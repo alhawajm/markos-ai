@@ -111,3 +111,16 @@ export interface VaultRagChunk {
   version: number;
   score: number;
 }
+
+export interface OnboardingModuleState {
+  module: string;
+  completed: boolean;
+  sections: VaultSection[];
+}
+
+export interface OnboardingState {
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
+  onboardingScore: number;
+  vaultScore: VaultCompletenessScore;
+  modules: OnboardingModuleState[];
+}

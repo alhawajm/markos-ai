@@ -5,10 +5,28 @@ import type { HealthResponse } from "@markos/shared-types";
 import { registerAuthRoutes } from "../auth/auth-routes";
 import { env } from "../config/env";
 import { getDeepHealth } from "../health/deep-health";
+import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
 import { errorEnvelope, ok } from "./envelope";
+
+function getErrorDetails(error: unknown): { code?: string; message: string; statusCode: number } {
+  if (typeof error !== "object" || error === null) {
+    return {
+      message: "Unexpected server error",
+      statusCode: 500
+    };
+  }
+
+  const maybeError = error as { code?: unknown; message?: unknown; statusCode?: unknown };
+  const details = {
+    message: typeof maybeError.message === "string" ? maybeError.message : "Unexpected server error",
+    statusCode: typeof maybeError.statusCode === "number" ? maybeError.statusCode : 500
+  };
+
+  return typeof maybeError.code === "string" ? { ...details, code: maybeError.code } : details;
+}
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -24,11 +42,27 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   await registerWorkspaceContext(app);
   await registerAuthRoutes(app);
+  await registerOnboardingRoutes(app);
   await registerVaultRoutes(app);
 
   app.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    void reply.status(500).send(errorEnvelope("INTERNAL_ERROR", "Unexpected server error"));
+    const details = getErrorDetails(error);
+    const statusCode = details.statusCode;
+
+    if (statusCode >= 500) {
+      request.log.error(error);
+    } else {
+      request.log.warn(error);
+    }
+
+    void reply
+      .status(statusCode)
+      .send(
+        errorEnvelope(
+          details.code ?? (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"),
+          statusCode >= 500 ? "Unexpected server error" : details.message
+        )
+      );
   });
 
   app.get("/v1/health", async () => {

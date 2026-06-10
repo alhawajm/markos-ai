@@ -19,3 +19,7 @@ Use Tailwind CSS 3.4.x for the initial Next.js 14 scaffold because the spec expe
 ## 2026-06-10: Next Config Extension
 
 Use `next.config.mjs` instead of the spec example `next.config.ts` because Next.js 14.2 rejects TypeScript config files in this environment.
+
+## 2026-06-10: Brand Onboarding Writes Tone
+
+The spec defines 7 onboarding modules but the Vault has 8 sections, including `TONE`. Treat the Brand module as the source for both `BRAND` and `TONE` when tone words or voice notes are supplied, so onboarding can complete the full Vault readiness score without adding an eighth wizard step.
