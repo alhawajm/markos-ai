@@ -83,3 +83,31 @@ export interface AuthSession {
   roles: Role[];
   tokens: AuthTokens;
 }
+
+export interface KnowledgeVaultEntry {
+  id: string;
+  workspaceId: string;
+  section: VaultSection;
+  key: string;
+  value: Record<string, unknown>;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VaultCompletenessScore {
+  score: number;
+  completedSections: VaultSection[];
+  missingSections: VaultSection[];
+  requiredSections: VaultSection[];
+  entryCount: number;
+}
+
+export interface VaultRagChunk {
+  id: string;
+  section: VaultSection;
+  key: string;
+  value: Record<string, unknown>;
+  version: number;
+  score: number;
+}

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     llm_longform_model: str = ""
     llm_cheap_model: str = ""
     embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
     image_model_primary: str = ""
     image_model_fallback: str = ""
 

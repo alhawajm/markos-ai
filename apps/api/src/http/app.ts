@@ -7,6 +7,7 @@ import { env } from "../config/env";
 import { getDeepHealth } from "../health/deep-health";
 import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
+import { registerVaultRoutes } from "../vault/vault-routes";
 import { errorEnvelope, ok } from "./envelope";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -23,6 +24,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   await registerWorkspaceContext(app);
   await registerAuthRoutes(app);
+  await registerVaultRoutes(app);
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);
