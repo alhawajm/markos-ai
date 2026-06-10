@@ -12,6 +12,7 @@
     "test:e2e": "echo \"test:e2e: web\""
   },
   "dependencies": {
+    "@markos/api-client": "workspace:*",
     "@markos/i18n": "workspace:*",
     "@markos/shared-types": "workspace:*",
     "@markos/ui-tokens": "workspace:*",

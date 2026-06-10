@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { t } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
+import { OnboardingPanel } from "./onboarding-panel";
 
 export type SectionSlug =
   | "dashboard"
@@ -306,6 +307,8 @@ export function AppShell({ locale, activeSection }: { locale: Locale; activeSect
                 <FoundationCard body={card.body[locale]} icon={card.icon} key={card.title.en} title={card.title[locale]} />
               ))}
             </div>
+
+            {activeSection === "dashboard" ? <OnboardingPanel locale={locale} /> : null}
           </div>
         </section>
       </div>
