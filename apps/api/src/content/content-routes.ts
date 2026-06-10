@@ -1,14 +1,17 @@
 import type { FastifyInstance } from "fastify";
-import { generateContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
+import { generateContentSchema, scheduleContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import {
   ContentContextMissingError,
   ContentItemLockedError,
   ContentItemNotFoundError,
+  ContentScheduleError,
   ContentStatusTransitionError,
   generateWorkspaceContent,
   listContentItems,
+  scheduleContentItem,
+  unscheduleContentItem,
   updateContentItem,
   updateContentItemStatus
 } from "./content-service";
@@ -122,6 +125,75 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
         if (error instanceof ContentStatusTransitionError) {
           return reply.status(409).send(errorEnvelope("CONTENT_STATUS_TRANSITION_INVALID", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/content/:contentItemId/schedule",
+    {
+      config: {
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      const parsed = scheduleContentSchema.safeParse(request.body ?? {});
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid schedule request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await scheduleContentItem(workspaceId, params.contentItemId, parsed.data));
+      } catch (error) {
+        if (error instanceof ContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof ContentScheduleError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_SCHEDULE_INVALID", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/content/:contentItemId/unschedule",
+    {
+      config: {
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await unscheduleContentItem(workspaceId, params.contentItemId));
+      } catch (error) {
+        if (error instanceof ContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof ContentScheduleError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_SCHEDULE_INVALID", error.message));
         }
 
         throw error;

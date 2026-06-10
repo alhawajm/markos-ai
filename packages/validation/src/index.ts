@@ -156,6 +156,10 @@ export const updateContentStatusSchema = z.object({
   status: z.enum(["DRAFT", "IN_REVIEW", "APPROVED"])
 });
 
+export const scheduleContentSchema = z.object({
+  scheduledAt: z.string().datetime()
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -172,3 +176,4 @@ export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type UpdateContentInput = z.infer<typeof updateContentSchema>;
 export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;
+export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;

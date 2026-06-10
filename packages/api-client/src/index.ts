@@ -167,6 +167,24 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async scheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/schedule`, {
+      body: {
+        scheduledAt
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async unscheduleContent(contentItemId: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/unschedule`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
   private async request<TData>(
     path: string,
     options: { body?: Record<string, unknown>; method?: "GET" | "PATCH" | "POST" | "PUT" } = {}

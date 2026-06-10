@@ -1,6 +1,6 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
 import type { ContentRecord, StrategyPlan } from "@markos/shared-types";
-import type { GenerateContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
+import type { GenerateContentInput, ScheduleContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -30,6 +30,12 @@ export class ContentItemLockedError extends Error {
 export class ContentStatusTransitionError extends Error {
   constructor() {
     super("Content item cannot move to that status from its current status");
+  }
+}
+
+export class ContentScheduleError extends Error {
+  constructor(message = "Content item cannot be scheduled in its current state") {
+    super(message);
   }
 }
 
@@ -195,6 +201,177 @@ export async function updateContentItemStatus(
   });
 
   return toContentRecord(row);
+}
+
+export async function scheduleContentItem(
+  workspaceId: string,
+  contentItemId: string,
+  input: ScheduleContentInput
+): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status !== "APPROVED") {
+    throw new ContentScheduleError();
+  }
+
+  const scheduledAt = new Date(input.scheduledAt);
+
+  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+    throw new ContentScheduleError("Schedule time must be in the future");
+  }
+
+  const row = await prisma.$transaction(async (tx) => {
+    const updated = await tx.contentItem.update({
+      where: {
+        id: current.id
+      },
+      data: {
+        scheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+
+    await addToContentCalendar(tx, workspaceId, updated.id, scheduledAt);
+
+    return updated;
+  });
+
+  return toContentRecord(row);
+}
+
+export async function unscheduleContentItem(workspaceId: string, contentItemId: string): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status !== "SCHEDULED") {
+    throw new ContentScheduleError("Only scheduled content can be unscheduled");
+  }
+
+  const row = await prisma.$transaction(async (tx) => {
+    const updated = await tx.contentItem.update({
+      where: {
+        id: current.id
+      },
+      data: {
+        scheduledAt: null,
+        status: "APPROVED"
+      }
+    });
+
+    if (current.scheduledAt) {
+      await removeFromContentCalendar(tx, workspaceId, current.id, current.scheduledAt);
+    }
+
+    return updated;
+  });
+
+  return toContentRecord(row);
+}
+
+async function addToContentCalendar(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  contentItemId: string,
+  scheduledAt: Date
+): Promise<void> {
+  const month = monthStart(scheduledAt);
+  const current = await tx.contentCalendar.findFirst({
+    where: {
+      workspaceId,
+      month,
+      deletedAt: null
+    }
+  });
+  const plan = mergeCalendarPlan(current?.plan, contentItemId);
+
+  if (current) {
+    await tx.contentCalendar.update({
+      where: {
+        id: current.id
+      },
+      data: {
+        plan: plan as unknown as Prisma.InputJsonValue
+      }
+    });
+    return;
+  }
+
+  await tx.contentCalendar.create({
+    data: {
+      workspaceId,
+      month,
+      plan: plan as unknown as Prisma.InputJsonValue
+    }
+  });
+}
+
+async function removeFromContentCalendar(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  contentItemId: string,
+  scheduledAt: Date
+): Promise<void> {
+  const current = await tx.contentCalendar.findFirst({
+    where: {
+      workspaceId,
+      month: monthStart(scheduledAt),
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    return;
+  }
+
+  const plan = mergeCalendarPlan(current.plan, contentItemId, "remove");
+
+  await tx.contentCalendar.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      plan: plan as unknown as Prisma.InputJsonValue
+    }
+  });
+}
+
+function mergeCalendarPlan(
+  value: Prisma.JsonValue | undefined,
+  contentItemId: string,
+  mode: "add" | "remove" = "add"
+): { scheduledContentIds: string[] } {
+  const current =
+    typeof value === "object" && value !== null && !Array.isArray(value) && Array.isArray(value.scheduledContentIds)
+      ? value.scheduledContentIds.filter((id): id is string => typeof id === "string")
+      : [];
+  const ids = mode === "add" ? Array.from(new Set([...current, contentItemId])) : current.filter((id) => id !== contentItemId);
+
+  return {
+    scheduledContentIds: ids
+  };
+}
+
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
 function isAllowedContentTransition(current: ContentStatus, next: UpdateContentStatusInput["status"]): boolean {

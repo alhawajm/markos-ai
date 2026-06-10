@@ -17,6 +17,7 @@ import { t } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
 import { ContentPanel } from "./content-panel";
 import { OnboardingPanel } from "./onboarding-panel";
+import { SchedulePanel } from "./schedule-panel";
 import { StrategyPanel } from "./strategy-panel";
 import { VaultPanel } from "./vault-panel";
 
@@ -315,6 +316,7 @@ export function AppShell({ locale, activeSection }: { locale: Locale; activeSect
             {activeSection === "vault" ? <VaultPanel locale={locale} /> : null}
             {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
             {activeSection === "content" ? <ContentPanel locale={locale} /> : null}
+            {activeSection === "schedule" ? <SchedulePanel locale={locale} /> : null}
           </div>
         </section>
       </div>

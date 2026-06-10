@@ -241,6 +241,84 @@ describe("content routes", () => {
 
     await app.close();
   });
+
+  it("schedules approved content and records it in the monthly calendar", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const draftSchedule = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers,
+      payload: {
+        scheduledAt
+      }
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: {
+        status: "IN_REVIEW"
+      }
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: {
+        status: "APPROVED"
+      }
+    });
+
+    const schedule = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers,
+      payload: {
+        scheduledAt
+      }
+    });
+    const calendar = await prisma.contentCalendar.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id
+      }
+    });
+    const unschedule = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/unschedule`,
+      headers,
+      payload: {}
+    });
+
+    expect(draftSchedule.statusCode).toBe(409);
+    expect(draftSchedule.json().error.code).toBe("CONTENT_SCHEDULE_INVALID");
+    expect(schedule.statusCode).toBe(200);
+    expect(schedule.json()).toMatchObject({
+      data: {
+        id: created.id,
+        status: "SCHEDULED",
+        scheduledAt
+      }
+    });
+    expect(calendar.plan).toMatchObject({
+      scheduledContentIds: [created.id]
+    });
+    expect(unschedule.statusCode).toBe(200);
+    expect(unschedule.json()).toMatchObject({
+      data: {
+        id: created.id,
+        status: "APPROVED"
+      }
+    });
+    expect(unschedule.json().data.scheduledAt).toBeUndefined();
+
+    await app.close();
+  });
 });
 
 async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
