@@ -1,0 +1,21 @@
+{
+  "name": "@markos/i18n",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: i18n\"",
+    "test": "echo \"test: i18n\""
+  },
+  "dependencies": {
+    "@markos/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

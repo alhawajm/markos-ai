@@ -1,0 +1,32 @@
+[project]
+name = "markos-ai-service"
+version = "0.0.0"
+description = "MARKOS AI FastAPI service"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "fastapi>=0.124.0",
+  "uvicorn[standard]>=0.38.0",
+  "pydantic>=2.12.0",
+  "pydantic-settings>=2.12.0",
+  "httpx>=0.28.0",
+  "structlog>=25.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.19.0",
+  "pytest>=9.0.0",
+  "ruff>=0.14.0"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,21 @@
+{
+  "name": "@markos/api-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: api-client\"",
+    "test": "echo \"test: api-client\""
+  },
+  "dependencies": {
+    "@markos/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

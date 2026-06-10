@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Locale {
+  EN
+  AR
+}
+
+enum PlanStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+}
+
+enum VatMode {
+  EXCLUSIVE
+  INCLUSIVE
+}
+
+enum Role {
+  OWNER
+  EDITOR
+  VIEWER
+  WORKSPACE_ADMIN
+  SUPER_ADMIN
+  PRODUCT_ADMIN
+  SUPPORT_ADMIN
+  FINANCE_ADMIN
+  READONLY_ADMIN
+}
+
+enum VaultSection {
+  COMPANY
+  STORY
+  PRODUCTS
+  AUDIENCE
+  COMPETITORS
+  BRAND
+  TONE
+  OBJECTIVES
+}
+
+enum ContentType {
+  POST
+  CAROUSEL
+  STORY
+  REEL
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  BRAND_ASSET
+  AI_GENERATED
+}
+
+enum MetricType {
+  ACCOUNT
+  POST
+  STORY
+  REEL
+  AUDIENCE
+}
+
+enum PaymentPurpose {
+  SUBSCRIPTION
+}
+
+enum PaymentStatus {
+  INITIATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum SubStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PAID
+  FAILED
+  VOID
+}
+
+enum UsageMetric {
+  AI_GENERATION
+  AI_IMAGE
+  POST_PUBLISH
+  STRATEGY
+  STORAGE_BYTES
+}
+
+model User {
+  id           String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  email        String     @unique
+  passwordHash String?
+  fullName     String
+  locale       Locale     @default(AR)
+  planId       String?    @db.Uuid
+  planStatus   PlanStatus @default(TRIAL)
+  trialEndsAt  DateTime?
+  isVerified   Boolean    @default(false)
+  mfaSecret    String?
+  mfaEnabled   Boolean    @default(false)
+  googleId     String?    @unique
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  @@map("users")
+}
+
+model Workspace {
+  id                      String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  ownerUserId             String           @db.Uuid
+  name                    String
+  slug                    String           @unique
+  instagramAccountId      String?
+  instagramAccessToken    String?
+  instagramTokenExpiresAt DateTime?
+  onboardingStatus        OnboardingStatus @default(NOT_STARTED)
+  onboardingScore         Int              @default(0)
+  vatPricingMode          VatMode          @default(EXCLUSIVE)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  deletedAt               DateTime?
+
+  @@index([ownerUserId])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String    @db.Uuid
+  userId      String    @db.Uuid
+  role        Role
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([workspaceId, userId, role])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model KnowledgeVault {
+  id          String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                   @db.Uuid
+  section     VaultSection
+  key         String
+  value       Json
+  embedding   Unsupported("vector(1536)")?
+  version     Int                      @default(1)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId, section])
+  @@map("knowledge_vault")
+}
+
+model Strategy {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String    @db.Uuid
+  title       String
+  horizonDays Int
+  content     Json
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId])
+  @@map("strategies")
+}
+
+model ContentCalendar {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String    @db.Uuid
+  month       DateTime
+  plan        Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId, month])
+  @@map("content_calendars")
+}
+
+model Campaign {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String    @db.Uuid
+  name        String
+  objective   String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId])
+  @@map("campaigns")
+}
+
+model ContentItem {
+  id              String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String        @db.Uuid
+  contentType     ContentType
+  status          ContentStatus @default(DRAFT)
+  captionEn       String?
+  captionAr       String?
+  hashtags        String[]
+  callToAction    String?
+  mediaIds        String[]      @db.Uuid
+  carousel        Json?
+  reelScript      Json?
+  contentPillar   String?
+  campaignId      String?       @db.Uuid
+  aiPromptUsed    String?
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  instagramPostId String?
+  failureReason   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
+  @@map("content_items")
+}
+
+model MediaAsset {
+  id              String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String    @db.Uuid
+  type            MediaType
+  filename        String
+  s3Key           String
+  cdnUrl          String
+  mimeType        String
+  sizeBytes       Int
+  width           Int?
+  height          Int?
+  durationSeconds Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([workspaceId, type])
+  @@map("media_assets")
+}
+
+model InstagramAnalytics {
+  id            String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String     @db.Uuid
+  contentItemId String?    @db.Uuid
+  metricType    MetricType
+  dataDate      DateTime
+  metrics       Json
+  syncedAt      DateTime
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  deletedAt     DateTime?
+
+  @@index([workspaceId, metricType, dataDate])
+  @@map("instagram_analytics")
+}
+
+model AiInteraction {
+  id            String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                   @db.Uuid
+  agent         String
+  promptVersion String
+  prompt        Json
+  response      Json
+  accepted      Boolean?
+  edited        Boolean?
+  regenerated   Boolean?
+  tokensIn      Int
+  tokensOut     Int
+  costMinor     Int
+  currency      String                   @default("BHD") @db.VarChar(3)
+  model         String
+  embedding     Unsupported("vector(1536)")?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  deletedAt     DateTime?
+
+  @@index([workspaceId, agent])
+  @@map("ai_interactions")
+}
+
+model Plan {
+  id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  code       String    @unique
+  name       String
+  priceMinor Int
+  currency   String    @default("BHD") @db.VarChar(3)
+  limits     Json
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                 String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId             String    @db.Uuid
+  workspaceId        String    @db.Uuid
+  planId             String    @db.Uuid
+  status             SubStatus @default(TRIALING)
+  gateway            String
+  gatewayCustomerId  String?
+  gatewayTokenId     String?
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  @@index([workspaceId, status])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String        @db.Uuid
+  workspaceId    String        @db.Uuid
+  subscriptionId String?       @db.Uuid
+  status         InvoiceStatus @default(DRAFT)
+  netMinor       Int
+  vatMinor       Int
+  grossMinor     Int
+  currency       String        @default("BHD") @db.VarChar(3)
+  vatRateBps     Int           @default(1000)
+  issuedAt       DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  @@index([workspaceId, status])
+  @@map("invoices")
+}
+
+model Payment {
+  id          String         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String         @db.Uuid
+  invoiceId   String?        @db.Uuid
+  purpose     PaymentPurpose @default(SUBSCRIPTION)
+  status      PaymentStatus  @default(INITIATED)
+  gateway     String
+  gatewayRef  String?
+  amountMinor Int
+  currency    String         @default("BHD") @db.VarChar(3)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId, status])
+  @@map("payments")
+}
+
+model UsageCounter {
+  id          String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String      @db.Uuid
+  metric      UsageMetric
+  periodStart DateTime
+  periodEnd   DateTime
+  used         Int         @default(0)
+  limit        Int
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([workspaceId, metric, periodStart])
+  @@map("usage_counters")
+}
+
+model PromptTemplate {
+  id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  agent      String
+  version    String
+  body       String
+  variantOf  String?   @db.Uuid
+  trafficPct Int       @default(100)
+  active     Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  @@unique([agent, version])
+  @@index([agent, active])
+  @@map("prompt_templates")
+}
+
+model Notification {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId      String    @db.Uuid
+  workspaceId String?   @db.Uuid
+  channel     String
+  templateKey String
+  payload     Json
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  actorId     String?   @db.Uuid
+  workspaceId String?   @db.Uuid
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, action])
+  @@index([actorId])
+  @@map("audit_logs")
+}
