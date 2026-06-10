@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { t } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
+import { ContentPanel } from "./content-panel";
 import { OnboardingPanel } from "./onboarding-panel";
 import { StrategyPanel } from "./strategy-panel";
 import { VaultPanel } from "./vault-panel";
@@ -313,6 +314,7 @@ export function AppShell({ locale, activeSection }: { locale: Locale; activeSect
             {activeSection === "dashboard" ? <OnboardingPanel locale={locale} /> : null}
             {activeSection === "vault" ? <VaultPanel locale={locale} /> : null}
             {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
+            {activeSection === "content" ? <ContentPanel locale={locale} /> : null}
           </div>
         </section>
       </div>

@@ -28,6 +28,8 @@ export const vaultSectionSchema = z.enum([
   "OBJECTIVES"
 ]);
 
+export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
+
 export const vaultValueSchema = z.record(z.string(), z.unknown());
 
 export const upsertVaultSectionSchema = z.object({
@@ -128,6 +130,13 @@ export const generateStrategySchema = z.object({
   horizonDays: z.number().int().min(30).max(180).default(90)
 });
 
+export const generateContentSchema = z.object({
+  topic: z.string().min(3).max(500),
+  contentType: contentTypeSchema.default("POST"),
+  count: z.number().int().min(1).max(5).default(3),
+  strategyId: z.string().uuid().optional()
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -141,3 +150,4 @@ export type UpsertVaultSectionInput = z.infer<typeof upsertVaultSectionSchema>;
 export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
+export type GenerateContentInput = z.infer<typeof generateContentSchema>;

@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { HealthResponse } from "@markos/shared-types";
 import { registerAuthRoutes } from "../auth/auth-routes";
 import { env } from "../config/env";
+import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { registerStrategyRoutes } from "../strategy/strategy-routes";
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAuthRoutes(app);
   await registerOnboardingRoutes(app);
   await registerStrategyRoutes(app);
+  await registerContentRoutes(app);
   await registerVaultRoutes(app);
 
   app.setErrorHandler((error, request, reply) => {

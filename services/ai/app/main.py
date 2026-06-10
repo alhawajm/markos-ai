@@ -50,6 +50,23 @@ class StrategyGenerateResponse(BaseModel):
     strategy: dict[str, object]
 
 
+class ContentGenerateRequest(BaseModel):
+    workspace_id: str
+    topic: str = Field(min_length=3, max_length=500)
+    content_type: Literal["POST", "CAROUSEL", "STORY", "REEL"] = "POST"
+    count: int = Field(default=3, ge=1, le=5)
+    context: list[StrategyContextChunk] = Field(default_factory=list, max_length=10)
+    strategy: dict[str, object] | None = None
+    model: str | None = None
+
+
+class ContentGenerateResponse(BaseModel):
+    model: str
+    prompt_version: str
+    tokens_in: int
+    tokens_out: int
+    drafts: list[dict[str, object]]
+
 app = FastAPI(title="MARKOS AI Service", version="0.0.0")
 
 
@@ -100,6 +117,22 @@ async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerat
         tokens_in=estimate_tokens(prompt_text),
         tokens_out=estimate_tokens(response_text),
         strategy=strategy,
+    )
+
+
+@app.post("/ai/content/generate", response_model=ContentGenerateResponse)
+async def generate_content(request: ContentGenerateRequest) -> ContentGenerateResponse:
+    model = request.model or settings.llm_primary_model
+    prompt_text = content_prompt_text(request)
+    drafts = build_content_drafts(request)
+    response_text = str(drafts)
+
+    return ContentGenerateResponse(
+        model=model,
+        prompt_version="content.v1.local",
+        tokens_in=estimate_tokens(prompt_text),
+        tokens_out=estimate_tokens(response_text),
+        drafts=drafts,
     )
 
 
@@ -192,3 +225,70 @@ def strategy_prompt_text(request: StrategyGenerateRequest) -> str:
 
 def estimate_tokens(text: str) -> int:
     return max(1, len(re.findall(r"\S+", text)))
+
+
+def build_content_drafts(request: ContentGenerateRequest) -> list[dict[str, object]]:
+    context_summary = summarize_context(request.context)
+    pillar = first_strategy_pillar(request.strategy)
+    drafts: list[dict[str, object]] = []
+
+    for index in range(request.count):
+        angle = ["educational", "proof-led", "invitation", "comparison", "behind-the-scenes"][index % 5]
+        article = "an" if angle[0].lower() in {"a", "e", "i", "o", "u"} else "a"
+        caption_en = (
+            f"{request.topic}: {article} {angle} post grounded in {context_summary}. "
+            f"Use this to connect {pillar.lower()} with a clear Instagram action."
+        )
+        caption_ar = (
+            f"{request.topic}: منشور يركز على {angle} ومبني على {context_summary}. "
+            "استخدمه لربط قيمة النشاط بخطوة واضحة على إنستغرام."
+        )
+        draft: dict[str, object] = {
+            "contentType": request.content_type,
+            "captionEn": caption_en,
+            "captionAr": caption_ar,
+            "hashtags": ["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
+            "callToAction": "Send a DM to learn more.",
+            "contentPillar": pillar,
+        }
+
+        if request.content_type == "CAROUSEL":
+            draft["carousel"] = {
+                "slides": [
+                    {"title": "Hook", "body": request.topic},
+                    {"title": "Problem", "body": "Show the customer pain point."},
+                    {"title": "Proof", "body": "Use a specific business detail from the Vault."},
+                    {"title": "Action", "body": "Invite the viewer to message or save."},
+                ]
+            }
+
+        if request.content_type == "REEL":
+            draft["reelScript"] = {
+                "hook": f"One thing to know about {request.topic}",
+                "beats": ["show the product or service", "explain the benefit", "close with a direct CTA"],
+                "durationSeconds": 20,
+            }
+
+        drafts.append(draft)
+
+    return drafts
+
+
+def first_strategy_pillar(strategy: dict[str, object] | None) -> str:
+    if not strategy:
+        return "Vault-grounded content"
+
+    pillars = strategy.get("pillars")
+    if not isinstance(pillars, list) or not pillars:
+        return "Vault-grounded content"
+
+    first = pillars[0]
+    if not isinstance(first, dict):
+        return "Vault-grounded content"
+
+    name = first.get("name")
+    return name if isinstance(name, str) else "Vault-grounded content"
+
+
+def content_prompt_text(request: ContentGenerateRequest) -> str:
+    return f"{request.workspace_id} {request.topic} {request.content_type} {request.count} {request.context} {request.strategy}"

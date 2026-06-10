@@ -1,6 +1,8 @@
 import type {
   ApiEnvelope,
   AuthSession,
+  ContentRecord,
+  ContentType,
   HealthResponse,
   KnowledgeVaultEntry,
   OnboardingState,
@@ -111,6 +113,24 @@ export class MarkosApiClient {
 
   async generateStrategy(input: { objective?: string; horizonDays?: number }): Promise<StrategyRecord> {
     const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async contentItems(): Promise<ContentRecord[]> {
+    const response = await this.request<ContentRecord[]>("/v1/content");
+    return response.data;
+  }
+
+  async generateContent(input: {
+    topic: string;
+    contentType?: ContentType;
+    count?: number;
+    strategyId?: string;
+  }): Promise<ContentRecord[]> {
+    const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
       method: "POST"
     });

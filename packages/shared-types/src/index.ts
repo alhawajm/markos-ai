@@ -160,3 +160,37 @@ export interface StrategyRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ContentDraft {
+  contentType: ContentType;
+  captionEn?: string;
+  captionAr?: string;
+  hashtags: string[];
+  callToAction?: string;
+  contentPillar?: string;
+  carousel?: Record<string, unknown>;
+  reelScript?: Record<string, unknown>;
+}
+
+export interface ContentRecord {
+  id: string;
+  workspaceId: string;
+  contentType: ContentType;
+  status: ContentStatus;
+  captionEn?: string;
+  captionAr?: string;
+  hashtags: string[];
+  callToAction?: string;
+  mediaIds: string[];
+  carousel?: Record<string, unknown>;
+  reelScript?: Record<string, unknown>;
+  contentPillar?: string;
+  campaignId?: string;
+  aiPromptUsed?: string;
+  scheduledAt?: string;
+  publishedAt?: string;
+  instagramPostId?: string;
+  failureReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
