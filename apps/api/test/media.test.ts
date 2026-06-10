@@ -62,6 +62,45 @@ describe("media routes", () => {
     await app.close();
   });
 
+  it("uploads local media bytes and serves the stored file", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const bytes = Buffer.from("markos media upload");
+
+    const uploaded = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "upload.jpg",
+        mimeType: "image/jpeg",
+        base64Data: bytes.toString("base64")
+      }
+    });
+    const publicUrl = uploaded.json().data.publicUrl as string;
+    const served = await app.inject({
+      method: "GET",
+      url: new URL(publicUrl).pathname
+    });
+
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json()).toMatchObject({
+      data: {
+        filename: "upload.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: bytes.byteLength,
+        workspaceId: session.workspace.id
+      }
+    });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers["content-type"]).toContain("image/jpeg");
+    expect(served.body).toBe("markos media upload");
+
+    await app.close();
+  });
+
   it("does not attach media from another workspace", async () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);

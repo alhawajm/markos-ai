@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { attachMediaToContentSchema, registerPublicMediaSchema } from "@markos/validation";
+import { attachMediaToContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import {
@@ -9,7 +9,10 @@ import {
   MediaAssetNotFoundError,
   MediaContentItemNotFoundError,
   MediaContentLockedError,
-  registerPublicMedia
+  MediaUploadInvalidError,
+  readPublicMediaFile,
+  registerPublicMedia,
+  uploadMedia
 } from "./media-service";
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
@@ -23,6 +26,34 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listMediaAssets(workspaceId));
+    }
+  );
+
+  app.post(
+    "/v1/media/upload",
+    {
+      config: {
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const parsed = uploadMediaSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid media upload request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await uploadMedia(workspaceId, parsed.data));
+      } catch (error) {
+        if (error instanceof MediaUploadInvalidError) {
+          return reply.status(400).send(errorEnvelope("MEDIA_UPLOAD_INVALID", error.message));
+        }
+
+        throw error;
+      }
     }
   );
 
@@ -97,6 +128,25 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   );
+
+  app.get("/media-files/:workspaceId/:storedFilename", async (request, reply) => {
+    const params = request.params as { workspaceId?: string; storedFilename?: string };
+
+    if (!params.workspaceId || !params.storedFilename) {
+      return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Workspace id and media filename are required"));
+    }
+
+    try {
+      const file = await readPublicMediaFile(params.workspaceId, params.storedFilename);
+      return reply.type(file.mimeType).send(file.bytes);
+    } catch (error) {
+      if (error instanceof MediaAssetNotFoundError) {
+        return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", error.message));
+      }
+
+      throw error;
+    }
+  });
 }
 
 function handleMediaMutationError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {

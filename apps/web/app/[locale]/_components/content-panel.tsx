@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileText, ImagePlus, Link2, RefreshCcw, RotateCcw, Save, Send, Sparkles, X } from "lucide-react";
+import { CheckCircle2, FileText, ImagePlus, Link2, RefreshCcw, RotateCcw, Save, Send, Sparkles, Upload, X } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuthSession, ContentRecord, ContentType, Locale, MediaAssetRecord, MediaType } from "@markos/shared-types";
 
@@ -298,6 +298,32 @@ function ContentDraftCard({
     }
   }
 
+  async function uploadAndAttachMedia(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const asset = await client.uploadMedia({
+        type: file.type.startsWith("video/") ? "VIDEO" : "IMAGE",
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        base64Data: await fileToBase64(file)
+      });
+      onMediaChange([asset, ...mediaAssets.filter((current) => current.id !== asset.id)]);
+      const updated = await client.attachMediaToContent(item.id, asset.id);
+      onChange(updated);
+      setMessage(copy(locale, "mediaUploaded"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function detachMedia(mediaAssetId: string) {
     setIsBusy(true);
     setMessage("");
@@ -440,6 +466,20 @@ function ContentDraftCard({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+            <Upload size={16} />
+            {copy(locale, "uploadAttach")}
+            <input
+              accept="image/*,video/*"
+              className="sr-only"
+              disabled={!canChangeMedia || isBusy}
+              onChange={(event) => {
+                void uploadAndAttachMedia(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+              type="file"
+            />
+          </label>
           <button
             className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
             disabled={!canChangeMedia || isBusy}
@@ -556,6 +596,18 @@ function filenameFromUrl(value: string): string {
   }
 }
 
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    binary += String.fromCharCode(bytes[index] ?? 0);
+  }
+
+  return window.btoa(binary);
+}
+
 function copy(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
@@ -579,9 +631,11 @@ function copy(locale: Locale, key: string): string {
       mediaFilename: "Filename",
       mediaUrl: "Public HTTPS media URL",
       mediaUrlRequired: "Add a public media URL first.",
+      mediaUploaded: "Media uploaded and attached",
       refresh: "Refresh",
       rework: "Return to draft",
       registerAttach: "Register and attach",
+      uploadAttach: "Upload and attach",
       save: "Save edits",
       saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",
@@ -614,9 +668,11 @@ function copy(locale: Locale, key: string): string {
       mediaFilename: "Filename",
       mediaUrl: "Public HTTPS media URL",
       mediaUrlRequired: "Add a public media URL first.",
+      mediaUploaded: "Media uploaded and attached",
       refresh: "Refresh",
       rework: "Return to draft",
       registerAttach: "Register and attach",
+      uploadAttach: "Upload and attach",
       save: "Save edits",
       saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",

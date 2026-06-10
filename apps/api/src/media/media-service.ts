@@ -1,8 +1,9 @@
 import type { ContentStatus, MediaAsset } from "@prisma/client";
 import type { ContentRecord, MediaAssetRecord } from "@markos/shared-types";
-import type { RegisterPublicMediaInput } from "@markos/validation";
+import type { RegisterPublicMediaInput, UploadMediaInput } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { toContentRecord } from "../content/content-service";
+import { localKeyForRoute, readStoredMedia, storeWorkspaceMedia } from "./storage-service";
 
 export class MediaAssetNotFoundError extends Error {
   constructor() {
@@ -19,6 +20,12 @@ export class MediaContentItemNotFoundError extends Error {
 export class MediaContentLockedError extends Error {
   constructor() {
     super("Media cannot be changed for content in its current status");
+  }
+}
+
+export class MediaUploadInvalidError extends Error {
+  constructor() {
+    super("Uploaded media data is invalid");
   }
 }
 
@@ -57,6 +64,55 @@ export async function registerPublicMedia(
   });
 
   return toMediaAssetRecord(row);
+}
+
+export async function uploadMedia(workspaceId: string, input: UploadMediaInput): Promise<MediaAssetRecord> {
+  const bytes = Buffer.from(input.base64Data, "base64");
+
+  if (bytes.byteLength === 0 || bytes.toString("base64").replace(/=+$/, "") !== input.base64Data.replace(/=+$/, "")) {
+    throw new MediaUploadInvalidError();
+  }
+
+  const stored = await storeWorkspaceMedia({
+    workspaceId,
+    filename: input.filename,
+    bytes
+  });
+  const row = await prisma.mediaAsset.create({
+    data: {
+      workspaceId,
+      type: input.type,
+      filename: input.filename,
+      s3Key: stored.key,
+      cdnUrl: stored.publicUrl,
+      mimeType: input.mimeType,
+      sizeBytes: stored.sizeBytes,
+      ...(input.width === undefined ? {} : { width: input.width }),
+      ...(input.height === undefined ? {} : { height: input.height }),
+      ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
+    }
+  });
+
+  return toMediaAssetRecord(row);
+}
+
+export async function readPublicMediaFile(workspaceId: string, storedFilename: string): Promise<{ bytes: Buffer; mimeType: string }> {
+  const asset = await prisma.mediaAsset.findFirst({
+    where: {
+      workspaceId,
+      s3Key: localKeyForRoute(workspaceId, storedFilename),
+      deletedAt: null
+    }
+  });
+
+  if (!asset) {
+    throw new MediaAssetNotFoundError();
+  }
+
+  return {
+    bytes: await readStoredMedia(workspaceId, storedFilename),
+    mimeType: asset.mimeType
+  };
 }
 
 export async function attachMediaToContent(

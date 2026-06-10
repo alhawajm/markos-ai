@@ -151,6 +151,22 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async uploadMedia(input: {
+    type?: MediaType;
+    filename: string;
+    mimeType: string;
+    base64Data: string;
+    width?: number;
+    height?: number;
+    durationSeconds?: number;
+  }): Promise<MediaAssetRecord> {
+    const response = await this.request<MediaAssetRecord>("/v1/media/upload", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async generateContent(input: {
     topic: string;
     contentType?: ContentType;

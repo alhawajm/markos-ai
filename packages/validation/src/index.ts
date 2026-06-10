@@ -180,6 +180,16 @@ export const registerPublicMediaSchema = z.object({
   durationSeconds: z.number().int().positive().max(3600).optional()
 });
 
+export const uploadMediaSchema = z.object({
+  type: mediaTypeSchema.default("IMAGE"),
+  filename: z.string().min(1).max(240),
+  mimeType: z.string().min(3).max(120),
+  base64Data: z.string().min(1).max(70_000_000),
+  width: z.number().int().positive().max(10000).optional(),
+  height: z.number().int().positive().max(10000).optional(),
+  durationSeconds: z.number().int().positive().max(3600).optional()
+});
+
 export const attachMediaToContentSchema = z.object({
   mediaAssetId: z.string().uuid()
 });
@@ -203,4 +213,5 @@ export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
 export type ConnectInstagramInput = z.infer<typeof connectInstagramSchema>;
 export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>;
+export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;

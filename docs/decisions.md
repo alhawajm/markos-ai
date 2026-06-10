@@ -27,3 +27,7 @@ The spec defines 7 onboarding modules but the Vault has 8 sections, including `T
 ## 2026-06-10: Public Media Registration Before Storage
 
 Before building S3/CDN upload infrastructure, support workspace-scoped registration of external HTTPS media URLs and attach those media assets to content items. Publish readiness must verify attached media belongs to the same workspace and has an HTTPS public URL. Treat this as scaffolding for Instagram container readiness, not as final storage or publishing.
+
+## 2026-06-10: Local Media Storage Adapter
+
+Use a local filesystem media adapter for development uploads before wiring S3/CDN credentials. Store files under `MEDIA_STORAGE_DIR`, expose them through `/media-files/:workspaceId/:storedFilename`, and keep publish readiness requiring HTTPS public URLs so local HTTP uploads do not masquerade as Instagram-publishable assets.

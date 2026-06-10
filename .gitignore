@@ -16,5 +16,7 @@ __pycache__/
 *.pyc
 *.tsbuildinfo
 *.log
+var/
+apps/*/var/
 .codex-doc-tools/
 _analysis/

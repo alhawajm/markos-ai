@@ -3,6 +3,7 @@ import { z } from "zod";
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  API_BASE_URL: z.string().url().default("http://localhost:4000"),
   WEB_BASE_URL: z.string().url().default("http://localhost:3000"),
   AI_BASE_URL: z.string().url().default("http://localhost:8000"),
   DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
@@ -12,7 +13,9 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(12).default("dev-refresh-secret-change-me"),
   JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
-  LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator")
+  LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
+  MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
+  MEDIA_PUBLIC_BASE_URL: z.string().url().optional()
 });
 
 export const env = envSchema.parse(process.env);
