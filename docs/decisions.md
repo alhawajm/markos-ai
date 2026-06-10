@@ -23,3 +23,7 @@ Use `next.config.mjs` instead of the spec example `next.config.ts` because Next.
 ## 2026-06-10: Brand Onboarding Writes Tone
 
 The spec defines 7 onboarding modules but the Vault has 8 sections, including `TONE`. Treat the Brand module as the source for both `BRAND` and `TONE` when tone words or voice notes are supplied, so onboarding can complete the full Vault readiness score without adding an eighth wizard step.
+
+## 2026-06-10: Public Media Registration Before Storage
+
+Before building S3/CDN upload infrastructure, support workspace-scoped registration of external HTTPS media URLs and attach those media assets to content items. Publish readiness must verify attached media belongs to the same workspace and has an HTTPS public URL. Treat this as scaffolding for Instagram container readiness, not as final storage or publishing.

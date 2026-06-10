@@ -7,6 +7,8 @@ import type {
   HealthResponse,
   InstagramConnection,
   KnowledgeVaultEntry,
+  MediaAssetRecord,
+  MediaType,
   OnboardingState,
   PublishReadiness,
   StrategyRecord,
@@ -127,6 +129,28 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async mediaAssets(): Promise<MediaAssetRecord[]> {
+    const response = await this.request<MediaAssetRecord[]>("/v1/media");
+    return response.data;
+  }
+
+  async registerPublicMedia(input: {
+    type?: MediaType;
+    filename: string;
+    publicUrl: string;
+    mimeType: string;
+    sizeBytes: number;
+    width?: number;
+    height?: number;
+    durationSeconds?: number;
+  }): Promise<MediaAssetRecord> {
+    const response = await this.request<MediaAssetRecord>("/v1/media/public-url", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async generateContent(input: {
     topic: string;
     contentType?: ContentType;
@@ -183,6 +207,23 @@ export class MarkosApiClient {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/unschedule`, {
       body: {},
       method: "POST"
+    });
+    return response.data;
+  }
+
+  async attachMediaToContent(contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/media`, {
+      body: {
+        mediaAssetId
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async detachMediaFromContent(contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/media/${mediaAssetId}`, {
+      method: "DELETE"
     });
     return response.data;
   }

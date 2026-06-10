@@ -79,12 +79,25 @@ describe("workspace routes", () => {
         tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
       }
     });
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: session.workspace.id,
+        type: "IMAGE",
+        filename: "post.jpg",
+        s3Key: "external:https://cdn.example.com/post.jpg",
+        cdnUrl: "https://cdn.example.com/post.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 120000,
+        width: 1080,
+        height: 1080
+      }
+    });
     await prisma.contentItem.update({
       where: {
         id: content.id
       },
       data: {
-        mediaIds: [randomUUID()]
+        mediaIds: [media.id]
       }
     });
 

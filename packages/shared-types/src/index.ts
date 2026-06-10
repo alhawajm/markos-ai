@@ -42,6 +42,9 @@ export const contentStatuses = [
 ] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
 
+export const mediaTypes = ["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"] as const;
+export type MediaType = (typeof mediaTypes)[number];
+
 export interface ApiEnvelope<TData> {
   data: TData;
   meta?: Record<string, unknown>;
@@ -191,6 +194,21 @@ export interface ContentRecord {
   publishedAt?: string;
   instagramPostId?: string;
   failureReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaAssetRecord {
+  id: string;
+  workspaceId: string;
+  type: MediaType;
+  filename: string;
+  publicUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
   createdAt: string;
   updatedAt: string;
 }

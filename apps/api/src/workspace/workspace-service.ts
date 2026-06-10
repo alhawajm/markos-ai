@@ -93,6 +93,27 @@ export async function getPublishReadiness(workspaceId: string, contentItemId: st
   if (contentItem.contentType === "POST" || contentItem.contentType === "CAROUSEL" || contentItem.contentType === "REEL") {
     if (contentItem.mediaIds.length === 0) {
       reasons.push("PUBLIC_MEDIA_REQUIRED");
+    } else {
+      const mediaAssets = await prisma.mediaAsset.findMany({
+        where: {
+          id: {
+            in: contentItem.mediaIds
+          },
+          workspaceId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          cdnUrl: true
+        }
+      });
+      const validPublicMediaIds = new Set(
+        mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id)
+      );
+
+      if (contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
+        reasons.push("PUBLIC_MEDIA_REQUIRED");
+      }
     }
   }
 

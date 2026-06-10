@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileText, RefreshCcw, RotateCcw, Save, Send, Sparkles } from "lucide-react";
+import { CheckCircle2, FileText, ImagePlus, Link2, RefreshCcw, RotateCcw, Save, Send, Sparkles, X } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuthSession, ContentRecord, ContentType, Locale } from "@markos/shared-types";
+import type { AuthSession, ContentRecord, ContentType, Locale, MediaAssetRecord, MediaType } from "@markos/shared-types";
 
 const sessionKey = "markos.session";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -12,6 +12,7 @@ const contentTypes: ContentType[] = ["POST", "CAROUSEL", "STORY", "REEL"];
 export function ContentPanel({ locale }: { locale: Locale }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [items, setItems] = useState<ContentRecord[]>([]);
+  const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
   const [topic, setTopic] = useState("");
   const [contentType, setContentType] = useState<ContentType>("POST");
   const [count, setCount] = useState(3);
@@ -44,6 +45,7 @@ export function ContentPanel({ locale }: { locale: Locale }) {
   useEffect(() => {
     if (!session) return;
     void refreshContent(client, setItems, setMessage);
+    void refreshMedia(client, setMediaAssets, setMessage);
   }, [client, session]);
 
   async function generate() {
@@ -159,6 +161,8 @@ export function ContentPanel({ locale }: { locale: Locale }) {
               item={item}
               key={item.id}
               locale={locale}
+              mediaAssets={mediaAssets}
+              onMediaChange={(assets) => setMediaAssets(assets)}
               onChange={(updated) => setItems((current) => current.map((draft) => (draft.id === updated.id ? updated : draft)))}
               setMessage={setMessage}
             />
@@ -177,12 +181,16 @@ function ContentDraftCard({
   client,
   item,
   locale,
+  mediaAssets,
+  onMediaChange,
   onChange,
   setMessage
 }: {
   client: MarkosApiClient;
   item: ContentRecord;
   locale: Locale;
+  mediaAssets: MediaAssetRecord[];
+  onMediaChange: (assets: MediaAssetRecord[]) => void;
   onChange: (item: ContentRecord) => void;
   setMessage: (message: string) => void;
 }) {
@@ -191,8 +199,13 @@ function ContentDraftCard({
   const [hashtags, setHashtags] = useState(item.hashtags.join(", "));
   const [callToAction, setCallToAction] = useState(item.callToAction ?? "");
   const [contentPillar, setContentPillar] = useState(item.contentPillar ?? "");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaFilename, setMediaFilename] = useState("");
+  const [mediaType, setMediaType] = useState<MediaType>("IMAGE");
   const [isBusy, setIsBusy] = useState(false);
   const canEdit = item.status === "DRAFT" || item.status === "IN_REVIEW";
+  const canChangeMedia = item.status !== "PUBLISHED" && item.status !== "FAILED";
+  const attachedMedia = mediaAssets.filter((asset) => item.mediaIds.includes(asset.id));
 
   useEffect(() => {
     setCaptionEn(item.captionEn ?? "");
@@ -231,6 +244,68 @@ function ContentDraftCard({
       const updated = await client.updateContentStatus(item.id, status);
       onChange(updated);
       setMessage(copy(locale, "statusUpdated"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function attachRegisteredMedia(mediaAssetId: string) {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const updated = await client.attachMediaToContent(item.id, mediaAssetId);
+      onChange(updated);
+      setMessage(copy(locale, "mediaAttached"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function registerAndAttachMedia() {
+    const publicUrl = mediaUrl.trim();
+
+    if (!publicUrl) {
+      setMessage(copy(locale, "mediaUrlRequired"));
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const asset = await client.registerPublicMedia({
+        type: mediaType,
+        filename: mediaFilename.trim() || filenameFromUrl(publicUrl),
+        publicUrl,
+        mimeType: mediaType === "VIDEO" ? "video/mp4" : "image/jpeg",
+        sizeBytes: 1
+      });
+      onMediaChange([asset, ...mediaAssets.filter((current) => current.id !== asset.id)]);
+      const updated = await client.attachMediaToContent(item.id, asset.id);
+      onChange(updated);
+      setMediaUrl("");
+      setMediaFilename("");
+      setMessage(copy(locale, "mediaAttached"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function detachMedia(mediaAssetId: string) {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const updated = await client.detachMediaFromContent(item.id, mediaAssetId);
+      onChange(updated);
+      setMessage(copy(locale, "mediaDetached"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
@@ -307,6 +382,91 @@ function ContentDraftCard({
         </pre>
       ) : null}
 
+      <div className="mt-4 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-navy">{copy(locale, "media")}</h3>
+          <span className="text-xs text-muted">{copy(locale, "attachedMedia").replace("{count}", String(item.mediaIds.length))}</span>
+        </div>
+
+        {attachedMedia.length > 0 ? (
+          <div className="mt-3 grid gap-2">
+            {attachedMedia.map((asset) => (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-input border border-border px-3 py-2" key={asset.id}>
+                <a className="truncate text-sm font-medium text-navy" href={asset.publicUrl} rel="noreferrer" target="_blank">
+                  {asset.filename}
+                </a>
+                <button
+                  aria-label={copy(locale, "detachMedia")}
+                  className="rounded-button border border-border p-2 text-muted disabled:opacity-50"
+                  disabled={!canChangeMedia || isBusy}
+                  onClick={() => detachMedia(asset.id)}
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">{copy(locale, "mediaEmpty")}</p>
+        )}
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-[120px_1fr_180px]">
+          <select
+            className="rounded-input border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canChangeMedia || isBusy}
+            onChange={(event) => setMediaType(event.target.value as MediaType)}
+            value={mediaType}
+          >
+            <option value="IMAGE">IMAGE</option>
+            <option value="VIDEO">VIDEO</option>
+            <option value="BRAND_ASSET">BRAND</option>
+            <option value="AI_GENERATED">AI</option>
+          </select>
+          <input
+            className="rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canChangeMedia || isBusy}
+            onChange={(event) => setMediaUrl(event.target.value)}
+            placeholder={copy(locale, "mediaUrl")}
+            value={mediaUrl}
+          />
+          <input
+            className="rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canChangeMedia || isBusy}
+            onChange={(event) => setMediaFilename(event.target.value)}
+            placeholder={copy(locale, "mediaFilename")}
+            value={mediaFilename}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
+            disabled={!canChangeMedia || isBusy}
+            onClick={registerAndAttachMedia}
+            type="button"
+          >
+            <ImagePlus size={16} />
+            {copy(locale, "registerAttach")}
+          </button>
+          {mediaAssets
+            .filter((asset) => !item.mediaIds.includes(asset.id))
+            .slice(0, 3)
+            .map((asset) => (
+              <button
+                className="inline-flex max-w-full items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
+                disabled={!canChangeMedia || isBusy}
+                key={asset.id}
+                onClick={() => attachRegisteredMedia(asset.id)}
+                type="button"
+              >
+                <Link2 size={16} />
+                <span className="truncate">{asset.filename}</span>
+              </button>
+            ))}
+        </div>
+      </div>
+
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
@@ -375,6 +535,27 @@ async function refreshContent(
   }
 }
 
+async function refreshMedia(
+  client: MarkosApiClient,
+  setMediaAssets: (items: MediaAssetRecord[]) => void,
+  setMessage: (message: string) => void
+) {
+  try {
+    setMediaAssets(await client.mediaAssets());
+  } catch (error) {
+    setMessage(error instanceof Error ? error.message : "Request failed");
+  }
+}
+
+function filenameFromUrl(value: string): string {
+  try {
+    const path = new URL(value).pathname;
+    return path.split("/").filter(Boolean).pop() || "public-media";
+  } catch {
+    return "public-media";
+  }
+}
+
 function copy(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
@@ -387,10 +568,20 @@ function copy(locale: Locale, key: string): string {
       generate: "Generate drafts",
       generated: "Content drafts generated",
       hashtags: "Hashtags",
+      attachedMedia: "{count} attached",
       pillar: "Content pillar",
       approve: "Approve",
+      detachMedia: "Detach media",
+      media: "Media",
+      mediaAttached: "Media attached",
+      mediaDetached: "Media detached",
+      mediaEmpty: "Attach a public HTTPS image or video before Instagram readiness can pass.",
+      mediaFilename: "Filename",
+      mediaUrl: "Public HTTPS media URL",
+      mediaUrlRequired: "Add a public media URL first.",
       refresh: "Refresh",
       rework: "Return to draft",
+      registerAttach: "Register and attach",
       save: "Save edits",
       saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",
@@ -412,10 +603,20 @@ function copy(locale: Locale, key: string): string {
       generate: "Generate drafts",
       generated: "Content drafts generated",
       hashtags: "Hashtags",
+      attachedMedia: "{count} attached",
       pillar: "Content pillar",
       approve: "Approve",
+      detachMedia: "Detach media",
+      media: "Media",
+      mediaAttached: "Media attached",
+      mediaDetached: "Media detached",
+      mediaEmpty: "Attach a public HTTPS image or video before Instagram readiness can pass.",
+      mediaFilename: "Filename",
+      mediaUrl: "Public HTTPS media URL",
+      mediaUrlRequired: "Add a public media URL first.",
       refresh: "Refresh",
       rework: "Return to draft",
+      registerAttach: "Register and attach",
       save: "Save edits",
       saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",

@@ -30,6 +30,7 @@ export const vaultSectionSchema = z.enum([
 
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
 export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
+export const mediaTypeSchema = z.enum(["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"]);
 
 export const vaultValueSchema = z.record(z.string(), z.unknown());
 
@@ -166,6 +167,23 @@ export const connectInstagramSchema = z.object({
   tokenExpiresAt: z.string().datetime()
 });
 
+export const registerPublicMediaSchema = z.object({
+  type: mediaTypeSchema.default("IMAGE"),
+  filename: z.string().min(1).max(240),
+  publicUrl: z.string().url().refine((value) => value.startsWith("https://"), {
+    message: "Public media URL must use HTTPS"
+  }),
+  mimeType: z.string().min(3).max(120),
+  sizeBytes: z.number().int().positive().max(50_000_000).default(1),
+  width: z.number().int().positive().max(10000).optional(),
+  height: z.number().int().positive().max(10000).optional(),
+  durationSeconds: z.number().int().positive().max(3600).optional()
+});
+
+export const attachMediaToContentSchema = z.object({
+  mediaAssetId: z.string().uuid()
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -184,3 +202,5 @@ export type UpdateContentInput = z.infer<typeof updateContentSchema>;
 export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
 export type ConnectInstagramInput = z.infer<typeof connectInstagramSchema>;
+export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>;
+export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
