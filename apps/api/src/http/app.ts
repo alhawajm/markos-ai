@@ -51,8 +51,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       }
     },
     async () => {
+      const context = getWorkspaceContext();
+
       return ok({
-        workspaceId: getWorkspaceContext()?.workspaceId
+        workspaceId: context?.workspaceId,
+        userId: context?.userId,
+        roles: context?.roles
       });
     }
   );

@@ -1,33 +1,85 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import type { Role } from "@markos/shared-types";
+import { prisma } from "../db/prisma";
+import { verifyAccessToken } from "../auth/tokens";
 import { errorEnvelope } from "../http/envelope";
-import { setWorkspaceContext } from "./workspace-context";
+import { runWorkspaceContextScope, setWorkspaceContext } from "./workspace-context";
 
 declare module "fastify" {
   interface FastifyContextConfig {
     workspaceRequired?: boolean;
   }
+
+  interface FastifyRequest {
+    auth?: {
+      userId: string;
+      workspaceId: string;
+      roles: Role[];
+    };
+  }
 }
 
-const workspaceIdSchema = z.string().uuid();
-
 export async function registerWorkspaceContext(app: FastifyInstance): Promise<void> {
+  app.addHook("onRequest", (_request, _reply, done) => {
+    runWorkspaceContextScope(done);
+  });
+
   app.addHook("preHandler", async (request, reply) => {
     if (request.routeOptions.config.workspaceRequired !== true) {
       return;
     }
 
-    const header = request.headers["x-workspace-id"];
-    const workspaceId = Array.isArray(header) ? header[0] : header;
-    const parsed = workspaceIdSchema.safeParse(workspaceId);
+    const token = getBearerToken(request.headers.authorization);
 
-    if (!parsed.success) {
+    if (token === undefined) {
       await reply
-        .status(400)
-        .send(errorEnvelope("WORKSPACE_REQUIRED", "A valid X-Workspace-Id header is required"));
+        .status(401)
+        .send(errorEnvelope("AUTH_REQUIRED", "A valid bearer token is required"));
       return;
     }
 
-    setWorkspaceContext({ workspaceId: parsed.data });
+    try {
+      const principal = await verifyAccessToken(token);
+      const membership = await prisma.workspaceMember.findFirst({
+        where: {
+          workspaceId: principal.workspaceId,
+          userId: principal.userId,
+          deletedAt: null
+        },
+        select: {
+          role: true
+        }
+      });
+
+      if (membership === null) {
+        await reply.status(403).send(errorEnvelope("WORKSPACE_FORBIDDEN", "User is not a member of this workspace"));
+        return;
+      }
+
+      const auth = {
+        userId: principal.userId,
+        workspaceId: principal.workspaceId,
+        roles: [membership.role as Role]
+      };
+
+      request.auth = auth;
+      setWorkspaceContext(auth);
+    } catch {
+      await reply.status(401).send(errorEnvelope("INVALID_TOKEN", "Bearer token is invalid or expired"));
+    }
   });
+}
+
+function getBearerToken(authorization: string | undefined): string | undefined {
+  if (authorization === undefined) {
+    return undefined;
+  }
+
+  const [scheme, token] = authorization.split(" ");
+
+  if (scheme?.toLowerCase() !== "bearer" || token === undefined || token.length === 0) {
+    return undefined;
+  }
+
+  return token;
 }

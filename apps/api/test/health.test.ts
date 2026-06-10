@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/http/app";
 
@@ -39,35 +40,67 @@ describe("health routes", () => {
 });
 
 describe("workspace context", () => {
-  it("fails closed without a workspace header", async () => {
+  it("fails closed without a bearer token", async () => {
     const app = await buildApp();
     const response = await app.inject({ method: "GET", url: "/v1/workspace-context" });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({
       error: {
-        code: "WORKSPACE_REQUIRED"
+        code: "AUTH_REQUIRED"
       }
     });
 
     await app.close();
   });
 
-  it("stores a valid workspace header in async context", async () => {
+  it("rejects invalid bearer tokens", async () => {
     const app = await buildApp();
-    const workspaceId = "018f6d77-7a67-7c02-8f04-09d34bdb1234";
     const response = await app.inject({
       method: "GET",
       url: "/v1/workspace-context",
       headers: {
-        "x-workspace-id": workspaceId
+        authorization: "Bearer invalid"
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "INVALID_TOKEN"
+      }
+    });
+
+    await app.close();
+  });
+
+  it("stores a valid authenticated workspace in async context", async () => {
+    const app = await buildApp();
+    const registration = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: `workspace-context-${randomUUID()}@markos.test`,
+        password: "CorrectHorseBattery99!",
+        fullName: "Workspace Context",
+        locale: "en"
+      }
+    });
+    const session = registration.json().data;
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/workspace-context",
+      headers: {
+        authorization: `Bearer ${session.tokens.accessToken}`
       }
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       data: {
-        workspaceId
+        workspaceId: session.workspace.id,
+        userId: session.user.id,
+        roles: ["OWNER"]
       }
     });
 

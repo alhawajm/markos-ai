@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import type { Role } from "@markos/shared-types";
+import { z } from "zod";
 import { createRedisClient } from "../cache/redis";
 import { env } from "../config/env";
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
+const accessClaimsSchema = z.object({
+  sub: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  roles: z.array(z.string()).min(1)
+});
 
 export interface TokenInput {
   userId: string;
@@ -48,6 +54,17 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
     accessToken,
     refreshToken,
     refreshJti
+  };
+}
+
+export async function verifyAccessToken(token: string): Promise<TokenInput> {
+  const result = await jwtVerify(token, accessSecret);
+  const claims = accessClaimsSchema.parse(result.payload);
+
+  return {
+    userId: claims.sub,
+    workspaceId: claims.workspaceId,
+    roles: claims.roles as Role[]
   };
 }
 
