@@ -4,6 +4,7 @@ import type {
   HealthResponse,
   KnowledgeVaultEntry,
   OnboardingState,
+  StrategyRecord,
   VaultCompletenessScore,
   VaultRagChunk,
   VaultSection
@@ -97,6 +98,19 @@ export class MarkosApiClient {
 
   async searchVault(input: { query: string; section?: VaultSection; topK?: number }): Promise<VaultRagChunk[]> {
     const response = await this.request<VaultRagChunk[]>("/v1/vault/rag/search", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async strategies(): Promise<StrategyRecord[]> {
+    const response = await this.request<StrategyRecord[]>("/v1/strategy");
+    return response.data;
+  }
+
+  async generateStrategy(input: { objective?: string; horizonDays?: number }): Promise<StrategyRecord> {
+    const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
       body: input,
       method: "POST"
     });

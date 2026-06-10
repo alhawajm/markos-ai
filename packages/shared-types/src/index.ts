@@ -124,3 +124,39 @@ export interface OnboardingState {
   vaultScore: VaultCompletenessScore;
   modules: OnboardingModuleState[];
 }
+
+export interface StrategyPillar {
+  name: string;
+  rationale: string;
+  contentAngles: string[];
+}
+
+export interface StrategyPlan {
+  summary: string;
+  horizonDays: number;
+  objectives: string[];
+  pillars: StrategyPillar[];
+  weeklyCadence: Array<{
+    week: number;
+    focus: string;
+    actions: string[];
+  }>;
+  kpis: Array<{
+    name: string;
+    target: string;
+  }>;
+  risks: string[];
+  nextActions: string[];
+  retrievedContext: VaultRagChunk[];
+}
+
+export interface StrategyRecord {
+  id: string;
+  workspaceId: string;
+  title: string;
+  horizonDays: number;
+  content: StrategyPlan;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}

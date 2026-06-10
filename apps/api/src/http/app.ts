@@ -6,6 +6,7 @@ import { registerAuthRoutes } from "../auth/auth-routes";
 import { env } from "../config/env";
 import { getDeepHealth } from "../health/deep-health";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
+import { registerStrategyRoutes } from "../strategy/strategy-routes";
 import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
@@ -43,6 +44,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerWorkspaceContext(app);
   await registerAuthRoutes(app);
   await registerOnboardingRoutes(app);
+  await registerStrategyRoutes(app);
   await registerVaultRoutes(app);
 
   app.setErrorHandler((error, request, reply) => {

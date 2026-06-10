@@ -123,6 +123,11 @@ export const objectivesOnboardingSchema = z.object({
   kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({})
 });
 
+export const generateStrategySchema = z.object({
+  objective: z.string().min(3).max(500).optional(),
+  horizonDays: z.number().int().min(30).max(180).default(90)
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -135,3 +140,4 @@ export type VaultSectionInput = z.infer<typeof vaultSectionSchema>;
 export type UpsertVaultSectionInput = z.infer<typeof upsertVaultSectionSchema>;
 export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
+export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
