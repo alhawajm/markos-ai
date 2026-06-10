@@ -11,6 +11,7 @@ import { registerStrategyRoutes } from "../strategy/strategy-routes";
 import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
+import { registerWorkspaceRoutes } from "../workspace/workspace-routes";
 import { errorEnvelope, ok } from "./envelope";
 
 function getErrorDetails(error: unknown): { code?: string; message: string; statusCode: number } {
@@ -47,6 +48,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerOnboardingRoutes(app);
   await registerStrategyRoutes(app);
   await registerContentRoutes(app);
+  await registerWorkspaceRoutes(app);
   await registerVaultRoutes(app);
 
   app.setErrorHandler((error, request, reply) => {

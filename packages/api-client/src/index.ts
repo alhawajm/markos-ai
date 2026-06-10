@@ -5,8 +5,10 @@ import type {
   ContentStatus,
   ContentType,
   HealthResponse,
+  InstagramConnection,
   KnowledgeVaultEntry,
   OnboardingState,
+  PublishReadiness,
   StrategyRecord,
   VaultCompletenessScore,
   VaultRagChunk,
@@ -185,9 +187,34 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async instagramConnection(): Promise<InstagramConnection> {
+    const response = await this.request<InstagramConnection>("/v1/workspace/instagram");
+    return response.data;
+  }
+
+  async connectInstagram(input: { accountId: string; accessToken: string; tokenExpiresAt: string }): Promise<InstagramConnection> {
+    const response = await this.request<InstagramConnection>("/v1/workspace/instagram", {
+      body: input,
+      method: "PUT"
+    });
+    return response.data;
+  }
+
+  async disconnectInstagram(): Promise<InstagramConnection> {
+    const response = await this.request<InstagramConnection>("/v1/workspace/instagram", {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
+  async publishReadiness(contentItemId: string): Promise<PublishReadiness> {
+    const response = await this.request<PublishReadiness>(`/v1/workspace/publish-readiness/${contentItemId}`);
+    return response.data;
+  }
+
   private async request<TData>(
     path: string,
-    options: { body?: Record<string, unknown>; method?: "GET" | "PATCH" | "POST" | "PUT" } = {}
+    options: { body?: Record<string, unknown>; method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT" } = {}
   ): Promise<ApiEnvelope<TData>> {
     const headers: Record<string, string> = {
       Accept: "application/json"

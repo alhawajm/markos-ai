@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, RefreshCcw, RotateCcw } from "lucide-react";
+import { CalendarClock, RefreshCcw, RotateCcw, ShieldCheck } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuthSession, ContentRecord, Locale } from "@markos/shared-types";
+import type { AuthSession, ContentRecord, Locale, PublishReadiness } from "@markos/shared-types";
 
 const sessionKey = "markos.session";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -136,8 +136,10 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
           empty={copy(locale, "scheduledEmpty")}
           isBusy={isBusy}
           items={scheduled}
+          client={client}
           locale={locale}
           onUnschedule={unschedule}
+          setMessage={setMessage}
           title={copy(locale, "scheduled")}
         />
       </div>
@@ -225,15 +227,19 @@ function ScheduledGroup({
   empty,
   isBusy,
   items,
+  client,
   locale,
   onUnschedule,
+  setMessage,
   title
 }: {
   empty: string;
   isBusy: boolean;
   items: ContentRecord[];
+  client: MarkosApiClient;
   locale: Locale;
   onUnschedule: (item: ContentRecord) => Promise<void>;
+  setMessage: (message: string) => void;
   title: string;
 }) {
   return (
@@ -242,31 +248,87 @@ function ScheduledGroup({
       <div className="mt-4 grid gap-3">
         {items.length > 0 ? (
           items.map((item) => (
-            <article className="rounded-card border border-border p-4" key={item.id}>
-              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-                <ContentSummary item={item} locale={locale} />
-                <div className="flex flex-col gap-2 sm:items-end">
-                  <span className="text-sm font-medium text-navy">
-                    {item.scheduledAt ? new Date(item.scheduledAt).toLocaleString(locale) : ""}
-                  </span>
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
-                    disabled={isBusy}
-                    onClick={() => onUnschedule(item)}
-                    type="button"
-                  >
-                    <RotateCcw size={16} />
-                    {copy(locale, "unschedule")}
-                  </button>
-                </div>
-              </div>
-            </article>
+            <ScheduledItem
+              client={client}
+              isBusy={isBusy}
+              item={item}
+              key={item.id}
+              locale={locale}
+              onUnschedule={onUnschedule}
+              setMessage={setMessage}
+            />
           ))
         ) : (
           <div className="rounded-card border border-dashed border-border p-4 text-sm text-muted">{empty}</div>
         )}
       </div>
     </section>
+  );
+}
+
+function ScheduledItem({
+  client,
+  isBusy,
+  item,
+  locale,
+  onUnschedule,
+  setMessage
+}: {
+  client: MarkosApiClient;
+  isBusy: boolean;
+  item: ContentRecord;
+  locale: Locale;
+  onUnschedule: (item: ContentRecord) => Promise<void>;
+  setMessage: (message: string) => void;
+}) {
+  const [readiness, setReadiness] = useState<PublishReadiness | null>(null);
+
+  async function checkReadiness() {
+    try {
+      const result = await client.publishReadiness(item.id);
+      setReadiness(result);
+      setMessage(result.ready ? copy(locale, "publishReady") : copy(locale, "notReady"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    }
+  }
+
+  return (
+    <article className="rounded-card border border-border p-4">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <ContentSummary item={item} locale={locale} />
+        <div className="flex flex-col gap-2 sm:items-end">
+          <span className="text-sm font-medium text-navy">
+            {item.scheduledAt ? new Date(item.scheduledAt).toLocaleString(locale) : ""}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
+              disabled={isBusy}
+              onClick={checkReadiness}
+              type="button"
+            >
+              <ShieldCheck size={16} />
+              {copy(locale, "check")}
+            </button>
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
+              disabled={isBusy}
+              onClick={() => onUnschedule(item)}
+              type="button"
+            >
+              <RotateCcw size={16} />
+              {copy(locale, "unschedule")}
+            </button>
+          </div>
+        </div>
+      </div>
+      {readiness ? (
+        <div className="mt-3 rounded-card bg-canvas p-3 text-sm text-muted">
+          {readiness.ready ? copy(locale, "publishReady") : readiness.reasons.map((reason) => copy(locale, reason)).join(" / ")}
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -307,9 +369,17 @@ function copy(locale: Locale, key: string): string {
     ar: {
       approved: "Approved",
       approvedEmpty: "No approved content is ready to schedule.",
+      check: "Check readiness",
       failed: "Request failed",
+      CONTENT_NOT_SCHEDULED: "Content is not scheduled",
+      INSTAGRAM_NOT_CONNECTED: "Instagram is not connected",
+      INSTAGRAM_TOKEN_EXPIRED: "Instagram token expired",
       note: "Scheduling stores an internal publish time only. Instagram publishing will be added in a later milestone.",
+      notReady: "Not publish-ready",
+      publishReady: "Publish-ready",
+      PUBLIC_MEDIA_REQUIRED: "Public media is required before publishing",
       ready: "Ready to schedule",
+      SCHEDULE_TIME_NOT_IN_FUTURE: "Schedule time is not in the future",
       refresh: "Refresh",
       schedule: "Schedule",
       scheduled: "Scheduled",
@@ -325,9 +395,17 @@ function copy(locale: Locale, key: string): string {
     en: {
       approved: "Approved",
       approvedEmpty: "No approved content is ready to schedule.",
+      check: "Check readiness",
       failed: "Request failed",
+      CONTENT_NOT_SCHEDULED: "Content is not scheduled",
+      INSTAGRAM_NOT_CONNECTED: "Instagram is not connected",
+      INSTAGRAM_TOKEN_EXPIRED: "Instagram token expired",
       note: "Scheduling stores an internal publish time only. Instagram publishing will be added in a later milestone.",
+      notReady: "Not publish-ready",
+      publishReady: "Publish-ready",
+      PUBLIC_MEDIA_REQUIRED: "Public media is required before publishing",
       ready: "Ready to schedule",
+      SCHEDULE_TIME_NOT_IN_FUTURE: "Schedule time is not in the future",
       refresh: "Refresh",
       schedule: "Schedule",
       scheduled: "Scheduled",

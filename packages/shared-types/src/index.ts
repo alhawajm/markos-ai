@@ -194,3 +194,16 @@ export interface ContentRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface InstagramConnection {
+  connected: boolean;
+  accountId?: string;
+  tokenExpiresAt?: string;
+}
+
+export interface PublishReadiness {
+  ready: boolean;
+  reasons: string[];
+  connection: InstagramConnection;
+  contentItem?: ContentRecord;
+}

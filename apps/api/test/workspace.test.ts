@@ -1,0 +1,137 @@
+import { randomUUID } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { prisma } from "../src/db/prisma";
+import { buildApp } from "../src/http/app";
+
+describe("workspace routes", () => {
+  it("connects and disconnects Instagram metadata", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
+    const initial = await app.inject({
+      method: "GET",
+      url: "/v1/workspace/instagram",
+      headers
+    });
+    const connected = await app.inject({
+      method: "PUT",
+      url: "/v1/workspace/instagram",
+      headers,
+      payload: {
+        accountId: "17841400000000000",
+        accessToken: "test-instagram-token",
+        tokenExpiresAt: expiresAt
+      }
+    });
+    const disconnected = await app.inject({
+      method: "DELETE",
+      url: "/v1/workspace/instagram",
+      headers
+    });
+
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json().data.connected).toBe(false);
+    expect(connected.statusCode).toBe(200);
+    expect(connected.json()).toMatchObject({
+      data: {
+        accountId: "17841400000000000",
+        connected: true,
+        tokenExpiresAt: expiresAt
+      }
+    });
+    expect(disconnected.statusCode).toBe(200);
+    expect(disconnected.json().data.connected).toBe(false);
+
+    await app.close();
+  });
+
+  it("reports publish readiness reasons without publishing", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await prisma.contentItem.create({
+      data: {
+        workspaceId: session.workspace.id,
+        contentType: "POST",
+        status: "SCHEDULED",
+        captionEn: "Ready soon",
+        hashtags: ["#Bahrain"],
+        mediaIds: [],
+        scheduledAt: new Date(Date.now() + 60 * 60 * 1000)
+      }
+    });
+
+    const missingConnection = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/publish-readiness/${content.id}`,
+      headers
+    });
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/workspace/instagram",
+      headers,
+      payload: {
+        accountId: "17841400000000000",
+        accessToken: "test-instagram-token",
+        tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    });
+    await prisma.contentItem.update({
+      where: {
+        id: content.id
+      },
+      data: {
+        mediaIds: [randomUUID()]
+      }
+    });
+
+    const ready = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/publish-readiness/${content.id}`,
+      headers
+    });
+
+    expect(missingConnection.statusCode).toBe(200);
+    expect(missingConnection.json()).toMatchObject({
+      data: {
+        ready: false,
+        reasons: ["INSTAGRAM_NOT_CONNECTED", "PUBLIC_MEDIA_REQUIRED"]
+      }
+    });
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json()).toMatchObject({
+      data: {
+        ready: true,
+        reasons: []
+      }
+    });
+
+    await app.close();
+  });
+});
+
+async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
+  const email = `workspace-${randomUUID()}@markos.test`;
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email,
+      password: "CorrectHorseBattery99!",
+      fullName: "Workspace User",
+      workspaceName: `Workspace Test ${randomUUID()}`,
+      locale: "en"
+    }
+  });
+
+  return response.json().data;
+}
+
+function authHeaders(accessToken: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${accessToken}`
+  };
+}

@@ -407,7 +407,7 @@ async function findStrategy(workspaceId: string, strategyId: string | undefined)
   return row.content as unknown as StrategyPlan;
 }
 
-function toContentRecord(row: {
+export function toContentRecord(row: {
   id: string;
   workspaceId: string;
   contentType: ContentType;

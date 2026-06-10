@@ -160,6 +160,12 @@ export const scheduleContentSchema = z.object({
   scheduledAt: z.string().datetime()
 });
 
+export const connectInstagramSchema = z.object({
+  accountId: z.string().min(3).max(120),
+  accessToken: z.string().min(8).max(4000),
+  tokenExpiresAt: z.string().datetime()
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -177,3 +183,4 @@ export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type UpdateContentInput = z.infer<typeof updateContentSchema>;
 export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
+export type ConnectInstagramInput = z.infer<typeof connectInstagramSchema>;
