@@ -141,7 +141,140 @@ describe("content routes", () => {
 
     await app.close();
   });
+
+  it("updates drafts and enforces the approval workflow", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    const itemId = created.id;
+
+    const update = await app.inject({
+      method: "PATCH",
+      url: `/v1/content/${itemId}`,
+      headers,
+      payload: {
+        captionEn: "Edited English caption",
+        captionAr: "Edited Arabic caption",
+        hashtags: ["#Edited", "#Bahrain"],
+        callToAction: "Book a tasting.",
+        contentPillar: "Lead generation"
+      }
+    });
+
+    expect(update.statusCode).toBe(200);
+    expect(update.json()).toMatchObject({
+      data: {
+        id: itemId,
+        status: "DRAFT",
+        captionEn: "Edited English caption",
+        hashtags: ["#Edited", "#Bahrain"],
+        callToAction: "Book a tasting.",
+        contentPillar: "Lead generation"
+      }
+    });
+
+    const review = await app.inject({
+      method: "POST",
+      url: `/v1/content/${itemId}/status`,
+      headers,
+      payload: {
+        status: "IN_REVIEW"
+      }
+    });
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/content/${itemId}/status`,
+      headers,
+      payload: {
+        status: "APPROVED"
+      }
+    });
+    const lockedEdit = await app.inject({
+      method: "PATCH",
+      url: `/v1/content/${itemId}`,
+      headers,
+      payload: {
+        captionEn: "Should not save"
+      }
+    });
+    const invalidTransition = await app.inject({
+      method: "POST",
+      url: `/v1/content/${itemId}/status`,
+      headers,
+      payload: {
+        status: "IN_REVIEW"
+      }
+    });
+
+    expect(review.statusCode).toBe(200);
+    expect(review.json().data.status).toBe("IN_REVIEW");
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().data.status).toBe("APPROVED");
+    expect(lockedEdit.statusCode).toBe(409);
+    expect(lockedEdit.json().error.code).toBe("CONTENT_LOCKED");
+    expect(invalidTransition.statusCode).toBe(409);
+    expect(invalidTransition.json().error.code).toBe("CONTENT_STATUS_TRANSITION_INVALID");
+
+    await app.close();
+  });
+
+  it("does not allow another workspace to edit a content item", async () => {
+    const app = await buildApp();
+    const ownerSession = await registerTestUser(app);
+    const ownerHeaders = authHeaders(ownerSession.tokens.accessToken);
+    const otherSession = await registerTestUser(app);
+    const otherHeaders = authHeaders(otherSession.tokens.accessToken);
+    const created = await createDraftContent(app, ownerHeaders);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/content/${created.id}`,
+      headers: otherHeaders,
+      payload: {
+        captionEn: "Cross workspace edit"
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe("CONTENT_NOT_FOUND");
+
+    await app.close();
+  });
 });
+
+async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
+  await app.inject({
+    method: "PUT",
+    url: "/v1/vault/company",
+    headers,
+    payload: {
+      entries: [
+        {
+          key: "profile",
+          value: {
+            name: "Pearl Coffee",
+            industry: "specialty coffee",
+            location: "Manama, Bahrain"
+          }
+        }
+      ]
+    }
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/content/generate",
+    headers,
+    payload: {
+      topic: "wholesale coffee leads",
+      contentType: "POST",
+      count: 1
+    }
+  });
+
+  return response.json().data[0];
+}
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   const email = `content-${randomUUID()}@markos.test`;

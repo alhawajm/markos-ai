@@ -1,6 +1,6 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
 import type { ContentRecord, StrategyPlan } from "@markos/shared-types";
-import type { GenerateContentInput } from "@markos/validation";
+import type { GenerateContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -12,6 +12,24 @@ const localCurrency = "BHD";
 export class ContentContextMissingError extends Error {
   constructor() {
     super("Complete at least one Vault section before generating content");
+  }
+}
+
+export class ContentItemNotFoundError extends Error {
+  constructor() {
+    super("Content item was not found");
+  }
+}
+
+export class ContentItemLockedError extends Error {
+  constructor() {
+    super("Content item cannot be edited in its current status");
+  }
+}
+
+export class ContentStatusTransitionError extends Error {
+  constructor() {
+    super("Content item cannot move to that status from its current status");
   }
 }
 
@@ -105,6 +123,92 @@ export async function generateWorkspaceContent(
   });
 
   return saved.map(toContentRecord);
+}
+
+export async function updateContentItem(
+  workspaceId: string,
+  contentItemId: string,
+  input: UpdateContentInput
+): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
+    throw new ContentItemLockedError();
+  }
+
+  const row = await prisma.contentItem.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
+      ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
+      ...(input.hashtags === undefined ? {} : { hashtags: input.hashtags }),
+      ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
+      ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+      ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
+      ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue })
+    }
+  });
+
+  return toContentRecord(row);
+}
+
+export async function updateContentItemStatus(
+  workspaceId: string,
+  contentItemId: string,
+  input: UpdateContentStatusInput
+): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (!isAllowedContentTransition(current.status, input.status)) {
+    throw new ContentStatusTransitionError();
+  }
+
+  const row = await prisma.contentItem.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      status: input.status
+    }
+  });
+
+  return toContentRecord(row);
+}
+
+function isAllowedContentTransition(current: ContentStatus, next: UpdateContentStatusInput["status"]): boolean {
+  if (current === next) {
+    return true;
+  }
+
+  const allowed: Record<UpdateContentStatusInput["status"], UpdateContentStatusInput["status"][]> = {
+    APPROVED: ["DRAFT"],
+    DRAFT: ["IN_REVIEW"],
+    IN_REVIEW: ["APPROVED", "DRAFT"]
+  };
+
+  return allowed[current as UpdateContentStatusInput["status"]]?.includes(next) ?? false;
 }
 
 async function findStrategy(workspaceId: string, strategyId: string | undefined): Promise<StrategyPlan | undefined> {

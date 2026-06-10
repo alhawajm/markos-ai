@@ -29,6 +29,7 @@ export const vaultSectionSchema = z.enum([
 ]);
 
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
+export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
 
 export const vaultValueSchema = z.record(z.string(), z.unknown());
 
@@ -137,6 +138,24 @@ export const generateContentSchema = z.object({
   strategyId: z.string().uuid().optional()
 });
 
+export const updateContentSchema = z
+  .object({
+    captionEn: z.string().max(2200).nullable().optional(),
+    captionAr: z.string().max(2200).nullable().optional(),
+    hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
+    callToAction: z.string().max(500).nullable().optional(),
+    contentPillar: z.string().max(160).nullable().optional(),
+    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
+    reelScript: z.record(z.string(), z.unknown()).nullable().optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one content field is required"
+  });
+
+export const updateContentStatusSchema = z.object({
+  status: z.enum(["DRAFT", "IN_REVIEW", "APPROVED"])
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -151,3 +170,5 @@ export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
+export type UpdateContentInput = z.infer<typeof updateContentSchema>;
+export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;

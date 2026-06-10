@@ -2,6 +2,7 @@ import type {
   ApiEnvelope,
   AuthSession,
   ContentRecord,
+  ContentStatus,
   ContentType,
   HealthResponse,
   KnowledgeVaultEntry,
@@ -137,9 +138,38 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async updateContent(
+    contentItemId: string,
+    input: {
+      captionEn?: string | null;
+      captionAr?: string | null;
+      hashtags?: string[];
+      callToAction?: string | null;
+      contentPillar?: string | null;
+      carousel?: Record<string, unknown> | null;
+      reelScript?: Record<string, unknown> | null;
+    }
+  ): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async updateContentStatus(contentItemId: string, status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
+      body: {
+        status
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
   private async request<TData>(
     path: string,
-    options: { body?: Record<string, unknown>; method?: "GET" | "POST" | "PUT" } = {}
+    options: { body?: Record<string, unknown>; method?: "GET" | "PATCH" | "POST" | "PUT" } = {}
   ): Promise<ApiEnvelope<TData>> {
     const headers: Record<string, string> = {
       Accept: "application/json"

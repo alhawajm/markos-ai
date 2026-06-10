@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, RefreshCcw, Sparkles } from "lucide-react";
+import { CheckCircle2, FileText, RefreshCcw, RotateCcw, Save, Send, Sparkles } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuthSession, ContentRecord, ContentType, Locale } from "@markos/shared-types";
 
@@ -153,7 +153,16 @@ export function ContentPanel({ locale }: { locale: Locale }) {
 
       <div className="grid gap-4">
         {items.length > 0 ? (
-          items.map((item) => <ContentDraftCard item={item} key={item.id} locale={locale} />)
+          items.map((item) => (
+            <ContentDraftCard
+              client={client}
+              item={item}
+              key={item.id}
+              locale={locale}
+              onChange={(updated) => setItems((current) => current.map((draft) => (draft.id === updated.id ? updated : draft)))}
+              setMessage={setMessage}
+            />
+          ))
         ) : (
           <div className="rounded-card border border-dashed border-border bg-card p-6 text-sm text-muted">
             {copy(locale, "empty")}
@@ -164,50 +173,194 @@ export function ContentPanel({ locale }: { locale: Locale }) {
   );
 }
 
-function ContentDraftCard({ item, locale }: { item: ContentRecord; locale: Locale }) {
+function ContentDraftCard({
+  client,
+  item,
+  locale,
+  onChange,
+  setMessage
+}: {
+  client: MarkosApiClient;
+  item: ContentRecord;
+  locale: Locale;
+  onChange: (item: ContentRecord) => void;
+  setMessage: (message: string) => void;
+}) {
+  const [captionEn, setCaptionEn] = useState(item.captionEn ?? "");
+  const [captionAr, setCaptionAr] = useState(item.captionAr ?? "");
+  const [hashtags, setHashtags] = useState(item.hashtags.join(", "));
+  const [callToAction, setCallToAction] = useState(item.callToAction ?? "");
+  const [contentPillar, setContentPillar] = useState(item.contentPillar ?? "");
+  const [isBusy, setIsBusy] = useState(false);
+  const canEdit = item.status === "DRAFT" || item.status === "IN_REVIEW";
+
+  useEffect(() => {
+    setCaptionEn(item.captionEn ?? "");
+    setCaptionAr(item.captionAr ?? "");
+    setHashtags(item.hashtags.join(", "));
+    setCallToAction(item.callToAction ?? "");
+    setContentPillar(item.contentPillar ?? "");
+  }, [item]);
+
+  async function save() {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const updated = await client.updateContent(item.id, {
+        captionEn: captionEn.trim() || null,
+        captionAr: captionAr.trim() || null,
+        hashtags: parseHashtags(hashtags),
+        callToAction: callToAction.trim() || null,
+        contentPillar: contentPillar.trim() || null
+      });
+      onChange(updated);
+      setMessage(copy(locale, "saved"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function move(status: "APPROVED" | "DRAFT" | "IN_REVIEW") {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const updated = await client.updateContentStatus(item.id, status);
+      onChange(updated);
+      setMessage(copy(locale, "statusUpdated"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   return (
     <article className="rounded-card border border-border bg-card p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-button bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">{item.contentType}</span>
           <span className="rounded-button border border-border px-2 py-1 text-xs text-muted">{item.status}</span>
-          {item.contentPillar ? <span className="text-xs text-muted">{item.contentPillar}</span> : null}
+          {contentPillar ? <span className="text-xs text-muted">{contentPillar}</span> : null}
         </div>
         <span className="text-xs text-muted">{new Date(item.createdAt).toLocaleDateString(locale)}</span>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {item.captionEn ? (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-normal text-muted">{copy(locale, "captionEn")}</h3>
-            <p className="mt-1 text-sm leading-6 text-navy">{item.captionEn}</p>
-          </div>
-        ) : null}
-        {item.captionAr ? (
-          <div dir="rtl">
-            <h3 className="text-xs font-semibold uppercase tracking-normal text-muted">{copy(locale, "captionAr")}</h3>
-            <p className="mt-1 text-sm leading-6 text-navy">{item.captionAr}</p>
-          </div>
-        ) : null}
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-normal text-muted">{copy(locale, "captionEn")}</span>
+          <textarea
+            className="mt-1 min-h-32 w-full resize-y rounded-input border border-border px-3 py-2 text-sm leading-6 outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canEdit || isBusy}
+            onChange={(event) => setCaptionEn(event.target.value)}
+            value={captionEn}
+          />
+        </label>
+        <label className="block" dir="rtl">
+          <span className="text-xs font-semibold uppercase tracking-normal text-muted">{copy(locale, "captionAr")}</span>
+          <textarea
+            className="mt-1 min-h-32 w-full resize-y rounded-input border border-border px-3 py-2 text-sm leading-6 outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canEdit || isBusy}
+            onChange={(event) => setCaptionAr(event.target.value)}
+            value={captionAr}
+          />
+        </label>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {item.hashtags.map((tag) => (
-          <span className="rounded-button border border-border px-2 py-1 text-xs text-muted" key={tag}>
-            {tag}
-          </span>
-        ))}
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-medium text-muted">{copy(locale, "hashtags")}</span>
+          <input
+            className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canEdit || isBusy}
+            onChange={(event) => setHashtags(event.target.value)}
+            value={hashtags}
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-muted">{copy(locale, "pillar")}</span>
+          <input
+            className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+            disabled={!canEdit || isBusy}
+            onChange={(event) => setContentPillar(event.target.value)}
+            value={contentPillar}
+          />
+        </label>
       </div>
 
-      {item.callToAction ? <p className="mt-4 text-sm font-medium text-navy">{item.callToAction}</p> : null}
+      <label className="mt-4 block">
+        <span className="text-xs font-medium text-muted">{copy(locale, "cta")}</span>
+        <input
+          className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent disabled:bg-canvas"
+          disabled={!canEdit || isBusy}
+          onChange={(event) => setCallToAction(event.target.value)}
+          value={callToAction}
+        />
+      </label>
 
       {item.carousel || item.reelScript ? (
         <pre className="mt-4 max-h-72 overflow-auto rounded-input bg-canvas p-3 text-xs leading-5 text-muted">
           {JSON.stringify(item.carousel ?? item.reelScript, null, 2)}
         </pre>
       ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
+          disabled={!canEdit || isBusy}
+          onClick={save}
+          type="button"
+        >
+          <Save size={16} />
+          {copy(locale, "save")}
+        </button>
+        {item.status === "DRAFT" ? (
+          <button
+            className="inline-flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={isBusy}
+            onClick={() => move("IN_REVIEW")}
+            type="button"
+          >
+            <Send size={16} />
+            {copy(locale, "submit")}
+          </button>
+        ) : null}
+        {item.status === "IN_REVIEW" ? (
+          <button
+            className="inline-flex items-center gap-2 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={isBusy}
+            onClick={() => move("APPROVED")}
+            type="button"
+          >
+            <CheckCircle2 size={16} />
+            {copy(locale, "approve")}
+          </button>
+        ) : null}
+        {item.status === "IN_REVIEW" || item.status === "APPROVED" ? (
+          <button
+            className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
+            disabled={isBusy}
+            onClick={() => move("DRAFT")}
+            type="button"
+          >
+            <RotateCcw size={16} />
+            {copy(locale, "rework")}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
+}
+
+function parseHashtags(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
 }
 
 async function refreshContent(
@@ -228,12 +381,21 @@ function copy(locale: Locale, key: string): string {
       captionAr: "Arabic caption",
       captionEn: "English caption",
       count: "Number of drafts",
+      cta: "Call to action",
       empty: "No content drafts yet. Generate drafts after adding Vault context.",
       failed: "Request failed",
       generate: "Generate drafts",
       generated: "Content drafts generated",
+      hashtags: "Hashtags",
+      pillar: "Content pillar",
+      approve: "Approve",
       refresh: "Refresh",
+      rework: "Return to draft",
+      save: "Save edits",
+      saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",
+      statusUpdated: "Status updated",
+      submit: "Submit for review",
       title: "Content",
       topic: "Topic",
       topicPlaceholder: "Example: wholesale coffee leads for cafes in Bahrain",
@@ -244,12 +406,21 @@ function copy(locale: Locale, key: string): string {
       captionAr: "Arabic Caption",
       captionEn: "English Caption",
       count: "Number of drafts",
+      cta: "Call to action",
       empty: "No content drafts yet. Generate drafts after adding Vault context.",
       failed: "Request failed",
       generate: "Generate drafts",
       generated: "Content drafts generated",
+      hashtags: "Hashtags",
+      pillar: "Content pillar",
+      approve: "Approve",
       refresh: "Refresh",
+      rework: "Return to draft",
+      save: "Save edits",
+      saved: "Content saved",
       signInFirst: "Sign in from the dashboard first, then complete at least one Vault section before generating content.",
+      statusUpdated: "Status updated",
+      submit: "Submit for review",
       title: "Content",
       topic: "Topic",
       topicPlaceholder: "Example: wholesale coffee leads for cafes in Bahrain",
