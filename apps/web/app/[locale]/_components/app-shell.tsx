@@ -16,6 +16,7 @@ import {
 import { t } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
 import { OnboardingPanel } from "./onboarding-panel";
+import { VaultPanel } from "./vault-panel";
 
 export type SectionSlug =
   | "dashboard"
@@ -309,6 +310,7 @@ export function AppShell({ locale, activeSection }: { locale: Locale; activeSect
             </div>
 
             {activeSection === "dashboard" ? <OnboardingPanel locale={locale} /> : null}
+            {activeSection === "vault" ? <VaultPanel locale={locale} /> : null}
           </div>
         </section>
       </div>

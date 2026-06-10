@@ -1,4 +1,13 @@
-import type { ApiEnvelope, AuthSession, HealthResponse, OnboardingState } from "@markos/shared-types";
+import type {
+  ApiEnvelope,
+  AuthSession,
+  HealthResponse,
+  KnowledgeVaultEntry,
+  OnboardingState,
+  VaultCompletenessScore,
+  VaultRagChunk,
+  VaultSection
+} from "@markos/shared-types";
 
 export interface MarkosApiClientOptions {
   baseUrl: string;
@@ -60,6 +69,35 @@ export class MarkosApiClient {
   async completeOnboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding/complete", {
       body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async vault(): Promise<Record<VaultSection, KnowledgeVaultEntry[]>> {
+    const response = await this.request<Record<VaultSection, KnowledgeVaultEntry[]>>("/v1/vault");
+    return response.data;
+  }
+
+  async vaultScore(): Promise<VaultCompletenessScore> {
+    const response = await this.request<VaultCompletenessScore>("/v1/vault/score");
+    return response.data;
+  }
+
+  async saveVaultSection(
+    section: VaultSection,
+    input: { entries: Array<{ key: string; value: Record<string, unknown> }> }
+  ): Promise<KnowledgeVaultEntry[]> {
+    const response = await this.request<KnowledgeVaultEntry[]>(`/v1/vault/${section}`, {
+      body: input,
+      method: "PUT"
+    });
+    return response.data;
+  }
+
+  async searchVault(input: { query: string; section?: VaultSection; topK?: number }): Promise<VaultRagChunk[]> {
+    const response = await this.request<VaultRagChunk[]>("/v1/vault/rag/search", {
+      body: input,
       method: "POST"
     });
     return response.data;
