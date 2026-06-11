@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, LogOut, RefreshCcw, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, LogOut, RefreshCcw, Save, ShieldCheck } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuthSession, Locale, OnboardingState } from "@markos/shared-types";
 
@@ -181,6 +181,9 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     );
   }, [session]);
   const activeDefinition = modules.find((item) => item.slug === activeModule) ?? modules[0]!;
+  const missingModules = modules.filter((item) => state?.modules.find((module) => module.module === item.slug)?.completed !== true);
+  const activeModuleState = state?.modules.find((module) => module.module === activeDefinition.slug);
+  const canComplete = Boolean(session) && !isBusy && (state?.vaultScore.score ?? 0) === 100;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(sessionKey);
@@ -284,6 +287,11 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
               <p className="mt-1 text-xs text-muted">{session.user.email}</p>
             </div>
             <ProgressBar value={state?.vaultScore.score ?? 0} />
+            <GapList
+              locale={locale}
+              missingModules={missingModules.map((item) => item.title[locale])}
+              missingSections={state?.vaultScore.missingSections ?? []}
+            />
             <div className="grid grid-cols-2 gap-2">
               <button className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm" onClick={() => refreshState(client, setState, setMessage)} type="button">
                 <RefreshCcw size={16} />
@@ -330,7 +338,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
             <h2 className="text-base font-semibold text-navy">{copy(locale, "onboarding")}</h2>
             <p className="mt-1 text-sm text-muted">{copy(locale, "onboardingSubtitle")}</p>
           </div>
-          <button className="rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!session || isBusy} onClick={complete} type="button">
+          <button className="rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!canComplete} onClick={complete} type="button">
             {copy(locale, "completeButton")}
           </button>
         </div>
@@ -359,6 +367,19 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
           <div>
             <h3 className="text-sm font-semibold text-navy">{activeDefinition.title[locale]}</h3>
             <p className="mt-1 text-sm text-muted">{activeDefinition.description[locale]}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(activeModuleState?.sections ?? []).map((section) => {
+                const complete = state?.vaultScore.completedSections.includes(section) ?? false;
+                return (
+                  <span
+                    className={complete ? "rounded-full bg-accent/10 px-2 py-1 text-xs font-medium text-accent" : "rounded-full bg-navy/5 px-2 py-1 text-xs font-medium text-muted"}
+                    key={section}
+                  >
+                    {sectionLabel(locale, section)}
+                  </span>
+                );
+              })}
+            </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {activeDefinition.fields.map((field) => (
                 <Field
@@ -428,6 +449,46 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
+function GapList({
+  locale,
+  missingModules,
+  missingSections
+}: {
+  locale: Locale;
+  missingModules: string[];
+  missingSections: OnboardingState["vaultScore"]["missingSections"];
+}) {
+  if (missingSections.length === 0) {
+    return (
+      <div className="rounded-card border border-accent/20 bg-accent/5 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-accent">
+          <CheckCircle2 size={16} />
+          {copy(locale, "allComplete")}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-card border border-border bg-canvas p-3">
+      <div className="flex items-center gap-2 text-sm font-semibold text-navy">
+        <AlertCircle size={16} className="text-accent" />
+        {copy(locale, "remaining")}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {missingModules.map((module) => (
+          <span className="rounded-full bg-white px-2 py-1 text-xs text-muted" key={module}>
+            {module}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted">
+        {copy(locale, "missingSections")}: {missingSections.map((section) => sectionLabel(locale, section)).join(", ")}
+      </p>
+    </div>
+  );
+}
+
 async function refreshState(
   client: MarkosApiClient,
   setState: (state: OnboardingState) => void,
@@ -451,9 +512,25 @@ function valueOf(values: Record<string, string>, key: string): string {
   return values[key] ?? "";
 }
 
+function sectionLabel(locale: Locale, section: OnboardingState["vaultScore"]["requiredSections"][number]): string {
+  const labels: Record<OnboardingState["vaultScore"]["requiredSections"][number], Record<Locale, string>> = {
+    AUDIENCE: { ar: "الجمهور", en: "Audience" },
+    BRAND: { ar: "الهوية", en: "Brand" },
+    COMPANY: { ar: "الشركة", en: "Company" },
+    COMPETITORS: { ar: "المنافسون", en: "Competitors" },
+    OBJECTIVES: { ar: "الأهداف", en: "Objectives" },
+    PRODUCTS: { ar: "المنتجات", en: "Products" },
+    STORY: { ar: "القصة", en: "Story" },
+    TONE: { ar: "النبرة", en: "Tone" }
+  };
+
+  return labels[section][locale];
+}
+
 function copy(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
+      allComplete: "كل وحدات المعرفة مكتملة",
       complete: "اكتملت التهيئة",
       completeButton: "إنهاء التهيئة",
       email: "البريد الإلكتروني",
@@ -462,8 +539,10 @@ function copy(locale: Locale, key: string): string {
       login: "تسجيل الدخول",
       onboarding: "تهيئة معرفة النشاط",
       onboardingSubtitle: "كل وحدة تحفظ معرفة قابلة للاسترجاع في الخزنة.",
+      missingSections: "الأقسام الناقصة",
       password: "كلمة المرور",
       refresh: "تحديث",
+      remaining: "المتبقي للإكمال",
       register: "إنشاء حساب",
       save: "حفظ الوحدة",
       saved: "تم الحفظ",
@@ -473,6 +552,7 @@ function copy(locale: Locale, key: string): string {
       workspaceName: "اسم مساحة العمل"
     },
     en: {
+      allComplete: "All knowledge modules are complete",
       complete: "Onboarding complete",
       completeButton: "Complete onboarding",
       email: "Email",
@@ -481,8 +561,10 @@ function copy(locale: Locale, key: string): string {
       login: "Log in",
       onboarding: "Business Knowledge Onboarding",
       onboardingSubtitle: "Each module saves retrievable business memory into the Vault.",
+      missingSections: "Missing sections",
       password: "Password",
       refresh: "Refresh",
+      remaining: "Remaining to complete",
       register: "Create account",
       save: "Save module",
       saved: "Saved",

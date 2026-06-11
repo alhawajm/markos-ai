@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: Staging container deploy pipeline
+- Latest completed implementation step: M1 completeness gaps surfaced in onboarding and Vault
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -72,7 +72,7 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [ ] Seven-module onboarding wizard is complete against the spec.
 - [ ] Vault versioning UX and history are complete.
 - [ ] Brand upload flow is complete.
-- [ ] Completeness gaps are surfaced in the expected UX.
+- [x] Completeness gaps are surfaced in the expected UX.
 - [ ] M1 acceptance gate fully passed.
 
 ## M2 AI Content Engine

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Database, RefreshCcw, Save, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, Database, RefreshCcw, Save, Search } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type {
   AuthSession,
@@ -152,6 +152,8 @@ export function VaultPanel({ locale }: { locale: Locale }) {
           </p>
         </div>
 
+        <VaultGaps locale={locale} missingSections={score?.missingSections ?? []} onSelectSection={setActiveSection} />
+
         <div className="mt-5 grid gap-1">
           {sections.map((section) => {
             const isComplete = score?.completedSections.includes(section) ?? false;
@@ -277,6 +279,48 @@ export function VaultPanel({ locale }: { locale: Locale }) {
   );
 }
 
+function VaultGaps({
+  locale,
+  missingSections,
+  onSelectSection
+}: {
+  locale: Locale;
+  missingSections: VaultSection[];
+  onSelectSection: (section: VaultSection) => void;
+}) {
+  if (missingSections.length === 0) {
+    return (
+      <div className="mt-4 rounded-card border border-accent/20 bg-accent/5 p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-accent">
+          <CheckCircle2 size={16} />
+          {copy(locale, "ready")}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-card border border-border bg-canvas p-3">
+      <div className="flex items-center gap-2 text-sm font-semibold text-navy">
+        <AlertCircle size={16} className="text-accent" />
+        {copy(locale, "missing")}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {missingSections.map((section) => (
+          <button
+            className="rounded-full bg-white px-2 py-1 text-xs text-muted hover:text-navy"
+            key={section}
+            onClick={() => onSelectSection(section)}
+            type="button"
+          >
+            {sectionLabel(locale, section)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 async function refreshVault(
   client: MarkosApiClient,
   setVault: (vault: Record<VaultSection, KnowledgeVaultEntry[]>) => void,
@@ -320,6 +364,8 @@ function copy(locale: Locale, key: string): string {
       failed: "تعذر تنفيذ الطلب",
       jsonObject: "القيمة يجب أن تكون JSON object.",
       key: "المفتاح",
+      missing: "أقسام المعرفة الناقصة",
+      ready: "الخزنة مكتملة",
       refresh: "تحديث",
       save: "حفظ في الخزنة",
       saved: "تم الحفظ",
@@ -340,6 +386,8 @@ function copy(locale: Locale, key: string): string {
       failed: "Request failed",
       jsonObject: "Value must be a JSON object.",
       key: "Key",
+      missing: "Missing knowledge sections",
+      ready: "Vault complete",
       refresh: "Refresh",
       save: "Save to Vault",
       saved: "Saved",
