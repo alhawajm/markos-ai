@@ -93,14 +93,18 @@ export const companyOnboardingSchema = z.object({
   industry: z.string().min(2).max(120),
   size: z.string().min(1).max(80).optional(),
   location: z.string().min(2).max(120),
+  socials: z.array(z.string().min(1).max(160)).max(20).default([]),
+  website: z.string().url().optional(),
   languages: nonEmptyStringArraySchema
 });
 
 export const storyOnboardingSchema = z.object({
   mission: z.string().min(10).max(2000),
   origin: z.string().max(2000).optional(),
+  problemSolved: z.string().max(1000).optional(),
   values: nonEmptyStringArraySchema,
-  usp: z.string().min(5).max(1000)
+  usp: z.string().min(5).max(1000),
+  vision: z.string().max(1000).optional()
 });
 
 export const productsOnboardingSchema = z.object({
@@ -115,12 +119,19 @@ export const productsOnboardingSchema = z.object({
       })
     )
     .min(1)
-    .max(30)
+    .max(30),
+  differentiators: z.array(z.string().min(1).max(160)).max(20).default([]),
+  priceRange: z.string().max(120).optional(),
+  salesChannels: z.array(z.string().min(1).max(80)).max(12).default([])
 });
 
 export const audienceOnboardingSchema = z.object({
+  ageRange: z.string().max(80).optional(),
   demographics: z.string().min(2).max(1000),
+  genderBreakdown: z.string().max(120).optional(),
   interests: nonEmptyStringArraySchema,
+  locations: z.array(z.string().min(1).max(120)).max(20).default([]),
+  motivations: z.array(z.string().min(1).max(120)).max(20).default([]),
   painPoints: nonEmptyStringArraySchema
 });
 
@@ -130,14 +141,18 @@ export const competitorsOnboardingSchema = z.object({
       z.object({
         name: z.string().min(1).max(160),
         instagramHandle: z.string().max(80).optional(),
+        website: z.string().url().optional(),
         notes: z.string().max(1000).optional()
       })
     )
     .min(1)
-    .max(20)
+    .max(20),
+  competitiveAdvantage: z.string().max(1000).optional(),
+  doDifferently: z.string().max(1000).optional()
 });
 
 export const brandOnboardingSchema = z.object({
+  aestheticWords: z.array(z.string().min(1).max(80)).max(20).default([]),
   logoMediaId: z.string().uuid().optional(),
   colors: nonEmptyStringArraySchema,
   fonts: z.array(z.string().min(1).max(120)).max(12).default([]),
@@ -148,7 +163,10 @@ export const brandOnboardingSchema = z.object({
 
 export const objectivesOnboardingSchema = z.object({
   goals: nonEmptyStringArraySchema,
-  kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({})
+  budgetRange: z.string().max(120).optional(),
+  instagramExperience: z.string().max(120).optional(),
+  kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+  success90Days: z.string().max(1000).optional()
 });
 
 export const generateStrategySchema = z.object({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Circle, LogOut, RefreshCcw, Save, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Circle, LogOut, Plus, RefreshCcw, Save, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuthSession, Locale, MediaAssetRecord, OnboardingState } from "@markos/shared-types";
 
@@ -10,6 +10,7 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:400
 
 type Mode = "login" | "register";
 type ModuleSlug = "company" | "story" | "products" | "audience" | "competitors" | "brand" | "objectives";
+type Drafts = Record<ModuleSlug, Record<string, string>>;
 
 interface ModuleDefinition {
   slug: ModuleSlug;
@@ -34,6 +35,8 @@ const modules: ModuleDefinition[] = [
       { name: "industry", label: { ar: "المجال", en: "Industry" } },
       { name: "size", label: { ar: "الحجم", en: "Size" } },
       { name: "location", label: { ar: "الموقع", en: "Location" } },
+      { name: "website", label: { ar: "الموقع الإلكتروني", en: "Website" }, placeholder: "https://example.com" },
+      { name: "socials", label: { ar: "الحسابات الاجتماعية", en: "Social accounts" }, placeholder: "instagram.com/brand, tiktok.com/@brand" },
       { name: "languages", label: { ar: "اللغات", en: "Languages" }, placeholder: "Arabic, English" }
     ],
     toPayload: (values) => ({
@@ -41,7 +44,9 @@ const modules: ModuleDefinition[] = [
       languages: splitList(valueOf(values, "languages")),
       location: valueOf(values, "location"),
       name: valueOf(values, "name"),
-      size: valueOf(values, "size") || undefined
+      size: valueOf(values, "size") || undefined,
+      socials: splitList(valueOf(values, "socials")),
+      website: valueOf(values, "website") || undefined
     })
   },
   {
@@ -51,14 +56,18 @@ const modules: ModuleDefinition[] = [
     fields: [
       { name: "mission", label: { ar: "الرسالة", en: "Mission" }, kind: "textarea" },
       { name: "origin", label: { ar: "البداية", en: "Origin" }, kind: "textarea" },
+      { name: "vision", label: { ar: "الرؤية", en: "Vision" }, kind: "textarea" },
       { name: "values", label: { ar: "القيم", en: "Values" } },
-      { name: "usp", label: { ar: "نقطة التميز", en: "USP" }, kind: "textarea" }
+      { name: "usp", label: { ar: "نقطة التميز", en: "USP" }, kind: "textarea" },
+      { name: "problemSolved", label: { ar: "المشكلة الأساسية", en: "Problem solved" }, kind: "textarea" }
     ],
     toPayload: (values) => ({
       mission: valueOf(values, "mission"),
       origin: valueOf(values, "origin") || undefined,
+      problemSolved: valueOf(values, "problemSolved") || undefined,
       usp: valueOf(values, "usp"),
-      values: splitList(valueOf(values, "values"))
+      values: splitList(valueOf(values, "values")),
+      vision: valueOf(values, "vision") || undefined
     })
   },
   {
@@ -66,21 +75,15 @@ const modules: ModuleDefinition[] = [
     title: { ar: "المنتجات", en: "Products" },
     description: { ar: "منتج رئيسي واحد كبداية.", en: "One primary product to start." },
     fields: [
-      { name: "name", label: { ar: "اسم المنتج", en: "Product name" } },
-      { name: "category", label: { ar: "الفئة", en: "Category" } },
-      { name: "priceMinor", label: { ar: "السعر بالفلس", en: "Price in fils" }, kind: "number" },
-      { name: "description", label: { ar: "الوصف", en: "Description" }, kind: "textarea" }
+      { name: "priceRange", label: { ar: "نطاق السعر", en: "Price range" } },
+      { name: "salesChannels", label: { ar: "قنوات البيع", en: "Sales channels" }, placeholder: "Online, in-store, Instagram DM" },
+      { name: "differentiators", label: { ar: "ما يميز المنتجات", en: "Product differentiators" }, kind: "textarea" }
     ],
     toPayload: (values) => ({
-      items: [
-        {
-          category: valueOf(values, "category") || undefined,
-          currency: "BHD",
-          description: valueOf(values, "description") || undefined,
-          name: valueOf(values, "name"),
-          priceMinor: valueOf(values, "priceMinor") ? Number(valueOf(values, "priceMinor")) : undefined
-        }
-      ]
+      differentiators: splitList(valueOf(values, "differentiators")),
+      items: collectProductRows(values),
+      priceRange: valueOf(values, "priceRange") || undefined,
+      salesChannels: splitList(valueOf(values, "salesChannels"))
     })
   },
   {
@@ -88,13 +91,21 @@ const modules: ModuleDefinition[] = [
     title: { ar: "الجمهور", en: "Audience" },
     description: { ar: "من نخاطب وما الذي يهمهم.", en: "Who we speak to and what matters to them." },
     fields: [
+      { name: "ageRange", label: { ar: "الفئة العمرية", en: "Age range" } },
+      { name: "genderBreakdown", label: { ar: "توزيع الجنس", en: "Gender breakdown" } },
+      { name: "locations", label: { ar: "مواقع العملاء", en: "Customer locations" }, placeholder: "Manama, Bahrain, GCC" },
       { name: "demographics", label: { ar: "الوصف الديموغرافي", en: "Demographics" }, kind: "textarea" },
       { name: "interests", label: { ar: "الاهتمامات", en: "Interests" } },
-      { name: "painPoints", label: { ar: "نقاط الألم", en: "Pain points" } }
+      { name: "painPoints", label: { ar: "نقاط الألم", en: "Pain points" } },
+      { name: "motivations", label: { ar: "دوافع الشراء", en: "Buying motivations" } }
     ],
     toPayload: (values) => ({
+      ageRange: valueOf(values, "ageRange") || undefined,
       demographics: valueOf(values, "demographics"),
+      genderBreakdown: valueOf(values, "genderBreakdown") || undefined,
       interests: splitList(valueOf(values, "interests")),
+      locations: splitList(valueOf(values, "locations")),
+      motivations: splitList(valueOf(values, "motivations")),
       painPoints: splitList(valueOf(values, "painPoints"))
     })
   },
@@ -103,18 +114,13 @@ const modules: ModuleDefinition[] = [
     title: { ar: "المنافسون", en: "Competitors" },
     description: { ar: "منافس واحد للمقارنة الأولية.", en: "One competitor for the first comparison." },
     fields: [
-      { name: "name", label: { ar: "اسم المنافس", en: "Competitor name" } },
-      { name: "instagramHandle", label: { ar: "حساب إنستغرام", en: "Instagram handle" } },
-      { name: "notes", label: { ar: "ملاحظات", en: "Notes" }, kind: "textarea" }
+      { name: "doDifferently", label: { ar: "ما تريد فعله بشكل مختلف", en: "What to do differently" }, kind: "textarea" },
+      { name: "competitiveAdvantage", label: { ar: "الميزة التنافسية", en: "Competitive advantage" }, kind: "textarea" }
     ],
     toPayload: (values) => ({
-      items: [
-        {
-          instagramHandle: valueOf(values, "instagramHandle") || undefined,
-          name: valueOf(values, "name"),
-          notes: valueOf(values, "notes") || undefined
-        }
-      ]
+      competitiveAdvantage: valueOf(values, "competitiveAdvantage") || undefined,
+      doDifferently: valueOf(values, "doDifferently") || undefined,
+      items: collectCompetitorRows(values)
     })
   },
   {
@@ -124,10 +130,12 @@ const modules: ModuleDefinition[] = [
     fields: [
       { name: "colors", label: { ar: "الألوان", en: "Colors" }, placeholder: "#0F2D52, #F64B6A" },
       { name: "fonts", label: { ar: "الخطوط", en: "Fonts" } },
+      { name: "aestheticWords", label: { ar: "كلمات الهوية البصرية", en: "Visual aesthetic words" }, placeholder: "minimal, bold, warm" },
       { name: "toneWords", label: { ar: "كلمات النبرة", en: "Tone words" } },
       { name: "voiceNotes", label: { ar: "ملاحظات الصوت", en: "Voice notes" }, kind: "textarea" }
     ],
     toPayload: (values) => ({
+      aestheticWords: splitList(valueOf(values, "aestheticWords")),
       colors: splitList(valueOf(values, "colors")),
       fonts: splitList(valueOf(values, "fonts")),
       guidelinesMediaId: valueOf(values, "guidelinesMediaId") || undefined,
@@ -142,12 +150,18 @@ const modules: ModuleDefinition[] = [
     description: { ar: "أهداف التسويق ومؤشرات القياس.", en: "Marketing goals and KPI targets." },
     fields: [
       { name: "goals", label: { ar: "الأهداف", en: "Goals" } },
+      { name: "success90Days", label: { ar: "نجاح 90 يوم", en: "90-day success" }, kind: "textarea" },
+      { name: "instagramExperience", label: { ar: "خبرة إنستغرام", en: "Instagram experience" } },
+      { name: "budgetRange", label: { ar: "ميزانية التسويق", en: "Marketing budget" } },
       { name: "primaryKpi", label: { ar: "مؤشر رئيسي", en: "Primary KPI" } },
       { name: "target", label: { ar: "الهدف الرقمي", en: "Target" } }
     ],
     toPayload: (values) => ({
+      budgetRange: valueOf(values, "budgetRange") || undefined,
       goals: splitList(valueOf(values, "goals")),
-      kpiTargets: valueOf(values, "primaryKpi") ? { [valueOf(values, "primaryKpi")]: valueOf(values, "target") || true } : {}
+      instagramExperience: valueOf(values, "instagramExperience") || undefined,
+      kpiTargets: valueOf(values, "primaryKpi") ? { [valueOf(values, "primaryKpi")]: valueOf(values, "target") || true } : {},
+      success90Days: valueOf(values, "success90Days") || undefined
     })
   }
 ];
@@ -163,7 +177,9 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     password: "",
     workspaceName: ""
   });
-  const [moduleValues, setModuleValues] = useState<Record<string, string>>({});
+  const [moduleDrafts, setModuleDrafts] = useState<Drafts>(() => emptyDrafts());
+  const [productRowCount, setProductRowCount] = useState(1);
+  const [competitorRowCount, setCompetitorRowCount] = useState(1);
   const [brandAssets, setBrandAssets] = useState<Record<string, MediaAssetRecord | undefined>>({});
   const [message, setMessage] = useState<string>("");
   const [isBusy, setIsBusy] = useState(false);
@@ -186,6 +202,8 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   const activeDefinition = modules.find((item) => item.slug === activeModule) ?? modules[0]!;
   const missingModules = modules.filter((item) => state?.modules.find((module) => module.module === item.slug)?.completed !== true);
   const activeModuleState = state?.modules.find((module) => module.module === activeDefinition.slug);
+  const activeModuleIndex = modules.findIndex((item) => item.slug === activeModule);
+  const activeModuleValues = moduleDrafts[activeModule];
   const canComplete = Boolean(session) && !isBusy && (state?.vaultScore.score ?? 0) === 100;
 
   useEffect(() => {
@@ -243,7 +261,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     setMessage("");
 
     try {
-      const payload = activeDefinition.toPayload(moduleValues);
+      const payload = activeDefinition.toPayload(activeModuleValues);
       const nextState = await client.saveOnboardingModule(activeDefinition.slug, payload);
       setState(nextState);
       setMessage(copy(locale, "saved"));
@@ -272,6 +290,27 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     window.localStorage.removeItem(sessionKey);
     setSession(null);
     setState(null);
+    setMessage("");
+  }
+
+  function setDraftValue(key: string, value: string) {
+    setModuleDrafts((current) => ({
+      ...current,
+      [activeModule]: {
+        ...current[activeModule],
+        [key]: value
+      }
+    }));
+  }
+
+  function goToModule(index: number) {
+    const next = modules[index];
+
+    if (next === undefined) {
+      return;
+    }
+
+    setActiveModule(next.slug);
     setMessage("");
   }
 
@@ -356,8 +395,8 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   key={item.slug}
                   onClick={() => {
                     setActiveModule(item.slug);
-                    setModuleValues({});
                     setBrandAssets({});
+                    setMessage("");
                   }}
                   type="button"
                 >
@@ -391,11 +430,37 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   {...(field.placeholder ? { placeholder: field.placeholder } : {})}
                   key={field.name}
                   label={field.label[locale]}
-                  onChange={(value) => setModuleValues((current) => ({ ...current, [field.name]: value }))}
-                  value={moduleValues[field.name] ?? ""}
+                  onChange={(value) => setDraftValue(field.name, value)}
+                  value={activeModuleValues[field.name] ?? ""}
                 />
               ))}
             </div>
+            {activeDefinition.slug === "products" ? (
+              <ProductRows
+                locale={locale}
+                onAdd={() => setProductRowCount((count) => Math.min(count + 1, 30))}
+                onRemove={(index) => {
+                  setProductRowCount((count) => Math.max(1, count - 1));
+                  setModuleDrafts((current) => removeRowDraft(current, "products", "product", index));
+                }}
+                onValueChange={setDraftValue}
+                rowCount={productRowCount}
+                values={activeModuleValues}
+              />
+            ) : null}
+            {activeDefinition.slug === "competitors" ? (
+              <CompetitorRows
+                locale={locale}
+                onAdd={() => setCompetitorRowCount((count) => Math.min(count + 1, 20))}
+                onRemove={(index) => {
+                  setCompetitorRowCount((count) => Math.max(1, count - 1));
+                  setModuleDrafts((current) => removeRowDraft(current, "competitors", "competitor", index));
+                }}
+                onValueChange={setDraftValue}
+                rowCount={competitorRowCount}
+                values={activeModuleValues}
+              />
+            ) : null}
             {activeDefinition.slug === "brand" ? (
               <BrandAssetUploads
                 assets={brandAssets}
@@ -404,7 +469,13 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                 locale={locale}
                 onUploaded={(key, asset) => {
                   setBrandAssets((current) => ({ ...current, [key]: asset }));
-                  setModuleValues((current) => ({ ...current, [key]: asset.id }));
+                  setModuleDrafts((current) => ({
+                    ...current,
+                    brand: {
+                      ...current.brand,
+                      [key]: asset.id
+                    }
+                  }));
                   setMessage(copy(locale, "uploaded"));
                 }}
                 setBusy={setIsBusy}
@@ -413,15 +484,141 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
             ) : null}
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="min-h-5 text-sm text-muted">{message}</p>
-              <button className="inline-flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!session || isBusy} onClick={saveModule} type="button">
-                <Save size={16} />
-                {copy(locale, "save")}
-              </button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted disabled:opacity-50"
+                  disabled={activeModuleIndex === 0 || isBusy}
+                  onClick={() => goToModule(activeModuleIndex - 1)}
+                  type="button"
+                >
+                  <ChevronLeft size={16} />
+                  {copy(locale, "previous")}
+                </button>
+                <button
+                  className="rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted disabled:opacity-50"
+                  disabled={activeModuleIndex === modules.length - 1 || isBusy}
+                  onClick={() => goToModule(activeModuleIndex + 1)}
+                  type="button"
+                >
+                  {copy(locale, "skip")}
+                </button>
+                <button className="inline-flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!session || isBusy} onClick={saveModule} type="button">
+                  <Save size={16} />
+                  {copy(locale, "save")}
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={activeModuleIndex === modules.length - 1 || isBusy}
+                  onClick={() => goToModule(activeModuleIndex + 1)}
+                  type="button"
+                >
+                  {copy(locale, "next")}
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function ProductRows({
+  locale,
+  onAdd,
+  onRemove,
+  onValueChange,
+  rowCount,
+  values
+}: {
+  locale: Locale;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  onValueChange: (key: string, value: string) => void;
+  rowCount: number;
+  values: Record<string, string>;
+}) {
+  return (
+    <div className="mt-4 grid gap-3">
+      {Array.from({ length: rowCount }, (_, index) => (
+        <div className="rounded-card border border-border bg-canvas p-3" key={index}>
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-xs font-semibold uppercase text-muted">
+              {copy(locale, "product")} {index + 1}
+            </h4>
+            <button
+              aria-label={copy(locale, "remove")}
+              className="rounded-button border border-border p-2 text-muted hover:text-accent disabled:opacity-50"
+              disabled={rowCount === 1}
+              onClick={() => onRemove(index)}
+              type="button"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Field label={copy(locale, "productName")} onChange={(value) => onValueChange(rowKey("product", index, "name"), value)} value={values[rowKey("product", index, "name")] ?? ""} />
+            <Field label={copy(locale, "category")} onChange={(value) => onValueChange(rowKey("product", index, "category"), value)} value={values[rowKey("product", index, "category")] ?? ""} />
+            <Field kind="number" label={copy(locale, "priceMinor")} onChange={(value) => onValueChange(rowKey("product", index, "priceMinor"), value)} value={values[rowKey("product", index, "priceMinor")] ?? ""} />
+            <Field kind="textarea" label={copy(locale, "description")} onChange={(value) => onValueChange(rowKey("product", index, "description"), value)} value={values[rowKey("product", index, "description")] ?? ""} />
+          </div>
+        </div>
+      ))}
+      <button className="inline-flex w-fit items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted" onClick={onAdd} type="button">
+        <Plus size={16} />
+        {copy(locale, "addProduct")}
+      </button>
+    </div>
+  );
+}
+
+function CompetitorRows({
+  locale,
+  onAdd,
+  onRemove,
+  onValueChange,
+  rowCount,
+  values
+}: {
+  locale: Locale;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  onValueChange: (key: string, value: string) => void;
+  rowCount: number;
+  values: Record<string, string>;
+}) {
+  return (
+    <div className="mt-4 grid gap-3">
+      {Array.from({ length: rowCount }, (_, index) => (
+        <div className="rounded-card border border-border bg-canvas p-3" key={index}>
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-xs font-semibold uppercase text-muted">
+              {copy(locale, "competitor")} {index + 1}
+            </h4>
+            <button
+              aria-label={copy(locale, "remove")}
+              className="rounded-button border border-border p-2 text-muted hover:text-accent disabled:opacity-50"
+              disabled={rowCount === 1}
+              onClick={() => onRemove(index)}
+              type="button"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Field label={copy(locale, "competitorName")} onChange={(value) => onValueChange(rowKey("competitor", index, "name"), value)} value={values[rowKey("competitor", index, "name")] ?? ""} />
+            <Field label={copy(locale, "instagramHandle")} onChange={(value) => onValueChange(rowKey("competitor", index, "instagramHandle"), value)} value={values[rowKey("competitor", index, "instagramHandle")] ?? ""} />
+            <Field label={copy(locale, "website")} onChange={(value) => onValueChange(rowKey("competitor", index, "website"), value)} value={values[rowKey("competitor", index, "website")] ?? ""} />
+            <Field kind="textarea" label={copy(locale, "notes")} onChange={(value) => onValueChange(rowKey("competitor", index, "notes"), value)} value={values[rowKey("competitor", index, "notes")] ?? ""} />
+          </div>
+        </div>
+      ))}
+      <button className="inline-flex w-fit items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted" onClick={onAdd} type="button">
+        <Plus size={16} />
+        {copy(locale, "addCompetitor")}
+      </button>
+    </div>
   );
 }
 
@@ -622,6 +819,87 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function collectProductRows(values: Record<string, string>) {
+  return collectRowIndexes(values, "product")
+    .map((index) => ({
+      category: valueOf(values, rowKey("product", index, "category")) || undefined,
+      currency: "BHD",
+      description: valueOf(values, rowKey("product", index, "description")) || undefined,
+      name: valueOf(values, rowKey("product", index, "name")),
+      priceMinor: valueOf(values, rowKey("product", index, "priceMinor"))
+        ? Number(valueOf(values, rowKey("product", index, "priceMinor")))
+        : undefined
+    }))
+    .filter((item) => item.name);
+}
+
+function collectCompetitorRows(values: Record<string, string>) {
+  return collectRowIndexes(values, "competitor")
+    .map((index) => ({
+      instagramHandle: valueOf(values, rowKey("competitor", index, "instagramHandle")) || undefined,
+      name: valueOf(values, rowKey("competitor", index, "name")),
+      notes: valueOf(values, rowKey("competitor", index, "notes")) || undefined,
+      website: valueOf(values, rowKey("competitor", index, "website")) || undefined
+    }))
+    .filter((item) => item.name);
+}
+
+function collectRowIndexes(values: Record<string, string>, prefix: "competitor" | "product"): number[] {
+  const indexes = new Set<number>();
+
+  for (const key of Object.keys(values)) {
+    const match = key.match(new RegExp(`^${prefix}\\.(\\d+)\\.`));
+
+    if (match?.[1] !== undefined) {
+      indexes.add(Number(match[1]));
+    }
+  }
+
+  return [...indexes].sort((first, second) => first - second);
+}
+
+function rowKey(prefix: "competitor" | "product", index: number, field: string): string {
+  return `${prefix}.${index}.${field}`;
+}
+
+function emptyDrafts(): Drafts {
+  return {
+    audience: {},
+    brand: {},
+    company: {},
+    competitors: {},
+    objectives: {},
+    products: {},
+    story: {}
+  };
+}
+
+function removeRowDraft(drafts: Drafts, module: Extract<ModuleSlug, "competitors" | "products">, prefix: "competitor" | "product", index: number): Drafts {
+  const nextValues: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(drafts[module])) {
+    const match = key.match(new RegExp(`^${prefix}\\.(\\d+)\\.(.+)$`));
+
+    if (match?.[1] === undefined || match[2] === undefined) {
+      nextValues[key] = value;
+      continue;
+    }
+
+    const rowIndex = Number(match[1]);
+
+    if (rowIndex < index) {
+      nextValues[key] = value;
+    } else if (rowIndex > index) {
+      nextValues[rowKey(prefix, rowIndex - 1, match[2])] = value;
+    }
+  }
+
+  return {
+    ...drafts,
+    [module]: nextValues
+  };
+}
+
 function valueOf(values: Record<string, string>, key: string): string {
   return values[key] ?? "";
 }
@@ -656,52 +934,84 @@ async function fileToBase64(file: File): Promise<string> {
 function copy(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
+      addCompetitor: "إضافة منافس",
+      addProduct: "إضافة منتج",
       allComplete: "كل وحدات المعرفة مكتملة",
+      category: "الفئة",
       complete: "اكتملت التهيئة",
       completeButton: "إنهاء التهيئة",
+      competitor: "منافس",
+      competitorName: "اسم المنافس",
+      description: "الوصف",
       email: "البريد الإلكتروني",
       failed: "تعذر تنفيذ الطلب",
       fullName: "الاسم الكامل",
       guidelinesUpload: "رفع دليل الهوية",
       login: "تسجيل الدخول",
       logoUpload: "رفع الشعار",
+      instagramHandle: "حساب إنستغرام",
       onboarding: "تهيئة معرفة النشاط",
       onboardingSubtitle: "كل وحدة تحفظ معرفة قابلة للاسترجاع في الخزنة.",
       missingSections: "الأقسام الناقصة",
+      next: "التالي",
+      notes: "ملاحظات",
       password: "كلمة المرور",
+      previous: "السابق",
+      priceMinor: "السعر بالفلس",
+      product: "منتج",
+      productName: "اسم المنتج",
       refresh: "تحديث",
+      remove: "إزالة",
       remaining: "المتبقي للإكمال",
       register: "إنشاء حساب",
       save: "حفظ الوحدة",
       saved: "تم الحفظ",
       signedIn: "تم تسجيل الدخول",
       signOut: "خروج",
+      skip: "تخطي الآن",
       uploaded: "تم رفع الملف",
+      website: "الموقع الإلكتروني",
       workspace: "مساحة العمل",
       workspaceName: "اسم مساحة العمل"
     },
     en: {
+      addCompetitor: "Add competitor",
+      addProduct: "Add product",
       allComplete: "All knowledge modules are complete",
+      category: "Category",
       complete: "Onboarding complete",
       completeButton: "Complete onboarding",
+      competitor: "Competitor",
+      competitorName: "Competitor name",
+      description: "Description",
       email: "Email",
       failed: "Request failed",
       fullName: "Full name",
       guidelinesUpload: "Upload brand guidelines",
       login: "Log in",
       logoUpload: "Upload logo",
+      instagramHandle: "Instagram handle",
       onboarding: "Business Knowledge Onboarding",
       onboardingSubtitle: "Each module saves retrievable business memory into the Vault.",
       missingSections: "Missing sections",
+      next: "Next",
+      notes: "Notes",
       password: "Password",
+      previous: "Previous",
+      priceMinor: "Price in fils",
+      product: "Product",
+      productName: "Product name",
       refresh: "Refresh",
+      remove: "Remove",
       remaining: "Remaining to complete",
       register: "Create account",
       save: "Save module",
       saved: "Saved",
       signedIn: "Signed in",
       signOut: "Sign out",
+      skip: "Skip for now",
       uploaded: "Uploaded",
+      website: "Website",
       workspace: "Workspace",
       workspaceName: "Workspace name"
     }

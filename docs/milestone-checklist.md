@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed implementation step: M1 Vault versioning UX and history
+- Latest completed implementation step: M1 seven-module onboarding wizard
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -69,7 +69,7 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] Vault completeness score exists.
 - [x] RAG search exists and is used by strategy/content calls.
 - [x] One grounded Strategy Agent call returns Vault context.
-- [ ] Seven-module onboarding wizard is complete against the spec.
+- [x] Seven-module onboarding wizard is complete against the spec.
 - [x] Vault versioning UX and history are complete.
 - [x] Brand upload flow is complete.
 - [x] Completeness gaps are surfaced in the expected UX.

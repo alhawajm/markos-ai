@@ -47,6 +47,8 @@ describe("onboarding routes", () => {
         industry: "Specialty coffee",
         size: "SMB",
         location: "Manama, Bahrain",
+        socials: ["instagram.com/pearlcoffee"],
+        website: "https://pearlcoffee.example",
         languages: ["Arabic", "English"]
       }
     });
@@ -114,6 +116,20 @@ describe("onboarding routes", () => {
         key: "voice"
       }
     });
+    const brand = await prisma.knowledgeVault.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        section: "BRAND",
+        key: "identity"
+      }
+    });
+    const objectives = await prisma.knowledgeVault.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        section: "OBJECTIVES",
+        key: "goals"
+      }
+    });
 
     expect(workspace).toEqual({
       onboardingStatus: "COMPLETE",
@@ -121,6 +137,14 @@ describe("onboarding routes", () => {
     });
     expect(tone.value).toMatchObject({
       toneWords: ["warm", "clear", "confident"]
+    });
+    expect(brand.value).toMatchObject({
+      aestheticWords: ["minimal", "warm"]
+    });
+    expect(objectives.value).toMatchObject({
+      budgetRange: "BHD 200-500",
+      instagramExperience: "Some strategy",
+      success90Days: "25 wholesale leads from Instagram."
     });
 
     await app.close();
@@ -174,8 +198,18 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
             priceMinor: 3500,
             currency: "BHD",
             description: "Medium roast blend for milk drinks."
+          },
+          {
+            name: "Office Coffee Setup",
+            category: "Service",
+            priceMinor: 25000,
+            currency: "BHD",
+            description: "Recurring office coffee supply."
           }
-        ]
+        ],
+        differentiators: ["locally roasted", "office-friendly"],
+        priceRange: "BHD 3.5-25",
+        salesChannels: ["Instagram DM", "in-person"]
       }
     }),
     app.inject({
@@ -184,7 +218,11 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
       headers,
       payload: {
         demographics: "Bahrain cafe owners, office managers, and coffee enthusiasts.",
+        ageRange: "25-44",
+        genderBreakdown: "Equal split",
         interests: ["coffee", "hospitality", "local brands"],
+        locations: ["Bahrain", "Eastern Saudi"],
+        motivations: ["quality", "convenience"],
         painPoints: ["inconsistent beans", "generic cafe suppliers"]
       }
     }),
@@ -197,9 +235,12 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
           {
             name: "Harbour Roasts",
             instagramHandle: "harbourroasts",
+            website: "https://harbour.example",
             notes: "Strong B2B cafe presence."
           }
-        ]
+        ],
+        competitiveAdvantage: "Arabic and English service with GCC blends.",
+        doDifferently: "More practical cafe education and transparent sourcing."
       }
     }),
     app.inject({
@@ -209,6 +250,7 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
       payload: {
         colors: ["#0A2342", "#F95738"],
         fonts: ["Inter"],
+        aestheticWords: ["minimal", "warm"],
         toneWords: ["warm", "clear", "confident"],
         voiceNotes: "Helpful, bilingual, and direct."
       }
@@ -219,10 +261,13 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
       headers,
       payload: {
         goals: ["increase wholesale leads", "grow Instagram reach"],
+        budgetRange: "BHD 200-500",
+        instagramExperience: "Some strategy",
         kpiTargets: {
           monthlyLeads: 25,
           engagementRate: "5%"
-        }
+        },
+        success90Days: "25 wholesale leads from Instagram."
       }
     })
   ];

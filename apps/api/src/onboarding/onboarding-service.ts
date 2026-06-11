@@ -141,6 +141,7 @@ function toVaultWrites(module: OnboardingModuleInput, payload: OnboardingPayload
               {
                 key: "identity",
                 value: {
+                  aestheticWords: brand.aestheticWords,
                   logoMediaId: brand.logoMediaId,
                   colors: brand.colors,
                   fonts: brand.fonts,
