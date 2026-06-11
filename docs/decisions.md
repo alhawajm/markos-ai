@@ -71,3 +71,7 @@ Reserve monthly `UsageCounter` quota before strategy and content generation call
 ## 2026-06-11: Email Verification Starts With Local Token Delivery
 
 Store email verification tokens hashed in Redis and expose the raw token only outside production so the M0 register -> verify -> login flow is testable before choosing a transactional email provider. Production responses omit the token.
+
+## 2026-06-11: RLS Uses The Dedicated App Role First
+
+Enable PostgreSQL RLS policies for workspace-scoped tables against the `markos_app` role, using `app.current_workspace` as the fail-closed tenant selector. Keep migrations and owner-level maintenance on the `markos` role, which bypasses RLS, and use transaction-local workspace context helpers when app-role RLS enforcement is needed.

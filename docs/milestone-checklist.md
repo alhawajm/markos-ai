@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: email verification flow
+- Latest completed M0 step: database RLS policies for workspace-scoped tables
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -31,7 +31,7 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] HNSW index exists on `knowledge_vault.embedding`.
 - [x] Workspace context middleware exists using `AsyncLocalStorage`.
 - [x] Workspace isolation tests cover every Prisma model with a `workspaceId` field.
-- [ ] Database RLS policies are implemented and fail closed with `app.current_workspace`.
+- [x] Database RLS policies are implemented and fail closed with `app.current_workspace`.
 - [x] Email/password registration and login.
 - [x] Email verification flow.
 - [ ] Google OAuth login.
