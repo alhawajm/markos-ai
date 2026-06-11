@@ -246,7 +246,7 @@ export interface PublishAttemptRecord {
   dryRun: boolean;
   reasons: string[];
   result?: InstagramPublishResult;
-  status: "BLOCKED" | "DRY_RUN" | "PUBLISHED";
+  status: "BLOCKED" | "DRY_RUN" | "FAILED" | "PUBLISHED";
 }
 
 export interface PublishDueContentResult {

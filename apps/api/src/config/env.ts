@@ -15,7 +15,13 @@ const envSchema = z.object({
   JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
-  MEDIA_PUBLIC_BASE_URL: z.string().url().optional()
+  MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
+  META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
+  META_GRAPH_VERSION: z
+    .preprocess((value) => (value === "" ? undefined : value), z.string().min(1).default("v24.0")),
+  INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
+  INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000)
 });
 
 export const env = envSchema.parse(process.env);

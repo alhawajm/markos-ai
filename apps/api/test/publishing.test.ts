@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { MetaGraphPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
+import { publishContentItem } from "../src/publishing/publishing-service";
 
 describe("publishing routes", () => {
   it("blocks dry-run publishing when prerequisites are missing", async () => {
@@ -111,6 +113,45 @@ describe("publishing routes", () => {
         ]
       }
     });
+
+    await app.close();
+  });
+
+  it("marks content failed when the live publisher fails", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+    await prisma.workspace.update({
+      where: {
+        id: session.workspace.id
+      },
+      data: {
+        instagramAccessToken: "test-token",
+        instagramAccountId: "17841400000000000",
+        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
+      }
+    });
+    const publisher: InstagramPublisher = {
+      async publish() {
+        throw new MetaGraphPublishError("Meta rejected the media container");
+      }
+    };
+
+    const attempt = await publishContentItem(session.workspace.id, content.id, { publisher });
+    const failed = await prisma.contentItem.findUniqueOrThrow({
+      where: {
+        id: content.id
+      }
+    });
+
+    expect(attempt).toMatchObject({
+      contentItemId: content.id,
+      dryRun: false,
+      reasons: ["Meta rejected the media container"],
+      status: "FAILED"
+    });
+    expect(failed.status).toBe("FAILED");
+    expect(failed.failureReason).toBe("Meta rejected the media container");
 
     await app.close();
   });

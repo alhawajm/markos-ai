@@ -1,13 +1,18 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
-import { DryRunInstagramPublisher, type InstagramPublishResult, type InstagramPublisher } from "./instagram-publisher";
+import {
+  createInstagramPublisher,
+  type InstagramPublishResult,
+  type InstagramPublisher,
+  MetaGraphPublishError
+} from "./instagram-publisher";
 
 export interface PublishAttemptRecord {
   contentItemId: string;
   dryRun: boolean;
   reasons: string[];
   result?: InstagramPublishResult;
-  status: "BLOCKED" | "DRY_RUN" | "PUBLISHED";
+  status: "BLOCKED" | "DRY_RUN" | "FAILED" | "PUBLISHED";
 }
 
 export interface PublishDueContentResult {
@@ -108,8 +113,33 @@ export async function publishContentItem(
     };
   }
 
-  const publisher = options.publisher ?? new DryRunInstagramPublisher();
-  const result = await publisher.publish({ contentItem, mediaAssets, workspace });
+  const publisher = options.publisher ?? createInstagramPublisher();
+  let result: InstagramPublishResult;
+
+  try {
+    result = await publisher.publish({ contentItem, mediaAssets, workspace });
+  } catch (error) {
+    if (error instanceof MetaGraphPublishError) {
+      await prisma.contentItem.update({
+        where: {
+          id: contentItem.id
+        },
+        data: {
+          failureReason: error.message,
+          status: "FAILED"
+        }
+      });
+
+      return {
+        contentItemId,
+        dryRun: false,
+        reasons: [error.message],
+        status: "FAILED"
+      };
+    }
+
+    throw error;
+  }
 
   if (!result.dryRun && result.instagramPostId) {
     await prisma.contentItem.update({

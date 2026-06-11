@@ -35,3 +35,7 @@ Use a local filesystem media adapter for development uploads before wiring S3/CD
 ## 2026-06-11: Instagram Publishing Starts As Dry Run
 
 Build the publishing worker boundary as a dry-run adapter before enabling Meta Graph API writes. The dry-run path validates due time, workspace-scoped media, Instagram connection metadata, and payload shape, but does not mutate scheduled content to `PUBLISHED` or call Meta until OAuth, App Review, and the container -> poll -> publish adapter are implemented.
+
+## 2026-06-11: Meta Graph Adapter Behind Live Flag
+
+Implement the Meta Graph container -> poll -> publish adapter behind `INSTAGRAM_PUBLISH_MODE=live`, while keeping `dry_run` as the default. Live mode can mark content `PUBLISHED` only after Meta returns a published media ID, and records Meta adapter errors as `FAILED` content with a failure reason.
