@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: Automated monthly usage reset scheduling
+- Latest completed M0 step: Staging container deploy pipeline
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -48,7 +48,8 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Usage enforcement covers billing lifecycle states such as expired trial, past-due, suspended, and cancelled.
 - [x] Usage enforcement covers automated plan reset scheduling.
 - [x] GitHub Actions runs the full verification gate on PRs.
-- [ ] Staging deploy on merge to `main`.
+- [x] Staging deploy workflow builds and publishes deployable service images on merge to `main`.
+- [ ] Live staging deploy on merge to `main` has been proven with configured cloud credentials.
 - [x] Sentry or equivalent observability in web, API, and AI services.
 - [x] Deep health checks cover DB/Redis/OpenSearch/AI.
 - [x] Meta App Review preparation doc exists.

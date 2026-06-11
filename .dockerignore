@@ -1,0 +1,14 @@
+.git
+.github
+.next
+.turbo
+**/.next
+**/.turbo
+**/.venv
+**/__pycache__
+**/node_modules
+**/var
+coverage
+dist
+node_modules
+var

@@ -1,0 +1,151 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  publish-images:
+    name: Build and Publish Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    outputs:
+      ai-image: ${{ steps.images.outputs.ai-image }}
+      ai-tags: ${{ steps.images.outputs.ai-tags }}
+      api-image: ${{ steps.images.outputs.api-image }}
+      api-tags: ${{ steps.images.outputs.api-tags }}
+      web-image: ${{ steps.images.outputs.web-image }}
+      web-tags: ${{ steps.images.outputs.web-tags }}
+      worker-image: ${{ steps.images.outputs.worker-image }}
+      worker-tags: ${{ steps.images.outputs.worker-tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tags
+        id: images
+        shell: bash
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          sha="${GITHUB_SHA}"
+          staging_tag() {
+            local image="$1"
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              printf "%s\n%s\n" "${repo}/${image}:${sha}" "${repo}/${image}:staging"
+            else
+              printf "%s\n" "${repo}/${image}:${sha}"
+            fi
+          }
+          {
+            echo "web-image=${repo}/web:${sha}"
+            echo "api-image=${repo}/api:${sha}"
+            echo "worker-image=${repo}/worker:${sha}"
+            echo "ai-image=${repo}/ai:${sha}"
+            echo "web-tags<<EOF"
+            staging_tag web
+            echo "EOF"
+            echo "api-tags<<EOF"
+            staging_tag api
+            echo "EOF"
+            echo "worker-tags<<EOF"
+            staging_tag worker
+            echo "EOF"
+            echo "ai-tags<<EOF"
+            staging_tag ai
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.web-tags }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.api-tags }}
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/worker.Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.worker-tags }}
+
+      - name: Build and push AI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/ai/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.ai-tags }}
+
+  deploy-ecs:
+    name: Deploy ECS Staging
+    needs: publish-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    if: ${{ github.ref == 'refs/heads/main' && vars.STAGING_AWS_ROLE_ARN != '' && vars.STAGING_AWS_REGION != '' && vars.STAGING_ECS_CLUSTER != '' }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.STAGING_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.STAGING_AWS_REGION }}
+
+      - name: Roll staging ECS services
+        shell: bash
+        env:
+          CLUSTER: ${{ vars.STAGING_ECS_CLUSTER }}
+          WEB_SERVICE: ${{ vars.STAGING_WEB_SERVICE }}
+          API_SERVICE: ${{ vars.STAGING_API_SERVICE }}
+          WORKER_SERVICE: ${{ vars.STAGING_WORKER_SERVICE }}
+          AI_SERVICE: ${{ vars.STAGING_AI_SERVICE }}
+        run: |
+          update_service() {
+            local service_name="$1"
+            if [ -n "$service_name" ]; then
+              aws ecs update-service \
+                --cluster "$CLUSTER" \
+                --service "$service_name" \
+                --force-new-deployment \
+                --no-cli-pager
+            fi
+          }
+
+          update_service "$WEB_SERVICE"
+          update_service "$API_SERVICE"
+          update_service "$WORKER_SERVICE"
+          update_service "$AI_SERVICE"

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "worker": "tsx src/worker.ts",
     "build": "tsc --noEmit",

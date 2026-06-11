@@ -107,3 +107,7 @@ Allow usage reservations only for `TRIAL` users with an unexpired trial and `ACT
 ## 2026-06-11: Usage Resets Run in the Maintenance Worker
 
 Run automated usage reset preparation from the API maintenance worker on a configurable interval. The worker idempotently creates current-month counters at zero for monthly metrics and leaves `STORAGE_BYTES` on its lifetime period because storage is an active allocation, not a monthly consumption reset.
+
+## 2026-06-11: Staging Deploy Starts With GHCR Images and Optional ECS Rollout
+
+Build production-shaped containers for the web, API, worker, and AI services on every merge to `main`, publish them to GitHub Container Registry, and roll ECS services only when the GitHub `staging` environment has AWS deployment variables configured. Keep the M0 live-staging acceptance item open until a real cloud target and credentials prove the rollout.
