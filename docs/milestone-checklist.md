@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: RBAC permission catalog and route guards
+- Latest completed M0 step: Google OAuth login
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -34,7 +34,7 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Database RLS policies are implemented and fail closed with `app.current_workspace`.
 - [x] Email/password registration and login.
 - [x] Email verification flow.
-- [ ] Google OAuth login.
+- [x] Google OAuth login.
 - [x] JWT access token and refresh token issuance.
 - [x] Refresh token rotation and reuse detection.
 - [x] Argon2id password hashing.

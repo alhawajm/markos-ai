@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
+import { resetGoogleTokenVerifierForTest, setGoogleTokenVerifierForTest } from "../src/auth/auth-service";
 import { buildApp } from "../src/http/app";
 
 describe("auth routes", () => {
+  afterEach(() => {
+    resetGoogleTokenVerifierForTest();
+  });
+
   it("registers a user, verifies email, creates an owner workspace, and logs in", async () => {
     const app = await buildApp();
     const workspaceSuffix = randomUUID();
@@ -125,6 +130,163 @@ describe("auth routes", () => {
           id: workspace.id
         },
         roles: ["OWNER"]
+      }
+    });
+
+    await app.close();
+  });
+
+  it("creates a verified Google user, owner workspace, and session", async () => {
+    const app = await buildApp();
+    const email = `google-${randomUUID()}@markos.test`;
+    const workspaceName = `Google Workspace ${randomUUID()}`;
+
+    setGoogleTokenVerifierForTest(async () => ({
+      email,
+      emailVerified: true,
+      fullName: "Google Founder",
+      googleId: `google-${randomUUID()}`
+    }));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/google",
+      payload: {
+        idToken: "test-google-id-token",
+        locale: "en",
+        workspaceName
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        user: {
+          email,
+          fullName: "Google Founder",
+          isVerified: true,
+          locale: "en"
+        },
+        workspace: {
+          name: workspaceName
+        },
+        roles: ["OWNER"]
+      }
+    });
+    expect(response.json().data.tokens.accessToken).toEqual(expect.any(String));
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email }
+    });
+    const membership = await prisma.workspaceMember.findFirstOrThrow({
+      where: {
+        userId: user.id,
+        workspaceId: response.json().data.workspace.id
+      }
+    });
+
+    expect(user.passwordHash).toBeNull();
+    expect(user.googleId).toEqual(expect.any(String));
+    expect(user.isVerified).toBe(true);
+    expect(membership.role).toBe("OWNER");
+
+    await app.close();
+  });
+
+  it("links Google login to an existing email account", async () => {
+    const app = await buildApp();
+    const email = `google-link-${randomUUID()}@markos.test`;
+    const googleId = `google-${randomUUID()}`;
+    const registerResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email,
+        password: "CorrectHorseBattery99!",
+        fullName: "Existing User",
+        locale: "en"
+      }
+    });
+    const originalWorkspaceId = registerResponse.json().data.workspace.id;
+
+    setGoogleTokenVerifierForTest(async () => ({
+      email,
+      emailVerified: true,
+      fullName: "Existing User From Google",
+      googleId
+    }));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/google",
+      payload: {
+        idToken: "test-google-id-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        user: {
+          email,
+          isVerified: true
+        },
+        workspace: {
+          id: originalWorkspaceId
+        },
+        roles: ["OWNER"]
+      }
+    });
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email }
+    });
+    expect(user.googleId).toBe(googleId);
+    expect(user.isVerified).toBe(true);
+
+    await app.close();
+  });
+
+  it("rejects Google login when Google has not verified the email", async () => {
+    const app = await buildApp();
+
+    setGoogleTokenVerifierForTest(async () => ({
+      email: `google-unverified-${randomUUID()}@markos.test`,
+      emailVerified: false,
+      fullName: "Unverified Google User",
+      googleId: `google-${randomUUID()}`
+    }));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/google",
+      payload: {
+        idToken: "test-google-id-token"
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "GOOGLE_EMAIL_NOT_VERIFIED"
+      }
+    });
+
+    await app.close();
+  });
+
+  it("reports Google OAuth configuration status", async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/google/configuration"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        configured: false,
+        missing: ["GOOGLE_OAUTH_CLIENT_ID"]
       }
     });
 

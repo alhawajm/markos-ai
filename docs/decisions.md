@@ -79,3 +79,7 @@ Enable PostgreSQL RLS policies for workspace-scoped tables against the `markos_a
 ## 2026-06-11: RBAC Starts With Workspace Route Permissions
 
 Define named permissions in shared types and enforce them in the workspace middleware after resolving the current database membership role. Owners and workspace admins can manage the full workspace surface, editors can create and schedule operational content, viewers stay read-only, and admin support roles get read/audit access until the admin portal introduces narrower global scopes.
+
+## 2026-06-11: Google Login Uses Backend ID Token Exchange
+
+Implement Google login as an API endpoint that accepts a Google ID token, verifies it against Google's issuer, audience, and JWKS, then creates or links a verified workspace user. This completes the M0 backend auth contract while leaving provider button UX and Google client loading to the web layer.

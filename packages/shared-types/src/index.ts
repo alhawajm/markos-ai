@@ -118,6 +118,11 @@ export interface EmailVerificationResult {
   isVerified: boolean;
 }
 
+export interface GoogleLoginConfigurationStatus {
+  configured: boolean;
+  missing: string[];
+}
+
 export interface KnowledgeVaultEntry {
   id: string;
   workspaceId: string;

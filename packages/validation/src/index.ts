@@ -19,6 +19,12 @@ export const refreshSessionSchema = z.object({
   refreshToken: z.string().min(1)
 });
 
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(1),
+  workspaceName: z.string().min(2).max(120).optional(),
+  locale: localeSchema.default("ar")
+});
+
 export const requestEmailVerificationSchema = z.object({
   email: z.string().email()
 });
@@ -214,6 +220,7 @@ export const healthResponseSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 export type RefreshSessionInput = z.infer<typeof refreshSessionSchema>;
 export type RequestEmailVerificationInput = z.infer<typeof requestEmailVerificationSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import argon2 from "argon2";
 import type { AuthSession, EmailVerificationChallenge, EmailVerificationResult, Locale, Role } from "@markos/shared-types";
 import type {
+  GoogleLoginInput,
   LoginInput,
   RefreshSessionInput,
   RegisterInput,
@@ -12,8 +13,15 @@ import type {
 import { createRedisClient } from "../cache/redis";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import {
+  type GoogleTokenVerifier,
+  GoogleOAuthTokenError,
+  verifyGoogleIdToken
+} from "./google-oauth";
 import { slugifyWorkspaceName } from "./slug";
 import { consumeRefreshToken, issueAuthTokens } from "./tokens";
+
+let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
 
 export class AuthConflictError extends Error {
   constructor() {
@@ -36,6 +44,18 @@ export class EmailNotVerifiedError extends Error {
 export class EmailVerificationInvalidError extends Error {
   constructor() {
     super("Email verification token is invalid or expired");
+  }
+}
+
+export class GoogleEmailNotVerifiedError extends Error {
+  constructor() {
+    super("Google account email must be verified");
+  }
+}
+
+export class GoogleAccountConflictError extends Error {
+  constructor() {
+    super("This email is already linked to a different Google account");
   }
 }
 
@@ -104,6 +124,93 @@ export async function register(input: RegisterInput): Promise<AuthSession> {
   }
 }
 
+export async function loginWithGoogle(
+  input: GoogleLoginInput,
+  verifier: GoogleTokenVerifier = googleTokenVerifier
+): Promise<AuthSession> {
+  const identity = await verifier(input.idToken);
+
+  if (!identity.emailVerified) {
+    throw new GoogleEmailNotVerifiedError();
+  }
+
+  const email = normalizeEmail(identity.email);
+  const existingByGoogleId = await prisma.user.findUnique({
+    where: {
+      googleId: identity.googleId
+    }
+  });
+  const user = existingByGoogleId ?? await upsertGoogleUserByEmail({
+    email,
+    fullName: identity.fullName,
+    googleId: identity.googleId,
+    locale: input.locale,
+    ...(input.workspaceName === undefined ? {} : { workspaceName: input.workspaceName })
+  });
+
+  if (user.deletedAt !== null) {
+    throw new GoogleOAuthTokenError("Google account is not active");
+  }
+
+  const membership = await prisma.workspaceMember.findFirst({
+    where: {
+      userId: user.id,
+      deletedAt: null
+    },
+    orderBy: {
+      createdAt: "asc"
+    }
+  });
+
+  if (membership === null) {
+    throw new InvalidCredentialsError();
+  }
+
+  const workspace = await prisma.workspace.findFirstOrThrow({
+    where: {
+      id: membership.workspaceId,
+      deletedAt: null
+    }
+  });
+
+  await prisma.user.update({
+    data: {
+      lastLoginAt: new Date()
+    },
+    where: {
+      id: user.id
+    }
+  });
+
+  return sessionFor({
+    roles: [membership.role as Role],
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: fromPrismaLocale(user.locale),
+      isVerified: user.isVerified
+    },
+    workspace
+  });
+}
+
+export function setGoogleTokenVerifierForTest(verifier: GoogleTokenVerifier): void {
+  if (env.NODE_ENV !== "test") {
+    throw new Error("Google token verifier override is only available in test");
+  }
+
+  googleTokenVerifier = verifier;
+}
+
+export function resetGoogleTokenVerifierForTest(): void {
+  if (env.NODE_ENV !== "test") {
+    throw new Error("Google token verifier reset is only available in test");
+  }
+
+  googleTokenVerifier = verifyGoogleIdToken;
+}
+
 export async function login(input: LoginInput): Promise<AuthSession> {
   const email = normalizeEmail(input.email);
   const user = await prisma.user.findUnique({
@@ -167,6 +274,76 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     workspace,
     roles: [membership.role as Role]
   });
+}
+
+async function upsertGoogleUserByEmail(input: {
+  email: string;
+  fullName: string;
+  googleId: string;
+  locale: Locale;
+  workspaceName?: string;
+}) {
+  const existingByEmail = await prisma.user.findUnique({
+    where: {
+      email: input.email
+    }
+  });
+
+  if (existingByEmail !== null) {
+    if (existingByEmail.googleId !== null && existingByEmail.googleId !== input.googleId) {
+      throw new GoogleAccountConflictError();
+    }
+
+    return prisma.user.update({
+      data: {
+        googleId: input.googleId,
+        isVerified: true
+      },
+      where: {
+        id: existingByEmail.id
+      }
+    });
+  }
+
+  const workspaceName = input.workspaceName ?? `${input.fullName}'s Workspace`;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const plan = await tx.plan.findUniqueOrThrow({
+      where: {
+        code: "STARTER"
+      }
+    });
+    const user = await tx.user.create({
+      data: {
+        email: input.email,
+        fullName: input.fullName,
+        googleId: input.googleId,
+        isVerified: true,
+        locale: toPrismaLocale(input.locale),
+        planId: plan.id,
+        trialEndsAt: daysFromNow(14)
+      }
+    });
+    const workspace = await tx.workspace.create({
+      data: {
+        ownerUserId: user.id,
+        name: workspaceName,
+        slug: await uniqueWorkspaceSlug(tx, workspaceName)
+      }
+    });
+
+    await tx.workspaceMember.create({
+      data: {
+        role: "OWNER",
+        userId: user.id,
+        workspaceId: workspace.id
+      }
+    });
+
+    return user;
+  });
+
+  return result;
 }
 
 export async function requestEmailVerification(input: RequestEmailVerificationInput): Promise<EmailVerificationChallenge> {

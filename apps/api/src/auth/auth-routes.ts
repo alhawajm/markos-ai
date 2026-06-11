@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  googleLoginSchema,
   loginSchema,
   refreshSessionSchema,
   registerSchema,
@@ -11,13 +12,17 @@ import {
   AuthConflictError,
   EmailNotVerifiedError,
   EmailVerificationInvalidError,
+  GoogleAccountConflictError,
+  GoogleEmailNotVerifiedError,
   InvalidCredentialsError,
   login,
+  loginWithGoogle,
   refreshSession,
   register,
   requestEmailVerification,
   verifyEmail
 } from "./auth-service";
+import { GoogleOAuthConfigurationError, GoogleOAuthTokenError, getGoogleOAuthConfigurationStatus } from "./google-oauth";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError } from "./tokens";
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
@@ -52,6 +57,44 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       if (error instanceof EmailNotVerifiedError) {
         return reply.status(403).send(errorEnvelope("EMAIL_NOT_VERIFIED", error.message));
+      }
+
+      if (error instanceof InvalidCredentialsError) {
+        return reply.status(401).send(errorEnvelope("INVALID_CREDENTIALS", error.message));
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/v1/auth/google/configuration", async () => {
+    return ok(getGoogleOAuthConfigurationStatus());
+  });
+
+  app.post("/v1/auth/google", async (request, reply) => {
+    const parsed = googleLoginSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Google login request", parsed.error.issues));
+    }
+
+    try {
+      return ok(await loginWithGoogle(parsed.data));
+    } catch (error) {
+      if (error instanceof GoogleOAuthConfigurationError) {
+        return reply.status(409).send(errorEnvelope("GOOGLE_OAUTH_NOT_CONFIGURED", error.message, error.missing));
+      }
+
+      if (error instanceof GoogleOAuthTokenError) {
+        return reply.status(401).send(errorEnvelope("GOOGLE_ID_TOKEN_INVALID", error.message));
+      }
+
+      if (error instanceof GoogleEmailNotVerifiedError) {
+        return reply.status(403).send(errorEnvelope("GOOGLE_EMAIL_NOT_VERIFIED", error.message));
+      }
+
+      if (error instanceof GoogleAccountConflictError) {
+        return reply.status(409).send(errorEnvelope("GOOGLE_ACCOUNT_CONFLICT", error.message));
       }
 
       if (error instanceof InvalidCredentialsError) {

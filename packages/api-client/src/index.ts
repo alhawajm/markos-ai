@@ -68,6 +68,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async loginWithGoogle(input: { idToken: string; locale?: "ar" | "en"; workspaceName?: string }): Promise<AuthSession> {
+    const response = await this.request<AuthSession>("/v1/auth/google", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async refreshSession(input: { refreshToken: string }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/refresh", {
       body: input,
