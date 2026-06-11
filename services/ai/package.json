@@ -3,10 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": ".\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000",
-    "build": ".\\.venv\\Scripts\\python.exe -m mypy app tests",
-    "typecheck": ".\\.venv\\Scripts\\python.exe -m mypy app tests",
-    "lint": ".\\.venv\\Scripts\\python.exe -m ruff check .",
-    "test": ".\\.venv\\Scripts\\python.exe -m pytest"
+    "dev": "node scripts/python-runner.mjs -m uvicorn app.main:app --reload --port 8000",
+    "build": "node scripts/python-runner.mjs -m mypy app tests",
+    "typecheck": "node scripts/python-runner.mjs -m mypy app tests",
+    "lint": "node scripts/python-runner.mjs -m ruff check .",
+    "test": "node scripts/python-runner.mjs -m pytest"
   }
 }

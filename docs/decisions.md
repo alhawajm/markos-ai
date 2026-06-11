@@ -87,3 +87,7 @@ Implement Google login as an API endpoint that accepts a Google ID token, verifi
 ## 2026-06-11: Sensitive Roles Require TOTP-Verified Sessions
 
 Use built-in TOTP generation and verification for sensitive workspace/admin roles. Users enroll while authenticated, sensitive-role login requires a valid six-digit TOTP code once enabled, and refresh tokens carry an `mfaVerified` claim so pre-MFA sessions cannot refresh into admin or finance access.
+
+## 2026-06-11: CI Boots Local Infrastructure With Docker Compose
+
+Run GitHub Actions CI on Ubuntu with Node 22, Python 3.11, pnpm 11.5.2, and Docker Compose services for Postgres/pgvector, Redis, and OpenSearch. Apply Prisma migrations and seed plans before running `corepack pnpm verify` and `corepack pnpm build`.
