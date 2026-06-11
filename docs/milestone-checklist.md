@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: GitHub Actions full verification gate
+- Latest completed M0 step: Sentry observability wiring across web, API, and AI
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -47,7 +47,7 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [ ] Usage enforcement covers image generation, publish caps, storage, billing lifecycle, and plan reset rules.
 - [x] GitHub Actions runs the full verification gate on PRs.
 - [ ] Staging deploy on merge to `main`.
-- [ ] Sentry or equivalent observability in web, API, and AI services.
+- [x] Sentry or equivalent observability in web, API, and AI services.
 - [x] Deep health checks cover DB/Redis/OpenSearch/AI.
 - [x] Meta App Review preparation doc exists.
 - [ ] Meta App Review formally submitted.

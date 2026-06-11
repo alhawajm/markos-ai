@@ -8,6 +8,7 @@ import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
 import { registerMetaRoutes } from "../meta/meta-routes";
+import { captureException, initObservability } from "../observability/sentry";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { registerPublishingRoutes } from "../publishing/publishing-routes";
 import { registerStrategyRoutes } from "../strategy/strategy-routes";
@@ -35,6 +36,8 @@ function getErrorDetails(error: unknown): { code?: string; message: string; stat
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
+  initObservability();
+
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug"
@@ -63,6 +66,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     if (statusCode >= 500) {
       request.log.error(error);
+      const workspaceId = getWorkspaceContext()?.workspaceId;
+      captureException(error, {
+        method: request.method,
+        url: request.url,
+        ...(workspaceId ? { workspaceId } : {})
+      });
     } else {
       request.log.warn(error);
     }

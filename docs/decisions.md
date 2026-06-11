@@ -91,3 +91,7 @@ Use built-in TOTP generation and verification for sensitive workspace/admin role
 ## 2026-06-11: CI Boots Local Infrastructure With Docker Compose
 
 Run GitHub Actions CI on Ubuntu with Node 22, Python 3.11, pnpm 11.5.2, and Docker Compose services for Postgres/pgvector, Redis, and OpenSearch. Apply Prisma migrations and seed plans before running `corepack pnpm verify` and `corepack pnpm build`.
+
+## 2026-06-11: Observability Uses Sentry SDKs Disabled by Default
+
+Wire Sentry SDK initialization into the Next.js web app, Fastify API, maintenance worker, and FastAPI AI service, controlled by DSN environment variables. Keep DSNs empty in local/test/CI so telemetry is disabled by default, and defer source-map upload/release artifact publishing until staging credentials exist.

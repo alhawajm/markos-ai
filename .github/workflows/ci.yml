@@ -27,6 +27,8 @@ jobs:
       MEDIA_STORAGE_DIR: var/media
       NEXT_TELEMETRY_DISABLED: "1"
       NODE_ENV: test
+      SENTRY_TRACES_SAMPLE_RATE: "0"
+      NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: "0"
       OPENSEARCH_URL: http://localhost:9200
       REDIS_URL: redis://localhost:6379
       WEB_BASE_URL: http://localhost:3000

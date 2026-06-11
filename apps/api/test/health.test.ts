@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/http/app";
+import { isObservabilityEnabled } from "../src/observability/sentry";
 
 describe("health routes", () => {
+  it("keeps observability disabled without a DSN", async () => {
+    const app = await buildApp();
+
+    expect(isObservabilityEnabled()).toBe(false);
+
+    await app.close();
+  });
+
   it("returns the API health envelope", async () => {
     const app = await buildApp();
     const response = await app.inject({ method: "GET", url: "/v1/health" });

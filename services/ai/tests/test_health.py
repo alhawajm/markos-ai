@@ -1,6 +1,11 @@
 from fastapi.testclient import TestClient
 
+from app.core.observability import observability_enabled
 from app.main import app
+
+
+def test_observability_disabled_without_dsn() -> None:
+    assert observability_enabled() is False
 
 
 def test_health() -> None:

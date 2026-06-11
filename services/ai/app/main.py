@@ -4,10 +4,12 @@ import math
 import re
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.observability import capture_exception, init_observability
 
 
 class HealthResponse(BaseModel):
@@ -67,7 +69,23 @@ class ContentGenerateResponse(BaseModel):
     tokens_out: int
     drafts: list[dict[str, object]]
 
+init_observability()
 app = FastAPI(title="MARKOS AI Service", version="0.0.0")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, error: Exception) -> JSONResponse:
+    capture_exception(error)
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "Unexpected server error",
+            }
+        },
+    )
 
 
 @app.get("/ai/health", response_model=HealthResponse)

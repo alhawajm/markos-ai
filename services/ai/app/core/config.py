@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     image_model_primary: str = ""
     image_model_fallback: str = ""
+    sentry_dsn: str = ""
+    sentry_environment: str = "development"
+    sentry_release: str = ""
+    sentry_traces_sample_rate: float = 0
 
 
 settings = Settings()

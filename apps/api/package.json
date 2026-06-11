@@ -22,6 +22,7 @@
     "@markos/shared-types": "workspace:*",
     "@markos/validation": "workspace:*",
     "@prisma/client": "6.19.3",
+    "@sentry/node": "^10.57.0",
     "argon2": "^0.44.0",
     "fastify": "^5.8.5",
     "ioredis": "^5.11.1",
