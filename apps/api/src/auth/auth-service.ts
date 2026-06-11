@@ -1,7 +1,15 @@
+import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import argon2 from "argon2";
-import type { AuthSession, Locale, Role } from "@markos/shared-types";
-import type { LoginInput, RefreshSessionInput, RegisterInput } from "@markos/validation";
+import type { AuthSession, EmailVerificationChallenge, EmailVerificationResult, Locale, Role } from "@markos/shared-types";
+import type {
+  LoginInput,
+  RefreshSessionInput,
+  RegisterInput,
+  RequestEmailVerificationInput,
+  VerifyEmailInput
+} from "@markos/validation";
+import { createRedisClient } from "../cache/redis";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { slugifyWorkspaceName } from "./slug";
@@ -16,6 +24,18 @@ export class AuthConflictError extends Error {
 export class InvalidCredentialsError extends Error {
   constructor() {
     super("Invalid email or password");
+  }
+}
+
+export class EmailNotVerifiedError extends Error {
+  constructor() {
+    super("Email verification is required before login");
+  }
+}
+
+export class EmailVerificationInvalidError extends Error {
+  constructor() {
+    super("Email verification token is invalid or expired");
   }
 }
 
@@ -102,6 +122,10 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     throw new InvalidCredentialsError();
   }
 
+  if (!user.isVerified) {
+    throw new EmailNotVerifiedError();
+  }
+
   const membership = await prisma.workspaceMember.findFirst({
     where: {
       userId: user.id,
@@ -145,6 +169,74 @@ export async function login(input: LoginInput): Promise<AuthSession> {
   });
 }
 
+export async function requestEmailVerification(input: RequestEmailVerificationInput): Promise<EmailVerificationChallenge> {
+  const email = normalizeEmail(input.email);
+  const expiresAt = new Date(Date.now() + env.EMAIL_VERIFICATION_TTL * 1000);
+  const user = await prisma.user.findUnique({
+    where: {
+      email
+    }
+  });
+
+  if (user === null || user.deletedAt !== null) {
+    return {
+      alreadyVerified: false,
+      email,
+      expiresAt: expiresAt.toISOString()
+    };
+  }
+
+  if (user.isVerified) {
+    return {
+      alreadyVerified: true,
+      email,
+      expiresAt: new Date().toISOString()
+    };
+  }
+
+  const token = await storeEmailVerificationToken(user.id, expiresAt);
+
+  return {
+    alreadyVerified: false,
+    email,
+    expiresAt: expiresAt.toISOString(),
+    ...(env.NODE_ENV === "production" ? {} : { verificationToken: token })
+  };
+}
+
+export async function verifyEmail(input: VerifyEmailInput): Promise<EmailVerificationResult> {
+  const tokenHash = hashToken(input.token);
+  const redis = createRedisClient();
+  let userId: string | null;
+
+  try {
+    await redis.connect();
+    userId = await redis.get(emailVerificationTokenKey(tokenHash));
+
+    if (userId === null) {
+      throw new EmailVerificationInvalidError();
+    }
+
+    await redis.del(emailVerificationTokenKey(tokenHash), emailVerificationUserKey(userId));
+  } finally {
+    redis.disconnect();
+  }
+
+  const user = await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: userId
+    }
+  });
+
+  return {
+    email: user.email,
+    isVerified: user.isVerified
+  };
+}
+
 export async function refreshSession(input: RefreshSessionInput): Promise<AuthSession> {
   const tokenInput = await consumeRefreshToken(input.refreshToken);
   const user = await prisma.user.findFirstOrThrow({
@@ -186,6 +278,43 @@ export async function refreshSession(input: RefreshSessionInput): Promise<AuthSe
     workspace,
     roles: [membership.role as Role]
   });
+}
+
+async function storeEmailVerificationToken(userId: string, expiresAt: Date): Promise<string> {
+  const redis = createRedisClient();
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = hashToken(token);
+  const ttlSeconds = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000));
+
+  try {
+    await redis.connect();
+    const previousTokenHash = await redis.get(emailVerificationUserKey(userId));
+    const pipeline = redis.pipeline();
+
+    if (previousTokenHash !== null) {
+      pipeline.del(emailVerificationTokenKey(previousTokenHash));
+    }
+
+    pipeline.set(emailVerificationTokenKey(tokenHash), userId, "EX", ttlSeconds);
+    pipeline.set(emailVerificationUserKey(userId), tokenHash, "EX", ttlSeconds);
+    await pipeline.exec();
+  } finally {
+    redis.disconnect();
+  }
+
+  return token;
+}
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function emailVerificationTokenKey(tokenHash: string): string {
+  return `email-verification:token:${tokenHash}`;
+}
+
+function emailVerificationUserKey(userId: string): string {
+  return `email-verification:user:${userId}`;
 }
 
 async function sessionFor(input: {

@@ -19,6 +19,14 @@ export const refreshSessionSchema = z.object({
   refreshToken: z.string().min(1)
 });
 
+export const requestEmailVerificationSchema = z.object({
+  email: z.string().email()
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(32).max(256)
+});
+
 export const workspaceIdSchema = z.string().uuid();
 
 export const vaultSectionSchema = z.enum([
@@ -207,6 +215,8 @@ export const healthResponseSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshSessionInput = z.infer<typeof refreshSessionSchema>;
+export type RequestEmailVerificationInput = z.infer<typeof requestEmailVerificationSchema>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type VaultSectionInput = z.infer<typeof vaultSectionSchema>;
 export type UpsertVaultSectionInput = z.infer<typeof upsertVaultSectionSchema>;
 export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;

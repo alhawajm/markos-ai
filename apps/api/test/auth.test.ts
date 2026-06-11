@@ -4,7 +4,7 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 
 describe("auth routes", () => {
-  it("registers a user, creates an owner workspace, and logs in", async () => {
+  it("registers a user, verifies email, creates an owner workspace, and logs in", async () => {
     const app = await buildApp();
     const workspaceSuffix = randomUUID();
     const email = `founder-${randomUUID()}@markos.test`;
@@ -57,6 +57,54 @@ describe("auth routes", () => {
     expect(workspace.slug).toBe(expectedSlug);
     expect(membership.role).toBe("OWNER");
 
+    const unverifiedLoginResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        email,
+        password
+      }
+    });
+
+    expect(unverifiedLoginResponse.statusCode).toBe(403);
+    expect(unverifiedLoginResponse.json()).toMatchObject({
+      error: {
+        code: "EMAIL_NOT_VERIFIED"
+      }
+    });
+
+    const verificationRequestResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verification/request",
+      payload: {
+        email
+      }
+    });
+    const verificationRequestBody = verificationRequestResponse.json();
+
+    expect(verificationRequestResponse.statusCode).toBe(200);
+    expect(verificationRequestBody.data).toMatchObject({
+      alreadyVerified: false,
+      email
+    });
+    expect(verificationRequestBody.data.verificationToken).toEqual(expect.any(String));
+
+    const verificationResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verify-email",
+      payload: {
+        token: verificationRequestBody.data.verificationToken
+      }
+    });
+
+    expect(verificationResponse.statusCode).toBe(200);
+    expect(verificationResponse.json()).toMatchObject({
+      data: {
+        email,
+        isVerified: true
+      }
+    });
+
     const loginResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/login",
@@ -70,12 +118,33 @@ describe("auth routes", () => {
     expect(loginResponse.json()).toMatchObject({
       data: {
         user: {
-          email
+          email,
+          isVerified: true
         },
         workspace: {
           id: workspace.id
         },
         roles: ["OWNER"]
+      }
+    });
+
+    await app.close();
+  });
+
+  it("rejects invalid email verification tokens", async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verify-email",
+      payload: {
+        token: "x".repeat(32)
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "EMAIL_VERIFICATION_INVALID"
       }
     });
 

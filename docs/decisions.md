@@ -67,3 +67,7 @@ Use `apps/web/tsconfig.typecheck.json` for standalone web `tsc --noEmit` so type
 ## 2026-06-11: AI Usage Quotas Reserve Before Generation
 
 Reserve monthly `UsageCounter` quota before strategy and content generation calls, and refund the reservation if downstream generation or persistence fails. In M0, workspace quota limits come from the workspace owner's active plan JSON limits.
+
+## 2026-06-11: Email Verification Starts With Local Token Delivery
+
+Store email verification tokens hashed in Redis and expose the raw token only outside production so the M0 register -> verify -> login flow is testable before choosing a transactional email provider. Production responses omit the token.

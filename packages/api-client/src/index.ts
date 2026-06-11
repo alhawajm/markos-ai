@@ -5,6 +5,8 @@ import type {
   ContentRecord,
   ContentStatus,
   ContentType,
+  EmailVerificationChallenge,
+  EmailVerificationResult,
   HealthResponse,
   InstagramConnection,
   InstagramOAuthStart,
@@ -68,6 +70,22 @@ export class MarkosApiClient {
 
   async refreshSession(input: { refreshToken: string }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/refresh", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async requestEmailVerification(input: { email: string }): Promise<EmailVerificationChallenge> {
+    const response = await this.request<EmailVerificationChallenge>("/v1/auth/verification/request", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async verifyEmail(input: { token: string }): Promise<EmailVerificationResult> {
+    const response = await this.request<EmailVerificationResult>("/v1/auth/verify-email", {
       body: input,
       method: "POST"
     });

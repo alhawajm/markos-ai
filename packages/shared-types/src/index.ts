@@ -87,6 +87,18 @@ export interface AuthSession {
   tokens: AuthTokens;
 }
 
+export interface EmailVerificationChallenge {
+  alreadyVerified: boolean;
+  email: string;
+  expiresAt: string;
+  verificationToken?: string;
+}
+
+export interface EmailVerificationResult {
+  email: string;
+  isVerified: boolean;
+}
+
 export interface KnowledgeVaultEntry {
   id: string;
   workspaceId: string;

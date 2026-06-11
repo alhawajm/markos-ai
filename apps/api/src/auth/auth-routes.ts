@@ -1,7 +1,23 @@
 import type { FastifyInstance } from "fastify";
-import { loginSchema, refreshSessionSchema, registerSchema } from "@markos/validation";
+import {
+  loginSchema,
+  refreshSessionSchema,
+  registerSchema,
+  requestEmailVerificationSchema,
+  verifyEmailSchema
+} from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
-import { AuthConflictError, InvalidCredentialsError, login, refreshSession, register } from "./auth-service";
+import {
+  AuthConflictError,
+  EmailNotVerifiedError,
+  EmailVerificationInvalidError,
+  InvalidCredentialsError,
+  login,
+  refreshSession,
+  register,
+  requestEmailVerification,
+  verifyEmail
+} from "./auth-service";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError } from "./tokens";
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
@@ -34,8 +50,40 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try {
       return ok(await login(parsed.data));
     } catch (error) {
+      if (error instanceof EmailNotVerifiedError) {
+        return reply.status(403).send(errorEnvelope("EMAIL_NOT_VERIFIED", error.message));
+      }
+
       if (error instanceof InvalidCredentialsError) {
         return reply.status(401).send(errorEnvelope("INVALID_CREDENTIALS", error.message));
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/v1/auth/verification/request", async (request, reply) => {
+    const parsed = requestEmailVerificationSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid email verification request", parsed.error.issues));
+    }
+
+    return ok(await requestEmailVerification(parsed.data));
+  });
+
+  app.post("/v1/auth/verify-email", async (request, reply) => {
+    const parsed = verifyEmailSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid email verification request", parsed.error.issues));
+    }
+
+    try {
+      return ok(await verifyEmail(parsed.data));
+    } catch (error) {
+      if (error instanceof EmailVerificationInvalidError) {
+        return reply.status(400).send(errorEnvelope("EMAIL_VERIFICATION_INVALID", error.message));
       }
 
       throw error;

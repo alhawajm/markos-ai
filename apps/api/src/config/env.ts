@@ -16,6 +16,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(12).default("dev-refresh-secret-change-me"),
   JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
+  EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
   MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
