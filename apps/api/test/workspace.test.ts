@@ -43,6 +43,30 @@ describe("workspace routes", () => {
     });
     expect(disconnected.statusCode).toBe(200);
     expect(disconnected.json().data.connected).toBe(false);
+    const auditLogs = await prisma.auditLog.findMany({
+      orderBy: {
+        createdAt: "asc"
+      },
+      where: {
+        action: {
+          in: ["INSTAGRAM_CONNECTED", "INSTAGRAM_DISCONNECTED"]
+        },
+        workspaceId: session.workspace.id
+      }
+    });
+    expect(auditLogs).toHaveLength(2);
+    expect(auditLogs[0]).toMatchObject({
+      action: "INSTAGRAM_CONNECTED",
+      actorId: session.user.id,
+      targetId: "17841400000000000",
+      targetType: "InstagramConnection"
+    });
+    expect(auditLogs[1]).toMatchObject({
+      action: "INSTAGRAM_DISCONNECTED",
+      actorId: session.user.id,
+      targetId: "17841400000000000",
+      targetType: "InstagramConnection"
+    });
 
     await app.close();
   });

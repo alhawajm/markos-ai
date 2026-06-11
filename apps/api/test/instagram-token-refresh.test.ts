@@ -101,6 +101,18 @@ describe("Instagram token refresh", () => {
       expect(response.json().data.refreshed).toBe(true);
       expect(response.json().data.connection.accountId).toBe(accountId);
       expect(workspace.instagramAccessToken).toBe("new-token-route");
+      await expect(
+        prisma.auditLog.findFirstOrThrow({
+          where: {
+            action: "INSTAGRAM_TOKEN_REFRESHED",
+            actorId: session.user.id,
+            targetId: accountId,
+            workspaceId: session.workspace.id
+          }
+        })
+      ).resolves.toMatchObject({
+        targetType: "InstagramConnection"
+      });
     } finally {
       globalThis.fetch = originalFetch;
       await app.close();

@@ -30,7 +30,11 @@ export async function getInstagramConnection(workspaceId: string): Promise<Insta
   return toInstagramConnection(workspace);
 }
 
-export async function connectInstagram(workspaceId: string, input: ConnectInstagramInput): Promise<InstagramConnection> {
+export async function connectInstagram(
+  workspaceId: string,
+  input: ConnectInstagramInput,
+  audit: { actorId?: string } = {}
+): Promise<InstagramConnection> {
   const workspace = await prisma.workspace.update({
     where: {
       id: workspaceId
@@ -42,19 +46,59 @@ export async function connectInstagram(workspaceId: string, input: ConnectInstag
     }
   });
 
+  await prisma.auditLog.create({
+    data: {
+      action: "INSTAGRAM_CONNECTED",
+      ...(audit.actorId === undefined ? {} : { actorId: audit.actorId }),
+      metadata: {
+        accountId: input.accountId,
+        tokenExpiresAt: new Date(input.tokenExpiresAt).toISOString()
+      },
+      targetId: input.accountId,
+      targetType: "InstagramConnection",
+      workspaceId
+    }
+  });
+
   return toInstagramConnection(workspace);
 }
 
-export async function disconnectInstagram(workspaceId: string): Promise<InstagramConnection> {
-  const workspace = await prisma.workspace.update({
-    where: {
-      id: workspaceId
-    },
-    data: {
-      instagramAccountId: null,
-      instagramAccessToken: null,
-      instagramTokenExpiresAt: null
-    }
+export async function disconnectInstagram(
+  workspaceId: string,
+  audit: { actorId?: string } = {}
+): Promise<InstagramConnection> {
+  const workspace = await prisma.$transaction(async (tx) => {
+    const existing = await tx.workspace.findUniqueOrThrow({
+      select: {
+        instagramAccountId: true
+      },
+      where: {
+        id: workspaceId
+      }
+    });
+    const updated = await tx.workspace.update({
+      where: {
+        id: workspaceId
+      },
+      data: {
+        instagramAccountId: null,
+        instagramAccessToken: null,
+        instagramTokenExpiresAt: null
+      }
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: "INSTAGRAM_DISCONNECTED",
+        ...(audit.actorId === undefined ? {} : { actorId: audit.actorId }),
+        metadata: existing.instagramAccountId === null ? {} : { accountId: existing.instagramAccountId },
+        targetId: existing.instagramAccountId,
+        targetType: "InstagramConnection",
+        workspaceId
+      }
+    });
+
+    return updated;
   });
 
   return toInstagramConnection(workspace);

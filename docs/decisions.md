@@ -59,3 +59,7 @@ Run due publishing and Instagram token refresh from a small API-owned maintenanc
 ## 2026-06-11: Meta Callback Events Are Audited
 
 Persist sanitized `AuditLog` entries for Instagram webhooks, deauthorization callbacks, and data deletion callbacks. Redact tokens and signed requests, and write workspace-scoped rows when callback account identifiers match stored workspace Instagram connections.
+
+## 2026-06-11: Standalone Web Typecheck Uses Its Own Config
+
+Use `apps/web/tsconfig.typecheck.json` for standalone web `tsc --noEmit` so typecheck does not depend on generated `.next` artifacts. Keep Next's main `tsconfig.json` compatible with `next lint` and `next build`; `next build` remains responsible for validating generated Next route types.

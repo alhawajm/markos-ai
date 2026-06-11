@@ -16,6 +16,7 @@ export class InstagramTokenRefreshError extends Error {
 }
 
 export async function refreshInstagramTokenForWorkspace(input: {
+  actorId?: string;
   workspaceId: string;
   fetchImpl?: typeof fetch;
   now?: Date;
@@ -49,6 +50,19 @@ export async function refreshInstagramTokenForWorkspace(input: {
   }
 
   const updated = await refreshWorkspaceToken(workspace, input.fetchImpl ?? fetch, now);
+  await prisma.auditLog.create({
+    data: {
+      action: "INSTAGRAM_TOKEN_REFRESHED",
+      ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
+      metadata: {
+        accountId: workspace.instagramAccountId,
+        ...(updated.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: updated.instagramTokenExpiresAt.toISOString() })
+      },
+      targetId: workspace.instagramAccountId,
+      targetType: "InstagramConnection",
+      workspaceId: workspace.id
+    }
+  });
 
   return {
     connection: toConnection(updated),

@@ -117,8 +117,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
         return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Instagram connection request", parsed.error.issues));
       }
 
-      const { workspaceId } = requireWorkspaceContext();
-      return ok(await connectInstagram(workspaceId, parsed.data));
+      const { userId, workspaceId } = requireWorkspaceContext();
+      return ok(await connectInstagram(workspaceId, parsed.data, { actorId: userId }));
     }
   );
 
@@ -130,8 +130,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
       }
     },
     async () => {
-      const { workspaceId } = requireWorkspaceContext();
-      return ok(await disconnectInstagram(workspaceId));
+      const { userId, workspaceId } = requireWorkspaceContext();
+      return ok(await disconnectInstagram(workspaceId, { actorId: userId }));
     }
   );
 
@@ -143,8 +143,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
       }
     },
     async () => {
-      const { workspaceId } = requireWorkspaceContext();
-      return ok(await refreshInstagramTokenForWorkspace({ workspaceId }));
+      const { userId, workspaceId } = requireWorkspaceContext();
+      return ok(await refreshInstagramTokenForWorkspace({ actorId: userId, workspaceId }));
     }
   );
 
