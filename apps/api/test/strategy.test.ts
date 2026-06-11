@@ -74,6 +74,7 @@ describe("strategy routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
+    const periodStart = monthStart(new Date());
 
     await app.inject({
       method: "PUT",
@@ -141,10 +142,106 @@ describe("strategy routes", () => {
       currency: "BHD",
       model: "test-strategy-model"
     });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "STRATEGY",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 1,
+      limit: 1
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_GENERATION",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 1,
+      limit: 100
+    });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({
       title: "90-day strategy: increase wholesale cafe leads"
     });
+
+    await app.close();
+  });
+
+  it("blocks strategy generation when the plan quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const periodStart = monthStart(new Date());
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Pearl Coffee",
+              industry: "specialty coffee",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "STRATEGY",
+        periodStart,
+        periodEnd: monthEnd(periodStart),
+        used: 1,
+        limit: 1
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/strategy/generate",
+      headers,
+      payload: {
+        horizonDays: 90
+      }
+    });
+    const aiCounter = await prisma.usageCounter.findUnique({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: session.workspace.id,
+          metric: "AI_GENERATION",
+          periodStart
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "USAGE_QUOTA_EXCEEDED",
+        details: [
+          {
+            metric: "STRATEGY"
+          }
+        ]
+      }
+    });
+    expect(aiCounter?.used ?? 0).toBe(0);
 
     await app.close();
   });
@@ -184,4 +281,12 @@ function testEmbedding(text: string): number[] {
   const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 
   return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function monthEnd(periodStart: Date): Date {
+  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1));
 }

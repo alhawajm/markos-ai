@@ -5,9 +5,41 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "dist/**", "build/**"]
     },
+    "@markos/api-client#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@markos/i18n#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@markos/shared-types#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@markos/ui-tokens#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@markos/validation#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "ai#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "api#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "infra#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
     },
     "typecheck": {
       "dependsOn": ["^build"],

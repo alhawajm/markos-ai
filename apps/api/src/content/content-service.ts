@@ -4,6 +4,7 @@ import type { GenerateContentInput, ScheduleContentInput, UpdateContentInput, Up
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, searchVaultContext } from "../vault/vault-service";
 
 const contentAgentName = "CONTENT";
@@ -69,66 +70,75 @@ export async function generateWorkspaceContent(
     query: input.topic,
     topK: 8
   });
-  const generated = await generateContentDrafts({
-    workspaceId,
-    topic: input.topic,
-    contentType: input.contentType,
-    count: input.count,
-    context,
-    ...(strategy === undefined ? {} : { strategy })
-  });
+  const generationCount = input.count;
+  const usagePeriodDate = new Date();
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
 
-  const saved = await prisma.$transaction(async (tx) => {
-    const rows = [];
-
-    for (const draft of generated.drafts) {
-      rows.push(
-        await tx.contentItem.create({
-          data: {
-            workspaceId,
-            contentType: draft.contentType,
-            status: "DRAFT",
-            ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
-            ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
-            hashtags: draft.hashtags,
-            ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
-            mediaIds: [],
-            ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
-            ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
-            ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-            aiPromptUsed: generated.prompt_version
-          }
-        })
-      );
-    }
-
-    await tx.aiInteraction.create({
-      data: {
-        workspaceId,
-        agent: contentAgentName,
-        promptVersion: generated.prompt_version,
-        prompt: {
-          topic: input.topic,
-          contentType: input.contentType,
-          count: input.count,
-          ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
-          retrievedContext: context
-        } as unknown as Prisma.InputJsonValue,
-        response: {
-          drafts: generated.drafts
-        } as unknown as Prisma.InputJsonValue,
-        tokensIn: generated.tokens_in,
-        tokensOut: generated.tokens_out,
-        costMinor: 0,
-        currency: localCurrency,
-        model: generated.model || env.LLM_PRIMARY_MODEL
-      }
+  try {
+    const generated = await generateContentDrafts({
+      workspaceId,
+      topic: input.topic,
+      contentType: input.contentType,
+      count: input.count,
+      context,
+      ...(strategy === undefined ? {} : { strategy })
     });
 
-    return rows;
-  });
+    const saved = await prisma.$transaction(async (tx) => {
+      const rows = [];
 
-  return saved.map(toContentRecord);
+      for (const draft of generated.drafts) {
+        rows.push(
+          await tx.contentItem.create({
+            data: {
+              workspaceId,
+              contentType: draft.contentType,
+              status: "DRAFT",
+              ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
+              ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
+              hashtags: draft.hashtags,
+              ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+              mediaIds: [],
+              ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
+              ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
+              ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
+              aiPromptUsed: generated.prompt_version
+            }
+          })
+        );
+      }
+
+      await tx.aiInteraction.create({
+        data: {
+          workspaceId,
+          agent: contentAgentName,
+          promptVersion: generated.prompt_version,
+          prompt: {
+            topic: input.topic,
+            contentType: input.contentType,
+            count: input.count,
+            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            retrievedContext: context
+          } as unknown as Prisma.InputJsonValue,
+          response: {
+            drafts: generated.drafts
+          } as unknown as Prisma.InputJsonValue,
+          tokensIn: generated.tokens_in,
+          tokensOut: generated.tokens_out,
+          costMinor: 0,
+          currency: localCurrency,
+          model: generated.model || env.LLM_PRIMARY_MODEL
+        }
+      });
+
+      return rows;
+    });
+
+    return saved.map(toContentRecord);
+  } catch (error) {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
+    throw error;
+  }
 }
 
 export async function updateContentItem(

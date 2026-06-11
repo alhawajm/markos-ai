@@ -63,3 +63,7 @@ Persist sanitized `AuditLog` entries for Instagram webhooks, deauthorization cal
 ## 2026-06-11: Standalone Web Typecheck Uses Its Own Config
 
 Use `apps/web/tsconfig.typecheck.json` for standalone web `tsc --noEmit` so typecheck does not depend on generated `.next` artifacts. Keep Next's main `tsconfig.json` compatible with `next lint` and `next build`; `next build` remains responsible for validating generated Next route types.
+
+## 2026-06-11: AI Usage Quotas Reserve Before Generation
+
+Reserve monthly `UsageCounter` quota before strategy and content generation calls, and refund the reservation if downstream generation or persistence fails. In M0, workspace quota limits come from the workspace owner's active plan JSON limits.

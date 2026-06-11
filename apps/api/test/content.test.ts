@@ -58,6 +58,7 @@ describe("content routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
+    const periodStart = monthStart(new Date());
 
     await app.inject({
       method: "PUT",
@@ -136,8 +137,92 @@ describe("content routes", () => {
       currency: "BHD",
       model: "test-content-model"
     });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_GENERATION",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 2,
+      limit: 100
+    });
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("blocks content generation when the AI generation quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const periodStart = monthStart(new Date());
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Pearl Coffee",
+              industry: "specialty coffee",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "AI_GENERATION",
+        periodStart,
+        periodEnd: monthEnd(periodStart),
+        used: 99,
+        limit: 100
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/generate",
+      headers,
+      payload: {
+        topic: "wholesale coffee leads",
+        contentType: "POST",
+        count: 2
+      }
+    });
+    const counter = await prisma.usageCounter.findUniqueOrThrow({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: session.workspace.id,
+          metric: "AI_GENERATION",
+          periodStart
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "USAGE_QUOTA_EXCEEDED",
+        details: [
+          {
+            metric: "AI_GENERATION"
+          }
+        ]
+      }
+    });
+    expect(counter.used).toBe(99);
 
     await app.close();
   });
@@ -388,4 +473,12 @@ function testEmbedding(text: string): number[] {
   const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 
   return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function monthEnd(periodStart: Date): Date {
+  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1));
 }

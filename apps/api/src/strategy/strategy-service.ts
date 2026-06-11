@@ -4,6 +4,7 @@ import type { GenerateStrategyInput } from "@markos/validation";
 import { generateStrategyPlan } from "../ai/strategy-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, searchVaultContext } from "../vault/vault-service";
 
 const strategyAgentName = "STRATEGIST";
@@ -45,57 +46,75 @@ export async function generateWorkspaceStrategy(
     query,
     topK: 8
   });
-  const request = {
-    workspaceId,
-    horizonDays: input.horizonDays,
-    context
-  };
-  const generated = await generateStrategyPlan(
-    input.objective === undefined
-      ? request
-      : {
-          ...request,
-          objective: input.objective
-        }
-  );
-  const strategy: StrategyPlan = {
-    ...generated.strategy,
-    retrievedContext: context
-  };
+  const usagePeriodDate = new Date();
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
-  const saved = await prisma.$transaction(async (tx) => {
-    const row = await tx.strategy.create({
-      data: {
-        workspaceId,
-        title: titleForStrategy(input.horizonDays, input.objective),
-        horizonDays: input.horizonDays,
-        content: strategy as unknown as Prisma.InputJsonValue
-      }
-    });
+  try {
+    await reserveWorkspaceUsage({ workspaceId, metric: "STRATEGY", now: usagePeriodDate });
+  } catch (error) {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    throw error;
+  }
 
-    await tx.aiInteraction.create({
-      data: {
-        workspaceId,
-        agent: strategyAgentName,
-        promptVersion: generated.prompt_version,
-        prompt: {
-          ...(input.objective === undefined ? {} : { objective: input.objective }),
+  try {
+    const request = {
+      workspaceId,
+      horizonDays: input.horizonDays,
+      context
+    };
+    const generated = await generateStrategyPlan(
+      input.objective === undefined
+        ? request
+        : {
+            ...request,
+            objective: input.objective
+          }
+    );
+    const strategy: StrategyPlan = {
+      ...generated.strategy,
+      retrievedContext: context
+    };
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const row = await tx.strategy.create({
+        data: {
+          workspaceId,
+          title: titleForStrategy(input.horizonDays, input.objective),
           horizonDays: input.horizonDays,
-          retrievedContext: context
-        } as unknown as Prisma.InputJsonValue,
-        response: strategy as unknown as Prisma.InputJsonValue,
-        tokensIn: generated.tokens_in,
-        tokensOut: generated.tokens_out,
-        costMinor: 0,
-        currency: localCurrency,
-        model: generated.model || env.LLM_PRIMARY_MODEL
-      }
+          content: strategy as unknown as Prisma.InputJsonValue
+        }
+      });
+
+      await tx.aiInteraction.create({
+        data: {
+          workspaceId,
+          agent: strategyAgentName,
+          promptVersion: generated.prompt_version,
+          prompt: {
+            ...(input.objective === undefined ? {} : { objective: input.objective }),
+            horizonDays: input.horizonDays,
+            retrievedContext: context
+          } as unknown as Prisma.InputJsonValue,
+          response: strategy as unknown as Prisma.InputJsonValue,
+          tokensIn: generated.tokens_in,
+          tokensOut: generated.tokens_out,
+          costMinor: 0,
+          currency: localCurrency,
+          model: generated.model || env.LLM_PRIMARY_MODEL
+        }
+      });
+
+      return row;
     });
 
-    return row;
-  });
-
-  return toStrategyRecord(saved);
+    return toStrategyRecord(saved);
+  } catch (error) {
+    await Promise.all([
+      refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate }),
+      refundWorkspaceUsage({ workspaceId, metric: "STRATEGY", now: usagePeriodDate })
+    ]);
+    throw error;
+  }
 }
 
 function titleForStrategy(horizonDays: number, objective: string | undefined): string {
