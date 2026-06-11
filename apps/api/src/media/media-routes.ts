@@ -20,7 +20,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     "/v1/media",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["media:read"]
       }
     },
     async () => {
@@ -33,7 +34,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     "/v1/media/upload",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["media:write"]
       }
     },
     async (request, reply) => {
@@ -61,7 +63,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     "/v1/media/public-url",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["media:write"]
       }
     },
     async (request, reply) => {
@@ -80,7 +83,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     "/v1/content/:contentItemId/media",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["media:write"]
       }
     },
     async (request, reply) => {
@@ -109,7 +113,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     "/v1/content/:contentItemId/media/:mediaAssetId",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["media:write"]
       }
     },
     async (request, reply) => {

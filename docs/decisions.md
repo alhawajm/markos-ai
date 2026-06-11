@@ -75,3 +75,7 @@ Store email verification tokens hashed in Redis and expose the raw token only ou
 ## 2026-06-11: RLS Uses The Dedicated App Role First
 
 Enable PostgreSQL RLS policies for workspace-scoped tables against the `markos_app` role, using `app.current_workspace` as the fail-closed tenant selector. Keep migrations and owner-level maintenance on the `markos` role, which bypasses RLS, and use transaction-local workspace context helpers when app-role RLS enforcement is needed.
+
+## 2026-06-11: RBAC Starts With Workspace Route Permissions
+
+Define named permissions in shared types and enforce them in the workspace middleware after resolving the current database membership role. Owners and workspace admins can manage the full workspace surface, editors can create and schedule operational content, viewers stay read-only, and admin support roles get read/audit access until the admin portal introduces narrower global scopes.

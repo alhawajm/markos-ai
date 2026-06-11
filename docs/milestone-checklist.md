@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: database RLS policies for workspace-scoped tables
+- Latest completed M0 step: RBAC permission catalog and route guards
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -39,7 +39,7 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Refresh token rotation and reuse detection.
 - [x] Argon2id password hashing.
 - [ ] TOTP MFA for admin/finance roles.
-- [ ] RBAC permission catalog with role and permission guards.
+- [x] RBAC permission catalog with role and permission guards.
 - [x] Shared packages: shared types, validation, API client, i18n, UI tokens.
 - [x] Provider interfaces and configurable model IDs.
 - [x] AI interaction token metering skeleton.

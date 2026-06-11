@@ -31,7 +31,8 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     "/v1/onboarding",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["onboarding:read"]
       }
     },
     async () => {
@@ -44,7 +45,8 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     "/v1/onboarding/:module",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["onboarding:write"]
       }
     },
     async (request, reply) => {
@@ -70,7 +72,8 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     "/v1/onboarding/complete",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["onboarding:write"]
       }
     },
     async (_request, reply) => {

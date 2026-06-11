@@ -95,7 +95,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     "/v1/workspace-context",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["workspace:read"]
       }
     },
     async () => {

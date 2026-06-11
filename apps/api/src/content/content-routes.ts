@@ -22,7 +22,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:read"]
       }
     },
     async () => {
@@ -35,7 +36,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content/generate",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:write"]
       }
     },
     async (request, reply) => {
@@ -67,7 +69,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content/:contentItemId",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:write"]
       }
     },
     async (request, reply) => {
@@ -104,7 +107,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content/:contentItemId/status",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:write"]
       }
     },
     async (request, reply) => {
@@ -141,7 +145,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content/:contentItemId/schedule",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:schedule"]
       }
     },
     async (request, reply) => {
@@ -178,7 +183,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     "/v1/content/:contentItemId/unschedule",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["content:schedule"]
       }
     },
     async (request, reply) => {

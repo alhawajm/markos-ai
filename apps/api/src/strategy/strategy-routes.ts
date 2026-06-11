@@ -10,7 +10,8 @@ export async function registerStrategyRoutes(app: FastifyInstance): Promise<void
     "/v1/strategy",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["strategy:read"]
       }
     },
     async () => {
@@ -23,7 +24,8 @@ export async function registerStrategyRoutes(app: FastifyInstance): Promise<void
     "/v1/strategy/generate",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["strategy:generate"]
       }
     },
     async (request, reply) => {

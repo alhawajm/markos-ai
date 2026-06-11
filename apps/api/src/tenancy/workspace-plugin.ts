@@ -1,13 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import type { Role } from "@markos/shared-types";
+import type { Permission, Role } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { verifyAccessToken } from "../auth/tokens";
+import { hasPermissions } from "../auth/rbac";
 import { errorEnvelope } from "../http/envelope";
 import { runWorkspaceContextScope, setWorkspaceContext } from "./workspace-context";
 
 declare module "fastify" {
   interface FastifyContextConfig {
     workspaceRequired?: boolean;
+    permissions?: Permission[];
   }
 
   interface FastifyRequest {
@@ -64,6 +66,20 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
 
       request.auth = auth;
       setWorkspaceContext(auth);
+
+      const permissions = request.routeOptions.config.permissions ?? [];
+
+      if (permissions.length > 0 && !hasPermissions(auth.roles, permissions)) {
+        await reply.status(403).send(
+          errorEnvelope("RBAC_FORBIDDEN", "This role does not have permission to perform this action", [
+            {
+              requiredPermissions: permissions,
+              roles: auth.roles
+            }
+          ])
+        );
+        return;
+      }
     } catch {
       await reply.status(401).send(errorEnvelope("INVALID_TOKEN", "Bearer token is invalid or expired"));
     }

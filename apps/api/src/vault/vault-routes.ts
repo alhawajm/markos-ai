@@ -9,7 +9,8 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     "/v1/vault",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["vault:read"]
       }
     },
     async () => {
@@ -22,7 +23,8 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     "/v1/vault/score",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["vault:read"]
       }
     },
     async () => {
@@ -35,7 +37,8 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     "/v1/vault/rag/search",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["vault:read"]
       }
     },
     async (request, reply) => {
@@ -54,7 +57,8 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     "/v1/vault/:section",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["vault:read"]
       }
     },
     async (request, reply) => {
@@ -73,7 +77,8 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     "/v1/vault/:section",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["vault:write"]
       }
     },
     async (request, reply) => {

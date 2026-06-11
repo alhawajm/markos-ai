@@ -17,6 +17,25 @@ export const roles = [
 ] as const;
 export type Role = (typeof roles)[number];
 
+export const permissions = [
+  "workspace:read",
+  "workspace:audit:read",
+  "instagram:manage",
+  "vault:read",
+  "vault:write",
+  "onboarding:read",
+  "onboarding:write",
+  "strategy:read",
+  "strategy:generate",
+  "content:read",
+  "content:write",
+  "content:schedule",
+  "media:read",
+  "media:write",
+  "publishing:run"
+] as const;
+export type Permission = (typeof permissions)[number];
+
 export const vaultSections = [
   "COMPANY",
   "STORY",

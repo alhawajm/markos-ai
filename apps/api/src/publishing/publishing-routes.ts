@@ -8,7 +8,8 @@ export async function registerPublishingRoutes(app: FastifyInstance): Promise<vo
     "/v1/publishing/run-due",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["publishing:run"]
       }
     },
     async () => {
@@ -21,7 +22,8 @@ export async function registerPublishingRoutes(app: FastifyInstance): Promise<vo
     "/v1/publishing/content/:contentItemId/dry-run",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["publishing:run"]
       }
     },
     async (request, reply) => {

@@ -219,7 +219,7 @@ describe("workspace routes", () => {
     });
 
     expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe("AUDIT_LOGS_FORBIDDEN");
+    expect(response.json().error.code).toBe("RBAC_FORBIDDEN");
 
     await app.close();
   });

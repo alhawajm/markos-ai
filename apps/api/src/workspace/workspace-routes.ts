@@ -26,7 +26,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram/oauth/start",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["instagram:manage"]
       }
     },
     async (request, reply) => {
@@ -94,7 +95,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["workspace:read"]
       }
     },
     async () => {
@@ -107,7 +109,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["instagram:manage"]
       }
     },
     async (request, reply) => {
@@ -126,7 +129,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["instagram:manage"]
       }
     },
     async () => {
@@ -139,7 +143,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram/refresh",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["instagram:manage"]
       }
     },
     async () => {
@@ -152,16 +157,12 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/audit-logs",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["workspace:audit:read"]
       }
     },
     async (request, reply) => {
-      const { roles, workspaceId } = requireWorkspaceContext();
-
-      if (!roles.some((role) => role === "OWNER" || role === "WORKSPACE_ADMIN")) {
-        return reply.status(403).send(errorEnvelope("AUDIT_LOGS_FORBIDDEN", "Audit logs require workspace admin access"));
-      }
-
+      const { workspaceId } = requireWorkspaceContext();
       const query = request.query as { limit?: string };
       const rawLimit = query.limit === undefined ? undefined : Number(query.limit);
 
@@ -177,7 +178,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/publish-readiness/:contentItemId",
     {
       config: {
-        workspaceRequired: true
+        workspaceRequired: true,
+        permissions: ["workspace:read"]
       }
     },
     async (request, reply) => {
