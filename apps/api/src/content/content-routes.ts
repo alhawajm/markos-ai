@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { generateContentSchema, scheduleContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
-import { UsageQuotaExceededError } from "../usage/usage-service";
+import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   ContentContextMissingError,
   ContentItemLockedError,
@@ -58,6 +58,10 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
         if (error instanceof UsageQuotaExceededError) {
           return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
         }
 
         throw error;

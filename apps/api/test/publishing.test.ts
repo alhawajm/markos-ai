@@ -274,6 +274,62 @@ describe("publishing routes", () => {
     await app.close();
   });
 
+  it("blocks live publishing when billing is past due", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+
+    await prisma.user.update({
+      data: {
+        planStatus: "PAST_DUE"
+      },
+      where: {
+        id: session.user.id
+      }
+    });
+    await prisma.workspace.update({
+      where: {
+        id: session.workspace.id
+      },
+      data: {
+        instagramAccessToken: "test-token",
+        instagramAccountId: "17841400000000000",
+        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
+      }
+    });
+
+    const publisher: InstagramPublisher = {
+      async getPublishingLimit() {
+        return {
+          quotaDurationSeconds: 86400,
+          quotaTotal: 50,
+          quotaUsage: 12
+        };
+      },
+      async publish() {
+        throw new Error("publish should not be called when billing is past due");
+      }
+    };
+
+    const attempt = await publishContentItem(session.workspace.id, content.id, { publisher });
+    const after = await prisma.contentItem.findUniqueOrThrow({
+      where: {
+        id: content.id
+      }
+    });
+
+    expect(attempt).toMatchObject({
+      contentItemId: content.id,
+      dryRun: false,
+      reasons: ["BILLING_STATUS_PAST_DUE"],
+      status: "BLOCKED"
+    });
+    expect(after.status).toBe("SCHEDULED");
+    expect(after.publishedAt).toBeNull();
+
+    await app.close();
+  });
+
   it("blocks publishing before container creation when the daily Instagram limit is reached", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

@@ -99,3 +99,7 @@ Wire Sentry SDK initialization into the Next.js web app, Fastify API, maintenanc
 ## 2026-06-11: Usage Quotas Use Monthly Periods Except Storage
 
 Track AI generations, AI images, strategies, and MARKOS post publishes in calendar-month usage periods. Track storage bytes in one lifetime period because storage is an active allocation rather than a monthly-reset consumption metric.
+
+## 2026-06-11: Paid Usage Requires Active Billing State
+
+Allow usage reservations only for `TRIAL` users with an unexpired trial and `ACTIVE` users. Block `PAST_DUE`, `SUSPENDED`, `CANCELLED`, and expired `TRIAL` states before counters move, returning explicit billing status errors for API calls and blocked publish attempts for workers.

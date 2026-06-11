@@ -1,4 +1,4 @@
-import type { Prisma, UsageMetric } from "@prisma/client";
+import type { PlanStatus, Prisma, UsageMetric } from "@prisma/client";
 import { prisma } from "../db/prisma";
 
 type SupportedUsageMetric = UsageMetric;
@@ -17,6 +17,15 @@ export class UsageQuotaExceededError extends Error {
   constructor(metric: SupportedUsageMetric) {
     super(`${metric} quota exceeded`);
     this.metric = metric;
+  }
+}
+
+export class UsagePlanInactiveError extends Error {
+  readonly status: PlanStatus;
+
+  constructor(status: PlanStatus) {
+    super(`Billing status ${status} cannot reserve usage`);
+    this.status = status;
   }
 }
 
@@ -124,13 +133,18 @@ async function getWorkspaceLimit(workspaceId: string, metric: SupportedUsageMetr
   });
   const owner = await prisma.user.findFirstOrThrow({
     select: {
-      planId: true
+      planId: true,
+      planStatus: true,
+      trialEndsAt: true
     },
     where: {
       deletedAt: null,
       id: workspace.ownerUserId
     }
   });
+
+  assertUsageAllowed(owner.planStatus, owner.trialEndsAt);
+
   const plan = owner.planId
     ? await prisma.plan.findFirst({
         select: {
@@ -151,6 +165,18 @@ async function getWorkspaceLimit(workspaceId: string, metric: SupportedUsageMetr
   }
 
   return limit;
+}
+
+function assertUsageAllowed(status: PlanStatus, trialEndsAt: Date | null): void {
+  if (status === "ACTIVE") {
+    return;
+  }
+
+  if (status === "TRIAL" && (trialEndsAt === null || trialEndsAt > new Date())) {
+    return;
+  }
+
+  throw new UsagePlanInactiveError(status);
 }
 
 function getLimitValue(limits: Prisma.JsonValue | undefined, key: string): number | undefined {

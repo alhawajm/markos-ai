@@ -227,6 +227,63 @@ describe("content routes", () => {
     await app.close();
   });
 
+  it("blocks content generation when billing is suspended", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Pearl Coffee",
+              industry: "specialty coffee",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+    await prisma.user.update({
+      data: {
+        planStatus: "SUSPENDED"
+      },
+      where: {
+        id: session.user.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/generate",
+      headers,
+      payload: {
+        topic: "wholesale coffee leads",
+        contentType: "POST",
+        count: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "BILLING_STATUS_INACTIVE",
+        details: [
+          {
+            status: "SUSPENDED"
+          }
+        ]
+      }
+    });
+
+    await app.close();
+  });
+
   it("updates drafts and enforces the approval workflow", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

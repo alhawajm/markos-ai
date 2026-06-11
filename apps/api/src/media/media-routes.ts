@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { attachMediaToContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
-import { UsageQuotaExceededError } from "../usage/usage-service";
+import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   attachMediaToContent,
   detachMediaFromContent,
@@ -59,6 +59,10 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
           return reply.status(409).send(errorEnvelope("QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
         }
 
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+
         throw error;
       }
     }
@@ -86,6 +90,10 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       } catch (error) {
         if (error instanceof UsageQuotaExceededError) {
           return reply.status(409).send(errorEnvelope("QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
         }
 
         throw error;

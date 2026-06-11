@@ -1,6 +1,6 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
-import { refundWorkspaceUsage, reserveWorkspaceUsage, UsageQuotaExceededError } from "../usage/usage-service";
+import { refundWorkspaceUsage, reserveWorkspaceUsage, UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   createInstagramPublisher,
   DryRunInstagramPublisher,
@@ -209,6 +209,15 @@ export async function publishContentItem(
             contentItemId,
             dryRun: false,
             reasons: ["POST_PUBLISH_QUOTA_EXCEEDED"],
+            status: "BLOCKED"
+          };
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return {
+            contentItemId,
+            dryRun: false,
+            reasons: [`BILLING_STATUS_${error.status}`],
             status: "BLOCKED"
           };
         }

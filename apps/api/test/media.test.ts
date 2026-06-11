@@ -264,6 +264,47 @@ describe("media routes", () => {
 
     await app.close();
   });
+
+  it("blocks media upload when billing is cancelled", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await prisma.user.update({
+      data: {
+        planStatus: "CANCELLED"
+      },
+      where: {
+        id: session.user.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "cancelled.jpg",
+        mimeType: "image/jpeg",
+        base64Data: Buffer.from("blocked media").toString("base64")
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "BILLING_STATUS_INACTIVE",
+        details: [
+          {
+            status: "CANCELLED"
+          }
+        ]
+      }
+    });
+
+    await app.close();
+  });
 });
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {

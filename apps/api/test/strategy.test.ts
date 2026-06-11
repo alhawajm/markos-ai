@@ -245,6 +245,62 @@ describe("strategy routes", () => {
 
     await app.close();
   });
+
+  it("blocks strategy generation when the trial has expired", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Pearl Coffee",
+              industry: "specialty coffee",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+    await prisma.user.update({
+      data: {
+        planStatus: "TRIAL",
+        trialEndsAt: new Date(Date.now() - 60 * 1000)
+      },
+      where: {
+        id: session.user.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/strategy/generate",
+      headers,
+      payload: {
+        horizonDays: 90
+      }
+    });
+
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "BILLING_STATUS_INACTIVE",
+        details: [
+          {
+            status: "TRIAL"
+          }
+        ]
+      }
+    });
+
+    await app.close();
+  });
 });
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
