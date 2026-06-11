@@ -7,6 +7,7 @@ import type {
   HealthResponse,
   InstagramConnection,
   InstagramOAuthStart,
+  InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
   MediaAssetRecord,
   MediaType,
@@ -271,6 +272,14 @@ export class MarkosApiClient {
   async disconnectInstagram(): Promise<InstagramConnection> {
     const response = await this.request<InstagramConnection>("/v1/workspace/instagram", {
       method: "DELETE"
+    });
+    return response.data;
+  }
+
+  async refreshInstagramToken(): Promise<InstagramTokenRefreshResult> {
+    const response = await this.request<InstagramTokenRefreshResult>("/v1/workspace/instagram/refresh", {
+      body: {},
+      method: "POST"
     });
     return response.data;
   }

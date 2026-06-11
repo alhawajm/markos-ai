@@ -19,6 +19,8 @@ Local defaults:
 META_REDIRECT_URI=http://localhost:4000/v1/workspace/instagram/oauth/callback
 META_WEBHOOK_VERIFY_TOKEN=change-me-for-meta-dashboard
 INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publish
+INSTAGRAM_REFRESH_TOKEN_URL=https://graph.instagram.com/refresh_access_token
+INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS=14
 ```
 
 ## Permissions To Request
@@ -50,11 +52,11 @@ Do not request analytics, comments, mentions, messaging, or ad permissions until
 - Public media URLs use HTTPS and are reachable by Meta.
 - Publishing remains behind `INSTAGRAM_PUBLISH_MODE=live`.
 - Daily publishing caps are enforced before background publishing is enabled.
-- Long-lived token refresh is implemented before real customer onboarding.
-- Data deletion/deauthorization callbacks are connected to a real privacy workflow before public launch.
+- Long-lived token refresh succeeds from MARKOS Settings for connected accounts.
+- Data deletion/deauthorization callbacks disconnect Instagram credentials when the callback account identifier matches a stored `instagramAccountId`.
 
 ## Current Limitations
 
 - Webhook POST payloads are acknowledged but not yet persisted.
-- Deauthorization and data deletion callbacks are acknowledged but do not yet remove workspace Instagram tokens.
-- Long-lived token refresh is not scheduled yet.
+- Deauthorization and data deletion callbacks cannot disconnect accounts when Meta sends only an app-scoped user id that is not stored by MARKOS.
+- Long-lived token refresh is explicit/manual; it is not scheduled yet.

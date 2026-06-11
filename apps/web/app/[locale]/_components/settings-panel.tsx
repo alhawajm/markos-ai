@@ -93,6 +93,23 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  async function refreshToken() {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const result = await client.refreshInstagramToken();
+      if (result.connection) {
+        setConnection(result.connection);
+      }
+      setMessage(result.refreshed ? copy(locale, "tokenRefreshed") : result.reason ?? copy(locale, "failed"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   if (!session) {
     return (
       <section className="mt-8 rounded-card border border-border bg-card p-5 shadow-card">
@@ -199,6 +216,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           <button
             className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
             disabled={isBusy}
+            onClick={refreshToken}
+            type="button"
+          >
+            <RefreshCcw size={16} />
+            {copy(locale, "refreshToken")}
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
+            disabled={isBusy}
             onClick={disconnect}
             type="button"
           >
@@ -245,11 +271,13 @@ function copy(locale: Locale, key: string): string {
       note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
       oauth: "Connect Instagram",
       refresh: "Refresh",
+      refreshToken: "Refresh token",
       save: "Save connection",
       signInFirst: "Sign in from the dashboard first to manage workspace settings.",
       status: "Status",
       title: "Settings",
-      token: "Access token"
+      token: "Access token",
+      tokenRefreshed: "Instagram token refreshed"
     },
     en: {
       accountId: "Instagram account ID",
@@ -265,11 +293,13 @@ function copy(locale: Locale, key: string): string {
       note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
       oauth: "Connect Instagram",
       refresh: "Refresh",
+      refreshToken: "Refresh token",
       save: "Save connection",
       signInFirst: "Sign in from the dashboard first to manage workspace settings.",
       status: "Status",
       title: "Settings",
-      token: "Access token"
+      token: "Access token",
+      tokenRefreshed: "Instagram token refreshed"
     }
   };
 

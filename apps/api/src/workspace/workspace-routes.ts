@@ -10,6 +10,7 @@ import {
   InstagramOAuthExchangeError,
   InstagramOAuthStateError
 } from "./instagram-oauth-service";
+import { refreshInstagramTokenForWorkspace } from "./instagram-token-service";
 import {
   connectInstagram,
   ContentItemNotFoundForReadinessError,
@@ -130,6 +131,19 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await disconnectInstagram(workspaceId));
+    }
+  );
+
+  app.post(
+    "/v1/workspace/instagram/refresh",
+    {
+      config: {
+        workspaceRequired: true
+      }
+    },
+    async () => {
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await refreshInstagramTokenForWorkspace({ workspaceId }));
     }
   );
 

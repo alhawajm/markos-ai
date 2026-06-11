@@ -224,6 +224,13 @@ export interface InstagramOAuthStart {
   stateExpiresAt: string;
 }
 
+export interface InstagramTokenRefreshResult {
+  refreshed: boolean;
+  workspaceId?: string;
+  reason?: string;
+  connection?: InstagramConnection;
+}
+
 export interface PublishReadiness {
   ready: boolean;
   reasons: string[];

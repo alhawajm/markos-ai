@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "../config/env";
 import { errorEnvelope, ok } from "../http/envelope";
+import { disconnectInstagramFromMetaCallback } from "./meta-service";
 
 export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
@@ -37,14 +38,15 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post("/v1/meta/deauthorize", async () => {
-    return ok({
-      received: true
-    });
+  app.post("/v1/meta/deauthorize", async (request) => {
+    return ok(await disconnectInstagramFromMetaCallback(request.body));
   });
 
-  app.post("/v1/meta/data-deletion", async () => {
+  app.post("/v1/meta/data-deletion", async (request) => {
+    const result = await disconnectInstagramFromMetaCallback(request.body);
+
     return {
+      ...result,
       confirmation_code: "markos-meta-deletion-received",
       url: `${env.WEB_BASE_URL}/en/settings?dataDeletion=received`
     };

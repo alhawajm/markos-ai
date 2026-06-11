@@ -29,7 +29,9 @@ const envSchema = z.object({
   INSTAGRAM_OAUTH_AUTHORIZE_URL: z.string().url().default("https://www.instagram.com/oauth/authorize"),
   INSTAGRAM_OAUTH_TOKEN_URL: z.string().url().default("https://api.instagram.com/oauth/access_token"),
   INSTAGRAM_LONG_LIVED_TOKEN_URL: z.string().url().default("https://graph.instagram.com/access_token"),
+  INSTAGRAM_REFRESH_TOKEN_URL: z.string().url().default("https://graph.instagram.com/refresh_access_token"),
   INSTAGRAM_OAUTH_SCOPES: z.string().min(1).default("instagram_business_basic,instagram_business_content_publish"),
+  INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().default(14),
   INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
   INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
   INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000)

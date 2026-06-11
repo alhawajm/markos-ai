@@ -47,3 +47,7 @@ Use the API as the Instagram OAuth redirect target at `/v1/workspace/instagram/o
 ## 2026-06-11: Meta Dashboard Callback URLs
 
 Expose minimal API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Until the privacy workflow is built, these endpoints acknowledge callbacks but do not mutate workspace records.
+
+## 2026-06-11: Instagram Token Refresh Starts Manual
+
+Implement long-lived Instagram token refresh as an explicit workspace API action and settings control before adding a background scheduler. Meta callbacks disconnect workspace Instagram credentials only when the callback includes an account identifier that matches `instagramAccountId`; broader app-scoped user mapping requires a future schema field.
