@@ -22,6 +22,7 @@ const envSchema = z.object({
   META_APP_ID: optionalString,
   META_APP_SECRET: optionalString,
   META_REDIRECT_URI: optionalUrl,
+  META_WEBHOOK_VERIFY_TOKEN: optionalString,
   META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
   META_GRAPH_VERSION: z
     .preprocess((value) => (value === "" ? undefined : value), z.string().min(1).default("v24.0")),

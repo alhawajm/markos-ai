@@ -1,0 +1,60 @@
+# Instagram App Review Readiness
+
+MARKOS uses Instagram Business Login and Content Publishing. Keep this file aligned with Meta dashboard settings before `INSTAGRAM_PUBLISH_MODE=live`.
+
+## Required Meta Dashboard URLs
+
+Use HTTPS URLs in production.
+
+| Meta setting | MARKOS endpoint |
+| --- | --- |
+| OAuth redirect URI | `${API_BASE_URL}/v1/workspace/instagram/oauth/callback` |
+| Instagram webhook callback | `${API_BASE_URL}/v1/meta/webhooks/instagram` |
+| Deauthorize callback URL | `${API_BASE_URL}/v1/meta/deauthorize` |
+| Data deletion request callback URL | `${API_BASE_URL}/v1/meta/data-deletion` |
+
+Local defaults:
+
+```env
+META_REDIRECT_URI=http://localhost:4000/v1/workspace/instagram/oauth/callback
+META_WEBHOOK_VERIFY_TOKEN=change-me-for-meta-dashboard
+INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publish
+```
+
+## Permissions To Request
+
+Request only the permissions currently used by the product:
+
+- `instagram_business_basic`
+- `instagram_business_content_publish`
+
+Do not request analytics, comments, mentions, messaging, or ad permissions until the matching product surface and tests exist.
+
+## App Review Screencast Script
+
+1. Sign in to MARKOS and open Settings.
+2. Click `Connect Instagram`.
+3. Complete Instagram Business Login for a professional test account.
+4. Return to MARKOS Settings and show the connected account state.
+5. Open Schedule and show a scheduled content item with an HTTPS public media URL.
+6. Run a dry-run publish and show readiness checks.
+7. For live-review testing only, set `INSTAGRAM_PUBLISH_MODE=live`, publish one approved due item, and show the generated Instagram post.
+8. Disconnect Instagram from MARKOS Settings.
+
+## Operational Gates Before Live Mode
+
+- Production API is served over HTTPS.
+- `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, and `META_WEBHOOK_VERIFY_TOKEN` are set in production secrets.
+- Meta dashboard OAuth redirect URI exactly matches `META_REDIRECT_URI`.
+- Webhook verification succeeds against `/v1/meta/webhooks/instagram`.
+- Public media URLs use HTTPS and are reachable by Meta.
+- Publishing remains behind `INSTAGRAM_PUBLISH_MODE=live`.
+- Daily publishing caps are enforced before background publishing is enabled.
+- Long-lived token refresh is implemented before real customer onboarding.
+- Data deletion/deauthorization callbacks are connected to a real privacy workflow before public launch.
+
+## Current Limitations
+
+- Webhook POST payloads are acknowledged but not yet persisted.
+- Deauthorization and data deletion callbacks are acknowledged but do not yet remove workspace Instagram tokens.
+- Long-lived token refresh is not scheduled yet.

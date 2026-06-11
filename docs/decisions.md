@@ -43,3 +43,7 @@ Implement the Meta Graph container -> poll -> publish adapter behind `INSTAGRAM_
 ## 2026-06-11: Instagram OAuth Callback Lives In API
 
 Use the API as the Instagram OAuth redirect target at `/v1/workspace/instagram/oauth/callback`, then redirect back to the localized web settings page. Keep manual token entry as a local-development fallback until production App Review credentials are available.
+
+## 2026-06-11: Meta Dashboard Callback URLs
+
+Expose minimal API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Until the privacy workflow is built, these endpoints acknowledge callbacks but do not mutate workspace records.
