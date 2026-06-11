@@ -156,6 +156,124 @@ describe("publishing routes", () => {
     await app.close();
   });
 
+  it("meters successful live publishes against the MARKOS post quota", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+
+    await prisma.workspace.update({
+      where: {
+        id: session.workspace.id
+      },
+      data: {
+        instagramAccessToken: "test-token",
+        instagramAccountId: "17841400000000000",
+        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
+      }
+    });
+
+    const publisher: InstagramPublisher = {
+      async getPublishingLimit() {
+        return {
+          quotaDurationSeconds: 86400,
+          quotaTotal: 50,
+          quotaUsage: 12
+        };
+      },
+      async publish() {
+        return {
+          dryRun: false,
+          instagramPostId: "ig-post-1",
+          payload: {
+            accountId: "17841400000000000",
+            caption: "Ready to publish\n\n#Bahrain #MarkosAI",
+            contentItemId: content.id,
+            contentType: "POST",
+            mediaUrls: ["https://cdn.example.com/publish.jpg"]
+          },
+          status: "PUBLISHED"
+        };
+      }
+    };
+
+    const attempt = await publishContentItem(session.workspace.id, content.id, { publisher });
+    const counter = await prisma.usageCounter.findUniqueOrThrow({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: session.workspace.id,
+          metric: "POST_PUBLISH",
+          periodStart: monthStart()
+        }
+      }
+    });
+
+    expect(attempt.status).toBe("PUBLISHED");
+    expect(counter).toMatchObject({
+      limit: 30,
+      used: 1
+    });
+
+    await app.close();
+  });
+
+  it("blocks live publishing when the MARKOS post quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+
+    await prisma.workspace.update({
+      where: {
+        id: session.workspace.id
+      },
+      data: {
+        instagramAccessToken: "test-token",
+        instagramAccountId: "17841400000000000",
+        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
+      }
+    });
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "POST_PUBLISH",
+        periodStart: monthStart(),
+        periodEnd: nextMonthStart(),
+        used: 30,
+        limit: 30
+      }
+    });
+
+    const publisher: InstagramPublisher = {
+      async getPublishingLimit() {
+        return {
+          quotaDurationSeconds: 86400,
+          quotaTotal: 50,
+          quotaUsage: 12
+        };
+      },
+      async publish() {
+        throw new Error("publish should not be called when the MARKOS post quota is exhausted");
+      }
+    };
+
+    const attempt = await publishContentItem(session.workspace.id, content.id, { publisher });
+    const after = await prisma.contentItem.findUniqueOrThrow({
+      where: {
+        id: content.id
+      }
+    });
+
+    expect(attempt).toMatchObject({
+      contentItemId: content.id,
+      dryRun: false,
+      reasons: ["POST_PUBLISH_QUOTA_EXCEEDED"],
+      status: "BLOCKED"
+    });
+    expect(after.status).toBe("SCHEDULED");
+    expect(after.publishedAt).toBeNull();
+
+    await app.close();
+  });
+
   it("blocks publishing before container creation when the daily Instagram limit is reached", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -321,4 +439,12 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
+}
+
+function monthStart(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function nextMonthStart(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
 }

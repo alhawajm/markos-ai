@@ -1,10 +1,13 @@
 import type { Prisma, UsageMetric } from "@prisma/client";
 import { prisma } from "../db/prisma";
 
-type SupportedUsageMetric = Extract<UsageMetric, "AI_GENERATION" | "STRATEGY">;
+type SupportedUsageMetric = UsageMetric;
 
 const limitKeys: Record<SupportedUsageMetric, string> = {
+  AI_IMAGE: "aiImages",
   AI_GENERATION: "aiGenerations",
+  POST_PUBLISH: "posts",
+  STORAGE_BYTES: "storageBytes",
   STRATEGY: "strategies"
 };
 
@@ -30,7 +33,7 @@ export async function reserveWorkspaceUsage(input: {
   }
 
   const now = input.now ?? new Date();
-  const period = monthPeriod(now);
+  const period = usagePeriod(input.metric, now);
   const limit = await getWorkspaceLimit(input.workspaceId, input.metric);
 
   await prisma.$transaction(async (tx) => {
@@ -90,7 +93,7 @@ export async function refundWorkspaceUsage(input: {
     return;
   }
 
-  const period = monthPeriod(input.now ?? new Date());
+  const period = usagePeriod(input.metric, input.now ?? new Date());
 
   await prisma.usageCounter.updateMany({
     data: {
@@ -167,4 +170,15 @@ function monthPeriod(date: Date): { end: Date; start: Date } {
     end,
     start
   };
+}
+
+function storagePeriod(): { end: Date; start: Date } {
+  return {
+    end: new Date(Date.UTC(9999, 11, 31)),
+    start: new Date(Date.UTC(1970, 0, 1))
+  };
+}
+
+function usagePeriod(metric: SupportedUsageMetric, date: Date): { end: Date; start: Date } {
+  return metric === "STORAGE_BYTES" ? storagePeriod() : monthPeriod(date);
 }

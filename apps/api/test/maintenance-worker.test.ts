@@ -7,6 +7,15 @@ import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 
 describe("maintenance worker", () => {
   it("publishes due content across workspaces", async () => {
+    await prisma.contentItem.updateMany({
+      data: {
+        status: "FAILED"
+      },
+      where: {
+        captionEn: "Worker publish",
+        status: "SCHEDULED"
+      }
+    });
     const first = await createPublishableWorkspace("worker-publish-a");
     const second = await createPublishableWorkspace("worker-publish-b");
     const publishedContentIds: string[] = [];
@@ -147,11 +156,42 @@ async function createPublishableWorkspace(label: string) {
 
 async function createWorkspace(label: string) {
   const suffix = randomUUID();
+  const plan = await prisma.plan.upsert({
+    create: {
+      code: "TEST_WORKER",
+      currency: "BHD",
+      limits: {
+        aiGenerations: 100,
+        aiImages: 20,
+        posts: 30,
+        storageBytes: 1_000_000_000,
+        strategies: 1,
+        workspaces: 1
+      },
+      name: "Test Worker",
+      priceMinor: 0
+    },
+    update: {
+      active: true,
+      limits: {
+        aiGenerations: 100,
+        aiImages: 20,
+        posts: 30,
+        storageBytes: 1_000_000_000,
+        strategies: 1,
+        workspaces: 1
+      }
+    },
+    where: {
+      code: "TEST_WORKER"
+    }
+  });
   const user = await prisma.user.create({
     data: {
       email: `${label}-${suffix}@markos.test`,
       fullName: "Worker User",
-      locale: "EN"
+      locale: "EN",
+      planId: plan.id
     }
   });
 

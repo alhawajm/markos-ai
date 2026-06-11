@@ -13,7 +13,7 @@ Legend:
 - Current milestone: M0 Foundation
 - Last confirmed full gates: `corepack pnpm verify` and `corepack pnpm build`
 - Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed M0 step: Sentry observability wiring across web, API, and AI
+- Latest completed M0 step: Extended usage enforcement for media storage, AI images, and live publishing
 - Next M0 focus: close the remaining foundation gaps before declaring M0 complete
 
 ## M0 Foundation
@@ -44,7 +44,8 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Provider interfaces and configurable model IDs.
 - [x] AI interaction token metering skeleton.
 - [x] Usage counters and plan quota enforcement for strategy/content AI generation.
-- [ ] Usage enforcement covers image generation, publish caps, storage, billing lifecycle, and plan reset rules.
+- [x] Usage enforcement covers AI image generation, MARKOS post publish caps, storage, and reset rules.
+- [ ] Usage enforcement covers billing lifecycle states such as past-due, suspended, cancelled, and plan reset scheduling.
 - [x] GitHub Actions runs the full verification gate on PRs.
 - [ ] Staging deploy on merge to `main`.
 - [x] Sentry or equivalent observability in web, API, and AI services.

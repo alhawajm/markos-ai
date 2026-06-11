@@ -58,6 +58,19 @@ describe("media routes", () => {
         })
       ])
     );
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "STORAGE_BYTES",
+            periodStart: storagePeriodStart()
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 245000
+    });
 
     await app.close();
   });
@@ -157,6 +170,100 @@ describe("media routes", () => {
 
     await app.close();
   });
+
+  it("blocks media registration when storage quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "STORAGE_BYTES",
+        periodStart: storagePeriodStart(),
+        periodEnd: storagePeriodEnd(),
+        used: 1_000_000_000,
+        limit: 1_000_000_000
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/public-url",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "too-much.jpg",
+        publicUrl: "https://cdn.example.com/too-much.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "QUOTA_EXCEEDED",
+        details: [{
+          metric: "STORAGE_BYTES"
+        }]
+      }
+    });
+
+    await app.close();
+  });
+
+  it("blocks AI generated media when the AI image quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "AI_IMAGE",
+        periodStart: monthStart(),
+        periodEnd: nextMonthStart(),
+        used: 20,
+        limit: 20
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/public-url",
+      headers,
+      payload: {
+        type: "AI_GENERATED",
+        filename: "generated.jpg",
+        publicUrl: "https://cdn.example.com/generated.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 1000
+      }
+    });
+    const storageCounter = await prisma.usageCounter.findUnique({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: session.workspace.id,
+          metric: "STORAGE_BYTES",
+          periodStart: storagePeriodStart()
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "QUOTA_EXCEEDED",
+        details: [{
+          metric: "AI_IMAGE"
+        }]
+      }
+    });
+    expect(storageCounter?.used ?? 0).toBe(0);
+
+    await app.close();
+  });
 });
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
@@ -193,4 +300,20 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
+}
+
+function monthStart(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function nextMonthStart(date = new Date()): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+}
+
+function storagePeriodStart(): Date {
+  return new Date(Date.UTC(1970, 0, 1));
+}
+
+function storagePeriodEnd(): Date {
+  return new Date(Date.UTC(9999, 11, 31));
 }

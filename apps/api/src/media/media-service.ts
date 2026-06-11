@@ -3,6 +3,7 @@ import type { ContentRecord, MediaAssetRecord } from "@markos/shared-types";
 import type { RegisterPublicMediaInput, UploadMediaInput } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { toContentRecord } from "../content/content-service";
+import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { localKeyForRoute, readStoredMedia, storeWorkspaceMedia } from "./storage-service";
 
 export class MediaAssetNotFoundError extends Error {
@@ -48,22 +49,30 @@ export async function registerPublicMedia(
   workspaceId: string,
   input: RegisterPublicMediaInput
 ): Promise<MediaAssetRecord> {
-  const row = await prisma.mediaAsset.create({
-    data: {
-      workspaceId,
-      type: input.type,
-      filename: input.filename,
-      s3Key: `external:${input.publicUrl}`,
-      cdnUrl: input.publicUrl,
-      mimeType: input.mimeType,
-      sizeBytes: input.sizeBytes,
-      ...(input.width === undefined ? {} : { width: input.width }),
-      ...(input.height === undefined ? {} : { height: input.height }),
-      ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
-    }
-  });
+  const usagePeriodDate = new Date();
+  await reserveMediaUsage(workspaceId, input.type, input.sizeBytes, usagePeriodDate);
 
-  return toMediaAssetRecord(row);
+  try {
+    const row = await prisma.mediaAsset.create({
+      data: {
+        workspaceId,
+        type: input.type,
+        filename: input.filename,
+        s3Key: `external:${input.publicUrl}`,
+        cdnUrl: input.publicUrl,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        ...(input.width === undefined ? {} : { width: input.width }),
+        ...(input.height === undefined ? {} : { height: input.height }),
+        ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
+      }
+    });
+
+    return toMediaAssetRecord(row);
+  } catch (error) {
+    await refundMediaUsage(workspaceId, input.type, input.sizeBytes, usagePeriodDate);
+    throw error;
+  }
 }
 
 export async function uploadMedia(workspaceId: string, input: UploadMediaInput): Promise<MediaAssetRecord> {
@@ -73,27 +82,35 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
     throw new MediaUploadInvalidError();
   }
 
-  const stored = await storeWorkspaceMedia({
-    workspaceId,
-    filename: input.filename,
-    bytes
-  });
-  const row = await prisma.mediaAsset.create({
-    data: {
-      workspaceId,
-      type: input.type,
-      filename: input.filename,
-      s3Key: stored.key,
-      cdnUrl: stored.publicUrl,
-      mimeType: input.mimeType,
-      sizeBytes: stored.sizeBytes,
-      ...(input.width === undefined ? {} : { width: input.width }),
-      ...(input.height === undefined ? {} : { height: input.height }),
-      ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
-    }
-  });
+  const usagePeriodDate = new Date();
+  await reserveMediaUsage(workspaceId, input.type, bytes.byteLength, usagePeriodDate);
 
-  return toMediaAssetRecord(row);
+  try {
+    const stored = await storeWorkspaceMedia({
+      workspaceId,
+      filename: input.filename,
+      bytes
+    });
+    const row = await prisma.mediaAsset.create({
+      data: {
+        workspaceId,
+        type: input.type,
+        filename: input.filename,
+        s3Key: stored.key,
+        cdnUrl: stored.publicUrl,
+        mimeType: input.mimeType,
+        sizeBytes: stored.sizeBytes,
+        ...(input.width === undefined ? {} : { width: input.width }),
+        ...(input.height === undefined ? {} : { height: input.height }),
+        ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
+      }
+    });
+
+    return toMediaAssetRecord(row);
+  } catch (error) {
+    await refundMediaUsage(workspaceId, input.type, bytes.byteLength, usagePeriodDate);
+    throw error;
+  }
 }
 
 export async function readPublicMediaFile(workspaceId: string, storedFilename: string): Promise<{ bytes: Buffer; mimeType: string }> {
@@ -211,5 +228,26 @@ export function toMediaAssetRecord(row: MediaAsset): MediaAssetRecord {
 function assertMediaEditable(status: ContentStatus): void {
   if (status === "PUBLISHED" || status === "FAILED") {
     throw new MediaContentLockedError();
+  }
+}
+
+async function reserveMediaUsage(workspaceId: string, mediaType: string, sizeBytes: number, now: Date): Promise<void> {
+  await reserveWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+
+  if (mediaType === "AI_GENERATED") {
+    try {
+      await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now });
+    } catch (error) {
+      await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+      throw error;
+    }
+  }
+}
+
+async function refundMediaUsage(workspaceId: string, mediaType: string, sizeBytes: number, now: Date): Promise<void> {
+  await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+
+  if (mediaType === "AI_GENERATED") {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now });
   }
 }

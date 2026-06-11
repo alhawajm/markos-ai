@@ -1,7 +1,9 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { refundWorkspaceUsage, reserveWorkspaceUsage, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   createInstagramPublisher,
+  DryRunInstagramPublisher,
   type InstagramPublishResult,
   type InstagramPublisher,
   type InstagramPublishingLimit,
@@ -193,10 +195,34 @@ export async function publishContentItem(
   }
 
   let result: InstagramPublishResult;
+  const shouldReservePublishUsage = !(publisher instanceof DryRunInstagramPublisher);
+  let publishUsageReserved = false;
 
   try {
+    if (shouldReservePublishUsage) {
+      try {
+        await reserveWorkspaceUsage({ workspaceId, metric: "POST_PUBLISH", now });
+        publishUsageReserved = true;
+      } catch (error) {
+        if (error instanceof UsageQuotaExceededError) {
+          return {
+            contentItemId,
+            dryRun: false,
+            reasons: ["POST_PUBLISH_QUOTA_EXCEEDED"],
+            status: "BLOCKED"
+          };
+        }
+
+        throw error;
+      }
+    }
+
     result = await publisher.publish({ contentItem, mediaAssets, workspace });
   } catch (error) {
+    if (publishUsageReserved) {
+      await refundWorkspaceUsage({ workspaceId, metric: "POST_PUBLISH", now });
+    }
+
     if (error instanceof MetaGraphPublishError) {
       await prisma.contentItem.update({
         where: {
@@ -217,6 +243,11 @@ export async function publishContentItem(
     }
 
     throw error;
+  }
+
+  if (publishUsageReserved && result.dryRun) {
+    await refundWorkspaceUsage({ workspaceId, metric: "POST_PUBLISH", now });
+    publishUsageReserved = false;
   }
 
   if (!result.dryRun && result.instagramPostId) {

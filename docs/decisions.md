@@ -95,3 +95,7 @@ Run GitHub Actions CI on Ubuntu with Node 22, Python 3.11, pnpm 11.5.2, and Dock
 ## 2026-06-11: Observability Uses Sentry SDKs Disabled by Default
 
 Wire Sentry SDK initialization into the Next.js web app, Fastify API, maintenance worker, and FastAPI AI service, controlled by DSN environment variables. Keep DSNs empty in local/test/CI so telemetry is disabled by default, and defer source-map upload/release artifact publishing until staging credentials exist.
+
+## 2026-06-11: Usage Quotas Use Monthly Periods Except Storage
+
+Track AI generations, AI images, strategies, and MARKOS post publishes in calendar-month usage periods. Track storage bytes in one lifetime period because storage is an active allocation rather than a monthly-reset consumption metric.
