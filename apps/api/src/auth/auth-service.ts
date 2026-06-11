@@ -1,11 +1,11 @@
 import { Prisma } from "@prisma/client";
 import argon2 from "argon2";
 import type { AuthSession, Locale, Role } from "@markos/shared-types";
-import type { LoginInput, RegisterInput } from "@markos/validation";
+import type { LoginInput, RefreshSessionInput, RegisterInput } from "@markos/validation";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { slugifyWorkspaceName } from "./slug";
-import { issueAuthTokens } from "./tokens";
+import { consumeRefreshToken, issueAuthTokens } from "./tokens";
 
 export class AuthConflictError extends Error {
   constructor() {
@@ -129,6 +129,49 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     },
     data: {
       lastLoginAt: new Date()
+    }
+  });
+
+  return sessionFor({
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: fromPrismaLocale(user.locale),
+      isVerified: user.isVerified
+    },
+    workspace,
+    roles: [membership.role as Role]
+  });
+}
+
+export async function refreshSession(input: RefreshSessionInput): Promise<AuthSession> {
+  const tokenInput = await consumeRefreshToken(input.refreshToken);
+  const user = await prisma.user.findFirstOrThrow({
+    where: {
+      deletedAt: null,
+      id: tokenInput.userId
+    }
+  });
+  const membership = await prisma.workspaceMember.findFirst({
+    where: {
+      deletedAt: null,
+      userId: tokenInput.userId,
+      workspaceId: tokenInput.workspaceId
+    },
+    select: {
+      role: true
+    }
+  });
+
+  if (membership === null) {
+    throw new InvalidCredentialsError();
+  }
+
+  const workspace = await prisma.workspace.findFirstOrThrow({
+    where: {
+      deletedAt: null,
+      id: tokenInput.workspaceId
     }
   });
 

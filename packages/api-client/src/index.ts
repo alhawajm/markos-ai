@@ -66,6 +66,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async refreshSession(input: { refreshToken: string }): Promise<AuthSession> {
+    const response = await this.request<AuthSession>("/v1/auth/refresh", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async onboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding");
     return response.data;

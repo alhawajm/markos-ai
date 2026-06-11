@@ -12,6 +12,9 @@ const accessClaimsSchema = z.object({
   workspaceId: z.string().uuid(),
   roles: z.array(z.string()).min(1)
 });
+const refreshClaimsSchema = accessClaimsSchema.extend({
+  jti: z.string().uuid()
+});
 
 export interface TokenInput {
   userId: string;
@@ -68,13 +71,81 @@ export async function verifyAccessToken(token: string): Promise<TokenInput> {
   };
 }
 
+export class RefreshTokenInvalidError extends Error {
+  constructor(message = "Refresh token is invalid or expired") {
+    super(message);
+  }
+}
+
+export class RefreshTokenReuseDetectedError extends Error {
+  constructor() {
+    super("Refresh token reuse detected");
+  }
+}
+
+export async function consumeRefreshToken(token: string): Promise<TokenInput> {
+  let claims: z.infer<typeof refreshClaimsSchema>;
+
+  try {
+    const result = await jwtVerify(token, refreshSecret);
+    claims = refreshClaimsSchema.parse(result.payload);
+  } catch {
+    throw new RefreshTokenInvalidError();
+  }
+
+  const redis = createRedisClient();
+
+  try {
+    await redis.connect();
+    const key = refreshTokenKey(claims.sub, claims.jti);
+    const consumed = await redis.del(key);
+
+    if (consumed !== 1) {
+      await revokeRefreshTokenFamily(redis, claims.sub);
+      throw new RefreshTokenReuseDetectedError();
+    }
+  } finally {
+    redis.disconnect();
+  }
+
+  return {
+    userId: claims.sub,
+    workspaceId: claims.workspaceId,
+    roles: claims.roles as Role[]
+  };
+}
+
 async function storeRefreshToken(userId: string, refreshJti: string): Promise<void> {
   const redis = createRedisClient();
 
   try {
     await redis.connect();
-    await redis.set(`refresh:${userId}:${refreshJti}`, "active", "EX", env.JWT_REFRESH_TTL);
+    await redis.set(refreshTokenKey(userId, refreshJti), "active", "EX", env.JWT_REFRESH_TTL);
   } finally {
     redis.disconnect();
+  }
+}
+
+function refreshTokenKey(userId: string, refreshJti: string): string {
+  return `refresh:${userId}:${refreshJti}`;
+}
+
+async function revokeRefreshTokenFamily(redis: ReturnType<typeof createRedisClient>, userId: string): Promise<void> {
+  const stream = redis.scanStream({
+    match: `refresh:${userId}:*`,
+    count: 100
+  });
+  const pipeline = redis.pipeline();
+  let pendingDeletes = 0;
+
+  for await (const keys of stream) {
+    for (const key of keys as string[]) {
+      pipeline.del(key);
+      pendingDeletes += 1;
+    }
+  }
+
+  if (pendingDeletes > 0) {
+    await pipeline.exec();
   }
 }

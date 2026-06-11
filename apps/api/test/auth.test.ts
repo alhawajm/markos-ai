@@ -125,4 +125,85 @@ describe("auth routes", () => {
 
     await app.close();
   });
+
+  it("rotates refresh tokens and rejects reused tokens", async () => {
+    const app = await buildApp();
+    const email = `refresh-${randomUUID()}@markos.test`;
+    const password = "CorrectHorseBattery99!";
+    const registerResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email,
+        password,
+        fullName: "Refresh User",
+        locale: "en"
+      }
+    });
+    const originalSession = registerResponse.json().data;
+    const originalRefreshToken = originalSession.tokens.refreshToken;
+
+    const refreshResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: {
+        refreshToken: originalRefreshToken
+      }
+    });
+    const refreshedSession = refreshResponse.json().data;
+
+    expect(refreshResponse.statusCode).toBe(200);
+    expect(refreshedSession.user.email).toBe(email);
+    expect(refreshedSession.tokens.refreshToken).toEqual(expect.any(String));
+    expect(refreshedSession.tokens.refreshToken).not.toBe(originalRefreshToken);
+
+    const contextResponse = await app.inject({
+      method: "GET",
+      url: "/v1/workspace-context",
+      headers: {
+        authorization: `Bearer ${refreshedSession.tokens.accessToken}`
+      }
+    });
+
+    expect(contextResponse.statusCode).toBe(200);
+    expect(contextResponse.json()).toMatchObject({
+      data: {
+        workspaceId: refreshedSession.workspace.id,
+        userId: refreshedSession.user.id,
+        roles: ["OWNER"]
+      }
+    });
+
+    const replayResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: {
+        refreshToken: originalRefreshToken
+      }
+    });
+
+    expect(replayResponse.statusCode).toBe(401);
+    expect(replayResponse.json()).toMatchObject({
+      error: {
+        code: "REFRESH_TOKEN_REUSE_DETECTED"
+      }
+    });
+
+    const revokedFamilyResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: {
+        refreshToken: refreshedSession.tokens.refreshToken
+      }
+    });
+
+    expect(revokedFamilyResponse.statusCode).toBe(401);
+    expect(revokedFamilyResponse.json()).toMatchObject({
+      error: {
+        code: "REFRESH_TOKEN_REUSE_DETECTED"
+      }
+    });
+
+    await app.close();
+  });
 });
