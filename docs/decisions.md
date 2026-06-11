@@ -103,3 +103,7 @@ Track AI generations, AI images, strategies, and MARKOS post publishes in calend
 ## 2026-06-11: Paid Usage Requires Active Billing State
 
 Allow usage reservations only for `TRIAL` users with an unexpired trial and `ACTIVE` users. Block `PAST_DUE`, `SUSPENDED`, `CANCELLED`, and expired `TRIAL` states before counters move, returning explicit billing status errors for API calls and blocked publish attempts for workers.
+
+## 2026-06-11: Usage Resets Run in the Maintenance Worker
+
+Run automated usage reset preparation from the API maintenance worker on a configurable interval. The worker idempotently creates current-month counters at zero for monthly metrics and leaves `STORAGE_BYTES` on its lifetime period because storage is an active allocation, not a monthly consumption reset.

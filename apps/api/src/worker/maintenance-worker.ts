@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import { publishDueContentForAllWorkspaces, type PublishDueContentForAllWorkspacesResult } from "../publishing/publishing-service";
 import type { InstagramPublisher } from "../publishing/instagram-publisher";
+import { ensureCurrentUsagePeriods, type UsagePeriodResetResult } from "../usage/usage-service";
 import { refreshDueInstagramTokens } from "../workspace/instagram-token-service";
 import type { InstagramTokenRefreshResult } from "@markos/shared-types";
 
@@ -13,6 +14,7 @@ export interface MaintenanceWorkerLogger {
 export interface MaintenanceWorkerTickResult {
   publishing?: PublishDueContentForAllWorkspacesResult;
   tokenRefresh?: InstagramTokenRefreshResult[];
+  usageReset?: UsagePeriodResetResult;
 }
 
 export interface MaintenanceWorkerHandle {
@@ -38,8 +40,10 @@ export async function runMaintenanceWorkerTick(input: {
   publisher?: InstagramPublisher;
   runPublishing?: boolean;
   runTokenRefresh?: boolean;
+  runUsageReset?: boolean;
 } = {}): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
+  const usageReset = input.runUsageReset === false ? undefined : await ensureCurrentUsagePeriods({ now });
   const tokenRefresh =
     input.runTokenRefresh === false
       ? undefined
@@ -57,7 +61,8 @@ export async function runMaintenanceWorkerTick(input: {
 
   return {
     ...(publishing === undefined ? {} : { publishing }),
-    ...(tokenRefresh === undefined ? {} : { tokenRefresh })
+    ...(tokenRefresh === undefined ? {} : { tokenRefresh }),
+    ...(usageReset === undefined ? {} : { usageReset })
   };
 }
 
@@ -68,11 +73,14 @@ export function startMaintenanceWorker(input: {
   publishingIntervalMs?: number;
   runImmediately?: boolean;
   tokenRefreshIntervalMs?: number;
+  usageResetIntervalMs?: number;
 } = {}): MaintenanceWorkerHandle {
   const logger = input.logger ?? consoleLogger;
   const publishingIntervalMs = input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
   const tokenRefreshIntervalMs = input.tokenRefreshIntervalMs ?? env.WORKER_TOKEN_REFRESH_INTERVAL_MS;
+  const usageResetIntervalMs = input.usageResetIntervalMs ?? env.WORKER_USAGE_RESET_INTERVAL_MS;
   let lastTokenRefreshAt = 0;
+  let lastUsageResetAt = 0;
   let running = false;
 
   async function runNow(): Promise<MaintenanceWorkerTickResult> {
@@ -84,18 +92,23 @@ export function startMaintenanceWorker(input: {
     running = true;
     const now = new Date();
     const shouldRefreshTokens = now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
+    const shouldResetUsage = now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
 
     try {
       const result = await runMaintenanceWorkerTick({
         now,
         runPublishing: true,
         runTokenRefresh: shouldRefreshTokens,
+        runUsageReset: shouldResetUsage,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
         ...(input.publisher === undefined ? {} : { publisher: input.publisher })
       });
 
       if (shouldRefreshTokens) {
         lastTokenRefreshAt = now.getTime();
+      }
+      if (shouldResetUsage) {
+        lastUsageResetAt = now.getTime();
       }
 
       logger.info("Maintenance worker tick completed", summarizeTick(result));
@@ -130,6 +143,8 @@ function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unkn
   return {
     attemptedPublishes: result.publishing?.attempted ?? 0,
     refreshedTokens: result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
-    tokenRefreshFailures: result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0
+    tokenRefreshFailures: result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0,
+    usageCountersEnsured: result.usageReset?.countersEnsured ?? 0,
+    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0
   };
 }

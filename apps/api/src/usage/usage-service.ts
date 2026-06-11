@@ -11,6 +11,8 @@ const limitKeys: Record<SupportedUsageMetric, string> = {
   STRATEGY: "strategies"
 };
 
+const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "POST_PUBLISH", "STRATEGY"];
+
 export class UsageQuotaExceededError extends Error {
   readonly metric: SupportedUsageMetric;
 
@@ -119,6 +121,119 @@ export async function refundWorkspaceUsage(input: {
       }
     }
   });
+}
+
+export interface UsagePeriodResetResult {
+  countersEnsured: number;
+  periodEnd: string;
+  periodStart: string;
+  workspacesChecked: number;
+}
+
+export async function ensureCurrentUsagePeriods(input: { now?: Date } = {}): Promise<UsagePeriodResetResult> {
+  const now = input.now ?? new Date();
+  const period = monthPeriod(now);
+  const owners = await prisma.user.findMany({
+    select: {
+      id: true,
+      planId: true,
+      planStatus: true,
+      trialEndsAt: true
+    },
+    where: {
+      deletedAt: null,
+      planId: {
+        not: null
+      },
+      OR: [
+        {
+          planStatus: "ACTIVE"
+        },
+        {
+          planStatus: "TRIAL",
+          OR: [
+            {
+              trialEndsAt: null
+            },
+            {
+              trialEndsAt: {
+                gt: now
+              }
+            }
+          ]
+        }
+      ]
+    }
+  });
+  const ownerById = new Map(owners.map((owner) => [owner.id, owner]));
+  const workspaces = await prisma.workspace.findMany({
+    select: {
+      id: true,
+      ownerUserId: true
+    },
+    where: {
+      deletedAt: null,
+      ownerUserId: {
+        in: owners.map((owner) => owner.id)
+      }
+    }
+  });
+  const planIds = [...new Set(owners.flatMap((owner) => (owner.planId ? [owner.planId] : [])))];
+  const plans = await prisma.plan.findMany({
+    select: {
+      id: true,
+      limits: true
+    },
+    where: {
+      active: true,
+      deletedAt: null,
+      id: {
+        in: planIds
+      }
+    }
+  });
+  const planById = new Map(plans.map((plan) => [plan.id, plan]));
+  const countersToCreate: Prisma.UsageCounterCreateManyInput[] = [];
+
+  for (const workspace of workspaces) {
+    const owner = ownerById.get(workspace.ownerUserId);
+    const plan = owner?.planId ? planById.get(owner.planId) : undefined;
+
+    if (!owner || !plan) {
+      continue;
+    }
+
+    for (const metric of monthlyUsageMetrics) {
+      const limit = getLimitValue(plan.limits, limitKeys[metric]);
+
+      if (limit === undefined) {
+        continue;
+      }
+
+      countersToCreate.push({
+        workspaceId: workspace.id,
+        metric,
+        periodStart: period.start,
+        periodEnd: period.end,
+        limit,
+        used: 0
+      });
+    }
+  }
+  const created =
+    countersToCreate.length === 0
+      ? { count: 0 }
+      : await prisma.usageCounter.createMany({
+          data: countersToCreate,
+          skipDuplicates: true
+        });
+
+  return {
+    countersEnsured: created.count,
+    periodEnd: period.end.toISOString(),
+    periodStart: period.start.toISOString(),
+    workspacesChecked: workspaces.length
+  };
 }
 
 async function getWorkspaceLimit(workspaceId: string, metric: SupportedUsageMetric): Promise<number> {

@@ -40,7 +40,8 @@ describe("maintenance worker", () => {
 
     const result = await runMaintenanceWorkerTick({
       publisher,
-      runTokenRefresh: false
+      runTokenRefresh: false,
+      runUsageReset: false
     });
     const [firstAfter, secondAfter] = await Promise.all([
       prisma.contentItem.findUniqueOrThrow({
@@ -90,7 +91,8 @@ describe("maintenance worker", () => {
 
     const result = await runMaintenanceWorkerTick({
       fetchImpl,
-      runPublishing: false
+      runPublishing: false,
+      runUsageReset: false
     });
     const updated = await prisma.workspace.findUniqueOrThrow({
       where: {
@@ -107,6 +109,79 @@ describe("maintenance worker", () => {
       ])
     );
     expect(updated.instagramAccessToken).not.toBe(oldToken);
+  });
+
+  it("rolls monthly usage counters forward without resetting lifetime storage", async () => {
+    const workspace = await createWorkspace("worker-usage-reset");
+    const now = new Date(Date.UTC(2026, 1, 5, 12));
+    const previousPeriodStart = new Date(Date.UTC(2026, 0, 1));
+    const previousPeriodEnd = new Date(Date.UTC(2026, 1, 1));
+    const currentPeriodStart = new Date(Date.UTC(2026, 1, 1));
+
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: workspace.id,
+        metric: "AI_GENERATION",
+        periodStart: previousPeriodStart,
+        periodEnd: previousPeriodEnd,
+        limit: 100,
+        used: 7
+      }
+    });
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: workspace.id,
+        metric: "STORAGE_BYTES",
+        periodStart: new Date(Date.UTC(1970, 0, 1)),
+        periodEnd: new Date(Date.UTC(9999, 11, 31)),
+        limit: 1_000_000_000,
+        used: 500_000
+      }
+    });
+
+    const result = await runMaintenanceWorkerTick({
+      now,
+      runPublishing: false,
+      runTokenRefresh: false
+    });
+    const currentCounters = await prisma.usageCounter.findMany({
+      orderBy: {
+        metric: "asc"
+      },
+      where: {
+        periodStart: currentPeriodStart,
+        workspaceId: workspace.id
+      }
+    });
+    const previousCounter = await prisma.usageCounter.findUniqueOrThrow({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: workspace.id,
+          metric: "AI_GENERATION",
+          periodStart: previousPeriodStart
+        }
+      }
+    });
+    const currentStorageCounter = await prisma.usageCounter.findUnique({
+      where: {
+        workspaceId_metric_periodStart: {
+          workspaceId: workspace.id,
+          metric: "STORAGE_BYTES",
+          periodStart: currentPeriodStart
+        }
+      }
+    });
+
+    expect(result.usageReset?.periodStart).toBe(currentPeriodStart.toISOString());
+    expect(currentCounters.map((counter) => counter.metric).sort()).toEqual([
+      "AI_GENERATION",
+      "AI_IMAGE",
+      "POST_PUBLISH",
+      "STRATEGY"
+    ]);
+    expect(currentCounters.every((counter) => counter.used === 0)).toBe(true);
+    expect(previousCounter.used).toBe(7);
+    expect(currentStorageCounter).toBeNull();
   });
 });
 

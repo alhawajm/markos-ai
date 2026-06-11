@@ -42,6 +42,7 @@ const envSchema = z.object({
   INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
   WORKER_PUBLISHING_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   WORKER_TOKEN_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60_000),
+  WORKER_USAGE_RESET_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60_000),
   SENTRY_DSN: optionalUrl,
   SENTRY_ENVIRONMENT: optionalString,
   SENTRY_RELEASE: optionalString,
