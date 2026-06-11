@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Circle, LogOut, RefreshCcw, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, LogOut, RefreshCcw, Save, ShieldCheck, UploadCloud } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuthSession, Locale, OnboardingState } from "@markos/shared-types";
+import type { AuthSession, Locale, MediaAssetRecord, OnboardingState } from "@markos/shared-types";
 
 const sessionKey = "markos.session";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -130,6 +130,8 @@ const modules: ModuleDefinition[] = [
     toPayload: (values) => ({
       colors: splitList(valueOf(values, "colors")),
       fonts: splitList(valueOf(values, "fonts")),
+      guidelinesMediaId: valueOf(values, "guidelinesMediaId") || undefined,
+      logoMediaId: valueOf(values, "logoMediaId") || undefined,
       toneWords: splitList(valueOf(values, "toneWords")),
       voiceNotes: valueOf(values, "voiceNotes") || undefined
     })
@@ -162,6 +164,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     workspaceName: ""
   });
   const [moduleValues, setModuleValues] = useState<Record<string, string>>({});
+  const [brandAssets, setBrandAssets] = useState<Record<string, MediaAssetRecord | undefined>>({});
   const [message, setMessage] = useState<string>("");
   const [isBusy, setIsBusy] = useState(false);
 
@@ -354,6 +357,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   onClick={() => {
                     setActiveModule(item.slug);
                     setModuleValues({});
+                    setBrandAssets({});
                   }}
                   type="button"
                 >
@@ -392,6 +396,21 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                 />
               ))}
             </div>
+            {activeDefinition.slug === "brand" ? (
+              <BrandAssetUploads
+                assets={brandAssets}
+                client={client}
+                disabled={!session || isBusy}
+                locale={locale}
+                onUploaded={(key, asset) => {
+                  setBrandAssets((current) => ({ ...current, [key]: asset }));
+                  setModuleValues((current) => ({ ...current, [key]: asset.id }));
+                  setMessage(copy(locale, "uploaded"));
+                }}
+                setBusy={setIsBusy}
+                setMessage={setMessage}
+              />
+            ) : null}
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="min-h-5 text-sm text-muted">{message}</p>
               <button className="inline-flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!session || isBusy} onClick={saveModule} type="button">
@@ -431,6 +450,101 @@ function Field({
       ) : (
         <input className={className} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={kind === "number" ? "number" : type} value={value} />
       )}
+    </label>
+  );
+}
+
+function BrandAssetUploads({
+  assets,
+  client,
+  disabled,
+  locale,
+  onUploaded,
+  setBusy,
+  setMessage
+}: {
+  assets: Record<string, MediaAssetRecord | undefined>;
+  client: MarkosApiClient;
+  disabled: boolean;
+  locale: Locale;
+  onUploaded: (key: "guidelinesMediaId" | "logoMediaId", asset: MediaAssetRecord) => void;
+  setBusy: (busy: boolean) => void;
+  setMessage: (message: string) => void;
+}) {
+  async function upload(key: "guidelinesMediaId" | "logoMediaId", file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const asset = await client.uploadMedia({
+        type: "BRAND_ASSET",
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        base64Data: await fileToBase64(file)
+      });
+      onUploaded(key, asset);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <UploadField
+        accept="image/*"
+        asset={assets.logoMediaId}
+        disabled={disabled}
+        label={copy(locale, "logoUpload")}
+        onChange={(file) => upload("logoMediaId", file)}
+      />
+      <UploadField
+        accept=".pdf,image/*"
+        asset={assets.guidelinesMediaId}
+        disabled={disabled}
+        label={copy(locale, "guidelinesUpload")}
+        onChange={(file) => upload("guidelinesMediaId", file)}
+      />
+    </div>
+  );
+}
+
+function UploadField({
+  accept,
+  asset,
+  disabled,
+  label,
+  onChange
+}: {
+  accept: string;
+  asset: MediaAssetRecord | undefined;
+  disabled: boolean;
+  label: string;
+  onChange: (file: File | undefined) => void;
+}) {
+  return (
+    <label className="rounded-card border border-dashed border-border bg-canvas p-3">
+      <span className="flex items-center gap-2 text-xs font-medium text-muted">
+        <UploadCloud size={16} />
+        {label}
+      </span>
+      <input
+        accept={accept}
+        className="mt-2 block w-full text-xs text-muted file:me-3 file:rounded-button file:border-0 file:bg-midnavy file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white disabled:opacity-50"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.files?.[0])}
+        type="file"
+      />
+      {asset ? (
+        <a className="mt-2 block truncate text-xs font-medium text-accent" href={asset.publicUrl} rel="noreferrer" target="_blank">
+          {asset.filename}
+        </a>
+      ) : null}
     </label>
   );
 }
@@ -527,6 +641,18 @@ function sectionLabel(locale: Locale, section: OnboardingState["vaultScore"]["re
   return labels[section][locale];
 }
 
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return window.btoa(binary);
+}
+
 function copy(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
@@ -536,7 +662,9 @@ function copy(locale: Locale, key: string): string {
       email: "البريد الإلكتروني",
       failed: "تعذر تنفيذ الطلب",
       fullName: "الاسم الكامل",
+      guidelinesUpload: "رفع دليل الهوية",
       login: "تسجيل الدخول",
+      logoUpload: "رفع الشعار",
       onboarding: "تهيئة معرفة النشاط",
       onboardingSubtitle: "كل وحدة تحفظ معرفة قابلة للاسترجاع في الخزنة.",
       missingSections: "الأقسام الناقصة",
@@ -548,6 +676,7 @@ function copy(locale: Locale, key: string): string {
       saved: "تم الحفظ",
       signedIn: "تم تسجيل الدخول",
       signOut: "خروج",
+      uploaded: "تم رفع الملف",
       workspace: "مساحة العمل",
       workspaceName: "اسم مساحة العمل"
     },
@@ -558,7 +687,9 @@ function copy(locale: Locale, key: string): string {
       email: "Email",
       failed: "Request failed",
       fullName: "Full name",
+      guidelinesUpload: "Upload brand guidelines",
       login: "Log in",
+      logoUpload: "Upload logo",
       onboarding: "Business Knowledge Onboarding",
       onboardingSubtitle: "Each module saves retrievable business memory into the Vault.",
       missingSections: "Missing sections",
@@ -570,6 +701,7 @@ function copy(locale: Locale, key: string): string {
       saved: "Saved",
       signedIn: "Signed in",
       signOut: "Sign out",
+      uploaded: "Uploaded",
       workspace: "Workspace",
       workspaceName: "Workspace name"
     }
