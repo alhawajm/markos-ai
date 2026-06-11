@@ -52,11 +52,10 @@ Do not request analytics, comments, mentions, messaging, or ad permissions until
 - Public media URLs use HTTPS and are reachable by Meta.
 - Publishing remains behind `INSTAGRAM_PUBLISH_MODE=live`.
 - Daily publishing caps are enforced before background publishing is enabled.
-- Long-lived token refresh succeeds from MARKOS Settings for connected accounts.
+- Long-lived token refresh succeeds from MARKOS Settings and from the maintenance worker for connected accounts.
 - Data deletion/deauthorization callbacks disconnect Instagram credentials when the callback account identifier matches a stored `instagramAccountId`.
+- Instagram webhook, deauthorization, and data deletion callbacks are persisted to `AuditLog` with sensitive payload fields redacted.
 
 ## Current Limitations
 
-- Webhook POST payloads are acknowledged but not yet persisted.
 - Deauthorization and data deletion callbacks cannot disconnect accounts when Meta sends only an app-scoped user id that is not stored by MARKOS.
-- Long-lived token refresh is explicit/manual; it is not scheduled yet.

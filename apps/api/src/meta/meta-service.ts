@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 
@@ -8,20 +9,59 @@ export interface MetaCallbackResult {
   received: true;
 }
 
+export interface MetaWebhookEventResult {
+  received: true;
+}
+
 interface SignedRequestPayload {
   user_id?: string | number;
 }
 
-export async function disconnectInstagramFromMetaCallback(body: unknown): Promise<MetaCallbackResult> {
+export async function recordInstagramWebhookEvent(body: unknown): Promise<MetaWebhookEventResult> {
+  await prisma.auditLog.create({
+    data: {
+      action: "META_INSTAGRAM_WEBHOOK_RECEIVED",
+      metadata: sanitizeMetaPayload(body),
+      targetType: "MetaWebhook"
+    }
+  });
+
+  return {
+    received: true
+  };
+}
+
+export async function disconnectInstagramFromMetaCallback(
+  body: unknown,
+  input: {
+    action?: "META_DATA_DELETION_RECEIVED" | "META_DEAUTHORIZE_RECEIVED";
+  } = {}
+): Promise<MetaCallbackResult> {
   const accountId = getAccountId(body);
+  const action = input.action ?? "META_DEAUTHORIZE_RECEIVED";
 
   if (!accountId) {
+    await recordMetaCallbackAudit({
+      action,
+      body,
+      disconnected: 0
+    });
+
     return {
       disconnected: 0,
       received: true
     };
   }
 
+  const matchingWorkspaces = await prisma.workspace.findMany({
+    select: {
+      id: true
+    },
+    where: {
+      deletedAt: null,
+      instagramAccountId: accountId
+    }
+  });
   const result = await prisma.workspace.updateMany({
     data: {
       instagramAccessToken: null,
@@ -34,11 +74,92 @@ export async function disconnectInstagramFromMetaCallback(body: unknown): Promis
     }
   });
 
+  await recordMetaCallbackAudit({
+    accountId,
+    action,
+    body,
+    disconnected: result.count,
+    workspaceIds: matchingWorkspaces.map((workspace) => workspace.id)
+  });
+
   return {
     accountId,
     disconnected: result.count,
     received: true
   };
+}
+
+async function recordMetaCallbackAudit(input: {
+  accountId?: string;
+  action: "META_DATA_DELETION_RECEIVED" | "META_DEAUTHORIZE_RECEIVED";
+  body: unknown;
+  disconnected: number;
+  workspaceIds?: string[];
+}): Promise<void> {
+  const workspaceIds = input.workspaceIds ?? [];
+
+  if (workspaceIds.length === 0) {
+    await prisma.auditLog.create({
+      data: {
+        action: input.action,
+        metadata: callbackMetadata(input),
+        targetId: input.accountId ?? null,
+        targetType: "InstagramConnection"
+      }
+    });
+    return;
+  }
+
+  await prisma.auditLog.createMany({
+    data: workspaceIds.map((workspaceId) => ({
+      action: input.action,
+      metadata: callbackMetadata(input),
+      targetId: input.accountId ?? null,
+      targetType: "InstagramConnection",
+      workspaceId
+    }))
+  });
+}
+
+function callbackMetadata(input: {
+  accountId?: string;
+  body: unknown;
+  disconnected: number;
+}): Prisma.InputJsonObject {
+  return {
+    ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
+    disconnected: input.disconnected,
+    payload: sanitizeMetaPayload(input.body)
+  };
+}
+
+function sanitizeMetaPayload(body: unknown): Prisma.InputJsonObject {
+  if (typeof body !== "object" || body === null) {
+    return {
+      payloadType: typeof body
+    };
+  }
+
+  const record = body as Record<string, unknown>;
+  const sanitized: Record<string, Prisma.InputJsonValue> = {};
+
+  for (const [key, value] of Object.entries(record)) {
+    if (key.toLowerCase().includes("token") || key === "signed_request") {
+      sanitized[key] = "[redacted]";
+    } else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      sanitized[key] = value;
+    } else if (Array.isArray(value)) {
+      sanitized[key] = {
+        itemCount: value.length
+      };
+    } else if (typeof value === "object" && value !== null) {
+      sanitized[key] = {
+        objectKeys: Object.keys(value as Record<string, unknown>)
+      };
+    }
+  }
+
+  return sanitized;
 }
 
 function getAccountId(body: unknown): string | undefined {

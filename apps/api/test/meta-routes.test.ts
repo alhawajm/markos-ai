@@ -67,6 +67,12 @@ describe("Meta callback routes", () => {
         id: session.workspace.id
       }
     });
+    const deauthorizeAudit = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        action: "META_DEAUTHORIZE_RECEIVED",
+        workspaceId: session.workspace.id
+      }
+    });
 
     await prisma.workspace.update({
       data: {
@@ -95,6 +101,12 @@ describe("Meta callback routes", () => {
         id: session.workspace.id
       }
     });
+    const deletionAudit = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        action: "META_DATA_DELETION_RECEIVED",
+        workspaceId: session.workspace.id
+      }
+    });
 
     expect(deauthorize.statusCode).toBe(200);
     expect(deauthorize.json().data.received).toBe(true);
@@ -102,6 +114,15 @@ describe("Meta callback routes", () => {
     expect(workspaceAfterDeauthorize.instagramAccountId).toBeNull();
     expect(workspaceAfterDeauthorize.instagramAccessToken).toBeNull();
     expect(workspaceAfterDeauthorize.instagramTokenExpiresAt).toBeNull();
+    expect(deauthorizeAudit.targetId).toBe(accountId);
+    expect(deauthorizeAudit.targetType).toBe("InstagramConnection");
+    expect(deauthorizeAudit.metadata).toMatchObject({
+      accountId,
+      disconnected: 1,
+      payload: {
+        account_id: accountId
+      }
+    });
     expect(deletion.statusCode).toBe(200);
     expect(deletion.json()).toMatchObject({
       confirmation_code: "markos-meta-deletion-received",
@@ -110,6 +131,53 @@ describe("Meta callback routes", () => {
     expect(workspaceAfterDeletion.instagramAccountId).toBeNull();
     expect(workspaceAfterDeletion.instagramAccessToken).toBeNull();
     expect(workspaceAfterDeletion.instagramTokenExpiresAt).toBeNull();
+    expect(deletionAudit.targetId).toBe(accountId);
+    expect(deletionAudit.targetType).toBe("InstagramConnection");
+
+    await app.close();
+  });
+
+  it("records Instagram webhook events with sanitized payload metadata", async () => {
+    const app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      payload: {
+        access_token: "secret-token",
+        entry: [
+          {
+            changes: [
+              {
+                field: "comments"
+              }
+            ]
+          }
+        ],
+        object: "instagram",
+        signed_request: "signed.secret"
+      },
+      url: "/v1/meta/webhooks/instagram"
+    });
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      orderBy: {
+        createdAt: "desc"
+      },
+      where: {
+        action: "META_INSTAGRAM_WEBHOOK_RECEIVED"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.received).toBe(true);
+    expect(audit.targetType).toBe("MetaWebhook");
+    expect(audit.metadata).toMatchObject({
+      access_token: "[redacted]",
+      entry: {
+        itemCount: 1
+      },
+      object: "instagram",
+      signed_request: "[redacted]"
+    });
 
     await app.close();
   });
