@@ -110,6 +110,40 @@ describe("MetaGraphInstagramPublisher", () => {
       })
     ).rejects.toThrow("Instagram media container creation-1 is ERROR");
   });
+
+  it("reads the current content publishing limit", async () => {
+    const calls: string[] = [];
+    const fetchImpl = async (input: string | URL, _init?: RequestInit): Promise<Response> => {
+      calls.push(input.toString());
+      return jsonResponse({
+        data: [
+          {
+            config: {
+              quota_duration: 86400,
+              quota_total: 50
+            },
+            quota_usage: 12
+          }
+        ]
+      });
+    };
+    const publisher = new MetaGraphInstagramPublisher({
+      fetchImpl,
+      graphBaseUrl: "https://graph.test",
+      graphVersion: "v24.0"
+    });
+
+    const limit = await publisher.getPublishingLimit({ workspace: workspace() });
+
+    expect(limit).toEqual({
+      quotaDurationSeconds: 86400,
+      quotaTotal: 50,
+      quotaUsage: 12
+    });
+    expect(calls).toEqual([
+      "https://graph.test/v24.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"
+    ]);
+  });
 });
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {

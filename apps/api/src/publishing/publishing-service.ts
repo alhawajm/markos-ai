@@ -4,6 +4,7 @@ import {
   createInstagramPublisher,
   type InstagramPublishResult,
   type InstagramPublisher,
+  type InstagramPublishingLimit,
   MetaGraphPublishError
 } from "./instagram-publisher";
 
@@ -12,6 +13,7 @@ export interface PublishAttemptRecord {
   dryRun: boolean;
   reasons: string[];
   result?: InstagramPublishResult;
+  publishingLimit?: InstagramPublishingLimit;
   status: "BLOCKED" | "DRY_RUN" | "FAILED" | "PUBLISHED";
 }
 
@@ -114,6 +116,36 @@ export async function publishContentItem(
   }
 
   const publisher = options.publisher ?? createInstagramPublisher();
+
+  if (publisher.getPublishingLimit) {
+    let publishingLimit: InstagramPublishingLimit;
+
+    try {
+      publishingLimit = await publisher.getPublishingLimit({ workspace });
+    } catch (error) {
+      if (error instanceof MetaGraphPublishError) {
+        return {
+          contentItemId,
+          dryRun: false,
+          reasons: [error.message],
+          status: "BLOCKED"
+        };
+      }
+
+      throw error;
+    }
+
+    if (publishingLimit.quotaUsage >= publishingLimit.quotaTotal) {
+      return {
+        contentItemId,
+        dryRun: false,
+        publishingLimit,
+        reasons: ["INSTAGRAM_DAILY_PUBLISHING_LIMIT_REACHED"],
+        status: "BLOCKED"
+      };
+    }
+  }
+
   let result: InstagramPublishResult;
 
   try {

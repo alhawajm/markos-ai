@@ -16,7 +16,14 @@ export interface InstagramPublishResult {
   status: "DRY_RUN" | "PUBLISHED";
 }
 
+export interface InstagramPublishingLimit {
+  quotaDurationSeconds: number;
+  quotaTotal: number;
+  quotaUsage: number;
+}
+
 export interface InstagramPublisher {
+  getPublishingLimit?(input: { workspace: Workspace }): Promise<InstagramPublishingLimit>;
   publish(input: {
     contentItem: ContentItem;
     mediaAssets: MediaAsset[];
@@ -69,6 +76,37 @@ export class MetaGraphInstagramPublisher implements InstagramPublisher {
     this.graphVersion = options.graphVersion ?? env.META_GRAPH_VERSION;
     this.pollAttempts = options.pollAttempts ?? env.INSTAGRAM_CONTAINER_POLL_ATTEMPTS;
     this.pollDelayMs = options.pollDelayMs ?? env.INSTAGRAM_CONTAINER_POLL_DELAY_MS;
+  }
+
+  async getPublishingLimit(input: { workspace: Workspace }): Promise<InstagramPublishingLimit> {
+    const accessToken = input.workspace.instagramAccessToken;
+
+    if (!input.workspace.instagramAccountId || !accessToken) {
+      throw new MetaGraphPublishError("Instagram account connection is missing");
+    }
+
+    const response = await this.graphGet<{
+      data?: Array<{
+        config?: {
+          quota_duration?: number;
+          quota_total?: number;
+        };
+        quota_usage?: number;
+      }>;
+    }>(`/${input.workspace.instagramAccountId}/content_publishing_limit`, accessToken, {
+      fields: "quota_usage,config"
+    });
+    const limit = response.data?.[0];
+
+    if (!limit?.config || typeof limit.quota_usage !== "number") {
+      throw new MetaGraphPublishError("Instagram publishing limit response is missing quota data");
+    }
+
+    return {
+      quotaDurationSeconds: limit.config.quota_duration ?? 86400,
+      quotaTotal: limit.config.quota_total ?? 50,
+      quotaUsage: limit.quota_usage
+    };
   }
 
   async publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult> {

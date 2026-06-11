@@ -253,9 +253,16 @@ export interface InstagramPublishResult {
   status: "DRY_RUN" | "PUBLISHED";
 }
 
+export interface InstagramPublishingLimit {
+  quotaDurationSeconds: number;
+  quotaTotal: number;
+  quotaUsage: number;
+}
+
 export interface PublishAttemptRecord {
   contentItemId: string;
   dryRun: boolean;
+  publishingLimit?: InstagramPublishingLimit;
   reasons: string[];
   result?: InstagramPublishResult;
   status: "BLOCKED" | "DRY_RUN" | "FAILED" | "PUBLISHED";
