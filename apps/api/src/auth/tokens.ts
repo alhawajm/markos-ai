@@ -8,6 +8,7 @@ import { env } from "../config/env";
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 const accessClaimsSchema = z.object({
+  mfaVerified: z.boolean().default(false),
   sub: z.string().uuid(),
   workspaceId: z.string().uuid(),
   roles: z.array(z.string()).min(1)
@@ -20,6 +21,7 @@ export interface TokenInput {
   userId: string;
   workspaceId: string;
   roles: Role[];
+  mfaVerified?: boolean;
 }
 
 export async function issueAuthTokens(input: TokenInput): Promise<{
@@ -31,6 +33,7 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
   const now = Math.floor(Date.now() / 1000);
 
   const accessToken = await new SignJWT({
+    mfaVerified: input.mfaVerified ?? false,
     workspaceId: input.workspaceId,
     roles: input.roles
   })
@@ -41,6 +44,7 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
     .sign(accessSecret);
 
   const refreshToken = await new SignJWT({
+    mfaVerified: input.mfaVerified ?? false,
     workspaceId: input.workspaceId,
     roles: input.roles,
     jti: refreshJti
@@ -67,6 +71,7 @@ export async function verifyAccessToken(token: string): Promise<TokenInput> {
   return {
     userId: claims.sub,
     workspaceId: claims.workspaceId,
+    mfaVerified: claims.mfaVerified,
     roles: claims.roles as Role[]
   };
 }
@@ -111,6 +116,7 @@ export async function consumeRefreshToken(token: string): Promise<TokenInput> {
   return {
     userId: claims.sub,
     workspaceId: claims.workspaceId,
+    mfaVerified: claims.mfaVerified,
     roles: claims.roles as Role[]
   };
 }

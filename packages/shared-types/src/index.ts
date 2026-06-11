@@ -123,6 +123,16 @@ export interface GoogleLoginConfigurationStatus {
   missing: string[];
 }
 
+export interface MfaTotpSetup {
+  enabled: boolean;
+  otpauthUri: string;
+  secret: string;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+}
+
 export interface KnowledgeVaultEntry {
   id: string;
   workspaceId: string;

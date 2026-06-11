@@ -83,3 +83,7 @@ Define named permissions in shared types and enforce them in the workspace middl
 ## 2026-06-11: Google Login Uses Backend ID Token Exchange
 
 Implement Google login as an API endpoint that accepts a Google ID token, verifies it against Google's issuer, audience, and JWKS, then creates or links a verified workspace user. This completes the M0 backend auth contract while leaving provider button UX and Google client loading to the web layer.
+
+## 2026-06-11: Sensitive Roles Require TOTP-Verified Sessions
+
+Use built-in TOTP generation and verification for sensitive workspace/admin roles. Users enroll while authenticated, sensitive-role login requires a valid six-digit TOTP code once enabled, and refresh tokens carry an `mfaVerified` claim so pre-MFA sessions cannot refresh into admin or finance access.

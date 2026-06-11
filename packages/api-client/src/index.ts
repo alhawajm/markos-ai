@@ -14,6 +14,8 @@ import type {
   KnowledgeVaultEntry,
   MediaAssetRecord,
   MediaType,
+  MfaStatus,
+  MfaTotpSetup,
   OnboardingState,
   PublishAttemptRecord,
   PublishDueContentResult,
@@ -60,7 +62,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async login(input: { email: string; password: string }): Promise<AuthSession> {
+  async login(input: { email: string; password: string; totpCode?: string }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/login", {
       body: input,
       method: "POST"
@@ -68,8 +70,23 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async loginWithGoogle(input: { idToken: string; locale?: "ar" | "en"; workspaceName?: string }): Promise<AuthSession> {
+  async loginWithGoogle(input: { idToken: string; locale?: "ar" | "en"; totpCode?: string; workspaceName?: string }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/google", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async setupMfaTotp(): Promise<MfaTotpSetup> {
+    const response = await this.request<MfaTotpSetup>("/v1/auth/mfa/totp/setup", {
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async enableMfaTotp(input: { code: string }): Promise<MfaStatus> {
+    const response = await this.request<MfaStatus>("/v1/auth/mfa/totp/enable", {
       body: input,
       method: "POST"
     });

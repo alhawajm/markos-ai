@@ -17,6 +17,7 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
   EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
+  MFA_ISSUER: z.string().min(1).default("MARKOS-AI"),
   GOOGLE_OAUTH_CLIENT_ID: optionalString,
   GOOGLE_OAUTH_ISSUER: z.string().url().default("https://accounts.google.com"),
   GOOGLE_OAUTH_JWKS_URL: z.string().url().default("https://www.googleapis.com/oauth2/v3/certs"),

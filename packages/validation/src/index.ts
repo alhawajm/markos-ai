@@ -12,7 +12,8 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  totpCode: z.string().regex(/^\d{6}$/).optional()
 });
 
 export const refreshSessionSchema = z.object({
@@ -22,7 +23,12 @@ export const refreshSessionSchema = z.object({
 export const googleLoginSchema = z.object({
   idToken: z.string().min(1),
   workspaceName: z.string().min(2).max(120).optional(),
-  locale: localeSchema.default("ar")
+  locale: localeSchema.default("ar"),
+  totpCode: z.string().regex(/^\d{6}$/).optional()
+});
+
+export const enableMfaTotpSchema = z.object({
+  code: z.string().regex(/^\d{6}$/)
 });
 
 export const requestEmailVerificationSchema = z.object({
@@ -221,6 +227,7 @@ export const healthResponseSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+export type EnableMfaTotpInput = z.infer<typeof enableMfaTotpSchema>;
 export type RefreshSessionInput = z.infer<typeof refreshSessionSchema>;
 export type RequestEmailVerificationInput = z.infer<typeof requestEmailVerificationSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;

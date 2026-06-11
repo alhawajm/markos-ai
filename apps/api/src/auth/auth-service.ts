@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import argon2 from "argon2";
-import type { AuthSession, EmailVerificationChallenge, EmailVerificationResult, Locale, Role } from "@markos/shared-types";
+import type { AuthSession, EmailVerificationChallenge, EmailVerificationResult, Locale, MfaStatus, MfaTotpSetup, Role } from "@markos/shared-types";
 import type {
+  EnableMfaTotpInput,
   GoogleLoginInput,
   LoginInput,
   RefreshSessionInput,
@@ -19,6 +20,7 @@ import {
   verifyGoogleIdToken
 } from "./google-oauth";
 import { slugifyWorkspaceName } from "./slug";
+import { buildTotpUri, generateTotpSecret, verifyTotpCode } from "./totp";
 import { consumeRefreshToken, issueAuthTokens } from "./tokens";
 
 let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
@@ -56,6 +58,30 @@ export class GoogleEmailNotVerifiedError extends Error {
 export class GoogleAccountConflictError extends Error {
   constructor() {
     super("This email is already linked to a different Google account");
+  }
+}
+
+export class MfaRequiredError extends Error {
+  constructor() {
+    super("A valid MFA code is required for this role");
+  }
+}
+
+export class MfaSetupRequiredError extends Error {
+  constructor() {
+    super("TOTP MFA must be enabled before this role can sign in");
+  }
+}
+
+export class MfaInvalidError extends Error {
+  constructor() {
+    super("MFA code is invalid");
+  }
+}
+
+export class MfaSetupMissingError extends Error {
+  constructor() {
+    super("TOTP MFA setup has not been started");
   }
 }
 
@@ -166,6 +192,12 @@ export async function loginWithGoogle(
     throw new InvalidCredentialsError();
   }
 
+  const mfaVerified = verifyRoleMfa({
+    roles: [membership.role as Role],
+    ...(input.totpCode === undefined ? {} : { totpCode: input.totpCode }),
+    user
+  });
+
   const workspace = await prisma.workspace.findFirstOrThrow({
     where: {
       id: membership.workspaceId,
@@ -184,6 +216,7 @@ export async function loginWithGoogle(
 
   return sessionFor({
     roles: [membership.role as Role],
+    mfaVerified,
     user: {
       id: user.id,
       email: user.email,
@@ -263,6 +296,13 @@ export async function login(input: LoginInput): Promise<AuthSession> {
     }
   });
 
+  const roles = [membership.role as Role];
+  const mfaVerified = verifyRoleMfa({
+    roles,
+    ...(input.totpCode === undefined ? {} : { totpCode: input.totpCode }),
+    user
+  });
+
   return sessionFor({
     user: {
       id: user.id,
@@ -272,8 +312,61 @@ export async function login(input: LoginInput): Promise<AuthSession> {
       isVerified: user.isVerified
     },
     workspace,
-    roles: [membership.role as Role]
+    roles,
+    mfaVerified
   });
+}
+
+export async function setupMfaTotp(userId: string): Promise<MfaTotpSetup> {
+  const secret = generateTotpSecret();
+  const user = await prisma.user.update({
+    data: {
+      mfaEnabled: false,
+      mfaSecret: secret
+    },
+    where: {
+      id: userId
+    }
+  });
+
+  return {
+    enabled: user.mfaEnabled,
+    otpauthUri: buildTotpUri({
+      accountName: user.email,
+      issuer: env.MFA_ISSUER,
+      secret
+    }),
+    secret
+  };
+}
+
+export async function enableMfaTotp(userId: string, input: EnableMfaTotpInput): Promise<MfaStatus> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: {
+      id: userId
+    }
+  });
+
+  if (user.mfaSecret === null) {
+    throw new MfaSetupMissingError();
+  }
+
+  if (!verifyTotpCode(user.mfaSecret, input.code)) {
+    throw new MfaInvalidError();
+  }
+
+  const updated = await prisma.user.update({
+    data: {
+      mfaEnabled: true
+    },
+    where: {
+      id: userId
+    }
+  });
+
+  return {
+    enabled: updated.mfaEnabled
+  };
 }
 
 async function upsertGoogleUserByEmail(input: {
@@ -437,6 +530,18 @@ export async function refreshSession(input: RefreshSessionInput): Promise<AuthSe
     throw new InvalidCredentialsError();
   }
 
+  const roles = [membership.role as Role];
+
+  if (isMfaRequiredForRoles(roles)) {
+    if (!user.mfaEnabled) {
+      throw new MfaSetupRequiredError();
+    }
+
+    if (!tokenInput.mfaVerified) {
+      throw new MfaRequiredError();
+    }
+  }
+
   const workspace = await prisma.workspace.findFirstOrThrow({
     where: {
       deletedAt: null,
@@ -453,7 +558,8 @@ export async function refreshSession(input: RefreshSessionInput): Promise<AuthSe
       isVerified: user.isVerified
     },
     workspace,
-    roles: [membership.role as Role]
+    roles,
+    ...(tokenInput.mfaVerified === undefined ? {} : { mfaVerified: tokenInput.mfaVerified })
   });
 }
 
@@ -495,6 +601,7 @@ function emailVerificationUserKey(userId: string): string {
 }
 
 async function sessionFor(input: {
+  mfaVerified?: boolean;
   user: AuthSession["user"];
   workspace: AuthSession["workspace"];
   roles: Role[];
@@ -502,7 +609,8 @@ async function sessionFor(input: {
   const tokens = await issueAuthTokens({
     userId: input.user.id,
     workspaceId: input.workspace.id,
-    roles: input.roles
+    roles: input.roles,
+    ...(input.mfaVerified === undefined ? {} : { mfaVerified: input.mfaVerified })
   });
 
   return {
@@ -515,6 +623,37 @@ async function sessionFor(input: {
       expiresIn: env.JWT_ACCESS_TTL
     }
   };
+}
+
+function verifyRoleMfa(input: { roles: Role[]; totpCode?: string; user: { mfaEnabled: boolean; mfaSecret: string | null } }): boolean {
+  if (!isMfaRequiredForRoles(input.roles)) {
+    return false;
+  }
+
+  if (!input.user.mfaEnabled || input.user.mfaSecret === null) {
+    throw new MfaSetupRequiredError();
+  }
+
+  if (input.totpCode === undefined) {
+    throw new MfaRequiredError();
+  }
+
+  if (!verifyTotpCode(input.user.mfaSecret, input.totpCode)) {
+    throw new MfaInvalidError();
+  }
+
+  return true;
+}
+
+function isMfaRequiredForRoles(roles: Role[]): boolean {
+  return roles.some((role) =>
+    role === "WORKSPACE_ADMIN" ||
+    role === "SUPER_ADMIN" ||
+    role === "PRODUCT_ADMIN" ||
+    role === "SUPPORT_ADMIN" ||
+    role === "FINANCE_ADMIN" ||
+    role === "READONLY_ADMIN"
+  );
 }
 
 async function uniqueWorkspaceSlug(tx: Prisma.TransactionClient, name: string): Promise<string> {

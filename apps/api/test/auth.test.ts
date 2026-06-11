@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { resetGoogleTokenVerifierForTest, setGoogleTokenVerifierForTest } from "../src/auth/auth-service";
+import { generateTotpCode } from "../src/auth/totp";
 import { buildApp } from "../src/http/app";
 
 describe("auth routes", () => {
@@ -357,6 +358,149 @@ describe("auth routes", () => {
     await app.close();
   });
 
+  it("enrolls TOTP MFA and requires it for finance/admin roles", async () => {
+    const app = await buildApp();
+    const email = `mfa-${randomUUID()}@markos.test`;
+    const password = "CorrectHorseBattery99!";
+    const session = await registerVerifiedUser(app, { email, password });
+
+    const setupResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/mfa/totp/setup",
+      headers: authHeaders(session.tokens.accessToken)
+    });
+    const setup = setupResponse.json().data;
+    const code = generateTotpCode(setup.secret);
+    const invalidCode = code === "000000" ? "000001" : "000000";
+
+    expect(setupResponse.statusCode).toBe(200);
+    expect(setup).toMatchObject({
+      enabled: false,
+      secret: expect.any(String)
+    });
+    expect(setup.otpauthUri).toContain("otpauth://totp/");
+
+    const enableResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/mfa/totp/enable",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {
+        code
+      }
+    });
+
+    expect(enableResponse.statusCode).toBe(200);
+    expect(enableResponse.json()).toMatchObject({
+      data: {
+        enabled: true
+      }
+    });
+
+    await prisma.workspaceMember.updateMany({
+      data: {
+        role: "FINANCE_ADMIN"
+      },
+      where: {
+        userId: session.user.id,
+        workspaceId: session.workspace.id
+      }
+    });
+
+    const missingCodeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        email,
+        password
+      }
+    });
+    const invalidCodeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        email,
+        password,
+        totpCode: invalidCode
+      }
+    });
+    const validLoginResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        email,
+        password,
+        totpCode: generateTotpCode(setup.secret)
+      }
+    });
+
+    expect(missingCodeResponse.statusCode).toBe(401);
+    expect(missingCodeResponse.json().error.code).toBe("MFA_REQUIRED");
+    expect(invalidCodeResponse.statusCode).toBe(401);
+    expect(invalidCodeResponse.json().error.code).toBe("MFA_INVALID");
+    expect(validLoginResponse.statusCode).toBe(200);
+    expect(validLoginResponse.json()).toMatchObject({
+      data: {
+        roles: ["FINANCE_ADMIN"],
+        user: {
+          email
+        }
+      }
+    });
+
+    const staleRefreshResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: {
+        refreshToken: session.tokens.refreshToken
+      }
+    });
+    const verifiedRefreshResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: {
+        refreshToken: validLoginResponse.json().data.tokens.refreshToken
+      }
+    });
+
+    expect(staleRefreshResponse.statusCode).toBe(401);
+    expect(staleRefreshResponse.json().error.code).toBe("MFA_REQUIRED");
+    expect(verifiedRefreshResponse.statusCode).toBe(200);
+    expect(verifiedRefreshResponse.json().data.roles).toEqual(["FINANCE_ADMIN"]);
+
+    await app.close();
+  });
+
+  it("blocks sensitive-role login until TOTP MFA is enabled", async () => {
+    const app = await buildApp();
+    const email = `mfa-required-${randomUUID()}@markos.test`;
+    const password = "CorrectHorseBattery99!";
+    const session = await registerVerifiedUser(app, { email, password });
+
+    await prisma.workspaceMember.updateMany({
+      data: {
+        role: "WORKSPACE_ADMIN"
+      },
+      where: {
+        userId: session.user.id,
+        workspaceId: session.workspace.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        email,
+        password
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe("MFA_SETUP_REQUIRED");
+
+    await app.close();
+  });
+
   it("rotates refresh tokens and rejects reused tokens", async () => {
     const app = await buildApp();
     const email = `refresh-${randomUUID()}@markos.test`;
@@ -438,3 +582,40 @@ describe("auth routes", () => {
     await app.close();
   });
 });
+
+async function registerVerifiedUser(app: Awaited<ReturnType<typeof buildApp>>, input: { email: string; password: string }) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: input.email,
+      password: input.password,
+      fullName: "MFA User",
+      locale: "en"
+    }
+  });
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
+}
+
+function authHeaders(accessToken: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${accessToken}`
+  };
+}

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  enableMfaTotpSchema,
   googleLoginSchema,
   loginSchema,
   refreshSessionSchema,
@@ -14,16 +15,23 @@ import {
   EmailVerificationInvalidError,
   GoogleAccountConflictError,
   GoogleEmailNotVerifiedError,
+  MfaInvalidError,
+  MfaRequiredError,
+  MfaSetupMissingError,
+  MfaSetupRequiredError,
+  enableMfaTotp,
   InvalidCredentialsError,
   login,
   loginWithGoogle,
   refreshSession,
   register,
   requestEmailVerification,
+  setupMfaTotp,
   verifyEmail
 } from "./auth-service";
 import { GoogleOAuthConfigurationError, GoogleOAuthTokenError, getGoogleOAuthConfigurationStatus } from "./google-oauth";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError } from "./tokens";
+import { requireWorkspaceContext } from "../tenancy/workspace-context";
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/auth/register", async (request, reply) => {
@@ -57,6 +65,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       if (error instanceof EmailNotVerifiedError) {
         return reply.status(403).send(errorEnvelope("EMAIL_NOT_VERIFIED", error.message));
+      }
+
+      if (error instanceof MfaSetupRequiredError) {
+        return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
+      }
+
+      if (error instanceof MfaRequiredError) {
+        return reply.status(401).send(errorEnvelope("MFA_REQUIRED", error.message));
+      }
+
+      if (error instanceof MfaInvalidError) {
+        return reply.status(401).send(errorEnvelope("MFA_INVALID", error.message));
       }
 
       if (error instanceof InvalidCredentialsError) {
@@ -93,6 +113,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(403).send(errorEnvelope("GOOGLE_EMAIL_NOT_VERIFIED", error.message));
       }
 
+      if (error instanceof MfaSetupRequiredError) {
+        return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
+      }
+
+      if (error instanceof MfaRequiredError) {
+        return reply.status(401).send(errorEnvelope("MFA_REQUIRED", error.message));
+      }
+
+      if (error instanceof MfaInvalidError) {
+        return reply.status(401).send(errorEnvelope("MFA_INVALID", error.message));
+      }
+
       if (error instanceof GoogleAccountConflictError) {
         return reply.status(409).send(errorEnvelope("GOOGLE_ACCOUNT_CONFLICT", error.message));
       }
@@ -104,6 +136,53 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
   });
+
+  app.post(
+    "/v1/auth/mfa/totp/setup",
+    {
+      config: {
+        permissions: ["workspace:read"],
+        workspaceRequired: true
+      }
+    },
+    async () => {
+      const { userId } = requireWorkspaceContext();
+      return ok(await setupMfaTotp(userId));
+    }
+  );
+
+  app.post(
+    "/v1/auth/mfa/totp/enable",
+    {
+      config: {
+        permissions: ["workspace:read"],
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const parsed = enableMfaTotpSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid TOTP MFA request", parsed.error.issues));
+      }
+
+      const { userId } = requireWorkspaceContext();
+
+      try {
+        return ok(await enableMfaTotp(userId, parsed.data));
+      } catch (error) {
+        if (error instanceof MfaSetupMissingError) {
+          return reply.status(409).send(errorEnvelope("MFA_SETUP_MISSING", error.message));
+        }
+
+        if (error instanceof MfaInvalidError) {
+          return reply.status(401).send(errorEnvelope("MFA_INVALID", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
 
   app.post("/v1/auth/verification/request", async (request, reply) => {
     const parsed = requestEmailVerificationSchema.safeParse(request.body);
@@ -145,6 +224,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       if (error instanceof RefreshTokenReuseDetectedError) {
         return reply.status(401).send(errorEnvelope("REFRESH_TOKEN_REUSE_DETECTED", error.message));
+      }
+
+      if (error instanceof MfaSetupRequiredError) {
+        return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
+      }
+
+      if (error instanceof MfaRequiredError) {
+        return reply.status(401).send(errorEnvelope("MFA_REQUIRED", error.message));
       }
 
       if (error instanceof RefreshTokenInvalidError || error instanceof InvalidCredentialsError) {
