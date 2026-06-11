@@ -12,6 +12,7 @@ import type {
   InstagramOAuthStart,
   InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
+  KnowledgeVaultHistoryEntry,
   MediaAssetRecord,
   MediaType,
   MfaStatus,
@@ -156,6 +157,13 @@ export class MarkosApiClient {
       body: input,
       method: "PUT"
     });
+    return response.data;
+  }
+
+  async vaultEntryHistory(section: VaultSection, key: string): Promise<KnowledgeVaultHistoryEntry[]> {
+    const response = await this.request<KnowledgeVaultHistoryEntry[]>(
+      `/v1/vault/${section}/${encodeURIComponent(key)}/history`
+    );
     return response.data;
   }
 

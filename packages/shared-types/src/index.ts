@@ -144,6 +144,17 @@ export interface KnowledgeVaultEntry {
   updatedAt: string;
 }
 
+export interface KnowledgeVaultHistoryEntry {
+  id: string;
+  workspaceId: string;
+  knowledgeVaultId: string;
+  section: VaultSection;
+  key: string;
+  value: Record<string, unknown>;
+  version: number;
+  createdAt: string;
+}
+
 export interface VaultCompletenessScore {
   score: number;
   completedSections: VaultSection[];

@@ -104,6 +104,30 @@ describe("vault routes", () => {
       version: 2
     });
 
+    const historyResponse = await app.inject({
+      method: "GET",
+      url: "/v1/vault/company/profile/history",
+      headers
+    });
+
+    expect(historyResponse.statusCode).toBe(200);
+    expect(historyResponse.json().data).toEqual([
+      expect.objectContaining({
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "profile",
+        version: 2,
+        value: expect.objectContaining({ name: "Pearl Coffee Roasters" })
+      }),
+      expect.objectContaining({
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "profile",
+        version: 1,
+        value: expect.objectContaining({ name: "Pearl Coffee" })
+      })
+    ]);
+
     const scoreResponse = await app.inject({
       method: "GET",
       url: "/v1/vault/score",
@@ -176,6 +200,11 @@ describe("vault routes", () => {
         topK: 10
       }
     });
+    const secondHistory = await app.inject({
+      method: "GET",
+      url: "/v1/vault/company/profile/history",
+      headers: authHeaders(second.tokens.accessToken)
+    });
 
     expect(firstVault.json().data).toEqual([
       expect.objectContaining({
@@ -190,6 +219,13 @@ describe("vault routes", () => {
     ]);
     expect(secondSearch.json().data).toEqual([
       expect.objectContaining({
+        key: "profile",
+        value: expect.objectContaining({ name: "Second Bakery" })
+      })
+    ]);
+    expect(secondHistory.json().data).toEqual([
+      expect.objectContaining({
+        workspaceId: second.workspace.id,
         key: "profile",
         value: expect.objectContaining({ name: "Second Bakery" })
       })

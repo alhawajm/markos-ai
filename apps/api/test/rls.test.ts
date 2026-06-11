@@ -8,6 +8,7 @@ const rlsTables = [
   "workspaces",
   "workspace_members",
   "knowledge_vault",
+  "knowledge_vault_history",
   "strategies",
   "content_calendars",
   "campaigns",

@@ -2,7 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
-import { getVaultScore, listVault, listVaultSection, searchVaultContext, upsertVaultSection } from "./vault-service";
+import {
+  getVaultScore,
+  listVault,
+  listVaultEntryHistory,
+  listVaultSection,
+  searchVaultContext,
+  upsertVaultSection
+} from "./vault-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -50,6 +57,31 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await searchVaultContext(workspaceId, parsed.data));
+    }
+  );
+
+  app.get(
+    "/v1/vault/:section/:key/history",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["vault:read"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { key?: string; section?: string };
+      const section = parseSection(params.section);
+
+      if (section === undefined) {
+        return reply.status(404).send(errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"));
+      }
+
+      if (params.key === undefined || params.key.trim().length === 0 || params.key.length > 120) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Vault key"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await listVaultEntryHistory(workspaceId, section, params.key));
     }
   );
 

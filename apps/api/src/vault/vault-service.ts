@@ -1,5 +1,11 @@
 import { Prisma } from "@prisma/client";
-import type { KnowledgeVaultEntry, VaultCompletenessScore, VaultRagChunk, VaultSection } from "@markos/shared-types";
+import type {
+  KnowledgeVaultEntry,
+  KnowledgeVaultHistoryEntry,
+  VaultCompletenessScore,
+  VaultRagChunk,
+  VaultSection
+} from "@markos/shared-types";
 import type { UpsertVaultSectionInput, VaultRagSearchInput } from "@markos/validation";
 import { vaultSections } from "@markos/shared-types";
 import { embedVaultTexts } from "../ai/embeddings-client";
@@ -35,6 +41,25 @@ export async function listVaultSection(workspaceId: string, section: VaultSectio
   });
 
   return entries.map(toVaultEntry);
+}
+
+export async function listVaultEntryHistory(
+  workspaceId: string,
+  section: VaultSection,
+  key: string
+): Promise<KnowledgeVaultHistoryEntry[]> {
+  const entries = await prisma.knowledgeVaultHistory.findMany({
+    where: {
+      workspaceId,
+      section,
+      key
+    },
+    orderBy: {
+      version: "desc"
+    }
+  });
+
+  return entries.map(toVaultHistoryEntry);
 }
 
 export async function upsertVaultSection(
@@ -89,6 +114,16 @@ export async function upsertVaultSection(
       }
 
       await setVaultEmbedding(tx, row.id, embedding);
+      await tx.knowledgeVaultHistory.create({
+        data: {
+          workspaceId: row.workspaceId,
+          knowledgeVaultId: row.id,
+          section: row.section,
+          key: row.key,
+          value: row.value as Prisma.InputJsonValue,
+          version: row.version
+        }
+      });
       saved.push(toVaultEntry(row));
     }
   });
@@ -210,5 +245,27 @@ function toVaultEntry(entry: {
     version: entry.version,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString()
+  };
+}
+
+function toVaultHistoryEntry(entry: {
+  id: string;
+  workspaceId: string;
+  knowledgeVaultId: string;
+  section: VaultSection;
+  key: string;
+  value: Prisma.JsonValue;
+  version: number;
+  createdAt: Date;
+}): KnowledgeVaultHistoryEntry {
+  return {
+    id: entry.id,
+    workspaceId: entry.workspaceId,
+    knowledgeVaultId: entry.knowledgeVaultId,
+    section: entry.section,
+    key: entry.key,
+    value: entry.value as Record<string, unknown>,
+    version: entry.version,
+    createdAt: entry.createdAt.toISOString()
   };
 }

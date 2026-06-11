@@ -189,6 +189,21 @@ model KnowledgeVault {
   @@map("knowledge_vault")
 }
 
+model KnowledgeVaultHistory {
+  id               String       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId      String       @db.Uuid
+  knowledgeVaultId String       @db.Uuid
+  section          VaultSection
+  key              String
+  value            Json
+  version          Int
+  createdAt        DateTime     @default(now())
+
+  @@unique([knowledgeVaultId, version])
+  @@index([workspaceId, section, key])
+  @@map("knowledge_vault_history")
+}
+
 model Strategy {
   id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid

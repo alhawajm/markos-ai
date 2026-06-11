@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
@@ -41,6 +42,28 @@ const isolationCases: IsolationCase[] = [
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.knowledgeVault.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "KnowledgeVaultHistory",
+    create: async (fixture) => {
+      const vault = await prisma.knowledgeVault.create({
+        data: { workspaceId: fixture.workspaceId, section: "COMPANY", key: `history-${randomUUID()}`, value: { name: "Cafe" } },
+        select: { id: true, workspaceId: true, section: true, key: true, value: true, version: true }
+      });
+
+      return prisma.knowledgeVaultHistory.create({
+        data: {
+          workspaceId: vault.workspaceId,
+          knowledgeVaultId: vault.id,
+          section: vault.section,
+          key: vault.key,
+          value: vault.value as Prisma.InputJsonValue,
+          version: vault.version
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.knowledgeVaultHistory.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "Strategy",
