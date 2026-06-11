@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Instagram, Link2Off, RefreshCcw, Save } from "lucide-react";
+import { ExternalLink, Instagram, Link2Off, RefreshCcw, Save } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuthSession, InstagramConnection, Locale } from "@markos/shared-types";
 
@@ -58,6 +58,20 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setConnection(updated);
       setAccessToken("");
       setMessage(copy(locale, "connected"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function startOAuth() {
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const start = await client.instagramOAuthStart({ locale });
+      window.location.href = start.authorizationUrl;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
@@ -124,6 +138,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         </div>
 
         <p className="mt-4 text-sm leading-6 text-muted">{copy(locale, "note")}</p>
+        <button
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-button bg-navy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          disabled={isBusy}
+          onClick={startOAuth}
+          type="button"
+        >
+          <ExternalLink size={16} />
+          {copy(locale, "oauth")}
+        </button>
         <p className="mt-3 min-h-5 text-sm text-muted">{message}</p>
       </aside>
 
@@ -219,7 +242,8 @@ function copy(locale: Locale, key: string): string {
       expiresAt: "Token expiry",
       failed: "Request failed",
       manual: "Manual connection",
-      note: "This stores publish-readiness metadata only. Real OAuth, App Review, and publishing will come in a later milestone.",
+      note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
+      oauth: "Connect Instagram",
       refresh: "Refresh",
       save: "Save connection",
       signInFirst: "Sign in from the dashboard first to manage workspace settings.",
@@ -238,7 +262,8 @@ function copy(locale: Locale, key: string): string {
       expiresAt: "Token expiry",
       failed: "Request failed",
       manual: "Manual connection",
-      note: "This stores publish-readiness metadata only. Real OAuth, App Review, and publishing will come in a later milestone.",
+      note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
+      oauth: "Connect Instagram",
       refresh: "Refresh",
       save: "Save connection",
       signInFirst: "Sign in from the dashboard first to manage workspace settings.",

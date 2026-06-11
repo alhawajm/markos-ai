@@ -6,6 +6,7 @@ import type {
   ContentType,
   HealthResponse,
   InstagramConnection,
+  InstagramOAuthStart,
   KnowledgeVaultEntry,
   MediaAssetRecord,
   MediaType,
@@ -248,6 +249,14 @@ export class MarkosApiClient {
 
   async instagramConnection(): Promise<InstagramConnection> {
     const response = await this.request<InstagramConnection>("/v1/workspace/instagram");
+    return response.data;
+  }
+
+  async instagramOAuthStart(input: { locale?: "ar" | "en" } = {}): Promise<InstagramOAuthStart> {
+    const response = await this.request<InstagramOAuthStart>("/v1/workspace/instagram/oauth/start", {
+      body: input,
+      method: "POST"
+    });
     return response.data;
   }
 

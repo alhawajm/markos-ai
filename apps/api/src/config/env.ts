@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional());
+const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional());
+
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -16,9 +19,16 @@ const envSchema = z.object({
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
   MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
+  META_APP_ID: optionalString,
+  META_APP_SECRET: optionalString,
+  META_REDIRECT_URI: optionalUrl,
   META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
   META_GRAPH_VERSION: z
     .preprocess((value) => (value === "" ? undefined : value), z.string().min(1).default("v24.0")),
+  INSTAGRAM_OAUTH_AUTHORIZE_URL: z.string().url().default("https://www.instagram.com/oauth/authorize"),
+  INSTAGRAM_OAUTH_TOKEN_URL: z.string().url().default("https://api.instagram.com/oauth/access_token"),
+  INSTAGRAM_LONG_LIVED_TOKEN_URL: z.string().url().default("https://graph.instagram.com/access_token"),
+  INSTAGRAM_OAUTH_SCOPES: z.string().min(1).default("instagram_business_basic,instagram_business_content_publish"),
   INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
   INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
   INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000)

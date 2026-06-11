@@ -39,3 +39,7 @@ Build the publishing worker boundary as a dry-run adapter before enabling Meta G
 ## 2026-06-11: Meta Graph Adapter Behind Live Flag
 
 Implement the Meta Graph container -> poll -> publish adapter behind `INSTAGRAM_PUBLISH_MODE=live`, while keeping `dry_run` as the default. Live mode can mark content `PUBLISHED` only after Meta returns a published media ID, and records Meta adapter errors as `FAILED` content with a failure reason.
+
+## 2026-06-11: Instagram OAuth Callback Lives In API
+
+Use the API as the Instagram OAuth redirect target at `/v1/workspace/instagram/oauth/callback`, then redirect back to the localized web settings page. Keep manual token entry as a local-development fallback until production App Review credentials are available.

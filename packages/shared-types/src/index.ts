@@ -219,6 +219,11 @@ export interface InstagramConnection {
   tokenExpiresAt?: string;
 }
 
+export interface InstagramOAuthStart {
+  authorizationUrl: string;
+  stateExpiresAt: string;
+}
+
 export interface PublishReadiness {
   ready: boolean;
   reasons: string[];
