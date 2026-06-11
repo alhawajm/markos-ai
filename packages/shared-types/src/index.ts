@@ -231,6 +231,17 @@ export interface InstagramTokenRefreshResult {
   connection?: InstagramConnection;
 }
 
+export interface AuditLogRecord {
+  id: string;
+  actorId?: string;
+  workspaceId: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface PublishReadiness {
   ready: boolean;
   reasons: string[];

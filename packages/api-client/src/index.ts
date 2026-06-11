@@ -1,5 +1,6 @@
 import type {
   ApiEnvelope,
+  AuditLogRecord,
   AuthSession,
   ContentRecord,
   ContentStatus,
@@ -281,6 +282,18 @@ export class MarkosApiClient {
       body: {},
       method: "POST"
     });
+    return response.data;
+  }
+
+  async auditLogs(input: { limit?: number } = {}): Promise<AuditLogRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.limit !== undefined) {
+      search.set("limit", String(input.limit));
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<AuditLogRecord[]>(`/v1/workspace/audit-logs${suffix}`);
     return response.data;
   }
 

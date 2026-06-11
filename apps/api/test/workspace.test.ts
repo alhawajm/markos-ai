@@ -124,6 +124,81 @@ describe("workspace routes", () => {
 
     await app.close();
   });
+
+  it("lists recent workspace audit logs without leaking other workspace events", async () => {
+    const app = await buildApp();
+    const first = await registerTestUser(app);
+    const second = await registerTestUser(app);
+
+    await prisma.auditLog.createMany({
+      data: [
+        {
+          action: "INSTAGRAM_CONNECTED",
+          metadata: {
+            accountId: "17841400000000000"
+          },
+          targetId: "17841400000000000",
+          targetType: "InstagramConnection",
+          workspaceId: first.workspace.id
+        },
+        {
+          action: "OTHER_WORKSPACE_EVENT",
+          targetType: "Workspace",
+          workspaceId: second.workspace.id
+        },
+        {
+          action: "GLOBAL_META_WEBHOOK",
+          targetType: "MetaWebhook"
+        }
+      ]
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/workspace/audit-logs?limit=10",
+      headers: authHeaders(first.tokens.accessToken)
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toHaveLength(1);
+    expect(response.json().data[0]).toMatchObject({
+      action: "INSTAGRAM_CONNECTED",
+      metadata: {
+        accountId: "17841400000000000"
+      },
+      targetId: "17841400000000000",
+      targetType: "InstagramConnection",
+      workspaceId: first.workspace.id
+    });
+
+    await app.close();
+  });
+
+  it("requires workspace admin access for audit logs", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+
+    await prisma.workspaceMember.updateMany({
+      data: {
+        role: "VIEWER"
+      },
+      where: {
+        userId: session.user.id,
+        workspaceId: session.workspace.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/workspace/audit-logs",
+      headers: authHeaders(session.tokens.accessToken)
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe("AUDIT_LOGS_FORBIDDEN");
+
+    await app.close();
+  });
 });
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {

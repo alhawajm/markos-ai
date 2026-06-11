@@ -1,4 +1,4 @@
-import type { InstagramConnection, PublishReadiness } from "@markos/shared-types";
+import type { AuditLogRecord, InstagramConnection, PublishReadiness } from "@markos/shared-types";
 import type { ConnectInstagramInput } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { toContentRecord } from "../content/content-service";
@@ -58,6 +58,21 @@ export async function disconnectInstagram(workspaceId: string): Promise<Instagra
   });
 
   return toInstagramConnection(workspace);
+}
+
+export async function listWorkspaceAuditLogs(workspaceId: string, input: { limit?: number } = {}): Promise<AuditLogRecord[]> {
+  const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+  const rows = await prisma.auditLog.findMany({
+    orderBy: {
+      createdAt: "desc"
+    },
+    take: limit,
+    where: {
+      workspaceId
+    }
+  });
+
+  return rows.map(toAuditLogRecord);
 }
 
 export async function getPublishReadiness(workspaceId: string, contentItemId: string): Promise<PublishReadiness> {
@@ -127,6 +142,34 @@ export async function getPublishReadiness(workspaceId: string, contentItemId: st
     ready: reasons.length === 0,
     reasons
   };
+}
+
+function toAuditLogRecord(row: {
+  action: string;
+  actorId: string | null;
+  createdAt: Date;
+  id: string;
+  metadata: unknown;
+  targetId: string | null;
+  targetType: string;
+  workspaceId: string | null;
+}): AuditLogRecord {
+  const metadata = isRecord(row.metadata) ? row.metadata : undefined;
+
+  return {
+    action: row.action,
+    ...(row.actorId === null ? {} : { actorId: row.actorId }),
+    createdAt: row.createdAt.toISOString(),
+    id: row.id,
+    ...(metadata === undefined ? {} : { metadata }),
+    ...(row.targetId === null ? {} : { targetId: row.targetId }),
+    targetType: row.targetType,
+    workspaceId: row.workspaceId ?? ""
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toInstagramConnection(workspace: {

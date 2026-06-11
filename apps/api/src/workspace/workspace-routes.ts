@@ -16,6 +16,7 @@ import {
   ContentItemNotFoundForReadinessError,
   disconnectInstagram,
   getInstagramConnection,
+  listWorkspaceAuditLogs,
   getPublishReadiness,
   WorkspaceNotFoundError
 } from "./workspace-service";
@@ -144,6 +145,31 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await refreshInstagramTokenForWorkspace({ workspaceId }));
+    }
+  );
+
+  app.get(
+    "/v1/workspace/audit-logs",
+    {
+      config: {
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const { roles, workspaceId } = requireWorkspaceContext();
+
+      if (!roles.some((role) => role === "OWNER" || role === "WORKSPACE_ADMIN")) {
+        return reply.status(403).send(errorEnvelope("AUDIT_LOGS_FORBIDDEN", "Audit logs require workspace admin access"));
+      }
+
+      const query = request.query as { limit?: string };
+      const rawLimit = query.limit === undefined ? undefined : Number(query.limit);
+
+      if (rawLimit !== undefined && (!Number.isInteger(rawLimit) || rawLimit < 1)) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Audit log limit must be a positive integer"));
+      }
+
+      return ok(await listWorkspaceAuditLogs(workspaceId, rawLimit === undefined ? {} : { limit: rawLimit }));
     }
   );
 
