@@ -22,6 +22,14 @@ export interface PublishDueContentResult {
   attempts: PublishAttemptRecord[];
 }
 
+export interface PublishDueContentForAllWorkspacesResult {
+  attempted: number;
+  workspaces: Array<{
+    result: PublishDueContentResult;
+    workspaceId: string;
+  }>;
+}
+
 export class PublishContentItemNotFoundError extends Error {
   constructor() {
     super("Content item was not found");
@@ -63,6 +71,44 @@ export async function publishDueContent(
   return {
     attempted: attempts.length,
     attempts
+  };
+}
+
+export async function publishDueContentForAllWorkspaces(
+  options: { now?: Date; publisher?: InstagramPublisher } = {}
+): Promise<PublishDueContentForAllWorkspacesResult> {
+  const now = options.now ?? new Date();
+  const dueWorkspaces = await prisma.contentItem.findMany({
+    distinct: ["workspaceId"],
+    select: {
+      workspaceId: true
+    },
+    where: {
+      deletedAt: null,
+      scheduledAt: {
+        lte: now
+      },
+      status: "SCHEDULED"
+    }
+  });
+  const workspaces: PublishDueContentForAllWorkspacesResult["workspaces"] = [];
+  let attempted = 0;
+
+  for (const row of dueWorkspaces) {
+    const result = await publishDueContent(row.workspaceId, {
+      now,
+      ...(options.publisher === undefined ? {} : { publisher: options.publisher })
+    });
+    attempted += result.attempted;
+    workspaces.push({
+      result,
+      workspaceId: row.workspaceId
+    });
+  }
+
+  return {
+    attempted,
+    workspaces
   };
 }
 

@@ -51,3 +51,7 @@ Expose minimal API callback URLs for Instagram webhook verification, deauthoriza
 ## 2026-06-11: Instagram Token Refresh Starts Manual
 
 Implement long-lived Instagram token refresh as an explicit workspace API action and settings control before adding a background scheduler. Meta callbacks disconnect workspace Instagram credentials only when the callback includes an account identifier that matches `instagramAccountId`; broader app-scoped user mapping requires a future schema field.
+
+## 2026-06-11: Maintenance Worker Starts As Interval Polling
+
+Run due publishing and Instagram token refresh from a small API-owned maintenance worker with configurable intervals. Defer a durable Redis queue until concurrency, retries, and volume require it; the worker still calls workspace-scoped services so tenant isolation remains enforced.
