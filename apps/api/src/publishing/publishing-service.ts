@@ -1,0 +1,171 @@
+import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
+import { prisma } from "../db/prisma";
+import { DryRunInstagramPublisher, type InstagramPublishResult, type InstagramPublisher } from "./instagram-publisher";
+
+export interface PublishAttemptRecord {
+  contentItemId: string;
+  dryRun: boolean;
+  reasons: string[];
+  result?: InstagramPublishResult;
+  status: "BLOCKED" | "DRY_RUN" | "PUBLISHED";
+}
+
+export interface PublishDueContentResult {
+  attempted: number;
+  attempts: PublishAttemptRecord[];
+}
+
+export class PublishContentItemNotFoundError extends Error {
+  constructor() {
+    super("Content item was not found");
+  }
+}
+
+const publishableTypes = new Set(["CAROUSEL", "POST", "REEL"]);
+
+export async function publishDueContent(
+  workspaceId: string,
+  options: { now?: Date; publisher?: InstagramPublisher } = {}
+): Promise<PublishDueContentResult> {
+  const now = options.now ?? new Date();
+  const rows = await prisma.contentItem.findMany({
+    where: {
+      workspaceId,
+      status: "SCHEDULED",
+      scheduledAt: {
+        lte: now
+      },
+      deletedAt: null
+    },
+    orderBy: {
+      scheduledAt: "asc"
+    },
+    take: 10
+  });
+  const attempts = [];
+
+  for (const row of rows) {
+    attempts.push(
+      await publishContentItem(workspaceId, row.id, {
+        now,
+        ...(options.publisher === undefined ? {} : { publisher: options.publisher })
+      })
+    );
+  }
+
+  return {
+    attempted: attempts.length,
+    attempts
+  };
+}
+
+export async function publishContentItem(
+  workspaceId: string,
+  contentItemId: string,
+  options: { now?: Date; publisher?: InstagramPublisher } = {}
+): Promise<PublishAttemptRecord> {
+  const now = options.now ?? new Date();
+  const [workspace, contentItem] = await Promise.all([
+    prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        deletedAt: null
+      }
+    }),
+    prisma.contentItem.findFirst({
+      where: {
+        id: contentItemId,
+        workspaceId,
+        deletedAt: null
+      }
+    })
+  ]);
+
+  if (!workspace || !contentItem) {
+    throw new PublishContentItemNotFoundError();
+  }
+
+  const mediaAssets = await prisma.mediaAsset.findMany({
+    where: {
+      id: {
+        in: contentItem.mediaIds
+      },
+      workspaceId,
+      deletedAt: null
+    },
+    orderBy: {
+      createdAt: "asc"
+    }
+  });
+  const reasons = validatePublishAttempt({ contentItem, mediaAssets, now, workspace });
+
+  if (reasons.length > 0) {
+    return {
+      contentItemId,
+      dryRun: true,
+      reasons,
+      status: "BLOCKED"
+    };
+  }
+
+  const publisher = options.publisher ?? new DryRunInstagramPublisher();
+  const result = await publisher.publish({ contentItem, mediaAssets, workspace });
+
+  if (!result.dryRun && result.instagramPostId) {
+    await prisma.contentItem.update({
+      where: {
+        id: contentItem.id
+      },
+      data: {
+        instagramPostId: result.instagramPostId,
+        publishedAt: now,
+        status: "PUBLISHED"
+      }
+    });
+  }
+
+  return {
+    contentItemId,
+    dryRun: result.dryRun,
+    reasons: [],
+    result,
+    status: result.status
+  };
+}
+
+function validatePublishAttempt(input: {
+  contentItem: ContentItem;
+  mediaAssets: MediaAsset[];
+  now: Date;
+  workspace: Workspace;
+}): string[] {
+  const reasons: string[] = [];
+
+  if (!input.workspace.instagramAccountId || !input.workspace.instagramAccessToken || !input.workspace.instagramTokenExpiresAt) {
+    reasons.push("INSTAGRAM_NOT_CONNECTED");
+  } else if (input.workspace.instagramTokenExpiresAt <= input.now) {
+    reasons.push("INSTAGRAM_TOKEN_EXPIRED");
+  }
+
+  if (input.contentItem.status !== "SCHEDULED") {
+    reasons.push("CONTENT_NOT_SCHEDULED");
+  }
+
+  if (!input.contentItem.scheduledAt || input.contentItem.scheduledAt > input.now) {
+    reasons.push("CONTENT_NOT_DUE");
+  }
+
+  if (!publishableTypes.has(input.contentItem.contentType)) {
+    reasons.push("CONTENT_TYPE_NOT_PUBLISHABLE");
+  }
+
+  const validPublicMediaIds = new Set(
+    input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id)
+  );
+
+  if (input.contentItem.mediaIds.length === 0 || input.contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
+    reasons.push("PUBLIC_MEDIA_REQUIRED");
+  }
+
+  return reasons;
+}

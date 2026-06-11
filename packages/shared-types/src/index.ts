@@ -225,3 +225,31 @@ export interface PublishReadiness {
   connection: InstagramConnection;
   contentItem?: ContentRecord;
 }
+
+export interface InstagramPublishPayload {
+  accountId: string;
+  contentItemId: string;
+  caption: string;
+  contentType: Extract<ContentType, "CAROUSEL" | "POST" | "REEL" | "STORY">;
+  mediaUrls: string[];
+}
+
+export interface InstagramPublishResult {
+  dryRun: boolean;
+  instagramPostId?: string;
+  payload: InstagramPublishPayload;
+  status: "DRY_RUN" | "PUBLISHED";
+}
+
+export interface PublishAttemptRecord {
+  contentItemId: string;
+  dryRun: boolean;
+  reasons: string[];
+  result?: InstagramPublishResult;
+  status: "BLOCKED" | "DRY_RUN" | "PUBLISHED";
+}
+
+export interface PublishDueContentResult {
+  attempted: number;
+  attempts: PublishAttemptRecord[];
+}

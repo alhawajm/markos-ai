@@ -10,6 +10,8 @@ import type {
   MediaAssetRecord,
   MediaType,
   OnboardingState,
+  PublishAttemptRecord,
+  PublishDueContentResult,
   PublishReadiness,
   StrategyRecord,
   VaultCompletenessScore,
@@ -266,6 +268,22 @@ export class MarkosApiClient {
 
   async publishReadiness(contentItemId: string): Promise<PublishReadiness> {
     const response = await this.request<PublishReadiness>(`/v1/workspace/publish-readiness/${contentItemId}`);
+    return response.data;
+  }
+
+  async publishContentDryRun(contentItemId: string): Promise<PublishAttemptRecord> {
+    const response = await this.request<PublishAttemptRecord>(`/v1/publishing/content/${contentItemId}/dry-run`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async runDuePublishing(): Promise<PublishDueContentResult> {
+    const response = await this.request<PublishDueContentResult>("/v1/publishing/run-due", {
+      body: {},
+      method: "POST"
+    });
     return response.data;
   }
 

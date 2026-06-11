@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, RefreshCcw, RotateCcw, ShieldCheck } from "lucide-react";
+import { CalendarClock, PlayCircle, RefreshCcw, RotateCcw, ShieldCheck } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuthSession, ContentRecord, Locale, PublishReadiness } from "@markos/shared-types";
+import type { AuthSession, ContentRecord, Locale, PublishAttemptRecord, PublishReadiness } from "@markos/shared-types";
 
 const sessionKey = "markos.session";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -282,12 +282,23 @@ function ScheduledItem({
   setMessage: (message: string) => void;
 }) {
   const [readiness, setReadiness] = useState<PublishReadiness | null>(null);
+  const [attempt, setAttempt] = useState<PublishAttemptRecord | null>(null);
 
   async function checkReadiness() {
     try {
       const result = await client.publishReadiness(item.id);
       setReadiness(result);
       setMessage(result.ready ? copy(locale, "publishReady") : copy(locale, "notReady"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    }
+  }
+
+  async function dryRunPublish() {
+    try {
+      const result = await client.publishContentDryRun(item.id);
+      setAttempt(result);
+      setMessage(result.status === "BLOCKED" ? copy(locale, "publishBlocked") : copy(locale, "dryRunReady"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     }
@@ -312,6 +323,15 @@ function ScheduledItem({
               {copy(locale, "check")}
             </button>
             <button
+              className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-navy disabled:opacity-50"
+              disabled={isBusy}
+              onClick={dryRunPublish}
+              type="button"
+            >
+              <PlayCircle size={16} />
+              {copy(locale, "dryRun")}
+            </button>
+            <button
               className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
               disabled={isBusy}
               onClick={() => onUnschedule(item)}
@@ -326,6 +346,13 @@ function ScheduledItem({
       {readiness ? (
         <div className="mt-3 rounded-card bg-canvas p-3 text-sm text-muted">
           {readiness.ready ? copy(locale, "publishReady") : readiness.reasons.map((reason) => copy(locale, reason)).join(" / ")}
+        </div>
+      ) : null}
+      {attempt ? (
+        <div className="mt-3 rounded-card bg-canvas p-3 text-sm text-muted">
+          {attempt.status === "BLOCKED"
+            ? attempt.reasons.map((reason) => copy(locale, reason)).join(" / ")
+            : `${copy(locale, "dryRunReady")}: ${attempt.result?.payload.mediaUrls.length ?? 0} ${copy(locale, "mediaUrls")}`}
         </div>
       ) : null}
     </article>
@@ -372,11 +399,17 @@ function copy(locale: Locale, key: string): string {
       check: "Check readiness",
       failed: "Request failed",
       CONTENT_NOT_SCHEDULED: "Content is not scheduled",
+      CONTENT_NOT_DUE: "Content is not due yet",
+      CONTENT_TYPE_NOT_PUBLISHABLE: "Content type is not publishable",
+      dryRun: "Dry run",
+      dryRunReady: "Publish dry run ready",
       INSTAGRAM_NOT_CONNECTED: "Instagram is not connected",
       INSTAGRAM_TOKEN_EXPIRED: "Instagram token expired",
       note: "Scheduling stores an internal publish time only. Instagram publishing will be added in a later milestone.",
       notReady: "Not publish-ready",
+      publishBlocked: "Publish dry run blocked",
       publishReady: "Publish-ready",
+      mediaUrls: "media URLs",
       PUBLIC_MEDIA_REQUIRED: "Public media is required before publishing",
       ready: "Ready to schedule",
       SCHEDULE_TIME_NOT_IN_FUTURE: "Schedule time is not in the future",
@@ -398,11 +431,17 @@ function copy(locale: Locale, key: string): string {
       check: "Check readiness",
       failed: "Request failed",
       CONTENT_NOT_SCHEDULED: "Content is not scheduled",
+      CONTENT_NOT_DUE: "Content is not due yet",
+      CONTENT_TYPE_NOT_PUBLISHABLE: "Content type is not publishable",
+      dryRun: "Dry run",
+      dryRunReady: "Publish dry run ready",
       INSTAGRAM_NOT_CONNECTED: "Instagram is not connected",
       INSTAGRAM_TOKEN_EXPIRED: "Instagram token expired",
       note: "Scheduling stores an internal publish time only. Instagram publishing will be added in a later milestone.",
       notReady: "Not publish-ready",
+      publishBlocked: "Publish dry run blocked",
       publishReady: "Publish-ready",
+      mediaUrls: "media URLs",
       PUBLIC_MEDIA_REQUIRED: "Public media is required before publishing",
       ready: "Ready to schedule",
       SCHEDULE_TIME_NOT_IN_FUTURE: "Schedule time is not in the future",
