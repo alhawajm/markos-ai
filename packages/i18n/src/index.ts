@@ -3,16 +3,19 @@ import type { Locale } from "@markos/shared-types";
 const dictionaries = {
   ar: {
     "app.name": "MARKOS AI",
-    "shell.title": "نظام التسويق الذكي",
-    "shell.subtitle": "ابدأ من الأساس: مساحة عمل آمنة، ذاكرة أعمال، وتجربة عربية من الشاشة الأولى.",
+    "shell.title": "نظام تشغيل التسويق الذكي",
+    "shell.subtitle": "ابدأ من الأساس: مساحة عمل آمنة، ذاكرة أعمال قابلة للاسترجاع، وتجربة عربية من الشاشة الأولى.",
     "nav.dashboard": "لوحة التحكم",
     "nav.vault": "الخزنة",
     "nav.strategy": "الاستراتيجية",
     "nav.content": "المحتوى",
     "nav.schedule": "الجدولة",
     "nav.analytics": "التحليلات",
+    "nav.audience": "الجمهور",
+    "nav.channels": "القنوات",
     "nav.ai": "المستشار الذكي",
     "nav.settings": "الإعدادات",
+    "nav.admin": "الإدارة",
     "status.foundation": "مرحلة التأسيس"
   },
   en: {
@@ -22,11 +25,14 @@ const dictionaries = {
     "nav.dashboard": "Dashboard",
     "nav.vault": "Vault",
     "nav.strategy": "Strategy",
-    "nav.content": "Content",
-    "nav.schedule": "Schedule",
+    "nav.content": "Content Creator",
+    "nav.schedule": "Publishing Queue",
     "nav.analytics": "Analytics",
-    "nav.ai": "AI Consultant",
+    "nav.audience": "Audience",
+    "nav.channels": "Channels",
+    "nav.ai": "AI Assistant",
     "nav.settings": "Settings",
+    "nav.admin": "Admin",
     "status.foundation": "Foundation phase"
   }
 } as const;

@@ -72,10 +72,41 @@ describe("auth routes", () => {
       }
     });
 
-    expect(unverifiedLoginResponse.statusCode).toBe(403);
+    expect(unverifiedLoginResponse.statusCode).toBe(200);
     expect(unverifiedLoginResponse.json()).toMatchObject({
+      data: {
+        user: {
+          email,
+          isVerified: false
+        },
+        workspace: {
+          id: workspace.id
+        },
+        roles: ["OWNER"]
+      }
+    });
+
+    const unverifiedSession = unverifiedLoginResponse.json().data;
+    const unverifiedContentListResponse = await app.inject({
+      method: "GET",
+      url: "/v1/content",
+      headers: authHeaders(unverifiedSession.tokens.accessToken)
+    });
+    const unverifiedGenerateResponse = await app.inject({
+      method: "POST",
+      url: "/v1/content/generate",
+      headers: authHeaders(unverifiedSession.tokens.accessToken),
+      payload: {
+        contentType: "POST",
+        prompt: "Create a launch post."
+      }
+    });
+
+    expect(unverifiedContentListResponse.statusCode).toBe(200);
+    expect(unverifiedGenerateResponse.statusCode).toBe(403);
+    expect(unverifiedGenerateResponse.json()).toMatchObject({
       error: {
-        code: "EMAIL_NOT_VERIFIED"
+        code: "EMAIL_VERIFICATION_REQUIRED"
       }
     });
 
@@ -135,7 +166,7 @@ describe("auth routes", () => {
     });
 
     await app.close();
-  });
+  }, 60_000);
 
   it("creates a verified Google user, owner workspace, and session", async () => {
     const app = await buildApp();

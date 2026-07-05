@@ -1,28 +1,55 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Instagram, Link2Off, RefreshCcw, Save, ScrollText } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  CreditCard,
+  Database,
+  Download,
+  ExternalLink,
+  Globe2,
+  Instagram,
+  KeyRound,
+  Link2Off,
+  LockKeyhole,
+  RefreshCcw,
+  Save,
+  ScrollText,
+  ShieldCheck,
+  UserRound
+} from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuditLogRecord, AuthSession, InstagramConnection, Locale } from "@markos/shared-types";
+import { getBrowserApiBaseUrl } from "./api-base-url";
+import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, Locale, MfaTotpSetup } from "@markos/shared-types";
+import { SurfaceState } from "./surface-state";
 
 const sessionKey = "markos.session";
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const apiBaseUrl = getBrowserApiBaseUrl();
+
+const previewConnection: InstagramConnection = {
+  accountId: "@zain_bh",
+  connected: true,
+  tokenExpiresAt: new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString()
+};
+type AuditState = "loading" | "error" | "success" | "limit";
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [connection, setConnection] = useState<InstagramConnection | null>(null);
-  const [accountId, setAccountId] = useState("");
+  const [connection, setConnection] = useState<InstagramConnection | null>(previewConnection);
+  const [billing, setBilling] = useState<BillingSummary | null>(null);
+  const [accountId, setAccountId] = useState("@zain_bh");
   const [accessToken, setAccessToken] = useState("");
   const [tokenExpiresAt, setTokenExpiresAt] = useState(defaultTokenExpiry());
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [mfaSetup, setMfaSetup] = useState<MfaTotpSetup | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [auditState, setAuditState] = useState<AuditState | null>(null);
 
   const client = useMemo(() => {
-    const options = {
-      baseUrl: apiBaseUrl
-    } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-
+    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
     return new MarkosApiClient(
       session
         ? {
@@ -36,6 +63,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(sessionKey);
+    const params = new URLSearchParams(window.location.search);
+    const requestedState = params.get("state");
+
+    if (isAuditState(requestedState)) {
+      setAuditState(requestedState);
+    }
+
     if (stored) {
       setSession(JSON.parse(stored) as AuthSession);
     }
@@ -43,11 +77,31 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     if (!session) return;
-    void refreshConnection(client, setConnection, setMessage);
-    void refreshAuditLogs(client, setAuditLogs, setMessage);
+    void refreshSettings(client, setConnection, setBilling, setAuditLogs, setMessage);
   }, [client, session]);
 
+  async function refreshAllSettings() {
+    if (!session) {
+      setAuditState("success");
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    setIsBusy(true);
+    setAuditState("loading");
+    setMessage("");
+
+    const loaded = await refreshSettings(client, setConnection, setBilling, setAuditLogs, setMessage);
+    setAuditState(loaded ? "success" : "error");
+    setIsBusy(false);
+  }
+
   async function connect() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
     setIsBusy(true);
     setMessage("");
 
@@ -68,6 +122,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   }
 
   async function startOAuth() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
     setIsBusy(true);
     setMessage("");
 
@@ -82,6 +141,12 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   }
 
   async function disconnect() {
+    if (!session) {
+      setConnection({ ...previewConnection, connected: false });
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
     setIsBusy(true);
     setMessage("");
 
@@ -96,6 +161,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   }
 
   async function refreshToken() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
     setIsBusy(true);
     setMessage("");
 
@@ -112,197 +182,329 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     }
   }
 
-  if (!session) {
-    return (
-      <section className="mt-8 rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="flex items-center gap-2 text-accent">
-          <Instagram size={20} />
-          <h2 className="text-base font-semibold text-navy">{copy(locale, "title")}</h2>
-        </div>
-        <p className="mt-2 text-sm leading-6 text-muted">{copy(locale, "signInFirst")}</p>
-      </section>
-    );
+  async function setupMfa() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      setMfaSetup(await client.setupMfaTotp());
+      setMessage(copy(locale, "mfaReady"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
   }
 
+  async function enableMfa() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const status = await client.enableMfaTotp({ code: mfaCode.trim() });
+      setMessage(status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"));
+      setMfaCode("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function exportData() {
+    if (!session) {
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+
+    try {
+      const data = await client.exportWorkspaceData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `markos-workspace-${session.workspace.id}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(copy(locale, "exportReady"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  const activeConnection = connection ?? previewConnection;
+  const workspaceName = session?.workspace.name ?? "Zain Arabia";
+  const userName = session?.user.fullName ?? "Ahmed Khalil";
+  const userEmail = session?.user.email ?? "ahmed@zain.example";
+  const subscription = billing?.subscription;
+
   return (
-    <section className="mt-8 grid gap-4 xl:grid-cols-[320px_1fr]">
-      <aside className="rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="flex items-center justify-between gap-3">
+    <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="rounded-[20px] bg-[linear-gradient(135deg,#14182b_0%,#102f54_55%,#24203f_100%)] p-5 text-white shadow-card xl:col-span-2">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-navy">{copy(locale, "title")}</h2>
-            <p className="mt-1 text-sm text-muted">{session.workspace.name}</p>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff4b6e]">
+              <ShieldCheck size={13} />
+              {copy(locale, "eyebrow")}
+            </div>
+            <h1 className="mt-4 font-display text-[28px] font-bold leading-tight">{copy(locale, "title")}</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{copy(locale, "subtitle")}</p>
           </div>
           <button
-            aria-label={copy(locale, "refresh")}
-            className="rounded-button border border-border p-2 text-muted hover:text-navy"
-            disabled={isBusy}
-            onClick={() => refreshConnection(client, setConnection, setMessage)}
+            className="inline-flex items-center justify-center gap-2 rounded-button border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+            disabled={isBusy || !session}
+            onClick={refreshAllSettings}
             type="button"
           >
             <RefreshCcw size={16} />
-          </button>
-        </div>
-
-        <div className="mt-5 rounded-card border border-border p-4">
-          <p className="text-xs font-medium uppercase tracking-normal text-muted">{copy(locale, "status")}</p>
-          <p className="mt-1 text-lg font-semibold text-navy">
-            {connection?.connected ? copy(locale, "connectedStatus") : copy(locale, "disconnectedStatus")}
-          </p>
-          {connection?.accountId ? <p className="mt-1 text-sm text-muted">{connection.accountId}</p> : null}
-          {connection?.tokenExpiresAt ? (
-            <p className="mt-1 text-xs text-muted">
-              {copy(locale, "expires")} {new Date(connection.tokenExpiresAt).toLocaleString(locale)}
-            </p>
-          ) : null}
-        </div>
-
-        <p className="mt-4 text-sm leading-6 text-muted">{copy(locale, "note")}</p>
-        <button
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-button bg-navy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          disabled={isBusy}
-          onClick={startOAuth}
-          type="button"
-        >
-          <ExternalLink size={16} />
-          {copy(locale, "oauth")}
-        </button>
-        <p className="mt-3 min-h-5 text-sm text-muted">{message}</p>
-      </aside>
-
-      <div className="rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="flex items-center gap-2 text-accent">
-          <Instagram size={20} />
-          <h2 className="text-base font-semibold text-navy">{copy(locale, "manual")}</h2>
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="block">
-            <span className="text-xs font-medium text-muted">{copy(locale, "accountId")}</span>
-            <input
-              className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent"
-              onChange={(event) => setAccountId(event.target.value)}
-              value={accountId}
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-muted">{copy(locale, "expiresAt")}</span>
-            <input
-              className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent"
-              onChange={(event) => setTokenExpiresAt(event.target.value)}
-              type="datetime-local"
-              value={tokenExpiresAt}
-            />
-          </label>
-        </div>
-
-        <label className="mt-4 block">
-          <span className="text-xs font-medium text-muted">{copy(locale, "token")}</span>
-          <input
-            className="mt-1 w-full rounded-input border border-border px-3 py-2 text-sm outline-none focus:border-accent"
-            onChange={(event) => setAccessToken(event.target.value)}
-            type="password"
-            value={accessToken}
-          />
-        </label>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            className="inline-flex items-center gap-2 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            disabled={isBusy}
-            onClick={connect}
-            type="button"
-          >
-            <Save size={16} />
-            {copy(locale, "save")}
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
-            disabled={isBusy}
-            onClick={refreshToken}
-            type="button"
-          >
-            <RefreshCcw size={16} />
-            {copy(locale, "refreshToken")}
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm text-muted disabled:opacity-50"
-            disabled={isBusy}
-            onClick={disconnect}
-            type="button"
-          >
-            <Link2Off size={16} />
-            {copy(locale, "disconnect")}
+            {copy(locale, "refresh")}
           </button>
         </div>
       </div>
 
-      <div className="rounded-card border border-border bg-card p-5 shadow-card xl:col-span-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-accent">
-            <ScrollText size={20} />
-            <h2 className="text-base font-semibold text-navy">{copy(locale, "auditTitle")}</h2>
+      {isBusy || auditState ? (
+        <div className="xl:col-span-2">
+          <SurfaceState
+            action={
+              auditState === "limit" ? (
+                <a className="inline-flex h-10 items-center rounded-button bg-accent px-4 text-sm font-bold text-white" href={`/${locale}/admin`}>
+                  {copy(locale, "openAdmin")}
+                </a>
+              ) : (
+                <button className="inline-flex h-10 items-center gap-2 rounded-button border border-border bg-card px-4 text-sm font-bold text-navy disabled:opacity-60" disabled={isBusy || !session} onClick={refreshAllSettings} type="button">
+                  <RefreshCcw size={15} />
+                  {copy(locale, "refresh")}
+                </button>
+              )
+            }
+            body={auditStateText(locale, isBusy ? "loading" : auditState).body}
+            title={auditStateText(locale, isBusy ? "loading" : auditState).title}
+            tone={auditState === "error" ? "error" : auditState === "success" ? "success" : auditState === "limit" ? "limit" : "loading"}
+          />
+        </div>
+      ) : null}
+
+      <aside className="grid gap-4">
+        <Panel icon={UserRound} kicker={copy(locale, "account")} title={userName} body={userEmail}>
+          <div className="mt-4 grid gap-2">
+            <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
+            <SettingRow label={copy(locale, "role")} value={(session?.roles ?? ["OWNER"]).join(", ")} />
+            <SettingRow label={copy(locale, "verified")} value={session?.user.isVerified ? copy(locale, "yes") : copy(locale, "pending")} />
           </div>
-          <button
-            aria-label={copy(locale, "refreshAudit")}
-            className="rounded-button border border-border p-2 text-muted hover:text-navy"
-            disabled={isBusy}
-            onClick={() => refreshAuditLogs(client, setAuditLogs, setMessage)}
-            type="button"
-          >
-            <RefreshCcw size={16} />
-          </button>
+        </Panel>
+
+        <Panel icon={Globe2} kicker={copy(locale, "language")} title={copy(locale, "languageTitle")} body={copy(locale, "languageBody")}>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Link className={languageClass(locale === "ar")} href="/ar/settings">
+              العربية
+            </Link>
+            <Link className={languageClass(locale === "en")} href="/en/settings">
+              English
+            </Link>
+          </div>
+        </Panel>
+
+        <Panel icon={CreditCard} kicker={copy(locale, "billing")} title={subscription?.planCode ?? "STARTER"} body={subscription?.status ?? copy(locale, "trial")}>
+          <div className="mt-4 grid gap-2">
+            <SettingRow label={copy(locale, "currency")} value="BHD" />
+            <SettingRow label={copy(locale, "invoices")} value={String(billing?.invoices.length ?? 0)} />
+            <SettingRow label={copy(locale, "payments")} value={String(billing?.payments.length ?? 0)} />
+          </div>
+        </Panel>
+      </aside>
+
+      <div className="grid gap-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel icon={Instagram} kicker={copy(locale, "channels")} title={copy(locale, "instagram")} body={copy(locale, activeConnection.connected ? "connectedStatus" : "disconnectedStatus")}>
+            <div className="mt-4 grid gap-3 rounded-[18px] border border-border bg-canvas p-4">
+              <SettingRow label={copy(locale, "accountId")} value={activeConnection.accountId ?? "Not set"} />
+              <SettingRow label={copy(locale, "publishMode")} value={session ? copy(locale, "liveWorkspace") : copy(locale, "previewWorkspace")} />
+              <SettingRow
+                label={copy(locale, "expires")}
+                value={activeConnection.tokenExpiresAt ? new Date(activeConnection.tokenExpiresAt).toLocaleDateString(locale) : copy(locale, "pending")}
+              />
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <input className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent" onChange={(event) => setAccountId(event.target.value)} placeholder={copy(locale, "accountId")} value={accountId} />
+              <input className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent" onChange={(event) => setTokenExpiresAt(event.target.value)} type="datetime-local" value={tokenExpiresAt} />
+            </div>
+            <input
+              className="mt-3 w-full rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent"
+              onChange={(event) => setAccessToken(event.target.value)}
+              placeholder={copy(locale, "token")}
+              type="password"
+              value={accessToken}
+            />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <ActionButton disabled={isBusy} icon={ExternalLink} label={copy(locale, "oauth")} onClick={startOAuth} tone="primary" />
+              <ActionButton disabled={isBusy} icon={Save} label={copy(locale, "save")} onClick={connect} />
+              <ActionButton disabled={isBusy} icon={RefreshCcw} label={copy(locale, "refreshToken")} onClick={refreshToken} />
+              <ActionButton disabled={isBusy} icon={Link2Off} label={copy(locale, "disconnect")} onClick={disconnect} />
+            </div>
+          </Panel>
+
+          <Panel icon={LockKeyhole} kicker={copy(locale, "security")} title={copy(locale, "securityTitle")} body={copy(locale, "securityBody")}>
+            <div className="mt-4 rounded-[18px] border border-border bg-canvas p-4">
+              <SettingRow label={copy(locale, "mfa")} value={mfaSetup?.enabled ? copy(locale, "enabled") : copy(locale, "notEnabled")} />
+              {mfaSetup?.secret ? <SettingRow label={copy(locale, "secret")} value={mfaSetup.secret} /> : null}
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+              <input
+                className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent"
+                onChange={(event) => setMfaCode(event.target.value)}
+                placeholder={copy(locale, "mfaCode")}
+                value={mfaCode}
+              />
+              <ActionButton disabled={isBusy || mfaCode.trim().length === 0} icon={KeyRound} label={copy(locale, "enableMfa")} onClick={enableMfa} tone="primary" />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <ActionButton disabled={isBusy} icon={ShieldCheck} label={copy(locale, "setupMfa")} onClick={setupMfa} />
+              <ActionButton disabled={isBusy} icon={Download} label={copy(locale, "exportData")} onClick={exportData} />
+            </div>
+          </Panel>
         </div>
 
-        {auditLogs.length === 0 ? (
-          <p className="mt-4 text-sm text-muted">{copy(locale, "auditEmpty")}</p>
-        ) : (
-          <div className="mt-4 overflow-hidden rounded-card border border-border">
-            <div className="hidden grid-cols-[minmax(140px,1fr)_minmax(120px,0.8fr)_minmax(150px,0.9fr)] border-b border-border bg-gray-50 px-4 py-2 text-xs font-semibold text-muted md:grid">
-              <span>{copy(locale, "auditAction")}</span>
-              <span>{copy(locale, "auditTarget")}</span>
-              <span>{copy(locale, "auditTime")}</span>
+        <Panel icon={ScrollText} kicker={copy(locale, "audit")} title={copy(locale, "auditTitle")} body={copy(locale, "auditBody")}>
+          {auditLogs.length === 0 ? (
+            <div className="mt-4 rounded-[18px] border border-dashed border-border bg-canvas p-6 text-sm text-muted">{copy(locale, "auditEmpty")}</div>
+          ) : (
+            <div className="mt-4 overflow-hidden rounded-[18px] border border-border">
+              {auditLogs.slice(0, 8).map((log) => (
+                <div className="grid gap-1 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]" key={log.id}>
+                  <span className="font-bold text-navy">{formatAction(log.action)}</span>
+                  <span className="text-muted">{log.targetType}</span>
+                  <span className="text-muted">{new Date(log.createdAt).toLocaleString(locale)}</span>
+                </div>
+              ))}
             </div>
-            {auditLogs.map((log) => (
-              <div
-                className="grid gap-1 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(140px,1fr)_minmax(120px,0.8fr)_minmax(150px,0.9fr)] md:gap-3"
-                key={log.id}
-              >
-                <span className="break-words font-medium text-navy">{formatAction(log.action)}</span>
-                <span className="break-words text-muted">
-                  {log.targetType}
-                  {log.targetId ? ` ${shortId(log.targetId)}` : ""}
-                </span>
-                <span className="text-muted">{new Date(log.createdAt).toLocaleString(locale)}</span>
+          )}
+        </Panel>
+
+        <div className="rounded-[20px] border border-border bg-card p-4 shadow-card">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
+                <Database size={20} />
               </div>
-            ))}
+              <div>
+                <h2 className="text-base font-bold text-navy">{copy(locale, "dataControls")}</h2>
+                <p className="text-xs text-muted">{copy(locale, "dataControlsBody")}</p>
+              </div>
+            </div>
+            <a className="inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-3 text-sm font-bold text-navy hover:border-accent hover:text-accent" href={`/${locale}/vault`}>
+              {copy(locale, "openVault")}
+              <ArrowRight size={16} />
+            </a>
           </div>
-        )}
+        </div>
+
+        {message ? <SurfaceState body={message} title={copy(locale, auditState === "error" ? "attention" : "status")} tone={auditState === "error" ? "error" : "info"} /> : <p className="min-h-5" />}
       </div>
     </section>
   );
 }
 
-async function refreshConnection(
-  client: MarkosApiClient,
-  setConnection: (connection: InstagramConnection) => void,
-  setMessage: (message: string) => void
-) {
-  try {
-    setConnection(await client.instagramConnection());
-  } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Request failed");
-  }
+function Panel({
+  body,
+  children,
+  icon: Icon,
+  kicker,
+  title
+}: {
+  body: string;
+  children?: React.ReactNode;
+  icon: typeof ShieldCheck;
+  kicker: string;
+  title: string;
+}) {
+  return (
+    <article className="rounded-[20px] border border-border bg-card p-5 shadow-card">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{kicker}</p>
+          <h2 className="mt-2 text-lg font-bold text-navy">{title}</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
+        </div>
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-[#FEEAF0] text-accent">
+          <Icon size={21} />
+        </div>
+      </div>
+      {children}
+    </article>
+  );
 }
 
-async function refreshAuditLogs(
+function SettingRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="truncate font-bold text-navy">{value}</span>
+    </div>
+  );
+}
+
+function ActionButton({
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+  tone = "secondary"
+}: {
+  disabled: boolean;
+  icon: typeof Save;
+  label: string;
+  onClick: () => void;
+  tone?: "primary" | "secondary";
+}) {
+  return (
+    <button
+      className={
+        tone === "primary"
+          ? "inline-flex items-center justify-center gap-2 rounded-button bg-accent px-4 py-2 text-sm font-bold text-white shadow-[0_10px_20px_rgba(239,62,91,.18)] disabled:opacity-60"
+          : "inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-2 text-sm font-bold text-navy disabled:opacity-60"
+      }
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      <Icon size={15} />
+      {label}
+    </button>
+  );
+}
+
+async function refreshSettings(
   client: MarkosApiClient,
+  setConnection: (connection: InstagramConnection) => void,
+  setBilling: (billing: BillingSummary) => void,
   setAuditLogs: (auditLogs: AuditLogRecord[]) => void,
   setMessage: (message: string) => void
-) {
+): Promise<boolean> {
   try {
-    setAuditLogs(await client.auditLogs({ limit: 10 }));
+    const [connection, billing, auditLogs] = await Promise.all([client.instagramConnection(), client.billingSummary(), client.auditLogs({ limit: 10 })]);
+    setConnection(connection);
+    setBilling(billing);
+    setAuditLogs(auditLogs);
+    return true;
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Request failed");
+    setMessage(error instanceof Error ? error.message : "Settings could not be loaded.");
+    return false;
   }
 }
 
@@ -320,69 +522,191 @@ function formatAction(action: string): string {
     .join(" ");
 }
 
-function shortId(id: string): string {
-  return id.length <= 10 ? id : `${id.slice(0, 6)}...${id.slice(-4)}`;
+function languageClass(active: boolean): string {
+  return active
+    ? "rounded-button bg-navy px-3 py-2 text-center text-sm font-bold text-white"
+    : "rounded-button border border-border bg-canvas px-3 py-2 text-center text-sm font-bold text-navy";
 }
 
-function copy(locale: Locale, key: string): string {
-  const dictionary: Record<Locale, Record<string, string>> = {
+function isAuditState(value: string | null): value is AuditState {
+  return value === "loading" || value === "error" || value === "success" || value === "limit";
+}
+
+function auditStateText(locale: Locale, state: AuditState | null): { body: string; title: string } {
+  const resolved = state ?? "success";
+  const dictionary: Record<Locale, Record<AuditState, { body: string; title: string }>> = {
     ar: {
-      accountId: "Instagram account ID",
-      auditAction: "Action",
-      auditEmpty: "No workspace audit events yet.",
-      auditTarget: "Target",
-      auditTime: "Time",
-      auditTitle: "Recent audit logs",
-      connected: "Instagram connection saved",
-      connectedStatus: "Connected",
-      disconnect: "Disconnect",
-      disconnected: "Instagram disconnected",
-      disconnectedStatus: "Not connected",
-      expires: "Expires",
-      expiresAt: "Token expiry",
-      failed: "Request failed",
-      manual: "Manual connection",
-      note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
-      oauth: "Connect Instagram",
-      refresh: "Refresh",
-      refreshAudit: "Refresh audit logs",
-      refreshToken: "Refresh token",
-      save: "Save connection",
-      signInFirst: "Sign in from the dashboard first to manage workspace settings.",
-      status: "Status",
-      title: "Settings",
-      token: "Access token",
-      tokenRefreshed: "Instagram token refreshed"
+      error: {
+        body: "تعذر تحميل إعدادات مساحة العمل. لن يتم تنفيذ التغييرات الحساسة حتى تعود بيانات الحساب والفوترة والقنوات.",
+        title: "تعذر تحميل الإعدادات"
+      },
+      limit: {
+        body: "بعض تغييرات الخطة أو القنوات تحتاج ترقية أو مراجعة حدود الاشتراك قبل المتابعة.",
+        title: "تحتاج مراجعة الخطة"
+      },
+      loading: {
+        body: "يتم تحميل الحساب، الفوترة، اتصال Instagram، وسجل التدقيق لمساحة العمل الحالية.",
+        title: "جار تحديث الإعدادات"
+      },
+      success: {
+        body: "الإعدادات جاهزة. يمكنك إدارة اللغة، القنوات، الأمان، والبيانات مع بقاء كل شيء مرتبطا بمساحة العمل.",
+        title: "الإعدادات جاهزة"
+      }
     },
     en: {
-      accountId: "Instagram account ID",
-      auditAction: "Action",
-      auditEmpty: "No workspace audit events yet.",
-      auditTarget: "Target",
-      auditTime: "Time",
-      auditTitle: "Recent audit logs",
-      connected: "Instagram connection saved",
-      connectedStatus: "Connected",
-      disconnect: "Disconnect",
-      disconnected: "Instagram disconnected",
-      disconnectedStatus: "Not connected",
-      expires: "Expires",
-      expiresAt: "Token expiry",
-      failed: "Request failed",
-      manual: "Manual connection",
-      note: "Connect through Instagram OAuth for App Review testing. Manual tokens remain available for local development.",
-      oauth: "Connect Instagram",
-      refresh: "Refresh",
-      refreshAudit: "Refresh audit logs",
-      refreshToken: "Refresh token",
-      save: "Save connection",
-      signInFirst: "Sign in from the dashboard first to manage workspace settings.",
-      status: "Status",
-      title: "Settings",
-      token: "Access token",
-      tokenRefreshed: "Instagram token refreshed"
+      error: {
+        body: "Workspace settings could not be loaded. Sensitive changes stay blocked until account, billing, and channel data return.",
+        title: "Settings load failed"
+      },
+      limit: {
+        body: "Some plan or channel changes need a subscription upgrade or quota review before they can continue.",
+        title: "Plan review needed"
+      },
+      loading: {
+        body: "Loading account, billing, Instagram connection, and audit history for the current workspace.",
+        title: "Refreshing settings"
+      },
+      success: {
+        body: "Settings are ready. Manage language, channels, security, and data controls while everything remains workspace-scoped.",
+        title: "Settings ready"
+      }
     }
   };
 
-  return dictionary[locale][key] ?? key;
+  return dictionary[locale][resolved];
+}
+
+function copy(locale: Locale, key: string): string {
+  const dictionary = {
+    ar: {
+      account: "الحساب",
+      accountId: "حساب إنستغرام",
+      attention: "تنبيه",
+      audit: "السجل",
+      auditBody: "آخر أحداث مساحة العمل والإعدادات الحساسة.",
+      auditEmpty: "لا توجد أحداث تدقيق بعد.",
+      auditTitle: "سجل التدقيق",
+      billing: "الفوترة",
+      channels: "القنوات",
+      connected: "تم حفظ اتصال إنستغرام.",
+      connectedStatus: "متصل",
+      currency: "العملة",
+      dataControls: "البيانات والذاكرة",
+      dataControlsBody: "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
+      disconnect: "فصل",
+      disconnected: "تم فصل إنستغرام.",
+      disconnectedStatus: "غير متصل",
+      enableMfa: "تفعيل",
+      enabled: "مفعّل",
+      error: "خطأ",
+      expires: "ينتهي",
+      exportData: "تصدير البيانات",
+      exportReady: "تم تجهيز ملف التصدير.",
+      eyebrow: "إعدادات مساحة العمل",
+      failed: "تعذر تنفيذ العملية.",
+      instagram: "Instagram",
+      invoices: "الفواتير",
+      language: "اللغة",
+      languageBody: "التبديل يحافظ على نفس مسار الإعدادات.",
+      languageTitle: "العربية والإنجليزية",
+      liveWorkspace: "مساحة عمل مباشرة",
+      mfa: "MFA",
+      mfaCode: "رمز التحقق",
+      mfaEnabled: "تم تفعيل MFA.",
+      mfaReady: "امسح الرمز في تطبيق المصادقة ثم أدخل الكود.",
+      notEnabled: "غير مفعّل",
+      oauth: "اتصال OAuth",
+      openAdmin: "فتح الإدارة",
+      openVault: "افتح الخزنة",
+      payments: "المدفوعات",
+      pending: "قيد الانتظار",
+      previewOnly: "هذه معاينة. سجّل الدخول لتنفيذ العملية.",
+      previewWorkspace: "معاينة محلية",
+      publishMode: "وضع النشر",
+      refresh: "تحديث",
+      refreshToken: "تحديث الرمز",
+      role: "الدور",
+      save: "حفظ",
+      secret: "السر",
+      security: "الأمان",
+      securityBody: "MFA، صلاحيات الوصول، وتصدير البيانات الحساسة.",
+      securityTitle: "ضوابط الوصول",
+      setupMfa: "إعداد MFA",
+      status: "الحالة",
+      subtitle: "إدارة الحساب، مساحة العمل، اللغة، الفوترة، القنوات، والأمان من شاشة واحدة.",
+      title: "الإعدادات",
+      token: "رمز الوصول",
+      tokenRefreshed: "تم تحديث رمز إنستغرام.",
+      trial: "تجربة",
+      verified: "التحقق",
+      workspace: "مساحة العمل",
+      yes: "نعم"
+    },
+    en: {
+      account: "Account",
+      accountId: "Instagram account",
+      attention: "Attention",
+      audit: "Audit",
+      auditBody: "Recent workspace and sensitive settings events.",
+      auditEmpty: "No audit events yet.",
+      auditTitle: "Audit trail",
+      billing: "Billing",
+      channels: "Channels",
+      connected: "Instagram connection saved.",
+      connectedStatus: "Connected",
+      currency: "Currency",
+      dataControls: "Data and memory",
+      dataControlsBody: "Export, audit, and business memory stay workspace-scoped.",
+      disconnect: "Disconnect",
+      disconnected: "Instagram disconnected.",
+      disconnectedStatus: "Disconnected",
+      enableMfa: "Enable",
+      enabled: "Enabled",
+      error: "Error",
+      expires: "Expires",
+      exportData: "Export data",
+      exportReady: "Workspace export is ready.",
+      eyebrow: "Workspace settings",
+      failed: "Action failed.",
+      instagram: "Instagram",
+      invoices: "Invoices",
+      language: "Language",
+      languageBody: "Switching keeps you on the same settings route.",
+      languageTitle: "Arabic and English",
+      liveWorkspace: "Live workspace",
+      mfa: "MFA",
+      mfaCode: "Verification code",
+      mfaEnabled: "MFA enabled.",
+      mfaReady: "Scan the secret in your authenticator, then enter the code.",
+      notEnabled: "Not enabled",
+      oauth: "Connect OAuth",
+      openAdmin: "Open admin",
+      openVault: "Open Vault",
+      payments: "Payments",
+      pending: "Pending",
+      previewOnly: "This is preview mode. Sign in to run the action.",
+      previewWorkspace: "Local preview",
+      publishMode: "Publish mode",
+      refresh: "Refresh",
+      refreshToken: "Refresh token",
+      role: "Role",
+      save: "Save",
+      secret: "Secret",
+      security: "Security",
+      securityBody: "MFA, access permissions, and sensitive data export controls.",
+      securityTitle: "Access controls",
+      setupMfa: "Set up MFA",
+      status: "Status",
+      subtitle: "Manage account, workspace, language, billing, channels, and security from one screen.",
+      title: "Settings",
+      token: "Access token",
+      tokenRefreshed: "Instagram token refreshed.",
+      trial: "Trial",
+      verified: "Verified",
+      workspace: "Workspace",
+      yes: "Yes"
+    }
+  } as const;
+
+  return dictionary[locale][key as keyof (typeof dictionary)["en"]] ?? key;
 }

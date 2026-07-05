@@ -6,12 +6,21 @@ type SupportedUsageMetric = UsageMetric;
 const limitKeys: Record<SupportedUsageMetric, string> = {
   AI_IMAGE: "aiImages",
   AI_GENERATION: "aiGenerations",
+  AI_TOKENS_IN: "aiInputTokens",
+  AI_TOKENS_OUT: "aiOutputTokens",
   POST_PUBLISH: "posts",
   STORAGE_BYTES: "storageBytes",
   STRATEGY: "strategies"
 };
 
-const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "POST_PUBLISH", "STRATEGY"];
+const monthlyUsageMetrics: SupportedUsageMetric[] = [
+  "AI_GENERATION",
+  "AI_IMAGE",
+  "AI_TOKENS_IN",
+  "AI_TOKENS_OUT",
+  "POST_PUBLISH",
+  "STRATEGY"
+];
 
 export class UsageQuotaExceededError extends Error {
   readonly metric: SupportedUsageMetric;
@@ -121,6 +130,94 @@ export async function refundWorkspaceUsage(input: {
       }
     }
   });
+}
+
+export async function recordAiTokenUsage(input: {
+  client?: Prisma.TransactionClient;
+  now?: Date;
+  tokensIn: number;
+  tokensOut: number;
+  workspaceId: string;
+}): Promise<void> {
+  const shared = {
+    workspaceId: input.workspaceId,
+    ...(input.client === undefined ? {} : { client: input.client }),
+    ...(input.now === undefined ? {} : { now: input.now })
+  };
+
+  await recordWorkspaceMeteredUsage({
+    ...shared,
+    metric: "AI_TOKENS_IN",
+    amount: input.tokensIn
+  });
+  await recordWorkspaceMeteredUsage({
+    ...shared,
+    metric: "AI_TOKENS_OUT",
+    amount: input.tokensOut
+  });
+}
+
+export async function recordWorkspaceMeteredUsage(input: {
+  amount: number;
+  client?: Prisma.TransactionClient;
+  metric: SupportedUsageMetric;
+  now?: Date;
+  workspaceId: string;
+}): Promise<void> {
+  if (input.amount === 0) {
+    return;
+  }
+
+  if (input.amount < 0 || !Number.isInteger(input.amount)) {
+    throw new Error("Metered usage amount must be a non-negative integer");
+  }
+
+  const client = input.client ?? prisma;
+  const now = input.now ?? new Date();
+  const period = usagePeriod(input.metric, now);
+  const limit = await getWorkspaceLimit(input.workspaceId, input.metric);
+
+  await client.usageCounter.upsert({
+    create: {
+      workspaceId: input.workspaceId,
+      metric: input.metric,
+      periodStart: period.start,
+      periodEnd: period.end,
+      limit,
+      used: 0
+    },
+    update: {
+      limit,
+      periodEnd: period.end
+    },
+    where: {
+      workspaceId_metric_periodStart: {
+        workspaceId: input.workspaceId,
+        metric: input.metric,
+        periodStart: period.start
+      }
+    }
+  });
+
+  const updated = await client.usageCounter.updateMany({
+    data: {
+      used: {
+        increment: input.amount
+      }
+    },
+    where: {
+      workspaceId: input.workspaceId,
+      metric: input.metric,
+      periodStart: period.start,
+      used: {
+        lte: limit - input.amount
+      }
+    }
+  });
+
+  if (updated.count !== 1) {
+    throw new UsageQuotaExceededError(input.metric);
+  }
 }
 
 export interface UsagePeriodResetResult {

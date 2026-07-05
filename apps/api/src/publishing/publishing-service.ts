@@ -1,5 +1,6 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { env } from "../config/env";
 import { refundWorkspaceUsage, reserveWorkspaceUsage, UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   createInstagramPublisher,
@@ -32,13 +33,142 @@ export interface PublishDueContentForAllWorkspacesResult {
   }>;
 }
 
+export interface PublishingLiveReadiness {
+  mode: "dry_run" | "live";
+  ready: boolean;
+  reasons: string[];
+  connection: {
+    connected: boolean;
+    accountId?: string;
+    tokenExpiresAt?: string;
+  };
+  requiredEnv: string[];
+}
+
 export class PublishContentItemNotFoundError extends Error {
   constructor() {
     super("Content item was not found");
   }
 }
 
+export class PublishRescheduleInvalidError extends Error {
+  constructor() {
+    super("Only failed publishing items can be rescheduled from the publishing queue");
+  }
+}
+
 const publishableTypes = new Set(["CAROUSEL", "POST", "REEL"]);
+
+export async function listPublishingQueue(workspaceId: string): Promise<ContentItem[]> {
+  return prisma.contentItem.findMany({
+    where: {
+      workspaceId,
+      status: {
+        in: ["FAILED", "SCHEDULED"]
+      },
+      deletedAt: null
+    },
+    orderBy: [
+      {
+        status: "desc"
+      },
+      {
+        scheduledAt: "asc"
+      },
+      {
+        updatedAt: "desc"
+      }
+    ],
+    take: 100
+  });
+}
+
+export async function getPublishingLiveReadiness(workspaceId: string): Promise<PublishingLiveReadiness> {
+  const workspace = await prisma.workspace.findFirst({
+    where: {
+      id: workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!workspace) {
+    throw new PublishContentItemNotFoundError();
+  }
+
+  const requiredEnv = ["INSTAGRAM_PUBLISH_MODE", "META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"];
+  const reasons: string[] = [];
+
+  if (env.INSTAGRAM_PUBLISH_MODE !== "live") {
+    reasons.push("INSTAGRAM_PUBLISH_MODE_NOT_LIVE");
+  }
+
+  for (const key of requiredEnv) {
+    if (!hasConfiguredEnv(key)) {
+      reasons.push(`MISSING_${key}`);
+    }
+  }
+
+  const connection = {
+    connected:
+      workspace.instagramAccountId !== null &&
+      workspace.instagramAccessToken !== null &&
+      workspace.instagramTokenExpiresAt !== null &&
+      workspace.instagramTokenExpiresAt > new Date(),
+    ...(workspace.instagramAccountId === null ? {} : { accountId: workspace.instagramAccountId }),
+    ...(workspace.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() })
+  };
+
+  if (!connection.connected) {
+    reasons.push("INSTAGRAM_NOT_CONNECTED");
+  }
+
+  if (workspace.instagramTokenExpiresAt !== null && workspace.instagramTokenExpiresAt <= new Date()) {
+    reasons.push("INSTAGRAM_TOKEN_EXPIRED");
+  }
+
+  return {
+    connection,
+    mode: env.INSTAGRAM_PUBLISH_MODE,
+    ready: reasons.length === 0,
+    reasons,
+    requiredEnv
+  };
+}
+
+export async function rescheduleFailedPublish(
+  workspaceId: string,
+  contentItemId: string,
+  input: { scheduledAt: string }
+): Promise<ContentItem> {
+  const contentItem = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!contentItem) {
+    throw new PublishContentItemNotFoundError();
+  }
+
+  if (contentItem.status !== "FAILED") {
+    throw new PublishRescheduleInvalidError();
+  }
+
+  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
+
+  return prisma.contentItem.update({
+    where: {
+      id: contentItem.id
+    },
+    data: {
+      failureReason: null,
+      scheduledAt,
+      status: "SCHEDULED"
+    }
+  });
+}
 
 export async function publishDueContent(
   workspaceId: string,
@@ -316,4 +446,19 @@ function validatePublishAttempt(input: {
   }
 
   return reasons;
+}
+
+function parseFutureScheduleTime(value: string): Date {
+  const scheduledAt = new Date(value);
+
+  if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+    throw new PublishRescheduleInvalidError();
+  }
+
+  return scheduledAt;
+}
+
+function hasConfiguredEnv(key: string): boolean {
+  const value = process.env[key];
+  return typeof value === "string" && value.trim().length > 0;
 }

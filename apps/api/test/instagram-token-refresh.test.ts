@@ -134,8 +134,26 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     url: "/v1/auth/register"
   });
 
-  return response.json().data;
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
 }
+
 
 function jsonResponse(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {

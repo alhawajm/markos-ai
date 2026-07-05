@@ -40,6 +40,8 @@ export const verifyEmailSchema = z.object({
 });
 
 export const workspaceIdSchema = z.string().uuid();
+export const planCodeSchema = z.enum(["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"]);
+export const paymentGatewayCodeSchema = z.enum(["CREDIMAX", "BENEFIT", "STRIPE"]);
 
 export const vaultSectionSchema = z.enum([
   "COMPANY",
@@ -55,6 +57,29 @@ export const vaultSectionSchema = z.enum([
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
 export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
 export const mediaTypeSchema = z.enum(["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"]);
+export const agentNameSchema = z.enum([
+  "MARKETING_STRATEGIST",
+  "CONTENT_PLANNER",
+  "CONTENT_CREATOR",
+  "REEL_SCRIPT",
+  "IMAGE_PROMPT",
+  "ANALYTICS_CONSULTANT",
+  "RECOMMENDATION_ENGINE",
+  "BUSINESS_GROWTH_ADVISOR"
+]);
+export const promptAgentSchema = z.enum([
+  "STRATEGIST",
+  "CONTENT",
+  "IMAGE",
+  "MARKETING_STRATEGIST",
+  "CONTENT_PLANNER",
+  "CONTENT_CREATOR",
+  "REEL_SCRIPT",
+  "IMAGE_PROMPT",
+  "ANALYTICS_CONSULTANT",
+  "RECOMMENDATION_ENGINE",
+  "BUSINESS_GROWTH_ADVISOR"
+]);
 
 export const vaultValueSchema = z.record(z.string(), z.unknown());
 
@@ -181,6 +206,81 @@ export const generateContentSchema = z.object({
   strategyId: z.string().uuid().optional()
 });
 
+export const generateContentForSlotSchema = z.object({
+  topic: z.string().min(3).max(500),
+  contentType: contentTypeSchema.default("POST"),
+  scheduledAt: z.string().datetime(),
+  strategyId: z.string().uuid().optional()
+});
+
+export const runAgentSchema = z.object({
+  agent: agentNameSchema,
+  task: z.string().min(3).max(1000),
+  locale: localeSchema.default("en"),
+  inputs: z.record(z.string(), z.unknown()).optional()
+});
+
+export const analyticsDigestSchema = z.object({
+  days: z.number().int().min(1).max(90).default(30),
+  locale: localeSchema.default("en")
+});
+
+export const analyticsChatSchema = z.object({
+  days: z.number().int().min(1).max(90).default(30),
+  locale: localeSchema.default("en"),
+  question: z.string().min(3).max(1000)
+});
+
+export const analyticsMonthlyPdfSchema = z.object({
+  locale: localeSchema.default("en"),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .refine((value) => {
+      const month = Number(value.slice(5, 7));
+      return month >= 1 && month <= 12;
+    }, "Month must be between 01 and 12")
+    .optional()
+});
+
+export const analyticsMonthlyEmailSchema = analyticsMonthlyPdfSchema;
+
+export const analyticsLearningSchema = z.object({
+  days: z.number().int().min(1).max(90).default(30)
+});
+
+export const billingCheckoutSchema = z.object({
+  gateway: paymentGatewayCodeSchema.default("CREDIMAX"),
+  planCode: planCodeSchema
+});
+
+export const billingUpgradeSchema = z.object({
+  gateway: paymentGatewayCodeSchema.default("CREDIMAX"),
+  targetPlanCode: planCodeSchema
+});
+
+export const billingPaymentCaptureParamsSchema = z.object({
+  paymentId: z.string().uuid()
+});
+
+export const billingInvoiceParamsSchema = z.object({
+  invoiceId: z.string().uuid()
+});
+
+export const adminUpdatePlanLimitsSchema = z.object({
+  limits: z
+    .record(z.string().min(1), z.number().int().nonnegative())
+    .refine((value) => Object.keys(value).length > 0, {
+      message: "At least one plan limit is required"
+    })
+});
+
+export const adminModelSettingKeySchema = z.enum(["LLM_PRIMARY_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"]);
+
+export const adminUpdateModelSettingSchema = z.object({
+  value: z.string().min(1).max(200)
+});
+
 export const updateContentSchema = z
   .object({
     captionEn: z.string().max(2200).nullable().optional(),
@@ -207,6 +307,10 @@ export const connectInstagramSchema = z.object({
   accountId: z.string().min(3).max(120),
   accessToken: z.string().min(8).max(4000),
   tokenExpiresAt: z.string().datetime()
+});
+
+export const eraseWorkspaceDataSchema = z.object({
+  confirm: z.literal("ERASE_WORKSPACE_DATA")
 });
 
 export const registerPublicMediaSchema = z.object({
@@ -236,6 +340,36 @@ export const attachMediaToContentSchema = z.object({
   mediaAssetId: z.string().uuid()
 });
 
+export const generateImageForContentSchema = z.object({
+  prompt: z.string().min(3).max(1000).optional(),
+  aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
+});
+
+export const createPromptTemplateSchema = z.object({
+  agent: promptAgentSchema,
+  version: z.string().min(3).max(120),
+  body: z.string().min(10).max(20_000),
+  variantOf: z.string().uuid().optional(),
+  trafficPct: z.number().int().min(0).max(100).default(100),
+  active: z.boolean().default(false)
+});
+
+export const updatePromptTemplateSchema = z
+  .object({
+    body: z.string().min(10).max(20_000).optional(),
+    variantOf: z.string().uuid().nullable().optional(),
+    trafficPct: z.number().int().min(0).max(100).optional(),
+    active: z.boolean().optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one prompt template field is required"
+  });
+
+export const selectPromptVariantSchema = z.object({
+  agent: promptAgentSchema,
+  seed: z.string().min(1).max(500)
+});
+
 export const healthResponseSchema = z.object({
   service: z.enum(["web", "api", "ai"]),
   status: z.enum(["ok", "degraded"]),
@@ -255,10 +389,26 @@ export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
+export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
+export type RunAgentInput = z.infer<typeof runAgentSchema>;
+export type AnalyticsMonthlyPdfInput = z.infer<typeof analyticsMonthlyPdfSchema>;
+export type AnalyticsMonthlyEmailInput = z.infer<typeof analyticsMonthlyEmailSchema>;
+export type AnalyticsLearningInput = z.infer<typeof analyticsLearningSchema>;
+export type BillingCheckoutInput = z.infer<typeof billingCheckoutSchema>;
+export type BillingUpgradeInput = z.infer<typeof billingUpgradeSchema>;
+export type BillingPaymentCaptureParamsInput = z.infer<typeof billingPaymentCaptureParamsSchema>;
+export type AdminUpdatePlanLimitsInput = z.infer<typeof adminUpdatePlanLimitsSchema>;
+export type AdminModelSettingKeyInput = z.infer<typeof adminModelSettingKeySchema>;
+export type AdminUpdateModelSettingInput = z.infer<typeof adminUpdateModelSettingSchema>;
+export type CreatePromptTemplateInput = z.infer<typeof createPromptTemplateSchema>;
+export type UpdatePromptTemplateInput = z.infer<typeof updatePromptTemplateSchema>;
+export type SelectPromptVariantInput = z.infer<typeof selectPromptVariantSchema>;
 export type UpdateContentInput = z.infer<typeof updateContentSchema>;
 export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
 export type ConnectInstagramInput = z.infer<typeof connectInstagramSchema>;
+export type EraseWorkspaceDataInput = z.infer<typeof eraseWorkspaceDataSchema>;
 export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>;
 export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
+export type GenerateImageForContentInput = z.infer<typeof generateImageForContentSchema>;

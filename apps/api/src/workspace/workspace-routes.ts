@@ -1,8 +1,14 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { connectInstagramSchema } from "@markos/validation";
+import { connectInstagramSchema, eraseWorkspaceDataSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { env } from "../config/env";
+import {
+  eraseWorkspaceData,
+  exportWorkspaceData,
+  WorkspaceDataErasureNotFoundError,
+  WorkspaceDataExportNotFoundError
+} from "./pdpl-service";
 import {
   completeInstagramOAuth,
   createInstagramOAuthStart,
@@ -171,6 +177,59 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
       }
 
       return ok(await listWorkspaceAuditLogs(workspaceId, rawLimit === undefined ? {} : { limit: rawLimit }));
+    }
+  );
+
+  app.get(
+    "/v1/workspace/data-export",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["workspace:data:export"]
+      }
+    },
+    async (_request, reply) => {
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        const data = await exportWorkspaceData(workspaceId);
+        return reply.header("content-disposition", `attachment; filename="markos-workspace-${workspaceId}-export.json"`).send(ok(data));
+      } catch (error) {
+        if (error instanceof WorkspaceDataExportNotFoundError) {
+          return reply.status(404).send(errorEnvelope("WORKSPACE_DATA_NOT_FOUND", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/workspace/data-erasure",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["workspace:data:erase"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = eraseWorkspaceDataSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid workspace data erasure request", parsed.error.issues));
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await eraseWorkspaceData({ actorId: userId, workspaceId }));
+      } catch (error) {
+        if (error instanceof WorkspaceDataErasureNotFoundError) {
+          return reply.status(404).send(errorEnvelope("WORKSPACE_DATA_NOT_FOUND", error.message));
+        }
+
+        throw error;
+      }
     }
   );
 

@@ -3,6 +3,10 @@ packages:
   - "packages/*"
   - "services/*"
   - "infra"
+overrides:
+  '@opentelemetry/core': 2.8.0
+  esbuild: 0.28.1
+  postcss: 8.5.15
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
@@ -10,6 +14,7 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+  sharp: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@turbo/darwin-64@2.9.17'

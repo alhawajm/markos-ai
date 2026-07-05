@@ -1,7 +1,27 @@
 import type {
+  AgentName,
+  AgentRunRecord,
+  AdminBahrainLaunchReadiness,
+  AdminBillingOperations,
+  AdminGatewayReadiness,
+  AdminModelConfiguration,
+  AnalyticsChatResult,
+  AnalyticsDigestResult,
+  AnalyticsEmailDeliveryResult,
+  AnalyticsLearningResult,
+  AnalyticsLiveReadiness,
+  AnalyticsSummary,
+  AnalyticsSyncResult,
   ApiEnvelope,
   AuditLogRecord,
   AuthSession,
+  AiImageGenerationResult,
+  BillingCheckoutResult,
+  BillingPaymentCaptureResult,
+  BillingPlanCatalogItem,
+  BillingSummary,
+  BillingUpgradeResult,
+  BillingVatComplianceReport,
   ContentRecord,
   ContentStatus,
   ContentType,
@@ -18,13 +38,18 @@ import type {
   MfaStatus,
   MfaTotpSetup,
   OnboardingState,
+  PromptTemplateRecord,
+  PromptVariantSelection,
   PublishAttemptRecord,
   PublishDueContentResult,
+  PublishingLiveReadiness,
   PublishReadiness,
   StrategyRecord,
   VaultCompletenessScore,
   VaultRagChunk,
-  VaultSection
+  VaultSection,
+  WorkspaceDataErasureResult,
+  WorkspaceDataExport
 } from "@markos/shared-types";
 
 export interface MarkosApiClientOptions {
@@ -188,6 +213,76 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async exportStrategyPdf(strategyId: string): Promise<ArrayBuffer> {
+    return this.requestBinary(`/v1/strategy/${strategyId}/pdf`, {
+      accept: "application/pdf"
+    });
+  }
+
+  async runAgent(input: {
+    agent: AgentName;
+    task: string;
+    locale?: "ar" | "en";
+    inputs?: Record<string, unknown>;
+  }): Promise<AgentRunRecord> {
+    const response = await this.request<AgentRunRecord>("/v1/agents/run", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async promptTemplates(input: { agent?: string } = {}): Promise<PromptTemplateRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.agent !== undefined) {
+      search.set("agent", input.agent);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<PromptTemplateRecord[]>(`/v1/prompts${suffix}`);
+    return response.data;
+  }
+
+  async createPromptTemplate(input: {
+    active?: boolean;
+    agent: string;
+    body: string;
+    trafficPct?: number;
+    variantOf?: string;
+    version: string;
+  }): Promise<PromptTemplateRecord> {
+    const response = await this.request<PromptTemplateRecord>("/v1/prompts", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async updatePromptTemplate(
+    promptTemplateId: string,
+    input: {
+      active?: boolean;
+      body?: string;
+      trafficPct?: number;
+      variantOf?: string | null;
+    }
+  ): Promise<PromptTemplateRecord> {
+    const response = await this.request<PromptTemplateRecord>(`/v1/prompts/${promptTemplateId}`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async selectPromptVariant(input: { agent: string; seed: string }): Promise<PromptVariantSelection> {
+    const response = await this.request<PromptVariantSelection>("/v1/prompts/select", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async contentItems(): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content");
     return response.data;
@@ -238,6 +333,19 @@ export class MarkosApiClient {
     strategyId?: string;
   }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentForSlot(input: {
+    topic: string;
+    contentType?: ContentType;
+    scheduledAt: string;
+    strategyId?: string;
+  }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
       body: input,
       method: "POST"
     });
@@ -308,6 +416,20 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async generateContentImage(
+    contentItemId: string,
+    input: {
+      aspectRatio?: "1:1" | "4:5" | "9:16";
+      prompt?: string;
+    } = {}
+  ): Promise<AiImageGenerationResult> {
+    const response = await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async instagramConnection(): Promise<InstagramConnection> {
     const response = await this.request<InstagramConnection>("/v1/workspace/instagram");
     return response.data;
@@ -356,8 +478,205 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async exportWorkspaceData(): Promise<WorkspaceDataExport> {
+    const response = await this.request<WorkspaceDataExport>("/v1/workspace/data-export");
+    return response.data;
+  }
+
+  async eraseWorkspaceData(): Promise<WorkspaceDataErasureResult> {
+    const response = await this.request<WorkspaceDataErasureResult>("/v1/workspace/data-erasure", {
+      body: {
+        confirm: "ERASE_WORKSPACE_DATA"
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async billingPlans(): Promise<BillingPlanCatalogItem[]> {
+    const response = await this.request<BillingPlanCatalogItem[]>("/v1/billing/plans");
+    return response.data;
+  }
+
+  async adminPlans(): Promise<BillingPlanCatalogItem[]> {
+    const response = await this.request<BillingPlanCatalogItem[]>("/v1/admin/plans");
+    return response.data;
+  }
+
+  async updateAdminPlanLimits(
+    planCode: "STARTER" | "GROWTH" | "PREMIUM" | "ENTERPRISE",
+    input: { limits: Record<string, number> }
+  ): Promise<BillingPlanCatalogItem> {
+    const response = await this.request<BillingPlanCatalogItem>(`/v1/admin/plans/${planCode}/limits`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async adminBillingOperations(): Promise<AdminBillingOperations> {
+    const response = await this.request<AdminBillingOperations>("/v1/admin/billing/operations");
+    return response.data;
+  }
+
+  async adminGatewayReadiness(): Promise<AdminGatewayReadiness[]> {
+    const response = await this.request<AdminGatewayReadiness[]>("/v1/admin/gateways");
+    return response.data;
+  }
+
+  async adminBahrainLaunchReadiness(): Promise<AdminBahrainLaunchReadiness> {
+    const response = await this.request<AdminBahrainLaunchReadiness>("/v1/admin/bahrain-launch-readiness");
+    return response.data;
+  }
+
+  async adminModelConfiguration(): Promise<AdminModelConfiguration> {
+    const response = await this.request<AdminModelConfiguration>("/v1/admin/model-config");
+    return response.data;
+  }
+
+  async updateAdminModelSetting(
+    key: "LLM_PRIMARY_MODEL" | "IMAGE_MODEL_PRIMARY" | "IMAGE_MODEL_FALLBACK",
+    input: { value: string }
+  ): Promise<AdminModelConfiguration> {
+    const response = await this.request<AdminModelConfiguration>(`/v1/admin/model-config/${key}`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async billingSummary(): Promise<BillingSummary> {
+    const response = await this.request<BillingSummary>("/v1/billing/summary");
+    return response.data;
+  }
+
+  async startBillingCheckout(input: {
+    gateway?: "CREDIMAX" | "BENEFIT" | "STRIPE";
+    planCode: "STARTER" | "GROWTH" | "PREMIUM" | "ENTERPRISE";
+  }): Promise<BillingCheckoutResult> {
+    const response = await this.request<BillingCheckoutResult>("/v1/billing/checkout", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async captureBillingPayment(paymentId: string): Promise<BillingPaymentCaptureResult> {
+    const response = await this.request<BillingPaymentCaptureResult>(`/v1/billing/payments/${paymentId}/capture`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async exportBillingInvoicePdf(invoiceId: string): Promise<ArrayBuffer> {
+    return this.requestBinary(`/v1/billing/invoices/${invoiceId}/pdf`, {
+      accept: "application/pdf"
+    });
+  }
+
+  async verifyBillingVatCompliance(invoiceId: string): Promise<BillingVatComplianceReport> {
+    const response = await this.request<BillingVatComplianceReport>(`/v1/billing/invoices/${invoiceId}/vat-compliance`);
+    return response.data;
+  }
+
+  async startBillingUpgrade(input: {
+    gateway?: "CREDIMAX" | "BENEFIT" | "STRIPE";
+    targetPlanCode: "STARTER" | "GROWTH" | "PREMIUM" | "ENTERPRISE";
+  }): Promise<BillingUpgradeResult> {
+    const response = await this.request<BillingUpgradeResult>("/v1/billing/upgrade", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async analytics(input: { days?: number } = {}): Promise<AnalyticsSummary> {
+    const search = new URLSearchParams();
+
+    if (input.days !== undefined) {
+      search.set("days", String(input.days));
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<AnalyticsSummary>(`/v1/analytics${suffix}`);
+    return response.data;
+  }
+
+  async syncAnalytics(input: { days?: number } = {}): Promise<AnalyticsSyncResult> {
+    const response = await this.request<AnalyticsSyncResult>("/v1/analytics/sync", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async analyticsLiveReadiness(): Promise<AnalyticsLiveReadiness> {
+    const response = await this.request<AnalyticsLiveReadiness>("/v1/analytics/live-readiness");
+    return response.data;
+  }
+
+  async writeAnalyticsLearning(input: { days?: number } = {}): Promise<AnalyticsLearningResult> {
+    const response = await this.request<AnalyticsLearningResult>("/v1/analytics/learning", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async analyticsDigest(input: { days?: number; locale?: "ar" | "en" } = {}): Promise<AnalyticsDigestResult> {
+    const response = await this.request<AnalyticsDigestResult>("/v1/analytics/digest", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async analyticsChat(input: { days?: number; locale?: "ar" | "en"; question: string }): Promise<AnalyticsChatResult> {
+    const response = await this.request<AnalyticsChatResult>("/v1/analytics/chat", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async exportMonthlyAnalyticsPdf(input: { locale?: "ar" | "en"; month?: string } = {}): Promise<ArrayBuffer> {
+    const search = new URLSearchParams();
+
+    if (input.locale !== undefined) {
+      search.set("locale", input.locale);
+    }
+
+    if (input.month !== undefined) {
+      search.set("month", input.month);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    return this.requestBinary(`/v1/analytics/monthly-pdf${suffix}`, {
+      accept: "application/pdf"
+    });
+  }
+
+  async sendMonthlyAnalyticsEmail(input: { locale?: "ar" | "en"; month?: string } = {}): Promise<AnalyticsEmailDeliveryResult> {
+    const response = await this.request<AnalyticsEmailDeliveryResult>("/v1/analytics/monthly-email", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async publishReadiness(contentItemId: string): Promise<PublishReadiness> {
     const response = await this.request<PublishReadiness>(`/v1/workspace/publish-readiness/${contentItemId}`);
+    return response.data;
+  }
+
+  async publishingQueue(): Promise<ContentRecord[]> {
+    const response = await this.request<ContentRecord[]>("/v1/publishing/queue");
+    return response.data;
+  }
+
+  async publishingLiveReadiness(): Promise<PublishingLiveReadiness> {
+    const response = await this.request<PublishingLiveReadiness>("/v1/publishing/live-readiness");
     return response.data;
   }
 
@@ -372,6 +691,16 @@ export class MarkosApiClient {
   async runDuePublishing(): Promise<PublishDueContentResult> {
     const response = await this.request<PublishDueContentResult>("/v1/publishing/run-due", {
       body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async rescheduleFailedPublish(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/publishing/content/${contentItemId}/reschedule`, {
+      body: {
+        scheduledAt
+      },
       method: "POST"
     });
     return response.data;
@@ -414,5 +743,31 @@ export class MarkosApiClient {
     }
 
     return (await response.json()) as ApiEnvelope<TData>;
+  }
+
+  private async requestBinary(path: string, options: { accept: string; method?: "GET" } = { accept: "application/octet-stream" }): Promise<ArrayBuffer> {
+    const headers: Record<string, string> = {
+      Accept: options.accept
+    };
+
+    if (this.accessToken !== undefined) {
+      headers.Authorization = `Bearer ${this.accessToken}`;
+    }
+
+    if (this.workspaceId !== undefined) {
+      headers["X-Workspace-Id"] = this.workspaceId;
+    }
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      headers,
+      method: options.method ?? "GET"
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => undefined)) as { error?: { message?: string } } | undefined;
+      throw new Error(body?.error?.message ?? `MARKOS API request failed: ${response.status}`);
+    }
+
+    return response.arrayBuffer();
   }
 }

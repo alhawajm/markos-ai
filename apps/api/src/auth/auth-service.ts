@@ -37,12 +37,6 @@ export class InvalidCredentialsError extends Error {
   }
 }
 
-export class EmailNotVerifiedError extends Error {
-  constructor() {
-    super("Email verification is required before login");
-  }
-}
-
 export class EmailVerificationInvalidError extends Error {
   constructor() {
     super("Email verification token is invalid or expired");
@@ -260,10 +254,6 @@ export async function login(input: LoginInput): Promise<AuthSession> {
 
   if (!passwordOk) {
     throw new InvalidCredentialsError();
-  }
-
-  if (!user.isVerified) {
-    throw new EmailNotVerifiedError();
   }
 
   const membership = await prisma.workspaceMember.findFirst({

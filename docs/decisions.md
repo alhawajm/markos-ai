@@ -111,3 +111,71 @@ Run automated usage reset preparation from the API maintenance worker on a confi
 ## 2026-06-11: Staging Deploy Starts With GHCR Images and Optional ECS Rollout
 
 Build production-shaped containers for the web, API, worker, and AI services on every merge to `main`, publish them to GitHub Container Registry, and roll ECS services only when the GitHub `staging` environment has AWS deployment variables configured. Keep the M0 live-staging acceptance item open until a real cloud target and credentials prove the rollout.
+
+## 2026-06-11: Strategy PDF Export Follows Existing API Naming
+
+Expose strategy PDF downloads at `GET /v1/strategy/:strategyId/pdf` instead of the spec shorthand `/strategies/:id/pdf` so the export route stays consistent with the existing singular `/v1/strategy` and `/v1/strategy/generate` resource naming.
+
+## 2026-06-14: Billing Checkout Starts With Dry-Run Bahrain Gateway Adapters
+
+Implement CrediMax, BENEFIT, and Stripe as typed payment adapter boundaries that create dry-run checkout references while persisting real invoice and payment rows. Keep live merchant credentials, certification, and hosted-payment callbacks open until the Bahrain payment accounts are available.
+
+## 2026-06-14: Bahrain VAT Rounds To Nearest Fil
+
+Calculate BHD billing amounts in integer fils only. For exclusive VAT, add 10 percent VAT to the plan net amount; for inclusive VAT, derive net from gross using nearest-fil integer rounding and store the VAT residual so `netMinor + vatMinor = grossMinor`.
+
+## 2026-06-14: Checkout Capture Activates The Subscription Atomically
+
+Create a `TRIALING` subscription at checkout time and link the draft invoice to it, then capture dry-run payments in one transaction by marking payment `CAPTURED`, invoice `PAID`, subscription `ACTIVE`, and the owner user plan status `ACTIVE`. Treat repeated capture calls as idempotent so payment callbacks can be safely retried.
+
+## 2026-06-14: Metered Usage Uses The Same Hard Quota Guard As Reservations
+
+Enforce plan limits for both pre-reserved usage and post-response metered usage. AI token counters now atomically check the active plan limit before incrementing; if output tokens exceed quota, the generated artifact and AI interaction are rolled back and the pre-reserved generation count is refunded.
+
+## 2026-06-14: Prisma Seed Loads API Env Defaults
+
+Import the API environment bootstrap in `apps/api/prisma/seed.ts` so local and CI seed runs receive the same default `DATABASE_URL` behavior as the Fastify app.
+
+## 2026-06-14: Prorated Upgrades Preserve The Current Billing Period
+
+Charge upgrades only for the remaining-period price difference in integer BHD fils. A prorated upgrade creates a pending target subscription through the current subscription period end; payment capture cancels the previous active subscription, activates the target subscription, and preserves the billing period boundary. Downgrades are rejected until an explicit downgrade or cancellation flow is designed.
+
+## 2026-06-14: Platform Admin Permissions Are Separate From Workspace Ownership
+
+Keep global admin operations behind `admin:read` and `admin:manage` instead of granting them to ordinary workspace owners. `SUPER_ADMIN` and `PRODUCT_ADMIN` can edit global plan limits; support, finance, and readonly admin roles can read admin surfaces without mutating plan configuration.
+
+## 2026-06-14: Admin Plan And Prompt Mutations Are Audited
+
+Write audit log rows for plan-limit edits and prompt template create/update operations in the same database transaction as the mutation. Plan limit edits preserve the existing plan price, currency, and active state, and only merge validated non-negative integer limit keys into `plans.limits`.
+
+## 2026-06-14: Admin Gateway Readiness Starts Read-Only
+
+Expose gateway readiness in the admin portal before allowing gateway credential mutation. Gateway readiness reports missing credential and callback-secret environment keys; live gateway credential storage remains external until merchant accounts and certification details are available.
+
+## 2026-06-14: VAT Invoice Downloads Use Workspace-Scoped PDFs
+
+Expose VAT invoice downloads at `GET /v1/billing/invoices/:invoiceId/pdf` behind `billing:read`. The generated PDF renders the stored invoice amounts in BHD fils, the VAT rate and pricing mode, payment evidence when available, and current tax-profile gaps as explicit notes until seller VAT number and reverse-charge customer VAT ID fields are added.
+
+## 2026-06-14: VAT Compliance Verification Is Code-Backed Per Invoice
+
+Expose `GET /v1/billing/invoices/:invoiceId/vat-compliance` behind `billing:read` so each workspace-scoped invoice can be checked against the supported Bahrain VAT rules before launch. Keep seller VAT registration number, customer VAT ID, reverse-charge handling, and live gateway receipt attachment as operational launch caveats until those external inputs are available.
+
+## 2026-06-14: Bahrain Plan Launch Requires A Local Gateway
+
+Treat Starter and Growth as Bahrain-live only when their BHD plan catalog is active and at least one local gateway, CrediMax or BENEFIT, is configured with credentials and webhook secret. Stripe can remain an international fallback, but it does not close the Bahrain local launch gate by itself.
+
+## 2026-06-14: Model Settings Are Global Admin Configuration
+
+Store editable model slots in a global `model_settings` table keyed by approved environment-style names such as `LLM_PRIMARY_MODEL` and `IMAGE_MODEL_PRIMARY`. Runtime AI gateway calls resolve the database value first and fall back to environment defaults, so admins can change active models without deploy. Model setting updates require `admin:manage` and write `MODEL_SETTING_UPDATED` audit logs with previous and next values.
+
+## 2026-06-14: PDPL Data Rights Are Workspace-Scoped
+
+Implement Bahrain PDPL export and erasure as workspace-scoped owner/admin actions. Export returns active workspace data plus audit evidence. Erasure soft-deletes workspace-owned records that support `deletedAt`, hard-deletes workspace-owned tables without `deletedAt` such as usage counters and Vault history, clears Instagram credentials, preserves audit logs, and anonymizes the owner user only when no active memberships remain.
+
+## 2026-06-17: Health Checks Fail Fast By Dependency Class
+
+Use separate deep-health timeouts for database, Redis, and HTTP dependencies. Internal dependencies get enough time to avoid false negatives during cold local checks, while OpenSearch/AI HTTP checks fail fast so unavailable optional services do not stall `/v1/health/deep` or readiness performance evidence.
+
+## 2026-06-17: OpenTelemetry Core Is Patched By Workspace Override
+
+Pin `@opentelemetry/core` to `2.8.0` through `pnpm-workspace.yaml` overrides because Sentry 10.57.0 resolves a vulnerable `2.7.1` transitive version and the Sentry/OpenTelemetry peer range accepts the patched 2.x package. Keep the override until Sentry resolves to a patched OpenTelemetry version without pinning.

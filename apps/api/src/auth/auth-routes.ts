@@ -11,7 +11,6 @@ import {
 import { errorEnvelope, ok } from "../http/envelope";
 import {
   AuthConflictError,
-  EmailNotVerifiedError,
   EmailVerificationInvalidError,
   GoogleAccountConflictError,
   GoogleEmailNotVerifiedError,
@@ -63,10 +62,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try {
       return ok(await login(parsed.data));
     } catch (error) {
-      if (error instanceof EmailNotVerifiedError) {
-        return reply.status(403).send(errorEnvelope("EMAIL_NOT_VERIFIED", error.message));
-      }
-
       if (error instanceof MfaSetupRequiredError) {
         return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
       }

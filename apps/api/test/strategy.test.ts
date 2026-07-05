@@ -170,9 +170,123 @@ describe("strategy routes", () => {
       used: 1,
       limit: 100
     });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_TOKENS_IN",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 101
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_TOKENS_OUT",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 202
+    });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({
       title: "90-day strategy: increase wholesale cafe leads"
+    });
+
+    await app.close();
+  });
+
+  it("exports a saved strategy as a workspace-scoped PDF", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Pearl Coffee",
+              industry: "specialty coffee",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/strategy/generate",
+      headers,
+      payload: {
+        objective: "increase wholesale cafe leads",
+        horizonDays: 90
+      }
+    });
+    const strategyId = generated.json().data.id as string;
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/strategy/${strategyId}/pdf`,
+      headers
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.headers["content-disposition"]).toBe('attachment; filename="90-day-strategy-increase-wholesale-cafe-leads.pdf"');
+    expect(response.body.startsWith("%PDF-1.4")).toBe(true);
+    expect(response.body).toContain("MARKOS AI Strategy Export");
+    expect(response.body).toContain("90-day strategy: increase wholesale cafe leads");
+    expect(response.body.trimEnd().endsWith("%%EOF")).toBe(true);
+
+    await app.close();
+  });
+
+  it("does not export a strategy from another workspace", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const strategy = await prisma.strategy.create({
+      data: {
+        workspaceId: owner.workspace.id,
+        title: "Owner-only strategy",
+        horizonDays: 90,
+        content: {
+          summary: "Private strategy",
+          horizonDays: 90,
+          objectives: ["protect workspace data"],
+          pillars: [],
+          weeklyCadence: [],
+          kpis: [],
+          risks: [],
+          nextActions: [],
+          retrievedContext: []
+        }
+      }
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/strategy/${strategy.id}/pdf`,
+      headers: authHeaders(other.tokens.accessToken)
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "STRATEGY_NOT_FOUND"
+      }
     });
 
     await app.close();
@@ -317,8 +431,26 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   });
 
-  return response.json().data;
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
 }
+
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {

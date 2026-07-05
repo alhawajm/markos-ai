@@ -8,12 +8,14 @@ import { runWorkspaceContextScope, setWorkspaceContext } from "./workspace-conte
 
 declare module "fastify" {
   interface FastifyContextConfig {
-    workspaceRequired?: boolean;
     permissions?: Permission[];
+    verifiedUserRequired?: boolean;
+    workspaceRequired?: boolean;
   }
 
   interface FastifyRequest {
     auth?: {
+      isVerified: boolean;
       userId: string;
       workspaceId: string;
       roles: Role[];
@@ -52,13 +54,28 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
           role: true
         }
       });
+      const user = await prisma.user.findUnique({
+        where: {
+          id: principal.userId
+        },
+        select: {
+          deletedAt: true,
+          isVerified: true
+        }
+      });
 
       if (membership === null) {
         await reply.status(403).send(errorEnvelope("WORKSPACE_FORBIDDEN", "User is not a member of this workspace"));
         return;
       }
 
+      if (user === null || user.deletedAt !== null) {
+        await reply.status(401).send(errorEnvelope("USER_NOT_ACTIVE", "User is not active"));
+        return;
+      }
+
       const auth = {
+        isVerified: user.isVerified,
         userId: principal.userId,
         workspaceId: principal.workspaceId,
         roles: [membership.role as Role]
@@ -78,6 +95,11 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
             }
           ])
         );
+        return;
+      }
+
+      if (request.routeOptions.config.verifiedUserRequired === true && !auth.isVerified) {
+        await reply.status(403).send(errorEnvelope("EMAIL_VERIFICATION_REQUIRED", "Email verification is required before this action"));
         return;
       }
     } catch {

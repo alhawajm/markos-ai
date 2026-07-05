@@ -1,341 +1,212 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ComponentType } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
-  CalendarClock,
-  Database,
-  FileText,
-  LayoutDashboard,
-  MessageSquareText,
+  Brain,
+  Calendar,
+  ChevronLeft,
+  Home,
+  Lightbulb,
+  Palette,
   Settings,
-  ShieldCheck,
   Sparkles,
-  Target,
-  UploadCloud,
-  Workflow
+  Zap
 } from "lucide-react";
-import { t } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
-import { ContentPanel } from "./content-panel";
-import { OnboardingPanel } from "./onboarding-panel";
-import { SchedulePanel } from "./schedule-panel";
-import { SettingsPanel } from "./settings-panel";
-import { StrategyPanel } from "./strategy-panel";
-import { VaultPanel } from "./vault-panel";
+import {
+  CampaignBuilderPanel,
+  ContentStudioPanel,
+  DailyBriefingPanel,
+  FinalAnalyticsPanel,
+  FinalDashboard,
+  FinalSettingsPanel,
+  FinalVaultPanel,
+  OpportunitiesPanel
+} from "./final-command-panels";
 
 export type SectionSlug =
-  | "dashboard"
-  | "vault"
-  | "strategy"
-  | "content"
-  | "schedule"
   | "analytics"
-  | "ai"
+  | "briefing"
+  | "campaign-builder"
+  | "content-studio"
+  | "dashboard"
+  | "knowledge"
+  | "opportunities"
   | "settings";
 
+type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+
 const navItems: Array<{
+  icon: Icon;
+  label: string;
+  notify?: boolean;
   slug: SectionSlug;
-  labelKey:
-    | "nav.dashboard"
-    | "nav.vault"
-    | "nav.strategy"
-    | "nav.content"
-    | "nav.schedule"
-    | "nav.analytics"
-    | "nav.ai"
-    | "nav.settings";
 }> = [
-  { slug: "dashboard", labelKey: "nav.dashboard" },
-  { slug: "vault", labelKey: "nav.vault" },
-  { slug: "strategy", labelKey: "nav.strategy" },
-  { slug: "content", labelKey: "nav.content" },
-  { slug: "schedule", labelKey: "nav.schedule" },
-  { slug: "analytics", labelKey: "nav.analytics" },
-  { slug: "ai", labelKey: "nav.ai" },
-  { slug: "settings", labelKey: "nav.settings" }
+  { icon: Home, label: "Command Center", slug: "dashboard" },
+  { icon: Calendar, label: "Daily Briefing", slug: "briefing" },
+  { icon: Lightbulb, label: "Opportunities", slug: "opportunities" },
+  { icon: Zap, label: "Campaign Builder", notify: true, slug: "campaign-builder" },
+  { icon: Palette, label: "Content Studio", notify: true, slug: "content-studio" },
+  { icon: BarChart3, label: "Analytics", slug: "analytics" },
+  { icon: Brain, label: "Knowledge Vault", slug: "knowledge" },
+  { icon: Settings, label: "Settings", slug: "settings" }
 ];
 
-const sectionContent: Record<
-  SectionSlug,
-  {
-    icon: ReactNode;
-    eyebrow: { ar: string; en: string };
-    title: { ar: string; en: string };
-    subtitle: { ar: string; en: string };
-    cards: Array<{
-      icon: ReactNode;
-      title: { ar: string; en: string };
-      body: { ar: string; en: string };
-    }>;
-  }
-> = {
-  dashboard: {
-    icon: <LayoutDashboard size={22} />,
-    eyebrow: { ar: "مرحلة التأسيس", en: "Foundation phase" },
-    title: { ar: "نظام التسويق الذكي", en: "AI Marketing Operating System" },
-    subtitle: {
-      ar: "ابدأ من الأساس: مساحة عمل آمنة، ذاكرة أعمال، وتجربة عربية من الشاشة الأولى.",
-      en: "Foundation first: secure workspace, business memory, and Arabic-ready UX from screen one."
-    },
-    cards: [
-      {
-        icon: <ShieldCheck size={22} />,
-        title: { ar: "عزل مساحات العمل", en: "Workspace Isolation" },
-        body: {
-          ar: "كل بيانات العميل مرتبطة بمساحة عمل واحدة، مع اختبارات تمنع أي تسرب بين العملاء.",
-          en: "Every customer-owned record is workspace-scoped, with tests proving tenant isolation."
-        }
-      },
-      {
-        icon: <Database size={22} />,
-        title: { ar: "الخزنة المعرفية", en: "Knowledge Vault" },
-        body: {
-          ar: "الأساس القادم: تخزين إجابات التهيئة وتحويلها إلى ذاكرة قابلة للاسترجاع.",
-          en: "Next spine: store onboarding answers and make them retrievable business memory."
-        }
-      },
-      {
-        icon: <Sparkles size={22} />,
-        title: { ar: "العربية والإنجليزية", en: "Arabic And English" },
-        body: {
-          ar: "اتجاه RTL ومسارات لغوية منذ أول شاشة، وليس كإضافة لاحقة.",
-          en: "RTL direction and localized routing from the first screen, not as a later patch."
-        }
-      }
-    ]
-  },
-  vault: {
-    icon: <Database size={22} />,
-    eyebrow: { ar: "M1 القادم", en: "Next M1 spine" },
-    title: { ar: "الخزنة المعرفية", en: "Knowledge Vault" },
-    subtitle: {
-      ar: "ستحفظ إجابات التهيئة، الإرشادات، والأداء كذاكرة دائمة لكل مساحة عمل.",
-      en: "Onboarding answers, brand rules, and performance data become durable memory for each workspace."
-    },
-    cards: [
-      {
-        icon: <FileText size={22} />,
-        title: { ar: "أقسام منظمة", en: "Structured Sections" },
-        body: {
-          ar: "الشركة، القصة، المنتجات، الجمهور، المنافسون، الهوية، النبرة، والأهداف.",
-          en: "Company, story, products, audience, competitors, brand, tone, and objectives."
-        }
-      },
-      {
-        icon: <Workflow size={22} />,
-        title: { ar: "RAG قبل الوكلاء", en: "RAG Before Agents" },
-        body: {
-          ar: "كل وكيل يحتاج استرجاع سياق العمل قبل توليد أي استراتيجية أو محتوى.",
-          en: "Every agent needs grounded business context before strategy or content generation."
-        }
-      }
-    ]
-  },
-  strategy: {
-    icon: <Target size={22} />,
-    eyebrow: { ar: "وكيل الاستراتيجية", en: "Strategist Agent" },
-    title: { ar: "الاستراتيجية", en: "Strategy" },
-    subtitle: {
-      ar: "استراتيجية 30/60/90 يوم، ركائز محتوى، وخطة نمو مبنية على الخزنة.",
-      en: "30/60/90-day strategy, content pillars, and growth direction grounded in the Vault."
-    },
-    cards: [
-      {
-        icon: <Sparkles size={22} />,
-        title: { ar: "توليد موجه", en: "Grounded Generation" },
-        body: {
-          ar: "لا استراتيجية عامة؛ كل مخرجات الوكيل يجب أن تستند إلى سياق العميل.",
-          en: "No generic strategy: every output must cite and use workspace business context."
-        }
-      }
-    ]
-  },
-  content: {
-    icon: <FileText size={22} />,
-    eyebrow: { ar: "محرك المحتوى", en: "Content Engine" },
-    title: { ar: "المحتوى", en: "Content" },
-    subtitle: {
-      ar: "تقويم، كابشن، هاشتاقات، كاروسيل، سكربت ريل، ومراجعة قبل الجدولة.",
-      en: "Calendar, captions, hashtags, carousel copy, reel scripts, and approval workflow."
-    },
-    cards: [
-      {
-        icon: <UploadCloud size={22} />,
-        title: { ar: "وسائط وصور AI", en: "Media And AI Images" },
-        body: {
-          ar: "كل توليد صورة أو رفع ملف يجب أن يحترم حدود الخطة والتخزين.",
-          en: "Image generation and uploads must respect plan and storage limits from day one."
-        }
-      }
-    ]
-  },
-  schedule: {
-    icon: <CalendarClock size={22} />,
-    eyebrow: { ar: "أعلى تكامل مخاطرة", en: "Highest-Risk Integration" },
-    title: { ar: "الجدولة والنشر", en: "Scheduling" },
-    subtitle: {
-      ar: "نشر إنستغرام يحتاج حالة دفاعية: إنشاء حاوية، انتظار المعالجة، ثم النشر.",
-      en: "Instagram publishing needs a defensive state machine: container, poll, publish."
-    },
-    cards: [
-      {
-        icon: <ShieldCheck size={22} />,
-        title: { ar: "حدود إنستغرام", en: "Instagram Limits" },
-        body: {
-          ar: "الحد اليومي يجب أن يظهر للمستخدم ولا يتم تجاهله بصمت.",
-          en: "The daily account cap must be visible to users and never silently ignored."
-        }
-      }
-    ]
-  },
-  analytics: {
-    icon: <BarChart3 size={22} />,
-    eyebrow: { ar: "حلقة التعلم", en: "Learning Loop" },
-    title: { ar: "التحليلات", en: "Analytics" },
-    subtitle: {
-      ar: "المقاييس ليست لوحة أرقام فقط؛ يجب أن تعود للخزنة لتحسين المحتوى القادم.",
-      en: "Metrics are not just reporting; they feed the Vault so future content improves."
-    },
-    cards: [
-      {
-        icon: <MessageSquareText size={22} />,
-        title: { ar: "تفسير AI", en: "AI Interpretation" },
-        body: {
-          ar: "المستخدم يحتاج معنى واضحاً: ماذا حدث، لماذا، وماذا يفعل بعدها.",
-          en: "Users need plain meaning: what happened, why it matters, and what to do next."
-        }
-      }
-    ]
-  },
-  ai: {
-    icon: <MessageSquareText size={22} />,
-    eyebrow: { ar: "المستشار الذكي", en: "AI Consultant" },
-    title: { ar: "المستشار الذكي", en: "AI Consultant" },
-    subtitle: {
-      ar: "محادثة وتوصيات مبنية على الخزنة، المحتوى، والتحليلات.",
-      en: "Chat and recommendations grounded in Vault data, content history, and analytics."
-    },
-    cards: [
-      {
-        icon: <Sparkles size={22} />,
-        title: { ar: "مفسر وقابل للتنفيذ", en: "Explainable Actions" },
-        body: {
-          ar: "كل توصية تحتاج سبباً واضحاً وخطوة عملية.",
-          en: "Every recommendation needs a clear reason and a concrete next action."
-        }
-      }
-    ]
-  },
-  settings: {
-    icon: <Settings size={22} />,
-    eyebrow: { ar: "إدارة مساحة العمل", en: "Workspace Operations" },
-    title: { ar: "الإعدادات", en: "Settings" },
-    subtitle: {
-      ar: "الحساب، مساحة العمل، إنستغرام، الفوترة، الفريق، والتنبيهات.",
-      en: "Account, workspace, Instagram connection, billing, team, and notifications."
-    },
-    cards: [
-      {
-        icon: <ShieldCheck size={22} />,
-        title: { ar: "الأمان أولاً", en: "Security First" },
-        body: {
-          ar: "أدوار، صلاحيات، MFA للأدوار الحساسة، وتدقيق للأعمال الإدارية.",
-          en: "Roles, permissions, MFA for sensitive roles, and audit logs for admin actions."
-        }
-      }
-    ]
-  }
-};
+export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
+  const router = useRouter();
+  const [sessionChecked, setSessionChecked] = useState(false);
 
-export function AppShell({ locale, activeSection }: { locale: Locale; activeSection: SectionSlug }) {
-  const content = sectionContent[activeSection];
+  useEffect(() => {
+    const stored = window.localStorage.getItem("markos.session");
+
+    if (!stored) {
+      router.replace(`/${locale}/login`);
+      return;
+    }
+
+    try {
+      if (isValidStoredSession(JSON.parse(stored))) {
+        setSessionChecked(true);
+        return;
+      }
+
+      window.localStorage.removeItem("markos.session");
+      router.replace(`/${locale}/login`);
+    } catch {
+      window.localStorage.removeItem("markos.session");
+      router.replace(`/${locale}/login`);
+    }
+  }, [locale, router]);
+
+  if (!sessionChecked) {
+    return (
+      <main className="lux-page grid min-h-screen place-items-center px-6 text-white">
+        <section className="lux-card max-w-md rounded-[2rem] p-8 text-center">
+          <span className="lux-ai-core mx-auto" />
+          <h1 className="mt-8 text-3xl font-black">Opening MARKOS</h1>
+          <p className="mt-3 text-base leading-relaxed text-[#9AA7BD]">Checking your workspace session before loading the command center.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-canvas text-navy">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[240px_1fr]">
-        <aside className="border-b border-border bg-card px-5 py-5 lg:border-b-0 lg:border-e">
-          <a className="flex items-center gap-3" href={`/${locale}`}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-card bg-accent/10 text-accent">
-              <Sparkles size={22} strokeWidth={1.7} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">{t(locale, "app.name")}</p>
-              <p className="text-xs text-muted">{t(locale, "status.foundation")}</p>
-            </div>
-          </a>
+    <main className="lux-page min-h-screen min-w-0 overflow-x-hidden text-white">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[4.75rem] border-r border-[#81D8D0]/12 bg-[#102027]/72 px-3 py-5 backdrop-blur-3xl lg:flex lg:flex-col lg:items-center xl:w-20 xl:px-4 xl:py-8">
+        <Link
+          aria-label="MARKOS AI Command Center"
+          className="mb-10 grid h-12 w-12 place-items-center rounded-full border-2 border-[#D4AF37] bg-[#0F1419] text-[#81D8D0] shadow-[0_0_28px_rgba(129,216,208,.22)] xl:mb-14 xl:h-14 xl:w-14"
+          href={`/${locale}/app`}
+        >
+          <Sparkles size={27} strokeWidth={1.8} />
+        </Link>
 
-          <nav className="mt-8 grid gap-1" aria-label="Primary">
-            {navItems.map((item) => {
-              const isActive = item.slug === activeSection;
-              const href = item.slug === "dashboard" ? `/${locale}` : `/${locale}/${item.slug}`;
+        <nav aria-label="Primary" className="flex flex-1 flex-col gap-3 xl:gap-5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = item.slug === activeSection;
+            return (
+              <Link
+                aria-current={active ? "page" : undefined}
+                aria-label={item.label}
+                className={
+                  active
+                    ? "group relative grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#81D8D0] to-[#D4AF37] text-[#0F1419] shadow-[0_0_24px_rgba(212,175,55,.28)] xl:h-14 xl:w-14"
+                    : "group relative grid h-12 w-12 place-items-center rounded-full border border-[#81D8D0]/14 bg-[#81D8D0]/5 text-[#8B95A8] transition hover:border-[#81D8D0]/35 hover:text-[#81D8D0] xl:h-14 xl:w-14"
+                }
+                href={localizedHref(locale, item.slug)}
+                key={item.slug}
+              >
+                {active ? <span className="absolute -left-3 h-9 w-1.5 rounded-r-full bg-[#81D8D0] xl:-left-4 xl:h-10" /> : null}
+                {item.notify ? <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#D4AF37] shadow-[0_0_12px_rgba(212,175,55,.55)]" /> : null}
+                <Icon size={24} strokeWidth={active ? 2 : 1.7} />
+                <span className="pointer-events-none absolute left-full z-50 ml-4 w-max max-w-56 translate-x-1 whitespace-nowrap rounded-xl border border-[#81D8D0]/20 bg-[#111920] px-4 py-2 text-sm font-semibold text-white opacity-0 shadow-[0_18px_50px_rgba(0,0,0,.45)] transition group-hover:translate-x-0 group-hover:opacity-100">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
 
-              return (
-                <a
-                  aria-current={isActive ? "page" : undefined}
-                  className={
-                    isActive
-                      ? "rounded-button bg-midnavy px-3 py-2 text-sm text-white transition"
-                      : "rounded-button px-3 py-2 text-sm text-muted transition hover:bg-navy/5 hover:text-navy"
-                  }
-                  href={href}
-                  key={item.slug}
-                >
-                  {t(locale, item.labelKey)}
-                </a>
-              );
-            })}
-          </nav>
-        </aside>
-
-        <section className="px-5 py-6 sm:px-8 lg:px-10">
-          <div className="mx-auto max-w-6xl">
-            <header className="flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-medium text-accent">
-                  {content.icon}
-                  <span>{content.eyebrow[locale]}</span>
-                </div>
-                <h1 className="mt-2 text-3xl font-bold tracking-normal text-navy">{content.title[locale]}</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{content.subtitle[locale]}</p>
-              </div>
-              <div className="flex gap-2">
-                <a className="rounded-button border border-border bg-card px-3 py-2 text-sm" href={localizedHref("ar", activeSection)}>
-                  العربية
-                </a>
-                <a className="rounded-button border border-border bg-card px-3 py-2 text-sm" href={localizedHref("en", activeSection)}>
-                  English
-                </a>
-              </div>
-            </header>
-
-            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {content.cards.map((card) => (
-                <FoundationCard body={card.body[locale]} icon={card.icon} key={card.title.en} title={card.title[locale]} />
-              ))}
-            </div>
-
-            {activeSection === "dashboard" ? <OnboardingPanel locale={locale} /> : null}
-            {activeSection === "vault" ? <VaultPanel locale={locale} /> : null}
-            {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
-            {activeSection === "content" ? <ContentPanel locale={locale} /> : null}
-            {activeSection === "schedule" ? <SchedulePanel locale={locale} /> : null}
-            {activeSection === "settings" ? <SettingsPanel locale={locale} /> : null}
-          </div>
-        </section>
+      <div className="fixed bottom-0 left-0 right-0 z-40 max-w-full overflow-hidden border-t border-[#81D8D0]/12 bg-[#102027]/90 px-2 py-2 backdrop-blur-3xl lg:hidden">
+        <nav className="grid grid-cols-5 gap-1" aria-label="Mobile primary">
+          {navItems.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const active = item.slug === activeSection;
+            return (
+              <Link
+                aria-current={active ? "page" : undefined}
+                className={active ? "grid min-h-11 place-items-center rounded-xl bg-[#D4AF37] text-[#0F1419]" : "grid min-h-11 place-items-center rounded-xl border border-[#81D8D0]/12 text-[#8B95A8]"}
+                href={localizedHref(locale, item.slug)}
+                key={item.slug}
+              >
+                <Icon size={19} />
+              </Link>
+            );
+          })}
+        </nav>
       </div>
+
+      <section className="min-h-screen w-full max-w-full min-w-0 overflow-x-hidden px-4 py-5 pb-20 lg:ml-[4.75rem] lg:w-[calc(100%-4.75rem)] lg:px-5 lg:py-5 lg:pb-9 xl:ml-20 xl:w-[calc(100%-5rem)] xl:px-7 2xl:px-9">
+        <div className="mx-auto w-full max-w-full min-w-0 xl:max-w-[1280px] 2xl:max-w-[1360px]">
+          <LocaleSwitch activeSection={activeSection} locale={locale} />
+          {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
+          {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
+          {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
+          {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
+          {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
+          {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
+          {activeSection === "knowledge" ? <FinalVaultPanel /> : null}
+          {activeSection === "settings" ? <FinalSettingsPanel /> : null}
+        </div>
+      </section>
     </main>
   );
 }
 
-function localizedHref(locale: Locale, section: SectionSlug): string {
-  return section === "dashboard" ? `/${locale}` : `/${locale}/${section}`;
+function LocaleSwitch({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
+  const otherLocale = locale === "en" ? "ar" : "en";
+  const arabicLabel = "\u0627\u0644\u0639\u0631\u0628\u064a\u0629";
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-start gap-4 sm:justify-between">
+      <Link className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#81D8D0]/14 bg-[#81D8D0]/5 px-4 py-2 text-sm font-bold text-[#9AA7BD] transition hover:text-white" href={localizedHref(locale, "dashboard")}>
+        <ChevronLeft size={16} />
+        MARKOS AI
+      </Link>
+      <Link className="shrink-0 rounded-full border border-[#81D8D0]/18 bg-[#81D8D0]/7 px-5 py-2 text-sm font-bold text-[#D6DEEA] transition hover:border-[#81D8D0]/38 hover:text-white" href={localizedHref(otherLocale, activeSection)}>
+        {otherLocale === "ar" ? arabicLabel : "English"}
+      </Link>
+    </div>
+  );
 }
 
-function FoundationCard({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+function localizedHref(locale: Locale, section: SectionSlug): string {
+  return section === "dashboard" ? `/${locale}/app` : `/${locale}/app/${section}`;
+}
+
+function isValidStoredSession(value: unknown): value is {
+  tokens: { accessToken: string };
+  user: { id: string };
+  workspace: { id: string };
+} {
+  if (typeof value !== "object" || value === null) return false;
+
+  const session = value as {
+    tokens?: { accessToken?: unknown };
+    user?: { id?: unknown };
+    workspace?: { id?: unknown };
+  };
+
   return (
-    <article className="rounded-card border border-border bg-card p-5 shadow-card">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-card bg-accent/10 text-accent">{icon}</div>
-      <h2 className="text-base font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
-    </article>
+    typeof session.tokens?.accessToken === "string" &&
+    session.tokens.accessToken.length > 0 &&
+    typeof session.user?.id === "string" &&
+    session.user.id.length > 0 &&
+    typeof session.workspace?.id === "string" &&
+    session.workspace.id.length > 0
   );
 }

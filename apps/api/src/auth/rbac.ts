@@ -3,10 +3,13 @@ import type { Permission, Role } from "@markos/shared-types";
 const readPermissions = [
   "workspace:read",
   "vault:read",
+  "billing:read",
   "onboarding:read",
   "strategy:read",
   "content:read",
-  "media:read"
+  "media:read",
+  "analytics:read",
+  "prompt:read"
 ] as const satisfies Permission[];
 
 const editPermissions = [
@@ -16,14 +19,32 @@ const editPermissions = [
   "strategy:generate",
   "content:write",
   "content:schedule",
+  "agent:run",
+  "billing:manage",
   "media:write",
-  "publishing:run"
+  "analytics:sync",
+  "publishing:run",
+  "prompt:manage"
 ] as const satisfies Permission[];
 
 const adminPermissions = [
   ...editPermissions,
   "workspace:audit:read",
+  "workspace:data:export",
+  "workspace:data:erase",
   "instagram:manage"
+] as const satisfies Permission[];
+
+const platformReadPermissions = [
+  ...readPermissions,
+  "workspace:audit:read",
+  "admin:read"
+] as const satisfies Permission[];
+
+const platformManagePermissions = [
+  ...adminPermissions,
+  "admin:read",
+  "admin:manage"
 ] as const satisfies Permission[];
 
 export const rolePermissions: Record<Role, readonly Permission[]> = {
@@ -31,11 +52,11 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   WORKSPACE_ADMIN: adminPermissions,
   EDITOR: editPermissions,
   VIEWER: readPermissions,
-  SUPER_ADMIN: adminPermissions,
-  PRODUCT_ADMIN: adminPermissions,
-  SUPPORT_ADMIN: [...readPermissions, "workspace:audit:read"],
-  FINANCE_ADMIN: [...readPermissions, "workspace:audit:read"],
-  READONLY_ADMIN: [...readPermissions, "workspace:audit:read"]
+  SUPER_ADMIN: platformManagePermissions,
+  PRODUCT_ADMIN: platformManagePermissions,
+  SUPPORT_ADMIN: platformReadPermissions,
+  FINANCE_ADMIN: [...platformReadPermissions, "billing:manage"],
+  READONLY_ADMIN: platformReadPermissions
 };
 
 export function hasPermission(roles: readonly Role[], permission: Permission): boolean {
