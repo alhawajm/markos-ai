@@ -169,17 +169,26 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
 }
 
 function LocaleSwitch({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
-  const otherLocale = locale === "en" ? "ar" : "en";
   const arabicLabel = "\u0627\u0644\u0639\u0631\u0628\u064a\u0629";
+  const languageLinkClass = (linkLocale: Locale) =>
+    linkLocale === locale
+      ? "shrink-0 rounded-full border border-[#81D8D0]/42 bg-[#81D8D0]/16 px-5 py-2 text-sm font-bold text-white shadow-[0_0_22px_rgba(129,216,208,.14)]"
+      : "shrink-0 rounded-full border border-[#81D8D0]/18 bg-[#81D8D0]/7 px-5 py-2 text-sm font-bold text-[#D6DEEA] transition hover:border-[#81D8D0]/38 hover:text-white";
+
   return (
     <div className="mb-6 flex flex-wrap items-center justify-start gap-4 sm:justify-between">
       <Link className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#81D8D0]/14 bg-[#81D8D0]/5 px-4 py-2 text-sm font-bold text-[#9AA7BD] transition hover:text-white" href={localizedHref(locale, "dashboard")}>
         <ChevronLeft size={16} />
         MARKOS AI
       </Link>
-      <Link className="shrink-0 rounded-full border border-[#81D8D0]/18 bg-[#81D8D0]/7 px-5 py-2 text-sm font-bold text-[#D6DEEA] transition hover:border-[#81D8D0]/38 hover:text-white" href={localizedHref(otherLocale, activeSection)}>
-        {otherLocale === "ar" ? arabicLabel : "English"}
-      </Link>
+      <div className="flex items-center gap-2" aria-label="Language switcher">
+        <Link aria-current={locale === "ar" ? "page" : undefined} className={languageLinkClass("ar")} href={localizedHref("ar", activeSection)}>
+          {arabicLabel}
+        </Link>
+        <Link aria-current={locale === "en" ? "page" : undefined} className={languageLinkClass("en")} href={localizedHref("en", activeSection)}>
+          English
+        </Link>
+      </div>
     </div>
   );
 }
