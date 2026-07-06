@@ -1,4 +1,5 @@
 import type { StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import { resolveModelSetting } from "../admin/model-settings-service";
 import { env } from "../config/env";
 
 interface StrategyGenerateResponse {
@@ -14,7 +15,9 @@ export async function generateStrategyPlan(input: {
   objective?: string;
   horizonDays: number;
   context: VaultRagChunk[];
+  promptTemplate?: { body: string; version: string };
 }): Promise<StrategyGenerateResponse> {
+  const model = await resolveModelSetting("LLM_PRIMARY_MODEL");
   const body = {
     workspace_id: input.workspaceId,
     horizon_days: input.horizonDays,
@@ -24,7 +27,8 @@ export async function generateStrategyPlan(input: {
       value: chunk.value,
       score: chunk.score
     })),
-    model: env.LLM_PRIMARY_MODEL
+    ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
+    model
   };
 
   const requestBody = input.objective === undefined ? body : { ...body, objective: input.objective };

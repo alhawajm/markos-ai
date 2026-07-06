@@ -20,6 +20,12 @@ export type Role = (typeof roles)[number];
 export const permissions = [
   "workspace:read",
   "workspace:audit:read",
+  "workspace:data:export",
+  "workspace:data:erase",
+  "admin:read",
+  "admin:manage",
+  "billing:read",
+  "billing:manage",
   "instagram:manage",
   "vault:read",
   "vault:write",
@@ -30,11 +36,19 @@ export const permissions = [
   "content:read",
   "content:write",
   "content:schedule",
+  "agent:run",
   "media:read",
   "media:write",
-  "publishing:run"
+  "analytics:read",
+  "analytics:sync",
+  "publishing:run",
+  "prompt:read",
+  "prompt:manage"
 ] as const;
 export type Permission = (typeof permissions)[number];
+
+export const paymentGatewayCodes = ["CREDIMAX", "BENEFIT", "STRIPE"] as const;
+export type PaymentGatewayCode = (typeof paymentGatewayCodes)[number];
 
 export const vaultSections = [
   "COMPANY",
@@ -63,6 +77,9 @@ export type ContentStatus = (typeof contentStatuses)[number];
 
 export const mediaTypes = ["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"] as const;
 export type MediaType = (typeof mediaTypes)[number];
+
+export const instagramMetricTypes = ["ACCOUNT", "AUDIENCE", "POST", "REEL", "STORY"] as const;
+export type InstagramMetricType = (typeof instagramMetricTypes)[number];
 
 export interface ApiEnvelope<TData> {
   data: TData;
@@ -172,6 +189,36 @@ export interface VaultRagChunk {
   score: number;
 }
 
+export const agentNames = [
+  "MARKETING_STRATEGIST",
+  "CONTENT_PLANNER",
+  "CONTENT_CREATOR",
+  "REEL_SCRIPT",
+  "IMAGE_PROMPT",
+  "ANALYTICS_CONSULTANT",
+  "RECOMMENDATION_ENGINE",
+  "BUSINESS_GROWTH_ADVISOR"
+] as const;
+export type AgentName = (typeof agentNames)[number];
+
+export interface AgentRunRecord {
+  id: string;
+  workspaceId: string;
+  agent: AgentName;
+  promptVersion: string;
+  request: {
+    task: string;
+    locale: Locale;
+    retrievedContext: VaultRagChunk[];
+    inputs?: Record<string, unknown>;
+  };
+  output: Record<string, unknown>;
+  tokensIn: number;
+  tokensOut: number;
+  model: string;
+  createdAt: string;
+}
+
 export interface OnboardingModuleState {
   module: string;
   completed: boolean;
@@ -232,6 +279,13 @@ export interface ContentDraft {
   reelScript?: Record<string, unknown>;
 }
 
+export interface ContentToneLock {
+  requiredLanguages: ["ar", "en"];
+  toneWords: string[];
+  voiceNotes?: string;
+  brandHints: Record<string, unknown>;
+}
+
 export interface ContentRecord {
   id: string;
   workspaceId: string;
@@ -270,6 +324,33 @@ export interface MediaAssetRecord {
   updatedAt: string;
 }
 
+export interface AiImageGenerationResult {
+  contentItem: ContentRecord;
+  mediaAsset: MediaAssetRecord;
+  model: string;
+  prompt: string;
+  promptVersion: string;
+}
+
+export interface PromptTemplateRecord {
+  id: string;
+  workspaceId: string;
+  agent: string;
+  version: string;
+  body: string;
+  variantOf?: string;
+  trafficPct: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptVariantSelection {
+  selected?: PromptTemplateRecord;
+  candidates: PromptTemplateRecord[];
+  seed: string;
+}
+
 export interface InstagramConnection {
   connected: boolean;
   accountId?: string;
@@ -299,11 +380,325 @@ export interface AuditLogRecord {
   createdAt: string;
 }
 
+export interface WorkspaceDataExport {
+  exportedAt: string;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    ownerUserId: string;
+    onboardingStatus: string;
+    onboardingScore: number;
+    vatPricingMode: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  owner: {
+    id: string;
+    email: string;
+    fullName: string;
+    locale: Locale;
+    isVerified: boolean;
+    planStatus: string;
+    trialEndsAt?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  records: Record<string, unknown[]>;
+}
+
+export interface WorkspaceDataErasureResult {
+  erasedAt: string;
+  ownerAnonymized: boolean;
+  userId: string;
+  workspaceId: string;
+  counts: Record<string, number>;
+}
+
+export interface InstagramAnalyticsRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId?: string;
+  metricType: InstagramMetricType;
+  dataDate: string;
+  metrics: Record<string, unknown>;
+  syncedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsSummary {
+  days: number;
+  byMetricType: Array<{
+    metricType: InstagramMetricType;
+    totals: AnalyticsMetricTotals;
+  }>;
+  daily: Array<{
+    dataDate: string;
+    totals: AnalyticsMetricTotals;
+  }>;
+  from: string;
+  to: string;
+  latestSyncedAt?: string;
+  topContent: Array<{
+    contentItemId: string;
+    contentType: ContentType;
+    caption?: string;
+    dataDate: string;
+    engagement: number;
+    metrics: AnalyticsMetricTotals;
+  }>;
+  totals: AnalyticsMetricTotals;
+  records: InstagramAnalyticsRecord[];
+}
+
+export interface AnalyticsMetricTotals {
+  comments: number;
+  engagement: number;
+  followers: number;
+  impressions: number;
+  likes: number;
+  reach: number;
+  saves: number;
+  shares: number;
+  views: number;
+}
+
+export interface AnalyticsSyncResult {
+  created: number;
+  from: string;
+  learning?: AnalyticsLearningResult;
+  mode: "dry_run" | "live";
+  records: InstagramAnalyticsRecord[];
+  to: string;
+  workspaceId: string;
+}
+
+export interface AnalyticsLearningResult {
+  entry: KnowledgeVaultEntry;
+  key: string;
+  observations: string[];
+  recordCount: number;
+  topContentCount: number;
+  workspaceId: string;
+}
+
+export interface AnalyticsDigestResult {
+  days: number;
+  generatedAt: string;
+  locale: Locale;
+  run: AgentRunRecord;
+}
+
+export interface AnalyticsChatResult {
+  days: number;
+  locale: Locale;
+  question: string;
+  run: AgentRunRecord;
+}
+
+export interface AnalyticsEmailDeliveryResult {
+  attachmentBytes: number;
+  delivered: boolean;
+  filename: string;
+  messageId?: string;
+  mode: "dry_run";
+  month: string;
+  recipients: string[];
+  skippedReason?: string;
+  workspaceId: string;
+}
+
+export interface AnalyticsEmailDeliveryForAllWorkspacesResult {
+  attempted: number;
+  delivered: number;
+  results: AnalyticsEmailDeliveryResult[];
+  skipped: number;
+}
+
+export interface AnalyticsLiveReadiness {
+  connection: InstagramConnection;
+  mode: "dry_run" | "live";
+  ready: boolean;
+  reasons: string[];
+  requiredEnv: string[];
+  requiredScopes: string[];
+}
+
+export interface BillingVatBreakdown {
+  currency: "BHD";
+  grossMinor: number;
+  netMinor: number;
+  vatMinor: number;
+  vatPricingMode: "EXCLUSIVE" | "INCLUSIVE";
+  vatRateBps: number;
+}
+
+export interface BillingPlanCatalogItem {
+  active: boolean;
+  code: PlanCode;
+  currency: "BHD";
+  id: string;
+  limits: Record<string, unknown>;
+  name: string;
+  priceMinor: number;
+}
+
+export interface BillingInvoiceRecord extends BillingVatBreakdown {
+  id: string;
+  issuedAt?: string;
+  paidAt?: string;
+  status: "DRAFT" | "PAID" | "FAILED" | "VOID";
+  workspaceId: string;
+}
+
+export interface BillingVatComplianceCheck {
+  code:
+    | "BHD_CURRENCY"
+    | "INTEGER_MINOR_UNITS"
+    | "NON_NEGATIVE_AMOUNTS"
+    | "VAT_RATE"
+    | "VAT_BREAKDOWN"
+    | "GROSS_TOTAL"
+    | "ISSUED_AT"
+    | "PAYMENT_RECONCILIATION";
+  details: string;
+  passed: boolean;
+}
+
+export interface BillingVatComplianceReport {
+  checks: BillingVatComplianceCheck[];
+  compliant: boolean;
+  generatedAt: string;
+  invoice: BillingInvoiceRecord;
+  workspaceId: string;
+}
+
+export interface BillingPaymentRecord {
+  amountMinor: number;
+  currency: "BHD";
+  gateway: PaymentGatewayCode;
+  gatewayRef?: string;
+  id: string;
+  invoiceId?: string;
+  status: "INITIATED" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "REFUNDED";
+  workspaceId: string;
+}
+
+export interface BillingSubscriptionRecord {
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string;
+  currentPeriodStart: string;
+  gateway: PaymentGatewayCode | string;
+  id: string;
+  planCode: PlanCode;
+  status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELLED";
+}
+
+export interface BillingCheckoutResult {
+  checkoutMode: "dry_run";
+  gateway: PaymentGatewayCode;
+  invoice: BillingInvoiceRecord;
+  payment: BillingPaymentRecord;
+  plan: BillingPlanCatalogItem;
+  redirectUrl: string;
+  vat: BillingVatBreakdown;
+}
+
+export interface BillingProrationBreakdown {
+  creditMinor: number;
+  currentPlanCode: PlanCode;
+  currentPlanPriceMinor: number;
+  remainingDays: number;
+  remainingPeriodRatioBps: number;
+  targetPlanCode: PlanCode;
+  targetPlanPriceMinor: number;
+  totalPeriodDays: number;
+  upgradeNetMinor: number;
+}
+
+export interface BillingUpgradeResult extends BillingCheckoutResult {
+  proration: BillingProrationBreakdown;
+}
+
+export interface BillingPaymentCaptureResult {
+  invoice: BillingInvoiceRecord;
+  payment: BillingPaymentRecord;
+  subscription: BillingSubscriptionRecord;
+  workspaceId: string;
+}
+
+export interface BillingSummary {
+  invoices: BillingInvoiceRecord[];
+  payments: BillingPaymentRecord[];
+  plans: BillingPlanCatalogItem[];
+  subscription?: BillingSubscriptionRecord;
+  workspaceId: string;
+}
+
+export interface AdminBillingOperations {
+  invoices: BillingInvoiceRecord[];
+  payments: BillingPaymentRecord[];
+  subscriptions: BillingSubscriptionRecord[];
+}
+
+export interface AdminGatewayReadiness {
+  callbackConfigured: boolean;
+  code: PaymentGatewayCode;
+  credentialKeys: string[];
+  dryRun: boolean;
+  ready: boolean;
+  reasons: string[];
+}
+
+export interface AdminBahrainLaunchPlanReadiness {
+  checkoutReady: boolean;
+  code: Extract<PlanCode, "STARTER" | "GROWTH">;
+  currency: "BHD";
+  grossMinor: number;
+  limitsReady: boolean;
+  netMinor: number;
+  planActive: boolean;
+  priceMinor: number;
+  reasons: string[];
+  vatMinor: number;
+  vatRateBps: number;
+}
+
+export interface AdminBahrainLaunchReadiness {
+  gatewayReady: boolean;
+  gateways: AdminGatewayReadiness[];
+  liveReady: boolean;
+  planCatalogReady: boolean;
+  plans: AdminBahrainLaunchPlanReadiness[];
+  reasons: string[];
+  requiredGateways: Extract<PaymentGatewayCode, "CREDIMAX" | "BENEFIT">[];
+}
+
+export interface AdminModelConfiguration {
+  editable: boolean;
+  models: Array<{
+    key: string;
+    source: "database" | "environment";
+    updatedAt?: string;
+    value?: string;
+  }>;
+  source: "database" | "environment" | "mixed";
+}
+
 export interface PublishReadiness {
   ready: boolean;
   reasons: string[];
   connection: InstagramConnection;
   contentItem?: ContentRecord;
+}
+
+export interface PublishingLiveReadiness {
+  mode: "dry_run" | "live";
+  ready: boolean;
+  reasons: string[];
+  connection: InstagramConnection;
+  requiredEnv: string[];
 }
 
 export interface InstagramPublishPayload {

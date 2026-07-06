@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { generateContentSchema, scheduleContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
+import {
+  generateContentForSlotSchema,
+  generateContentSchema,
+  scheduleContentSchema,
+  updateContentSchema,
+  updateContentStatusSchema
+} from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -9,6 +15,7 @@ import {
   ContentItemNotFoundError,
   ContentScheduleError,
   ContentStatusTransitionError,
+  generateWorkspaceContentForSlot,
   generateWorkspaceContent,
   listContentItems,
   scheduleContentItem,
@@ -37,6 +44,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     {
       config: {
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["content:write"]
       }
     },
@@ -54,6 +62,48 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       } catch (error) {
         if (error instanceof ContentContextMissingError) {
           return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof UsageQuotaExceededError) {
+          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/content/generate-for-slot",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write", "content:schedule"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = generateContentForSlotSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid slot content generation request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await generateWorkspaceContentForSlot(workspaceId, parsed.data));
+      } catch (error) {
+        if (error instanceof ContentContextMissingError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof ContentScheduleError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_SCHEDULE_INVALID", error.message));
         }
 
         if (error instanceof UsageQuotaExceededError) {

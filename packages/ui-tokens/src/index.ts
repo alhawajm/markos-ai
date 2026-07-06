@@ -32,7 +32,7 @@ export const radii = {
 
 export const typography = {
   fontFamily: "Inter",
-  displayFamily: "Space Grotesk",
+  displayFamily: "Inter",
   sizes: {
     caption: 12,
     body: 14,

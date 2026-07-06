@@ -76,6 +76,12 @@ def test_content_generation_contract() -> None:
                     "score": 0.82,
                 }
             ],
+            "tone_lock": {
+                "required_languages": ["ar", "en"],
+                "tone_words": ["warm", "clear", "confident"],
+                "voice_notes": "Helpful, bilingual, and direct.",
+                "brand_hints": {"identity": {"colors": ["#123456"]}},
+            },
             "model": "test-content-model",
         },
     )
@@ -88,4 +94,74 @@ def test_content_generation_contract() -> None:
     assert body["tokens_out"] > 0
     assert len(body["drafts"]) == 2
     assert body["drafts"][0]["contentType"] == "CAROUSEL"
+    assert "warm, clear, confident" in body["drafts"][0]["captionEn"]
+    assert body["drafts"][0]["captionAr"]
     assert body["drafts"][0]["carousel"]["slides"]
+
+
+def test_image_generation_contract() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/images/generate",
+        json={
+            "workspace_id": "workspace-1",
+            "prompt": "Brand-aligned visual for Bahrain coffee leads",
+            "aspect_ratio": "4:5",
+            "model": "test-image-model",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model"] == "test-image-model"
+    assert body["prompt_version"] == "image.v1.local"
+    assert body["mime_type"] == "image/svg+xml"
+    assert body["filename"].endswith(".svg")
+    assert body["width"] == 1080
+    assert body["height"] == 1350
+    assert body["tokens_in"] > 0
+    assert body["tokens_out"] > 0
+    assert body["base64_data"]
+
+
+def test_all_agent_run_contracts_are_grounded() -> None:
+    client = TestClient(app)
+    agents = [
+        "MARKETING_STRATEGIST",
+        "CONTENT_PLANNER",
+        "CONTENT_CREATOR",
+        "REEL_SCRIPT",
+        "IMAGE_PROMPT",
+        "ANALYTICS_CONSULTANT",
+        "RECOMMENDATION_ENGINE",
+        "BUSINESS_GROWTH_ADVISOR",
+    ]
+
+    for agent in agents:
+        response = client.post(
+            "/ai/agents/run",
+            json={
+                "workspace_id": "workspace-1",
+                "agent": agent,
+                "task": "increase wholesale coffee leads",
+                "locale": "en",
+                "context": [
+                    {
+                        "section": "COMPANY",
+                        "key": "profile",
+                        "value": {"name": "Pearl Coffee", "location": "Bahrain"},
+                        "score": 0.82,
+                    }
+                ],
+                "model": "test-agent-model",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["model"] == "test-agent-model"
+        assert body["prompt_version"] == f"{agent.lower()}.v1.local"
+        assert body["tokens_in"] > 0
+        assert body["tokens_out"] > 0
+        assert body["output"]["agent"] == agent
+        assert "COMPANY/profile" in body["output"]["grounding"]

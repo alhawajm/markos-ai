@@ -1,11 +1,187 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { MetaGraphPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { publishContentItem } from "../src/publishing/publishing-service";
 
 describe("publishing routes", () => {
+  it("reports live publishing readiness blockers before Meta credentials are configured", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/publishing/live-readiness",
+      headers
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        mode: "dry_run",
+        ready: false,
+        reasons: expect.arrayContaining([
+          "INSTAGRAM_PUBLISH_MODE_NOT_LIVE",
+          "MISSING_META_APP_ID",
+          "MISSING_META_APP_SECRET",
+          "MISSING_META_REDIRECT_URI",
+          "INSTAGRAM_NOT_CONNECTED"
+        ]),
+        requiredEnv: ["INSTAGRAM_PUBLISH_MODE", "META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"]
+      }
+    });
+
+    await app.close();
+  });
+
+  it("reports live publishing ready when live mode, Meta credentials, and Instagram connection are configured", async () => {
+    const previousMode = env.INSTAGRAM_PUBLISH_MODE;
+    const previousProcessEnv = {
+      INSTAGRAM_PUBLISH_MODE: process.env.INSTAGRAM_PUBLISH_MODE,
+      META_APP_ID: process.env.META_APP_ID,
+      META_APP_SECRET: process.env.META_APP_SECRET,
+      META_REDIRECT_URI: process.env.META_REDIRECT_URI
+    };
+    env.INSTAGRAM_PUBLISH_MODE = "live";
+    process.env.INSTAGRAM_PUBLISH_MODE = "live";
+    process.env.META_APP_ID = "123456789";
+    process.env.META_APP_SECRET = "test-secret";
+    process.env.META_REDIRECT_URI = "https://app.example.com/api/meta/callback";
+
+    const app = await buildApp();
+
+    try {
+      const session = await registerTestUser(app);
+      const headers = authHeaders(session.tokens.accessToken);
+      await connectInstagram(app, headers);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/publishing/live-readiness",
+        headers
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        data: {
+          connection: {
+            accountId: "17841400000000000",
+            connected: true
+          },
+          mode: "live",
+          ready: true,
+          reasons: []
+        }
+      });
+    } finally {
+      await app.close();
+      env.INSTAGRAM_PUBLISH_MODE = previousMode;
+      restoreProcessEnv(previousProcessEnv);
+    }
+  });
+
+  it("lists scheduled and failed content in the publishing queue", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const scheduled = await createPublishableFutureContent(session.workspace.id);
+    const failed = await createPublishableContent(session.workspace.id, new Date(Date.now() - 60 * 1000));
+    await prisma.contentItem.update({
+      data: {
+        failureReason: "Meta rejected the media container",
+        status: "FAILED"
+      },
+      where: {
+        id: failed.content.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/publishing/queue",
+      headers
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: scheduled.content.id,
+          status: "SCHEDULED"
+        }),
+        expect.objectContaining({
+          failureReason: "Meta rejected the media container",
+          id: failed.content.id,
+          status: "FAILED"
+        })
+      ])
+    );
+
+    await app.close();
+  });
+
+  it("reschedules a failed publishing item and clears the failure reason", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const failed = await createPublishableContent(session.workspace.id, new Date(Date.now() - 60 * 1000));
+    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    await prisma.contentItem.update({
+      data: {
+        failureReason: "Meta rejected the media container",
+        status: "FAILED"
+      },
+      where: {
+        id: failed.content.id
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/publishing/content/${failed.content.id}/reschedule`,
+      headers,
+      payload: {
+        scheduledAt
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: failed.content.id,
+        scheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+    expect(response.json().data.failureReason).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("rejects publishing reschedule for non-failed content", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const scheduled = await createPublishableFutureContent(session.workspace.id);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/publishing/content/${scheduled.content.id}/reschedule`,
+      headers,
+      payload: {
+        scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("PUBLISH_RESCHEDULE_INVALID");
+
+    await app.close();
+  });
+
   it("blocks dry-run publishing when prerequisites are missing", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -438,8 +614,26 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   });
 
-  return response.json().data;
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
 }
+
 
 async function connectInstagram(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   await app.inject({
@@ -503,4 +697,14 @@ function monthStart(date = new Date()): Date {
 
 function nextMonthStart(date = new Date()): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+}
+
+function restoreProcessEnv(values: Record<string, string | undefined>): void {
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
 }

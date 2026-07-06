@@ -110,6 +110,31 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.ai-tags }}
 
+      - name: Write image evidence
+        shell: bash
+        run: |
+          mkdir -p evidence/m6/"$(date -u +%F)"/staging
+          cat > evidence/m6/"$(date -u +%F)"/staging/image-publish-report.json <<EOF
+          {
+            "gate": "staging",
+            "event": "image-publish",
+            "repository": "${GITHUB_REPOSITORY}",
+            "releaseSha": "${GITHUB_SHA}",
+            "webImage": "${{ steps.images.outputs.web-image }}",
+            "apiImage": "${{ steps.images.outputs.api-image }}",
+            "workerImage": "${{ steps.images.outputs.worker-image }}",
+            "aiImage": "${{ steps.images.outputs.ai-image }}",
+            "publishedAt": "$(date -u +%FT%TZ)"
+          }
+          EOF
+
+      - name: Upload image evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-staging-image-evidence-${{ github.sha }}
+          path: evidence/m6/*/staging/image-publish-report.json
+          if-no-files-found: error
+
   deploy-ecs:
     name: Deploy ECS Staging
     needs: publish-images
@@ -149,3 +174,67 @@ jobs:
           update_service "$API_SERVICE"
           update_service "$WORKER_SERVICE"
           update_service "$AI_SERVICE"
+
+          mkdir -p evidence/m6/"$(date -u +%F)"/staging
+          {
+            echo "{"
+            echo '  "gate": "staging",'
+            echo '  "event": "ecs-rollout",'
+            echo "  \"releaseSha\": \"${GITHUB_SHA}\","
+            echo "  \"cluster\": \"${CLUSTER}\","
+            echo '  "services": ['
+            first=1
+            for service in "$WEB_SERVICE" "$API_SERVICE" "$WORKER_SERVICE" "$AI_SERVICE"; do
+              if [ -n "$service" ]; then
+                if [ "$first" -eq 0 ]; then
+                  echo ","
+                fi
+                printf '    "%s"' "$service"
+                first=0
+              fi
+            done
+            echo
+            echo "  ],"
+            echo "  \"rolledAt\": \"$(date -u +%FT%TZ)\""
+            echo "}"
+          } > evidence/m6/"$(date -u +%F)"/staging/ecs-rollout-report.json
+
+      - name: Upload ECS rollout evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-staging-ecs-rollout-evidence-${{ github.sha }}
+          path: evidence/m6/*/staging/ecs-rollout-report.json
+          if-no-files-found: error
+
+  staging-smoke:
+    name: Staging Smoke Evidence
+    needs:
+      - publish-images
+      - deploy-ecs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.publish-images.result == 'success' && (needs.deploy-ecs.result == 'success' || needs.deploy-ecs.result == 'skipped') && vars.STAGING_API_BASE_URL != '' && vars.STAGING_WEB_BASE_URL != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run staging smoke
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.STAGING_WEB_BASE_URL }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: node scripts/staging-smoke.mjs
+
+      - name: Upload staging smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m6-staging-smoke-evidence-${{ github.sha }}
+          path: evidence/m6/*/staging/staging-smoke-report.json
+          if-no-files-found: error

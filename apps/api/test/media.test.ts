@@ -1,7 +1,27 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+
+vi.mock("../src/ai/image-client", () => ({
+  generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
+    const bytes = Buffer.from(`<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`);
+
+    return {
+      base64_data: bytes.toString("base64"),
+      filename: "generated-test.svg",
+      height: 1350,
+      mime_type: "image/svg+xml",
+      model: "test-image-model",
+      prompt: input.prompt,
+      prompt_version: "image.v1.test",
+      size_bytes: bytes.byteLength,
+      tokens_in: 31,
+      tokens_out: 7,
+      width: 1080
+    };
+  }
+}));
 
 describe("media routes", () => {
   it("registers public media and attaches it to content", async () => {
@@ -110,6 +130,120 @@ describe("media routes", () => {
     expect(served.statusCode).toBe(200);
     expect(served.headers["content-type"]).toContain("image/jpeg");
     expect(served.body).toBe("markos media upload");
+
+    await app.close();
+  });
+
+  it("generates an AI image for content, attaches it, and meters usage", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const periodStart = monthStart();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        prompt: "Premium Bahrain coffee product photo"
+      }
+    });
+    const body = response.json().data;
+    const assetId = body.mediaAsset.id as string;
+    const served = await app.inject({
+      method: "GET",
+      url: new URL(body.mediaAsset.publicUrl as string).pathname
+    });
+    const interaction = await prisma.aiInteraction.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        agent: "IMAGE"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(body).toMatchObject({
+      contentItem: {
+        id: content.id,
+        mediaIds: [assetId]
+      },
+      mediaAsset: {
+        id: assetId,
+        type: "AI_GENERATED",
+        filename: "generated-test.svg",
+        mimeType: "image/svg+xml",
+        width: 1080,
+        height: 1350
+      },
+      model: "test-image-model",
+      prompt: "Premium Bahrain coffee product photo",
+      promptVersion: "image.v1.test"
+    });
+    expect(served.statusCode).toBe(200);
+    expect(served.body).toContain("Premium Bahrain coffee product photo");
+    expect(interaction).toMatchObject({
+      promptVersion: "image.v1.test",
+      tokensIn: 31,
+      tokensOut: 7,
+      costMinor: 0,
+      currency: "BHD",
+      model: "test-image-model"
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_IMAGE",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 1,
+      limit: 20
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_TOKENS_IN",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 31
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_TOKENS_OUT",
+            periodStart
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 7
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "STORAGE_BYTES",
+            periodStart: storagePeriodStart()
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: body.mediaAsset.sizeBytes
+    });
 
     await app.close();
   });
@@ -321,8 +455,26 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   });
 
-  return response.json().data;
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
 }
+
 
 async function createDraftContent(workspaceId: string) {
   return prisma.contentItem.create({

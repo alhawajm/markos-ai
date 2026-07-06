@@ -1,8 +1,10 @@
 # AGENTS.md
 
-This repo is built from one authoritative spec:
+This repo is built from one authoritative spec and one behavioral companion:
 
 `docs/source/MARKOS_BUILD_SPEC. 2.pdf` is the complete source of truth. Read it before changing product behavior.
+
+`docs/source/MARKOS_EXPERIENCE_FLOWS.md` explains the end-to-end user journey, state transitions, and failure behavior. Use it to understand how screens should move. Where it conflicts on behavior, prefer the experience flows; where it conflicts on structure, prefer the build spec.
 
 ## TL;DR
 

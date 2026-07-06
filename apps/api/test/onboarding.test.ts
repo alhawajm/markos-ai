@@ -293,8 +293,26 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   });
 
-  return response.json().data;
+  const session = response.json().data;
+
+  await prisma.user.update({
+    data: {
+      isVerified: true
+    },
+    where: {
+      id: session.user.id
+    }
+  });
+
+  return {
+    ...session,
+    user: {
+      ...session.user,
+      isVerified: true
+    }
+  };
 }
+
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {

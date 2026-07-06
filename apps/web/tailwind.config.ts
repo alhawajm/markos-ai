@@ -1,10 +1,14 @@
 import type { Config } from "tailwindcss";
-import { colors, radii } from "@markos/ui-tokens";
+import { colors, radii, typography } from "@markos/ui-tokens";
 
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [typography.fontFamily, "ui-sans-serif", "system-ui", "sans-serif"],
+        display: [typography.displayFamily, typography.fontFamily, "ui-sans-serif", "system-ui", "sans-serif"]
+      },
       colors: {
         navy: colors.navy,
         midnavy: colors.midnavy,

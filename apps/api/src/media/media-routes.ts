@@ -1,15 +1,17 @@
 import type { FastifyInstance } from "fastify";
-import { attachMediaToContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
+import { attachMediaToContentSchema, generateImageForContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   attachMediaToContent,
   detachMediaFromContent,
+  generateImageForContent,
   listMediaAssets,
   MediaAssetNotFoundError,
   MediaContentItemNotFoundError,
   MediaContentLockedError,
+  MediaImageGenerationInvalidError,
   MediaUploadInvalidError,
   readPublicMediaFile,
   registerPublicMedia,
@@ -102,6 +104,41 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post(
+    "/v1/content/:contentItemId/generate-image",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write", "media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      const parsed = generateImageForContentSchema.safeParse(request.body ?? {});
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid image generation request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await generateImageForContent(workspaceId, params.contentItemId, parsed.data));
+      } catch (error) {
+        if (error instanceof MediaImageGenerationInvalidError) {
+          return reply.status(502).send(errorEnvelope("AI_IMAGE_INVALID", error.message));
+        }
+
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
+  app.post(
     "/v1/content/:contentItemId/media",
     {
       config: {
@@ -187,6 +224,14 @@ function handleMediaMutationError(error: unknown, reply: { status: (code: number
 
   if (error instanceof MediaContentLockedError) {
     return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
+  }
+
+  if (error instanceof UsageQuotaExceededError) {
+    return reply.status(409).send(errorEnvelope("QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+  }
+
+  if (error instanceof UsagePlanInactiveError) {
+    return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
   }
 
   throw error;

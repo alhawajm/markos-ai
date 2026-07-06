@@ -20,3 +20,13 @@ var/
 apps/*/var/
 .codex-doc-tools/
 _analysis/
+
+# Launch evidence can include provider screenshots, payment proof, tokens,
+# customer data, or app review artifacts. Commit only templates/docs.
+evidence/**
+!evidence/
+!evidence/README.md
+!evidence/m6/
+!evidence/m6/README.md
+!evidence/m6/templates/
+!evidence/m6/templates/**

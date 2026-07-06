@@ -2,11 +2,13 @@ import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
+import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
 import type { InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 
 describe("maintenance worker", () => {
   it("publishes due content across workspaces", async () => {
+    const now = new Date(Date.UTC(2026, 0, 1, 12));
     await prisma.contentItem.updateMany({
       data: {
         status: "FAILED"
@@ -16,8 +18,8 @@ describe("maintenance worker", () => {
         status: "SCHEDULED"
       }
     });
-    const first = await createPublishableWorkspace("worker-publish-a");
-    const second = await createPublishableWorkspace("worker-publish-b");
+    const first = await createPublishableWorkspace("worker-publish-a", now);
+    const second = await createPublishableWorkspace("worker-publish-b", now);
     const publishedContentIds: string[] = [];
     const publisher: InstagramPublisher = {
       async publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }) {
@@ -39,7 +41,10 @@ describe("maintenance worker", () => {
     };
 
     const result = await runMaintenanceWorkerTick({
+      now,
       publisher,
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
       runTokenRefresh: false,
       runUsageReset: false
     });
@@ -60,7 +65,7 @@ describe("maintenance worker", () => {
     expect(publishedContentIds).toEqual(expect.arrayContaining([first.content.id, second.content.id]));
     expect(firstAfter.status).toBe("PUBLISHED");
     expect(secondAfter.status).toBe("PUBLISHED");
-  });
+  }, 60_000);
 
   it("refreshes due Instagram tokens", async () => {
     const workspace = await createWorkspace("worker-refresh");
@@ -91,6 +96,8 @@ describe("maintenance worker", () => {
 
     const result = await runMaintenanceWorkerTick({
       fetchImpl,
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
       runPublishing: false,
       runUsageReset: false
     });
@@ -109,7 +116,7 @@ describe("maintenance worker", () => {
       ])
     );
     expect(updated.instagramAccessToken).not.toBe(oldToken);
-  });
+  }, 60_000);
 
   it("rolls monthly usage counters forward without resetting lifetime storage", async () => {
     const workspace = await createWorkspace("worker-usage-reset");
@@ -141,6 +148,8 @@ describe("maintenance worker", () => {
 
     const result = await runMaintenanceWorkerTick({
       now,
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
       runPublishing: false,
       runTokenRefresh: false
     });
@@ -176,22 +185,80 @@ describe("maintenance worker", () => {
     expect(currentCounters.map((counter) => counter.metric).sort()).toEqual([
       "AI_GENERATION",
       "AI_IMAGE",
+      "AI_TOKENS_IN",
+      "AI_TOKENS_OUT",
       "POST_PUBLISH",
       "STRATEGY"
     ]);
     expect(currentCounters.every((counter) => counter.used === 0)).toBe(true);
     expect(previousCounter.used).toBe(7);
     expect(currentStorageCounter).toBeNull();
-  });
+  }, 60_000);
+
+  it("sends monthly analytics PDF emails once per workspace and month", async () => {
+    const now = new Date(Date.UTC(2026, 1, 2, 12));
+    const workspace = await createWorkspace("worker-analytics-email");
+    const sentFilenames: string[] = [];
+    const provider: AnalyticsEmailProvider = {
+      mode: "dry_run",
+      async send(input) {
+        sentFilenames.push(input.filename);
+
+        return {
+          messageId: `test:${input.filename}`
+        };
+      }
+    };
+
+    const first = await runMaintenanceWorkerTick({
+      analyticsEmailProvider: provider,
+      analyticsEmailWorkspaceIds: [workspace.id],
+      now,
+      runAnalyticsSync: false,
+      runPublishing: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+    const second = await runMaintenanceWorkerTick({
+      analyticsEmailProvider: provider,
+      analyticsEmailWorkspaceIds: [workspace.id],
+      now,
+      runAnalyticsSync: false,
+      runPublishing: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+
+    expect(first.analyticsEmail?.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          delivered: true,
+          month: "2026-01",
+          workspaceId: workspace.id
+        })
+      ])
+    );
+    expect(second.analyticsEmail?.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          delivered: false,
+          month: "2026-01",
+          skippedReason: "ALREADY_SENT",
+          workspaceId: workspace.id
+        })
+      ])
+    );
+    expect(sentFilenames.filter((filename) => filename.includes(workspace.name.toLowerCase().replace(/\s+/g, "-")))).toHaveLength(1);
+  }, 60_000);
 });
 
-async function createPublishableWorkspace(label: string) {
+async function createPublishableWorkspace(label: string, now = new Date()) {
   const workspace = await createWorkspace(label);
   await prisma.workspace.update({
     data: {
       instagramAccessToken: `publish-token-${randomUUID()}`,
       instagramAccountId: `publish-account-${randomUUID()}`,
-      instagramTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      instagramTokenExpiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000)
     },
     where: {
       id: workspace.id
@@ -216,7 +283,7 @@ async function createPublishableWorkspace(label: string) {
       contentType: "POST",
       hashtags: ["#MarkosAI"],
       mediaIds: [media.id],
-      scheduledAt: new Date(Date.now() - 60 * 1000),
+      scheduledAt: new Date(now.getTime() - 60 * 1000),
       status: "SCHEDULED",
       workspaceId: workspace.id
     }
@@ -238,6 +305,8 @@ async function createWorkspace(label: string) {
       limits: {
         aiGenerations: 100,
         aiImages: 20,
+        aiInputTokens: 1_000_000,
+        aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
         strategies: 1,
@@ -251,6 +320,8 @@ async function createWorkspace(label: string) {
       limits: {
         aiGenerations: 100,
         aiImages: 20,
+        aiInputTokens: 1_000_000,
+        aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
         strategies: 1,

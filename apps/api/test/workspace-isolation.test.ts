@@ -153,6 +153,22 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.aiInteraction.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
+    model: "PromptTemplate",
+    create: (fixture) =>
+      prisma.promptTemplate.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          agent: "CONTENT",
+          version: `prompt-${randomUUID()}`,
+          body: "Generate a workspace-scoped test prompt body.",
+          trafficPct: 100,
+          active: true
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.promptTemplate.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "Subscription",
     create: (fixture) =>
       prisma.subscription.create({

@@ -38,8 +38,12 @@ describe("health routes", () => {
         dependencies: {
           database: expect.any(Object),
           redis: expect.any(Object),
-          opensearch: expect.any(Object),
-          ai: expect.any(Object)
+          opensearch: expect.objectContaining({
+            durationMs: expect.any(Number)
+          }),
+          ai: expect.objectContaining({
+            durationMs: expect.any(Number)
+          })
         }
       }
     });

@@ -1,11 +1,18 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
-import type { ContentRecord, StrategyPlan } from "@markos/shared-types";
-import type { GenerateContentInput, ScheduleContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
+import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import type {
+  GenerateContentForSlotInput,
+  GenerateContentInput,
+  ScheduleContentInput,
+  UpdateContentInput,
+  UpdateContentStatusInput
+} from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
-import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { getVaultScore, searchVaultContext } from "../vault/vault-service";
+import { selectPromptTemplateForRun } from "../prompts/prompt-service";
+import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
+import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
 
 const contentAgentName = "CONTENT";
 const localCurrency = "BHD";
@@ -70,6 +77,13 @@ export async function generateWorkspaceContent(
     query: input.topic,
     topK: 8
   });
+  const toneLock = await getContentToneLock(workspaceId);
+  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const promptTemplate = await selectPromptTemplateForRun(
+    workspaceId,
+    contentAgentName,
+    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}`
+  );
   const generationCount = input.count;
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
@@ -80,9 +94,12 @@ export async function generateWorkspaceContent(
       topic: input.topic,
       contentType: input.contentType,
       count: input.count,
-      context,
+      context: lockedContext,
+      toneLock: toneLock.lock,
+      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
       ...(strategy === undefined ? {} : { strategy })
     });
+    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
     const saved = await prisma.$transaction(async (tx) => {
       const rows = [];
@@ -102,7 +119,7 @@ export async function generateWorkspaceContent(
               ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
               ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
               ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-              aiPromptUsed: generated.prompt_version
+              aiPromptUsed: promptVersion
             }
           })
         );
@@ -112,16 +129,19 @@ export async function generateWorkspaceContent(
         data: {
           workspaceId,
           agent: contentAgentName,
-          promptVersion: generated.prompt_version,
+          promptVersion,
           prompt: {
             topic: input.topic,
             contentType: input.contentType,
             count: input.count,
             ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
-            retrievedContext: context
+            ...(promptTemplate === undefined ? {} : { promptTemplate }),
+            toneLock: toneLock.lock,
+            retrievedContext: lockedContext
           } as unknown as Prisma.InputJsonValue,
           response: {
-            drafts: generated.drafts
+            drafts: generated.drafts,
+            providerPromptVersion: generated.prompt_version
           } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
           tokensOut: generated.tokens_out,
@@ -130,6 +150,13 @@ export async function generateWorkspaceContent(
           model: generated.model || env.LLM_PRIMARY_MODEL
         }
       });
+      await recordAiTokenUsage({
+        client: tx,
+        workspaceId,
+        tokensIn: generated.tokens_in,
+        tokensOut: generated.tokens_out,
+        now: usagePeriodDate
+      });
 
       return rows;
     });
@@ -137,6 +164,115 @@ export async function generateWorkspaceContent(
     return saved.map(toContentRecord);
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
+    throw error;
+  }
+}
+
+export async function generateWorkspaceContentForSlot(
+  workspaceId: string,
+  input: GenerateContentForSlotInput
+): Promise<ContentRecord> {
+  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
+  const score = await getVaultScore(workspaceId);
+
+  if (score.entryCount === 0) {
+    throw new ContentContextMissingError();
+  }
+
+  const strategy = await findStrategy(workspaceId, input.strategyId);
+  const context = await searchVaultContext(workspaceId, {
+    query: input.topic,
+    topK: 8
+  });
+  const toneLock = await getContentToneLock(workspaceId);
+  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const promptTemplate = await selectPromptTemplateForRun(
+    workspaceId,
+    contentAgentName,
+    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}`
+  );
+  const usagePeriodDate = new Date();
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+
+  try {
+    const generated = await generateContentDrafts({
+      workspaceId,
+      topic: input.topic,
+      contentType: input.contentType,
+      count: 1,
+      context: lockedContext,
+      toneLock: toneLock.lock,
+      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
+      ...(strategy === undefined ? {} : { strategy })
+    });
+    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
+    const [draft] = generated.drafts;
+
+    if (!draft) {
+      throw new Error("AI content generation returned no drafts");
+    }
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const row = await tx.contentItem.create({
+        data: {
+          workspaceId,
+          contentType: draft.contentType,
+          status: "SCHEDULED",
+          scheduledAt,
+          ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
+          ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
+          hashtags: draft.hashtags,
+          ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+          mediaIds: [],
+          ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
+          ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
+          ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
+          aiPromptUsed: promptVersion
+        }
+      });
+
+      await addToContentCalendar(tx, workspaceId, row.id, scheduledAt);
+      await tx.aiInteraction.create({
+        data: {
+          workspaceId,
+          agent: contentAgentName,
+          promptVersion,
+          prompt: {
+            topic: input.topic,
+            contentType: input.contentType,
+            count: 1,
+            scheduledAt: input.scheduledAt,
+            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(promptTemplate === undefined ? {} : { promptTemplate }),
+            toneLock: toneLock.lock,
+            retrievedContext: lockedContext
+          } as unknown as Prisma.InputJsonValue,
+          response: {
+            drafts: generated.drafts,
+            scheduledContentItemId: row.id,
+            providerPromptVersion: generated.prompt_version
+          } as unknown as Prisma.InputJsonValue,
+          tokensIn: generated.tokens_in,
+          tokensOut: generated.tokens_out,
+          costMinor: 0,
+          currency: localCurrency,
+          model: generated.model || env.LLM_PRIMARY_MODEL
+        }
+      });
+      await recordAiTokenUsage({
+        client: tx,
+        workspaceId,
+        tokensIn: generated.tokens_in,
+        tokensOut: generated.tokens_out,
+        now: usagePeriodDate
+      });
+
+      return row;
+    });
+
+    return toContentRecord(saved);
+  } catch (error) {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
     throw error;
   }
 }
@@ -234,11 +370,7 @@ export async function scheduleContentItem(
     throw new ContentScheduleError();
   }
 
-  const scheduledAt = new Date(input.scheduledAt);
-
-  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
-    throw new ContentScheduleError("Schedule time must be in the future");
-  }
+  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
 
   const row = await prisma.$transaction(async (tx) => {
     const updated = await tx.contentItem.update({
@@ -382,6 +514,73 @@ function mergeCalendarPlan(
 
 function monthStart(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function parseFutureScheduleTime(value: string): Date {
+  const scheduledAt = new Date(value);
+
+  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+    throw new ContentScheduleError("Schedule time must be in the future");
+  }
+
+  return scheduledAt;
+}
+
+async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
+  const [brandEntries, toneEntries] = await Promise.all([
+    listVaultSection(workspaceId, "BRAND"),
+    listVaultSection(workspaceId, "TONE")
+  ]);
+  const toneWords = uniqueStrings(
+    toneEntries.flatMap((entry) => {
+      const value = entry.value.toneWords;
+      return Array.isArray(value) ? value : [];
+    })
+  );
+  const voiceNotes = firstString(toneEntries.map((entry) => entry.value.voiceNotes));
+  const brandHints = Object.fromEntries(brandEntries.map((entry) => [entry.key, entry.value]));
+  const context: VaultRagChunk[] = [...brandEntries, ...toneEntries].map((entry) => ({
+    id: entry.id,
+    section: entry.section,
+    key: entry.key,
+    value: entry.value,
+    version: entry.version,
+    score: 1
+  }));
+
+  return {
+    context,
+    lock: {
+      requiredLanguages: ["ar", "en"],
+      toneWords,
+      ...(voiceNotes === undefined ? {} : { voiceNotes }),
+      brandHints
+    }
+  };
+}
+
+function mergeVaultContext(primary: VaultRagChunk[], locked: VaultRagChunk[]): VaultRagChunk[] {
+  const seen = new Set<string>();
+  const merged: VaultRagChunk[] = [];
+
+  for (const chunk of [...locked, ...primary]) {
+    if (seen.has(chunk.id)) {
+      continue;
+    }
+
+    seen.add(chunk.id);
+    merged.push(chunk);
+  }
+
+  return merged.slice(0, 10);
+}
+
+function uniqueStrings(values: unknown[]): string[] {
+  return Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+}
+
+function firstString(values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
 }
 
 function isAllowedContentTransition(current: ContentStatus, next: UpdateContentStatusInput["status"]): boolean {

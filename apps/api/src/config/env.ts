@@ -35,18 +35,30 @@ const envSchema = z.object({
   INSTAGRAM_OAUTH_TOKEN_URL: z.string().url().default("https://api.instagram.com/oauth/access_token"),
   INSTAGRAM_LONG_LIVED_TOKEN_URL: z.string().url().default("https://graph.instagram.com/access_token"),
   INSTAGRAM_REFRESH_TOKEN_URL: z.string().url().default("https://graph.instagram.com/refresh_access_token"),
-  INSTAGRAM_OAUTH_SCOPES: z.string().min(1).default("instagram_business_basic,instagram_business_content_publish"),
+  INSTAGRAM_OAUTH_SCOPES: z
+    .string()
+    .min(1)
+    .default("instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights"),
+  IMAGE_MODEL_PRIMARY: z.string().min(1).default("local-image-generator"),
+  IMAGE_MODEL_FALLBACK: optionalString,
   INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().default(14),
+  INSTAGRAM_ANALYTICS_SYNC_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
   INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
   INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
   INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
   WORKER_PUBLISHING_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  WORKER_ANALYTICS_EMAIL_INTERVAL_MS: z.coerce.number().int().positive().default(24 * 60 * 60_000),
+  WORKER_ANALYTICS_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(6 * 60 * 60_000),
   WORKER_TOKEN_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60_000),
   WORKER_USAGE_RESET_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60_000),
   SENTRY_DSN: optionalUrl,
   SENTRY_ENVIRONMENT: optionalString,
   SENTRY_RELEASE: optionalString,
-  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0)
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+  HEALTH_DEPENDENCY_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
+  HEALTH_DATABASE_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
+  HEALTH_REDIS_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
+  HEALTH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(200)
 });
 
 export const env = envSchema.parse(process.env);
@@ -56,3 +68,4 @@ process.env.REDIS_URL ??= env.REDIS_URL;
 process.env.OPENSEARCH_URL ??= env.OPENSEARCH_URL;
 process.env.AI_BASE_URL ??= env.AI_BASE_URL;
 process.env.LLM_PRIMARY_MODEL ??= env.LLM_PRIMARY_MODEL;
+process.env.IMAGE_MODEL_PRIMARY ??= env.IMAGE_MODEL_PRIMARY;

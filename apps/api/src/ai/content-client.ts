@@ -1,4 +1,5 @@
-import type { ContentDraft, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import type { ContentDraft, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import { resolveModelSetting } from "../admin/model-settings-service";
 import { env } from "../config/env";
 
 interface ContentGenerateResponse {
@@ -16,7 +17,10 @@ export async function generateContentDrafts(input: {
   count: number;
   context: VaultRagChunk[];
   strategy?: StrategyPlan;
+  toneLock: ContentToneLock;
+  promptTemplate?: { body: string; version: string };
 }): Promise<ContentGenerateResponse> {
+  const model = await resolveModelSetting("LLM_PRIMARY_MODEL");
   const body = {
     workspace_id: input.workspaceId,
     topic: input.topic,
@@ -28,7 +32,14 @@ export async function generateContentDrafts(input: {
       value: chunk.value,
       score: chunk.score
     })),
-    model: env.LLM_PRIMARY_MODEL
+    tone_lock: {
+      required_languages: input.toneLock.requiredLanguages,
+      tone_words: input.toneLock.toneWords,
+      ...(input.toneLock.voiceNotes === undefined ? {} : { voice_notes: input.toneLock.voiceNotes }),
+      brand_hints: input.toneLock.brandHints
+    },
+    ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
+    model
   };
   const requestBody = input.strategy === undefined ? body : { ...body, strategy: input.strategy };
 

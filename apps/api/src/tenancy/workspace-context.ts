@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Role } from "@markos/shared-types";
 
 export interface WorkspaceContext {
+  isVerified: boolean;
   workspaceId: string;
   userId: string;
   roles: Role[];
@@ -27,7 +28,12 @@ export function setWorkspaceContext(context: WorkspaceContext): void {
 export function getWorkspaceContext(): WorkspaceContext | undefined {
   const store = workspaceStorage.getStore();
 
-  if (store?.workspaceId === undefined || store.userId === undefined || store.roles === undefined) {
+  if (
+    store?.isVerified === undefined ||
+    store.workspaceId === undefined ||
+    store.userId === undefined ||
+    store.roles === undefined
+  ) {
     return undefined;
   }
 

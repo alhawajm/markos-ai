@@ -1,193 +1,351 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Circle, LogOut, Plus, RefreshCcw, Save, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  BriefcaseBusiness,
+  CheckCircle2,
+  Facebook,
+  Gem,
+  Instagram,
+  Plus,
+  Sparkles,
+  Target,
+  Trash2,
+  Twitter,
+  Upload,
+  Zap
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AuthSession, Locale, MediaAssetRecord, OnboardingState } from "@markos/shared-types";
+import { getBrowserApiBaseUrl } from "./api-base-url";
+import type { AuthSession, Locale } from "@markos/shared-types";
 
 const sessionKey = "markos.session";
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const draftKey = "markos.onboarding.draft";
+const apiBaseUrl = getBrowserApiBaseUrl();
 
-type Mode = "login" | "register";
-type ModuleSlug = "company" | "story" | "products" | "audience" | "competitors" | "brand" | "objectives";
-type Drafts = Record<ModuleSlug, Record<string, string>>;
+type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Icon = ComponentType<{ className?: string; color?: string; size?: number; strokeWidth?: number }>;
+type SelectOption = { label: string; value: string };
 
-interface ModuleDefinition {
-  slug: ModuleSlug;
-  title: Record<Locale, string>;
-  description: Record<Locale, string>;
-  fields: Array<{
-    name: string;
-    label: Record<Locale, string>;
-    kind?: "number" | "textarea";
-    placeholder?: string;
-  }>;
-  toPayload: (values: Record<string, string>) => Record<string, unknown>;
+interface OnboardingDraft {
+  ageRange: string;
+  brandColor: string;
+  channels: Record<"facebook" | "instagram" | "twitter", boolean>;
+  companyName: string;
+  competitors: string[];
+  description: string;
+  genderFocus: string;
+  goals: string[];
+  industry: string;
+  languagePreference: string;
+  location: string;
+  logoUploaded: boolean;
+  newCompetitor: string;
+  painPoints: string;
+  tone: string;
+  website: string;
 }
 
-const modules: ModuleDefinition[] = [
-  {
-    slug: "company",
-    title: { ar: "الشركة", en: "Company" },
-    description: { ar: "الاسم، المجال، الموقع، واللغات.", en: "Name, industry, location, and languages." },
-    fields: [
-      { name: "name", label: { ar: "اسم النشاط", en: "Business name" } },
-      { name: "industry", label: { ar: "المجال", en: "Industry" } },
-      { name: "size", label: { ar: "الحجم", en: "Size" } },
-      { name: "location", label: { ar: "الموقع", en: "Location" } },
-      { name: "website", label: { ar: "الموقع الإلكتروني", en: "Website" }, placeholder: "https://example.com" },
-      { name: "socials", label: { ar: "الحسابات الاجتماعية", en: "Social accounts" }, placeholder: "instagram.com/brand, tiktok.com/@brand" },
-      { name: "languages", label: { ar: "اللغات", en: "Languages" }, placeholder: "Arabic, English" }
-    ],
-    toPayload: (values) => ({
-      industry: valueOf(values, "industry"),
-      languages: splitList(valueOf(values, "languages")),
-      location: valueOf(values, "location"),
-      name: valueOf(values, "name"),
-      size: valueOf(values, "size") || undefined,
-      socials: splitList(valueOf(values, "socials")),
-      website: valueOf(values, "website") || undefined
-    })
-  },
-  {
-    slug: "story",
-    title: { ar: "القصة", en: "Story" },
-    description: { ar: "الرسالة، البداية، القيم، ونقطة التميز.", en: "Mission, origin, values, and USP." },
-    fields: [
-      { name: "mission", label: { ar: "الرسالة", en: "Mission" }, kind: "textarea" },
-      { name: "origin", label: { ar: "البداية", en: "Origin" }, kind: "textarea" },
-      { name: "vision", label: { ar: "الرؤية", en: "Vision" }, kind: "textarea" },
-      { name: "values", label: { ar: "القيم", en: "Values" } },
-      { name: "usp", label: { ar: "نقطة التميز", en: "USP" }, kind: "textarea" },
-      { name: "problemSolved", label: { ar: "المشكلة الأساسية", en: "Problem solved" }, kind: "textarea" }
-    ],
-    toPayload: (values) => ({
-      mission: valueOf(values, "mission"),
-      origin: valueOf(values, "origin") || undefined,
-      problemSolved: valueOf(values, "problemSolved") || undefined,
-      usp: valueOf(values, "usp"),
-      values: splitList(valueOf(values, "values")),
-      vision: valueOf(values, "vision") || undefined
-    })
-  },
-  {
-    slug: "products",
-    title: { ar: "المنتجات", en: "Products" },
-    description: { ar: "منتج رئيسي واحد كبداية.", en: "One primary product to start." },
-    fields: [
-      { name: "priceRange", label: { ar: "نطاق السعر", en: "Price range" } },
-      { name: "salesChannels", label: { ar: "قنوات البيع", en: "Sales channels" }, placeholder: "Online, in-store, Instagram DM" },
-      { name: "differentiators", label: { ar: "ما يميز المنتجات", en: "Product differentiators" }, kind: "textarea" }
-    ],
-    toPayload: (values) => ({
-      differentiators: splitList(valueOf(values, "differentiators")),
-      items: collectProductRows(values),
-      priceRange: valueOf(values, "priceRange") || undefined,
-      salesChannels: splitList(valueOf(values, "salesChannels"))
-    })
-  },
-  {
-    slug: "audience",
-    title: { ar: "الجمهور", en: "Audience" },
-    description: { ar: "من نخاطب وما الذي يهمهم.", en: "Who we speak to and what matters to them." },
-    fields: [
-      { name: "ageRange", label: { ar: "الفئة العمرية", en: "Age range" } },
-      { name: "genderBreakdown", label: { ar: "توزيع الجنس", en: "Gender breakdown" } },
-      { name: "locations", label: { ar: "مواقع العملاء", en: "Customer locations" }, placeholder: "Manama, Bahrain, GCC" },
-      { name: "demographics", label: { ar: "الوصف الديموغرافي", en: "Demographics" }, kind: "textarea" },
-      { name: "interests", label: { ar: "الاهتمامات", en: "Interests" } },
-      { name: "painPoints", label: { ar: "نقاط الألم", en: "Pain points" } },
-      { name: "motivations", label: { ar: "دوافع الشراء", en: "Buying motivations" } }
-    ],
-    toPayload: (values) => ({
-      ageRange: valueOf(values, "ageRange") || undefined,
-      demographics: valueOf(values, "demographics"),
-      genderBreakdown: valueOf(values, "genderBreakdown") || undefined,
-      interests: splitList(valueOf(values, "interests")),
-      locations: splitList(valueOf(values, "locations")),
-      motivations: splitList(valueOf(values, "motivations")),
-      painPoints: splitList(valueOf(values, "painPoints"))
-    })
-  },
-  {
-    slug: "competitors",
-    title: { ar: "المنافسون", en: "Competitors" },
-    description: { ar: "منافس واحد للمقارنة الأولية.", en: "One competitor for the first comparison." },
-    fields: [
-      { name: "doDifferently", label: { ar: "ما تريد فعله بشكل مختلف", en: "What to do differently" }, kind: "textarea" },
-      { name: "competitiveAdvantage", label: { ar: "الميزة التنافسية", en: "Competitive advantage" }, kind: "textarea" }
-    ],
-    toPayload: (values) => ({
-      competitiveAdvantage: valueOf(values, "competitiveAdvantage") || undefined,
-      doDifferently: valueOf(values, "doDifferently") || undefined,
-      items: collectCompetitorRows(values)
-    })
-  },
-  {
-    slug: "brand",
-    title: { ar: "الهوية", en: "Brand" },
-    description: { ar: "الألوان، الخطوط، ونبرة الصوت.", en: "Colors, fonts, and tone of voice." },
-    fields: [
-      { name: "colors", label: { ar: "الألوان", en: "Colors" }, placeholder: "#0F2D52, #F64B6A" },
-      { name: "fonts", label: { ar: "الخطوط", en: "Fonts" } },
-      { name: "aestheticWords", label: { ar: "كلمات الهوية البصرية", en: "Visual aesthetic words" }, placeholder: "minimal, bold, warm" },
-      { name: "toneWords", label: { ar: "كلمات النبرة", en: "Tone words" } },
-      { name: "voiceNotes", label: { ar: "ملاحظات الصوت", en: "Voice notes" }, kind: "textarea" }
-    ],
-    toPayload: (values) => ({
-      aestheticWords: splitList(valueOf(values, "aestheticWords")),
-      colors: splitList(valueOf(values, "colors")),
-      fonts: splitList(valueOf(values, "fonts")),
-      guidelinesMediaId: valueOf(values, "guidelinesMediaId") || undefined,
-      logoMediaId: valueOf(values, "logoMediaId") || undefined,
-      toneWords: splitList(valueOf(values, "toneWords")),
-      voiceNotes: valueOf(values, "voiceNotes") || undefined
-    })
-  },
-  {
-    slug: "objectives",
-    title: { ar: "الأهداف", en: "Objectives" },
-    description: { ar: "أهداف التسويق ومؤشرات القياس.", en: "Marketing goals and KPI targets." },
-    fields: [
-      { name: "goals", label: { ar: "الأهداف", en: "Goals" } },
-      { name: "success90Days", label: { ar: "نجاح 90 يوم", en: "90-day success" }, kind: "textarea" },
-      { name: "instagramExperience", label: { ar: "خبرة إنستغرام", en: "Instagram experience" } },
-      { name: "budgetRange", label: { ar: "ميزانية التسويق", en: "Marketing budget" } },
-      { name: "primaryKpi", label: { ar: "مؤشر رئيسي", en: "Primary KPI" } },
-      { name: "target", label: { ar: "الهدف الرقمي", en: "Target" } }
-    ],
-    toPayload: (values) => ({
-      budgetRange: valueOf(values, "budgetRange") || undefined,
-      goals: splitList(valueOf(values, "goals")),
-      instagramExperience: valueOf(values, "instagramExperience") || undefined,
-      kpiTargets: valueOf(values, "primaryKpi") ? { [valueOf(values, "primaryKpi")]: valueOf(values, "target") || true } : {},
-      success90Days: valueOf(values, "success90Days") || undefined
-    })
-  }
+const toneMeta: Array<{ icon: Icon; id: string }> = [
+  { id: "professional", icon: BriefcaseBusiness },
+  { id: "friendly", icon: CheckCircle2 },
+  { id: "bold", icon: Zap },
+  { id: "luxury", icon: Gem },
+  { id: "playful", icon: Sparkles },
+  { id: "informative", icon: BookOpen }
 ];
 
+const goalValues = [
+  "Increase brand awareness",
+  "Drive website traffic",
+  "Generate leads",
+  "Boost sales",
+  "Build community",
+  "Customer retention"
+];
+
+function onboardingCopy(locale: Locale) {
+  if (locale === "ar") {
+    return {
+      add: "إضافة",
+      addCompetitorPlaceholder: "أضف اسم منافس...",
+      aiCardBody: "يتعلم MARKOS علامتك خلال دقائق ويولّد محتوى يشبه صوتك من اليوم الأول.",
+      aiCardTitle: "إعداد مدعوم بالذكاء الاصطناعي",
+      back: "السابق",
+      brand: {
+        color: "لون العلامة الأساسي",
+        logoDone: "تم رفع الشعار",
+        logoHint: "PNG أو SVG أو JPG حتى 10MB",
+        logoIdle: "اسحب الشعار هنا أو اضغط للرفع",
+        tone: "نبرة صوت العلامة *",
+        title: "ارفع أصول علامتك",
+        body: "يساعد الشعار والألوان MARKOS في الحفاظ على اتساق بصري واضح."
+      },
+      build: "ابنِ الذكاء الاصطناعي",
+      channels: {
+        body: "اربط حسابات التواصل للنشر مباشرة من MARKOS.",
+        connected: "متصل",
+        connect: "ربط",
+        notConnected: "غير متصل",
+        title: "اربط قنواتك"
+      },
+      company: {
+        body: "يساعد هذا MARKOS على إنشاء محتوى يمثل علامتك بدقة.",
+        description: "وصف النشاط",
+        industry: "القطاع *",
+        name: "اسم الشركة *",
+        title: "حدثنا عن شركتك",
+        website: "الموقع الإلكتروني"
+      },
+      complete: "مكتمل",
+      competitors: {
+        body: "سيحلل MARKOS استراتيجيات محتواهم ليساعدك على التقدم.",
+        hint: "يمكنك إضافة المزيد لاحقاً من الإعدادات.",
+        title: "من هم منافسوك؟"
+      },
+      continue: "متابعة",
+      errors: {
+        complete: "تعذر إنهاء الإعداد الآن.",
+        save: "تعذر حفظ هذه الخطوة الآن."
+      },
+      goals: {
+        body: "اختر كل ما ينطبق. سيضبط MARKOS استراتيجية المحتوى وفقاً لذلك.",
+        title: "ما أهدافك من المحتوى؟"
+      },
+      launch: "افتح لوحة MARKOS",
+      progress: (step: StepId, total: number) => `الخطوة ${step} من ${total}`,
+      saved: "تم الحفظ في الخزنة",
+      setup: {
+        body: "يحلل MARKOS القطاع والمنافسين والأهداف لبناء طبقة ذكاء تسويقي مخصصة.",
+        loadingTitle: "نبني ذكاء علامتك...",
+        readyBody: "تعلم MARKOS علامتك. أنت جاهز لإنشاء محتوى مدعوم بالذكاء الاصطناعي يحقق نتائج.",
+        readyTitle: "ذكاء علامتك جاهز!",
+        stats: [
+          { value: "94%", label: "درجة مطابقة العلامة" },
+          { value: "47", label: "أفكار محتوى جاهزة" },
+          { value: "3", label: "قنوات مرتبطة" }
+        ],
+        tasks: [
+          "فحص اتجاهات القطاع في البحرين",
+          "تحليل استراتيجيات محتوى المنافسين",
+          "بناء نموذج صوت العلامة",
+          "توليد إطار تقويم المحتوى",
+          "إنهاء إعدادات الذكاء الاصطناعي"
+        ]
+      },
+      steps: [
+        { id: 1 as const, label: "معلومات الشركة", desc: "عرّفنا على نشاطك" },
+        { id: 2 as const, label: "هوية العلامة", desc: "ارفع أصولك" },
+        { id: 3 as const, label: "الجمهور المستهدف", desc: "من تخدم؟" },
+        { id: 4 as const, label: "المنافسون", desc: "اعرف السوق" },
+        { id: 5 as const, label: "قنوات التواصل", desc: "اربط حساباتك" },
+        { id: 6 as const, label: "أهداف المحتوى", desc: "حدد أهدافك" },
+        { id: 7 as const, label: "إعداد الذكاء", desc: "نبني ذكاء علامتك" }
+      ],
+      audience: {
+        age: "الفئة العمرية",
+        body: "فهم جمهورك يساعد MARKOS على صياغة رسائل مؤثرة.",
+        gender: "تركيز الجنس",
+        language: "تفضيلات اللغة",
+        location: "الموقع",
+        painPoints: "نقاط ألم العملاء",
+        title: "من هو جمهورك؟"
+      }
+    };
+  }
+
+  return {
+    add: "Add",
+    addCompetitorPlaceholder: "Add competitor name...",
+    aiCardBody: "MARKOS learns your brand in minutes and generates content that sounds like you from day one.",
+    aiCardTitle: "AI-Powered Setup",
+    back: "Back",
+    brand: {
+      color: "Primary Brand Color",
+      logoDone: "Logo uploaded",
+      logoHint: "PNG, SVG, JPG up to 10MB",
+      logoIdle: "Drop your logo here or click to upload",
+      tone: "Brand Tone of Voice *",
+      title: "Upload your brand assets",
+      body: "Your logo and brand colors help MARKOS maintain visual consistency."
+    },
+    build: "Build My AI",
+    channels: {
+      body: "Connect your social accounts to publish directly from MARKOS.",
+      connected: "Connected",
+      connect: "Connect",
+      notConnected: "Not connected",
+      title: "Connect your channels"
+    },
+    company: {
+      body: "This helps MARKOS create content that truly represents your brand.",
+      description: "Business Description",
+      industry: "Industry *",
+      name: "Company Name *",
+      title: "Tell us about your company",
+      website: "Website"
+    },
+    complete: "complete",
+    competitors: {
+      body: "MARKOS will analyze their content strategies to help you stay ahead.",
+      hint: "You can always add more later from Settings.",
+      title: "Who are your competitors?"
+    },
+    continue: "Continue",
+    errors: {
+      complete: "Could not complete onboarding yet.",
+      save: "Could not save this step yet."
+    },
+    goals: {
+      body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
+      title: "What are your content goals?"
+    },
+    launch: "Launch MARKOS Dashboard",
+    progress: (step: StepId, total: number) => `Step ${step} of ${total}`,
+    saved: "Saved to Vault",
+    setup: {
+      body: "Analyzing your industry, competitors, and goals to create a personalized marketing intelligence layer.",
+      loadingTitle: "Building Your Brand AI...",
+      readyBody: "MARKOS has learned your brand. You're ready to create AI-powered content that converts.",
+      readyTitle: "Your Brand AI is Ready!",
+      stats: [
+        { value: "94%", label: "Brand Match Score" },
+        { value: "47", label: "Content Ideas Ready" },
+        { value: "3", label: "Channels Connected" }
+      ],
+      tasks: [
+        "Scanning industry trends in Bahrain",
+        "Analyzing competitor content strategies",
+        "Building your brand voice model",
+        "Generating content calendar framework",
+        "Finalizing AI configuration"
+      ]
+    },
+    steps: [
+      { id: 1 as const, label: "Company Info", desc: "Tell us about your business" },
+      { id: 2 as const, label: "Brand Identity", desc: "Upload your assets" },
+      { id: 3 as const, label: "Target Audience", desc: "Who do you serve?" },
+      { id: 4 as const, label: "Competitors", desc: "Know your market" },
+      { id: 5 as const, label: "Social Channels", desc: "Connect your accounts" },
+      { id: 6 as const, label: "Content Goals", desc: "Set your objectives" },
+      { id: 7 as const, label: "AI Setup", desc: "Building your brand AI" }
+    ],
+    audience: {
+      age: "Age Range",
+      body: "Understanding your audience helps MARKOS craft messages that resonate.",
+      gender: "Gender Focus",
+      language: "Language Preferences",
+      location: "Location",
+      painPoints: "Customer Pain Points",
+      title: "Who is your audience?"
+    }
+  };
+}
+
+function industryOptions(locale: Locale): SelectOption[] {
+  const labels =
+    locale === "ar"
+      ? ["التجزئة والتجارة الإلكترونية", "المطاعم والمقاهي", "العقارات", "الرعاية الصحية", "التعليم", "السيارات", "الأزياء والجمال", "التقنية", "المالية", "الضيافة"]
+      : ["Retail & E-commerce", "Food & Beverage", "Real Estate", "Healthcare", "Education", "Automotive", "Fashion & Beauty", "Technology", "Finance", "Hospitality"];
+  const values = ["Retail & E-commerce", "Food & Beverage", "Real Estate", "Healthcare", "Education", "Automotive", "Fashion & Beauty", "Technology", "Finance", "Hospitality"];
+
+  return values.map((value, index) => ({ value, label: labels[index] ?? value }));
+}
+
+function toneLabel(locale: Locale, toneId: string) {
+  const ar: Record<string, string> = {
+    professional: "احترافية",
+    friendly: "ودودة",
+    bold: "جريئة ونشطة",
+    luxury: "فاخرة",
+    playful: "مرحة",
+    informative: "معلوماتية"
+  };
+  const en: Record<string, string> = {
+    professional: "Professional",
+    friendly: "Friendly",
+    bold: "Bold & Energetic",
+    luxury: "Luxury",
+    playful: "Playful",
+    informative: "Informative"
+  };
+
+  return locale === "ar" ? ar[toneId] : en[toneId];
+}
+
+function goalOptions(locale: Locale): SelectOption[] {
+  const ar = ["زيادة الوعي بالعلامة", "زيادة زيارات الموقع", "توليد العملاء المحتملين", "رفع المبيعات", "بناء مجتمع", "الاحتفاظ بالعملاء"];
+  return goalValues.map((value, index) => ({ value, label: locale === "ar" ? ar[index] ?? value : value }));
+}
+
+function genderOptions(locale: Locale): SelectOption[] {
+  return [
+    { value: "All", label: locale === "ar" ? "الكل" : "All" },
+    { value: "Male", label: locale === "ar" ? "ذكور" : "Male" },
+    { value: "Female", label: locale === "ar" ? "إناث" : "Female" }
+  ];
+}
+
+function languageOptions(locale: Locale): SelectOption[] {
+  return [
+    { value: "Arabic", label: locale === "ar" ? "العربية" : "Arabic" },
+    { value: "English", label: locale === "ar" ? "الإنجليزية" : "English" },
+    { value: "Both", label: locale === "ar" ? "اللغتان" : "Both" }
+  ];
+}
+
+type OnboardingCopy = ReturnType<typeof onboardingCopy>;
+
+const defaultDraft: OnboardingDraft = {
+  ageRange: "25-34",
+  brandColor: "#0F3460",
+  channels: { facebook: true, instagram: true, twitter: false },
+  companyName: "Zain Arabia",
+  competitors: ["STC Bahrain", "Batelco"],
+  description: "Leading telecommunications company serving Bahrain with mobile, internet, and digital services.",
+  genderFocus: "All",
+  goals: ["Increase brand awareness", "Build community"],
+  industry: "Technology",
+  languagePreference: "Both",
+  location: "Bahrain, GCC Region",
+  logoUploaded: false,
+  newCompetitor: "",
+  painPoints: "Need reliable connectivity, digital transformation support, competitive pricing",
+  tone: "professional",
+  website: "https://zain.com.bh"
+};
+
+function defaultDraftForLocale(locale: Locale): OnboardingDraft {
+  if (locale !== "ar") return defaultDraft;
+
+  return {
+    ...defaultDraft,
+    companyName: "زين العربية",
+    description: "شركة اتصالات رائدة تخدم البحرين بخدمات الهاتف والإنترنت والحلول الرقمية.",
+    location: "البحرين، دول الخليج",
+    painPoints: "الحاجة إلى اتصال موثوق، دعم التحول الرقمي، وأسعار تنافسية"
+  };
+}
+
 export function OnboardingPanel({ locale }: { locale: Locale }) {
-  const [mode, setMode] = useState<Mode>("register");
+  const copy = onboardingCopy(locale);
+  const isRtl = locale === "ar";
+  const steps = copy.steps;
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState(100);
+  const [draft, setDraft] = useState<OnboardingDraft>(() => defaultDraftForLocale(locale));
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [state, setState] = useState<OnboardingState | null>(null);
-  const [activeModule, setActiveModule] = useState<ModuleSlug>("company");
-  const [authValues, setAuthValues] = useState({
-    email: "",
-    fullName: "",
-    password: "",
-    workspaceName: ""
-  });
-  const [moduleDrafts, setModuleDrafts] = useState<Drafts>(() => emptyDrafts());
-  const [productRowCount, setProductRowCount] = useState(1);
-  const [competitorRowCount, setCompetitorRowCount] = useState(1);
-  const [brandAssets, setBrandAssets] = useState<Record<string, MediaAssetRecord | undefined>>({});
-  const [message, setMessage] = useState<string>("");
-  const [isBusy, setIsBusy] = useState(false);
+  const [step, setStep] = useState<StepId>(1);
+  const router = useRouter();
 
   const client = useMemo(() => {
-    const options = {
-      baseUrl: apiBaseUrl
-    } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
+    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
 
     return new MarkosApiClient(
       session
@@ -199,823 +357,655 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
         : options
     );
   }, [session]);
-  const activeDefinition = modules.find((item) => item.slug === activeModule) ?? modules[0]!;
-  const missingModules = modules.filter((item) => state?.modules.find((module) => module.module === item.slug)?.completed !== true);
-  const activeModuleState = state?.modules.find((module) => module.module === activeDefinition.slug);
-  const activeModuleIndex = modules.findIndex((item) => item.slug === activeModule);
-  const activeModuleValues = moduleDrafts[activeModule];
-  const canComplete = Boolean(session) && !isBusy && (state?.vaultScore.score ?? 0) === 100;
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
-    }
-  }, []);
+    const storedSession = window.localStorage.getItem(sessionKey);
+    const storedDraft = window.localStorage.getItem(draftKey);
+
+    const baseDraft = defaultDraftForLocale(locale);
+    if (storedSession) setSession(JSON.parse(storedSession) as AuthSession);
+    if (storedDraft) setDraft({ ...baseDraft, ...(JSON.parse(storedDraft) as Partial<OnboardingDraft>) });
+    setStep(getInitialStep());
+  }, [locale]);
 
   useEffect(() => {
-    if (!session) return;
-    void refreshState(client, setState, setMessage);
-  }, [client, session]);
+    window.localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [draft]);
 
-  async function submitAuth() {
-    setIsBusy(true);
-    setMessage("");
+  useEffect(() => {
+    if (step !== 7 || aiProgress === 100) return;
 
-    try {
-      const nextSession =
-        mode === "register"
-          ? await client.register(
-              authValues.workspaceName
-                ? {
-                    email: authValues.email,
-                    fullName: authValues.fullName,
-                    locale,
-                    password: authValues.password,
-                    workspaceName: authValues.workspaceName
-                  }
-                : {
-                    email: authValues.email,
-                    fullName: authValues.fullName,
-                    locale,
-                    password: authValues.password
-                  }
-            )
-          : await client.login({
-              email: authValues.email,
-              password: authValues.password
-            });
+    const timer = window.setInterval(() => {
+      setAiProgress((current) => {
+        const next = Math.min(100, current + 20);
+        if (next === 100) {
+          window.clearInterval(timer);
+          setAiLoading(false);
+        }
+        return next;
+      });
+    }, 260);
 
-      window.localStorage.setItem(sessionKey, JSON.stringify(nextSession));
-      setSession(nextSession);
-      setMessage(copy(locale, "signedIn"));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
-    } finally {
-      setIsBusy(false);
-    }
-  }
+    return () => window.clearInterval(timer);
+  }, [aiProgress, step]);
 
-  async function saveModule() {
-    setIsBusy(true);
-    setMessage("");
+  const progress = Math.round((step / steps.length) * 100);
 
-    try {
-      const payload = activeDefinition.toPayload(activeModuleValues);
-      const nextState = await client.saveOnboardingModule(activeDefinition.slug, payload);
-      setState(nextState);
-      setMessage(copy(locale, "saved"));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
-    } finally {
-      setIsBusy(false);
-    }
-  }
+  async function next() {
+    await persistStep(step);
 
-  async function complete() {
-    setIsBusy(true);
-    setMessage("");
-
-    try {
-      setState(await client.completeOnboarding());
-      setMessage(copy(locale, "complete"));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  function signOut() {
-    window.localStorage.removeItem(sessionKey);
-    setSession(null);
-    setState(null);
-    setMessage("");
-  }
-
-  function setDraftValue(key: string, value: string) {
-    setModuleDrafts((current) => ({
-      ...current,
-      [activeModule]: {
-        ...current[activeModule],
-        [key]: value
-      }
-    }));
-  }
-
-  function goToModule(index: number) {
-    const next = modules[index];
-
-    if (next === undefined) {
+    if (step === 6) {
+      setStep(7);
+      setAiLoading(true);
+      setAiProgress(0);
       return;
     }
 
-    setActiveModule(next.slug);
+    if (step < 7) {
+      setStep((current) => (current + 1) as StepId);
+      setMessage("");
+    }
+  }
+
+  function back() {
+    setStep((current) => Math.max(1, current - 1) as StepId);
     setMessage("");
   }
 
+  async function launchDashboard() {
+    await persistStep(6);
+
+    if (session) {
+      setSaving(true);
+      try {
+        await client.completeOnboarding();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : copy.errors.complete);
+        setSaving(false);
+        return;
+      }
+    }
+
+    router.push(`/${locale}`);
+  }
+
+  async function persistStep(stepToSave: StepId) {
+    if (!session || stepToSave === 5 || stepToSave === 7) return;
+
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const payload = payloadForStep(stepToSave, draft);
+      if (payload) await client.saveOnboardingModule(payload.module, payload.body);
+      setMessage(copy.saved);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function update<K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function addCompetitor() {
+    const name = draft.newCompetitor.trim();
+    if (!name) return;
+    setDraft((current) => ({ ...current, competitors: [...current.competitors, name], newCompetitor: "" }));
+  }
+
+  function removeCompetitor(index: number) {
+    setDraft((current) => ({ ...current, competitors: current.competitors.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
+  function toggleGoal(goal: string) {
+    setDraft((current) => ({
+      ...current,
+      goals: current.goals.includes(goal) ? current.goals.filter((item) => item !== goal) : [...current.goals, goal]
+    }));
+  }
+
+  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
+  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
+
   return (
-    <section className="mt-8 grid gap-4 lg:grid-cols-[320px_1fr]">
-      <div className="rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="flex items-center gap-2 text-accent">
-          <ShieldCheck size={20} />
-          <h2 className="text-base font-semibold text-navy">{copy(locale, "workspace")}</h2>
-        </div>
+    <section className="flex min-h-screen bg-[linear-gradient(135deg,#0F3460_0%,#1A1A2E_50%,#0a0a1a_100%)] text-white" dir={isRtl ? "rtl" : "ltr"}>
+      <aside className={isRtl ? "hidden w-80 shrink-0 flex-col justify-between border-l border-white/[.08] p-10 lg:flex" : "hidden w-80 shrink-0 flex-col justify-between border-r border-white/[.08] p-10 lg:flex"}>
+        <div>
+          <a className="mb-12 flex items-center gap-3" href={`/${locale}`}>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-[0_4px_16px_rgba(233,69,96,.35)]">
+              <Sparkles size={20} strokeWidth={2.4} />
+            </span>
+            <span className="font-display text-xl font-bold tracking-normal">MARKOS AI</span>
+          </a>
 
-        {session ? (
-          <div className="mt-4 space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-navy">{session.workspace.name}</p>
-              <p className="mt-1 text-xs text-muted">{session.user.email}</p>
-            </div>
-            <ProgressBar value={state?.vaultScore.score ?? 0} />
-            <GapList
-              locale={locale}
-              missingModules={missingModules.map((item) => item.title[locale])}
-              missingSections={state?.vaultScore.missingSections ?? []}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm" onClick={() => refreshState(client, setState, setMessage)} type="button">
-                <RefreshCcw size={16} />
-                {copy(locale, "refresh")}
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-button border border-border px-3 py-2 text-sm" onClick={signOut} type="button">
-                <LogOut size={16} />
-                {copy(locale, "signOut")}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            <div className="grid grid-cols-2 rounded-button border border-border p-1">
-              {(["register", "login"] as const).map((item) => (
-                <button
-                  className={mode === item ? "rounded-button bg-midnavy px-3 py-2 text-sm text-white" : "rounded-button px-3 py-2 text-sm text-muted"}
-                  key={item}
-                  onClick={() => setMode(item)}
-                  type="button"
-                >
-                  {copy(locale, item)}
-                </button>
-              ))}
-            </div>
-            <Field label={copy(locale, "email")} onChange={(value) => setAuthValues((current) => ({ ...current, email: value }))} type="email" value={authValues.email} />
-            {mode === "register" ? (
-              <>
-                <Field label={copy(locale, "fullName")} onChange={(value) => setAuthValues((current) => ({ ...current, fullName: value }))} value={authValues.fullName} />
-                <Field label={copy(locale, "workspaceName")} onChange={(value) => setAuthValues((current) => ({ ...current, workspaceName: value }))} value={authValues.workspaceName} />
-              </>
-            ) : null}
-            <Field label={copy(locale, "password")} onChange={(value) => setAuthValues((current) => ({ ...current, password: value }))} type="password" value={authValues.password} />
-            <button className="w-full rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={isBusy} onClick={submitAuth} type="button">
-              {copy(locale, mode)}
-            </button>
-          </div>
-        )}
-      </div>
+          <nav className="grid gap-1" aria-label="Onboarding steps">
+            {steps.map((item) => {
+              const active = step === item.id;
+              const complete = step > item.id;
 
-      <div className="rounded-card border border-border bg-card p-5 shadow-card">
-        <div className="flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-navy">{copy(locale, "onboarding")}</h2>
-            <p className="mt-1 text-sm text-muted">{copy(locale, "onboardingSubtitle")}</p>
-          </div>
-          <button className="rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!canComplete} onClick={complete} type="button">
-            {copy(locale, "completeButton")}
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-[220px_1fr]">
-          <div className="grid gap-1">
-            {modules.map((item) => {
-              const done = state?.modules.find((module) => module.module === item.slug)?.completed ?? false;
               return (
-                <button
-                  className={activeModule === item.slug ? "flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm text-white" : "flex items-center gap-2 rounded-button px-3 py-2 text-sm text-muted hover:bg-navy/5"}
-                  key={item.slug}
-                  onClick={() => {
-                    setActiveModule(item.slug);
-                    setBrandAssets({});
-                    setMessage("");
-                  }}
-                  type="button"
-                >
-                  {done ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                  {item.title[locale]}
+                <button className="flex items-center gap-3 py-2.5 text-start" key={item.id} onClick={() => setStep(item.id)} type="button">
+                  <span
+                    className={
+                      complete
+                        ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success text-white"
+                        : active
+                          ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-white"
+                          : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-xs font-bold text-white"
+                    }
+                  >
+                    {complete ? <CheckCircle2 size={14} /> : item.id}
+                  </span>
+                  <span>
+                    <span className={active || complete ? "block text-[13px] font-semibold text-white" : "block text-[13px] text-white/40"}>{item.label}</span>
+                    <span className="block text-[11px] text-white/30">{item.desc}</span>
+                  </span>
                 </button>
               );
             })}
+          </nav>
+        </div>
+
+        <div className="rounded-xl border border-accent/25 bg-accent/15 p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-accent">
+            <Sparkles size={14} />
+            {copy.aiCardTitle}
+          </div>
+          <p className="text-xs leading-5 text-white/60">{copy.aiCardBody}</p>
+        </div>
+      </aside>
+
+      <main className="flex min-w-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto px-5 py-6 sm:p-8 lg:items-center">
+        <div className="w-full min-w-0 max-w-[310px] sm:max-w-[560px]">
+          <div className="mb-8">
+            <div className="mb-2 flex justify-between text-xs text-white/50">
+              <span>{copy.progress(step, steps.length)}</span>
+              <span>
+                {progress}%<span className="hidden sm:inline"> {copy.complete}</span>
+              </span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,#E94560,#f472b6)] transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-navy">{activeDefinition.title[locale]}</h3>
-            <p className="mt-1 text-sm text-muted">{activeDefinition.description[locale]}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(activeModuleState?.sections ?? []).map((section) => {
-                const complete = state?.vaultScore.completedSections.includes(section) ?? false;
-                return (
-                  <span
-                    className={complete ? "rounded-full bg-accent/10 px-2 py-1 text-xs font-medium text-accent" : "rounded-full bg-navy/5 px-2 py-1 text-xs font-medium text-muted"}
-                    key={section}
-                  >
-                    {sectionLabel(locale, section)}
-                  </span>
-                );
-              })}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {activeDefinition.fields.map((field) => (
-                <Field
-                  {...(field.kind ? { kind: field.kind } : {})}
-                  {...(field.placeholder ? { placeholder: field.placeholder } : {})}
-                  key={field.name}
-                  label={field.label[locale]}
-                  onChange={(value) => setDraftValue(field.name, value)}
-                  value={activeModuleValues[field.name] ?? ""}
-                />
-              ))}
-            </div>
-            {activeDefinition.slug === "products" ? (
-              <ProductRows
-                locale={locale}
-                onAdd={() => setProductRowCount((count) => Math.min(count + 1, 30))}
-                onRemove={(index) => {
-                  setProductRowCount((count) => Math.max(1, count - 1));
-                  setModuleDrafts((current) => removeRowDraft(current, "products", "product", index));
-                }}
-                onValueChange={setDraftValue}
-                rowCount={productRowCount}
-                values={activeModuleValues}
-              />
-            ) : null}
-            {activeDefinition.slug === "competitors" ? (
-              <CompetitorRows
-                locale={locale}
-                onAdd={() => setCompetitorRowCount((count) => Math.min(count + 1, 20))}
-                onRemove={(index) => {
-                  setCompetitorRowCount((count) => Math.max(1, count - 1));
-                  setModuleDrafts((current) => removeRowDraft(current, "competitors", "competitor", index));
-                }}
-                onValueChange={setDraftValue}
-                rowCount={competitorRowCount}
-                values={activeModuleValues}
-              />
-            ) : null}
-            {activeDefinition.slug === "brand" ? (
-              <BrandAssetUploads
-                assets={brandAssets}
-                client={client}
-                disabled={!session || isBusy}
-                locale={locale}
-                onUploaded={(key, asset) => {
-                  setBrandAssets((current) => ({ ...current, [key]: asset }));
-                  setModuleDrafts((current) => ({
-                    ...current,
-                    brand: {
-                      ...current.brand,
-                      [key]: asset.id
-                    }
-                  }));
-                  setMessage(copy(locale, "uploaded"));
-                }}
-                setBusy={setIsBusy}
-                setMessage={setMessage}
-              />
-            ) : null}
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="min-h-5 text-sm text-muted">{message}</p>
-              <div className="flex flex-wrap justify-end gap-2">
+          <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,.18)] backdrop-blur sm:p-8">
+            {step === 1 ? <CompanyStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
+            {step === 2 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
+            {step === 3 ? <AudienceStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
+            {step === 4 ? <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} /> : null}
+            {step === 5 ? <ChannelsStep copy={copy} draft={draft} update={update} /> : null}
+            {step === 6 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} /> : null}
+            {step === 7 ? <AiSetupStep aiLoading={aiLoading} aiProgress={aiProgress} copy={copy} launchDashboard={launchDashboard} saving={saving} /> : null}
+
+            {message ? <p className="mt-5 rounded-lg border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-white/55">{message}</p> : null}
+
+            {step < 7 ? (
+              <div className="mt-6 flex items-center justify-between sm:mt-8">
                 <button
-                  className="inline-flex items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted disabled:opacity-50"
-                  disabled={activeModuleIndex === 0 || isBusy}
-                  onClick={() => goToModule(activeModuleIndex - 1)}
+                  className="flex items-center gap-2 rounded-lg bg-white/[.06] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[.09] disabled:bg-transparent disabled:text-white/20"
+                  disabled={step === 1 || saving}
+                  onClick={back}
                   type="button"
                 >
-                  <ChevronLeft size={16} />
-                  {copy(locale, "previous")}
+                  <BackIcon size={16} />
+                  {copy.back}
                 </button>
                 <button
-                  className="rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted disabled:opacity-50"
-                  disabled={activeModuleIndex === modules.length - 1 || isBusy}
-                  onClick={() => goToModule(activeModuleIndex + 1)}
+                  className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_12px_rgba(233,69,96,.3)] transition hover:opacity-90 disabled:opacity-60"
+                  disabled={saving}
+                  onClick={next}
                   type="button"
                 >
-                  {copy(locale, "skip")}
-                </button>
-                <button className="inline-flex items-center gap-2 rounded-button bg-midnavy px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!session || isBusy} onClick={saveModule} type="button">
-                  <Save size={16} />
-                  {copy(locale, "save")}
-                </button>
-                <button
-                  className="inline-flex items-center gap-2 rounded-button bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={activeModuleIndex === modules.length - 1 || isBusy}
-                  onClick={() => goToModule(activeModuleIndex + 1)}
-                  type="button"
-                >
-                  {copy(locale, "next")}
-                  <ChevronRight size={16} />
+                  {step === 6 ? copy.build : copy.continue}
+                  <NextIcon size={16} />
                 </button>
               </div>
-            </div>
-          </div>
+            ) : null}
+          </section>
         </div>
-      </div>
+      </main>
     </section>
   );
 }
 
-function ProductRows({
-  locale,
-  onAdd,
-  onRemove,
-  onValueChange,
-  rowCount,
-  values
-}: {
-  locale: Locale;
-  onAdd: () => void;
-  onRemove: (index: number) => void;
-  onValueChange: (key: string, value: string) => void;
-  rowCount: number;
-  values: Record<string, string>;
-}) {
-  return (
-    <div className="mt-4 grid gap-3">
-      {Array.from({ length: rowCount }, (_, index) => (
-        <div className="rounded-card border border-border bg-canvas p-3" key={index}>
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-xs font-semibold uppercase text-muted">
-              {copy(locale, "product")} {index + 1}
-            </h4>
-            <button
-              aria-label={copy(locale, "remove")}
-              className="rounded-button border border-border p-2 text-muted hover:text-accent disabled:opacity-50"
-              disabled={rowCount === 1}
-              onClick={() => onRemove(index)}
-              type="button"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <Field label={copy(locale, "productName")} onChange={(value) => onValueChange(rowKey("product", index, "name"), value)} value={values[rowKey("product", index, "name")] ?? ""} />
-            <Field label={copy(locale, "category")} onChange={(value) => onValueChange(rowKey("product", index, "category"), value)} value={values[rowKey("product", index, "category")] ?? ""} />
-            <Field kind="number" label={copy(locale, "priceMinor")} onChange={(value) => onValueChange(rowKey("product", index, "priceMinor"), value)} value={values[rowKey("product", index, "priceMinor")] ?? ""} />
-            <Field kind="textarea" label={copy(locale, "description")} onChange={(value) => onValueChange(rowKey("product", index, "description"), value)} value={values[rowKey("product", index, "description")] ?? ""} />
-          </div>
-        </div>
-      ))}
-      <button className="inline-flex w-fit items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted" onClick={onAdd} type="button">
-        <Plus size={16} />
-        {copy(locale, "addProduct")}
-      </button>
-    </div>
-  );
-}
-
-function CompetitorRows({
-  locale,
-  onAdd,
-  onRemove,
-  onValueChange,
-  rowCount,
-  values
-}: {
-  locale: Locale;
-  onAdd: () => void;
-  onRemove: (index: number) => void;
-  onValueChange: (key: string, value: string) => void;
-  rowCount: number;
-  values: Record<string, string>;
-}) {
-  return (
-    <div className="mt-4 grid gap-3">
-      {Array.from({ length: rowCount }, (_, index) => (
-        <div className="rounded-card border border-border bg-canvas p-3" key={index}>
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-xs font-semibold uppercase text-muted">
-              {copy(locale, "competitor")} {index + 1}
-            </h4>
-            <button
-              aria-label={copy(locale, "remove")}
-              className="rounded-button border border-border p-2 text-muted hover:text-accent disabled:opacity-50"
-              disabled={rowCount === 1}
-              onClick={() => onRemove(index)}
-              type="button"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <Field label={copy(locale, "competitorName")} onChange={(value) => onValueChange(rowKey("competitor", index, "name"), value)} value={values[rowKey("competitor", index, "name")] ?? ""} />
-            <Field label={copy(locale, "instagramHandle")} onChange={(value) => onValueChange(rowKey("competitor", index, "instagramHandle"), value)} value={values[rowKey("competitor", index, "instagramHandle")] ?? ""} />
-            <Field label={copy(locale, "website")} onChange={(value) => onValueChange(rowKey("competitor", index, "website"), value)} value={values[rowKey("competitor", index, "website")] ?? ""} />
-            <Field kind="textarea" label={copy(locale, "notes")} onChange={(value) => onValueChange(rowKey("competitor", index, "notes"), value)} value={values[rowKey("competitor", index, "notes")] ?? ""} />
-          </div>
-        </div>
-      ))}
-      <button className="inline-flex w-fit items-center gap-2 rounded-button border border-border px-3 py-2 text-sm font-semibold text-muted" onClick={onAdd} type="button">
-        <Plus size={16} />
-        {copy(locale, "addCompetitor")}
-      </button>
-    </div>
-  );
-}
-
-function Field({
-  kind,
-  label,
-  onChange,
-  placeholder,
-  type = "text",
-  value
-}: {
-  kind?: "number" | "textarea";
-  label: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  value: string;
-}) {
-  const className = "mt-1 w-full rounded-input border border-border bg-white px-3 py-2 text-sm outline-none focus:border-accent";
-
-  return (
-    <label className={kind === "textarea" ? "md:col-span-2" : undefined}>
-      <span className="text-xs font-medium text-muted">{label}</span>
-      {kind === "textarea" ? (
-        <textarea className={`${className} min-h-24 resize-y`} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
-      ) : (
-        <input className={className} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={kind === "number" ? "number" : type} value={value} />
-      )}
-    </label>
-  );
-}
-
-function BrandAssetUploads({
-  assets,
-  client,
-  disabled,
-  locale,
-  onUploaded,
-  setBusy,
-  setMessage
-}: {
-  assets: Record<string, MediaAssetRecord | undefined>;
-  client: MarkosApiClient;
-  disabled: boolean;
-  locale: Locale;
-  onUploaded: (key: "guidelinesMediaId" | "logoMediaId", asset: MediaAssetRecord) => void;
-  setBusy: (busy: boolean) => void;
-  setMessage: (message: string) => void;
-}) {
-  async function upload(key: "guidelinesMediaId" | "logoMediaId", file: File | undefined) {
-    if (!file) {
-      return;
-    }
-
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const asset = await client.uploadMedia({
-        type: "BRAND_ASSET",
-        filename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        base64Data: await fileToBase64(file)
-      });
-      onUploaded(key, asset);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="mt-4 grid gap-3 md:grid-cols-2">
-      <UploadField
-        accept="image/*"
-        asset={assets.logoMediaId}
-        disabled={disabled}
-        label={copy(locale, "logoUpload")}
-        onChange={(file) => upload("logoMediaId", file)}
-      />
-      <UploadField
-        accept=".pdf,image/*"
-        asset={assets.guidelinesMediaId}
-        disabled={disabled}
-        label={copy(locale, "guidelinesUpload")}
-        onChange={(file) => upload("guidelinesMediaId", file)}
-      />
-    </div>
-  );
-}
-
-function UploadField({
-  accept,
-  asset,
-  disabled,
-  label,
-  onChange
-}: {
-  accept: string;
-  asset: MediaAssetRecord | undefined;
-  disabled: boolean;
-  label: string;
-  onChange: (file: File | undefined) => void;
-}) {
-  return (
-    <label className="rounded-card border border-dashed border-border bg-canvas p-3">
-      <span className="flex items-center gap-2 text-xs font-medium text-muted">
-        <UploadCloud size={16} />
-        {label}
-      </span>
-      <input
-        accept={accept}
-        className="mt-2 block w-full text-xs text-muted file:me-3 file:rounded-button file:border-0 file:bg-midnavy file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white disabled:opacity-50"
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.files?.[0])}
-        type="file"
-      />
-      {asset ? (
-        <a className="mt-2 block truncate text-xs font-medium text-accent" href={asset.publicUrl} rel="noreferrer" target="_blank">
-          {asset.filename}
-        </a>
-      ) : null}
-    </label>
-  );
-}
-
-function ProgressBar({ value }: { value: number }) {
+function CompanyStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
   return (
     <div>
-      <div className="flex items-center justify-between text-xs text-muted">
-        <span>Vault</span>
-        <span>{value}%</span>
-      </div>
-      <div className="mt-2 h-2 rounded-full bg-navy/10">
-        <div className="h-2 rounded-full bg-accent" style={{ width: `${value}%` }} />
+      <StepHeading body={copy.company.body} title={copy.company.title} />
+      <div className="grid gap-4">
+        <DarkField label={copy.company.name} onChange={(value) => update("companyName", value)} value={draft.companyName} />
+        <DarkSelect label={copy.company.industry} onChange={(value) => update("industry", value)} options={industryOptions(locale)} value={draft.industry} />
+        <DarkField label={copy.company.website} onChange={(value) => update("website", value)} value={draft.website} />
+        <DarkField area label={copy.company.description} onChange={(value) => update("description", value)} value={draft.description} />
       </div>
     </div>
   );
 }
 
-function GapList({
-  locale,
-  missingModules,
-  missingSections
-}: {
-  locale: Locale;
-  missingModules: string[];
-  missingSections: OnboardingState["vaultScore"]["missingSections"];
+function BrandStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
+  return (
+    <div>
+      <StepHeading body={copy.brand.body} title={copy.brand.title} />
+      <button
+        className={
+          draft.logoUploaded
+            ? "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-success/70 bg-success/10 p-5 text-success sm:min-h-36 sm:gap-3 sm:p-6"
+            : "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-white/[.03] p-5 text-white/45 transition hover:border-accent/60 hover:text-white/65 sm:min-h-36 sm:gap-3 sm:p-6"
+        }
+        onClick={() => update("logoUploaded", !draft.logoUploaded)}
+        type="button"
+      >
+        {draft.logoUploaded ? <CheckCircle2 size={28} /> : <Upload size={28} />}
+        <span className="text-sm font-semibold">{draft.logoUploaded ? copy.brand.logoDone : copy.brand.logoIdle}</span>
+        <span className="text-xs text-white/30">{copy.brand.logoHint}</span>
+      </button>
+
+      <section className="mt-5 sm:mt-6">
+        <Label>{copy.brand.tone}</Label>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {toneMeta.map((tone) => {
+            const Icon = tone.icon;
+            const active = draft.tone === tone.id;
+            return (
+              <button
+                className={
+                  active
+                    ? "rounded-lg border border-accent bg-accent/20 p-2.5 text-center text-accent sm:p-3"
+                    : "rounded-lg border border-white/10 bg-white/[.05] p-2.5 text-center text-white/55 transition hover:border-white/20 hover:text-white/75 sm:p-3"
+                }
+                key={tone.id}
+                onClick={() => update("tone", tone.id)}
+                type="button"
+              >
+                <Icon className="mx-auto" size={18} />
+                <span className="mt-2 block text-xs font-semibold">{toneLabel(locale, tone.id)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mt-5 sm:mt-6">
+        <Label>{copy.brand.color}</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {["#E94560", "#0F3460", "#22C55E", "#F59E0B", "#6366F1", "#EC4899", "#111827"].map((color) => (
+            <button
+              aria-label={`${copy.brand.color} ${color}`}
+              className={draft.brandColor === color ? "h-8 w-8 rounded-lg border-[3px] border-white sm:h-9 sm:w-9" : "h-8 w-8 rounded-lg border-[3px] border-transparent sm:h-9 sm:w-9"}
+              key={color}
+              onClick={() => update("brandColor", color)}
+              style={{ background: color }}
+              type="button"
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AudienceStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
+  return (
+    <div>
+      <StepHeading body={copy.audience.body} title={copy.audience.title} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <DarkSelect label={copy.audience.age} onChange={(value) => update("ageRange", value)} options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))} value={draft.ageRange} />
+        <DarkSelect label={copy.audience.gender} onChange={(value) => update("genderFocus", value)} options={genderOptions(locale)} value={draft.genderFocus} />
+        <div className="sm:col-span-2">
+          <DarkField label={copy.audience.location} onChange={(value) => update("location", value)} value={draft.location} />
+        </div>
+        <div className="sm:col-span-2">
+          <DarkField area label={copy.audience.painPoints} onChange={(value) => update("painPoints", value)} value={draft.painPoints} />
+        </div>
+      </div>
+      <section className="mt-6">
+        <Label>{copy.audience.language}</Label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {languageOptions(locale).map((language) => (
+            <button
+              className={
+                draft.languagePreference === language.value
+                  ? "rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-accent"
+                  : "rounded-lg border border-white/10 bg-white/[.05] px-4 py-2 text-sm text-white/55"
+              }
+              key={language.value}
+              onClick={() => update("languagePreference", language.value)}
+              type="button"
+            >
+              {language.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CompetitorsStep({
+  addCompetitor,
+  copy,
+  draft,
+  removeCompetitor,
+  update
+}: StepProps & {
+  addCompetitor: () => void;
+  copy: OnboardingCopy;
+  removeCompetitor: (index: number) => void;
 }) {
-  if (missingSections.length === 0) {
+  return (
+    <div>
+      <StepHeading body={copy.competitors.body} title={copy.competitors.title} />
+      <div className="grid gap-3">
+        {draft.competitors.map((competitor, index) => (
+          <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[.07] px-4 py-3" key={competitor}>
+            <Target className="text-accent" size={16} />
+            <span className="flex-1 text-sm font-semibold text-white">{competitor}</span>
+            <button aria-label={`Remove ${competitor}`} className="text-white/40 transition hover:text-accent" onClick={() => removeCompetitor(index)} type="button">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-accent"
+          onChange={(event) => update("newCompetitor", event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") addCompetitor();
+          }}
+          placeholder={copy.addCompetitorPlaceholder}
+          value={draft.newCompetitor}
+        />
+        <button className="flex items-center gap-1 rounded-lg bg-accent px-4 text-sm font-semibold text-white" onClick={addCompetitor} type="button">
+          <Plus size={16} />
+          {copy.add}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-white/30">{copy.competitors.hint}</p>
+    </div>
+  );
+}
+
+function ChannelsStep({ copy, draft, update }: StepProps & { copy: OnboardingCopy }) {
+  const channels = [
+    { id: "instagram" as const, label: "Instagram", handle: "@zain_bh", icon: Instagram, color: "#E1306C" },
+    { id: "facebook" as const, label: "Facebook", handle: "Zain Bahrain", icon: Facebook, color: "#1877F2" },
+    { id: "twitter" as const, label: "X (Twitter)", handle: "Not connected", icon: Twitter, color: "#111827" }
+  ];
+
+  return (
+    <div>
+      <StepHeading body={copy.channels.body} title={copy.channels.title} />
+      <div className="grid gap-3">
+        {channels.map((channel) => {
+          const Icon = channel.icon;
+          const connected = draft.channels[channel.id];
+          return (
+            <article className={connected ? "flex items-center gap-4 rounded-xl border border-success/30 bg-white/[.05] p-4" : "flex items-center gap-4 rounded-xl border border-white/10 bg-white/[.05] p-4"} key={channel.id}>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${channel.color}22` }}>
+                <Icon color={channel.color} size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-white">{channel.label}</h3>
+                <p className={connected ? "text-xs text-success" : "text-xs text-white/30"}>{connected ? channel.handle : copy.channels.notConnected}</p>
+              </div>
+              <button
+                className={connected ? "rounded-lg border border-success/30 bg-success/15 px-3 py-1.5 text-xs font-semibold text-success" : "rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white"}
+                onClick={() => update("channels", { ...draft.channels, [channel.id]: !connected })}
+                type="button"
+              >
+                {connected ? copy.channels.connected : copy.channels.connect}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GoalsStep({ copy, draft, locale, toggleGoal }: { copy: OnboardingCopy; draft: OnboardingDraft; locale: Locale; toggleGoal: (goal: string) => void }) {
+  return (
+    <div>
+      <StepHeading body={copy.goals.body} title={copy.goals.title} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {goalOptions(locale).map((goal) => {
+          const active = draft.goals.includes(goal.value);
+          return (
+            <button
+              className={active ? "rounded-xl border border-accent bg-accent/15 p-4 text-start" : "rounded-xl border border-white/10 bg-white/[.05] p-4 text-start transition hover:border-white/20"}
+              key={goal.value}
+              onClick={() => toggleGoal(goal.value)}
+              type="button"
+            >
+              <span className="flex items-center gap-2">
+                <span className={active ? "flex h-[18px] w-[18px] items-center justify-center rounded-full bg-accent" : "h-[18px] w-[18px] rounded-full bg-white/10"}>
+                  {active ? <CheckCircle2 size={12} /> : null}
+                </span>
+                <span className={active ? "text-sm font-semibold text-white" : "text-sm text-white/55"}>{goal.label}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AiSetupStep({
+  aiLoading,
+  aiProgress,
+  copy,
+  launchDashboard,
+  saving
+}: {
+  aiLoading: boolean;
+  aiProgress: number;
+  copy: OnboardingCopy;
+  launchDashboard: () => void;
+  saving: boolean;
+}) {
+  if (aiLoading) {
+    const taskDoneAt = [20, 45, 65, 82, 100];
+
     return (
-      <div className="rounded-card border border-accent/20 bg-accent/5 p-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-          <CheckCircle2 size={16} />
-          {copy(locale, "allComplete")}
+      <div className="py-4 text-center">
+        <BrandAiMark pulse />
+        <StepHeading center body={copy.setup.body} title={copy.setup.loadingTitle} />
+        <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-[linear-gradient(90deg,#E94560,#f472b6,#E94560)] transition-all duration-300" style={{ width: `${aiProgress}%` }} />
+        </div>
+        <div className="grid gap-2 text-start">
+          {copy.setup.tasks.map((task, index) => {
+            const done = aiProgress >= (taskDoneAt[index] ?? 100);
+            return (
+            <div className="flex items-center gap-3" key={task}>
+              <span className={done ? "h-2 w-2 rounded-full bg-success" : "h-2 w-2 rounded-full bg-white/20"} />
+              <span className={done ? "text-[13px] text-success" : "text-[13px] text-white/40"}>{task}</span>
+            </div>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-card border border-border bg-canvas p-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-navy">
-        <AlertCircle size={16} className="text-accent" />
-        {copy(locale, "remaining")}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {missingModules.map((module) => (
-          <span className="rounded-full bg-white px-2 py-1 text-xs text-muted" key={module}>
-            {module}
-          </span>
+    <div className="py-4 text-center">
+      <BrandAiMark />
+      <StepHeading center body={copy.setup.readyBody} title={copy.setup.readyTitle} />
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        {copy.setup.stats.map((stat) => (
+          <div className="rounded-xl border border-white/10 bg-white/[.06] p-3" key={stat.label}>
+            <p className="font-display text-[22px] font-bold text-accent">{stat.value}</p>
+            <p className="text-[11px] text-white/50">{stat.label}</p>
+          </div>
         ))}
       </div>
-      <p className="mt-2 text-xs leading-5 text-muted">
-        {copy(locale, "missingSections")}: {missingSections.map((section) => sectionLabel(locale, section)).join(", ")}
-      </p>
+      <button
+        className="w-full rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] py-3.5 text-base font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.4)] transition hover:opacity-90 disabled:opacity-60"
+        disabled={saving}
+        onClick={launchDashboard}
+        type="button"
+      >
+        {copy.launch}
+      </button>
     </div>
   );
 }
 
-async function refreshState(
-  client: MarkosApiClient,
-  setState: (state: OnboardingState) => void,
-  setMessage: (message: string) => void
-) {
-  try {
-    setState(await client.onboarding());
-  } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Request failed");
-  }
+interface StepProps {
+  draft: OnboardingDraft;
+  update: <K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) => void;
 }
 
-function splitList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function StepHeading({ body, center = false, title }: { body: string; center?: boolean; title: string }) {
+  return (
+    <div className={center ? "mb-5 text-center sm:mb-7" : "mb-5 sm:mb-7"}>
+      <h2 className="font-display text-[22px] font-bold tracking-normal text-white sm:text-2xl">{title}</h2>
+      <p className="mt-1.5 text-sm leading-6 text-white/50 sm:mt-2">{body}</p>
+    </div>
+  );
 }
 
-function collectProductRows(values: Record<string, string>) {
-  return collectRowIndexes(values, "product")
-    .map((index) => ({
-      category: valueOf(values, rowKey("product", index, "category")) || undefined,
-      currency: "BHD",
-      description: valueOf(values, rowKey("product", index, "description")) || undefined,
-      name: valueOf(values, rowKey("product", index, "name")),
-      priceMinor: valueOf(values, rowKey("product", index, "priceMinor"))
-        ? Number(valueOf(values, rowKey("product", index, "priceMinor")))
-        : undefined
-    }))
-    .filter((item) => item.name);
+function BrandAiMark({ pulse = false }: { pulse?: boolean }) {
+  return (
+    <div className="mb-6 flex justify-center">
+      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-accent/40 bg-[linear-gradient(135deg,rgba(233,69,96,.3),rgba(15,52,96,.3))]">
+        <Sparkles className={pulse ? "animate-pulse text-accent" : "text-accent"} size={32} />
+      </div>
+    </div>
+  );
 }
 
-function collectCompetitorRows(values: Record<string, string>) {
-  return collectRowIndexes(values, "competitor")
-    .map((index) => ({
-      instagramHandle: valueOf(values, rowKey("competitor", index, "instagramHandle")) || undefined,
-      name: valueOf(values, rowKey("competitor", index, "name")),
-      notes: valueOf(values, rowKey("competitor", index, "notes")) || undefined,
-      website: valueOf(values, rowKey("competitor", index, "website")) || undefined
-    }))
-    .filter((item) => item.name);
+function DarkField({
+  area,
+  label,
+  onChange,
+  value
+}: {
+  area?: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label>
+      <Label>{label}</Label>
+      {area ? (
+        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+      ) : (
+        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+      )}
+    </label>
+  );
 }
 
-function collectRowIndexes(values: Record<string, string>, prefix: "competitor" | "product"): number[] {
-  const indexes = new Set<number>();
-
-  for (const key of Object.keys(values)) {
-    const match = key.match(new RegExp(`^${prefix}\\.(\\d+)\\.`));
-
-    if (match?.[1] !== undefined) {
-      indexes.add(Number(match[1]));
-    }
-  }
-
-  return [...indexes].sort((first, second) => first - second);
+function DarkSelect({
+  label,
+  onChange,
+  options,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  value: string;
+}) {
+  return (
+    <label>
+      <Label>{label}</Label>
+      <select className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#2d2d42] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
-function rowKey(prefix: "competitor" | "product", index: number, field: string): string {
-  return `${prefix}.${index}.${field}`;
+function Label({ children }: { children: ReactNode }) {
+  return <span className="text-xs font-semibold uppercase tracking-[.06em] text-white/60">{children}</span>;
 }
 
-function emptyDrafts(): Drafts {
-  return {
-    audience: {},
-    brand: {},
-    company: {},
-    competitors: {},
-    objectives: {},
-    products: {},
-    story: {}
-  };
-}
-
-function removeRowDraft(drafts: Drafts, module: Extract<ModuleSlug, "competitors" | "products">, prefix: "competitor" | "product", index: number): Drafts {
-  const nextValues: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(drafts[module])) {
-    const match = key.match(new RegExp(`^${prefix}\\.(\\d+)\\.(.+)$`));
-
-    if (match?.[1] === undefined || match[2] === undefined) {
-      nextValues[key] = value;
-      continue;
-    }
-
-    const rowIndex = Number(match[1]);
-
-    if (rowIndex < index) {
-      nextValues[key] = value;
-    } else if (rowIndex > index) {
-      nextValues[rowKey(prefix, rowIndex - 1, match[2])] = value;
-    }
+function payloadForStep(step: StepId, draft: OnboardingDraft): { body: Record<string, unknown>; module: string } | null {
+  if (step === 1) {
+    return {
+      module: "company",
+      body: {
+        industry: draft.industry,
+        languages: draft.languagePreference === "Both" ? ["Arabic", "English"] : [draft.languagePreference],
+        location: draft.location,
+        name: draft.companyName,
+        socials: ["instagram.com/zain_bh"],
+        website: draft.website
+      }
+    };
   }
 
-  return {
-    ...drafts,
-    [module]: nextValues
-  };
-}
-
-function valueOf(values: Record<string, string>, key: string): string {
-  return values[key] ?? "";
-}
-
-function sectionLabel(locale: Locale, section: OnboardingState["vaultScore"]["requiredSections"][number]): string {
-  const labels: Record<OnboardingState["vaultScore"]["requiredSections"][number], Record<Locale, string>> = {
-    AUDIENCE: { ar: "الجمهور", en: "Audience" },
-    BRAND: { ar: "الهوية", en: "Brand" },
-    COMPANY: { ar: "الشركة", en: "Company" },
-    COMPETITORS: { ar: "المنافسون", en: "Competitors" },
-    OBJECTIVES: { ar: "الأهداف", en: "Objectives" },
-    PRODUCTS: { ar: "المنتجات", en: "Products" },
-    STORY: { ar: "القصة", en: "Story" },
-    TONE: { ar: "النبرة", en: "Tone" }
-  };
-
-  return labels[section][locale];
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+  if (step === 2) {
+    return {
+      module: "brand",
+      body: {
+        aestheticWords: ["clean", "modern", "confident"],
+        colors: [draft.brandColor, "#E94560"],
+        fonts: ["Inter", "Space Grotesk"],
+        toneWords: [draft.tone],
+        voiceNotes: "Professional, bilingual, helpful, and confident."
+      }
+    };
   }
 
-  return window.btoa(binary);
+  if (step === 3) {
+    return {
+      module: "audience",
+      body: {
+        ageRange: draft.ageRange,
+        demographics: draft.genderFocus,
+        genderBreakdown: draft.genderFocus,
+        interests: ["Connectivity", "Digital services", "Business growth"],
+        locations: draft.location.split(",").map((item) => item.trim()).filter(Boolean),
+        motivations: ["Reliability", "Speed", "Competitive pricing"],
+        painPoints: draft.painPoints.split(",").map((item) => item.trim()).filter(Boolean)
+      }
+    };
+  }
+
+  if (step === 4) {
+    return {
+      module: "competitors",
+      body: {
+        competitiveAdvantage: "Bilingual digital-first customer experience.",
+        doDifferently: "Publish clearer, more helpful content with consistent audience timing.",
+        items: draft.competitors.map((name) => ({ name }))
+      }
+    };
+  }
+
+  if (step === 6) {
+    return {
+      module: "objectives",
+      body: {
+        budgetRange: "BHD 500-1500",
+        goals: draft.goals,
+        instagramExperience: "Active business account",
+        kpiTargets: { engagementRate: "4.8%" },
+        success90Days: "More consistent content, higher engagement, and clearer campaign rhythm."
+      }
+    };
+  }
+
+  return null;
 }
 
-function copy(locale: Locale, key: string): string {
-  const dictionary: Record<Locale, Record<string, string>> = {
-    ar: {
-      addCompetitor: "إضافة منافس",
-      addProduct: "إضافة منتج",
-      allComplete: "كل وحدات المعرفة مكتملة",
-      category: "الفئة",
-      complete: "اكتملت التهيئة",
-      completeButton: "إنهاء التهيئة",
-      competitor: "منافس",
-      competitorName: "اسم المنافس",
-      description: "الوصف",
-      email: "البريد الإلكتروني",
-      failed: "تعذر تنفيذ الطلب",
-      fullName: "الاسم الكامل",
-      guidelinesUpload: "رفع دليل الهوية",
-      login: "تسجيل الدخول",
-      logoUpload: "رفع الشعار",
-      instagramHandle: "حساب إنستغرام",
-      onboarding: "تهيئة معرفة النشاط",
-      onboardingSubtitle: "كل وحدة تحفظ معرفة قابلة للاسترجاع في الخزنة.",
-      missingSections: "الأقسام الناقصة",
-      next: "التالي",
-      notes: "ملاحظات",
-      password: "كلمة المرور",
-      previous: "السابق",
-      priceMinor: "السعر بالفلس",
-      product: "منتج",
-      productName: "اسم المنتج",
-      refresh: "تحديث",
-      remove: "إزالة",
-      remaining: "المتبقي للإكمال",
-      register: "إنشاء حساب",
-      save: "حفظ الوحدة",
-      saved: "تم الحفظ",
-      signedIn: "تم تسجيل الدخول",
-      signOut: "خروج",
-      skip: "تخطي الآن",
-      uploaded: "تم رفع الملف",
-      website: "الموقع الإلكتروني",
-      workspace: "مساحة العمل",
-      workspaceName: "اسم مساحة العمل"
-    },
-    en: {
-      addCompetitor: "Add competitor",
-      addProduct: "Add product",
-      allComplete: "All knowledge modules are complete",
-      category: "Category",
-      complete: "Onboarding complete",
-      completeButton: "Complete onboarding",
-      competitor: "Competitor",
-      competitorName: "Competitor name",
-      description: "Description",
-      email: "Email",
-      failed: "Request failed",
-      fullName: "Full name",
-      guidelinesUpload: "Upload brand guidelines",
-      login: "Log in",
-      logoUpload: "Upload logo",
-      instagramHandle: "Instagram handle",
-      onboarding: "Business Knowledge Onboarding",
-      onboardingSubtitle: "Each module saves retrievable business memory into the Vault.",
-      missingSections: "Missing sections",
-      next: "Next",
-      notes: "Notes",
-      password: "Password",
-      previous: "Previous",
-      priceMinor: "Price in fils",
-      product: "Product",
-      productName: "Product name",
-      refresh: "Refresh",
-      remove: "Remove",
-      remaining: "Remaining to complete",
-      register: "Create account",
-      save: "Save module",
-      saved: "Saved",
-      signedIn: "Signed in",
-      signOut: "Sign out",
-      skip: "Skip for now",
-      uploaded: "Uploaded",
-      website: "Website",
-      workspace: "Workspace",
-      workspaceName: "Workspace name"
-    }
-  };
-
-  return dictionary[locale][key] ?? key;
+function getInitialStep(): StepId {
+  if (typeof window === "undefined") return 1;
+  const value = Number(new URLSearchParams(window.location.search).get("step") ?? "1");
+  return value >= 1 && value <= 7 ? (value as StepId) : 1;
 }

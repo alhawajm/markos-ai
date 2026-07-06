@@ -114,6 +114,8 @@ enum InvoiceStatus {
 enum UsageMetric {
   AI_GENERATION
   AI_IMAGE
+  AI_TOKENS_IN
+  AI_TOKENS_OUT
   POST_PUBLISH
   STRATEGY
   STORAGE_BYTES
@@ -426,6 +428,7 @@ model UsageCounter {
 
 model PromptTemplate {
   id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String    @db.Uuid
   agent      String
   version    String
   body       String
@@ -436,9 +439,20 @@ model PromptTemplate {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  @@unique([agent, version])
-  @@index([agent, active])
+  @@unique([workspaceId, agent, version])
+  @@index([workspaceId, agent, active])
   @@map("prompt_templates")
+}
+
+model ModelSetting {
+  id        String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  key       String    @unique
+  value     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("model_settings")
 }
 
 model Notification {
