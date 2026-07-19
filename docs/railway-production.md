@@ -28,6 +28,8 @@ The API container runs `node --import tsx prisma/deploy.ts` before starting Fast
 
 If any release step fails, the API process never starts and Railway marks that deployment as failed. Confirm the existing production deployment remains active before retrying or rolling back.
 
+The root `railway.json` sets `deploy.startCommand` to `null`. This intentionally clears stale dashboard command overrides so each service runs the `CMD` from its selected Dockerfile.
+
 ## Service Variables
 
 Use Railway reference variables instead of copying database credentials between services. Seal JWT, Meta, provider, payment, email, and webhook secrets after validation.
