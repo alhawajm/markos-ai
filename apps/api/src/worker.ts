@@ -9,7 +9,7 @@ const worker = startMaintenanceWorker({
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.info(`Received ${signal}; stopping maintenance worker`);
-  worker.stop();
+  await worker.stop();
   await flushObservability();
   process.exit(0);
 }

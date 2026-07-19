@@ -54,6 +54,7 @@ const envSchema = z.object({
   INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
   INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
   WORKER_PUBLISHING_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  WORKER_EMBEDDED: booleanFromString.default(false),
   WORKER_ANALYTICS_EMAIL_INTERVAL_MS: z.coerce.number().int().positive().default(24 * 60 * 60_000),
   WORKER_ANALYTICS_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(6 * 60 * 60_000),
   WORKER_TOKEN_REFRESH_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60_000),

@@ -18,5 +18,6 @@ RUN pnpm --filter api build
 FROM base AS runtime
 ENV NODE_ENV=production
 COPY --from=build /app /app
+WORKDIR /app/apps/api
 EXPOSE 4000
-CMD ["sh", "-c", "pnpm --filter api db:deploy && exec pnpm --filter api start"]
+CMD ["sh", "-c", "node --import tsx prisma/deploy.ts && exec node --import tsx src/main.ts"]

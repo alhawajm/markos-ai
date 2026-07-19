@@ -18,4 +18,5 @@ RUN pnpm --filter api build
 FROM base AS runtime
 ENV NODE_ENV=production
 COPY --from=build /app /app
-CMD ["pnpm", "--filter", "api", "worker"]
+WORKDIR /app/apps/api
+CMD ["node", "--import", "tsx", "src/worker.ts"]

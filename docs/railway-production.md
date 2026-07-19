@@ -8,16 +8,17 @@ This document is the production runbook for Railway project `68878e53-9589-4632-
 | --- | --- | --- | --- |
 | `web` | Public HTTPS | `apps/web/Dockerfile` | None |
 | `api` | Public HTTPS | `apps/api/Dockerfile` | `/app/var/media` volume |
-| `worker` | Private only | `apps/api/worker.Dockerfile` | PostgreSQL and Redis |
 | `ai` | Private only | `services/ai/Dockerfile` | None |
 | `pgvector` | Private only | `pgvector/pgvector:pg16` | PostgreSQL data volume |
 | `Redis` | Private only | Railway Redis service | Railway-managed volume |
 
 OpenSearch is intentionally disabled for the first production deployment. No shipped feature currently queries it; deploying the JVM service would add avoidable baseline cost. Set `OPENSEARCH_ENABLED=true` and provide `OPENSEARCH_URL` when search-backed product behavior is introduced.
 
+The Railway free plan is limited to five services, so `api` runs the maintenance scheduler with `WORKER_EMBEDDED=true`. The standalone `apps/api/worker.Dockerfile` remains the scale-out target when the project upgrades its plan. Do not horizontally scale the API while the scheduler is embedded, because every API replica would otherwise run the same scheduled work.
+
 ## Release Contract
 
-The API container runs `pnpm --filter api db:deploy` before Fastify starts. The command is idempotent and performs these steps:
+The API container runs `node --import tsx prisma/deploy.ts` before starting Fastify with Node as PID 1. The release command is idempotent and performs these steps:
 
 1. Enables `vector` and `pgcrypto`.
 2. Creates the UUID v7 database function used by the schema.
@@ -42,6 +43,7 @@ DATABASE_URL=${{pgvector.DATABASE_URL}}
 DIRECT_DATABASE_URL=${{pgvector.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 OPENSEARCH_ENABLED=false
+WORKER_EMBEDDED=true
 JWT_ACCESS_SECRET=<generated-64-character-secret>
 JWT_REFRESH_SECRET=<different-generated-64-character-secret>
 MEDIA_STORAGE_DIR=/app/var/media
@@ -54,9 +56,9 @@ SENTRY_TRACES_SAMPLE_RATE=0
 RAILWAY_DOCKERFILE_PATH=/apps/api/Dockerfile
 ```
 
-### Worker
+### Standalone Worker After a Plan Upgrade
 
-Use the same database, Redis, JWT, Meta, publishing, model, email, and Sentry variables as the API. Also set:
+Create this private service before horizontal API scaling. Set `WORKER_EMBEDDED=false` on `api`, then use the same database, Redis, JWT, Meta, publishing, model, email, and Sentry variables on the worker. Also set:
 
 ```text
 NODE_ENV=production
@@ -65,7 +67,7 @@ OPENSEARCH_ENABLED=false
 RAILWAY_DOCKERFILE_PATH=/apps/api/worker.Dockerfile
 ```
 
-Do not generate a public domain for the worker.
+Do not generate a public domain for the worker. The first free-plan deployment does not provision this service.
 
 ### AI
 
@@ -103,7 +105,7 @@ Enable automated PostgreSQL volume backups before onboarding a paying client. Te
 2. Configure and deploy private `ai`.
 3. Configure `api`, attach its media volume, generate its public domain, and deploy it.
 4. Confirm `GET /v1/health` and `GET /v1/health/deep` return HTTP 200; deep health must report database, Redis, and AI as `ok`, with OpenSearch `skipped`.
-5. Configure and deploy `worker` without a public domain.
+5. Confirm the API logs show `Embedded maintenance worker started` and one successful maintenance tick.
 6. Set the final API URL on `web`, deploy it, then verify `/ar`, `/en`, registration, login, logout, and an authenticated workspace request.
 
 ## Production Gates Still Owned Externally

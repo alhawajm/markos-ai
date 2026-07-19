@@ -28,7 +28,7 @@ export interface MaintenanceWorkerTickResult {
 
 export interface MaintenanceWorkerHandle {
   runNow(): Promise<MaintenanceWorkerTickResult>;
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 const consoleLogger: MaintenanceWorkerLogger = {
@@ -119,15 +119,26 @@ export function startMaintenanceWorker(input: {
   let lastTokenRefreshAt = 0;
   let lastAnalyticsSyncAt = 0;
   let lastUsageResetAt = 0;
-  let running = false;
+  let activeTick: Promise<MaintenanceWorkerTickResult> | undefined;
 
-  async function runNow(): Promise<MaintenanceWorkerTickResult> {
-    if (running) {
+  function runNow(): Promise<MaintenanceWorkerTickResult> {
+    if (activeTick) {
       logger.warn("Maintenance worker tick skipped because a previous tick is still running");
-      return {};
+      return Promise.resolve({});
     }
 
-    running = true;
+    const tick = executeTick();
+    activeTick = tick;
+    void tick.finally(() => {
+      if (activeTick === tick) {
+        activeTick = undefined;
+      }
+    });
+
+    return tick;
+  }
+
+  async function executeTick(): Promise<MaintenanceWorkerTickResult> {
     const now = new Date();
     const shouldEmailAnalytics = now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
     const shouldRefreshTokens = now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
@@ -168,8 +179,6 @@ export function startMaintenanceWorker(input: {
         error: error instanceof Error ? error.message : String(error)
       });
       return {};
-    } finally {
-      running = false;
     }
   }
 
@@ -183,8 +192,9 @@ export function startMaintenanceWorker(input: {
 
   return {
     runNow,
-    stop() {
+    async stop() {
       clearInterval(timer);
+      await activeTick;
     }
   };
 }
