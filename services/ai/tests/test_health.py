@@ -29,6 +29,75 @@ def test_vault_embedding_contract() -> None:
     assert len(body["embeddings"][0]) == 1536
 
 
+def test_website_extraction_returns_strict_evidence_backed_candidates() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/vault/extract-website",
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-website-model",
+            "pages": [
+                {
+                    "url": "https://raedat.example/",
+                    "title": "Raedat | Luxury Jewelry Bahrain",
+                    "description": "Luxury jewelry crafted for modern women in Bahrain.",
+                    "site_name": "Raedat",
+                    "headline": "Timeless jewelry, crafted locally",
+                    "paragraphs": [
+                        "Our premium collections celebrate Bahraini craftsmanship.",
+                        "Shop bridal collections and custom jewelry services.",
+                    ],
+                    "links": ["Shop collections", "Jewelry services"],
+                    "image_alts": ["Gold ring with pearl detail"],
+                    "colors": ["#78DAD1"],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model"] == "test-website-model"
+    assert body["prompt_version"] == "website-extraction.v1.local"
+    assert body["tokens_in"] > 0
+    assert body["tokens_out"] > 0
+    assert {candidate["section"] for candidate in body["candidates"]} >= {"COMPANY", "PRODUCTS", "BRAND", "TONE"}
+    assert all(candidate["confidence"] >= 0.45 for candidate in body["candidates"])
+    assert all(candidate["sourceSnippet"] for candidate in body["candidates"])
+
+
+def test_website_extraction_attributes_child_page_evidence_to_child_url() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/vault/extract-website",
+        json={
+            "workspace_id": "workspace-1",
+            "pages": [
+                {
+                    "url": "https://raedat.example/",
+                    "title": "Raedat Jewelry",
+                },
+                {
+                    "url": "https://raedat.example/collections",
+                    "headline": "Bridal Collections",
+                    "paragraphs": [
+                        "Shop bridal collections and custom jewelry packages."
+                    ],
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    candidates = response.json()["candidates"]
+    story = next(candidate for candidate in candidates if candidate["section"] == "STORY")
+    products = next(
+        candidate for candidate in candidates if candidate["section"] == "PRODUCTS"
+    )
+    assert story["sourceUrl"] == "https://raedat.example/collections"
+    assert products["sourceUrl"] == "https://raedat.example/collections"
+
+
 def test_strategy_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(

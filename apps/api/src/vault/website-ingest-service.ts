@@ -1,27 +1,61 @@
 import { isIP } from "node:net";
 import * as cheerio from "cheerio";
 import { Prisma } from "@prisma/client";
-import type { VaultSection, VaultWebsiteIngestCandidate, VaultWebsiteIngestDraft } from "@markos/shared-types";
+import type {
+  VaultSection,
+  VaultWebsiteIngestCandidate,
+  VaultWebsiteIngestDraft,
+  VaultWebsiteIngestJob,
+} from "@markos/shared-types";
 import {
   vaultWebsiteIngestCandidateSchema,
   type VaultWebsiteIngestApproveInput,
   type VaultWebsiteIngestCandidateInput,
+  type VaultWebsiteIngestJobCreateInput,
   type VaultWebsiteIngestPreviewInput,
-  type VaultWebsiteIngestRejectInput
+  type VaultWebsiteIngestRejectInput,
 } from "@markos/validation";
+import {
+  extractWebsiteCandidatesWithAi,
+  type WebsiteExtractionPage,
+} from "../ai/website-extraction-client";
 import { prisma } from "../db/prisma";
-import { upsertVaultSection } from "./vault-service";
+import {
+  recordAiTokenUsage,
+  refundWorkspaceUsage,
+  reserveWorkspaceUsage,
+} from "../usage/usage-service";
+import { upsertVaultSectionInTransaction } from "./vault-service";
 
 const maxWebsiteBytes = 1_000_000;
 const websiteFetchTimeoutMs = 5_000;
 const userAgent = "MARKOS-AI-Vault-Ingest/1.0 (+https://markos.ai)";
 
-interface WebsiteSignals {
+interface WebsiteIngestJobRow {
+  actorId: string;
+  attempts: number;
+  completedAt: Date | null;
+  createdAt: Date;
+  deletedAt: Date | null;
+  draftId: string | null;
+  error: string | null;
+  id: string;
+  maxPages: number;
+  nextRunAt: Date;
+  sourceUrl: string;
+  startedAt: Date | null;
+  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+  updatedAt: Date;
+  workspaceId: string;
+}
+
+interface WebsiteSignals extends WebsiteExtractionPage {
   colors: string[];
   description?: string;
   headline?: string;
   imageAlts: string[];
   links: string[];
+  internalUrls: string[];
   paragraphs: string[];
   siteName?: string;
   title?: string;
@@ -32,7 +66,7 @@ export class VaultWebsiteIngestError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly statusCode: number
+    public readonly statusCode: number,
   ) {
     super(message);
   }
@@ -41,7 +75,7 @@ export class VaultWebsiteIngestError extends Error {
 export function extractWebsiteIngestCandidates(
   url: string,
   html: string,
-  extractedAt = new Date()
+  extractedAt = new Date(),
 ): VaultWebsiteIngestCandidate[] {
   return buildCandidates(extractWebsiteSignals(url, html), extractedAt);
 }
@@ -49,7 +83,7 @@ export function extractWebsiteIngestCandidates(
 export async function previewWebsiteIngest(
   workspaceId: string,
   actorId: string,
-  input: VaultWebsiteIngestPreviewInput
+  input: VaultWebsiteIngestPreviewInput,
 ): Promise<VaultWebsiteIngestDraft> {
   const url = normalizeAndValidateWebsiteUrl(input.url);
   const html = await fetchWebsiteHtml(url);
@@ -60,80 +94,126 @@ export async function previewWebsiteIngest(
     throw new VaultWebsiteIngestError(
       "WEBSITE_INGEST_NO_SIGNALS",
       "The website did not expose enough public brand signals to create a Vault preview",
-      422
+      422,
     );
   }
 
-  const draft = await prisma.vaultIngestDraft.create({
-    data: {
-      workspaceId,
-      sourceUrl: url,
-      ...(signals.title === undefined ? {} : { sourceTitle: signals.title }),
-      ...(signals.description === undefined ? {} : { sourceDescription: signals.description }),
-      candidates: candidates as unknown as Prisma.InputJsonValue,
-      confidence: averageConfidence(candidates),
-      status: "PENDING"
-    }
+  return createWebsiteIngestDraft({
+    actorId,
+    candidates,
+    ...(signals.description === undefined
+      ? {}
+      : { sourceDescription: signals.description }),
+    ...(signals.title === undefined ? {} : { sourceTitle: signals.title }),
+    sourceUrl: url,
+    workspaceId,
+    extraction: {
+      method: "dom_signals_v1",
+      pageCount: 1,
+    },
   });
-
-  await prisma.auditLog.create({
-    data: {
-      actorId,
-      workspaceId,
-      action: "VAULT_WEBSITE_INGEST_PREVIEWED",
-      targetType: "VaultIngestDraft",
-      targetId: draft.id,
-      metadata: {
-        sourceUrl: url,
-        candidateCount: candidates.length,
-        sections: Array.from(new Set(candidates.map((candidate) => candidate.section)))
-      }
-    }
-  });
-
-  return toDraftRecord(draft);
 }
 
 export async function approveWebsiteIngest(
   workspaceId: string,
   actorId: string,
   draftId: string,
-  input: VaultWebsiteIngestApproveInput
+  input: VaultWebsiteIngestApproveInput,
 ): Promise<VaultWebsiteIngestDraft> {
   const draft = await findPendingDraft(workspaceId, draftId);
-  const candidates = normalizeCandidates(input.candidates ?? parseDraftCandidates(draft.candidates));
+  const originalCandidates = parseDraftCandidates(draft.candidates);
+  const reviewedCandidates = normalizeCandidates(
+    input.candidates ?? originalCandidates,
+  );
 
-  for (const candidate of candidates) {
+  for (const candidate of reviewedCandidates) {
     const parsed = vaultWebsiteIngestCandidateSchema.safeParse(candidate);
 
     if (!parsed.success) {
-      throw new VaultWebsiteIngestError("WEBSITE_INGEST_CANDIDATE_INVALID", "Invalid ingest candidate payload", 400);
+      throw new VaultWebsiteIngestError(
+        "WEBSITE_INGEST_CANDIDATE_INVALID",
+        "Invalid ingest candidate payload",
+        400,
+      );
     }
   }
 
-  for (const section of unique(candidates.map((candidate) => candidate.section))) {
-    await upsertVaultSection(workspaceId, section, {
-      entries: candidates
-        .filter((candidate) => candidate.section === section)
-        .map((candidate) => ({
-          key: candidate.key,
-          value: candidate.value
-        }))
-    });
-  }
+  const existing = await prisma.knowledgeVault.findMany({
+    where: {
+      workspaceId,
+      deletedAt: null,
+      OR: reviewedCandidates.map((candidate) => ({
+        section: candidate.section,
+        key: candidate.key,
+      })),
+    },
+  });
+  const candidates = reviewedCandidates.map((candidate) => {
+    const current = existing.find(
+      (entry) =>
+        entry.section === candidate.section && entry.key === candidate.key,
+    );
+
+    if (
+      input.writeMode === "OVERWRITE" ||
+      current === undefined ||
+      !isPlainRecord(current.value)
+    ) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      value: mergeRecords(current.value, candidate.value),
+    };
+  });
+  const decisions = candidates.map((candidate) => {
+    const original = originalCandidates.find(
+      (item) =>
+        item.section === candidate.section && item.key === candidate.key,
+    );
+    const current = existing.find(
+      (entry) =>
+        entry.section === candidate.section && entry.key === candidate.key,
+    );
+
+    return {
+      section: candidate.section,
+      key: candidate.key,
+      reviewDecision:
+        original === undefined || !jsonEquals(original.value, candidate.value)
+          ? "EDITED"
+          : "UNCHANGED",
+      writeAction: current === undefined ? "CREATED" : input.writeMode,
+      previousVersion: current?.version ?? null,
+    };
+  });
 
   const reviewedAt = new Date();
   const updated = await prisma.$transaction(async (tx) => {
+    for (const section of unique(
+      candidates.map((candidate) => candidate.section),
+    )) {
+      await upsertVaultSectionInTransaction(tx, workspaceId, section, {
+        entries: candidates
+          .filter((candidate) => candidate.section === section)
+          .map((candidate) => ({
+            key: candidate.key,
+            value: candidate.value,
+          })),
+      });
+    }
+
     const row = await tx.vaultIngestDraft.update({
       where: {
-        id: draft.id
+        id: draft.id,
       },
       data: {
         candidates: candidates as unknown as Prisma.InputJsonValue,
         confidence: averageConfidence(candidates),
         reviewedAt,
-        status: "APPROVED"
-      }
+        status: "APPROVED",
+      },
     });
 
     await tx.auditLog.create({
@@ -146,9 +226,11 @@ export async function approveWebsiteIngest(
         metadata: {
           sourceUrl: draft.sourceUrl,
           candidateCount: candidates.length,
-          sections: unique(candidates.map((candidate) => candidate.section))
-        }
-      }
+          sections: unique(candidates.map((candidate) => candidate.section)),
+          writeMode: input.writeMode,
+          decisions,
+        },
+      },
     });
 
     return row;
@@ -157,24 +239,266 @@ export async function approveWebsiteIngest(
   return toDraftRecord(updated);
 }
 
+export async function queueWebsiteIngestJob(
+  workspaceId: string,
+  actorId: string,
+  input: VaultWebsiteIngestJobCreateInput,
+): Promise<VaultWebsiteIngestJob> {
+  const sourceUrl = normalizeAndValidateWebsiteUrl(input.url);
+  const job = await prisma.vaultWebsiteIngestJob.create({
+    data: {
+      actorId,
+      workspaceId,
+      sourceUrl,
+      maxPages: input.maxPages,
+      status: "QUEUED",
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      workspaceId,
+      action: "VAULT_WEBSITE_INGEST_QUEUED",
+      targetType: "VaultWebsiteIngestJob",
+      targetId: job.id,
+      metadata: {
+        sourceUrl,
+        maxPages: input.maxPages,
+      },
+    },
+  });
+
+  return toJobRecord(job);
+}
+
+export async function getWebsiteIngestJob(
+  workspaceId: string,
+  jobId: string,
+): Promise<VaultWebsiteIngestJob> {
+  const job = await prisma.vaultWebsiteIngestJob.findFirst({
+    where: {
+      id: jobId,
+      workspaceId,
+      deletedAt: null,
+    },
+  });
+
+  if (job === null) {
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_JOB_NOT_FOUND",
+      "Website ingest job was not found",
+      404,
+    );
+  }
+
+  return toJobRecord(job);
+}
+
+export async function getWebsiteIngestDraft(
+  workspaceId: string,
+  draftId: string,
+): Promise<VaultWebsiteIngestDraft> {
+  const draft = await prisma.vaultIngestDraft.findFirst({
+    where: {
+      id: draftId,
+      workspaceId,
+      deletedAt: null,
+    },
+  });
+
+  if (draft === null) {
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_DRAFT_NOT_FOUND",
+      "Website ingest draft was not found",
+      404,
+    );
+  }
+
+  return toDraftRecord(draft);
+}
+
+export interface WebsiteIngestJobRunResult {
+  completed: number;
+  failed: number;
+  retried: number;
+}
+
+export async function processWebsiteIngestJobs(
+  input: {
+    limit?: number;
+    now?: Date;
+  } = {},
+): Promise<WebsiteIngestJobRunResult> {
+  const now = input.now ?? new Date();
+  const jobs = await claimWebsiteIngestJobs(input.limit ?? 3, now);
+  const result: WebsiteIngestJobRunResult = {
+    completed: 0,
+    failed: 0,
+    retried: 0,
+  };
+
+  for (const job of jobs) {
+    const usageDate = new Date();
+    let usageReserved = false;
+
+    try {
+      const pages = await crawlWebsitePages(job.sourceUrl, job.maxPages);
+      await reserveWorkspaceUsage({
+        workspaceId: job.workspaceId,
+        metric: "AI_GENERATION",
+        now: usageDate,
+      });
+      usageReserved = true;
+      const generated = await extractWebsiteCandidatesWithAi({
+        workspaceId: job.workspaceId,
+        pages,
+      });
+      const root = pages[0];
+
+      if (root === undefined) {
+        throw new VaultWebsiteIngestError(
+          "WEBSITE_INGEST_NO_SIGNALS",
+          "Website crawl returned no usable pages",
+          422,
+        );
+      }
+
+      const draft = await createWebsiteIngestDraft({
+        actorId: job.actorId,
+        candidates: generated.candidates,
+        ...(root.description === undefined
+          ? {}
+          : { sourceDescription: root.description }),
+        ...(root.title === undefined ? {} : { sourceTitle: root.title }),
+        sourceUrl: job.sourceUrl,
+        workspaceId: job.workspaceId,
+        extraction: {
+          method: generated.promptVersion,
+          model: generated.model,
+          pageCount: pages.length,
+        },
+      });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.aiInteraction.create({
+          data: {
+            workspaceId: job.workspaceId,
+            agent: "WEBSITE_EXTRACTOR",
+            promptVersion: generated.promptVersion,
+            prompt: {
+              sourceUrl: job.sourceUrl,
+              pageUrls: pages.map((page) => page.url),
+            },
+            response: {
+              draftId: draft.id,
+              candidateCount: generated.candidates.length,
+            },
+            tokensIn: generated.tokensIn,
+            tokensOut: generated.tokensOut,
+            costMinor: 0,
+            currency: "BHD",
+            model: generated.model,
+          },
+        });
+        await recordAiTokenUsage({
+          client: tx,
+          workspaceId: job.workspaceId,
+          tokensIn: generated.tokensIn,
+          tokensOut: generated.tokensOut,
+          now: usageDate,
+        });
+        await tx.vaultWebsiteIngestJob.update({
+          where: { id: job.id },
+          data: {
+            completedAt: new Date(),
+            draftId: draft.id,
+            error: null,
+            status: "COMPLETED",
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: job.actorId,
+            workspaceId: job.workspaceId,
+            action: "VAULT_WEBSITE_INGEST_COMPLETED",
+            targetType: "VaultWebsiteIngestJob",
+            targetId: job.id,
+            metadata: {
+              draftId: draft.id,
+              pageCount: pages.length,
+              model: generated.model,
+            },
+          },
+        });
+      });
+      result.completed += 1;
+    } catch (error) {
+      if (usageReserved) {
+        await refundWorkspaceUsage({
+          workspaceId: job.workspaceId,
+          metric: "AI_GENERATION",
+          now: usageDate,
+        });
+      }
+      const retry = job.attempts < 3;
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.$transaction(async (tx) => {
+        await tx.vaultWebsiteIngestJob.update({
+          where: { id: job.id },
+          data: retry
+            ? {
+                error: message,
+                nextRunAt: new Date(now.getTime() + 2 ** job.attempts * 30_000),
+                status: "QUEUED",
+              }
+            : {
+                completedAt: new Date(),
+                error: message,
+                status: "FAILED",
+              },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: job.actorId,
+            workspaceId: job.workspaceId,
+            action: retry
+              ? "VAULT_WEBSITE_INGEST_RETRY_SCHEDULED"
+              : "VAULT_WEBSITE_INGEST_FAILED",
+            targetType: "VaultWebsiteIngestJob",
+            targetId: job.id,
+            metadata: {
+              attempts: job.attempts,
+              error: message,
+            },
+          },
+        });
+      });
+      result[retry ? "retried" : "failed"] += 1;
+    }
+  }
+
+  return result;
+}
+
 export async function rejectWebsiteIngest(
   workspaceId: string,
   actorId: string,
   draftId: string,
-  input: VaultWebsiteIngestRejectInput
+  input: VaultWebsiteIngestRejectInput,
 ): Promise<VaultWebsiteIngestDraft> {
   const draft = await findPendingDraft(workspaceId, draftId);
   const reviewedAt = new Date();
   const updated = await prisma.$transaction(async (tx) => {
     const row = await tx.vaultIngestDraft.update({
       where: {
-        id: draft.id
+        id: draft.id,
       },
       data: {
         error: input.reason ?? null,
         reviewedAt,
-        status: "REJECTED"
-      }
+        status: "REJECTED",
+      },
     });
 
     await tx.auditLog.create({
@@ -186,9 +510,9 @@ export async function rejectWebsiteIngest(
         targetId: draft.id,
         metadata: {
           sourceUrl: draft.sourceUrl,
-          reason: input.reason ?? "not provided"
-        }
-      }
+          reason: input.reason ?? "not provided",
+        },
+      },
     });
 
     return row;
@@ -197,21 +521,83 @@ export async function rejectWebsiteIngest(
   return toDraftRecord(updated);
 }
 
+async function createWebsiteIngestDraft(input: {
+  actorId: string;
+  candidates: VaultWebsiteIngestCandidate[];
+  extraction: {
+    method: string;
+    model?: string;
+    pageCount: number;
+  };
+  sourceDescription?: string;
+  sourceTitle?: string;
+  sourceUrl: string;
+  workspaceId: string;
+}): Promise<VaultWebsiteIngestDraft> {
+  const draft = await prisma.$transaction(async (tx) => {
+    const row = await tx.vaultIngestDraft.create({
+      data: {
+        workspaceId: input.workspaceId,
+        sourceUrl: input.sourceUrl,
+        ...(input.sourceTitle === undefined
+          ? {}
+          : { sourceTitle: input.sourceTitle }),
+        ...(input.sourceDescription === undefined
+          ? {}
+          : { sourceDescription: input.sourceDescription }),
+        candidates: input.candidates as unknown as Prisma.InputJsonValue,
+        confidence: averageConfidence(input.candidates),
+        status: "PENDING",
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: input.actorId,
+        workspaceId: input.workspaceId,
+        action: "VAULT_WEBSITE_INGEST_PREVIEWED",
+        targetType: "VaultIngestDraft",
+        targetId: row.id,
+        metadata: {
+          sourceUrl: input.sourceUrl,
+          candidateCount: input.candidates.length,
+          sections: unique(
+            input.candidates.map((candidate) => candidate.section),
+          ),
+          extraction: input.extraction,
+        },
+      },
+    });
+
+    return row;
+  });
+
+  return toDraftRecord(draft);
+}
+
 async function findPendingDraft(workspaceId: string, draftId: string) {
   const draft = await prisma.vaultIngestDraft.findFirst({
     where: {
       id: draftId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (draft === null) {
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_DRAFT_NOT_FOUND", "Website ingest draft was not found", 404);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_DRAFT_NOT_FOUND",
+      "Website ingest draft was not found",
+      404,
+    );
   }
 
   if (draft.status !== "PENDING") {
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_DRAFT_LOCKED", "Website ingest draft has already been reviewed", 409);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_DRAFT_LOCKED",
+      "Website ingest draft has already been reviewed",
+      409,
+    );
   }
 
   return draft;
@@ -222,12 +608,19 @@ function normalizeAndValidateWebsiteUrl(rawUrl: string): string {
   const protocol = url.protocol.toLowerCase();
 
   if (protocol !== "https:" && protocol !== "http:") {
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_URL_BLOCKED", "Website URL must use HTTP or HTTPS", 400);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_URL_BLOCKED",
+      "Website URL must use HTTP or HTTPS",
+      400,
+    );
   }
 
   url.hash = "";
 
-  const hostname = url.hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  const hostname = url.hostname
+    .toLowerCase()
+    .replace(/^\[/, "")
+    .replace(/\]$/, "");
 
   if (
     hostname.length === 0 ||
@@ -236,7 +629,11 @@ function normalizeAndValidateWebsiteUrl(rawUrl: string): string {
     hostname.endsWith(".local") ||
     isBlockedIp(hostname)
   ) {
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_URL_BLOCKED", "Website URL must point to a public website", 400);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_URL_BLOCKED",
+      "Website URL must point to a public website",
+      400,
+    );
   }
 
   return url.toString();
@@ -250,14 +647,18 @@ async function fetchWebsiteHtml(url: string): Promise<string> {
     const response = await fetch(url, {
       headers: {
         accept: "text/html,application/xhtml+xml",
-        "user-agent": userAgent
+        "user-agent": userAgent,
       },
       redirect: "follow",
-      signal: controller.signal
+      signal: controller.signal,
     });
 
     if (!response.ok) {
-      throw new VaultWebsiteIngestError("WEBSITE_INGEST_FETCH_FAILED", `Website returned HTTP ${response.status}`, 422);
+      throw new VaultWebsiteIngestError(
+        "WEBSITE_INGEST_FETCH_FAILED",
+        `Website returned HTTP ${response.status}`,
+        422,
+      );
     }
 
     const finalUrl = response.url.length > 0 ? response.url : url;
@@ -265,14 +666,26 @@ async function fetchWebsiteHtml(url: string): Promise<string> {
 
     const contentType = response.headers.get("content-type")?.toLowerCase();
 
-    if (contentType !== undefined && !contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
-      throw new VaultWebsiteIngestError("WEBSITE_INGEST_UNSUPPORTED_CONTENT", "Website did not return HTML content", 415);
+    if (
+      contentType !== undefined &&
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml")
+    ) {
+      throw new VaultWebsiteIngestError(
+        "WEBSITE_INGEST_UNSUPPORTED_CONTENT",
+        "Website did not return HTML content",
+        415,
+      );
     }
 
     const bytes = await response.arrayBuffer();
 
     if (bytes.byteLength > maxWebsiteBytes) {
-      throw new VaultWebsiteIngestError("WEBSITE_INGEST_TOO_LARGE", "Website HTML is too large to ingest safely", 413);
+      throw new VaultWebsiteIngestError(
+        "WEBSITE_INGEST_TOO_LARGE",
+        "Website HTML is too large to ingest safely",
+        413,
+      );
     }
 
     return new TextDecoder("utf-8").decode(bytes);
@@ -281,10 +694,34 @@ async function fetchWebsiteHtml(url: string): Promise<string> {
       throw error;
     }
 
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_FETCH_FAILED", "Could not fetch website for ingest", 422);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_FETCH_FAILED",
+      "Could not fetch website for ingest",
+      422,
+    );
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function crawlWebsitePages(
+  sourceUrl: string,
+  maxPages: number,
+): Promise<WebsiteSignals[]> {
+  const rootHtml = await fetchWebsiteHtml(sourceUrl);
+  const root = extractWebsiteSignals(sourceUrl, rootHtml);
+  const pages = [root];
+
+  for (const url of root.internalUrls.slice(0, Math.max(0, maxPages - 1))) {
+    try {
+      const html = await fetchWebsiteHtml(url);
+      pages.push(extractWebsiteSignals(url, html));
+    } catch {
+      // Child pages are best-effort; the root page remains authoritative.
+    }
+  }
+
+  return pages;
 }
 
 function extractWebsiteSignals(url: string, html: string): WebsiteSignals {
@@ -296,29 +733,69 @@ function extractWebsiteSignals(url: string, html: string): WebsiteSignals {
   const description = cleanText(
     $("meta[name='description']").attr("content") ??
       $("meta[property='og:description']").attr("content") ??
-      $("meta[name='twitter:description']").attr("content")
+      $("meta[name='twitter:description']").attr("content"),
   );
-  const siteName = cleanText($("meta[property='og:site_name']").attr("content"));
+  const siteName = cleanText(
+    $("meta[property='og:site_name']").attr("content"),
+  );
   const headline = cleanText($("h1").first().text());
   const paragraphs = unique(
     $("p")
       .toArray()
       .map((element) => cleanText($(element).text()))
-      .filter(isUsefulText)
+      .filter(isUsefulText),
   ).slice(0, 12);
   const links = unique(
     $("a")
       .toArray()
       .map((element) => cleanText($(element).text()))
-      .filter(isUsefulText)
+      .filter(isUsefulText),
   ).slice(0, 30);
+  const sourceOrigin = new URL(url).origin;
+  const internalUrls = unique(
+    $("a[href]")
+      .toArray()
+      .map((element) => {
+        const href = $(element).attr("href");
+
+        if (
+          href === undefined ||
+          href.startsWith("mailto:") ||
+          href.startsWith("tel:") ||
+          href.startsWith("javascript:")
+        ) {
+          return undefined;
+        }
+
+        try {
+          const candidate = new URL(href, url);
+          candidate.hash = "";
+
+          if (
+            candidate.origin !== sourceOrigin ||
+            candidate.pathname === new URL(url).pathname
+          ) {
+            return undefined;
+          }
+
+          return normalizeAndValidateWebsiteUrl(candidate.toString());
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((value): value is string => value !== undefined),
+  ).slice(0, 20);
   const imageAlts = unique(
     $("img")
       .toArray()
       .map((element) => cleanText($(element).attr("alt")))
-      .filter(isUsefulText)
+      .filter(isUsefulText),
   ).slice(0, 20);
-  const colors = unique((html.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((color) => color.toUpperCase())).slice(0, 12);
+  const colors = unique(
+    (html.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((color) =>
+      color.toUpperCase(),
+    ),
+  ).slice(0, 12);
 
   return {
     url,
@@ -328,20 +805,52 @@ function extractWebsiteSignals(url: string, html: string): WebsiteSignals {
     ...(headline === undefined ? {} : { headline }),
     paragraphs,
     links,
+    internalUrls,
     imageAlts,
-    colors
+    colors,
   };
 }
 
-function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsiteIngestCandidate[] {
+async function claimWebsiteIngestJobs(
+  limit: number,
+  now: Date,
+): Promise<WebsiteIngestJobRow[]> {
+  return prisma.$queryRaw<WebsiteIngestJobRow[]>`
+    WITH claimed AS (
+      SELECT "id"
+      FROM "vault_website_ingest_jobs"
+      WHERE "status" = 'QUEUED'::"VaultWebsiteIngestJobStatus"
+        AND "nextRunAt" <= ${now}
+        AND "deletedAt" IS NULL
+      ORDER BY "createdAt" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT ${limit}
+    )
+    UPDATE "vault_website_ingest_jobs" AS job
+    SET
+      "status" = 'PROCESSING'::"VaultWebsiteIngestJobStatus",
+      "attempts" = job."attempts" + 1,
+      "startedAt" = ${now},
+      "updatedAt" = ${now}
+    FROM claimed
+    WHERE job."id" = claimed."id"
+    RETURNING job.*
+  `;
+}
+
+function buildCandidates(
+  signals: WebsiteSignals,
+  extractedAt: Date,
+): VaultWebsiteIngestCandidate[] {
   const extractedAtIso = extractedAt.toISOString();
   const name = deriveBusinessName(signals);
-  const mainSummary = signals.description ?? signals.headline ?? signals.paragraphs[0];
+  const mainSummary =
+    signals.description ?? signals.headline ?? signals.paragraphs[0];
   const baseSource = {
     type: "website_ingest",
     sourceUrl: signals.url,
     extractedAt: extractedAtIso,
-    extractionMethod: "dom_signals_v1"
+    extractionMethod: "dom_signals_v1",
   };
   const candidates: VaultWebsiteIngestCandidate[] = [];
 
@@ -352,14 +861,20 @@ function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsi
       confidence: sectionConfidence(signals, "COMPANY"),
       sourceUrl: signals.url,
       extractedAt: extractedAtIso,
-      ...(mainSummary === undefined ? {} : { sourceSnippet: truncate(mainSummary, 320) }),
+      ...(mainSummary === undefined
+        ? {}
+        : { sourceSnippet: truncate(mainSummary, 320) }),
       value: {
         source: baseSource,
         ...(name === undefined ? {} : { name }),
-        ...(signals.headline === undefined ? {} : { headline: signals.headline }),
-        ...(signals.description === undefined ? {} : { description: signals.description }),
-        languages: inferLanguages(signals)
-      }
+        ...(signals.headline === undefined
+          ? {}
+          : { headline: signals.headline }),
+        ...(signals.description === undefined
+          ? {}
+          : { description: signals.description }),
+        languages: inferLanguages(signals),
+      },
     });
   }
 
@@ -370,12 +885,20 @@ function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsi
       confidence: sectionConfidence(signals, "STORY"),
       sourceUrl: signals.url,
       extractedAt: extractedAtIso,
-      sourceSnippet: truncate(signals.paragraphs[0] ?? signals.headline ?? "", 320),
+      sourceSnippet: truncate(
+        signals.paragraphs[0] ?? signals.headline ?? "",
+        320,
+      ),
       value: {
         source: baseSource,
-        summary: truncate([signals.headline, signals.description, ...signals.paragraphs].filter(Boolean).join(" "), 1200),
-        proofPoints: signals.paragraphs.slice(0, 5)
-      }
+        summary: truncate(
+          [signals.headline, signals.description, ...signals.paragraphs]
+            .filter(Boolean)
+            .join(" "),
+          1200,
+        ),
+        proofPoints: signals.paragraphs.slice(0, 5),
+      },
     });
   }
 
@@ -388,11 +911,14 @@ function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsi
       confidence: sectionConfidence(signals, "PRODUCTS"),
       sourceUrl: signals.url,
       extractedAt: extractedAtIso,
-      sourceSnippet: truncate(productSignals.map((item) => item.name).join(", "), 320),
+      sourceSnippet: truncate(
+        productSignals.map((item) => item.name).join(", "),
+        320,
+      ),
       value: {
         source: baseSource,
-        discoveredItems: productSignals
-      }
+        discoveredItems: productSignals,
+      },
     });
   }
 
@@ -403,13 +929,16 @@ function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsi
       confidence: sectionConfidence(signals, "BRAND"),
       sourceUrl: signals.url,
       extractedAt: extractedAtIso,
-      sourceSnippet: truncate([...signals.imageAlts, ...signals.colors].join(", "), 320),
+      sourceSnippet: truncate(
+        [...signals.imageAlts, ...signals.colors].join(", "),
+        320,
+      ),
       value: {
         source: baseSource,
         colors: signals.colors,
         visualReferences: signals.imageAlts,
-        note: "Website imagery is treated as brand reference until reuse rights are confirmed."
-      }
+        note: "Website imagery is treated as brand reference until reuse rights are confirmed.",
+      },
     });
   }
 
@@ -422,12 +951,15 @@ function buildCandidates(signals: WebsiteSignals, extractedAt: Date): VaultWebsi
       confidence: sectionConfidence(signals, "TONE"),
       sourceUrl: signals.url,
       extractedAt: extractedAtIso,
-      sourceSnippet: truncate([signals.description, signals.paragraphs[0]].filter(Boolean).join(" "), 320),
+      sourceSnippet: truncate(
+        [signals.description, signals.paragraphs[0]].filter(Boolean).join(" "),
+        320,
+      ),
       value: {
         source: baseSource,
         toneWords,
-        voiceEvidence: signals.paragraphs.slice(0, 4)
-      }
+        voiceEvidence: signals.paragraphs.slice(0, 4),
+      },
     });
   }
 
@@ -444,7 +976,9 @@ function deriveBusinessName(signals: WebsiteSignals): string | undefined {
   return cleanText(source.split(/\s[|:-]\s/)[0]);
 }
 
-function inferProductSignals(signals: WebsiteSignals): Array<{ name: string; evidence: string }> {
+function inferProductSignals(
+  signals: WebsiteSignals,
+): Array<{ name: string; evidence: string }> {
   const keywords = [
     "service",
     "services",
@@ -461,36 +995,59 @@ function inferProductSignals(signals: WebsiteSignals): Array<{ name: string; evi
     "offers",
     "plan",
     "plans",
-    "booking"
+    "booking",
   ];
-  const signalsToScan = unique([signals.headline, ...signals.links, ...signals.paragraphs].filter(Boolean) as string[]);
+  const signalsToScan = unique(
+    [signals.headline, ...signals.links, ...signals.paragraphs].filter(
+      Boolean,
+    ) as string[],
+  );
 
   return signalsToScan
-    .filter((text) => keywords.some((keyword) => text.toLowerCase().includes(keyword)))
+    .filter((text) =>
+      keywords.some((keyword) => text.toLowerCase().includes(keyword)),
+    )
     .slice(0, 8)
     .map((text) => ({
       name: truncate(text, 120),
-      evidence: truncate(text, 300)
+      evidence: truncate(text, 300),
     }));
 }
 
 function inferToneWords(signals: WebsiteSignals): string[] {
-  const text = [signals.title, signals.description, signals.headline, ...signals.paragraphs].filter(Boolean).join(" ").toLowerCase();
+  const text = [
+    signals.title,
+    signals.description,
+    signals.headline,
+    ...signals.paragraphs,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   const toneRules: Array<[string, string[]]> = [
     ["premium", ["premium", "luxury", "exclusive", "elegant"]],
     ["warm", ["family", "community", "care", "welcome", "hospitality"]],
     ["innovative", ["technology", "digital", "innovation", "smart", "ai"]],
     ["trusted", ["trusted", "certified", "expert", "quality", "reliable"]],
     ["sustainable", ["sustainable", "eco", "ethical", "recycled"]],
-    ["value-focused", ["affordable", "value", "save", "offer"]]
+    ["value-focused", ["affordable", "value", "save", "offer"]],
   ];
-  const matches = toneRules.filter(([, words]) => words.some((word) => text.includes(word))).map(([tone]) => tone);
+  const matches = toneRules
+    .filter(([, words]) => words.some((word) => text.includes(word)))
+    .map(([tone]) => tone);
 
   return matches.slice(0, 6);
 }
 
 function inferLanguages(signals: WebsiteSignals): string[] {
-  const text = [signals.title, signals.description, signals.headline, ...signals.paragraphs].filter(Boolean).join(" ");
+  const text = [
+    signals.title,
+    signals.description,
+    signals.headline,
+    ...signals.paragraphs,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const languages: string[] = [];
 
   if (/[\u0600-\u06ff]/.test(text)) {
@@ -504,7 +1061,10 @@ function inferLanguages(signals: WebsiteSignals): string[] {
   return languages.length === 0 ? ["Unknown"] : languages;
 }
 
-function sectionConfidence(signals: WebsiteSignals, section: VaultSection): number {
+function sectionConfidence(
+  signals: WebsiteSignals,
+  section: VaultSection,
+): number {
   const base =
     0.35 +
     signals.paragraphs.length * 0.025 +
@@ -521,27 +1081,38 @@ function sectionConfidence(signals: WebsiteSignals, section: VaultSection): numb
     OBJECTIVES: 0.7,
     PRODUCTS: 0.9,
     STORY: 0.95,
-    TONE: 0.85
+    TONE: 0.85,
   };
 
   return roundConfidence(Math.min(0.9, base * multiplier[section]));
 }
 
 function averageConfidence(candidates: VaultWebsiteIngestCandidate[]): number {
-  return roundConfidence(candidates.reduce((sum, candidate) => sum + candidate.confidence, 0) / candidates.length);
+  return roundConfidence(
+    candidates.reduce((sum, candidate) => sum + candidate.confidence, 0) /
+      candidates.length,
+  );
 }
 
-function parseDraftCandidates(value: Prisma.JsonValue): VaultWebsiteIngestCandidate[] {
+function parseDraftCandidates(
+  value: Prisma.JsonValue,
+): VaultWebsiteIngestCandidate[] {
   const parsed = vaultWebsiteIngestCandidateSchema.array().safeParse(value);
 
   if (!parsed.success) {
-    throw new VaultWebsiteIngestError("WEBSITE_INGEST_DRAFT_INVALID", "Stored ingest draft candidates are invalid", 500);
+    throw new VaultWebsiteIngestError(
+      "WEBSITE_INGEST_DRAFT_INVALID",
+      "Stored ingest draft candidates are invalid",
+      500,
+    );
   }
 
   return normalizeCandidates(parsed.data);
 }
 
-function normalizeCandidates(candidates: VaultWebsiteIngestCandidateInput[]): VaultWebsiteIngestCandidate[] {
+function normalizeCandidates(
+  candidates: VaultWebsiteIngestCandidateInput[],
+): VaultWebsiteIngestCandidate[] {
   return candidates.map((candidate) => ({
     section: candidate.section,
     key: candidate.key,
@@ -549,7 +1120,9 @@ function normalizeCandidates(candidates: VaultWebsiteIngestCandidateInput[]): Va
     confidence: candidate.confidence,
     sourceUrl: candidate.sourceUrl,
     extractedAt: candidate.extractedAt,
-    ...(candidate.sourceSnippet === undefined ? {} : { sourceSnippet: candidate.sourceSnippet })
+    ...(candidate.sourceSnippet === undefined
+      ? {}
+      : { sourceSnippet: candidate.sourceSnippet }),
   }));
 }
 
@@ -575,15 +1148,68 @@ function toDraftRecord(draft: {
     workspaceId: draft.workspaceId,
     sourceUrl: draft.sourceUrl,
     ...(draft.sourceTitle === null ? {} : { sourceTitle: draft.sourceTitle }),
-    ...(draft.sourceDescription === null ? {} : { sourceDescription: draft.sourceDescription }),
+    ...(draft.sourceDescription === null
+      ? {}
+      : { sourceDescription: draft.sourceDescription }),
     candidates,
     status: draft.status,
     confidence: draft.confidence,
     ...(draft.error === null ? {} : { error: draft.error }),
-    ...(draft.reviewedAt === null ? {} : { reviewedAt: draft.reviewedAt.toISOString() }),
+    ...(draft.reviewedAt === null
+      ? {}
+      : { reviewedAt: draft.reviewedAt.toISOString() }),
     createdAt: draft.createdAt.toISOString(),
-    updatedAt: draft.updatedAt.toISOString()
+    updatedAt: draft.updatedAt.toISOString(),
   };
+}
+
+function toJobRecord(job: WebsiteIngestJobRow): VaultWebsiteIngestJob {
+  return {
+    id: job.id,
+    workspaceId: job.workspaceId,
+    sourceUrl: job.sourceUrl,
+    maxPages: job.maxPages,
+    status: job.status,
+    attempts: job.attempts,
+    ...(job.draftId === null ? {} : { draftId: job.draftId }),
+    ...(job.error === null ? {} : { error: job.error }),
+    ...(job.startedAt === null
+      ? {}
+      : { startedAt: job.startedAt.toISOString() }),
+    ...(job.completedAt === null
+      ? {}
+      : { completedAt: job.completedAt.toISOString() }),
+    createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
+  };
+}
+
+function isPlainRecord(value: Prisma.JsonValue): value is Prisma.JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeRecords(
+  existing: Prisma.JsonObject,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...existing,
+    ...incoming,
+    ...(isPlainUnknownRecord(existing.source) &&
+    isPlainUnknownRecord(incoming.source)
+      ? { source: { ...existing.source, ...incoming.source } }
+      : {}),
+  };
+}
+
+function isPlainUnknownRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function jsonEquals(first: unknown, second: unknown): boolean {
+  return JSON.stringify(first) === JSON.stringify(second);
 }
 
 function isBlockedIp(hostname: string): boolean {
@@ -626,7 +1252,9 @@ function isBlockedIp(hostname: string): boolean {
 
 function cleanText(value: string | undefined): string | undefined {
   const normalized = value?.replace(/\s+/g, " ").trim();
-  return normalized === undefined || normalized.length === 0 ? undefined : normalized;
+  return normalized === undefined || normalized.length === 0
+    ? undefined
+    : normalized;
 }
 
 function isUsefulText(value: string | undefined): value is string {
@@ -634,7 +1262,9 @@ function isUsefulText(value: string | undefined): value is string {
 }
 
 function truncate(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1).trimEnd()}...`;
+  return value.length <= maxLength
+    ? value
+    : `${value.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
 function roundConfidence(value: number): number {

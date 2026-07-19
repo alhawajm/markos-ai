@@ -1,16 +1,29 @@
 import { env } from "../config/env";
 import {
   sendMonthlyAnalyticsPdfEmailForAllWorkspaces,
-  type AnalyticsEmailProvider
+  type AnalyticsEmailProvider,
 } from "../analytics/analytics-email-service";
-import { syncInstagramAnalyticsForAllWorkspaces, type AnalyticsSyncForAllWorkspacesResult } from "../analytics/analytics-service";
-import { publishDueContentForAllWorkspaces, type PublishDueContentForAllWorkspacesResult } from "../publishing/publishing-service";
+import {
+  syncInstagramAnalyticsForAllWorkspaces,
+  type AnalyticsSyncForAllWorkspacesResult,
+} from "../analytics/analytics-service";
+import {
+  publishDueContentForAllWorkspaces,
+  type PublishDueContentForAllWorkspacesResult,
+} from "../publishing/publishing-service";
 import type { AnalyticsEmailDeliveryForAllWorkspacesResult } from "@markos/shared-types";
 import type { InstagramAnalyticsProvider } from "../analytics/instagram-analytics-provider";
 import type { InstagramPublisher } from "../publishing/instagram-publisher";
-import { ensureCurrentUsagePeriods, type UsagePeriodResetResult } from "../usage/usage-service";
+import {
+  ensureCurrentUsagePeriods,
+  type UsagePeriodResetResult,
+} from "../usage/usage-service";
 import { refreshDueInstagramTokens } from "../workspace/instagram-token-service";
 import type { InstagramTokenRefreshResult } from "@markos/shared-types";
+import {
+  processWebsiteIngestJobs,
+  type WebsiteIngestJobRunResult,
+} from "../vault/website-ingest-service";
 
 export interface MaintenanceWorkerLogger {
   error(message: string, meta?: Record<string, unknown>): void;
@@ -24,6 +37,7 @@ export interface MaintenanceWorkerTickResult {
   publishing?: PublishDueContentForAllWorkspacesResult;
   tokenRefresh?: InstagramTokenRefreshResult[];
   usageReset?: UsagePeriodResetResult;
+  websiteIngest?: WebsiteIngestJobRunResult;
 }
 
 export interface MaintenanceWorkerHandle {
@@ -40,81 +54,108 @@ const consoleLogger: MaintenanceWorkerLogger = {
   },
   warn(message, meta) {
     console.warn(message, meta ?? {});
-  }
+  },
 };
 
-export async function runMaintenanceWorkerTick(input: {
-  analyticsEmailProvider?: AnalyticsEmailProvider;
-  analyticsEmailWorkspaceIds?: string[];
-  analyticsProvider?: InstagramAnalyticsProvider;
-  fetchImpl?: typeof fetch;
-  now?: Date;
-  publisher?: InstagramPublisher;
-  runAnalyticsEmail?: boolean;
-  runAnalyticsSync?: boolean;
-  runPublishing?: boolean;
-  runTokenRefresh?: boolean;
-  runUsageReset?: boolean;
-} = {}): Promise<MaintenanceWorkerTickResult> {
+export async function runMaintenanceWorkerTick(
+  input: {
+    analyticsEmailProvider?: AnalyticsEmailProvider;
+    analyticsEmailWorkspaceIds?: string[];
+    analyticsProvider?: InstagramAnalyticsProvider;
+    fetchImpl?: typeof fetch;
+    now?: Date;
+    publisher?: InstagramPublisher;
+    runAnalyticsEmail?: boolean;
+    runAnalyticsSync?: boolean;
+    runPublishing?: boolean;
+    runTokenRefresh?: boolean;
+    runUsageReset?: boolean;
+    runWebsiteIngest?: boolean;
+  } = {},
+): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
   const analyticsEmail =
     input.runAnalyticsEmail === false
       ? undefined
       : await sendMonthlyAnalyticsPdfEmailForAllWorkspaces({
           now,
-          ...(input.analyticsEmailWorkspaceIds === undefined ? {} : { workspaceIds: input.analyticsEmailWorkspaceIds }),
-          ...(input.analyticsEmailProvider === undefined ? {} : { provider: input.analyticsEmailProvider })
+          ...(input.analyticsEmailWorkspaceIds === undefined
+            ? {}
+            : { workspaceIds: input.analyticsEmailWorkspaceIds }),
+          ...(input.analyticsEmailProvider === undefined
+            ? {}
+            : { provider: input.analyticsEmailProvider }),
         });
-  const usageReset = input.runUsageReset === false ? undefined : await ensureCurrentUsagePeriods({ now });
+  const usageReset =
+    input.runUsageReset === false
+      ? undefined
+      : await ensureCurrentUsagePeriods({ now });
   const tokenRefresh =
     input.runTokenRefresh === false
       ? undefined
       : await refreshDueInstagramTokens({
           now,
-          ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl })
+          ...(input.fetchImpl === undefined
+            ? {}
+            : { fetchImpl: input.fetchImpl }),
         });
   const analyticsSync =
     input.runAnalyticsSync === false
       ? undefined
       : await syncInstagramAnalyticsForAllWorkspaces({
           now,
-          ...(input.analyticsProvider === undefined ? {} : { provider: input.analyticsProvider })
+          ...(input.analyticsProvider === undefined
+            ? {}
+            : { provider: input.analyticsProvider }),
         });
   const publishing =
     input.runPublishing === false
       ? undefined
       : await publishDueContentForAllWorkspaces({
           now,
-          ...(input.publisher === undefined ? {} : { publisher: input.publisher })
+          ...(input.publisher === undefined
+            ? {}
+            : { publisher: input.publisher }),
         });
+  const websiteIngest =
+    input.runWebsiteIngest === false
+      ? undefined
+      : await processWebsiteIngestJobs({ now });
 
   return {
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
     ...(analyticsSync === undefined ? {} : { analyticsSync }),
     ...(publishing === undefined ? {} : { publishing }),
     ...(tokenRefresh === undefined ? {} : { tokenRefresh }),
-    ...(usageReset === undefined ? {} : { usageReset })
+    ...(usageReset === undefined ? {} : { usageReset }),
+    ...(websiteIngest === undefined ? {} : { websiteIngest }),
   };
 }
 
-export function startMaintenanceWorker(input: {
-  analyticsEmailIntervalMs?: number;
-  analyticsEmailProvider?: AnalyticsEmailProvider;
-  analyticsProvider?: InstagramAnalyticsProvider;
-  fetchImpl?: typeof fetch;
-  logger?: MaintenanceWorkerLogger;
-  publisher?: InstagramPublisher;
-  publishingIntervalMs?: number;
-  runImmediately?: boolean;
-  tokenRefreshIntervalMs?: number;
-  usageResetIntervalMs?: number;
-} = {}): MaintenanceWorkerHandle {
+export function startMaintenanceWorker(
+  input: {
+    analyticsEmailIntervalMs?: number;
+    analyticsEmailProvider?: AnalyticsEmailProvider;
+    analyticsProvider?: InstagramAnalyticsProvider;
+    fetchImpl?: typeof fetch;
+    logger?: MaintenanceWorkerLogger;
+    publisher?: InstagramPublisher;
+    publishingIntervalMs?: number;
+    runImmediately?: boolean;
+    tokenRefreshIntervalMs?: number;
+    usageResetIntervalMs?: number;
+  } = {},
+): MaintenanceWorkerHandle {
   const logger = input.logger ?? consoleLogger;
-  const publishingIntervalMs = input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
-  const analyticsEmailIntervalMs = input.analyticsEmailIntervalMs ?? env.WORKER_ANALYTICS_EMAIL_INTERVAL_MS;
+  const publishingIntervalMs =
+    input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
+  const analyticsEmailIntervalMs =
+    input.analyticsEmailIntervalMs ?? env.WORKER_ANALYTICS_EMAIL_INTERVAL_MS;
   const analyticsSyncIntervalMs = env.WORKER_ANALYTICS_SYNC_INTERVAL_MS;
-  const tokenRefreshIntervalMs = input.tokenRefreshIntervalMs ?? env.WORKER_TOKEN_REFRESH_INTERVAL_MS;
-  const usageResetIntervalMs = input.usageResetIntervalMs ?? env.WORKER_USAGE_RESET_INTERVAL_MS;
+  const tokenRefreshIntervalMs =
+    input.tokenRefreshIntervalMs ?? env.WORKER_TOKEN_REFRESH_INTERVAL_MS;
+  const usageResetIntervalMs =
+    input.usageResetIntervalMs ?? env.WORKER_USAGE_RESET_INTERVAL_MS;
   let lastAnalyticsEmailAt = 0;
   let lastTokenRefreshAt = 0;
   let lastAnalyticsSyncAt = 0;
@@ -123,7 +164,9 @@ export function startMaintenanceWorker(input: {
 
   function runNow(): Promise<MaintenanceWorkerTickResult> {
     if (activeTick) {
-      logger.warn("Maintenance worker tick skipped because a previous tick is still running");
+      logger.warn(
+        "Maintenance worker tick skipped because a previous tick is still running",
+      );
       return Promise.resolve({});
     }
 
@@ -140,10 +183,14 @@ export function startMaintenanceWorker(input: {
 
   async function executeTick(): Promise<MaintenanceWorkerTickResult> {
     const now = new Date();
-    const shouldEmailAnalytics = now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
-    const shouldRefreshTokens = now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
-    const shouldSyncAnalytics = now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
-    const shouldResetUsage = now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
+    const shouldEmailAnalytics =
+      now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
+    const shouldRefreshTokens =
+      now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
+    const shouldSyncAnalytics =
+      now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
+    const shouldResetUsage =
+      now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
 
     try {
       const result = await runMaintenanceWorkerTick({
@@ -153,10 +200,19 @@ export function startMaintenanceWorker(input: {
         runPublishing: true,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
-        ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
-        ...(input.analyticsEmailProvider === undefined ? {} : { analyticsEmailProvider: input.analyticsEmailProvider }),
-        ...(input.analyticsProvider === undefined ? {} : { analyticsProvider: input.analyticsProvider }),
-        ...(input.publisher === undefined ? {} : { publisher: input.publisher })
+        runWebsiteIngest: true,
+        ...(input.fetchImpl === undefined
+          ? {}
+          : { fetchImpl: input.fetchImpl }),
+        ...(input.analyticsEmailProvider === undefined
+          ? {}
+          : { analyticsEmailProvider: input.analyticsEmailProvider }),
+        ...(input.analyticsProvider === undefined
+          ? {}
+          : { analyticsProvider: input.analyticsProvider }),
+        ...(input.publisher === undefined
+          ? {}
+          : { publisher: input.publisher }),
       });
 
       if (shouldEmailAnalytics) {
@@ -176,7 +232,7 @@ export function startMaintenanceWorker(input: {
       return result;
     } catch (error) {
       logger.error("Maintenance worker tick failed", {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       return {};
     }
@@ -195,19 +251,26 @@ export function startMaintenanceWorker(input: {
     async stop() {
       clearInterval(timer);
       await activeTick;
-    }
+    },
   };
 }
 
-function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unknown> {
+function summarizeTick(
+  result: MaintenanceWorkerTickResult,
+): Record<string, unknown> {
   return {
     attemptedPublishes: result.publishing?.attempted ?? 0,
     analyticsEmailsDelivered: result.analyticsEmail?.delivered ?? 0,
     analyticsEmailsSkipped: result.analyticsEmail?.skipped ?? 0,
     analyticsWorkspacesSynced: result.analyticsSync?.attempted ?? 0,
-    refreshedTokens: result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
-    tokenRefreshFailures: result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0,
+    refreshedTokens:
+      result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
+    tokenRefreshFailures:
+      result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0,
     usageCountersEnsured: result.usageReset?.countersEnsured ?? 0,
-    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0
+    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0,
+    websiteIngestCompleted: result.websiteIngest?.completed ?? 0,
+    websiteIngestFailed: result.websiteIngest?.failed ?? 0,
+    websiteIngestRetried: result.websiteIngest?.retried ?? 0,
   };
 }

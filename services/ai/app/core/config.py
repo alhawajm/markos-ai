@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     llm_flagship_model: str = ""
     llm_longform_model: str = ""
     llm_cheap_model: str = ""
+    website_extraction_model: str = "local-website-extractor"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
     image_model_primary: str = ""

@@ -245,3 +245,11 @@ Deploy the public Next.js web app and Fastify API as separate Railway services, 
 Railway's free-plan resource limit allows five services, so the API runtime starts the maintenance scheduler behind `WORKER_EMBEDDED=true`. The worker remains an independently deployable image and must move to its own private service before horizontal API scaling or when the project upgrades its Railway plan.
 
 The API container runs the idempotent `db:deploy` release command before starting. That command installs required PostgreSQL extensions/functions, prepares compatibility roles for the existing RLS migrations, applies forward-only Prisma migrations, and upserts plan reference data without creating a demo workspace. `INSTAGRAM_PUBLISH_MODE` and analytics sync remain `dry_run` until Meta credentials, App Review, and live-publish acceptance are complete.
+
+## 2026-07-19: Website Auto-Ingest Uses Review-Gated Async Extraction
+
+Keep the existing single-page deterministic preview for fast local review, and add a workspace-scoped asynchronous job for multi-page or slow-source extraction. The maintenance worker claims jobs with `FOR UPDATE SKIP LOCKED`, crawls at most ten same-origin public pages, retries failures three times with backoff, and records queue, completion, retry, and failure audit evidence. Job and draft reads always include `workspaceId`, and the job table has row-level security coverage.
+
+Route multi-page extraction through the configurable `WEBSITE_EXTRACTION_MODEL` slot and require a strict runtime-validated JSON response. Invalid JSON or unsupported evidence receives one repair attempt. Every accepted candidate must meet the confidence floor and cite a non-empty snippet that exists on its declared source page; unsupported candidates are refused instead of becoming Vault memory. Reserve one AI generation before extraction, meter model tokens after persistence, and refund only reservations that actually succeeded.
+
+Approval remains a human decision. `MERGE` is the default and preserves existing object fields while applying reviewed values; `OVERWRITE` replaces the reviewed entry. Approval writes the Vault update, reviewed draft, and an audit trail containing the chosen write mode plus per-candidate edited/unchanged and created/merged/overwritten decisions in one transaction.

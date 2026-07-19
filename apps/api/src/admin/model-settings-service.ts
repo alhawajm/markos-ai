@@ -7,12 +7,17 @@ import { prisma } from "../db/prisma";
 const modelSettingFallbacks = {
   IMAGE_MODEL_FALLBACK: env.IMAGE_MODEL_FALLBACK,
   IMAGE_MODEL_PRIMARY: env.IMAGE_MODEL_PRIMARY,
-  LLM_PRIMARY_MODEL: env.LLM_PRIMARY_MODEL
+  LLM_PRIMARY_MODEL: env.LLM_PRIMARY_MODEL,
+  WEBSITE_EXTRACTION_MODEL: env.WEBSITE_EXTRACTION_MODEL,
 } as const satisfies Record<AdminModelSettingKeyInput, string | undefined>;
 
-const modelSettingKeys = Object.keys(modelSettingFallbacks) as AdminModelSettingKeyInput[];
+const modelSettingKeys = Object.keys(
+  modelSettingFallbacks,
+) as AdminModelSettingKeyInput[];
 
-export async function resolveModelSetting(key: AdminModelSettingKeyInput): Promise<string> {
+export async function resolveModelSetting(
+  key: AdminModelSettingKeyInput,
+): Promise<string> {
   const [row] = await prisma.$queryRaw<Array<{ value: string }>>`
     SELECT "value" FROM "model_settings"
     WHERE "key" = ${key} AND "deletedAt" IS NULL
@@ -24,7 +29,9 @@ export async function resolveModelSetting(key: AdminModelSettingKeyInput): Promi
 }
 
 export async function getModelConfiguration(): Promise<AdminModelConfiguration> {
-  const rows = await prisma.$queryRaw<Array<{ key: string; updatedAt: Date; value: string }>>`
+  const rows = await prisma.$queryRaw<
+    Array<{ key: string; updatedAt: Date; value: string }>
+  >`
     SELECT "key", "value", "updatedAt" FROM "model_settings"
     WHERE "deletedAt" IS NULL AND "key" IN (${Prisma.join(modelSettingKeys)})
   `;
@@ -37,7 +44,7 @@ export async function getModelConfiguration(): Promise<AdminModelConfiguration> 
         key,
         source: "database" as const,
         updatedAt: row.updatedAt.toISOString(),
-        value: row.value
+        value: row.value,
       };
     }
 
@@ -46,7 +53,7 @@ export async function getModelConfiguration(): Promise<AdminModelConfiguration> 
     return {
       key,
       source: "environment" as const,
-      ...(fallback === undefined ? {} : { value: fallback })
+      ...(fallback === undefined ? {} : { value: fallback }),
     };
   });
   const uniqueSources = new Set(models.map((model) => model.source));
@@ -54,7 +61,8 @@ export async function getModelConfiguration(): Promise<AdminModelConfiguration> 
   return {
     editable: true,
     models,
-    source: uniqueSources.size === 1 ? models[0]?.source ?? "environment" : "mixed"
+    source:
+      uniqueSources.size === 1 ? (models[0]?.source ?? "environment") : "mixed",
   };
 }
 
@@ -100,12 +108,12 @@ export async function updateModelSetting(input: {
           key: input.key,
           nextValue: row.value,
           previousSource: previous === undefined ? "environment" : "database",
-          previousValue: previous?.value ?? modelSettingFallbacks[input.key]
+          previousValue: previous?.value ?? modelSettingFallbacks[input.key],
         },
         targetId: row.id,
         targetType: "ModelSetting",
-        workspaceId: input.workspaceId
-      }
+        workspaceId: input.workspaceId,
+      },
     });
   });
 

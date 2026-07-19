@@ -1,7 +1,12 @@
 export const locales = ["ar", "en"] as const;
 export type Locale = (typeof locales)[number];
 
-export const planCodes = ["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"] as const;
+export const planCodes = [
+  "STARTER",
+  "GROWTH",
+  "PREMIUM",
+  "ENTERPRISE",
+] as const;
 export type PlanCode = (typeof planCodes)[number];
 
 export const roles = [
@@ -13,7 +18,7 @@ export const roles = [
   "PRODUCT_ADMIN",
   "SUPPORT_ADMIN",
   "FINANCE_ADMIN",
-  "READONLY_ADMIN"
+  "READONLY_ADMIN",
 ] as const;
 export type Role = (typeof roles)[number];
 
@@ -45,7 +50,7 @@ export const permissions = [
   "analytics:sync",
   "publishing:run",
   "prompt:read",
-  "prompt:manage"
+  "prompt:manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
@@ -60,7 +65,7 @@ export const vaultSections = [
   "COMPETITORS",
   "BRAND",
   "TONE",
-  "OBJECTIVES"
+  "OBJECTIVES",
 ] as const;
 export type VaultSection = (typeof vaultSections)[number];
 
@@ -73,24 +78,50 @@ export const contentStatuses = [
   "APPROVED",
   "SCHEDULED",
   "PUBLISHED",
-  "FAILED"
+  "FAILED",
 ] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
 
-export const campaignStatuses = ["DRAFT", "GENERATED", "IN_REVIEW", "APPROVED", "SCHEDULED", "ARCHIVED"] as const;
+export const campaignStatuses = [
+  "DRAFT",
+  "GENERATED",
+  "IN_REVIEW",
+  "APPROVED",
+  "SCHEDULED",
+  "ARCHIVED",
+] as const;
 export type CampaignStatus = (typeof campaignStatuses)[number];
 
-export const mediaTypes = ["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"] as const;
+export const mediaTypes = [
+  "IMAGE",
+  "VIDEO",
+  "BRAND_ASSET",
+  "AI_GENERATED",
+] as const;
 export type MediaType = (typeof mediaTypes)[number];
 
-export const visualModes = ["PRODUCT_PHOTO", "LIFESTYLE_STORY", "AD_CREATIVE", "BACKGROUND_VARIANT"] as const;
+export const visualModes = [
+  "PRODUCT_PHOTO",
+  "LIFESTYLE_STORY",
+  "AD_CREATIVE",
+  "BACKGROUND_VARIANT",
+] as const;
 export type VisualMode = (typeof visualModes)[number];
 
-export const generatedMediaStatuses = ["PENDING_REVIEW", "APPROVED", "REJECTED"] as const;
+export const generatedMediaStatuses = [
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+] as const;
 export type GeneratedMediaStatus = (typeof generatedMediaStatuses)[number];
 
-export const generatedMediaQualityStatuses = ["REVIEW_REQUIRED", "APPROVED", "REJECTED"] as const;
-export type GeneratedMediaQualityStatus = (typeof generatedMediaQualityStatuses)[number];
+export const generatedMediaQualityStatuses = [
+  "REVIEW_REQUIRED",
+  "APPROVED",
+  "REJECTED",
+] as const;
+export type GeneratedMediaQualityStatus =
+  (typeof generatedMediaQualityStatuses)[number];
 
 export const brandBookExportStatuses = ["DRAFT", "EXPORTED"] as const;
 export type BrandBookExportStatus = (typeof brandBookExportStatuses)[number];
@@ -98,10 +129,21 @@ export type BrandBookExportStatus = (typeof brandBookExportStatuses)[number];
 export const productStatuses = ["ACTIVE", "ARCHIVED"] as const;
 export type ProductStatus = (typeof productStatuses)[number];
 
-export const offerStatuses = ["ACTIVE", "PAUSED", "EXPIRED", "ARCHIVED"] as const;
+export const offerStatuses = [
+  "ACTIVE",
+  "PAUSED",
+  "EXPIRED",
+  "ARCHIVED",
+] as const;
 export type OfferStatus = (typeof offerStatuses)[number];
 
-export const instagramMetricTypes = ["ACCOUNT", "AUDIENCE", "POST", "REEL", "STORY"] as const;
+export const instagramMetricTypes = [
+  "ACCOUNT",
+  "AUDIENCE",
+  "POST",
+  "REEL",
+  "STORY",
+] as const;
 export type InstagramMetricType = (typeof instagramMetricTypes)[number];
 
 export interface ApiEnvelope<TData> {
@@ -214,6 +256,12 @@ export interface VaultRagChunk {
 
 export type VaultIngestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export type VaultWebsiteIngestJobStatus =
+  | "QUEUED"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED";
+
 export interface VaultWebsiteIngestCandidate {
   section: VaultSection;
   key: string;
@@ -235,6 +283,21 @@ export interface VaultWebsiteIngestDraft {
   confidence: number;
   error?: string;
   reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VaultWebsiteIngestJob {
+  id: string;
+  workspaceId: string;
+  sourceUrl: string;
+  maxPages: number;
+  status: VaultWebsiteIngestJobStatus;
+  attempts: number;
+  draftId?: string;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,7 +364,7 @@ export const agentNames = [
   "IMAGE_PROMPT",
   "ANALYTICS_CONSULTANT",
   "RECOMMENDATION_ENGINE",
-  "BUSINESS_GROWTH_ADVISOR"
+  "BUSINESS_GROWTH_ADVISOR",
 ] as const;
 export type AgentName = (typeof agentNames)[number];
 

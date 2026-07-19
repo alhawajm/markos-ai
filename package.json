@@ -21,6 +21,7 @@
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
+    "e2e:pomelli:vault": "node scripts/pomelli-vault-browser-e2e.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
     "format": "prettier --write ."
   },

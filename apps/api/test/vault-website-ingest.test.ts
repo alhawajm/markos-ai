@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
@@ -7,8 +8,8 @@ vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
     model: "test-embedding-model",
     dimensions: 1536,
-    embeddings: texts.map(testEmbedding)
-  })
+    embeddings: texts.map(testEmbedding),
+  }),
 }));
 
 afterEach(() => {
@@ -22,7 +23,9 @@ describe("Vault website ingest routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const sourceUrl = "https://raedat.example/";
 
-    mockWebsiteFetch(sourceUrl, `
+    mockWebsiteFetch(
+      sourceUrl,
+      `
       <!doctype html>
       <html>
         <head>
@@ -39,15 +42,16 @@ describe("Vault website ingest routes", () => {
           <img src="/ring.jpg" alt="Gold ring with pearl detail" />
         </body>
       </html>
-    `);
+    `,
+    );
 
     const preview = await app.inject({
       method: "POST",
       url: "/v1/vault/ingest/website/preview",
       headers,
       payload: {
-        url: sourceUrl
-      }
+        url: sourceUrl,
+      },
     });
 
     expect(preview.statusCode).toBe(200);
@@ -55,16 +59,22 @@ describe("Vault website ingest routes", () => {
       workspaceId: session.workspace.id,
       sourceUrl,
       status: "PENDING",
-      sourceTitle: "Raedat Jewelry | Luxury Bahrain Collections"
+      sourceTitle: "Raedat Jewelry | Luxury Bahrain Collections",
     });
     expect(preview.json().data.candidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ section: "COMPANY", key: "website-profile" }),
         expect.objectContaining({ section: "STORY", key: "website-story" }),
-        expect.objectContaining({ section: "PRODUCTS", key: "website-products" }),
-        expect.objectContaining({ section: "BRAND", key: "website-visual-signals" }),
-        expect.objectContaining({ section: "TONE", key: "website-voice" })
-      ])
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: "website-products",
+        }),
+        expect.objectContaining({
+          section: "BRAND",
+          key: "website-visual-signals",
+        }),
+        expect.objectContaining({ section: "TONE", key: "website-voice" }),
+      ]),
     );
 
     const draftId = preview.json().data.id;
@@ -72,25 +82,31 @@ describe("Vault website ingest routes", () => {
       method: "POST",
       url: `/v1/vault/ingest/${draftId}/approve`,
       headers,
-      payload: {}
+      payload: {},
     });
 
     expect(approve.statusCode).toBe(200);
     expect(approve.json().data).toMatchObject({
       id: draftId,
-      status: "APPROVED"
+      status: "APPROVED",
     });
 
     const entries = await prisma.knowledgeVault.findMany({
       where: {
         workspaceId: session.workspace.id,
         key: {
-          in: ["website-profile", "website-story", "website-products", "website-visual-signals", "website-voice"]
-        }
+          in: [
+            "website-profile",
+            "website-story",
+            "website-products",
+            "website-visual-signals",
+            "website-voice",
+          ],
+        },
       },
       orderBy: {
-        key: "asc"
-      }
+        key: "asc",
+      },
     });
 
     expect(entries).toHaveLength(5);
@@ -99,52 +115,52 @@ describe("Vault website ingest routes", () => {
         expect.objectContaining({
           section: "COMPANY",
           value: expect.objectContaining({
-            name: "Raedat Jewelry"
-          })
+            name: "Raedat Jewelry",
+          }),
         }),
         expect.objectContaining({
           section: "PRODUCTS",
           value: expect.objectContaining({
             discoveredItems: expect.arrayContaining([
               expect.objectContaining({
-                name: expect.stringContaining("Shop")
-              })
-            ])
-          })
-        })
-      ])
+                name: expect.stringContaining("Shop"),
+              }),
+            ]),
+          }),
+        }),
+      ]),
     );
 
     const auditActions = await prisma.auditLog.findMany({
       where: {
         workspaceId: session.workspace.id,
-        targetId: draftId
+        targetId: draftId,
       },
       select: {
-        action: true
+        action: true,
       },
       orderBy: {
-        createdAt: "asc"
-      }
+        createdAt: "asc",
+      },
     });
 
     expect(auditActions.map((entry) => entry.action)).toEqual([
       "VAULT_WEBSITE_INGEST_PREVIEWED",
-      "VAULT_WEBSITE_INGEST_APPROVED"
+      "VAULT_WEBSITE_INGEST_APPROVED",
     ]);
 
     const approveAgain = await app.inject({
       method: "POST",
       url: `/v1/vault/ingest/${draftId}/approve`,
       headers,
-      payload: {}
+      payload: {},
     });
 
     expect(approveAgain.statusCode).toBe(409);
     expect(approveAgain.json()).toMatchObject({
       error: {
-        code: "WEBSITE_INGEST_DRAFT_LOCKED"
-      }
+        code: "WEBSITE_INGEST_DRAFT_LOCKED",
+      },
     });
 
     await app.close();
@@ -155,7 +171,9 @@ describe("Vault website ingest routes", () => {
     const session = await registerVerifiedTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
 
-    mockWebsiteFetch("https://reject.example/", `
+    mockWebsiteFetch(
+      "https://reject.example/",
+      `
       <html>
         <head><title>Reject Me</title></head>
         <body>
@@ -163,15 +181,16 @@ describe("Vault website ingest routes", () => {
           <p>This page should not be used as business memory.</p>
         </body>
       </html>
-    `);
+    `,
+    );
 
     const preview = await app.inject({
       method: "POST",
       url: "/v1/vault/ingest/website/preview",
       headers,
       payload: {
-        url: "https://reject.example/"
-      }
+        url: "https://reject.example/",
+      },
     });
     const draftId = preview.json().data.id;
     const reject = await app.inject({
@@ -179,24 +198,24 @@ describe("Vault website ingest routes", () => {
       url: `/v1/vault/ingest/${draftId}/reject`,
       headers,
       payload: {
-        reason: "Wrong source"
-      }
+        reason: "Wrong source",
+      },
     });
 
     expect(reject.statusCode).toBe(200);
     expect(reject.json().data).toMatchObject({
       id: draftId,
       status: "REJECTED",
-      error: "Wrong source"
+      error: "Wrong source",
     });
 
     const entries = await prisma.knowledgeVault.findMany({
       where: {
         workspaceId: session.workspace.id,
         key: {
-          startsWith: "website-"
-        }
-      }
+          startsWith: "website-",
+        },
+      },
     });
 
     expect(entries).toHaveLength(0);
@@ -215,15 +234,15 @@ describe("Vault website ingest routes", () => {
       url: "/v1/vault/ingest/website/preview",
       headers: authHeaders(session.tokens.accessToken),
       payload: {
-        url: "http://localhost:3000"
-      }
+        url: "http://localhost:3000",
+      },
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       error: {
-        code: "WEBSITE_INGEST_URL_BLOCKED"
-      }
+        code: "WEBSITE_INGEST_URL_BLOCKED",
+      },
     });
     expect(fetchMock).not.toHaveBeenCalled();
 
@@ -235,20 +254,23 @@ describe("Vault website ingest routes", () => {
     const first = await registerVerifiedTestUser(app);
     const second = await registerVerifiedTestUser(app);
 
-    mockWebsiteFetch("https://scope.example/", `
+    mockWebsiteFetch(
+      "https://scope.example/",
+      `
       <html>
         <head><title>Scoped Brand</title><meta name="description" content="Scoped brand context" /></head>
         <body><h1>Scoped Campaign</h1><p>Scoped service package for Bahrain businesses.</p></body>
       </html>
-    `);
+    `,
+    );
 
     const preview = await app.inject({
       method: "POST",
       url: "/v1/vault/ingest/website/preview",
       headers: authHeaders(first.tokens.accessToken),
       payload: {
-        url: "https://scope.example/"
-      }
+        url: "https://scope.example/",
+      },
     });
     const draftId = preview.json().data.id;
 
@@ -256,27 +278,170 @@ describe("Vault website ingest routes", () => {
       method: "POST",
       url: `/v1/vault/ingest/${draftId}/approve`,
       headers: authHeaders(second.tokens.accessToken),
-      payload: {}
+      payload: {},
     });
 
     expect(crossWorkspaceApprove.statusCode).toBe(404);
     expect(crossWorkspaceApprove.json()).toMatchObject({
       error: {
-        code: "WEBSITE_INGEST_DRAFT_NOT_FOUND"
-      }
+        code: "WEBSITE_INGEST_DRAFT_NOT_FOUND",
+      },
     });
 
     const secondEntries = await prisma.knowledgeVault.findMany({
       where: {
-        workspaceId: second.workspace.id
-      }
+        workspaceId: second.workspace.id,
+      },
     });
 
     expect(secondEntries).toHaveLength(0);
 
     await app.close();
   });
+
+  it("merges by default, overwrites only when requested, and audits both decisions", async () => {
+    const app = await buildApp();
+    const session = await registerVerifiedTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const sourceUrl = "https://review-decisions.example/";
+
+    await prisma.knowledgeVault.create({
+      data: {
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "website-profile",
+        value: {
+          name: "Existing Name",
+          legacyField: "preserve me",
+          source: { original: true },
+        },
+      },
+    });
+
+    const mergeDraft = await createPendingDraft(
+      session.workspace.id,
+      sourceUrl,
+      {
+        name: "Merged Name",
+        source: { ingest: true },
+      },
+    );
+    const merge = await app.inject({
+      method: "POST",
+      url: `/v1/vault/ingest/${mergeDraft.id}/approve`,
+      headers,
+      payload: {},
+    });
+    expect(merge.statusCode).toBe(200);
+
+    let entry = await prisma.knowledgeVault.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "website-profile",
+      },
+    });
+    expect(entry.value).toEqual({
+      name: "Merged Name",
+      legacyField: "preserve me",
+      source: { original: true, ingest: true },
+    });
+
+    const mergeAudit = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        targetId: mergeDraft.id,
+        action: "VAULT_WEBSITE_INGEST_APPROVED",
+      },
+    });
+    expect(mergeAudit.metadata).toEqual(
+      expect.objectContaining({
+        writeMode: "MERGE",
+        decisions: [
+          expect.objectContaining({
+            key: "website-profile",
+            writeAction: "MERGE",
+          }),
+        ],
+      }),
+    );
+
+    const overwriteDraft = await createPendingDraft(
+      session.workspace.id,
+      sourceUrl,
+      {
+        name: "Overwritten Name",
+        source: { overwrite: true },
+      },
+    );
+    const overwrite = await app.inject({
+      method: "POST",
+      url: `/v1/vault/ingest/${overwriteDraft.id}/approve`,
+      headers,
+      payload: { writeMode: "OVERWRITE" },
+    });
+    expect(overwrite.statusCode).toBe(200);
+
+    entry = await prisma.knowledgeVault.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "website-profile",
+      },
+    });
+    expect(entry.value).toEqual({
+      name: "Overwritten Name",
+      source: { overwrite: true },
+    });
+
+    const overwriteAudit = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        targetId: overwriteDraft.id,
+        action: "VAULT_WEBSITE_INGEST_APPROVED",
+      },
+    });
+    expect(overwriteAudit.metadata).toEqual(
+      expect.objectContaining({
+        writeMode: "OVERWRITE",
+        decisions: [
+          expect.objectContaining({
+            key: "website-profile",
+            writeAction: "OVERWRITE",
+          }),
+        ],
+      }),
+    );
+
+    await app.close();
+  });
 });
+
+async function createPendingDraft(
+  workspaceId: string,
+  sourceUrl: string,
+  value: Record<string, unknown>,
+) {
+  return prisma.vaultIngestDraft.create({
+    data: {
+      workspaceId,
+      sourceUrl,
+      sourceTitle: "Review Decisions",
+      candidates: [
+        {
+          section: "COMPANY",
+          key: "website-profile",
+          value,
+          confidence: 0.86,
+          sourceUrl,
+          sourceSnippet: "Reviewed public company information",
+          extractedAt: "2026-07-19T12:00:00.000Z",
+        },
+      ] as unknown as Prisma.InputJsonValue,
+      confidence: 0.86,
+    },
+  });
+}
 
 function mockWebsiteFetch(url: string, html: string): void {
   vi.stubGlobal(
@@ -284,15 +449,17 @@ function mockWebsiteFetch(url: string, html: string): void {
     vi.fn(async () => {
       return new Response(new TextEncoder().encode(html), {
         headers: {
-          "content-type": "text/html; charset=utf-8"
+          "content-type": "text/html; charset=utf-8",
         },
-        status: 200
+        status: 200,
       });
-    })
+    }),
   );
 }
 
-async function registerVerifiedTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
+async function registerVerifiedTestUser(
+  app: Awaited<ReturnType<typeof buildApp>>,
+) {
   const email = `vault-ingest-${randomUUID()}@markos.test`;
   const response = await app.inject({
     method: "POST",
@@ -302,32 +469,32 @@ async function registerVerifiedTestUser(app: Awaited<ReturnType<typeof buildApp>
       password: "CorrectHorseBattery99!",
       fullName: "Vault Ingest User",
       workspaceName: `Vault Ingest Workspace ${randomUUID()}`,
-      locale: "en"
-    }
+      locale: "en",
+    },
   });
   const session = response.json().data;
 
   await prisma.user.update({
     data: {
-      isVerified: true
+      isVerified: true,
     },
     where: {
-      id: session.user.id
-    }
+      id: session.user.id,
+    },
   });
 
   return {
     ...session,
     user: {
       ...session.user,
-      isVerified: true
-    }
+      isVerified: true,
+    },
   };
 }
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {
-    authorization: `Bearer ${accessToken}`
+    authorization: `Bearer ${accessToken}`,
   };
 }
 

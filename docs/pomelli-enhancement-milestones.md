@@ -38,14 +38,14 @@ Goal: Let MARKOS learn a business from a website, then save only approved facts 
 Deliverables:
 
 - [x] Website URL ingest API/service.
-- [ ] Async website ingest job/worker for multi-page or slow-source crawls.
+- [x] Async website ingest job/worker for multi-page or slow-source crawls.
 - [x] Extracted facts review screen.
 - [x] Approved facts saved to `KnowledgeVault`.
 - [x] Embeddings created for approved chunks.
 - [x] Local development/test embedding fallback when the AI service is offline.
 - [x] Source URL, confidence, and extraction timestamp tracked.
 - [x] Audit log entries for ingest preview, approve, and reject.
-- [ ] Explicit overwrite/merge audit trail for edited review decisions.
+- [x] Explicit overwrite/merge audit trail for edited review decisions.
 
 Backend/API:
 
@@ -57,10 +57,10 @@ Backend/API:
 
 AI:
 
-- [ ] Add configurable model setting for website extraction.
-- [ ] Return strict JSON only.
-- [ ] Auto-retry invalid JSON once through the existing AI gateway.
-- [ ] Refuse unsupported claims when source evidence is weak.
+- [x] Add configurable model setting for website extraction.
+- [x] Return strict JSON only.
+- [x] Auto-retry invalid JSON once through the existing AI gateway.
+- [x] Refuse unsupported claims when source evidence is weak.
 
 Web:
 
@@ -77,7 +77,7 @@ Tests/Gates:
 - [x] API route tests for preview, approve, reject, blocked URL, and cross-workspace access.
 - [x] Web typecheck, lint, API client typecheck, and production build smoke pass.
 - [x] API E2E: ingest URL, approve facts, and retrieve approved facts through Vault RAG with local embedding fallback.
-- [ ] Browser E2E: review facts in the Vault UI, approve facts, and see the Vault update.
+- [x] Browser E2E: review facts in the Vault UI, approve facts, and see the Vault update.
 
 ## PE-M2: Product and Offer Catalog
 

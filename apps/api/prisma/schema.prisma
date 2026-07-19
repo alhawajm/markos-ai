@@ -136,6 +136,13 @@ enum VaultIngestStatus {
   REJECTED
 }
 
+enum VaultWebsiteIngestJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum ProductStatus {
   ACTIVE
   ARCHIVED
@@ -275,6 +282,28 @@ model VaultIngestDraft {
   @@index([workspaceId, status])
   @@index([workspaceId, sourceUrl])
   @@map("vault_ingest_drafts")
+}
+
+model VaultWebsiteIngestJob {
+  id          String                      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                      @db.Uuid
+  actorId     String                      @db.Uuid
+  sourceUrl   String
+  maxPages    Int                         @default(5)
+  status      VaultWebsiteIngestJobStatus @default(QUEUED)
+  attempts    Int                         @default(0)
+  draftId     String?                     @db.Uuid
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  nextRunAt   DateTime                    @default(now())
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  deletedAt   DateTime?
+
+  @@index([status, nextRunAt])
+  @@index([workspaceId, status])
+  @@map("vault_website_ingest_jobs")
 }
 
 model Strategy {
