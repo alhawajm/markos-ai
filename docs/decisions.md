@@ -237,3 +237,9 @@ Campaign packages are assembled from approved Vault context and active catalog c
 Build the live Brand Kit from the current workspace's approved Knowledge Vault entries and approved brand assets. Derive tone, messaging, and visual rules only from those records; expose confidence and missing-section notes instead of filling gaps with unsupported claims.
 
 Each Brand Book export stores an immutable versioned snapshot, the exact Vault source entry IDs, confidence, missing sections, and an audit record. Later Vault edits affect the live Brand Kit and future versions but do not rewrite prior exports, preserving traceability for approved campaign work.
+
+## 2026-07-19: Railway Uses a Cost-Controlled Five-Service Production Topology
+
+Deploy the public Next.js web app and Fastify API as separate Railway services, with the Python AI service and maintenance worker private to the project network. Use a pinned pgvector PostgreSQL image and managed Redis; keep OpenSearch disabled until a product feature actually requires it. Persist API media on a Railway volume mounted at `/app/var/media` so generated and uploaded assets survive deployments and retain public API URLs.
+
+The API container runs the idempotent `db:deploy` release command before starting. That command installs required PostgreSQL extensions/functions, prepares compatibility roles for the existing RLS migrations, applies forward-only Prisma migrations, and upserts plan reference data without creating a demo workspace. `INSTAGRAM_PUBLISH_MODE` and analytics sync remain `dry_run` until Meta credentials, App Review, and live-publish acceptance are complete.

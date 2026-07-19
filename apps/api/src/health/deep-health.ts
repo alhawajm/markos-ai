@@ -6,7 +6,7 @@ import { env } from "../config/env";
 const prisma = new PrismaClient();
 
 export interface DependencyHealth {
-  status: "ok" | "down";
+  status: "ok" | "down" | "skipped";
   durationMs: number;
   detail?: string;
 }
@@ -27,7 +27,9 @@ export async function getDeepHealth(): Promise<DeepHealthResponse> {
   const [database, redis, opensearch, ai] = await Promise.all([
     checkDatabase(),
     checkRedis(),
-    checkHttp(`${env.OPENSEARCH_URL}/_cluster/health`),
+    env.OPENSEARCH_ENABLED
+      ? checkHttp(`${env.OPENSEARCH_URL}/_cluster/health`)
+      : Promise.resolve({ status: "skipped", durationMs: 0, detail: "Disabled by configuration" } satisfies DependencyHealth),
     checkHttp(`${env.AI_BASE_URL}/ai/health`)
   ]);
 
@@ -35,7 +37,7 @@ export async function getDeepHealth(): Promise<DeepHealthResponse> {
 
   return {
     service: "api",
-    status: checks.every((check) => check.status === "ok") ? "ok" : "degraded",
+    status: checks.every((check) => check.status !== "down") ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
     dependencies: {
       database,

@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional());
+const booleanFromString = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  if (value.toLowerCase() === "true") return true;
+  if (value.toLowerCase() === "false") return false;
+  return value;
+}, z.boolean());
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -11,6 +17,7 @@ const envSchema = z.object({
   AI_BASE_URL: z.string().url().default("http://localhost:8000"),
   DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
+  OPENSEARCH_ENABLED: booleanFromString.default(true),
   OPENSEARCH_URL: z.string().url().default("http://localhost:9200"),
   JWT_ACCESS_SECRET: z.string().min(12).default("dev-access-secret-change-me"),
   JWT_REFRESH_SECRET: z.string().min(12).default("dev-refresh-secret-change-me"),
@@ -61,7 +68,10 @@ const envSchema = z.object({
   HEALTH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(200)
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema.parse({
+  ...process.env,
+  API_PORT: process.env.API_PORT ?? process.env.PORT
+});
 
 process.env.DATABASE_URL ??= env.DATABASE_URL;
 process.env.REDIS_URL ??= env.REDIS_URL;
