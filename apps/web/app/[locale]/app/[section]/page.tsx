@@ -1,7 +1,7 @@
 import type { Locale } from "@markos/shared-types";
 import { AppShell, type SectionSlug } from "../../_components/app-shell";
 
-const sections = ["briefing", "opportunities", "campaign-builder", "content-studio", "analytics", "knowledge", "settings"] as const;
+const sections = ["briefing", "opportunities", "catalog", "campaign-builder", "content-studio", "analytics", "knowledge", "brand-kit", "settings"] as const;
 type RouteSection = (typeof sections)[number];
 
 export function generateStaticParams() {

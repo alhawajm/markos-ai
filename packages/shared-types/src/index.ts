@@ -36,6 +36,8 @@ export const permissions = [
   "content:read",
   "content:write",
   "content:schedule",
+  "catalog:read",
+  "catalog:write",
   "agent:run",
   "media:read",
   "media:write",
@@ -75,8 +77,29 @@ export const contentStatuses = [
 ] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
 
+export const campaignStatuses = ["DRAFT", "GENERATED", "IN_REVIEW", "APPROVED", "SCHEDULED", "ARCHIVED"] as const;
+export type CampaignStatus = (typeof campaignStatuses)[number];
+
 export const mediaTypes = ["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"] as const;
 export type MediaType = (typeof mediaTypes)[number];
+
+export const visualModes = ["PRODUCT_PHOTO", "LIFESTYLE_STORY", "AD_CREATIVE", "BACKGROUND_VARIANT"] as const;
+export type VisualMode = (typeof visualModes)[number];
+
+export const generatedMediaStatuses = ["PENDING_REVIEW", "APPROVED", "REJECTED"] as const;
+export type GeneratedMediaStatus = (typeof generatedMediaStatuses)[number];
+
+export const generatedMediaQualityStatuses = ["REVIEW_REQUIRED", "APPROVED", "REJECTED"] as const;
+export type GeneratedMediaQualityStatus = (typeof generatedMediaQualityStatuses)[number];
+
+export const brandBookExportStatuses = ["DRAFT", "EXPORTED"] as const;
+export type BrandBookExportStatus = (typeof brandBookExportStatuses)[number];
+
+export const productStatuses = ["ACTIVE", "ARCHIVED"] as const;
+export type ProductStatus = (typeof productStatuses)[number];
+
+export const offerStatuses = ["ACTIVE", "PAUSED", "EXPIRED", "ARCHIVED"] as const;
+export type OfferStatus = (typeof offerStatuses)[number];
 
 export const instagramMetricTypes = ["ACCOUNT", "AUDIENCE", "POST", "REEL", "STORY"] as const;
 export type InstagramMetricType = (typeof instagramMetricTypes)[number];
@@ -187,6 +210,87 @@ export interface VaultRagChunk {
   value: Record<string, unknown>;
   version: number;
   score: number;
+}
+
+export type VaultIngestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface VaultWebsiteIngestCandidate {
+  section: VaultSection;
+  key: string;
+  value: Record<string, unknown>;
+  confidence: number;
+  sourceUrl: string;
+  extractedAt: string;
+  sourceSnippet?: string;
+}
+
+export interface VaultWebsiteIngestDraft {
+  id: string;
+  workspaceId: string;
+  sourceUrl: string;
+  sourceTitle?: string;
+  sourceDescription?: string;
+  candidates: VaultWebsiteIngestCandidate[];
+  status: VaultIngestStatus;
+  confidence: number;
+  error?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrandKitSourceEntry {
+  id: string;
+  section: VaultSection;
+  key: string;
+  value: Record<string, unknown>;
+  version: number;
+  updatedAt: string;
+}
+
+export interface BrandKitRule {
+  guidance: string;
+  label: string;
+  sourceEntryIds: string[];
+}
+
+export interface BrandKitAsset {
+  id: string;
+  filename: string;
+  mimeType: string;
+  publicUrl: string;
+  type: MediaType;
+}
+
+export interface BrandKit {
+  workspaceId: string;
+  generatedAt: string;
+  confidence: number;
+  score: VaultCompletenessScore;
+  companyProfile: BrandKitRule[];
+  toneRules: BrandKitRule[];
+  messagingPillars: BrandKitRule[];
+  visualRules: BrandKitRule[];
+  assets: BrandKitAsset[];
+  missingSections: VaultSection[];
+  notes: string[];
+  sourceEntries: BrandKitSourceEntry[];
+  unsupportedClaims: string[];
+}
+
+export interface BrandBookExportRecord {
+  id: string;
+  workspaceId: string;
+  version: number;
+  status: BrandBookExportStatus;
+  title: string;
+  content: BrandKit;
+  sourceEntryIds: string[];
+  missingSections: VaultSection[];
+  confidence: number;
+  exportedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const agentNames = [
@@ -309,6 +413,74 @@ export interface ContentRecord {
   updatedAt: string;
 }
 
+export interface CampaignBrief {
+  audience?: string;
+  contentCount: number;
+  contentTypes: ContentType[];
+  durationDays: number;
+  objective: string;
+  offerId?: string;
+  productId?: string;
+  startDate?: string;
+  tone?: string;
+}
+
+export interface CampaignPackageItem {
+  contentItemId: string;
+  contentType: ContentType;
+  day: number;
+  angle: string;
+  scheduledAt?: string;
+  status: ContentStatus;
+}
+
+export interface CampaignRejectedIdea {
+  contentItemId?: string;
+  reason: string;
+  rejectedAt: string;
+  snapshot?: Record<string, unknown>;
+}
+
+export interface CampaignPackage {
+  angles: string[];
+  items: CampaignPackageItem[];
+  objectives: Array<{
+    label: string;
+    value: string;
+  }>;
+  rationale: string;
+  schedule: Array<{
+    contentItemId: string;
+    day: number;
+    scheduledAt: string;
+  }>;
+}
+
+export interface CampaignRecord {
+  id: string;
+  workspaceId: string;
+  name: string;
+  objective?: string;
+  status: CampaignStatus;
+  structuredBrief: CampaignBrief;
+  package?: CampaignPackage;
+  productId?: string;
+  offerId?: string;
+  rationale?: string;
+  rejectedIdeas: CampaignRejectedIdea[];
+  startsAt?: string;
+  endsAt?: string;
+  generatedAt?: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignPackageRecord {
+  campaign: CampaignRecord;
+  contentItems: ContentRecord[];
+}
+
 export interface MediaAssetRecord {
   id: string;
   workspaceId: string;
@@ -324,11 +496,73 @@ export interface MediaAssetRecord {
   updatedAt: string;
 }
 
+export interface ProductRecord {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  category?: string;
+  priceMinor?: number;
+  currency: string;
+  salesChannels: string[];
+  benefits: string[];
+  mediaAssetIds: string[];
+  status: ProductStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferRecord {
+  id: string;
+  workspaceId: string;
+  productId?: string;
+  title: string;
+  description?: string;
+  priceMinor?: number;
+  compareAtPriceMinor?: number;
+  currency: string;
+  startsAt?: string;
+  endsAt?: string;
+  terms?: string;
+  status: OfferStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AiImageGenerationResult {
   contentItem: ContentRecord;
   mediaAsset: MediaAssetRecord;
   model: string;
   prompt: string;
+  promptVersion: string;
+}
+
+export interface GeneratedMediaVariantRecord {
+  id: string;
+  workspaceId: string;
+  mediaAssetId: string;
+  mediaAsset: MediaAssetRecord;
+  contentItemId?: string;
+  productId?: string;
+  offerId?: string;
+  sourceMediaAssetIds: string[];
+  visualMode: VisualMode;
+  aspectRatio: "1:1" | "4:5" | "9:16";
+  prompt: string;
+  negativePrompt?: string;
+  model: string;
+  promptVersion: string;
+  status: GeneratedMediaStatus;
+  qualityStatus: GeneratedMediaQualityStatus;
+  rejectionReason?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VisualStudioGenerationResult {
+  variants: GeneratedMediaVariantRecord[];
+  model: string;
   promptVersion: string;
 }
 

@@ -72,63 +72,22 @@ export async function upsertVaultSection(
   const saved: KnowledgeVaultEntry[] = [];
 
   await prisma.$transaction(async (tx) => {
-    for (const [index, entry] of input.entries.entries()) {
-      const existing = await tx.knowledgeVault.findFirst({
-        where: {
-          workspaceId,
-          section,
-          key: entry.key,
-          deletedAt: null
-        },
-        orderBy: {
-          version: "desc"
-        }
-      });
-
-      const row =
-        existing === null
-          ? await tx.knowledgeVault.create({
-              data: {
-                workspaceId,
-                section,
-                key: entry.key,
-                value: entry.value as Prisma.InputJsonValue
-              }
-            })
-          : await tx.knowledgeVault.update({
-              where: {
-                id: existing.id
-              },
-              data: {
-                value: entry.value as Prisma.InputJsonValue,
-                version: {
-                  increment: 1
-                }
-              }
-            });
-
-      const embedding = embeddings[index];
-
-      if (embedding === undefined) {
-        throw new Error("Missing embedding for Vault entry");
-      }
-
-      await setVaultEmbedding(tx, row.id, embedding);
-      await tx.knowledgeVaultHistory.create({
-        data: {
-          workspaceId: row.workspaceId,
-          knowledgeVaultId: row.id,
-          section: row.section,
-          key: row.key,
-          value: row.value as Prisma.InputJsonValue,
-          version: row.version
-        }
-      });
-      saved.push(toVaultEntry(row));
-    }
+    saved.push(...(await saveVaultEntries(tx, workspaceId, section, input, embeddings)));
   });
 
   return saved;
+}
+
+export async function upsertVaultSectionInTransaction(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  section: VaultSection,
+  input: UpsertVaultSectionInput
+): Promise<KnowledgeVaultEntry[]> {
+  const texts = input.entries.map((entry) => vaultEntryToEmbeddingText(section, entry.key, entry.value));
+  const { embeddings } = await embedVaultTexts(texts);
+
+  return saveVaultEntries(tx, workspaceId, section, input, embeddings);
 }
 
 export async function getVaultScore(workspaceId: string): Promise<VaultCompletenessScore> {
@@ -216,6 +175,73 @@ async function setVaultEmbedding(tx: Prisma.TransactionClient, id: string, embed
     SET embedding = ${toVectorLiteral(embedding)}::vector
     WHERE id = ${id}::uuid
   `;
+}
+
+async function saveVaultEntries(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  section: VaultSection,
+  input: UpsertVaultSectionInput,
+  embeddings: number[][]
+): Promise<KnowledgeVaultEntry[]> {
+  const saved: KnowledgeVaultEntry[] = [];
+
+  for (const [index, entry] of input.entries.entries()) {
+    const existing = await tx.knowledgeVault.findFirst({
+      where: {
+        workspaceId,
+        section,
+        key: entry.key,
+        deletedAt: null
+      },
+      orderBy: {
+        version: "desc"
+      }
+    });
+
+    const row =
+      existing === null
+        ? await tx.knowledgeVault.create({
+            data: {
+              workspaceId,
+              section,
+              key: entry.key,
+              value: entry.value as Prisma.InputJsonValue
+            }
+          })
+        : await tx.knowledgeVault.update({
+            where: {
+              id: existing.id
+            },
+            data: {
+              value: entry.value as Prisma.InputJsonValue,
+              version: {
+                increment: 1
+              }
+            }
+          });
+
+    const embedding = embeddings[index];
+
+    if (embedding === undefined) {
+      throw new Error("Missing embedding for Vault entry");
+    }
+
+    await setVaultEmbedding(tx, row.id, embedding);
+    await tx.knowledgeVaultHistory.create({
+      data: {
+        workspaceId: row.workspaceId,
+        knowledgeVaultId: row.id,
+        section: row.section,
+        key: row.key,
+        value: row.value as Prisma.InputJsonValue,
+        version: row.version
+      }
+    });
+    saved.push(toVaultEntry(row));
+  }
+
+  return saved;
 }
 
 function vaultEntryToEmbeddingText(section: VaultSection, key: string, value: Record<string, unknown>): string {

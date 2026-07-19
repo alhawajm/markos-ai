@@ -22,11 +22,18 @@ import type {
   BillingSummary,
   BillingUpgradeResult,
   BillingVatComplianceReport,
+  BrandBookExportRecord,
+  BrandKit,
+  CampaignBrief,
+  CampaignPackageRecord,
+  CampaignStatus,
   ContentRecord,
   ContentStatus,
   ContentType,
   EmailVerificationChallenge,
   EmailVerificationResult,
+  GeneratedMediaStatus,
+  GeneratedMediaVariantRecord,
   HealthResponse,
   InstagramConnection,
   InstagramOAuthStart,
@@ -37,17 +44,25 @@ import type {
   MediaType,
   MfaStatus,
   MfaTotpSetup,
+  OfferRecord,
+  OfferStatus,
   OnboardingState,
   PromptTemplateRecord,
   PromptVariantSelection,
+  ProductRecord,
+  ProductStatus,
   PublishAttemptRecord,
   PublishDueContentResult,
   PublishingLiveReadiness,
   PublishReadiness,
   StrategyRecord,
   VaultCompletenessScore,
+  VaultWebsiteIngestCandidate,
+  VaultWebsiteIngestDraft,
   VaultRagChunk,
   VaultSection,
+  VisualMode,
+  VisualStudioGenerationResult,
   WorkspaceDataErasureResult,
   WorkspaceDataExport
 } from "@markos/shared-types";
@@ -200,12 +215,69 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async previewVaultWebsiteIngest(input: { url: string }): Promise<VaultWebsiteIngestDraft> {
+    const response = await this.request<VaultWebsiteIngestDraft>("/v1/vault/ingest/website/preview", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveVaultWebsiteIngest(
+    draftId: string,
+    input: { candidates?: VaultWebsiteIngestCandidate[] } = {}
+  ): Promise<VaultWebsiteIngestDraft> {
+    const response = await this.request<VaultWebsiteIngestDraft>(`/v1/vault/ingest/${draftId}/approve`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async rejectVaultWebsiteIngest(draftId: string, input: { reason?: string } = {}): Promise<VaultWebsiteIngestDraft> {
+    const response = await this.request<VaultWebsiteIngestDraft>(`/v1/vault/ingest/${draftId}/reject`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async brandKit(): Promise<BrandKit> {
+    const response = await this.request<BrandKit>("/v1/brand-kit");
+    return response.data;
+  }
+
+  async brandBookExports(input: { limit?: number } = {}): Promise<BrandBookExportRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.limit !== undefined) {
+      search.set("limit", String(input.limit));
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<BrandBookExportRecord[]>(`/v1/brand-book/exports${suffix}`);
+    return response.data;
+  }
+
+  async createBrandBookExport(): Promise<BrandBookExportRecord> {
+    const response = await this.request<BrandBookExportRecord>("/v1/brand-book/exports", {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async brandBookExport(exportId: string): Promise<BrandBookExportRecord> {
+    const response = await this.request<BrandBookExportRecord>(`/v1/brand-book/exports/${exportId}`);
+    return response.data;
+  }
+
   async strategies(): Promise<StrategyRecord[]> {
     const response = await this.request<StrategyRecord[]>("/v1/strategy");
     return response.data;
   }
 
-  async generateStrategy(input: { objective?: string; horizonDays?: number }): Promise<StrategyRecord> {
+  async generateStrategy(input: { objective?: string; horizonDays?: number; productId?: string; offerId?: string }): Promise<StrategyRecord> {
     const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
       body: input,
       method: "POST"
@@ -288,8 +360,192 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async campaignPackages(input: { limit?: number; status?: CampaignStatus } = {}): Promise<CampaignPackageRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.limit !== undefined) {
+      search.set("limit", String(input.limit));
+    }
+
+    if (input.status !== undefined) {
+      search.set("status", input.status);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<CampaignPackageRecord[]>(`/v1/campaigns/packages${suffix}`);
+    return response.data;
+  }
+
+  async generateCampaignPackage(input: { brief: CampaignBrief; name?: string }): Promise<CampaignPackageRecord> {
+    const response = await this.request<CampaignPackageRecord>("/v1/campaigns/packages/generate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveCampaignPackage(campaignId: string): Promise<CampaignPackageRecord> {
+    const response = await this.request<CampaignPackageRecord>(`/v1/campaigns/${campaignId}/approve`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async rejectCampaignPackageItem(campaignId: string, contentItemId: string, reason: string): Promise<CampaignPackageRecord> {
+    const response = await this.request<CampaignPackageRecord>(`/v1/campaigns/${campaignId}/items/${contentItemId}/reject`, {
+      body: {
+        reason
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async scheduleCampaignPackage(campaignId: string, input: { startDate?: string; time?: string } = {}): Promise<CampaignPackageRecord> {
+    const response = await this.request<CampaignPackageRecord>(`/v1/campaigns/${campaignId}/schedule`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async mediaAssets(): Promise<MediaAssetRecord[]> {
     const response = await this.request<MediaAssetRecord[]>("/v1/media");
+    return response.data;
+  }
+
+  async catalogProducts(input: { category?: string; q?: string; status?: ProductStatus } = {}): Promise<ProductRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.category !== undefined) {
+      search.set("category", input.category);
+    }
+
+    if (input.q !== undefined) {
+      search.set("q", input.q);
+    }
+
+    if (input.status !== undefined) {
+      search.set("status", input.status);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<ProductRecord[]>(`/v1/catalog/products${suffix}`);
+    return response.data;
+  }
+
+  async createCatalogProduct(input: {
+    benefits?: string[];
+    category?: string;
+    currency?: string;
+    description?: string;
+    mediaAssetIds?: string[];
+    name: string;
+    priceMinor?: number;
+    salesChannels?: string[];
+    status?: ProductStatus;
+  }): Promise<ProductRecord> {
+    const response = await this.request<ProductRecord>("/v1/catalog/products", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async updateCatalogProduct(
+    productId: string,
+    input: {
+      benefits?: string[];
+      category?: string | null;
+      currency?: string;
+      description?: string | null;
+      mediaAssetIds?: string[];
+      name?: string;
+      priceMinor?: number | null;
+      salesChannels?: string[];
+      status?: ProductStatus;
+    }
+  ): Promise<ProductRecord> {
+    const response = await this.request<ProductRecord>(`/v1/catalog/products/${productId}`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async archiveCatalogProduct(productId: string): Promise<ProductRecord> {
+    const response = await this.request<ProductRecord>(`/v1/catalog/products/${productId}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
+  async catalogOffers(input: { productId?: string; q?: string; status?: OfferStatus } = {}): Promise<OfferRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.productId !== undefined) {
+      search.set("productId", input.productId);
+    }
+
+    if (input.q !== undefined) {
+      search.set("q", input.q);
+    }
+
+    if (input.status !== undefined) {
+      search.set("status", input.status);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<OfferRecord[]>(`/v1/catalog/offers${suffix}`);
+    return response.data;
+  }
+
+  async createCatalogOffer(input: {
+    compareAtPriceMinor?: number;
+    currency?: string;
+    description?: string;
+    endsAt?: string;
+    priceMinor?: number;
+    productId?: string;
+    startsAt?: string;
+    status?: OfferStatus;
+    terms?: string;
+    title: string;
+  }): Promise<OfferRecord> {
+    const response = await this.request<OfferRecord>("/v1/catalog/offers", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async updateCatalogOffer(
+    offerId: string,
+    input: {
+      compareAtPriceMinor?: number | null;
+      currency?: string;
+      description?: string | null;
+      endsAt?: string | null;
+      priceMinor?: number | null;
+      productId?: string | null;
+      startsAt?: string | null;
+      status?: OfferStatus;
+      terms?: string | null;
+      title?: string;
+    }
+  ): Promise<OfferRecord> {
+    const response = await this.request<OfferRecord>(`/v1/catalog/offers/${offerId}`, {
+      body: input,
+      method: "PATCH"
+    });
+    return response.data;
+  }
+
+  async archiveCatalogOffer(offerId: string): Promise<OfferRecord> {
+    const response = await this.request<OfferRecord>(`/v1/catalog/offers/${offerId}`, {
+      method: "DELETE"
+    });
     return response.data;
   }
 
@@ -331,6 +587,8 @@ export class MarkosApiClient {
     contentType?: ContentType;
     count?: number;
     strategyId?: string;
+    productId?: string;
+    offerId?: string;
   }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
@@ -344,6 +602,8 @@ export class MarkosApiClient {
     contentType?: ContentType;
     scheduledAt: string;
     strategyId?: string;
+    productId?: string;
+    offerId?: string;
   }): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
       body: input,
@@ -425,6 +685,68 @@ export class MarkosApiClient {
   ): Promise<AiImageGenerationResult> {
     const response = await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, {
       body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async visualStudioVariants(input: { limit?: number; status?: GeneratedMediaStatus } = {}): Promise<GeneratedMediaVariantRecord[]> {
+    const search = new URLSearchParams();
+
+    if (input.limit !== undefined) {
+      search.set("limit", String(input.limit));
+    }
+
+    if (input.status !== undefined) {
+      search.set("status", input.status);
+    }
+
+    const suffix = search.size === 0 ? "" : `?${search.toString()}`;
+    const response = await this.request<GeneratedMediaVariantRecord[]>(`/v1/media/visual-studio/variants${suffix}`);
+    return response.data;
+  }
+
+  async generateVisualStudioVariants(input: {
+    aspectRatio?: "1:1" | "4:5" | "9:16";
+    contentItemId?: string;
+    count?: number;
+    negativePrompt?: string;
+    offerId?: string;
+    productId?: string;
+    prompt?: string;
+    sourceMediaAssetIds?: string[];
+    visualMode?: VisualMode;
+  }): Promise<VisualStudioGenerationResult> {
+    const response = await this.request<VisualStudioGenerationResult>("/v1/media/visual-studio/generate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveGeneratedMediaVariant(variantId: string): Promise<GeneratedMediaVariantRecord> {
+    const response = await this.request<GeneratedMediaVariantRecord>(`/v1/media/visual-studio/variants/${variantId}/approve`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async rejectGeneratedMediaVariant(variantId: string, reason: string): Promise<GeneratedMediaVariantRecord> {
+    const response = await this.request<GeneratedMediaVariantRecord>(`/v1/media/visual-studio/variants/${variantId}/reject`, {
+      body: {
+        reason
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async attachGeneratedMediaVariantToContent(variantId: string, contentItemId: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/media/visual-studio/variants/${variantId}/attach-to-content`, {
+      body: {
+        contentItemId
+      },
       method: "POST"
     });
     return response.data;

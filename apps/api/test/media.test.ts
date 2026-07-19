@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 
+let imageGenerationCalls = 0;
+
 vi.mock("../src/ai/image-client", () => ({
   generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
+    imageGenerationCalls += 1;
     const bytes = Buffer.from(`<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`);
 
     return {
@@ -24,6 +27,10 @@ vi.mock("../src/ai/image-client", () => ({
 }));
 
 describe("media routes", () => {
+  beforeEach(() => {
+    imageGenerationCalls = 0;
+  });
+
   it("registers public media and attaches it to content", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -244,6 +251,226 @@ describe("media routes", () => {
     ).resolves.toMatchObject({
       used: body.mediaAsset.sizeBytes
     });
+
+    await app.close();
+  });
+
+  it("generates Visual Studio variants with review gating, lineage, and usage metering", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const sourceMedia = await createSourceMediaAsset(session.workspace.id);
+    const product = await prisma.product.create({
+      data: {
+        workspaceId: session.workspace.id,
+        benefits: ["Handcrafted limited-edition pieces", "Premium gifting presentation"],
+        category: "Luxury jewelry",
+        description: "Luxury jewelry collection for Bahrain customers",
+        mediaAssetIds: [sourceMedia.id],
+        name: "Luxury Jewelry Collection",
+        priceMinor: 450000,
+        salesChannels: ["Instagram"]
+      }
+    });
+    const offer = await prisma.offer.create({
+      data: {
+        workspaceId: session.workspace.id,
+        description: "Launch campaign for the luxury jewelry collection",
+        priceMinor: 450000,
+        productId: product.id,
+        title: "BD 450 launch bundle"
+      }
+    });
+
+    await seedVisualVaultContext(session.workspace.id);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/media/visual-studio/generate",
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        contentItemId: content.id,
+        count: 1,
+        negativePrompt: "No cluttered background",
+        offerId: offer.id,
+        productId: product.id,
+        prompt: "Create a premium launch visual for the luxury jewelry campaign",
+        sourceMediaAssetIds: [sourceMedia.id],
+        visualMode: "PRODUCT_PHOTO"
+      }
+    });
+    const generatedBody = generated.json().data;
+    const variant = generatedBody.variants[0];
+    const mediaAssetId = variant.mediaAssetId as string;
+
+    const blockedAttach = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/media`,
+      headers,
+      payload: {
+        mediaAssetId
+      }
+    });
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/media/visual-studio/variants/${variant.id}/approve`,
+      headers,
+      payload: {}
+    });
+    const attached = await app.inject({
+      method: "POST",
+      url: `/v1/media/visual-studio/variants/${variant.id}/attach-to-content`,
+      headers,
+      payload: {
+        contentItemId: content.id
+      }
+    });
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/media/visual-studio/variants?status=APPROVED",
+      headers
+    });
+    const interaction = await prisma.aiInteraction.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        agent: "IMAGE",
+        response: {
+          path: ["variantId"],
+          equals: variant.id
+        }
+      }
+    });
+    const variantRow = await prisma.generatedMediaVariant.findUniqueOrThrow({
+      where: {
+        id: variant.id
+      }
+    });
+
+    expect(generated.statusCode).toBe(200);
+    expect(generatedBody).toMatchObject({
+      model: "test-image-model",
+      promptVersion: "image.v1.test",
+      variants: [
+        expect.objectContaining({
+          aspectRatio: "4:5",
+          contentItemId: content.id,
+          mediaAsset: expect.objectContaining({
+            type: "AI_GENERATED",
+            width: 1080,
+            height: 1350
+          }),
+          negativePrompt: expect.stringContaining("No cluttered background"),
+          offerId: offer.id,
+          productId: product.id,
+          qualityStatus: "REVIEW_REQUIRED",
+          sourceMediaAssetIds: [sourceMedia.id],
+          status: "PENDING_REVIEW",
+          visualMode: "PRODUCT_PHOTO"
+        })
+      ]
+    });
+    expect(variant.prompt).toContain("Luxury Jewelry Collection");
+    expect(variant.prompt).toContain("BD 450 launch bundle");
+    expect(blockedAttach.statusCode).toBe(409);
+    expect(blockedAttach.json().error.code).toBe("GENERATED_MEDIA_NOT_APPROVED");
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toMatchObject({
+      data: {
+        id: variant.id,
+        qualityStatus: "APPROVED",
+        status: "APPROVED"
+      }
+    });
+    expect(attached.statusCode).toBe(200);
+    expect(attached.json().data.mediaIds).toEqual([mediaAssetId]);
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().data).toEqual(expect.arrayContaining([expect.objectContaining({ id: variant.id })]));
+    expect(interaction).toMatchObject({
+      model: "test-image-model",
+      promptVersion: "image.v1.test",
+      tokensIn: 31,
+      tokensOut: 7
+    });
+    expect(JSON.stringify(variantRow.metadata)).toContain("humanApprovalRequired");
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_IMAGE",
+            periodStart: monthStart()
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      limit: 20,
+      used: 1
+    });
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: session.workspace.id,
+            metric: "AI_TOKENS_IN",
+            periodStart: monthStart()
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      used: 31
+    });
+
+    await app.close();
+  });
+
+  it("blocks Visual Studio generation before provider calls when image quota is exhausted", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "AI_IMAGE",
+        periodStart: monthStart(),
+        periodEnd: nextMonthStart(),
+        used: 20,
+        limit: 20
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/visual-studio/generate",
+      headers,
+      payload: {
+        aspectRatio: "1:1",
+        count: 1,
+        prompt: "Generate a blocked image",
+        visualMode: "AD_CREATIVE"
+      }
+    });
+    const generatedVariants = await prisma.generatedMediaVariant.findMany({
+      where: {
+        workspaceId: session.workspace.id
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "QUOTA_EXCEEDED",
+        details: [
+          {
+            metric: "AI_IMAGE"
+          }
+        ]
+      }
+    });
+    expect(imageGenerationCalls).toBe(0);
+    expect(generatedVariants).toHaveLength(0);
 
     await app.close();
   });
@@ -486,6 +713,63 @@ async function createDraftContent(workspaceId: string) {
       hashtags: ["#Bahrain"],
       mediaIds: []
     }
+  });
+}
+
+async function createSourceMediaAsset(workspaceId: string) {
+  return prisma.mediaAsset.create({
+    data: {
+      workspaceId,
+      type: "BRAND_ASSET",
+      filename: "brand-reference.png",
+      s3Key: "external:https://cdn.example.com/brand-reference.png",
+      cdnUrl: "https://cdn.example.com/brand-reference.png",
+      mimeType: "image/png",
+      sizeBytes: 2048,
+      width: 1080,
+      height: 1350
+    }
+  });
+}
+
+async function seedVisualVaultContext(workspaceId: string): Promise<void> {
+  await prisma.knowledgeVault.createMany({
+    data: [
+      {
+        workspaceId,
+        section: "COMPANY",
+        key: "profile",
+        value: {
+          country: "Bahrain",
+          name: "Maryam Studio"
+        }
+      },
+      {
+        workspaceId,
+        section: "BRAND",
+        key: "visual-style",
+        value: {
+          colors: ["teal", "gold"],
+          personality: "premium, modern, warm"
+        }
+      },
+      {
+        workspaceId,
+        section: "TONE",
+        key: "voice",
+        value: {
+          rules: ["confident", "clear", "no exaggerated claims"]
+        }
+      },
+      {
+        workspaceId,
+        section: "AUDIENCE",
+        key: "primary",
+        value: {
+          segment: "Bahrain luxury shoppers"
+        }
+      }
+    ]
   });
 }
 

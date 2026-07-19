@@ -6,7 +6,7 @@ import { buildApp } from "../src/http/app";
 const contentMock = vi.hoisted(() => ({
   lastInput: undefined as
     | {
-        context: Array<{ key: string; section: string }>;
+        context: Array<{ key: string; section: string; value?: Record<string, unknown> }>;
         contentType: string;
         count: number;
         toneLock: { requiredLanguages: ["ar", "en"]; toneWords: string[]; voiceNotes?: string };
@@ -93,6 +93,24 @@ describe("content routes", () => {
         ]
       }
     });
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/audience",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "primary",
+            value: {
+              painPoints: ["need reliable office coffee supply"],
+              segment: "office managers"
+            }
+          }
+        ]
+      }
+    });
+    const product = await createCatalogProduct(app, headers);
+    const offer = await createCatalogOffer(app, headers, product.id);
 
     const response = await app.inject({
       method: "POST",
@@ -101,7 +119,9 @@ describe("content routes", () => {
       payload: {
         topic: "wholesale coffee leads",
         contentType: "CAROUSEL",
-        count: 2
+        count: 2,
+        productId: product.id,
+        offerId: offer.id
       }
     });
 
@@ -153,6 +173,70 @@ describe("content routes", () => {
       currency: "BHD",
       model: "test-content-model"
     });
+    expect(contentMock.lastInput).toMatchObject({
+      context: expect.arrayContaining([
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: "catalog:commercial-brief",
+          value: expect.objectContaining({
+            audienceSignals: expect.arrayContaining(["office managers"]),
+            campaignAngles: expect.arrayContaining([expect.stringContaining("bulk packs for offices")]),
+            sourceType: "commercial_brief"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:product:${product.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_product"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:offer:${offer.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_offer"
+          })
+        })
+      ])
+    });
+    expect(interaction.prompt).toMatchObject({
+      productId: product.id,
+      offerId: offer.id,
+      retrievedContext: expect.arrayContaining([
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: "catalog:commercial-brief",
+          value: expect.objectContaining({
+            audienceSignals: expect.arrayContaining(["office managers"]),
+            campaignAngles: expect.arrayContaining([expect.stringContaining("bulk packs for offices")]),
+            guardrails: expect.objectContaining({
+              doNotInventComparativeClaims: true,
+              doNotInventPrices: true
+            }),
+            sourceType: "commercial_brief"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:product:${product.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_product"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:offer:${offer.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_offer"
+          })
+        })
+      ])
+    });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -195,6 +279,56 @@ describe("content routes", () => {
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("rejects unsupported comparative claims before generating content", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              industry: "specialty coffee",
+              location: "Bahrain",
+              name: "Pearl Coffee"
+            }
+          }
+        ]
+      }
+    });
+    const product = await createCatalogProduct(app, headers);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/generate",
+      headers,
+      payload: {
+        contentType: "POST",
+        count: 1,
+        productId: product.id,
+        topic: "Write the best coffee in Bahrain launch post"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "CATALOG_GENERATION_GUARDRAIL",
+        details: expect.arrayContaining([
+          expect.objectContaining({
+            issue: "unsupported_claim"
+          })
+        ])
+      }
+    });
 
     await app.close();
   });
@@ -943,6 +1077,41 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
+}
+
+async function createCatalogProduct(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/catalog/products",
+    headers,
+    payload: {
+      benefits: ["bulk packs for offices", "same-day Bahrain delivery"],
+      category: "Coffee",
+      name: "Wholesale Coffee Starter Pack",
+      priceMinor: 32000,
+      salesChannels: ["Instagram", "WhatsApp"]
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json().data as { id: string };
+}
+
+async function createCatalogOffer(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>, productId: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/catalog/offers",
+    headers,
+    payload: {
+      description: "Introductory discount for new cafe accounts.",
+      priceMinor: 28000,
+      productId,
+      title: "First wholesale order offer"
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json().data as { id: string };
 }
 
 function testEmbedding(text: string): number[] {

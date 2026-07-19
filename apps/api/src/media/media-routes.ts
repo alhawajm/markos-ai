@@ -1,12 +1,28 @@
 import type { FastifyInstance } from "fastify";
-import { attachMediaToContentSchema, generateImageForContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
+import {
+  attachGeneratedMediaVariantSchema,
+  attachMediaToContentSchema,
+  generateImageForContentSchema,
+  registerPublicMediaSchema,
+  rejectGeneratedMediaVariantSchema,
+  uploadMediaSchema,
+  visualStudioGenerateSchema,
+  visualStudioVariantListQuerySchema
+} from "@markos/validation";
+import { CatalogSelectionInvalidError, CatalogSelectionNotFoundError } from "../catalog/catalog-service";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
+  approveGeneratedMediaVariant,
+  attachGeneratedMediaVariantToContent,
   attachMediaToContent,
   detachMediaFromContent,
   generateImageForContent,
+  generateVisualStudioVariants,
+  GeneratedMediaVariantNotApprovedError,
+  GeneratedMediaVariantNotFoundError,
+  listGeneratedMediaVariants,
   listMediaAssets,
   MediaAssetNotFoundError,
   MediaContentItemNotFoundError,
@@ -15,6 +31,7 @@ import {
   MediaUploadInvalidError,
   readPublicMediaFile,
   registerPublicMedia,
+  rejectGeneratedMediaVariant,
   uploadMedia
 } from "./media-service";
 
@@ -30,6 +47,141 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listMediaAssets(workspaceId));
+    }
+  );
+
+  app.get(
+    "/v1/media/visual-studio/variants",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["media:read"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = visualStudioVariantListQuerySchema.safeParse(request.query ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid generated media query", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await listGeneratedMediaVariants(workspaceId, parsed.data));
+    }
+  );
+
+  app.post(
+    "/v1/media/visual-studio/generate",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["media:write"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = visualStudioGenerateSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Visual Studio generation request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await generateVisualStudioVariants(workspaceId, parsed.data));
+      } catch (error) {
+        if (error instanceof MediaImageGenerationInvalidError) {
+          return reply.status(502).send(errorEnvelope("AI_IMAGE_INVALID", error.message));
+        }
+
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/v1/media/visual-studio/variants/:variantId/approve",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { variantId?: string };
+
+      if (!params.variantId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Generated media variant id is required"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await approveGeneratedMediaVariant(workspaceId, params.variantId));
+      } catch (error) {
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/v1/media/visual-studio/variants/:variantId/reject",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { variantId?: string };
+      const parsed = rejectGeneratedMediaVariantSchema.safeParse(request.body ?? {});
+
+      if (!params.variantId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Generated media variant id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid generated media rejection request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await rejectGeneratedMediaVariant(workspaceId, params.variantId, parsed.data));
+      } catch (error) {
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/v1/media/visual-studio/variants/:variantId/attach-to-content",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { variantId?: string };
+      const parsed = attachGeneratedMediaVariantSchema.safeParse(request.body ?? {});
+
+      if (!params.variantId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Generated media variant id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid generated media attachment request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await attachGeneratedMediaVariantToContent(workspaceId, params.variantId, parsed.data));
+      } catch (error) {
+        return handleMediaMutationError(error, reply);
+      }
     }
   );
 
@@ -222,8 +374,24 @@ function handleMediaMutationError(error: unknown, reply: { status: (code: number
     return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", error.message));
   }
 
+  if (error instanceof GeneratedMediaVariantNotFoundError) {
+    return reply.status(404).send(errorEnvelope("GENERATED_MEDIA_NOT_FOUND", error.message));
+  }
+
+  if (error instanceof GeneratedMediaVariantNotApprovedError) {
+    return reply.status(409).send(errorEnvelope("GENERATED_MEDIA_NOT_APPROVED", error.message));
+  }
+
   if (error instanceof MediaContentLockedError) {
     return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
+  }
+
+  if (error instanceof CatalogSelectionNotFoundError) {
+    return reply.status(404).send(errorEnvelope("CATALOG_SELECTION_NOT_FOUND", error.message));
+  }
+
+  if (error instanceof CatalogSelectionInvalidError) {
+    return reply.status(409).send(errorEnvelope("CATALOG_SELECTION_INVALID", error.message));
   }
 
   if (error instanceof UsageQuotaExceededError) {

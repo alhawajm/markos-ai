@@ -7,6 +7,7 @@ const readPermissions = [
   "onboarding:read",
   "strategy:read",
   "content:read",
+  "catalog:read",
   "media:read",
   "analytics:read",
   "prompt:read"
@@ -19,6 +20,7 @@ const editPermissions = [
   "strategy:generate",
   "content:write",
   "content:schedule",
+  "catalog:write",
   "agent:run",
   "billing:manage",
   "media:write",

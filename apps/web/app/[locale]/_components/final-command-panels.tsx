@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowRight,
+  AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   Brain,
   Building2,
   Calendar,
@@ -15,9 +17,11 @@ import {
   Clock,
   CreditCard,
   DollarSign,
+  Download,
   Eye,
+  FileText,
   Heart,
-  Image,
+  Image as ImageIcon,
   Instagram,
   Lightbulb,
   Link2,
@@ -36,7 +40,26 @@ import {
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AnalyticsSummary, AuthSession, ContentRecord, ContentStatus, ContentType, Locale, VaultCompletenessScore } from "@markos/shared-types";
+import type {
+  AnalyticsSummary,
+  AuthSession,
+  BrandBookExportRecord,
+  BrandKit,
+  CampaignPackageRecord,
+  ContentRecord,
+  ContentStatus,
+  ContentType,
+  GeneratedMediaVariantRecord,
+  Locale,
+  MediaAssetRecord,
+  OfferRecord,
+  ProductRecord,
+  VaultCompletenessScore,
+  VaultSection,
+  VaultWebsiteIngestCandidate,
+  VaultWebsiteIngestDraft,
+  VisualMode
+} from "@markos/shared-types";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
@@ -52,6 +75,12 @@ interface ContentReadyCardModel {
   title: string;
 }
 
+interface CampaignItemEdit {
+  callToAction: string;
+  caption: string;
+  hashtags: string;
+}
+
 interface DashboardLiveState {
   analytics: AnalyticsSummary | null;
   contentItems: ContentRecord[];
@@ -59,6 +88,25 @@ interface DashboardLiveState {
   loading: boolean;
   publishingQueue: ContentRecord[];
   vaultScore: VaultCompletenessScore | null;
+}
+
+interface EditableIngestCandidate {
+  candidate: VaultWebsiteIngestCandidate;
+  selected: boolean;
+  valueError: string;
+  valueText: string;
+}
+
+interface CatalogPickerState {
+  error: string;
+  loading: boolean;
+  offers: OfferRecord[];
+  products: ProductRecord[];
+  refresh: () => void;
+  selectedOfferId: string;
+  selectedProductId: string;
+  setSelectedOfferId: (offerId: string) => void;
+  setSelectedProductId: (productId: string) => void;
 }
 
 const sessionKey = "markos.session";
@@ -86,11 +134,33 @@ const accent = {
 } as const;
 
 const studioTypes: Array<[StudioContentType, string, IconType]> = [
-  ["POST", "Post", Image],
+  ["POST", "Post", ImageIcon],
   ["REEL", "Reel", Play],
-  ["CAROUSEL", "Carousel", Image],
+  ["CAROUSEL", "Carousel", ImageIcon],
   ["STORY", "Story", Instagram]
 ];
+
+const visualModes: Array<[VisualMode, string, string, IconType]> = [
+  ["PRODUCT_PHOTO", "Product Hero", "Accurate product-first creative", ImageIcon],
+  ["LIFESTYLE_STORY", "Lifestyle Story", "Aspirational brand scene", Heart],
+  ["AD_CREATIVE", "Ad Creative", "Offer-led conversion visual", Zap],
+  ["BACKGROUND_VARIANT", "Background", "Clean branded backdrop", Palette]
+];
+
+const visualAspectRatios = ["1:1", "4:5", "9:16"] as const;
+type VisualAspectRatio = (typeof visualAspectRatios)[number];
+
+const vaultModules: Array<{ description: string; icon: IconType; section: VaultSection; title: string }> = [
+  { description: "Business name, positioning, market, and languages", icon: Building2, section: "COMPANY", title: "Company Info" },
+  { description: "Mission, origin, proof points, and unique value", icon: Sparkles, section: "STORY", title: "Your Story" },
+  { description: "Products, services, packages, and commercial context", icon: Target, section: "PRODUCTS", title: "Products & Services" },
+  { description: "Customer demographics, needs, and purchase triggers", icon: Users, section: "AUDIENCE", title: "Target Audience" },
+  { description: "Competitive landscape and positioning gaps", icon: TrendingUp, section: "COMPETITORS", title: "Competitors" },
+  { description: "Visual style, colors, assets, and brand constraints", icon: Palette, section: "BRAND", title: "Brand Identity" },
+  { description: "Voice, tone, messaging rules, and content objectives", icon: Brain, section: "OBJECTIVES", title: "Marketing Objectives" }
+];
+
+const websiteIngestCoreSections: VaultSection[] = ["COMPANY", "STORY", "PRODUCTS", "BRAND", "TONE"];
 
 function useMarkosSession() {
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -125,6 +195,81 @@ function useMarkosClient(session: AuthSession | null) {
         : baseOptions
     );
   }, [session]);
+}
+
+function useCatalogPickerState(session: AuthSession | null, client: MarkosApiClient): CatalogPickerState {
+  const [products, setProducts] = useState<ProductRecord[]>([]);
+  const [offers, setOffers] = useState<OfferRecord[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedOfferId, setSelectedOfferId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!session) {
+      setProducts([]);
+      setOffers([]);
+      setSelectedProductId("");
+      setSelectedOfferId("");
+      setError("");
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+
+    async function loadCatalog() {
+      try {
+        const [nextProducts, nextOffers] = await Promise.all([
+          client.catalogProducts({ status: "ACTIVE" }),
+          client.catalogOffers({ status: "ACTIVE" })
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setProducts(nextProducts);
+        setOffers(nextOffers);
+      } catch {
+        if (!cancelled) {
+          setError("Catalog context could not load. MARKOS can still generate from the Vault.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, refreshKey, session]);
+
+  return {
+    error,
+    loading,
+    offers,
+    products,
+    refresh: () => setRefreshKey((current) => current + 1),
+    selectedOfferId,
+    selectedProductId,
+    setSelectedOfferId,
+    setSelectedProductId
+  };
+}
+
+function catalogGenerationPayload(catalog: CatalogPickerState): { offerId?: string; productId?: string } {
+  return {
+    ...(catalog.selectedProductId ? { productId: catalog.selectedProductId } : {}),
+    ...(catalog.selectedOfferId ? { offerId: catalog.selectedOfferId } : {})
+  };
 }
 
 function recordTitle(record: ContentRecord): string {
@@ -194,6 +339,44 @@ function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat("en", { maximumFractionDigits: value >= 10000 ? 1 : 0, notation: value >= 10000 ? "compact" : "standard" }).format(value);
 }
 
+function formatCatalogPrice(priceMinor: number | undefined, currency: string): string | null {
+  if (priceMinor === undefined) {
+    return null;
+  }
+
+  const divisor = currency === "BHD" ? 1000 : 100;
+  const formatted = new Intl.NumberFormat("en", {
+    maximumFractionDigits: currency === "BHD" ? 3 : 2,
+    minimumFractionDigits: currency === "BHD" ? 3 : 2
+  }).format(priceMinor / divisor);
+
+  return `${currency} ${formatted}`;
+}
+
+function formatCatalogDate(value: string | undefined): string {
+  if (value === undefined) {
+    return "Always on";
+  }
+
+  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function parseBhdPriceMinor(value: string): number | undefined {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const amount = Number(trimmed);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error("Enter a valid BHD price.");
+  }
+
+  return Math.round(amount * 1000);
+}
+
 function parseHashtags(value: string): string[] {
   return value
     .split(/[\s,]+/)
@@ -202,6 +385,14 @@ function parseHashtags(value: string): string[] {
     .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
     .filter((tag, index, all) => all.indexOf(tag) === index)
     .slice(0, 30);
+}
+
+function campaignItemEditFromRecord(record: ContentRecord): CampaignItemEdit {
+  return {
+    callToAction: record.callToAction ?? "",
+    caption: record.captionEn ?? record.captionAr ?? record.contentPillar ?? "",
+    hashtags: record.hashtags.join(" ")
+  };
 }
 
 function initialScheduleDate(): string {
@@ -240,6 +431,41 @@ function contentStudioError(error: unknown): string {
   }
 
   return message;
+}
+
+function visualStudioError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Visual Studio could not complete that action.";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("approved")) {
+    return "Approve the generated visual before attaching it to content.";
+  }
+
+  if (lower.includes("quota") || lower.includes("limit")) {
+    return "This workspace has reached its AI image quota. Upgrade or wait for the quota window to reset before generating more visuals.";
+  }
+
+  if (lower.includes("catalog")) {
+    return "The selected product or offer is no longer active. Pick an active catalog record, then generate again.";
+  }
+
+  return contentStudioError(error);
+}
+
+function visualModeLabel(mode: VisualMode): string {
+  return visualModes.find(([value]) => value === mode)?.[1] ?? "Visual";
+}
+
+function generatedVariantStatusLabel(variant: GeneratedMediaVariantRecord): string {
+  if (variant.status === "APPROVED") {
+    return "Approved";
+  }
+
+  if (variant.status === "REJECTED") {
+    return "Rejected";
+  }
+
+  return "Review required";
 }
 
 function isStudioContentType(value: string | null): value is StudioContentType {
@@ -609,22 +835,375 @@ export function OpportunitiesPanel({ locale }: { locale: Locale }) {
   );
 }
 
+function CatalogContextPicker({ catalog, compact = false }: { catalog: CatalogPickerState; compact?: boolean }) {
+  const selectedProduct = catalog.products.find((product) => product.id === catalog.selectedProductId);
+  const selectedOffer = catalog.offers.find((offer) => offer.id === catalog.selectedOfferId);
+  const offerOptions = catalog.selectedProductId
+    ? catalog.offers.filter((offer) => offer.productId === undefined || offer.productId === catalog.selectedProductId)
+    : catalog.offers;
+
+  function updateProduct(productId: string) {
+    catalog.setSelectedProductId(productId);
+
+    if (catalog.selectedOfferId) {
+      const offer = catalog.offers.find((item) => item.id === catalog.selectedOfferId);
+
+      if (productId && offer?.productId && offer.productId !== productId) {
+        catalog.setSelectedOfferId("");
+      }
+    }
+  }
+
+  return (
+    <article className={compact ? "lux-card-muted rounded-[1.5rem] p-5" : "lux-card rounded-[1.5rem] p-5 xl:p-6"}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-3 text-xl font-bold text-white"><Target className="text-[#81D8D0]" size={22} /> Commercial Context</h2>
+          <p className="mt-2 text-sm text-[#9AA7BD]">Optional, but recommended. It tells MARKOS exactly what product or offer to build around.</p>
+        </div>
+        {catalog.loading ? <span className="lux-thinking-dot mt-1" aria-hidden="true" /> : null}
+      </div>
+
+      {catalog.error ? <p className="mt-4 rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-4 py-3 text-sm font-semibold text-[#D4AF37]">{catalog.error}</p> : null}
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Product</span>
+          <select
+            className="mt-2 w-full rounded-full border border-[#81D8D0]/14 bg-[#0F171A] px-4 py-3 text-base font-semibold text-white outline-none focus:border-[#81D8D0]/45"
+            disabled={catalog.loading || catalog.products.length === 0}
+            onChange={(event) => updateProduct(event.target.value)}
+            value={catalog.selectedProductId}
+          >
+            <option value="">{catalog.products.length === 0 ? "No active products yet" : "Use Vault context"}</option>
+            {catalog.products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}{formatCatalogPrice(product.priceMinor, product.currency) ? ` - ${formatCatalogPrice(product.priceMinor, product.currency)}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Offer</span>
+          <select
+            className="mt-2 w-full rounded-full border border-[#81D8D0]/14 bg-[#0F171A] px-4 py-3 text-base font-semibold text-white outline-none focus:border-[#81D8D0]/45"
+            disabled={catalog.loading || offerOptions.length === 0}
+            onChange={(event) => catalog.setSelectedOfferId(event.target.value)}
+            value={catalog.selectedOfferId}
+          >
+            <option value="">{offerOptions.length === 0 ? "No active offers yet" : "No specific offer"}</option>
+            {offerOptions.map((offer) => (
+              <option key={offer.id} value={offer.id}>
+                {offer.title}{formatCatalogPrice(offer.priceMinor, offer.currency) ? ` - ${formatCatalogPrice(offer.priceMinor, offer.currency)}` : ""} - {formatCatalogDate(offer.endsAt)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {selectedProduct || selectedOffer ? (
+        <div className="mt-5 rounded-[1.25rem] border border-[#81D8D0]/12 bg-[#81D8D0]/7 p-4 text-sm text-[#D6DEEA]">
+          <p className="font-bold text-white">Selected for generation</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {selectedProduct ? (
+              <div className="rounded-2xl border border-[#81D8D0]/12 bg-[#0F171A]/70 p-3">
+                <p className="text-xs font-bold uppercase tracking-[.14em] text-[#81D8D0]">Product</p>
+                <p className="mt-1 font-semibold text-white">{selectedProduct.name}</p>
+                <p className="mt-1 text-xs text-[#9AA7BD]">{formatCatalogPrice(selectedProduct.priceMinor, selectedProduct.currency) ?? "No price set"}</p>
+              </div>
+            ) : null}
+            {selectedOffer ? (
+              <div className="rounded-2xl border border-[#D4AF37]/12 bg-[#D4AF37]/7 p-3">
+                <p className="text-xs font-bold uppercase tracking-[.14em] text-[#D4AF37]">Offer</p>
+                <p className="mt-1 font-semibold text-white">{selectedOffer.title}</p>
+                <p className="mt-1 text-xs text-[#9AA7BD]">{formatCatalogPrice(selectedOffer.priceMinor, selectedOffer.currency) ?? "No price set"} - {formatCatalogDate(selectedOffer.endsAt)}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+export function CatalogPanel({ locale }: { locale: Locale }) {
+  const session = useMarkosSession();
+  const client = useMarkosClient(session);
+  const catalog = useCatalogPickerState(session, client);
+  const [productName, setProductName] = useState("");
+  const [productCategory, setProductCategory] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [offerTitle, setOfferTitle] = useState("");
+  const [offerProductId, setOfferProductId] = useState("");
+  const [offerDescription, setOfferDescription] = useState("");
+  const [offerPrice, setOfferPrice] = useState("");
+  const [offerEndsAt, setOfferEndsAt] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<"offer" | "product" | string | null>(null);
+
+  const productById = useMemo(() => new Map(catalog.products.map((product) => [product.id, product])), [catalog.products]);
+
+  async function createProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session) {
+      setMessage("Sign in before creating catalog products.");
+      return;
+    }
+
+    const name = productName.trim();
+
+    if (!name) {
+      setMessage("Product name is required.");
+      return;
+    }
+
+    setBusy("product");
+    setMessage("Saving product to the catalog and Vault...");
+
+    try {
+      const priceMinor = parseBhdPriceMinor(productPrice);
+      await client.createCatalogProduct({
+        name,
+        ...(productCategory.trim() ? { category: productCategory.trim() } : {}),
+        ...(productDescription.trim() ? { description: productDescription.trim() } : {}),
+        ...(priceMinor === undefined ? {} : { priceMinor }),
+        benefits: [],
+        salesChannels: ["Instagram", "WhatsApp"]
+      });
+      setProductName("");
+      setProductCategory("");
+      setProductDescription("");
+      setProductPrice("");
+      catalog.refresh();
+      setMessage("Product saved. MARKOS can now use it in campaign and content generation.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createOffer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session) {
+      setMessage("Sign in before creating catalog offers.");
+      return;
+    }
+
+    const title = offerTitle.trim();
+
+    if (!title) {
+      setMessage("Offer title is required.");
+      return;
+    }
+
+    setBusy("offer");
+    setMessage("Saving offer to the catalog and Vault...");
+
+    try {
+      const priceMinor = parseBhdPriceMinor(offerPrice);
+      await client.createCatalogOffer({
+        title,
+        ...(offerProductId ? { productId: offerProductId } : {}),
+        ...(offerDescription.trim() ? { description: offerDescription.trim() } : {}),
+        ...(priceMinor === undefined ? {} : { priceMinor }),
+        ...(offerEndsAt ? { endsAt: new Date(`${offerEndsAt}T23:59:00`).toISOString() } : {})
+      });
+      setOfferTitle("");
+      setOfferDescription("");
+      setOfferPrice("");
+      setOfferEndsAt("");
+      catalog.refresh();
+      setMessage("Offer saved. Campaign generation can now target it directly.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function archiveProduct(product: ProductRecord) {
+    setBusy(product.id);
+    setMessage(`Archiving ${product.name}...`);
+
+    try {
+      await client.archiveCatalogProduct(product.id);
+      catalog.refresh();
+      setMessage("Product archived. Linked active offers were archived too.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function archiveOffer(offer: OfferRecord) {
+    setBusy(offer.id);
+    setMessage(`Archiving ${offer.title}...`);
+
+    try {
+      await client.archiveCatalogOffer(offer.id);
+      catalog.refresh();
+      setMessage("Offer archived.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="space-y-6 xl:space-y-8">
+      <HeroTitle icon={Target} subtitle="Products and offers become structured commercial memory for campaign, content, and strategy generation." title="Product Catalog" />
+
+      {message ? (
+        <article className="lux-card-muted rounded-[1.25rem] border-[#81D8D0]/20 p-5">
+          <p className="font-semibold text-[#D6DEEA]">{message}</p>
+        </article>
+      ) : null}
+
+      <section className="grid gap-5 lg:grid-cols-2 xl:gap-6">
+        <form className="lux-card rounded-[1.5rem] p-5 xl:p-6" onSubmit={createProduct}>
+          <h2 className="text-2xl font-bold text-white">Add Product</h2>
+          <div className="mt-5 grid gap-4">
+            <input className="rounded-full border border-[#81D8D0]/12 bg-white/[.045] px-5 py-3 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45" onChange={(event) => setProductName(event.target.value)} placeholder="Product name" value={productName} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input className="rounded-full border border-[#81D8D0]/12 bg-white/[.045] px-5 py-3 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45" onChange={(event) => setProductCategory(event.target.value)} placeholder="Category" value={productCategory} />
+              <input className="rounded-full border border-[#81D8D0]/12 bg-white/[.045] px-5 py-3 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45" inputMode="decimal" onChange={(event) => setProductPrice(event.target.value)} placeholder="Price in BHD" value={productPrice} />
+            </div>
+            <textarea className="min-h-28 resize-none rounded-[1.25rem] border border-[#81D8D0]/12 bg-white/[.045] p-5 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45" onChange={(event) => setProductDescription(event.target.value)} placeholder="What it is, who it is for, and why it matters" value={productDescription} />
+          </div>
+          <button className="mt-5 inline-flex items-center gap-3 rounded-full bg-[#81D8D0] px-6 py-3.5 font-bold text-[#0F1419] transition hover:bg-[#9FE5DF] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy === "product"} type="submit">
+            {busy === "product" ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Sparkles size={19} />}
+            {busy === "product" ? "Saving..." : "Save Product"}
+          </button>
+        </form>
+
+        <form className="lux-card rounded-[1.5rem] p-5 xl:p-6" onSubmit={createOffer}>
+          <h2 className="text-2xl font-bold text-white">Add Offer</h2>
+          <div className="mt-5 grid gap-4">
+            <input className="rounded-full border border-[#D4AF37]/16 bg-white/[.045] px-5 py-3 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#D4AF37]/50" onChange={(event) => setOfferTitle(event.target.value)} placeholder="Offer title" value={offerTitle} />
+            <select className="rounded-full border border-[#D4AF37]/16 bg-[#0F171A] px-5 py-3 text-white outline-none focus:border-[#D4AF37]/50" onChange={(event) => setOfferProductId(event.target.value)} value={offerProductId}>
+              <option value="">No linked product</option>
+              {catalog.products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input className="rounded-full border border-[#D4AF37]/16 bg-white/[.045] px-5 py-3 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#D4AF37]/50" inputMode="decimal" onChange={(event) => setOfferPrice(event.target.value)} placeholder="Offer price in BHD" value={offerPrice} />
+              <input className="rounded-full border border-[#D4AF37]/16 bg-white/[.045] px-5 py-3 text-white outline-none focus:border-[#D4AF37]/50" onChange={(event) => setOfferEndsAt(event.target.value)} type="date" value={offerEndsAt} />
+            </div>
+            <textarea className="min-h-28 resize-none rounded-[1.25rem] border border-[#D4AF37]/16 bg-white/[.045] p-5 text-white outline-none placeholder:text-[#8B95A8] focus:border-[#D4AF37]/50" onChange={(event) => setOfferDescription(event.target.value)} placeholder="Discount, urgency, terms, or launch angle" value={offerDescription} />
+          </div>
+          <button className="mt-5 inline-flex items-center gap-3 rounded-full bg-[#D4AF37] px-6 py-3.5 font-bold text-[#0F1419] transition hover:bg-[#E7C957] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy === "offer"} type="submit">
+            {busy === "offer" ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Target size={19} />}
+            {busy === "offer" ? "Saving..." : "Save Offer"}
+          </button>
+        </form>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[1fr_1fr] xl:gap-6">
+        <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <SectionLabel accentName="teal" label="Active Products" />
+            {catalog.loading ? <span className="lux-thinking-dot" aria-hidden="true" /> : null}
+          </div>
+          <div className="mt-5 grid gap-4">
+            {catalog.products.length === 0 ? (
+              <p className="rounded-[1.25rem] border border-[#81D8D0]/12 bg-[#81D8D0]/6 p-5 text-[#9AA7BD]">No active products yet. Add one above so MARKOS has concrete commercial context.</p>
+            ) : catalog.products.map((product) => (
+              <article className="rounded-[1.25rem] border border-[#81D8D0]/14 bg-[#81D8D0]/6 p-5" key={product.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{product.name}</h3>
+                    <p className="mt-1 text-sm text-[#9AA7BD]">{product.category ?? "Uncategorized"}{formatCatalogPrice(product.priceMinor, product.currency) ? ` - ${formatCatalogPrice(product.priceMinor, product.currency)}` : ""}</p>
+                  </div>
+                  <button className="rounded-full border border-[#F4A460]/20 px-4 py-2 text-sm font-bold text-[#F4A460] disabled:opacity-50" disabled={busy === product.id} onClick={() => void archiveProduct(product)} type="button">Archive</button>
+                </div>
+                {product.description ? <p className="mt-4 text-sm leading-relaxed text-[#D6DEEA]">{product.description}</p> : null}
+                {product.salesChannels.length > 0 ? <p className="mt-4 text-xs font-bold uppercase tracking-[.14em] text-[#81D8D0]">{product.salesChannels.join(" / ")}</p> : null}
+              </article>
+            ))}
+          </div>
+        </article>
+
+        <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+          <SectionLabel accentName="gold" label="Active Offers" />
+          <div className="mt-5 grid gap-4">
+            {catalog.offers.length === 0 ? (
+              <p className="rounded-[1.25rem] border border-[#D4AF37]/12 bg-[#D4AF37]/7 p-5 text-[#9AA7BD]">No active offers yet. Offers help MARKOS generate more specific angles and calls to action.</p>
+            ) : catalog.offers.map((offer) => {
+              const linkedProduct = offer.productId ? productById.get(offer.productId) : undefined;
+              return (
+                <article className="rounded-[1.25rem] border border-[#D4AF37]/14 bg-[#D4AF37]/7 p-5" key={offer.id}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">{offer.title}</h3>
+                      <p className="mt-1 text-sm text-[#9AA7BD]">{linkedProduct?.name ?? "Standalone offer"} - {formatCatalogDate(offer.endsAt)}</p>
+                    </div>
+                    <button className="rounded-full border border-[#F4A460]/20 px-4 py-2 text-sm font-bold text-[#F4A460] disabled:opacity-50" disabled={busy === offer.id} onClick={() => void archiveOffer(offer)} type="button">Archive</button>
+                  </div>
+                  {offer.description ? <p className="mt-4 text-sm leading-relaxed text-[#D6DEEA]">{offer.description}</p> : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {formatCatalogPrice(offer.priceMinor, offer.currency) ? <span className="rounded-full bg-[#D4AF37]/12 px-3 py-1 text-xs font-bold text-[#D4AF37]">{formatCatalogPrice(offer.priceMinor, offer.currency)}</span> : null}
+                    <span className="rounded-full bg-[#81D8D0]/10 px-3 py-1 text-xs font-bold text-[#81D8D0]">{offer.status}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </article>
+      </section>
+
+      <article className="lux-card-muted rounded-[1.5rem] p-5 xl:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Use Catalog Context</h2>
+            <p className="mt-2 text-[#9AA7BD]">Pick these products and offers directly inside Campaign Builder and Content Studio.</p>
+          </div>
+          <a className="inline-flex items-center gap-2 rounded-full bg-[#81D8D0] px-6 py-3 font-bold text-[#0F1419]" href={`/${locale}/app/campaign-builder`}>Build Campaign <ArrowRight size={19} /></a>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
   const client = useMarkosClient(session);
+  const catalog = useCatalogPickerState(session, client);
   const [step, setStep] = useState(1);
   const [saved, setSaved] = useState(false);
   const [campaignPrompt, setCampaignPrompt] = useState("Launch a high-performing campaign for our most important offer. Use the Knowledge Vault for audience, positioning, language, and brand voice.");
+  const [campaignPackage, setCampaignPackage] = useState<CampaignPackageRecord | null>(null);
   const [campaignRecords, setCampaignRecords] = useState<ContentRecord[]>([]);
   const [campaignMessage, setCampaignMessage] = useState("");
   const [generatingCampaign, setGeneratingCampaign] = useState(false);
+  const [approvingCampaign, setApprovingCampaign] = useState(false);
   const [schedulingCampaign, setSchedulingCampaign] = useState(false);
+  const [rejectingContentId, setRejectingContentId] = useState<string | null>(null);
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
+  const [savingContentId, setSavingContentId] = useState<string | null>(null);
+  const [campaignEdits, setCampaignEdits] = useState<Record<string, CampaignItemEdit>>({});
   const templates = [
     ["Product Launch", "7-day campaign to maximize launch impact", "8 posts", "7 days", Zap],
     ["Brand Awareness", "Build recognition and expand reach", "12 posts", "14 days", TrendingUp],
     ["Engagement Boost", "Deepen connection with your audience", "10 posts", "10 days", MessageCircle]
   ] as const;
   const timelineRecords = campaignRecords.length > 0 ? campaignRecords : [];
+  const campaignStatus = campaignPackage?.campaign.status;
+  const packageObjectives =
+    campaignPackage?.campaign.package?.objectives.map((objective, index) => ({
+      icon: [Target, Zap, TrendingUp][index % 3] ?? Target,
+      label: objective.label,
+      sub: index === 0 ? "Package scope" : index === 1 ? "Campaign window" : "Launch signal",
+      value: objective.value
+    })) ?? [
+      { icon: Target, label: "Reach Goal", sub: "Projected impressions", value: "125K" },
+      { icon: Zap, label: "Engagement", sub: "Expected interactions", value: "12.5K" },
+      { icon: TrendingUp, label: "Conversion", sub: "Estimated rate", value: "8.2%" }
+    ];
 
   async function generateCampaignDrafts() {
     if (!session) {
@@ -639,20 +1218,144 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
     }
 
     setGeneratingCampaign(true);
-    setCampaignMessage("MARKOS is generating a saved campaign content batch...");
+    setCampaignMessage("MARKOS is generating a Vault-grounded campaign package...");
 
     try {
-      const drafts = await client.generateContent({
-        count: 4,
-        topic: trimmedPrompt
+      const generated = await client.generateCampaignPackage({
+        brief: {
+          contentCount: 4,
+          contentTypes: ["POST", "CAROUSEL", "REEL", "STORY"],
+          durationDays: 7,
+          objective: trimmedPrompt,
+          tone: "premium, clear, bilingual, conversion-aware",
+          ...catalogGenerationPayload(catalog)
+        },
+        name: trimmedPrompt.split(/[.!?\n]/)[0]?.slice(0, 120) || "Campaign package"
       });
-      setCampaignRecords(drafts);
-      setCampaignMessage(`${drafts.length} campaign drafts generated and saved to the workspace.`);
+      setCampaignPackage(generated);
+      setCampaignRecords(generated.contentItems);
+      setSaved(false);
+      setCampaignMessage(`${generated.contentItems.length} campaign assets generated, saved, and ready for package review.`);
       setStep(2);
     } catch (error) {
       setCampaignMessage(contentStudioError(error));
     } finally {
       setGeneratingCampaign(false);
+    }
+  }
+
+  function startEditingCampaignItem(record: ContentRecord) {
+    if (!["DRAFT", "IN_REVIEW"].includes(record.status)) {
+      setCampaignMessage("Approved or scheduled campaign items are locked. Mark the item as needing rework before editing.");
+      return;
+    }
+
+    setEditingContentId(record.id);
+    setCampaignEdits((current) => ({
+      ...current,
+      [record.id]: current[record.id] ?? campaignItemEditFromRecord(record)
+    }));
+  }
+
+  function updateCampaignEdit(contentItemId: string, field: keyof CampaignItemEdit, value: string) {
+    setCampaignEdits((current) => ({
+      ...current,
+      [contentItemId]: {
+        ...(current[contentItemId] ?? { callToAction: "", caption: "", hashtags: "" }),
+        [field]: value
+      }
+    }));
+  }
+
+  async function saveCampaignItem(record: ContentRecord) {
+    if (!session) {
+      setCampaignMessage("Sign in again before saving campaign edits.");
+      return;
+    }
+
+    const draft = campaignEdits[record.id] ?? campaignItemEditFromRecord(record);
+    const caption = draft.caption.trim();
+
+    if (caption.length < 4) {
+      setCampaignMessage("Campaign item caption is too short to save.");
+      return;
+    }
+
+    setSavingContentId(record.id);
+    setCampaignMessage("Saving campaign item edits...");
+
+    try {
+      const updated = await client.updateContent(record.id, {
+        callToAction: draft.callToAction.trim() || null,
+        captionEn: caption,
+        hashtags: parseHashtags(draft.hashtags)
+      });
+      setCampaignRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setCampaignPackage((current) =>
+        current
+          ? {
+              ...current,
+              contentItems: current.contentItems.map((item) => (item.id === updated.id ? updated : item))
+            }
+          : current
+      );
+      setEditingContentId(null);
+      setCampaignMessage("Campaign item edits saved. Review and approve the package when ready.");
+    } catch (error) {
+      setCampaignMessage(contentStudioError(error));
+    } finally {
+      setSavingContentId(null);
+    }
+  }
+
+  async function approveCampaign() {
+    if (!session) {
+      setCampaignMessage("Sign in again before approving campaign content.");
+      return;
+    }
+
+    if (!campaignPackage) {
+      setCampaignMessage("Generate a campaign package before approving it.");
+      return;
+    }
+
+    setApprovingCampaign(true);
+    setCampaignMessage("Approving package assets...");
+
+    try {
+      const approved = await client.approveCampaignPackage(campaignPackage.campaign.id);
+      setCampaignPackage(approved);
+      setCampaignRecords(approved.contentItems);
+      setCampaignMessage(`${approved.contentItems.length} campaign assets approved. You can now schedule the package.`);
+    } catch (error) {
+      setCampaignMessage(contentStudioError(error));
+    } finally {
+      setApprovingCampaign(false);
+    }
+  }
+
+  async function rejectCampaignItem(record: ContentRecord) {
+    if (!session || !campaignPackage) {
+      setCampaignMessage("Generate a campaign package before sending item feedback.");
+      return;
+    }
+
+    setRejectingContentId(record.id);
+    setCampaignMessage("Sending package feedback...");
+
+    try {
+      const updated = await client.rejectCampaignPackageItem(
+        campaignPackage.campaign.id,
+        record.id,
+        `Needs rework from campaign review: ${recordTitle(record)}`
+      );
+      setCampaignPackage(updated);
+      setCampaignRecords(updated.contentItems);
+      setCampaignMessage("Feedback saved. This package is back in review until the replacement asset is approved.");
+    } catch (error) {
+      setCampaignMessage(contentStudioError(error));
+    } finally {
+      setRejectingContentId(null);
     }
   }
 
@@ -662,26 +1365,20 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
       return;
     }
 
-    if (campaignRecords.length === 0) {
-      setCampaignMessage("Generate campaign drafts before scheduling.");
+    if (!campaignPackage) {
+      setCampaignMessage("Generate and approve a campaign package before scheduling.");
       return;
     }
 
     setSchedulingCampaign(true);
-    setCampaignMessage("Approving and scheduling campaign items...");
+    setCampaignMessage("Moving approved campaign package into the publishing queue...");
 
     try {
-      const scheduledRecords: ContentRecord[] = [];
-
-      for (const [index, record] of campaignRecords.entries()) {
-        const approved = await approveContentRecord(client, record);
-        const scheduledDate = new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000);
-        scheduledDate.setHours(19, 30, 0, 0);
-        scheduledRecords.push(await client.scheduleContent(approved.id, scheduledDate.toISOString()));
-      }
-
-      setCampaignRecords(scheduledRecords);
-      setCampaignMessage(`${scheduledRecords.length} campaign items approved and scheduled.`);
+      const approved = campaignPackage.campaign.status === "APPROVED" ? campaignPackage : await client.approveCampaignPackage(campaignPackage.campaign.id);
+      const scheduled = await client.scheduleCampaignPackage(approved.campaign.id, { time: "19:30" });
+      setCampaignPackage(scheduled);
+      setCampaignRecords(scheduled.contentItems);
+      setCampaignMessage(`${scheduled.contentItems.length} campaign items scheduled in the publishing queue.`);
       setStep(3);
     } catch (error) {
       setCampaignMessage(contentStudioError(error));
@@ -730,6 +1427,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               {generatingCampaign ? "Generating campaign..." : "Generate Campaign Drafts"}
             </button>
           </article>
+          <CatalogContextPicker catalog={catalog} />
           <SectionHeading title="Choose Your Campaign Type" />
           <section className="grid gap-5 lg:grid-cols-3 xl:gap-6">
             {templates.map(([title, body, posts, days, Icon]) => (
@@ -765,24 +1463,91 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
             <div className="mb-6 flex items-center gap-4 xl:mb-8 xl:gap-5">
               <IconTile accentName="teal" icon={Sparkles} />
               <div>
-                <h3 className="text-xl font-bold text-white xl:text-2xl">Workspace Campaign Drafts</h3>
-                <p className="mt-2 text-base text-[#D6DEEA] xl:text-lg">{timelineRecords.length || 0} saved content pieces - approval required before scheduling</p>
+                <h3 className="text-xl font-bold text-white xl:text-2xl">{campaignPackage?.campaign.name ?? "Workspace Campaign Package"}</h3>
+                <p className="mt-2 text-base text-[#D6DEEA] xl:text-lg">
+                  {timelineRecords.length || 0} saved content pieces - {campaignStatus === "APPROVED" || campaignStatus === "SCHEDULED" ? statusLabel(campaignStatus) : "approval required before scheduling"}
+                </p>
               </div>
             </div>
             {timelineRecords.length > 0 ? (
               <div className="grid gap-4">
                 {timelineRecords.map((record, index) => (
-                  <a className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5" href={`/${locale}/app/content-studio?item=${record.id}`} key={record.id}>
-                  <div className="border-r border-white/10 pr-5">
-                    <p className="text-2xl font-bold text-white xl:text-3xl">{index + 1}</p>
-                    <p className="text-[#9AA7BD]">Day</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-white">{recordTitle(record)}</p>
-                    <p className="mt-2 text-lg text-[#9AA7BD]">{record.scheduledAt ? formatShortTime(record.scheduledAt) : "7:30 PM"} - {contentTypeLabel(record.contentType)}</p>
-                  </div>
-                  <span className="self-center rounded-full bg-[#81D8D0]/12 px-4 py-2 font-bold text-[#81D8D0]">{statusLabel(record.status)}</span>
-                </a>
+                  <article className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5" key={record.id}>
+                    <div className="border-r border-white/10 pr-5">
+                      <p className="text-2xl font-bold text-white xl:text-3xl">{index + 1}</p>
+                      <p className="text-[#9AA7BD]">Day</p>
+                    </div>
+                    <div>
+                      {editingContentId === record.id ? (
+                        <div className="space-y-3">
+                          <label className="block">
+                            <span className="text-sm font-bold uppercase tracking-[0.14em] text-[#9AA7BD]">Caption</span>
+                            <textarea
+                              className="mt-2 min-h-24 w-full resize-none rounded-[1rem] border border-[#81D8D0]/15 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none focus:border-[#81D8D0]/45"
+                              onChange={(event) => updateCampaignEdit(record.id, "caption", event.target.value)}
+                              value={(campaignEdits[record.id] ?? campaignItemEditFromRecord(record)).caption}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-sm font-bold uppercase tracking-[0.14em] text-[#9AA7BD]">Call to action</span>
+                            <input
+                              className="mt-2 w-full rounded-full border border-[#81D8D0]/15 bg-white/[.045] px-4 py-3 text-base text-white outline-none focus:border-[#81D8D0]/45"
+                              onChange={(event) => updateCampaignEdit(record.id, "callToAction", event.target.value)}
+                              value={(campaignEdits[record.id] ?? campaignItemEditFromRecord(record)).callToAction}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-sm font-bold uppercase tracking-[0.14em] text-[#9AA7BD]">Hashtags</span>
+                            <input
+                              className="mt-2 w-full rounded-full border border-[#81D8D0]/15 bg-white/[.045] px-4 py-3 text-base text-white outline-none focus:border-[#81D8D0]/45"
+                              onChange={(event) => updateCampaignEdit(record.id, "hashtags", event.target.value)}
+                              value={(campaignEdits[record.id] ?? campaignItemEditFromRecord(record)).hashtags}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xl font-bold text-white">{recordTitle(record)}</p>
+                          <p className="mt-2 text-lg text-[#9AA7BD]">{record.scheduledAt ? formatShortTime(record.scheduledAt) : "7:30 PM"} - {contentTypeLabel(record.contentType)}</p>
+                          {record.callToAction ? <p className="mt-2 text-sm font-bold text-[#81D8D0]">{record.callToAction}</p> : null}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                      <span className="rounded-full bg-[#81D8D0]/12 px-4 py-2 font-bold text-[#81D8D0]">{statusLabel(record.status)}</span>
+                      <a className="rounded-full border border-[#81D8D0]/20 px-4 py-2 font-bold text-white transition hover:bg-[#81D8D0]/10" href={`/${locale}/app/content-studio?item=${record.id}`}>Open</a>
+                      {editingContentId === record.id ? (
+                        <>
+                          <button
+                            className="rounded-full border border-[#81D8D0]/25 px-4 py-2 font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={savingContentId === record.id}
+                            onClick={() => void saveCampaignItem(record)}
+                            type="button"
+                          >
+                            {savingContentId === record.id ? "Saving..." : "Save"}
+                          </button>
+                          <button className="rounded-full border border-white/10 px-4 py-2 font-bold text-[#D6DEEA] transition hover:bg-white/8" onClick={() => setEditingContentId(null)} type="button">Cancel</button>
+                        </>
+                      ) : (
+                        <button
+                          className="rounded-full border border-[#81D8D0]/20 px-4 py-2 font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={!["DRAFT", "IN_REVIEW"].includes(record.status) || campaignStatus === "SCHEDULED"}
+                          onClick={() => startEditingCampaignItem(record)}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        className="rounded-full border border-[#F4A460]/25 px-4 py-2 font-bold text-[#F4A460] transition hover:bg-[#F4A460]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={rejectingContentId === record.id || campaignStatus === "SCHEDULED"}
+                        onClick={() => void rejectCampaignItem(record)}
+                        type="button"
+                      >
+                        {rejectingContentId === record.id ? "Saving..." : "Needs rework"}
+                      </button>
+                    </div>
+                  </article>
                 ))}
               </div>
             ) : (
@@ -795,13 +1560,16 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 
           <SectionHeading title="Campaign Objectives" />
           <section className="grid gap-4 sm:grid-cols-3 xl:gap-5">
-            <ObjectiveCard icon={Target} label="Reach Goal" sub="Projected impressions" value="125K" />
-            <ObjectiveCard icon={Zap} label="Engagement" sub="Expected interactions" value="12.5K" />
-            <ObjectiveCard icon={TrendingUp} label="Conversion" sub="Estimated rate" value="8.2%" />
+            {packageObjectives.slice(0, 3).map((objective) => (
+              <ObjectiveCard icon={objective.icon} key={objective.label} label={objective.label} sub={objective.sub} value={objective.value} />
+            ))}
           </section>
           <div className="flex flex-wrap items-center justify-between gap-5">
-            <button className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl" disabled={schedulingCampaign || campaignRecords.length === 0} onClick={scheduleCampaign} type="button"><Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : "Schedule Campaign"} <ArrowRight size={24} /></button>
-            <button className="rounded-[1.5rem] bg-white/16 px-8 py-4 text-lg font-bold text-white transition hover:bg-[#81D8D0]/16 xl:px-10 xl:py-5 xl:text-xl" onClick={() => setSaved(true)} type="button">{saved ? "Draft Saved" : "Save as Draft"}</button>
+            <div className="flex flex-wrap items-center gap-4">
+              <button className="inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/25 px-6 py-3 text-lg font-bold text-white transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl" disabled={approvingCampaign || !campaignPackage || campaignStatus === "APPROVED" || campaignStatus === "SCHEDULED"} onClick={approveCampaign} type="button"><CheckCircle2 size={23} /> {approvingCampaign ? "Approving..." : campaignStatus === "APPROVED" || campaignStatus === "SCHEDULED" ? "Package Approved" : "Approve Package"}</button>
+              <button className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl" disabled={schedulingCampaign || !campaignPackage || campaignStatus === "SCHEDULED"} onClick={scheduleCampaign} type="button"><Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : campaignStatus === "SCHEDULED" ? "Scheduled" : "Schedule Campaign"} <ArrowRight size={24} /></button>
+            </div>
+            <button className="rounded-[1.5rem] bg-white/16 px-8 py-4 text-lg font-bold text-white transition hover:bg-[#81D8D0]/16 xl:px-10 xl:py-5 xl:text-xl" onClick={() => { setSaved(true); setCampaignMessage("Campaign package is already saved to the workspace."); }} type="button">{saved ? "Draft Saved" : "Save as Draft"}</button>
           </div>
         </section>
       ) : null}
@@ -812,6 +1580,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
   const client = useMarkosClient(session);
+  const catalog = useCatalogPickerState(session, client);
   const [contentType, setContentType] = useState<StudioContentType>("POST");
   const [prompt, setPrompt] = useState("");
   const [records, setRecords] = useState<ContentRecord[]>([]);
@@ -821,6 +1590,15 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [callToAction, setCallToAction] = useState("");
   const [scheduleDate, setScheduleDate] = useState(initialScheduleDate);
   const [scheduleTime, setScheduleTime] = useState("19:30");
+  const [visualPrompt, setVisualPrompt] = useState("Create a premium Instagram visual that matches this draft and the selected catalog context.");
+  const [visualMode, setVisualMode] = useState<VisualMode>("PRODUCT_PHOTO");
+  const [visualAspectRatio, setVisualAspectRatio] = useState<VisualAspectRatio>("4:5");
+  const [sourceMediaAssets, setSourceMediaAssets] = useState<MediaAssetRecord[]>([]);
+  const [selectedSourceMediaId, setSelectedSourceMediaId] = useState("");
+  const [visualVariants, setVisualVariants] = useState<GeneratedMediaVariantRecord[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [visualBusy, setVisualBusy] = useState<"approve" | "attach" | "generate" | "platform" | "reject" | null>(null);
+  const [visualMessage, setVisualMessage] = useState("");
   const [message, setMessage] = useState("");
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -828,6 +1606,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [approving, setApproving] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
+  const selectedVariant = visualVariants.find((variant) => variant.id === selectedVariantId) ?? visualVariants[0] ?? null;
   const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
   const canSchedule = currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED" && currentRecord.status !== "FAILED";
 
@@ -848,13 +1627,20 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
     async function loadRecords() {
       try {
-        const nextRecords = await client.contentItems();
+        const [nextRecords, nextVariants, nextMediaAssets] = await Promise.all([
+          client.contentItems(),
+          client.visualStudioVariants({ limit: 8 }),
+          client.mediaAssets()
+        ]);
 
         if (cancelled) {
           return;
         }
 
         setRecords(nextRecords);
+        setVisualVariants(nextVariants);
+        setSourceMediaAssets(nextMediaAssets.filter((asset) => asset.type !== "VIDEO").slice(0, 20));
+        setSelectedVariantId((current) => current || nextVariants[0]?.id || "");
         const requestedItemId = params.get("item");
         const requestedRecord = requestedItemId ? nextRecords.find((item) => item.id === requestedItemId) : null;
         const latestEditable = nextRecords.find((item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED") ?? nextRecords[0] ?? null;
@@ -908,6 +1694,32 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     });
   }
 
+  function upsertVariant(variant: GeneratedMediaVariantRecord) {
+    setVisualVariants((current) => {
+      const existingIndex = current.findIndex((item) => item.id === variant.id);
+      if (existingIndex === -1) {
+        return [variant, ...current];
+      }
+
+      const next = [...current];
+      next[existingIndex] = variant;
+      return next;
+    });
+    setSelectedVariantId(variant.id);
+  }
+
+  function upsertVariants(variants: GeneratedMediaVariantRecord[]) {
+    if (variants.length === 0) {
+      return;
+    }
+
+    setVisualVariants((current) => {
+      const incomingIds = new Set(variants.map((variant) => variant.id));
+      return [...variants, ...current.filter((variant) => !incomingIds.has(variant.id))];
+    });
+    setSelectedVariantId(variants[0]?.id ?? "");
+  }
+
   async function generate() {
     const trimmedPrompt = prompt.trim();
 
@@ -928,6 +1740,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const drafts = await client.generateContent({
         contentType,
         count: 1,
+        ...catalogGenerationPayload(catalog),
         topic: trimmedPrompt
       });
       const draft = drafts[0];
@@ -942,6 +1755,159 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setMessage(contentStudioError(error));
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function generateVisualVariant() {
+    const trimmedVisualPrompt = visualPrompt.trim() || caption.trim() || prompt.trim();
+
+    if (!session) {
+      setVisualMessage("Sign in or complete onboarding first so MARKOS can save generated visuals to this workspace.");
+      return;
+    }
+
+    if (trimmedVisualPrompt.length < 8) {
+      setVisualMessage("Describe the visual MARKOS should create before generating.");
+      return;
+    }
+
+    setVisualBusy("generate");
+    setVisualMessage("MARKOS is generating a brand-safe visual variant for human review...");
+
+    try {
+      const result = await client.generateVisualStudioVariants({
+        aspectRatio: visualAspectRatio,
+        count: 1,
+        prompt: trimmedVisualPrompt,
+        visualMode,
+        ...catalogGenerationPayload(catalog),
+        ...(currentRecord ? { contentItemId: currentRecord.id } : {}),
+        ...(selectedSourceMediaId ? { sourceMediaAssetIds: [selectedSourceMediaId] } : {})
+      });
+      const variant = result.variants[0];
+
+      if (!variant) {
+        throw new Error("The API returned no generated visual variant.");
+      }
+
+      upsertVariant(variant);
+      setVisualMessage("Visual generated. Review and approve it before attaching it to the draft.");
+    } catch (error) {
+      setVisualMessage(visualStudioError(error));
+    } finally {
+      setVisualBusy(null);
+    }
+  }
+
+  async function generatePlatformVariantSet() {
+    const trimmedVisualPrompt = visualPrompt.trim() || caption.trim() || prompt.trim();
+    const generated: GeneratedMediaVariantRecord[] = [];
+
+    if (!session) {
+      setVisualMessage("Sign in or complete onboarding first so MARKOS can save generated visuals to this workspace.");
+      return;
+    }
+
+    if (trimmedVisualPrompt.length < 8) {
+      setVisualMessage("Describe the visual MARKOS should create before generating.");
+      return;
+    }
+
+    setVisualBusy("platform");
+    setVisualMessage("MARKOS is generating square, portrait, and story variants for review...");
+
+    try {
+      for (const aspectRatio of visualAspectRatios) {
+        const result = await client.generateVisualStudioVariants({
+          aspectRatio,
+          count: 1,
+          prompt: `${trimmedVisualPrompt}\n\nCreate the ${aspectRatio} Instagram platform variant with consistent campaign concept, visual identity, and product truth.`,
+          visualMode,
+          ...catalogGenerationPayload(catalog),
+          ...(currentRecord ? { contentItemId: currentRecord.id } : {}),
+          ...(selectedSourceMediaId ? { sourceMediaAssetIds: [selectedSourceMediaId] } : {})
+        });
+        generated.push(...result.variants);
+      }
+
+      upsertVariants(generated);
+      setVisualMessage(`Generated ${generated.length} Instagram platform variants. Review and approve the one you want to use.`);
+    } catch (error) {
+      upsertVariants(generated);
+      setVisualMessage(generated.length > 0 ? `${generated.length} variants were saved, but the full set did not finish. ${visualStudioError(error)}` : visualStudioError(error));
+    } finally {
+      setVisualBusy(null);
+    }
+  }
+
+  async function approveVisualVariant(variant: GeneratedMediaVariantRecord) {
+    if (!session) {
+      setVisualMessage("Sign in again before approving visuals.");
+      return;
+    }
+
+    setVisualBusy("approve");
+    setVisualMessage("");
+
+    try {
+      const approved = await client.approveGeneratedMediaVariant(variant.id);
+      upsertVariant(approved);
+      setVisualMessage("Visual approved. It can now be attached to the current draft.");
+    } catch (error) {
+      setVisualMessage(visualStudioError(error));
+    } finally {
+      setVisualBusy(null);
+    }
+  }
+
+  async function rejectVisualVariant(variant: GeneratedMediaVariantRecord) {
+    if (!session) {
+      setVisualMessage("Sign in again before rejecting visuals.");
+      return;
+    }
+
+    setVisualBusy("reject");
+    setVisualMessage("");
+
+    try {
+      const rejected = await client.rejectGeneratedMediaVariant(variant.id, "Rejected from Visual Studio review.");
+      upsertVariant(rejected);
+      setVisualMessage("Visual rejected and kept out of content attachment.");
+    } catch (error) {
+      setVisualMessage(visualStudioError(error));
+    } finally {
+      setVisualBusy(null);
+    }
+  }
+
+  async function attachVisualVariant(variant: GeneratedMediaVariantRecord) {
+    if (!session) {
+      setVisualMessage("Sign in again before attaching visuals.");
+      return;
+    }
+
+    if (!currentRecord) {
+      setVisualMessage("Generate or choose a draft before attaching an approved visual.");
+      return;
+    }
+
+    if (variant.status !== "APPROVED") {
+      setVisualMessage("Approve this visual before attaching it to content.");
+      return;
+    }
+
+    setVisualBusy("attach");
+    setVisualMessage("");
+
+    try {
+      const updated = await client.attachGeneratedMediaVariantToContent(variant.id, currentRecord.id);
+      upsertRecord(updated);
+      applyRecord(updated, "Approved visual attached to this draft.");
+      setVisualMessage("Approved visual attached to this draft.");
+    } catch (error) {
+      setVisualMessage(visualStudioError(error));
+    } finally {
+      setVisualBusy(null);
     }
   }
 
@@ -1103,6 +2069,122 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </button>
         </article>
 
+        <CatalogContextPicker catalog={catalog} compact />
+
+        <article className="lux-card rounded-[1.75rem] p-5 xl:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="flex items-center gap-3 text-xl font-bold text-white"><ImageIcon className="text-[#D4AF37]" /> AI Visual Studio</h2>
+              <p className="mt-2 text-sm leading-relaxed text-[#9AA7BD] xl:text-base">Generate image variants from Vault memory, catalog context, source assets, and the active draft.</p>
+            </div>
+            <span className="rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-4 py-2 text-sm font-bold text-[#D4AF37]">Review required</span>
+          </div>
+
+          {visualMessage ? (
+            <div className="mt-5 rounded-[1rem] border border-[#81D8D0]/18 bg-[#81D8D0]/7 p-4 text-sm font-semibold text-[#D6DEEA]">
+              {visualMessage}
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {visualModes.map(([value, label, description, Icon]) => (
+              <button
+                className={visualMode === value ? "rounded-[1.25rem] border border-[#D4AF37]/55 bg-[#D4AF37]/13 p-4 text-left shadow-[0_0_28px_rgba(212,175,55,.12)]" : "rounded-[1.25rem] border border-[#81D8D0]/12 bg-white/[.035] p-4 text-left transition hover:border-[#81D8D0]/35 hover:bg-[#81D8D0]/7"}
+                key={value}
+                onClick={() => setVisualMode(value)}
+                type="button"
+              >
+                <span className="flex items-center gap-3 text-base font-bold text-white"><Icon size={20} />{label}</span>
+                <span className="mt-2 block text-sm leading-relaxed text-[#9AA7BD]">{description}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-xs font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Aspect</span>
+              <select className="w-full rounded-full border border-[#81D8D0]/12 bg-[#111A20] px-4 py-3 text-white outline-none focus:border-[#81D8D0]/40" onChange={(event) => setVisualAspectRatio(event.target.value as VisualAspectRatio)} value={visualAspectRatio}>
+                {visualAspectRatios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Source asset</span>
+              <select className="w-full rounded-full border border-[#81D8D0]/12 bg-[#111A20] px-4 py-3 text-white outline-none focus:border-[#81D8D0]/40" onChange={(event) => setSelectedSourceMediaId(event.target.value)} value={selectedSourceMediaId}>
+                <option value="">Vault + catalog only</option>
+                {sourceMediaAssets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>{asset.filename}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <textarea
+            className="mt-5 min-h-28 w-full resize-none rounded-[1.25rem] border border-[#81D8D0]/10 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45"
+            onChange={(event) => setVisualPrompt(event.target.value)}
+            placeholder="Describe the visual direction, product focus, mood, and platform format."
+            value={visualPrompt}
+          />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <button className="inline-flex items-center justify-center gap-3 rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#D4AF37]/18 disabled:cursor-not-allowed disabled:opacity-60" disabled={visualBusy !== null} onClick={generateVisualVariant} type="button">
+              {visualBusy === "generate" ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Sparkles size={20} />}
+              {visualBusy === "generate" ? "Generating..." : "Generate Visual"}
+            </button>
+            <button className="inline-flex items-center justify-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60" disabled={visualBusy !== null} onClick={generatePlatformVariantSet} type="button">
+              {visualBusy === "platform" ? <span className="lux-thinking-dot" aria-hidden="true" /> : <ImageIcon size={20} />}
+              {visualBusy === "platform" ? "Generating set..." : "Generate IG Set"}
+            </button>
+          </div>
+
+          <section className="mt-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Generated variants</h3>
+              {selectedVariant ? <span className="text-sm font-semibold text-[#81D8D0]">{visualModeLabel(selectedVariant.visualMode)}</span> : null}
+            </div>
+            {visualVariants.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {visualVariants.slice(0, 4).map((variant) => (
+                  <article className={selectedVariant?.id === variant.id ? "overflow-hidden rounded-[1.5rem] border border-[#81D8D0]/45 bg-[#101B21]" : "overflow-hidden rounded-[1.5rem] border border-[#81D8D0]/14 bg-[#101B21]"} key={variant.id}>
+                    <button className="block h-52 w-full bg-[#0C1217] text-left" onClick={() => setSelectedVariantId(variant.id)} type="button">
+                      <span
+                        aria-label={`${visualModeLabel(variant.visualMode)} generated visual`}
+                        className="block h-full w-full bg-cover bg-center"
+                        role="img"
+                        style={{ backgroundImage: `url("${variant.mediaAsset.publicUrl}")` }}
+                      />
+                    </button>
+                    <div className="space-y-4 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-bold text-white">{visualModeLabel(variant.visualMode)}</p>
+                          <p className="mt-1 text-sm text-[#9AA7BD]">{variant.aspectRatio} - {generatedVariantStatusLabel(variant)}</p>
+                        </div>
+                        <span className={variant.status === "APPROVED" ? "rounded-full bg-[#81D8D0]/12 px-3 py-1 text-xs font-bold text-[#81D8D0]" : variant.status === "REJECTED" ? "rounded-full bg-[#F4A460]/12 px-3 py-1 text-xs font-bold text-[#F4A460]" : "rounded-full bg-[#D4AF37]/12 px-3 py-1 text-xs font-bold text-[#D4AF37]"}>
+                          {generatedVariantStatusLabel(variant)}
+                        </span>
+                      </div>
+                      <div className="grid gap-2">
+                        <button className="rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-4 py-2.5 text-sm font-bold text-[#81D8D0] disabled:cursor-not-allowed disabled:opacity-45" disabled={variant.status === "APPROVED" || visualBusy !== null} onClick={() => void approveVisualVariant(variant)} type="button">
+                          {visualBusy === "approve" && selectedVariant?.id === variant.id ? "Approving..." : "Approve"}
+                        </button>
+                        <button className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-4 py-2.5 text-sm font-bold text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-45" disabled={!currentRecord || variant.status !== "APPROVED" || visualBusy !== null} onClick={() => void attachVisualVariant(variant)} type="button">
+                          {visualBusy === "attach" && selectedVariant?.id === variant.id ? "Attaching..." : "Use in Draft"}
+                        </button>
+                        <button className="rounded-full border border-[#F4A460]/20 bg-[#F4A460]/10 px-4 py-2.5 text-sm font-bold text-[#F4A460] disabled:cursor-not-allowed disabled:opacity-45" disabled={variant.status === "REJECTED" || visualBusy !== null} onClick={() => void rejectVisualVariant(variant)} type="button">
+                          {visualBusy === "reject" && selectedVariant?.id === variant.id ? "Rejecting..." : "Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[1.5rem] border border-dashed border-[#81D8D0]/18 bg-[#81D8D0]/5 p-6 text-center text-[#9AA7BD]">
+                Generated visuals will appear here with approval controls before they can be used.
+              </div>
+            )}
+          </section>
+        </article>
+
         <section>
           <h2 className="mb-4 text-sm font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Quick Prompts</h2>
           <div className="flex flex-wrap gap-3">
@@ -1257,41 +2339,300 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
 }
 
 export function FinalVaultPanel() {
-  const modules = ["Company Info", "Your Story", "Products & Services", "Target Audience", "Competitors", "Brand Identity", "Marketing Objectives"];
+  const session = useMarkosSession();
+  const client = useMarkosClient(session);
+  const [url, setUrl] = useState("");
+  const [draft, setDraft] = useState<VaultWebsiteIngestDraft | null>(null);
+  const [candidateDrafts, setCandidateDrafts] = useState<EditableIngestCandidate[]>([]);
+  const [score, setScore] = useState<VaultCompletenessScore | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busyAction, setBusyAction] = useState<"approve" | "preview" | "reject" | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!session) {
+      return;
+    }
+
+    client
+      .vaultScore()
+      .then((nextScore) => {
+        if (mounted) {
+          setScore(nextScore);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setScore(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [client, session]);
+
+  async function handlePreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session) {
+      setError("Log in to ingest a website into your workspace Vault.");
+      return;
+    }
+
+    setBusyAction("preview");
+    setError("");
+    setMessage("");
+
+    try {
+      const nextDraft = await client.previewVaultWebsiteIngest({ url });
+      setDraft(nextDraft);
+      setCandidateDrafts(toEditableCandidates(nextDraft.candidates));
+      setMessage(`MARKOS found ${nextDraft.candidates.length} reviewable facts. Approve only what belongs in business memory.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Website ingest failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleApprove() {
+    if (!draft) {
+      return;
+    }
+
+    const parsed = parseCandidateDrafts(candidateDrafts);
+    setCandidateDrafts(parsed.nextDrafts);
+
+    if (parsed.error) {
+      setError(parsed.error);
+      return;
+    }
+
+    setBusyAction("approve");
+    setError("");
+    setMessage("");
+
+    try {
+      const approved = await client.approveVaultWebsiteIngest(draft.id, {
+        candidates: parsed.candidates
+      });
+      setDraft(approved);
+      setMessage("Approved facts were saved to the Knowledge Vault and embedded for future MARKOS work.");
+      setScore(await client.vaultScore());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not approve ingest draft.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleReject() {
+    if (!draft) {
+      return;
+    }
+
+    setBusyAction("reject");
+    setError("");
+    setMessage("");
+
+    try {
+      const rejected = await client.rejectVaultWebsiteIngest(draft.id, {
+        reason: "Rejected from MARKOS web review"
+      });
+      setDraft(rejected);
+      setMessage("Draft rejected. No website facts were saved to the Vault.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not reject ingest draft.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  const selectedCandidates = candidateDrafts.filter((item) => item.selected);
+  const missingSections = websiteIngestCoreSections.filter((section) => !selectedCandidates.some((item) => item.candidate.section === section));
+  const scorePercent = score?.score ?? 86;
+  const completedSections = new Set(score?.completedSections ?? ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "BRAND", "OBJECTIVES"]);
+  const draftLocked = draft?.status === "APPROVED" || draft?.status === "REJECTED";
+
   return (
     <section className="space-y-6 xl:space-y-8">
       <div>
         <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Knowledge Vault</h1>
         <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">The foundation of your AI-powered marketing strategy</p>
       </div>
+
       <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white">Vault Completion</h2>
-            <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">6 of 7 modules complete</p>
+            <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">
+              {score ? `${score.completedSections.length} of ${score.requiredSections.length} sections complete` : "6 of 7 modules complete"}
+            </p>
           </div>
-          <p className="text-3xl font-bold text-[#F4A460] xl:text-4xl">86%</p>
+          <p className="text-3xl font-bold text-[#F4A460] xl:text-4xl">{scorePercent}%</p>
         </div>
-        <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/12 xl:mt-7 xl:h-4"><div className="h-full w-[86%] rounded-full bg-gradient-to-r from-[#F4A460] to-[#D4AF37]" /></div>
+        <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/12 xl:mt-7 xl:h-4">
+          <div className="h-full rounded-full bg-gradient-to-r from-[#F4A460] to-[#D4AF37]" style={{ width: `${scorePercent}%` }} />
+        </div>
         <p className="mt-5 text-base text-[#D6DEEA] xl:text-lg">Complete all modules to unlock advanced AI features and more accurate content recommendations.</p>
       </article>
+
+      <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div>
+            <SectionLabel accentName="teal" label="Vault Auto-Ingest" />
+            <h2 className="mt-4 text-2xl font-bold text-white">Learn from a public website</h2>
+            <p className="mt-3 max-w-4xl text-base leading-relaxed text-[#D6DEEA] xl:text-lg">
+              MARKOS extracts reviewable business facts, shows source evidence, then saves only approved memory into the workspace Vault.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-4 py-2 text-sm font-bold text-[#81D8D0]">
+            Review required
+          </span>
+        </div>
+
+        <form className="mt-6 grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={handlePreview}>
+          <label className="sr-only" htmlFor="vault-website-url">Website URL</label>
+          <input
+            className="min-h-12 rounded-2xl border border-[#81D8D0]/16 bg-[#0F1419]/72 px-4 text-base text-white outline-none transition placeholder:text-[#6F7B8F] focus:border-[#81D8D0]/45"
+            disabled={busyAction !== null}
+            id="vault-website-url"
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://yourcompany.com"
+            type="url"
+            value={url}
+          />
+          <button
+            className="lux-button-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-base font-black disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busyAction !== null || url.trim().length === 0}
+            type="submit"
+          >
+            <Wand2 size={19} />
+            {busyAction === "preview" ? "Scanning..." : "Preview Facts"}
+          </button>
+        </form>
+
+        {error ? <p className="mt-4 rounded-2xl border border-[#FF6B6B]/25 bg-[#FF6B6B]/10 px-4 py-3 text-sm font-semibold text-[#FFB4B4]">{error}</p> : null}
+        {message ? <p className="mt-4 rounded-2xl border border-[#81D8D0]/22 bg-[#81D8D0]/10 px-4 py-3 text-sm font-semibold text-[#81D8D0]">{message}</p> : null}
+
+        {draft ? (
+          <div className="mt-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 px-4 py-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[.12em] text-[#9AA7BD]">Source</p>
+                <a className="mt-1 inline-flex items-center gap-2 break-all text-base font-bold text-[#81D8D0]" href={draft.sourceUrl} rel="noreferrer" target="_blank">
+                  <Link2 size={17} />
+                  {draft.sourceTitle ?? draft.sourceUrl}
+                </a>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                <span className="rounded-full bg-[#81D8D0]/12 px-3 py-1 text-[#81D8D0]">{Math.round(draft.confidence * 100)}% confidence</span>
+                <span className="rounded-full bg-white/8 px-3 py-1 text-[#D6DEEA]">{draft.status}</span>
+                <span className="rounded-full bg-white/8 px-3 py-1 text-[#9AA7BD]">{formatVaultDate(draft.createdAt)}</span>
+              </div>
+            </div>
+
+            {!draftLocked && (candidateDrafts.length < 3 || missingSections.length > 0) ? (
+              <div className="rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-4 py-3 text-sm leading-relaxed text-[#F5D772]">
+                Sparse context warning: MARKOS found limited source evidence
+                {missingSections.length > 0 ? ` and still needs ${missingSections.map(sectionName).join(", ")} context` : ""}. Add missing details manually before relying on generated campaigns.
+              </div>
+            ) : null}
+
+            <div className="grid gap-4">
+              {candidateDrafts.map((item, index) => (
+                <article className={item.selected ? "lux-card-muted rounded-[1.35rem] border-[#81D8D0]/26 p-4" : "lux-card-quiet rounded-[1.35rem] p-4 opacity-70"} key={`${item.candidate.section}-${item.candidate.key}-${index}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[.14em] text-[#9AA7BD]">{sectionName(item.candidate.section)}</p>
+                      <h3 className="mt-1 text-lg font-bold text-white">{humanizeKey(item.candidate.key)}</h3>
+                      {item.candidate.sourceSnippet ? <p className="mt-2 max-w-4xl text-sm leading-relaxed text-[#9AA7BD]">{item.candidate.sourceSnippet}</p> : null}
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#81D8D0]/18 bg-[#81D8D0]/7 px-3 py-2 text-sm font-bold text-[#D6DEEA]">
+                      <input
+                        checked={item.selected}
+                        className="h-4 w-4 accent-[#81D8D0]"
+                        disabled={draftLocked}
+                        onChange={() =>
+                          setCandidateDrafts((current) =>
+                            current.map((candidate, candidateIndex) =>
+                              candidateIndex === index ? { ...candidate, selected: !candidate.selected, valueError: "" } : candidate
+                            )
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Include
+                    </label>
+                  </div>
+                  <textarea
+                    className="mt-4 min-h-40 w-full resize-y rounded-2xl border border-[#81D8D0]/12 bg-[#0F1419]/70 p-4 font-mono text-sm leading-relaxed text-[#D6DEEA] outline-none transition focus:border-[#81D8D0]/45 disabled:opacity-70"
+                    disabled={draftLocked || !item.selected}
+                    onChange={(event) =>
+                      setCandidateDrafts((current) =>
+                        current.map((candidate, candidateIndex) =>
+                          candidateIndex === index ? { ...candidate, valueText: event.target.value, valueError: "" } : candidate
+                        )
+                      )
+                    }
+                    spellCheck={false}
+                    value={item.valueText}
+                  />
+                  {item.valueError ? <p className="mt-2 text-sm font-semibold text-[#FFB4B4]">{item.valueError}</p> : null}
+                </article>
+              ))}
+            </div>
+
+            {!draftLocked ? (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="lux-button-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-base font-black disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={busyAction !== null || selectedCandidates.length === 0}
+                  onClick={handleApprove}
+                  type="button"
+                >
+                  <CheckCircle2 size={19} />
+                  {busyAction === "approve" ? "Saving..." : `Approve ${selectedCandidates.length} Facts`}
+                </button>
+                <button
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#FF6B6B]/28 bg-[#FF6B6B]/8 px-5 text-base font-bold text-[#FFB4B4] transition hover:bg-[#FF6B6B]/12 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={busyAction !== null}
+                  onClick={handleReject}
+                  type="button"
+                >
+                  Reject Draft
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </article>
+
       <section className="grid gap-5 lg:grid-cols-2">
-        {modules.map((module, index) => (
-          <article className={module === "Competitors" ? "lux-card rounded-[1.75rem] border-[#F4A460]/35 p-5 xl:p-7" : "lux-card-muted rounded-[1.75rem] p-5 xl:p-7"} key={module}>
+        {vaultModules.map((module) => {
+          const complete = completedSections.has(module.section);
+          const Icon = module.icon;
+          return (
+          <article className={!complete ? "lux-card rounded-[1.75rem] border-[#F4A460]/35 p-5 xl:p-7" : "lux-card-muted rounded-[1.75rem] p-5 xl:p-7"} key={module.section}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 xl:gap-5">
-                <IconTile accentName={module === "Competitors" ? "amber" : "teal"} icon={index % 2 === 0 ? Brain : Sparkles} />
+                <IconTile accentName={!complete ? "amber" : "teal"} icon={Icon} />
                 <div>
-                  <h3 className="text-xl font-bold text-white">{module}</h3>
-                  <p className="mt-2 text-base text-[#9AA7BD] xl:text-lg">{module === "Competitors" ? "Competitive landscape analysis" : "Updated business memory and brand context"}</p>
-                  <p className="mt-5 text-[#6F7B8F]">Last updated: {module === "Competitors" ? "Never" : "May 15, 2026"}</p>
+                  <h3 className="text-xl font-bold text-white">{module.title}</h3>
+                  <p className="mt-2 text-base text-[#9AA7BD] xl:text-lg">{module.description}</p>
+                  <p className="mt-5 text-[#6F7B8F]">{complete ? "Live memory available" : "Needs context"}</p>
                 </div>
               </div>
-              <span className={module === "Competitors" ? "text-[#F4A460]" : "text-[#00C9A7]"}>{module === "Competitors" ? "Complete" : <CheckCircle2 size={26} />}</span>
+              <span className={!complete ? "text-[#F4A460]" : "text-[#00C9A7]"}>{!complete ? "Complete" : <CheckCircle2 size={26} />}</span>
             </div>
           </article>
-        ))}
+        );
+        })}
       </section>
+
       <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
         <h2 className="text-2xl font-bold text-white">How the Knowledge Vault Works</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:mt-8 xl:grid-cols-3 xl:gap-6">
@@ -1306,6 +2647,320 @@ export function FinalVaultPanel() {
       </article>
     </section>
   );
+}
+
+export function BrandKitPanel({ locale }: { locale: Locale }) {
+  const session = useMarkosSession();
+  const client = useMarkosClient(session);
+  const [kit, setKit] = useState<BrandKit | null>(null);
+  const [exports, setExports] = useState<BrandBookExportRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!session) {
+      setKit(null);
+      setExports([]);
+      setError("");
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+
+    Promise.all([client.brandKit(), client.brandBookExports({ limit: 5 })])
+      .then(([nextKit, nextExports]) => {
+        if (!cancelled) {
+          setKit(nextKit);
+          setExports(nextExports);
+        }
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : "Could not load Brand Kit.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, session]);
+
+  async function handleExport() {
+    if (!session) {
+      setError("Log in to export a Brand Book.");
+      return;
+    }
+
+    setExporting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const created = await client.createBrandBookExport();
+      setExports((current) => [created, ...current.filter((item) => item.id !== created.id)].slice(0, 5));
+      setKit(created.content);
+      setMessage(`Brand Book v${created.version} was saved with ${created.sourceEntryIds.length} Vault sources.`);
+      downloadBrandBook(created);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not export Brand Book.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const confidence = kit === null ? 0 : Math.round(kit.confidence * 100);
+  const sourceCount = kit?.sourceEntries.length ?? 0;
+  const incomplete = (kit?.missingSections.length ?? 0) > 0;
+
+  return (
+    <section className="space-y-6 xl:space-y-8">
+      <HeroTitle icon={BookOpen} subtitle="A live brand system built only from approved Knowledge Vault memory and brand assets." title="Brand Kit">
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <MiniStat accentName="teal" icon={CheckCircle2} label="Confidence" value={loading ? "..." : `${confidence}%`} />
+          <MiniStat accentName="gold" icon={Brain} label="Vault Score" value={kit ? `${kit.score.score}%` : "N/A"} />
+          <MiniStat accentName="amber" icon={FileText} label="Sources" value={String(sourceCount)} />
+        </div>
+      </HeroTitle>
+
+      {error ? <p className="rounded-2xl border border-[#FF6B6B]/25 bg-[#FF6B6B]/10 px-4 py-3 text-sm font-semibold text-[#FFB4B4]">{error}</p> : null}
+      {message ? <p className="rounded-2xl border border-[#81D8D0]/22 bg-[#81D8D0]/10 px-4 py-3 text-sm font-semibold text-[#81D8D0]">{message}</p> : null}
+
+      {loading ? (
+        <article className="lux-card rounded-[1.5rem] p-6">
+          <span className="lux-ai-core" />
+          <p className="mt-5 text-lg font-bold text-white">Building Brand Kit from Vault memory...</p>
+        </article>
+      ) : null}
+
+      {kit ? (
+        <>
+          {incomplete ? (
+            <article className="lux-card rounded-[1.5rem] border-[#D4AF37]/35 p-5 xl:p-6">
+              <div className="flex items-start gap-4">
+                <IconTile accentName="gold" icon={AlertTriangle} />
+                <div>
+                  <h2 className="text-xl font-bold text-white">Incomplete Vault Warning</h2>
+                  <p className="mt-2 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">
+                    Missing {kit.missingSections.map(sectionName).join(", ")}. MARKOS will keep exports source-grounded and mark these gaps instead of inventing brand claims.
+                  </p>
+                  <a className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#81D8D0]" href={`/${locale}/app/knowledge`}>
+                    Complete Knowledge Vault <ArrowRight size={16} />
+                  </a>
+                </div>
+              </div>
+            </article>
+          ) : null}
+
+          <section className="grid gap-5 lg:grid-cols-2">
+            <BrandRuleGroup title="Company Profile" empty="Add company basics to the Vault." rules={kit.companyProfile} />
+            <BrandRuleGroup title="Tone Rules" empty="Add voice and tone guidance to the Vault." rules={kit.toneRules} />
+            <BrandRuleGroup title="Messaging Pillars" empty="Add story, audience, products, or objectives." rules={kit.messagingPillars} />
+            <BrandRuleGroup title="Visual Rules" empty="Add colors, fonts, aesthetics, and brand assets." rules={kit.visualRules} />
+          </section>
+
+          <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
+            <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <SectionLabel accentName="teal" label="Brand Book Export" />
+                <button
+                  className="lux-button-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-base font-black disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={exporting || sourceCount === 0}
+                  onClick={handleExport}
+                  type="button"
+                >
+                  <Download size={19} />
+                  {exporting ? "Exporting..." : "Export Brand Book"}
+                </button>
+              </div>
+              <p className="mt-4 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">
+                Every export stores a versioned copy of this Brand Kit, the Vault source IDs used, confidence, and missing-data notes.
+              </p>
+              <div className="mt-6 grid gap-3">
+                {exports.length === 0 ? (
+                  <p className="rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 p-4 text-sm font-semibold text-[#9AA7BD]">
+                    No Brand Book exports yet.
+                  </p>
+                ) : (
+                  exports.map((record) => (
+                    <button
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 p-4 text-left transition hover:border-[#81D8D0]/32"
+                      key={record.id}
+                      onClick={() => downloadBrandBook(record)}
+                      type="button"
+                    >
+                      <span>
+                        <span className="block text-base font-bold text-white">{record.title}</span>
+                        <span className="mt-1 block text-sm text-[#9AA7BD]">{record.exportedAt ? formatVaultDate(record.exportedAt) : formatVaultDate(record.createdAt)}</span>
+                      </span>
+                      <span className="rounded-full bg-[#81D8D0]/12 px-3 py-1 text-sm font-bold text-[#81D8D0]">{Math.round(record.confidence * 100)}%</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+              <SectionLabel accentName="gold" label="Approved Assets" />
+              <div className="mt-5 grid gap-3">
+                {kit.assets.length === 0 ? (
+                  <p className="rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/8 p-4 text-sm font-semibold text-[#F5D772]">
+                    No brand assets approved yet.
+                  </p>
+                ) : (
+                  kit.assets.map((asset) => (
+                    <a className="rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 p-4 transition hover:border-[#81D8D0]/32" href={asset.publicUrl} key={asset.id} rel="noreferrer" target="_blank">
+                      <span className="block text-base font-bold text-white">{asset.filename}</span>
+                      <span className="mt-1 block text-sm text-[#9AA7BD]">{asset.mimeType}</span>
+                    </a>
+                  ))
+                )}
+              </div>
+            </article>
+          </section>
+
+          <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+            <SectionLabel accentName="amber" label="Source Trace" />
+            <div className="mt-5 grid gap-3">
+              {kit.sourceEntries.slice(0, 12).map((entry) => (
+                <div className="rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 p-4" key={entry.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-bold uppercase tracking-[.12em] text-[#9AA7BD]">{sectionName(entry.section)} / {humanizeKey(entry.key)}</p>
+                    <span className="rounded-full bg-white/8 px-3 py-1 text-xs font-bold text-[#9AA7BD]">v{entry.version}</span>
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-[#D6DEEA]">{previewRecord(entry.value)}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function BrandRuleGroup({ empty, rules, title }: { empty: string; rules: BrandKit["toneRules"]; title: string }) {
+  return (
+    <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+      <h2 className="text-xl font-bold text-white">{title}</h2>
+      <div className="mt-5 grid gap-3">
+        {rules.length === 0 ? (
+          <p className="rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/8 p-4 text-sm font-semibold text-[#F5D772]">{empty}</p>
+        ) : (
+          rules.map((rule) => (
+            <div className="rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 p-4" key={`${rule.label}-${rule.guidance}`}>
+              <p className="text-base font-bold text-white">{rule.label}</p>
+              <p className="mt-2 text-sm leading-relaxed text-[#D6DEEA]">{rule.guidance}</p>
+              <p className="mt-3 text-xs font-bold uppercase tracking-[.12em] text-[#6F7B8F]">{rule.sourceEntryIds.length} source{rule.sourceEntryIds.length === 1 ? "" : "s"}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </article>
+  );
+}
+
+function toEditableCandidates(candidates: VaultWebsiteIngestCandidate[]): EditableIngestCandidate[] {
+  return candidates.map((candidate) => ({
+    candidate,
+    selected: true,
+    valueError: "",
+    valueText: JSON.stringify(candidate.value, null, 2)
+  }));
+}
+
+function parseCandidateDrafts(items: EditableIngestCandidate[]): {
+  candidates: VaultWebsiteIngestCandidate[];
+  error: string;
+  nextDrafts: EditableIngestCandidate[];
+} {
+  const candidates: VaultWebsiteIngestCandidate[] = [];
+  let error = "";
+
+  const nextDrafts = items.map((item) => {
+    if (!item.selected) {
+      return { ...item, valueError: "" };
+    }
+
+    try {
+      const parsed = JSON.parse(item.valueText) as unknown;
+
+      if (!isRecord(parsed)) {
+        error = "Each selected fact must be a JSON object.";
+        return { ...item, valueError: "Value must be a JSON object." };
+      }
+
+      candidates.push({
+        ...item.candidate,
+        value: parsed
+      });
+      return { ...item, valueError: "" };
+    } catch {
+      error = "Fix invalid JSON before approving website facts.";
+      return { ...item, valueError: "Invalid JSON." };
+    }
+  });
+
+  if (candidates.length === 0 && error.length === 0) {
+    error = "Select at least one website fact before approving.";
+  }
+
+  return { candidates, error, nextDrafts };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sectionName(section: VaultSection): string {
+  return section
+    .toLowerCase()
+    .split("_")
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
+function humanizeKey(key: string): string {
+  return key
+    .split("-")
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
+function formatVaultDate(value: string): string {
+  return new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short"
+  }).format(new Date(value));
+}
+
+function previewRecord(value: Record<string, unknown>): string {
+  const text = JSON.stringify(value);
+  return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+}
+
+function downloadBrandBook(record: BrandBookExportRecord): void {
+  const blob = new Blob([JSON.stringify(record, null, 2)], {
+    type: "application/json"
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `markos-brand-book-v${record.version}.json`;
+  link.click();
+  window.URL.revokeObjectURL(url);
 }
 
 export function FinalSettingsPanel() {

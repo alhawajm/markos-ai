@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { generateStrategySchema } from "@markos/validation";
+import { CatalogGenerationGuardrailError, CatalogSelectionInvalidError, CatalogSelectionNotFoundError } from "../catalog/catalog-service";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -49,6 +50,18 @@ export async function registerStrategyRoutes(app: FastifyInstance): Promise<void
       } catch (error) {
         if (error instanceof StrategyContextMissingError) {
           return reply.status(409).send(errorEnvelope("STRATEGY_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof CatalogSelectionNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CATALOG_SELECTION_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof CatalogSelectionInvalidError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_SELECTION_INVALID", error.message));
+        }
+
+        if (error instanceof CatalogGenerationGuardrailError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_GENERATION_GUARDRAIL", error.message, error.details));
         }
 
         if (error instanceof UsageQuotaExceededError) {

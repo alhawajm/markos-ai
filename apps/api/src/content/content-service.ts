@@ -8,6 +8,7 @@ import type {
   UpdateContentStatusInput
 } from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
+import { buildCatalogCommercialBrief, listCatalogGenerationContext } from "../catalog/catalog-service";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
@@ -64,7 +65,8 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
 
 export async function generateWorkspaceContent(
   workspaceId: string,
-  input: GenerateContentInput
+  input: GenerateContentInput,
+  options: { campaignId?: string } = {}
 ): Promise<ContentRecord[]> {
   const score = await getVaultScore(workspaceId);
 
@@ -77,12 +79,24 @@ export async function generateWorkspaceContent(
     query: input.topic,
     topK: 8
   });
+  const catalogContext = await listCatalogGenerationContext(workspaceId, {
+    limit: 8,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const commercialContext = buildCatalogCommercialBrief({
+    catalogContext,
+    requestText: input.topic,
+    vaultContext: [...toneLock.context, ...context],
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
+  const lockedContext = mergeVaultContext([toneLock.context, commercialContext, catalogContext, context], 16);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}`
   );
   const generationCount = input.count;
   const usagePeriodDate = new Date();
@@ -116,6 +130,7 @@ export async function generateWorkspaceContent(
               hashtags: draft.hashtags,
               ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
               mediaIds: [],
+              ...(options.campaignId === undefined ? {} : { campaignId: options.campaignId }),
               ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
               ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
               ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
@@ -135,6 +150,9 @@ export async function generateWorkspaceContent(
             contentType: input.contentType,
             count: input.count,
             ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.productId === undefined ? {} : { productId: input.productId }),
+            ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+            ...(options.campaignId === undefined ? {} : { campaignId: options.campaignId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
             retrievedContext: lockedContext
@@ -184,12 +202,24 @@ export async function generateWorkspaceContentForSlot(
     query: input.topic,
     topK: 8
   });
+  const catalogContext = await listCatalogGenerationContext(workspaceId, {
+    limit: 8,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const commercialContext = buildCatalogCommercialBrief({
+    catalogContext,
+    requestText: input.topic,
+    vaultContext: [...toneLock.context, ...context],
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
+  const lockedContext = mergeVaultContext([toneLock.context, commercialContext, catalogContext, context], 16);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}`
   );
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
@@ -243,6 +273,8 @@ export async function generateWorkspaceContentForSlot(
             count: 1,
             scheduledAt: input.scheduledAt,
             ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.productId === undefined ? {} : { productId: input.productId }),
+            ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
             retrievedContext: lockedContext
@@ -559,20 +591,22 @@ async function getContentToneLock(workspaceId: string): Promise<{ context: Vault
   };
 }
 
-function mergeVaultContext(primary: VaultRagChunk[], locked: VaultRagChunk[]): VaultRagChunk[] {
+function mergeVaultContext(groups: VaultRagChunk[][], limit: number): VaultRagChunk[] {
   const seen = new Set<string>();
   const merged: VaultRagChunk[] = [];
 
-  for (const chunk of [...locked, ...primary]) {
-    if (seen.has(chunk.id)) {
+  for (const chunk of groups.flat()) {
+    const key = `${chunk.section}:${chunk.key}`;
+
+    if (seen.has(key)) {
       continue;
     }
 
-    seen.add(chunk.id);
+    seen.add(key);
     merged.push(chunk);
   }
 
-  return merged.slice(0, 10);
+  return merged.slice(0, limit);
 }
 
 function uniqueStrings(values: unknown[]): string[] {

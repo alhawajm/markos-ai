@@ -66,6 +66,30 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.knowledgeVaultHistory.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
+    model: "VaultIngestDraft",
+    create: (fixture) =>
+      prisma.vaultIngestDraft.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          sourceUrl: `https://${randomUUID()}.example`,
+          sourceTitle: "Workspace scoped ingest draft",
+          candidates: [
+            {
+              section: "COMPANY",
+              key: "website-profile",
+              value: { name: "Scoped Brand" },
+              confidence: 0.8,
+              sourceUrl: "https://brand.example",
+              extractedAt: "2026-07-12T00:00:00.000Z"
+            }
+          ],
+          confidence: 0.8
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.vaultIngestDraft.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "Strategy",
     create: (fixture) =>
       prisma.strategy.create({
@@ -117,6 +141,84 @@ const isolationCases: IsolationCase[] = [
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.mediaAsset.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "GeneratedMediaVariant",
+    create: async (fixture) => {
+      const mediaAsset = await prisma.mediaAsset.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          type: "AI_GENERATED",
+          filename: `${randomUUID()}.png`,
+          s3Key: `test/${randomUUID()}.png`,
+          cdnUrl: "https://cdn.markos.test/generated.png",
+          mimeType: "image/png",
+          sizeBytes: 1024
+        }
+      });
+
+      return prisma.generatedMediaVariant.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          mediaAssetId: mediaAsset.id,
+          sourceMediaAssetIds: [],
+          visualMode: "LIFESTYLE_STORY",
+          aspectRatio: "4:5",
+          prompt: "Workspace-scoped visual prompt",
+          model: "test-image-model",
+          promptVersion: "image.v1.test",
+          metadata: {
+            source: "workspace-isolation"
+          }
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.generatedMediaVariant.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "Product",
+    create: (fixture) =>
+      prisma.product.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          benefits: ["Workspace scoped benefit"],
+          mediaAssetIds: [],
+          name: `Product ${randomUUID()}`,
+          salesChannels: ["Instagram"]
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.product.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "Offer",
+    create: (fixture) =>
+      prisma.offer.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          title: `Offer ${randomUUID()}`
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.offer.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "BrandBookExport",
+    create: (fixture) =>
+      prisma.brandBookExport.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          version: 1,
+          title: `Brand Book ${randomUUID()}`,
+          content: { title: "Workspace-scoped brand book" },
+          sourceEntryIds: [],
+          missingSections: [],
+          confidence: 0
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.brandBookExport.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "InstagramAnalytics",

@@ -1,5 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } from "@markos/validation";
+import {
+  upsertVaultSectionSchema,
+  vaultRagSearchSchema,
+  vaultSectionSchema,
+  vaultWebsiteIngestApproveSchema,
+  vaultWebsiteIngestParamsSchema,
+  vaultWebsiteIngestPreviewSchema,
+  vaultWebsiteIngestRejectSchema
+} from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import {
@@ -10,6 +18,12 @@ import {
   searchVaultContext,
   upsertVaultSection
 } from "./vault-service";
+import {
+  approveWebsiteIngest,
+  previewWebsiteIngest,
+  rejectWebsiteIngest,
+  VaultWebsiteIngestError
+} from "./website-ingest-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -57,6 +71,106 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await searchVaultContext(workspaceId, parsed.data));
+    }
+  );
+
+  app.post(
+    "/v1/vault/ingest/website/preview",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = vaultWebsiteIngestPreviewSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid website ingest request", parsed.error.issues));
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await previewWebsiteIngest(workspaceId, userId, parsed.data));
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/vault/ingest/:draftId/approve",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = vaultWebsiteIngestParamsSchema.safeParse(request.params ?? {});
+      const parsed = vaultWebsiteIngestApproveSchema.safeParse(request.body ?? {});
+
+      if (!params.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid website ingest draft id", params.error.issues));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid website ingest approval", parsed.error.issues));
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await approveWebsiteIngest(workspaceId, userId, params.data.draftId, parsed.data));
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/vault/ingest/:draftId/reject",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = vaultWebsiteIngestParamsSchema.safeParse(request.params ?? {});
+      const parsed = vaultWebsiteIngestRejectSchema.safeParse(request.body ?? {});
+
+      if (!params.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid website ingest draft id", params.error.issues));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid website ingest rejection", parsed.error.issues));
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await rejectWebsiteIngest(workspaceId, userId, params.data.draftId, parsed.data));
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
     }
   );
 

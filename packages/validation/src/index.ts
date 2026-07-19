@@ -56,7 +56,12 @@ export const vaultSectionSchema = z.enum([
 
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
 export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
+export const campaignStatusSchema = z.enum(["DRAFT", "GENERATED", "IN_REVIEW", "APPROVED", "SCHEDULED", "ARCHIVED"]);
 export const mediaTypeSchema = z.enum(["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"]);
+export const visualModeSchema = z.enum(["PRODUCT_PHOTO", "LIFESTYLE_STORY", "AD_CREATIVE", "BACKGROUND_VARIANT"]);
+export const generatedMediaStatusSchema = z.enum(["PENDING_REVIEW", "APPROVED", "REJECTED"]);
+export const productStatusSchema = z.enum(["ACTIVE", "ARCHIVED"]);
+export const offerStatusSchema = z.enum(["ACTIVE", "PAUSED", "EXPIRED", "ARCHIVED"]);
 export const agentNameSchema = z.enum([
   "MARKETING_STRATEGIST",
   "CONTENT_PLANNER",
@@ -101,6 +106,37 @@ export const vaultRagSearchSchema = z.object({
   section: vaultSectionSchema.optional()
 });
 
+export const vaultWebsiteIngestPreviewSchema = z.object({
+  url: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("https://") || value.startsWith("http://"), {
+      message: "Website URL must use HTTP or HTTPS"
+    })
+});
+
+export const vaultWebsiteIngestCandidateSchema = z.object({
+  section: vaultSectionSchema,
+  key: z.string().min(1).max(120),
+  value: vaultValueSchema,
+  confidence: z.number().min(0).max(1),
+  sourceUrl: z.string().url(),
+  extractedAt: z.string().datetime(),
+  sourceSnippet: z.string().max(500).optional()
+});
+
+export const vaultWebsiteIngestApproveSchema = z.object({
+  candidates: z.array(vaultWebsiteIngestCandidateSchema).min(1).max(20).optional()
+});
+
+export const vaultWebsiteIngestRejectSchema = z.object({
+  reason: z.string().max(500).optional()
+});
+
+export const vaultWebsiteIngestParamsSchema = z.object({
+  draftId: z.string().uuid()
+});
+
 export const onboardingModuleSchema = z.enum([
   "company",
   "story",
@@ -112,6 +148,100 @@ export const onboardingModuleSchema = z.enum([
 ]);
 
 const nonEmptyStringArraySchema = z.array(z.string().min(1).max(80)).min(1).max(30);
+const optionalCatalogStringArraySchema = z.array(z.string().min(1).max(120)).max(30).default([]);
+const currencySchema = z.string().trim().length(3).regex(/^[A-Z]{3}$/).default("BHD");
+const catalogMoneySchema = z.number().int().nonnegative().max(10_000_000);
+
+export const catalogProductListQuerySchema = z.object({
+  category: z.string().min(1).max(120).optional(),
+  q: z.string().min(1).max(120).optional(),
+  status: productStatusSchema.optional()
+});
+
+export const catalogOfferListQuerySchema = z.object({
+  productId: z.string().uuid().optional(),
+  q: z.string().min(1).max(120).optional(),
+  status: offerStatusSchema.optional()
+});
+
+export const createCatalogProductSchema = z.object({
+  benefits: optionalCatalogStringArraySchema,
+  category: z.string().min(1).max(120).optional(),
+  currency: currencySchema,
+  description: z.string().max(2000).optional(),
+  mediaAssetIds: z.array(z.string().uuid()).max(20).default([]),
+  name: z.string().min(1).max(160),
+  priceMinor: catalogMoneySchema.optional(),
+  salesChannels: optionalCatalogStringArraySchema,
+  status: productStatusSchema.default("ACTIVE")
+});
+
+export const updateCatalogProductSchema = z
+  .object({
+    benefits: z.array(z.string().min(1).max(120)).max(30).optional(),
+    category: z.string().min(1).max(120).nullable().optional(),
+    currency: currencySchema.optional(),
+    description: z.string().max(2000).nullable().optional(),
+    mediaAssetIds: z.array(z.string().uuid()).max(20).optional(),
+    name: z.string().min(1).max(160).optional(),
+    priceMinor: catalogMoneySchema.nullable().optional(),
+    salesChannels: z.array(z.string().min(1).max(120)).max(30).optional(),
+    status: productStatusSchema.optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one product field is required"
+  });
+
+export const createCatalogOfferSchema = z
+  .object({
+    compareAtPriceMinor: catalogMoneySchema.optional(),
+    currency: currencySchema,
+    description: z.string().max(2000).optional(),
+    endsAt: z.string().datetime().optional(),
+    priceMinor: catalogMoneySchema.optional(),
+    productId: z.string().uuid().optional(),
+    startsAt: z.string().datetime().optional(),
+    status: offerStatusSchema.default("ACTIVE"),
+    terms: z.string().max(2000).optional(),
+    title: z.string().min(1).max(160)
+  })
+  .refine((value) => value.priceMinor === undefined || value.compareAtPriceMinor === undefined || value.compareAtPriceMinor >= value.priceMinor, {
+    message: "Compare-at price must be greater than or equal to offer price"
+  })
+  .refine((value) => value.startsAt === undefined || value.endsAt === undefined || Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+    message: "Offer end date must be after start date"
+  });
+
+export const updateCatalogOfferSchema = z
+  .object({
+    compareAtPriceMinor: catalogMoneySchema.nullable().optional(),
+    currency: currencySchema.optional(),
+    description: z.string().max(2000).nullable().optional(),
+    endsAt: z.string().datetime().nullable().optional(),
+    priceMinor: catalogMoneySchema.nullable().optional(),
+    productId: z.string().uuid().nullable().optional(),
+    startsAt: z.string().datetime().nullable().optional(),
+    status: offerStatusSchema.optional(),
+    terms: z.string().max(2000).nullable().optional(),
+    title: z.string().min(1).max(160).optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one offer field is required"
+  })
+  .refine((value) => value.priceMinor == null || value.compareAtPriceMinor == null || value.compareAtPriceMinor >= value.priceMinor, {
+    message: "Compare-at price must be greater than or equal to offer price"
+  })
+  .refine((value) => value.startsAt == null || value.endsAt == null || Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+    message: "Offer end date must be after start date"
+  });
+
+export const catalogProductParamsSchema = z.object({
+  productId: z.string().uuid()
+});
+
+export const catalogOfferParamsSchema = z.object({
+  offerId: z.string().uuid()
+});
 
 export const companyOnboardingSchema = z.object({
   name: z.string().min(2).max(160),
@@ -194,23 +324,145 @@ export const objectivesOnboardingSchema = z.object({
   success90Days: z.string().max(1000).optional()
 });
 
+const catalogGenerationSelectionSchema = {
+  offerId: z.string().uuid().optional(),
+  productId: z.string().uuid().optional()
+};
+
 export const generateStrategySchema = z.object({
   objective: z.string().min(3).max(500).optional(),
-  horizonDays: z.number().int().min(30).max(180).default(90)
+  horizonDays: z.number().int().min(30).max(180).default(90),
+  ...catalogGenerationSelectionSchema
 });
 
 export const generateContentSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
   count: z.number().int().min(1).max(5).default(3),
-  strategyId: z.string().uuid().optional()
+  strategyId: z.string().uuid().optional(),
+  ...catalogGenerationSelectionSchema
 });
 
 export const generateContentForSlotSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
   scheduledAt: z.string().datetime(),
-  strategyId: z.string().uuid().optional()
+  strategyId: z.string().uuid().optional(),
+  ...catalogGenerationSelectionSchema
+});
+
+export const campaignBriefSchema = z.object({
+  audience: z.string().min(2).max(500).optional(),
+  contentCount: z.number().int().min(1).max(8).default(4),
+  contentTypes: z.array(contentTypeSchema).min(1).max(4).default(["POST", "CAROUSEL", "REEL", "STORY"]),
+  durationDays: z.number().int().min(1).max(30).default(7),
+  objective: z.string().min(3).max(700),
+  offerId: z.string().uuid().optional(),
+  productId: z.string().uuid().optional(),
+  startDate: z.string().datetime().optional(),
+  tone: z.string().min(2).max(200).optional()
+});
+
+export const campaignPackageItemSchema = z
+  .object({
+    angle: z.string().min(1).max(700),
+    contentItemId: z.string().uuid(),
+    contentType: contentTypeSchema,
+    day: z.number().int().min(1).max(30),
+    scheduledAt: z.string().datetime().optional(),
+    status: contentStatusSchema
+  })
+  .strict();
+
+export const campaignPackageSchema = z
+  .object({
+    angles: z.array(z.string().min(1).max(700)).min(1).max(6),
+    items: z.array(campaignPackageItemSchema).min(1).max(8),
+    objectives: z
+      .array(
+        z
+          .object({
+            label: z.string().min(1).max(120),
+            value: z.string().min(1).max(120)
+          })
+          .strict()
+      )
+      .min(1)
+      .max(4),
+    rationale: z.string().min(1).max(2000),
+    schedule: z
+      .array(
+        z
+          .object({
+            contentItemId: z.string().uuid(),
+            day: z.number().int().min(1).max(30),
+            scheduledAt: z.string().datetime()
+          })
+          .strict()
+      )
+      .min(1)
+      .max(8)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const itemIds = new Set(value.items.map((item) => item.contentItemId));
+    const scheduleIds = new Set(value.schedule.map((item) => item.contentItemId));
+
+    if (itemIds.size !== value.items.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Campaign package items must reference unique content items",
+        path: ["items"]
+      });
+    }
+
+    for (const scheduled of scheduleIds) {
+      if (!itemIds.has(scheduled)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Campaign schedule can only reference package items",
+          path: ["schedule"]
+        });
+      }
+    }
+  });
+
+export const generateCampaignPackageSchema = z.object({
+  brief: campaignBriefSchema,
+  name: z.string().min(2).max(160).optional()
+});
+
+export const campaignPackageListQuerySchema = z.object({
+  status: campaignStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20)
+});
+
+export const campaignParamsSchema = z.object({
+  campaignId: z.string().uuid()
+});
+
+export const campaignItemParamsSchema = campaignParamsSchema.extend({
+  contentItemId: z.string().uuid()
+});
+
+export const rejectCampaignItemSchema = z.object({
+  reason: z.string().min(3).max(500)
+});
+
+export const scheduleCampaignPackageSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .default("19:30")
+});
+
+export const brandBookExportListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(25).default(10)
+});
+
+export const brandBookExportParamsSchema = z.object({
+  exportId: z.string().uuid()
 });
 
 export const runAgentSchema = z.object({
@@ -345,6 +597,31 @@ export const generateImageForContentSchema = z.object({
   aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
 });
 
+export const visualStudioGenerateSchema = z.object({
+  prompt: z.string().min(3).max(2000).optional(),
+  negativePrompt: z.string().min(3).max(1000).optional(),
+  aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5"),
+  visualMode: visualModeSchema.default("LIFESTYLE_STORY"),
+  count: z.number().int().min(1).max(4).default(1),
+  contentItemId: z.string().uuid().optional(),
+  productId: z.string().uuid().optional(),
+  offerId: z.string().uuid().optional(),
+  sourceMediaAssetIds: z.array(z.string().uuid()).max(8).default([])
+});
+
+export const visualStudioVariantListQuerySchema = z.object({
+  status: generatedMediaStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50)
+});
+
+export const rejectGeneratedMediaVariantSchema = z.object({
+  reason: z.string().min(3).max(500)
+});
+
+export const attachGeneratedMediaVariantSchema = z.object({
+  contentItemId: z.string().uuid()
+});
+
 export const createPromptTemplateSchema = z.object({
   agent: promptAgentSchema,
   version: z.string().min(3).max(120),
@@ -386,10 +663,27 @@ export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type VaultSectionInput = z.infer<typeof vaultSectionSchema>;
 export type UpsertVaultSectionInput = z.infer<typeof upsertVaultSectionSchema>;
 export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
+export type VaultWebsiteIngestApproveInput = z.infer<typeof vaultWebsiteIngestApproveSchema>;
+export type VaultWebsiteIngestCandidateInput = z.infer<typeof vaultWebsiteIngestCandidateSchema>;
+export type VaultWebsiteIngestPreviewInput = z.infer<typeof vaultWebsiteIngestPreviewSchema>;
+export type VaultWebsiteIngestRejectInput = z.infer<typeof vaultWebsiteIngestRejectSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
+export type CampaignBriefInput = z.infer<typeof campaignBriefSchema>;
+export type CampaignPackageOutput = z.infer<typeof campaignPackageSchema>;
+export type GenerateCampaignPackageInput = z.infer<typeof generateCampaignPackageSchema>;
+export type CampaignPackageListQueryInput = z.infer<typeof campaignPackageListQuerySchema>;
+export type RejectCampaignItemInput = z.infer<typeof rejectCampaignItemSchema>;
+export type ScheduleCampaignPackageInput = z.infer<typeof scheduleCampaignPackageSchema>;
+export type BrandBookExportListQueryInput = z.infer<typeof brandBookExportListQuerySchema>;
+export type CatalogProductListQueryInput = z.infer<typeof catalogProductListQuerySchema>;
+export type CatalogOfferListQueryInput = z.infer<typeof catalogOfferListQuerySchema>;
+export type CreateCatalogProductInput = z.infer<typeof createCatalogProductSchema>;
+export type UpdateCatalogProductInput = z.infer<typeof updateCatalogProductSchema>;
+export type CreateCatalogOfferInput = z.infer<typeof createCatalogOfferSchema>;
+export type UpdateCatalogOfferInput = z.infer<typeof updateCatalogOfferSchema>;
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
 export type AnalyticsMonthlyPdfInput = z.infer<typeof analyticsMonthlyPdfSchema>;
 export type AnalyticsMonthlyEmailInput = z.infer<typeof analyticsMonthlyEmailSchema>;
@@ -412,3 +706,7 @@ export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>
 export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
 export type GenerateImageForContentInput = z.infer<typeof generateImageForContentSchema>;
+export type VisualStudioGenerateInput = z.infer<typeof visualStudioGenerateSchema>;
+export type VisualStudioVariantListQueryInput = z.infer<typeof visualStudioVariantListQuerySchema>;
+export type RejectGeneratedMediaVariantInput = z.infer<typeof rejectGeneratedMediaVariantSchema>;
+export type AttachGeneratedMediaVariantInput = z.infer<typeof attachGeneratedMediaVariantSchema>;

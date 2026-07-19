@@ -6,6 +6,7 @@ import {
   updateContentSchema,
   updateContentStatusSchema
 } from "@markos/validation";
+import { CatalogGenerationGuardrailError, CatalogSelectionInvalidError, CatalogSelectionNotFoundError } from "../catalog/catalog-service";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -64,6 +65,18 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
           return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
         }
 
+        if (error instanceof CatalogSelectionNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CATALOG_SELECTION_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof CatalogSelectionInvalidError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_SELECTION_INVALID", error.message));
+        }
+
+        if (error instanceof CatalogGenerationGuardrailError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_GENERATION_GUARDRAIL", error.message, error.details));
+        }
+
         if (error instanceof UsageQuotaExceededError) {
           return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
         }
@@ -104,6 +117,18 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
         if (error instanceof ContentScheduleError) {
           return reply.status(409).send(errorEnvelope("CONTENT_SCHEDULE_INVALID", error.message));
+        }
+
+        if (error instanceof CatalogSelectionNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CATALOG_SELECTION_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof CatalogSelectionInvalidError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_SELECTION_INVALID", error.message));
+        }
+
+        if (error instanceof CatalogGenerationGuardrailError) {
+          return reply.status(409).send(errorEnvelope("CATALOG_GENERATION_GUARDRAIL", error.message, error.details));
         }
 
         if (error instanceof UsageQuotaExceededError) {
