@@ -123,6 +123,37 @@ export const generatedMediaQualityStatuses = [
 export type GeneratedMediaQualityStatus =
   (typeof generatedMediaQualityStatuses)[number];
 
+export const creativeFeedbackDecisions = ["APPROVED", "REJECTED"] as const;
+export type CreativeFeedbackDecision =
+  (typeof creativeFeedbackDecisions)[number];
+
+export const creativeFeedbackReasonCodes = [
+  "ON_BRAND",
+  "STRONG_COMPOSITION",
+  "PRODUCT_ACCURATE",
+  "READY_TO_PUBLISH",
+  "OFF_BRAND",
+  "PRODUCT_INACCURATE",
+  "POOR_COMPOSITION",
+  "COLOR_MISMATCH",
+  "TEXT_QUALITY",
+  "CLAIM_RISK",
+  "LOW_RESOLUTION",
+  "OTHER",
+] as const;
+export type CreativeFeedbackReasonCode =
+  (typeof creativeFeedbackReasonCodes)[number];
+
+export const creativeLearningSources = [
+  "HUMAN_FEEDBACK",
+  "INSTAGRAM_PERFORMANCE",
+  "CAMPAIGN_REVIEW",
+] as const;
+export type CreativeLearningSource = (typeof creativeLearningSources)[number];
+
+export const creativePatternTypes = ["POSITIVE", "NEGATIVE"] as const;
+export type CreativePatternType = (typeof creativePatternTypes)[number];
+
 export const brandBookExportStatuses = ["DRAFT", "EXPORTED"] as const;
 export type BrandBookExportStatus = (typeof brandBookExportStatuses)[number];
 
@@ -615,12 +646,90 @@ export interface GeneratedMediaVariantRecord {
   negativePrompt?: string;
   model: string;
   promptVersion: string;
+  aiInteractionId?: string;
   status: GeneratedMediaStatus;
   qualityStatus: GeneratedMediaQualityStatus;
   rejectionReason?: string;
+  qualityScores: CreativeQualityScores;
+  performanceScore?: number;
+  lastLearnedAt?: string;
+  latestFeedback?: CreativeFeedbackRecord;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreativeQualityScores {
+  brandAlignment?: number;
+  composition?: number;
+  overall?: number;
+  platformReadiness?: number;
+  productAccuracy?: number;
+}
+
+export interface CreativeFeedbackRecord {
+  id: string;
+  workspaceId: string;
+  generatedMediaVariantId: string;
+  aiInteractionId?: string;
+  decision: CreativeFeedbackDecision;
+  reasonCodes: CreativeFeedbackReasonCode[];
+  notes?: string;
+  scores: CreativeQualityScores;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface CreativeLearningExemplarRecord {
+  id: string;
+  workspaceId: string;
+  source: CreativeLearningSource;
+  patternType: CreativePatternType;
+  generatedMediaVariantId?: string;
+  contentItemId?: string;
+  campaignId?: string;
+  aiInteractionId?: string;
+  patternKey: string;
+  summary: string;
+  evidence: Record<string, unknown>;
+  score: number;
+  active: boolean;
+  lastObservedAt: string;
+  vaultSyncedAt?: string;
+  vaultSyncError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreativeLearningContext {
+  positive: CreativeLearningExemplarRecord[];
+  negative: CreativeLearningExemplarRecord[];
+}
+
+export interface CreativeLearningInsights {
+  workspaceId: string;
+  generatedAt: string;
+  feedbackCount: number;
+  performanceLinkedCount: number;
+  positivePatternCount: number;
+  negativePatternCount: number;
+  topPositive: CreativeLearningExemplarRecord[];
+  topNegative: CreativeLearningExemplarRecord[];
+  recommendations: string[];
+}
+
+export interface CreativeLearningWorkspaceResult {
+  workspaceId: string;
+  analyzedContent: number;
+  linkedVariants: number;
+  exemplarsUpserted: number;
+  interactionsUpdated: number;
+  vaultEntriesWritten: number;
+}
+
+export interface CreativeLearningRunResult {
+  attempted: number;
+  results: CreativeLearningWorkspaceResult[];
 }
 
 export interface VisualStudioGenerationResult {
@@ -763,6 +872,7 @@ export interface AnalyticsMetricTotals {
 
 export interface AnalyticsSyncResult {
   created: number;
+  creativeLearning?: CreativeLearningWorkspaceResult;
   from: string;
   learning?: AnalyticsLearningResult;
   mode: "dry_run" | "live";

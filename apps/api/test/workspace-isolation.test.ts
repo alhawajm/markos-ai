@@ -271,6 +271,72 @@ const isolationCases: IsolationCase[] = [
       }),
   },
   {
+    model: "CreativeFeedback",
+    create: async (fixture) => {
+      const mediaAsset = await prisma.mediaAsset.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          type: "AI_GENERATED",
+          filename: `${randomUUID()}.png`,
+          s3Key: `test/${randomUUID()}.png`,
+          cdnUrl: "https://cdn.markos.test/feedback.png",
+          mimeType: "image/png",
+          sizeBytes: 1024,
+        },
+      });
+      const variant = await prisma.generatedMediaVariant.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          mediaAssetId: mediaAsset.id,
+          sourceMediaAssetIds: [],
+          visualMode: "PRODUCT_PHOTO",
+          aspectRatio: "4:5",
+          prompt: "Workspace-scoped feedback visual",
+          model: "test-image-model",
+          promptVersion: "image.v1.test",
+          metadata: {},
+        },
+      });
+
+      return prisma.creativeFeedback.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          generatedMediaVariantId: variant.id,
+          decision: "APPROVED",
+          reasonCodes: ["ON_BRAND"],
+          createdBy: fixture.userId,
+        },
+        select: { id: true, workspaceId: true },
+      });
+    },
+    list: (workspaceId) =>
+      prisma.creativeFeedback.findMany({
+        where: { workspaceId },
+        select: { id: true, workspaceId: true },
+      }),
+  },
+  {
+    model: "CreativeLearningExemplar",
+    create: (fixture) =>
+      prisma.creativeLearningExemplar.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          source: "HUMAN_FEEDBACK",
+          patternType: "POSITIVE",
+          patternKey: `workspace-pattern-${randomUUID()}`,
+          summary: "Workspace-scoped winning pattern",
+          evidence: { signal: "approved" },
+          score: 0.9,
+        },
+        select: { id: true, workspaceId: true },
+      }),
+    list: (workspaceId) =>
+      prisma.creativeLearningExemplar.findMany({
+        where: { workspaceId },
+        select: { id: true, workspaceId: true },
+      }),
+  },
+  {
     model: "Product",
     create: (fixture) =>
       prisma.product.create({

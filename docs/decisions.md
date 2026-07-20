@@ -253,3 +253,11 @@ Keep the existing single-page deterministic preview for fast local review, and a
 Route multi-page extraction through the configurable `WEBSITE_EXTRACTION_MODEL` slot and require a strict runtime-validated JSON response. Invalid JSON or unsupported evidence receives one repair attempt. Every accepted candidate must meet the confidence floor and cite a non-empty snippet that exists on its declared source page; unsupported candidates are refused instead of becoming Vault memory. Reserve one AI generation before extraction, meter model tokens after persistence, and refund only reservations that actually succeeded.
 
 Approval remains a human decision. `MERGE` is the default and preserves existing object fields while applying reviewed values; `OVERWRITE` replaces the reviewed entry. Approval writes the Vault update, reviewed draft, and an audit trail containing the chosen write mode plus per-candidate edited/unchanged and created/merged/overwritten decisions in one transaction.
+
+## 2026-07-20: Creative Learning Uses Durable Feedback And Attached-Media Attribution
+
+Store every generated-asset approval or rejection as workspace-scoped `CreativeFeedback`, with structured reason codes, reviewer notes, and dimension scores. Materialize the latest human or Instagram performance signal as a stable-keyed `CreativeLearningExemplar`, update the linked `AiInteraction`, and expose the resulting winning and rejected patterns to Visual Studio, Content generation, Campaign generation, the Analytics Consultant, and the dashboard.
+
+Attribute Instagram performance to a generated visual only when that exact `MediaAsset` is attached to the measured `ContentItem`. A variant's generation-time `contentItemId` is context lineage, not proof that the asset was published. This prevents rejected or unused variants from receiving performance credit.
+
+Vault synchronization is recoverable. Exemplars track `vaultSyncedAt` and `vaultSyncError`; feedback remains successful when embedding or Vault infrastructure is temporarily unavailable, and the maintenance learning worker retries unsynced exemplars. Generation also reads the exemplar table directly, so a temporary Vault sync delay cannot remove reviewer feedback from the next prompt.

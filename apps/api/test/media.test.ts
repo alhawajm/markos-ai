@@ -2,13 +2,22 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { processWorkspaceCreativeLearning } from "../src/learning/creative-learning-service";
 
 let imageGenerationCalls = 0;
+let imageGenerationPrompts: string[] = [];
 
 vi.mock("../src/ai/image-client", () => ({
-  generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
+  generateImageAsset: async (input: {
+    aspectRatio: string;
+    prompt: string;
+    workspaceId: string;
+  }) => {
     imageGenerationCalls += 1;
-    const bytes = Buffer.from(`<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`);
+    imageGenerationPrompts.push(input.prompt);
+    const bytes = Buffer.from(
+      `<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`,
+    );
 
     return {
       base64_data: bytes.toString("base64"),
@@ -21,14 +30,15 @@ vi.mock("../src/ai/image-client", () => ({
       size_bytes: bytes.byteLength,
       tokens_in: 31,
       tokens_out: 7,
-      width: 1080
+      width: 1080,
     };
-  }
+  },
 }));
 
 describe("media routes", () => {
   beforeEach(() => {
     imageGenerationCalls = 0;
+    imageGenerationPrompts = [];
   });
 
   it("registers public media and attaches it to content", async () => {
@@ -48,8 +58,8 @@ describe("media routes", () => {
         mimeType: "image/jpeg",
         sizeBytes: 245000,
         width: 1080,
-        height: 1080
-      }
+        height: 1080,
+      },
     });
     const mediaId = registered.json().data.id as string;
     const attached = await app.inject({
@@ -57,13 +67,13 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers,
       payload: {
-        mediaAssetId: mediaId
-      }
+        mediaAssetId: mediaId,
+      },
     });
     const list = await app.inject({
       method: "GET",
       url: "/v1/media",
-      headers
+      headers,
     });
 
     expect(registered.statusCode).toBe(200);
@@ -71,8 +81,8 @@ describe("media routes", () => {
       data: {
         filename: "menu-post.jpg",
         publicUrl: "https://cdn.example.com/menu-post.jpg",
-        workspaceId: session.workspace.id
-      }
+        workspaceId: session.workspace.id,
+      },
     });
     expect(attached.statusCode).toBe(200);
     expect(attached.json().data.mediaIds).toEqual([mediaId]);
@@ -81,9 +91,9 @@ describe("media routes", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: mediaId,
-          publicUrl: "https://cdn.example.com/menu-post.jpg"
-        })
-      ])
+          publicUrl: "https://cdn.example.com/menu-post.jpg",
+        }),
+      ]),
     );
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -91,12 +101,12 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "STORAGE_BYTES",
-            periodStart: storagePeriodStart()
-          }
-        }
-      })
+            periodStart: storagePeriodStart(),
+          },
+        },
+      }),
     ).resolves.toMatchObject({
-      used: 245000
+      used: 245000,
     });
 
     await app.close();
@@ -116,13 +126,13 @@ describe("media routes", () => {
         type: "IMAGE",
         filename: "upload.jpg",
         mimeType: "image/jpeg",
-        base64Data: bytes.toString("base64")
-      }
+        base64Data: bytes.toString("base64"),
+      },
     });
     const publicUrl = uploaded.json().data.publicUrl as string;
     const served = await app.inject({
       method: "GET",
-      url: new URL(publicUrl).pathname
+      url: new URL(publicUrl).pathname,
     });
 
     expect(uploaded.statusCode).toBe(200);
@@ -131,8 +141,8 @@ describe("media routes", () => {
         filename: "upload.jpg",
         mimeType: "image/jpeg",
         sizeBytes: bytes.byteLength,
-        workspaceId: session.workspace.id
-      }
+        workspaceId: session.workspace.id,
+      },
     });
     expect(served.statusCode).toBe(200);
     expect(served.headers["content-type"]).toContain("image/jpeg");
@@ -154,27 +164,27 @@ describe("media routes", () => {
       headers,
       payload: {
         aspectRatio: "4:5",
-        prompt: "Premium Bahrain coffee product photo"
-      }
+        prompt: "Premium Bahrain coffee product photo",
+      },
     });
     const body = response.json().data;
     const assetId = body.mediaAsset.id as string;
     const served = await app.inject({
       method: "GET",
-      url: new URL(body.mediaAsset.publicUrl as string).pathname
+      url: new URL(body.mediaAsset.publicUrl as string).pathname,
     });
     const interaction = await prisma.aiInteraction.findFirstOrThrow({
       where: {
         workspaceId: session.workspace.id,
-        agent: "IMAGE"
-      }
+        agent: "IMAGE",
+      },
     });
 
     expect(response.statusCode).toBe(200);
     expect(body).toMatchObject({
       contentItem: {
         id: content.id,
-        mediaIds: [assetId]
+        mediaIds: [assetId],
       },
       mediaAsset: {
         id: assetId,
@@ -182,11 +192,11 @@ describe("media routes", () => {
         filename: "generated-test.svg",
         mimeType: "image/svg+xml",
         width: 1080,
-        height: 1350
+        height: 1350,
       },
       model: "test-image-model",
       prompt: "Premium Bahrain coffee product photo",
-      promptVersion: "image.v1.test"
+      promptVersion: "image.v1.test",
     });
     expect(served.statusCode).toBe(200);
     expect(served.body).toContain("Premium Bahrain coffee product photo");
@@ -196,7 +206,7 @@ describe("media routes", () => {
       tokensOut: 7,
       costMinor: 0,
       currency: "BHD",
-      model: "test-image-model"
+      model: "test-image-model",
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -204,13 +214,13 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "AI_IMAGE",
-            periodStart
-          }
-        }
-      })
+            periodStart,
+          },
+        },
+      }),
     ).resolves.toMatchObject({
       used: 1,
-      limit: 20
+      limit: 20,
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -218,12 +228,12 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "AI_TOKENS_IN",
-            periodStart
-          }
-        }
-      })
+            periodStart,
+          },
+        },
+      }),
     ).resolves.toMatchObject({
-      used: 31
+      used: 31,
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -231,12 +241,12 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "AI_TOKENS_OUT",
-            periodStart
-          }
-        }
-      })
+            periodStart,
+          },
+        },
+      }),
     ).resolves.toMatchObject({
-      used: 7
+      used: 7,
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -244,12 +254,12 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "STORAGE_BYTES",
-            periodStart: storagePeriodStart()
-          }
-        }
-      })
+            periodStart: storagePeriodStart(),
+          },
+        },
+      }),
     ).resolves.toMatchObject({
-      used: body.mediaAsset.sizeBytes
+      used: body.mediaAsset.sizeBytes,
     });
 
     await app.close();
@@ -264,14 +274,17 @@ describe("media routes", () => {
     const product = await prisma.product.create({
       data: {
         workspaceId: session.workspace.id,
-        benefits: ["Handcrafted limited-edition pieces", "Premium gifting presentation"],
+        benefits: [
+          "Handcrafted limited-edition pieces",
+          "Premium gifting presentation",
+        ],
         category: "Luxury jewelry",
         description: "Luxury jewelry collection for Bahrain customers",
         mediaAssetIds: [sourceMedia.id],
         name: "Luxury Jewelry Collection",
         priceMinor: 450000,
-        salesChannels: ["Instagram"]
-      }
+        salesChannels: ["Instagram"],
+      },
     });
     const offer = await prisma.offer.create({
       data: {
@@ -279,8 +292,8 @@ describe("media routes", () => {
         description: "Launch campaign for the luxury jewelry collection",
         priceMinor: 450000,
         productId: product.id,
-        title: "BD 450 launch bundle"
-      }
+        title: "BD 450 launch bundle",
+      },
     });
 
     await seedVisualVaultContext(session.workspace.id);
@@ -296,10 +309,11 @@ describe("media routes", () => {
         negativePrompt: "No cluttered background",
         offerId: offer.id,
         productId: product.id,
-        prompt: "Create a premium launch visual for the luxury jewelry campaign",
+        prompt:
+          "Create a premium launch visual for the luxury jewelry campaign",
         sourceMediaAssetIds: [sourceMedia.id],
-        visualMode: "PRODUCT_PHOTO"
-      }
+        visualMode: "PRODUCT_PHOTO",
+      },
     });
     const generatedBody = generated.json().data;
     const variant = generatedBody.variants[0];
@@ -310,27 +324,36 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers,
       payload: {
-        mediaAssetId
-      }
+        mediaAssetId,
+      },
     });
     const approved = await app.inject({
       method: "POST",
       url: `/v1/media/visual-studio/variants/${variant.id}/approve`,
       headers,
-      payload: {}
+      payload: {
+        reasonCodes: ["ON_BRAND", "PRODUCT_ACCURATE", "READY_TO_PUBLISH"],
+        notes: "Product framing and brand palette are ready for publishing.",
+        scores: {
+          brandAlignment: 94,
+          composition: 88,
+          platformReadiness: 92,
+          productAccuracy: 96,
+        },
+      },
     });
     const attached = await app.inject({
       method: "POST",
       url: `/v1/media/visual-studio/variants/${variant.id}/attach-to-content`,
       headers,
       payload: {
-        contentItemId: content.id
-      }
+        contentItemId: content.id,
+      },
     });
     const listed = await app.inject({
       method: "GET",
       url: "/v1/media/visual-studio/variants?status=APPROVED",
-      headers
+      headers,
     });
     const interaction = await prisma.aiInteraction.findFirstOrThrow({
       where: {
@@ -338,14 +361,32 @@ describe("media routes", () => {
         agent: "IMAGE",
         response: {
           path: ["variantId"],
-          equals: variant.id
-        }
-      }
+          equals: variant.id,
+        },
+      },
     });
     const variantRow = await prisma.generatedMediaVariant.findUniqueOrThrow({
       where: {
-        id: variant.id
-      }
+        id: variant.id,
+      },
+    });
+    const feedback = await prisma.creativeFeedback.findFirstOrThrow({
+      where: {
+        generatedMediaVariantId: variant.id,
+        workspaceId: session.workspace.id,
+      },
+    });
+    const exemplar = await prisma.creativeLearningExemplar.findFirstOrThrow({
+      where: {
+        generatedMediaVariantId: variant.id,
+        source: "HUMAN_FEEDBACK",
+        workspaceId: session.workspace.id,
+      },
+    });
+    const insights = await app.inject({
+      method: "GET",
+      url: "/v1/media/visual-studio/learning-insights",
+      headers,
     });
 
     expect(generated.statusCode).toBe(200);
@@ -359,54 +400,98 @@ describe("media routes", () => {
           mediaAsset: expect.objectContaining({
             type: "AI_GENERATED",
             width: 1080,
-            height: 1350
+            height: 1350,
           }),
           negativePrompt: expect.stringContaining("No cluttered background"),
           offerId: offer.id,
           productId: product.id,
+          qualityScores: expect.objectContaining({
+            overall: expect.any(Number),
+            platformReadiness: 84,
+          }),
           qualityStatus: "REVIEW_REQUIRED",
           sourceMediaAssetIds: [sourceMedia.id],
           status: "PENDING_REVIEW",
-          visualMode: "PRODUCT_PHOTO"
-        })
-      ]
+          visualMode: "PRODUCT_PHOTO",
+        }),
+      ],
     });
     expect(variant.prompt).toContain("Luxury Jewelry Collection");
     expect(variant.prompt).toContain("BD 450 launch bundle");
     expect(blockedAttach.statusCode).toBe(409);
-    expect(blockedAttach.json().error.code).toBe("GENERATED_MEDIA_NOT_APPROVED");
+    expect(blockedAttach.json().error.code).toBe(
+      "GENERATED_MEDIA_NOT_APPROVED",
+    );
     expect(approved.statusCode).toBe(200);
     expect(approved.json()).toMatchObject({
       data: {
         id: variant.id,
+        latestFeedback: {
+          decision: "APPROVED",
+          reasonCodes: ["ON_BRAND", "PRODUCT_ACCURATE", "READY_TO_PUBLISH"],
+          scores: expect.objectContaining({
+            brandAlignment: 94,
+            overall: 93,
+            productAccuracy: 96,
+          }),
+        },
         qualityStatus: "APPROVED",
-        status: "APPROVED"
-      }
+        status: "APPROVED",
+      },
     });
     expect(attached.statusCode).toBe(200);
     expect(attached.json().data.mediaIds).toEqual([mediaAssetId]);
     expect(listed.statusCode).toBe(200);
-    expect(listed.json().data).toEqual(expect.arrayContaining([expect.objectContaining({ id: variant.id })]));
+    expect(listed.json().data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: variant.id })]),
+    );
     expect(interaction).toMatchObject({
+      accepted: true,
       model: "test-image-model",
       promptVersion: "image.v1.test",
       tokensIn: 31,
-      tokensOut: 7
+      tokensOut: 7,
     });
-    expect(JSON.stringify(variantRow.metadata)).toContain("humanApprovalRequired");
+    expect(JSON.stringify(interaction.response)).toContain("creativeFeedback");
+    expect(feedback).toMatchObject({
+      createdBy: session.user.id,
+      decision: "APPROVED",
+      reasonCodes: ["ON_BRAND", "PRODUCT_ACCURATE", "READY_TO_PUBLISH"],
+    });
+    expect(exemplar).toMatchObject({
+      patternType: "POSITIVE",
+      source: "HUMAN_FEEDBACK",
+    });
+    expect(exemplar.summary).toContain("Product framing and brand palette");
+    expect(insights.statusCode).toBe(200);
+    expect(insights.json()).toMatchObject({
+      data: {
+        feedbackCount: 1,
+        positivePatternCount: 1,
+        topPositive: [
+          expect.objectContaining({
+            generatedMediaVariantId: variant.id,
+            patternType: "POSITIVE",
+          }),
+        ],
+      },
+    });
+    expect(JSON.stringify(variantRow.metadata)).toContain(
+      "humanApprovalRequired",
+    );
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "AI_IMAGE",
-            periodStart: monthStart()
-          }
-        }
-      })
+            periodStart: monthStart(),
+          },
+        },
+      }),
     ).resolves.toMatchObject({
       limit: 20,
-      used: 1
+      used: 1,
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -414,13 +499,195 @@ describe("media routes", () => {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
             metric: "AI_TOKENS_IN",
-            periodStart: monthStart()
-          }
-        }
-      })
+            periodStart: monthStart(),
+          },
+        },
+      }),
     ).resolves.toMatchObject({
-      used: 31
+      used: 31,
     });
+
+    await app.close();
+  });
+
+  it("persists rejection feedback and injects it into the next visual prompt", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/media/visual-studio/generate",
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        count: 1,
+        prompt: "Create a premium jewelry launch visual",
+        visualMode: "PRODUCT_PHOTO",
+      },
+    });
+    const firstVariant = first.json().data.variants[0];
+    const rejected = await app.inject({
+      method: "POST",
+      url: `/v1/media/visual-studio/variants/${firstVariant.id}/reject`,
+      headers,
+      payload: {
+        reasonCodes: ["OFF_BRAND", "COLOR_MISMATCH"],
+        notes: "Avoid neon purple backgrounds and oversized headline text.",
+      },
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/media/visual-studio/generate",
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        count: 1,
+        prompt: "Create another premium jewelry launch visual",
+        visualMode: "PRODUCT_PHOTO",
+      },
+    });
+    const feedback = await prisma.creativeFeedback.findMany({
+      where: {
+        generatedMediaVariantId: firstVariant.id,
+        workspaceId: session.workspace.id,
+      },
+    });
+    const negativeExemplar =
+      await prisma.creativeLearningExemplar.findFirstOrThrow({
+        where: {
+          generatedMediaVariantId: firstVariant.id,
+          patternType: "NEGATIVE",
+          workspaceId: session.workspace.id,
+        },
+      });
+
+    expect(first.statusCode).toBe(200);
+    expect(rejected.statusCode).toBe(200);
+    expect(rejected.json()).toMatchObject({
+      data: {
+        latestFeedback: {
+          decision: "REJECTED",
+          notes: "Avoid neon purple backgrounds and oversized headline text.",
+          reasonCodes: ["OFF_BRAND", "COLOR_MISMATCH"],
+        },
+        status: "REJECTED",
+      },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(imageGenerationPrompts).toHaveLength(2);
+    expect(imageGenerationPrompts[1]).toContain(
+      "Rejected or low-performing patterns that must not be reused",
+    );
+    expect(imageGenerationPrompts[1]).toContain(
+      "Avoid neon purple backgrounds and oversized headline text",
+    );
+    expect(feedback).toHaveLength(1);
+    expect(negativeExemplar.summary).toContain("off brand, color mismatch");
+
+    await app.close();
+  });
+
+  it("attributes Instagram performance only to attached generated media", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/media/visual-studio/generate",
+      headers,
+      payload: {
+        aspectRatio: "1:1",
+        contentItemId: content.id,
+        count: 1,
+        prompt: "Create a performance attribution visual",
+        visualMode: "AD_CREATIVE",
+      },
+    });
+    const variant = generated.json().data.variants[0];
+    await app.inject({
+      method: "POST",
+      url: `/v1/media/visual-studio/variants/${variant.id}/approve`,
+      headers,
+      payload: {
+        reasonCodes: ["ON_BRAND", "READY_TO_PUBLISH"],
+      },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/media/visual-studio/variants/${variant.id}/attach-to-content`,
+      headers,
+      payload: { contentItemId: content.id },
+    });
+    const observedAt = new Date("2026-07-19T12:00:00.000Z");
+    await prisma.instagramAnalytics.create({
+      data: {
+        contentItemId: content.id,
+        dataDate: observedAt,
+        metricType: "POST",
+        metrics: {
+          comments: 20,
+          likes: 180,
+          reach: 2000,
+          saves: 30,
+          shares: 40,
+        },
+        syncedAt: observedAt,
+        workspaceId: session.workspace.id,
+      },
+    });
+
+    const firstRun = await processWorkspaceCreativeLearning(
+      session.workspace.id,
+      {
+        now: new Date("2026-07-20T12:00:00.000Z"),
+      },
+    );
+    const secondRun = await processWorkspaceCreativeLearning(
+      session.workspace.id,
+      {
+        now: new Date("2026-07-20T12:05:00.000Z"),
+      },
+    );
+    const learnedVariant = await prisma.generatedMediaVariant.findUniqueOrThrow(
+      {
+        where: { id: variant.id },
+      },
+    );
+    const interaction = await prisma.aiInteraction.findUniqueOrThrow({
+      where: { id: learnedVariant.aiInteractionId! },
+    });
+    const performanceExemplars = await prisma.creativeLearningExemplar.findMany(
+      {
+        where: {
+          source: "INSTAGRAM_PERFORMANCE",
+          workspaceId: session.workspace.id,
+        },
+      },
+    );
+    const vaultEntries = await prisma.knowledgeVault.findMany({
+      where: {
+        key: { startsWith: "creative.learning.performance." },
+        workspaceId: session.workspace.id,
+      },
+    });
+
+    expect(firstRun).toMatchObject({
+      analyzedContent: 1,
+      exemplarsUpserted: 2,
+      interactionsUpdated: 1,
+      linkedVariants: 1,
+      vaultEntriesWritten: 2,
+    });
+    expect(secondRun.exemplarsUpserted).toBe(2);
+    expect(performanceExemplars).toHaveLength(2);
+    expect(learnedVariant.performanceScore).toBe(50);
+    expect(learnedVariant.lastLearnedAt).not.toBeNull();
+    expect(JSON.stringify(interaction.response)).toContain(
+      "creativePerformance",
+    );
+    expect(vaultEntries).toHaveLength(2);
 
     await app.close();
   });
@@ -437,8 +704,8 @@ describe("media routes", () => {
         periodStart: monthStart(),
         periodEnd: nextMonthStart(),
         used: 20,
-        limit: 20
-      }
+        limit: 20,
+      },
     });
 
     const response = await app.inject({
@@ -449,13 +716,13 @@ describe("media routes", () => {
         aspectRatio: "1:1",
         count: 1,
         prompt: "Generate a blocked image",
-        visualMode: "AD_CREATIVE"
-      }
+        visualMode: "AD_CREATIVE",
+      },
     });
     const generatedVariants = await prisma.generatedMediaVariant.findMany({
       where: {
-        workspaceId: session.workspace.id
-      }
+        workspaceId: session.workspace.id,
+      },
     });
 
     expect(response.statusCode).toBe(409);
@@ -464,10 +731,10 @@ describe("media routes", () => {
         code: "QUOTA_EXCEEDED",
         details: [
           {
-            metric: "AI_IMAGE"
-          }
-        ]
-      }
+            metric: "AI_IMAGE",
+          },
+        ],
+      },
     });
     expect(imageGenerationCalls).toBe(0);
     expect(generatedVariants).toHaveLength(0);
@@ -489,8 +756,8 @@ describe("media routes", () => {
         s3Key: "external:https://cdn.example.com/foreign.jpg",
         cdnUrl: "https://cdn.example.com/foreign.jpg",
         mimeType: "image/jpeg",
-        sizeBytes: 120000
-      }
+        sizeBytes: 120000,
+      },
     });
 
     const response = await app.inject({
@@ -498,8 +765,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers: ownerHeaders,
       payload: {
-        mediaAssetId: foreignMedia.id
-      }
+        mediaAssetId: foreignMedia.id,
+      },
     });
 
     expect(response.statusCode).toBe(404);
@@ -522,8 +789,8 @@ describe("media routes", () => {
         filename: "local.jpg",
         publicUrl: "http://example.com/local.jpg",
         mimeType: "image/jpeg",
-        sizeBytes: 1000
-      }
+        sizeBytes: 1000,
+      },
     });
 
     expect(response.statusCode).toBe(400);
@@ -544,8 +811,8 @@ describe("media routes", () => {
         periodStart: storagePeriodStart(),
         periodEnd: storagePeriodEnd(),
         used: 1_000_000_000,
-        limit: 1_000_000_000
-      }
+        limit: 1_000_000_000,
+      },
     });
 
     const response = await app.inject({
@@ -557,18 +824,20 @@ describe("media routes", () => {
         filename: "too-much.jpg",
         publicUrl: "https://cdn.example.com/too-much.jpg",
         mimeType: "image/jpeg",
-        sizeBytes: 1
-      }
+        sizeBytes: 1,
+      },
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       error: {
         code: "QUOTA_EXCEEDED",
-        details: [{
-          metric: "STORAGE_BYTES"
-        }]
-      }
+        details: [
+          {
+            metric: "STORAGE_BYTES",
+          },
+        ],
+      },
     });
 
     await app.close();
@@ -586,8 +855,8 @@ describe("media routes", () => {
         periodStart: monthStart(),
         periodEnd: nextMonthStart(),
         used: 20,
-        limit: 20
-      }
+        limit: 20,
+      },
     });
 
     const response = await app.inject({
@@ -599,27 +868,29 @@ describe("media routes", () => {
         filename: "generated.jpg",
         publicUrl: "https://cdn.example.com/generated.jpg",
         mimeType: "image/jpeg",
-        sizeBytes: 1000
-      }
+        sizeBytes: 1000,
+      },
     });
     const storageCounter = await prisma.usageCounter.findUnique({
       where: {
         workspaceId_metric_periodStart: {
           workspaceId: session.workspace.id,
           metric: "STORAGE_BYTES",
-          periodStart: storagePeriodStart()
-        }
-      }
+          periodStart: storagePeriodStart(),
+        },
+      },
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       error: {
         code: "QUOTA_EXCEEDED",
-        details: [{
-          metric: "AI_IMAGE"
-        }]
-      }
+        details: [
+          {
+            metric: "AI_IMAGE",
+          },
+        ],
+      },
     });
     expect(storageCounter?.used ?? 0).toBe(0);
 
@@ -633,11 +904,11 @@ describe("media routes", () => {
 
     await prisma.user.update({
       data: {
-        planStatus: "CANCELLED"
+        planStatus: "CANCELLED",
       },
       where: {
-        id: session.user.id
-      }
+        id: session.user.id,
+      },
     });
 
     const response = await app.inject({
@@ -648,8 +919,8 @@ describe("media routes", () => {
         type: "IMAGE",
         filename: "cancelled.jpg",
         mimeType: "image/jpeg",
-        base64Data: Buffer.from("blocked media").toString("base64")
-      }
+        base64Data: Buffer.from("blocked media").toString("base64"),
+      },
     });
 
     expect(response.statusCode).toBe(402);
@@ -658,10 +929,10 @@ describe("media routes", () => {
         code: "BILLING_STATUS_INACTIVE",
         details: [
           {
-            status: "CANCELLED"
-          }
-        ]
-      }
+            status: "CANCELLED",
+          },
+        ],
+      },
     });
 
     await app.close();
@@ -678,30 +949,29 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
       password: "CorrectHorseBattery99!",
       fullName: "Media User",
       workspaceName: `Media Workspace ${randomUUID()}`,
-      locale: "en"
-    }
+      locale: "en",
+    },
   });
 
   const session = response.json().data;
 
   await prisma.user.update({
     data: {
-      isVerified: true
+      isVerified: true,
     },
     where: {
-      id: session.user.id
-    }
+      id: session.user.id,
+    },
   });
 
   return {
     ...session,
     user: {
       ...session.user,
-      isVerified: true
-    }
+      isVerified: true,
+    },
   };
 }
-
 
 async function createDraftContent(workspaceId: string) {
   return prisma.contentItem.create({
@@ -711,8 +981,8 @@ async function createDraftContent(workspaceId: string) {
       status: "DRAFT",
       captionEn: "Draft with media",
       hashtags: ["#Bahrain"],
-      mediaIds: []
-    }
+      mediaIds: [],
+    },
   });
 }
 
@@ -727,8 +997,8 @@ async function createSourceMediaAsset(workspaceId: string) {
       mimeType: "image/png",
       sizeBytes: 2048,
       width: 1080,
-      height: 1350
-    }
+      height: 1350,
+    },
   });
 }
 
@@ -741,8 +1011,8 @@ async function seedVisualVaultContext(workspaceId: string): Promise<void> {
         key: "profile",
         value: {
           country: "Bahrain",
-          name: "Maryam Studio"
-        }
+          name: "Maryam Studio",
+        },
       },
       {
         workspaceId,
@@ -750,32 +1020,32 @@ async function seedVisualVaultContext(workspaceId: string): Promise<void> {
         key: "visual-style",
         value: {
           colors: ["teal", "gold"],
-          personality: "premium, modern, warm"
-        }
+          personality: "premium, modern, warm",
+        },
       },
       {
         workspaceId,
         section: "TONE",
         key: "voice",
         value: {
-          rules: ["confident", "clear", "no exaggerated claims"]
-        }
+          rules: ["confident", "clear", "no exaggerated claims"],
+        },
       },
       {
         workspaceId,
         section: "AUDIENCE",
         key: "primary",
         value: {
-          segment: "Bahrain luxury shoppers"
-        }
-      }
-    ]
+          segment: "Bahrain luxury shoppers",
+        },
+      },
+    ],
   });
 }
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {
-    authorization: `Bearer ${accessToken}`
+    authorization: `Bearer ${accessToken}`,
   };
 }
 

@@ -55,6 +55,8 @@ import type {
   ContentRecord,
   ContentStatus,
   ContentType,
+  CreativeFeedbackReasonCode,
+  CreativeLearningInsights,
   GeneratedMediaVariantRecord,
   Locale,
   MediaAssetRecord,
@@ -94,6 +96,7 @@ interface CampaignItemEdit {
 interface DashboardLiveState {
   analytics: AnalyticsSummary | null;
   contentItems: ContentRecord[];
+  creativeLearning: CreativeLearningInsights | null;
   error: string;
   loading: boolean;
   publishingQueue: ContentRecord[];
@@ -164,6 +167,20 @@ const visualModes: Array<[VisualMode, string, string, IconType]> = [
 
 const visualAspectRatios = ["1:1", "4:5", "9:16"] as const;
 type VisualAspectRatio = (typeof visualAspectRatios)[number];
+
+const visualRejectionReasons: Array<{
+  code: CreativeFeedbackReasonCode;
+  label: string;
+}> = [
+  { code: "OFF_BRAND", label: "Off brand" },
+  { code: "PRODUCT_INACCURATE", label: "Product inaccurate" },
+  { code: "POOR_COMPOSITION", label: "Composition" },
+  { code: "COLOR_MISMATCH", label: "Color mismatch" },
+  { code: "TEXT_QUALITY", label: "Text quality" },
+  { code: "CLAIM_RISK", label: "Claim risk" },
+  { code: "LOW_RESOLUTION", label: "Low resolution" },
+  { code: "OTHER", label: "Other" },
+];
 
 const vaultModules: Array<{
   description: string;
@@ -770,6 +787,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   const [liveState, setLiveState] = useState<DashboardLiveState>({
     analytics: null,
     contentItems: [],
+    creativeLearning: null,
     error: "",
     loading: false,
     publishingQueue: [],
@@ -829,13 +847,19 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
     setLiveState((current) => ({ ...current, error: "", loading: true }));
 
     async function loadDashboard() {
-      const [contentResult, queueResult, analyticsResult, vaultResult] =
-        await Promise.allSettled([
-          client.contentItems(),
-          client.publishingQueue(),
-          client.analytics({ days: 7 }),
-          client.vaultScore(),
-        ]);
+      const [
+        contentResult,
+        queueResult,
+        analyticsResult,
+        vaultResult,
+        creativeLearningResult,
+      ] = await Promise.allSettled([
+        client.contentItems(),
+        client.publishingQueue(),
+        client.analytics({ days: 7 }),
+        client.vaultScore(),
+        client.creativeLearningInsights(),
+      ]);
 
       if (cancelled) {
         return;
@@ -853,6 +877,10 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           analyticsResult.status === "fulfilled" ? analyticsResult.value : null,
         contentItems:
           contentResult.status === "fulfilled" ? contentResult.value : [],
+        creativeLearning:
+          creativeLearningResult.status === "fulfilled"
+            ? creativeLearningResult.value
+            : null,
         error:
           rejected?.status === "rejected"
             ? contentStudioError(rejected.reason)
@@ -1037,6 +1065,43 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           </div>
         </div>
       </section>
+
+      {liveState.creativeLearning &&
+      liveState.creativeLearning.recommendations.length > 0 ? (
+        <section
+          className="lux-card rounded-[1.5rem] border-[#81D8D0]/18 p-5 sm:p-6"
+          data-testid="dashboard-creative-learning"
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+            <IconTile accentName="teal" icon={Sparkles} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[.14em] text-[#81D8D0]">
+                    Creative intelligence
+                  </p>
+                  <h2 className="mt-1 text-xl font-bold text-white">
+                    What is working now
+                  </h2>
+                </div>
+                <span className="rounded-full bg-[#81D8D0]/10 px-3 py-1.5 text-xs font-bold text-[#81D8D0]">
+                  {liveState.creativeLearning.performanceLinkedCount}{" "}
+                  performance-linked
+                </span>
+              </div>
+              <p className="mt-3 max-w-5xl text-sm leading-relaxed text-[#D6DEEA] sm:text-base">
+                {liveState.creativeLearning.recommendations[0]}
+              </p>
+            </div>
+            <a
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-[#81D8D0]/24 bg-[#81D8D0]/8 px-5 py-3 text-sm font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/14"
+              href={`/${locale}/app/content-studio`}
+            >
+              Review visuals <ArrowRight size={17} />
+            </a>
+          </div>
+        </section>
+      ) : null}
 
       <div className="flex items-center justify-between gap-4">
         <SectionLabel accentName="gold" label="Content Ready" />
@@ -2184,11 +2249,13 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
             <h2 className="text-2xl font-bold text-white">Campaign Brief</h2>
             <textarea
               className="mt-5 min-h-28 w-full resize-none rounded-[1.25rem] border border-[#81D8D0]/10 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45 xl:min-h-32 xl:p-5 xl:text-lg"
+              data-testid="campaign-brief"
               onChange={(event) => setCampaignPrompt(event.target.value)}
               value={campaignPrompt}
             />
             <button
               className="mt-5 inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
+              data-testid="campaign-generate"
               disabled={generatingCampaign}
               onClick={generateCampaignDrafts}
               type="button"
@@ -2250,7 +2317,10 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               {generatingCampaign ? "Regenerating..." : "Regenerate"}
             </button>
           </div>
-          <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
+          <article
+            className="lux-card rounded-[1.5rem] p-5 xl:p-6"
+            data-testid="campaign-package"
+          >
             <div className="mb-6 flex items-center gap-4 xl:mb-8 xl:gap-5">
               <IconTile accentName="teal" icon={Sparkles} />
               <div>
@@ -2272,6 +2342,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                 {timelineRecords.map((record, index) => (
                   <article
                     className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
+                    data-testid={`campaign-item-${record.id}`}
                     key={record.id}
                   >
                     <div className="border-r border-white/10 pr-5">
@@ -2289,6 +2360,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                             </span>
                             <textarea
                               className="mt-2 min-h-24 w-full resize-none rounded-[1rem] border border-[#81D8D0]/15 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none focus:border-[#81D8D0]/45"
+                              data-testid={`campaign-caption-${record.id}`}
                               onChange={(event) =>
                                 updateCampaignEdit(
                                   record.id,
@@ -2380,6 +2452,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                         <>
                           <button
                             className="rounded-full border border-[#81D8D0]/25 px-4 py-2 font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid={`campaign-save-${record.id}`}
                             disabled={savingContentId === record.id}
                             onClick={() => void saveCampaignItem(record)}
                             type="button"
@@ -2399,6 +2472,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                       ) : (
                         <button
                           className="rounded-full border border-[#81D8D0]/20 px-4 py-2 font-bold text-[#81D8D0] transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          data-testid={`campaign-edit-${record.id}`}
                           disabled={
                             !["DRAFT", "IN_REVIEW"].includes(record.status) ||
                             campaignStatus === "SCHEDULED"
@@ -2455,6 +2529,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
             <div className="flex flex-wrap items-center gap-4">
               <button
                 className="inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/25 px-6 py-3 text-lg font-bold text-white transition hover:bg-[#81D8D0]/10 disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl"
+                data-testid="campaign-approve"
                 disabled={
                   approvingCampaign ||
                   !campaignPackage ||
@@ -2474,6 +2549,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               </button>
               <button
                 className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl"
+                data-testid="campaign-schedule"
                 disabled={
                   schedulingCampaign ||
                   !campaignPackage ||
@@ -2543,6 +2619,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     "approve" | "attach" | "generate" | "platform" | "reject" | null
   >(null);
   const [visualMessage, setVisualMessage] = useState("");
+  const [visualReviewNotes, setVisualReviewNotes] = useState("");
+  const [visualReviewReasons, setVisualReviewReasons] = useState<
+    CreativeFeedbackReasonCode[]
+  >(["OFF_BRAND"]);
+  const [creativeLearningInsights, setCreativeLearningInsights] =
+    useState<CreativeLearningInsights | null>(null);
   const [message, setMessage] = useState("");
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -2580,11 +2662,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
     async function loadRecords() {
       try {
-        const [nextRecords, nextVariants, nextMediaAssets] = await Promise.all([
-          client.contentItems(),
-          client.visualStudioVariants({ limit: 8 }),
-          client.mediaAssets(),
-        ]);
+        const [nextRecords, nextVariants, nextMediaAssets, nextInsights] =
+          await Promise.all([
+            client.contentItems(),
+            client.visualStudioVariants({ limit: 8 }),
+            client.mediaAssets(),
+            client.creativeLearningInsights().catch(() => null),
+          ]);
 
         if (cancelled) {
           return;
@@ -2592,6 +2676,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
         setRecords(nextRecords);
         setVisualVariants(nextVariants);
+        setCreativeLearningInsights(nextInsights);
         setSourceMediaAssets(
           nextMediaAssets
             .filter((asset) => asset.type !== "VIDEO")
@@ -2688,6 +2773,22 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       ];
     });
     setSelectedVariantId(variants[0]?.id ?? "");
+  }
+
+  function toggleVisualReviewReason(code: CreativeFeedbackReasonCode) {
+    setVisualReviewReasons((current) =>
+      current.includes(code)
+        ? current.filter((reason) => reason !== code)
+        : [...current, code],
+    );
+  }
+
+  async function refreshCreativeLearningInsights() {
+    try {
+      setCreativeLearningInsights(await client.creativeLearningInsights());
+    } catch {
+      // Feedback remains durable even when the summary refresh is unavailable.
+    }
   }
 
   async function generate() {
@@ -2850,11 +2951,29 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     setVisualMessage("");
 
     try {
-      const approved = await client.approveGeneratedMediaVariant(variant.id);
+      const reasonCodes: CreativeFeedbackReasonCode[] = ["ON_BRAND"];
+      if ((variant.qualityScores.productAccuracy ?? 0) >= 75) {
+        reasonCodes.push("PRODUCT_ACCURATE");
+      }
+      if ((variant.qualityScores.composition ?? 0) >= 75) {
+        reasonCodes.push("STRONG_COMPOSITION");
+      }
+      if ((variant.qualityScores.platformReadiness ?? 0) >= 75) {
+        reasonCodes.push("READY_TO_PUBLISH");
+      }
+      const approved = await client.approveGeneratedMediaVariant(variant.id, {
+        reasonCodes,
+        ...(visualReviewNotes.trim()
+          ? { notes: visualReviewNotes.trim() }
+          : {}),
+        scores: variant.qualityScores,
+      });
       upsertVariant(approved);
+      setVisualReviewNotes("");
       setVisualMessage(
         "Visual approved. It can now be attached to the current draft.",
       );
+      void refreshCreativeLearningInsights();
     } catch (error) {
       setVisualMessage(visualStudioError(error));
     } finally {
@@ -2868,16 +2987,36 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return;
     }
 
+    if (visualReviewReasons.length === 0) {
+      setVisualMessage("Select at least one rejection reason.");
+      return;
+    }
+
+    if (
+      visualReviewReasons.includes("OTHER") &&
+      visualReviewNotes.trim().length < 3
+    ) {
+      setVisualMessage("Add a short review note for the Other reason.");
+      return;
+    }
+
     setVisualBusy("reject");
     setVisualMessage("");
 
     try {
-      const rejected = await client.rejectGeneratedMediaVariant(
-        variant.id,
-        "Rejected from Visual Studio review.",
-      );
+      const rejected = await client.rejectGeneratedMediaVariant(variant.id, {
+        reasonCodes: visualReviewReasons,
+        ...(visualReviewNotes.trim()
+          ? { notes: visualReviewNotes.trim() }
+          : {}),
+        scores: variant.qualityScores,
+      });
       upsertVariant(rejected);
-      setVisualMessage("Visual rejected and kept out of content attachment.");
+      setVisualReviewNotes("");
+      setVisualMessage(
+        "Visual rejected. MARKOS will avoid this pattern in future generations.",
+      );
+      void refreshCreativeLearningInsights();
     } catch (error) {
       setVisualMessage(visualStudioError(error));
     } finally {
@@ -3148,7 +3287,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </div>
 
           {visualMessage ? (
-            <div className="mt-5 rounded-[1rem] border border-[#81D8D0]/18 bg-[#81D8D0]/7 p-4 text-sm font-semibold text-[#D6DEEA]">
+            <div
+              className="mt-5 rounded-[1rem] border border-[#81D8D0]/18 bg-[#81D8D0]/7 p-4 text-sm font-semibold text-[#D6DEEA]"
+              data-testid="visual-message"
+            >
               {visualMessage}
             </div>
           ) : null}
@@ -3225,6 +3367,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               className="inline-flex items-center justify-center gap-3 rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#D4AF37]/18 disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="visual-generate"
               disabled={visualBusy !== null}
               onClick={generateVisualVariant}
               type="button"
@@ -3273,6 +3416,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         ? "overflow-hidden rounded-[1.5rem] border border-[#81D8D0]/45 bg-[#101B21]"
                         : "overflow-hidden rounded-[1.5rem] border border-[#81D8D0]/14 bg-[#101B21]"
                     }
+                    data-testid={`visual-variant-${variant.id}`}
                     key={variant.id}
                   >
                     <button
@@ -3299,6 +3443,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                             {variant.aspectRatio} -{" "}
                             {generatedVariantStatusLabel(variant)}
                           </p>
+                          {variant.qualityScores.overall !== undefined ? (
+                            <p className="mt-2 text-xs font-semibold text-[#D6DEEA]">
+                              QA {variant.qualityScores.overall}/100
+                            </p>
+                          ) : null}
                         </div>
                         <span
                           className={
@@ -3315,6 +3464,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       <div className="grid gap-2">
                         <button
                           className="rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-4 py-2.5 text-sm font-bold text-[#81D8D0] disabled:cursor-not-allowed disabled:opacity-45"
+                          data-testid={`visual-approve-${variant.id}`}
                           disabled={
                             variant.status === "APPROVED" || visualBusy !== null
                           }
@@ -3328,6 +3478,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         </button>
                         <button
                           className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-4 py-2.5 text-sm font-bold text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-45"
+                          data-testid={`visual-use-${variant.id}`}
                           disabled={
                             !currentRecord ||
                             variant.status !== "APPROVED" ||
@@ -3343,6 +3494,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         </button>
                         <button
                           className="rounded-full border border-[#F4A460]/20 bg-[#F4A460]/10 px-4 py-2.5 text-sm font-bold text-[#F4A460] disabled:cursor-not-allowed disabled:opacity-45"
+                          data-testid={`visual-reject-${variant.id}`}
                           disabled={
                             variant.status === "REJECTED" || visualBusy !== null
                           }
@@ -3365,6 +3517,146 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 they can be used.
               </div>
             )}
+
+            {selectedVariant ? (
+              <section
+                className="mt-4 rounded-[1.5rem] border border-[#81D8D0]/14 bg-[#0D171D] p-5"
+                data-testid="visual-review-panel"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[.14em] text-[#81D8D0]">
+                      Creative QA
+                    </p>
+                    <p className="mt-1 text-sm text-[#9AA7BD]">
+                      {visualModeLabel(selectedVariant.visualMode)} -{" "}
+                      {selectedVariant.aspectRatio}
+                    </p>
+                  </div>
+                  <strong className="text-2xl text-white">
+                    {selectedVariant.qualityScores.overall ?? "--"}
+                    <span className="text-sm font-medium text-[#9AA7BD]">
+                      /100
+                    </span>
+                  </strong>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    ["Brand", selectedVariant.qualityScores.brandAlignment],
+                    ["Product", selectedVariant.qualityScores.productAccuracy],
+                    ["Composition", selectedVariant.qualityScores.composition],
+                    [
+                      "Platform",
+                      selectedVariant.qualityScores.platformReadiness,
+                    ],
+                  ].map(([label, score]) => (
+                    <div
+                      className="rounded-xl border border-white/[.06] bg-white/[.035] px-3 py-2"
+                      key={String(label)}
+                    >
+                      <span className="block text-xs text-[#9AA7BD]">
+                        {label}
+                      </span>
+                      <span className="mt-1 block font-bold text-white">
+                        {score ?? "--"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5">
+                  <p className="text-xs font-bold uppercase tracking-[.14em] text-[#9AA7BD]">
+                    Rejection signals
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {visualRejectionReasons.map((reason) => {
+                      const selected = visualReviewReasons.includes(
+                        reason.code,
+                      );
+                      return (
+                        <button
+                          aria-pressed={selected}
+                          className={
+                            selected
+                              ? "rounded-full border border-[#F4A460]/45 bg-[#F4A460]/14 px-3 py-2 text-xs font-bold text-[#F4A460]"
+                              : "rounded-full border border-white/[.08] bg-white/[.035] px-3 py-2 text-xs font-semibold text-[#9AA7BD] hover:text-white"
+                          }
+                          data-testid={`visual-reason-${reason.code}`}
+                          key={reason.code}
+                          onClick={() => toggleVisualReviewReason(reason.code)}
+                          type="button"
+                        >
+                          {reason.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <label className="mt-4 block">
+                  <span className="text-xs font-bold uppercase tracking-[.14em] text-[#9AA7BD]">
+                    Reviewer note
+                  </span>
+                  <textarea
+                    className="mt-2 min-h-20 w-full resize-none rounded-xl border border-white/[.08] bg-white/[.035] p-3 text-sm leading-relaxed text-white outline-none placeholder:text-[#687489] focus:border-[#81D8D0]/40"
+                    data-testid="visual-review-notes"
+                    maxLength={500}
+                    onChange={(event) =>
+                      setVisualReviewNotes(event.target.value)
+                    }
+                    placeholder="Add precise direction for the next generation."
+                    value={visualReviewNotes}
+                  />
+                </label>
+
+                {selectedVariant.latestFeedback ? (
+                  <p className="mt-3 text-xs leading-relaxed text-[#9AA7BD]">
+                    Latest decision:{" "}
+                    {selectedVariant.latestFeedback.decision.toLowerCase()} -{" "}
+                    {selectedVariant.latestFeedback.reasonCodes
+                      .map((code) => code.toLowerCase().replaceAll("_", " "))
+                      .join(", ")}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            {creativeLearningInsights ? (
+              <section
+                className="mt-4 rounded-[1.5rem] border border-[#D4AF37]/16 bg-[#D4AF37]/[.045] p-5"
+                data-testid="creative-learning-insights"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      Creative learning
+                    </p>
+                    <p className="mt-1 text-xs text-[#9AA7BD]">
+                      {creativeLearningInsights.feedbackCount} reviews -{" "}
+                      {creativeLearningInsights.performanceLinkedCount}{" "}
+                      performance-linked patterns
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#81D8D0]/10 px-3 py-1.5 text-xs font-bold text-[#81D8D0]">
+                    {creativeLearningInsights.positivePatternCount} winning
+                    patterns
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {creativeLearningInsights.recommendations
+                    .slice(0, 3)
+                    .map((recommendation) => (
+                      <p
+                        className="rounded-xl border border-white/[.05] bg-black/10 px-3 py-2 text-sm leading-relaxed text-[#D6DEEA]"
+                        key={recommendation}
+                      >
+                        {recommendation}
+                      </p>
+                    ))}
+                </div>
+              </section>
+            ) : null}
           </section>
         </article>
 

@@ -14,6 +14,8 @@ import {
 import type { AnalyticsEmailDeliveryForAllWorkspacesResult } from "@markos/shared-types";
 import type { InstagramAnalyticsProvider } from "../analytics/instagram-analytics-provider";
 import type { InstagramPublisher } from "../publishing/instagram-publisher";
+import { processCreativeLearningForAllWorkspaces } from "../learning/creative-learning-service";
+import type { CreativeLearningRunResult } from "@markos/shared-types";
 import {
   ensureCurrentUsagePeriods,
   type UsagePeriodResetResult,
@@ -34,6 +36,7 @@ export interface MaintenanceWorkerLogger {
 export interface MaintenanceWorkerTickResult {
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
   analyticsSync?: AnalyticsSyncForAllWorkspacesResult;
+  creativeLearning?: CreativeLearningRunResult;
   publishing?: PublishDueContentForAllWorkspacesResult;
   tokenRefresh?: InstagramTokenRefreshResult[];
   usageReset?: UsagePeriodResetResult;
@@ -67,6 +70,7 @@ export async function runMaintenanceWorkerTick(
     publisher?: InstagramPublisher;
     runAnalyticsEmail?: boolean;
     runAnalyticsSync?: boolean;
+    runCreativeLearning?: boolean;
     runPublishing?: boolean;
     runTokenRefresh?: boolean;
     runUsageReset?: boolean;
@@ -108,6 +112,22 @@ export async function runMaintenanceWorkerTick(
             ? {}
             : { provider: input.analyticsProvider }),
         });
+  const creativeLearning =
+    (input.runCreativeLearning ?? input.runAnalyticsSync !== false) === false
+      ? undefined
+      : analyticsSync !== undefined &&
+          analyticsSync.results.every(
+            (result) => result.creativeLearning !== undefined,
+          )
+        ? {
+            attempted: analyticsSync.results.length,
+            results: analyticsSync.results.flatMap((result) =>
+              result.creativeLearning === undefined
+                ? []
+                : [result.creativeLearning],
+            ),
+          }
+        : await processCreativeLearningForAllWorkspaces({ now });
   const publishing =
     input.runPublishing === false
       ? undefined
@@ -125,6 +145,7 @@ export async function runMaintenanceWorkerTick(
   return {
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
     ...(analyticsSync === undefined ? {} : { analyticsSync }),
+    ...(creativeLearning === undefined ? {} : { creativeLearning }),
     ...(publishing === undefined ? {} : { publishing }),
     ...(tokenRefresh === undefined ? {} : { tokenRefresh }),
     ...(usageReset === undefined ? {} : { usageReset }),
@@ -197,6 +218,7 @@ export function startMaintenanceWorker(
         runAnalyticsEmail: shouldEmailAnalytics,
         now,
         runAnalyticsSync: shouldSyncAnalytics,
+        runCreativeLearning: shouldSyncAnalytics,
         runPublishing: true,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
@@ -263,6 +285,12 @@ function summarizeTick(
     analyticsEmailsDelivered: result.analyticsEmail?.delivered ?? 0,
     analyticsEmailsSkipped: result.analyticsEmail?.skipped ?? 0,
     analyticsWorkspacesSynced: result.analyticsSync?.attempted ?? 0,
+    creativeLearningWorkspaces: result.creativeLearning?.attempted ?? 0,
+    creativeLearningExemplars:
+      result.creativeLearning?.results.reduce(
+        (total, item) => total + item.exemplarsUpserted,
+        0,
+      ) ?? 0,
     refreshedTokens:
       result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
     tokenRefreshFailures:

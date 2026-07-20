@@ -1,7 +1,7 @@
 # Pomelli-Inspired Enhancement Milestones
 
 Date: 2026-07-12
-Status: Proposed implementation track
+Status: PE-M0 through PE-M6 implemented; PE-M7 deferred
 
 This track turns Pomelli-inspired research into MARKOS-native product milestones. It does not replace M0-M6. It extends the existing milestone plan while preserving the build spec: workspace isolation, Vault-first generation, Instagram publishing realities, metering, quotas, bilingual UX, and production-grade tests.
 
@@ -158,7 +158,7 @@ Tests/Gates:
 - [x] Quota tests.
 - [x] Media lineage tests.
 - [x] API E2E: generate image variant, approve it, attach it to content.
-- [ ] Browser E2E: generate image variant from the Visual Studio UI and use it in content.
+- [x] Browser E2E: generate image variant from the Visual Studio UI and use it in content.
 
 ## PE-M4: Campaign Workbench 2.0
 
@@ -198,7 +198,7 @@ Tests/Gates:
 - [x] Campaign package runtime schema validation.
 - [x] State transition tests.
 - [x] API E2E: brief, generate package, edit asset, approve package, schedule package.
-- [ ] Browser E2E: generate/edit/approve/schedule from the Campaign Builder UI.
+- [x] Browser E2E: generate/edit/approve/schedule from the Campaign Builder UI.
 
 ## PE-M5: Brand Kit and Brand Book
 
@@ -242,34 +242,34 @@ Goal: Make visual output improve from approvals, rejections, and Instagram perfo
 
 Deliverables:
 
-- [ ] Asset approval/rejection reasons.
-- [ ] AI output scoring metadata.
-- [ ] Performance feedback into `AiInteraction` and Vault exemplars.
-- [ ] Dashboard insight showing what visual patterns are working.
+- [x] Asset approval/rejection reasons.
+- [x] AI output scoring metadata.
+- [x] Performance feedback into `AiInteraction` and Vault exemplars.
+- [x] Dashboard insight showing what visual patterns are working.
 
 Backend/API:
 
-- [ ] Add feedback capture to generated assets.
-- [ ] Link content performance back to campaign and source assets.
-- [ ] Add learning-loop worker.
+- [x] Add feedback capture to generated assets.
+- [x] Link content performance back to campaign and source assets.
+- [x] Add learning-loop worker.
 
 AI:
 
-- [ ] Retrieval includes approved high-performing examples.
-- [ ] Generation avoids rejected visual/copy patterns.
-- [ ] Analytics agent summarizes winning creative patterns.
+- [x] Retrieval includes approved high-performing examples.
+- [x] Generation avoids rejected visual/copy patterns.
+- [x] Analytics agent summarizes winning creative patterns.
 
 Web:
 
-- [ ] Add feedback controls.
-- [ ] Add visual learning insights.
-- [ ] Add performance-linked campaign recommendations.
+- [x] Add feedback controls.
+- [x] Add visual learning insights.
+- [x] Add performance-linked campaign recommendations.
 
 Tests/Gates:
 
-- [ ] Feedback persistence tests.
-- [ ] Workspace isolation tests.
-- [ ] E2E: reject asset, regenerate, confirm rejected pattern is not reused in prompt context.
+- [x] Feedback persistence tests.
+- [x] Workspace isolation tests.
+- [x] E2E: reject asset, regenerate, confirm rejected pattern is not reused in prompt context.
 
 ## PE-M7: Optional Website and Ads Handoff
 

@@ -16,6 +16,8 @@ const rlsTables = [
   "campaigns",
   "content_items",
   "generated_media_variants",
+  "creative_feedback",
+  "creative_learning_exemplars",
   "brand_book_exports",
   "media_assets",
   "products",

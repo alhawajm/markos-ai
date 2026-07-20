@@ -22,6 +22,8 @@
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
     "e2e:pomelli:vault": "node scripts/pomelli-vault-browser-e2e.mjs",
+    "e2e:pomelli:visual": "node scripts/pomelli-visual-browser-e2e.mjs",
+    "e2e:pomelli:campaign": "node scripts/pomelli-campaign-browser-e2e.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
     "format": "prettier --write ."
   },

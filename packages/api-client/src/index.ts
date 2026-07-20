@@ -30,6 +30,9 @@ import type {
   ContentRecord,
   ContentStatus,
   ContentType,
+  CreativeFeedbackReasonCode,
+  CreativeLearningInsights,
+  CreativeQualityScores,
   EmailVerificationChallenge,
   EmailVerificationResult,
   GeneratedMediaStatus,
@@ -950,11 +953,16 @@ export class MarkosApiClient {
 
   async approveGeneratedMediaVariant(
     variantId: string,
+    input: {
+      reasonCodes?: CreativeFeedbackReasonCode[];
+      notes?: string;
+      scores?: CreativeQualityScores;
+    } = {},
   ): Promise<GeneratedMediaVariantRecord> {
     const response = await this.request<GeneratedMediaVariantRecord>(
       `/v1/media/visual-studio/variants/${variantId}/approve`,
       {
-        body: {},
+        body: input,
         method: "POST",
       },
     );
@@ -963,16 +971,27 @@ export class MarkosApiClient {
 
   async rejectGeneratedMediaVariant(
     variantId: string,
-    reason: string,
+    input:
+      | string
+      | {
+          reasonCodes: CreativeFeedbackReasonCode[];
+          notes?: string;
+          scores?: CreativeQualityScores;
+        },
   ): Promise<GeneratedMediaVariantRecord> {
     const response = await this.request<GeneratedMediaVariantRecord>(
       `/v1/media/visual-studio/variants/${variantId}/reject`,
       {
-        body: {
-          reason,
-        },
+        body: typeof input === "string" ? { reason: input } : input,
         method: "POST",
       },
+    );
+    return response.data;
+  }
+
+  async creativeLearningInsights(): Promise<CreativeLearningInsights> {
+    const response = await this.request<CreativeLearningInsights>(
+      "/v1/media/visual-studio/learning-insights",
     );
     return response.data;
   }

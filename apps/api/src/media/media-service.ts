@@ -1,31 +1,54 @@
-import type { ContentItem, ContentStatus, GeneratedMediaVariant, MediaAsset, Prisma } from "@prisma/client";
+import type {
+  ContentItem,
+  ContentStatus,
+  GeneratedMediaVariant,
+  MediaAsset,
+  Prisma,
+} from "@prisma/client";
 import type {
   AiImageGenerationResult,
+  CreativeFeedbackRecord,
+  CreativeLearningContext,
   ContentRecord,
   GeneratedMediaVariantRecord,
   KnowledgeVaultEntry,
   MediaAssetRecord,
   VaultRagChunk,
-  VisualStudioGenerationResult
+  VisualStudioGenerationResult,
 } from "@markos/shared-types";
 import type {
+  ApproveGeneratedMediaVariantInput,
   AttachGeneratedMediaVariantInput,
   GenerateImageForContentInput,
   RegisterPublicMediaInput,
   RejectGeneratedMediaVariantInput,
   UploadMediaInput,
   VisualStudioGenerateInput,
-  VisualStudioVariantListQueryInput
+  VisualStudioVariantListQueryInput,
 } from "@markos/validation";
 import { generateImageAsset } from "../ai/image-client";
 import { listCatalogGenerationContext } from "../catalog/catalog-service";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import {
+  buildInitialCreativeQualityScores,
+  getCreativeLearningContext,
+  latestCreativeFeedbackByVariant,
+  recordGeneratedMediaFeedback,
+} from "../learning/creative-learning-service";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { toContentRecord } from "../content/content-service";
-import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
+import {
+  recordAiTokenUsage,
+  refundWorkspaceUsage,
+  reserveWorkspaceUsage,
+} from "../usage/usage-service";
 import { listVaultSection } from "../vault/vault-service";
-import { localKeyForRoute, readStoredMedia, storeWorkspaceMedia } from "./storage-service";
+import {
+  localKeyForRoute,
+  readStoredMedia,
+  storeWorkspaceMedia,
+} from "./storage-service";
 
 export class MediaAssetNotFoundError extends Error {
   constructor() {
@@ -65,23 +88,27 @@ export class GeneratedMediaVariantNotFoundError extends Error {
 
 export class GeneratedMediaVariantNotApprovedError extends Error {
   constructor() {
-    super("Generated media variant must be approved before it can be attached to content");
+    super(
+      "Generated media variant must be approved before it can be attached to content",
+    );
   }
 }
 
 const imageAgentName = "IMAGE";
 const localCurrency = "BHD";
 
-export async function listMediaAssets(workspaceId: string): Promise<MediaAssetRecord[]> {
+export async function listMediaAssets(
+  workspaceId: string,
+): Promise<MediaAssetRecord[]> {
   const rows = await prisma.mediaAsset.findMany({
     where: {
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
     },
     orderBy: {
-      createdAt: "desc"
+      createdAt: "desc",
     },
-    take: 100
+    take: 100,
   });
 
   return rows.map(toMediaAssetRecord);
@@ -89,10 +116,15 @@ export async function listMediaAssets(workspaceId: string): Promise<MediaAssetRe
 
 export async function registerPublicMedia(
   workspaceId: string,
-  input: RegisterPublicMediaInput
+  input: RegisterPublicMediaInput,
 ): Promise<MediaAssetRecord> {
   const usagePeriodDate = new Date();
-  await reserveMediaUsage(workspaceId, input.type, input.sizeBytes, usagePeriodDate);
+  await reserveMediaUsage(
+    workspaceId,
+    input.type,
+    input.sizeBytes,
+    usagePeriodDate,
+  );
 
   try {
     const row = await prisma.mediaAsset.create({
@@ -106,18 +138,28 @@ export async function registerPublicMedia(
         sizeBytes: input.sizeBytes,
         ...(input.width === undefined ? {} : { width: input.width }),
         ...(input.height === undefined ? {} : { height: input.height }),
-        ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
-      }
+        ...(input.durationSeconds === undefined
+          ? {}
+          : { durationSeconds: input.durationSeconds }),
+      },
     });
 
     return toMediaAssetRecord(row);
   } catch (error) {
-    await refundMediaUsage(workspaceId, input.type, input.sizeBytes, usagePeriodDate);
+    await refundMediaUsage(
+      workspaceId,
+      input.type,
+      input.sizeBytes,
+      usagePeriodDate,
+    );
     throw error;
   }
 }
 
-export async function uploadMedia(workspaceId: string, input: UploadMediaInput): Promise<MediaAssetRecord> {
+export async function uploadMedia(
+  workspaceId: string,
+  input: UploadMediaInput,
+): Promise<MediaAssetRecord> {
   const bytes = Buffer.from(input.base64Data, "base64");
 
   if (!isValidBase64Payload(input.base64Data, bytes)) {
@@ -125,13 +167,18 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
   }
 
   const usagePeriodDate = new Date();
-  await reserveMediaUsage(workspaceId, input.type, bytes.byteLength, usagePeriodDate);
+  await reserveMediaUsage(
+    workspaceId,
+    input.type,
+    bytes.byteLength,
+    usagePeriodDate,
+  );
 
   try {
     const stored = await storeWorkspaceMedia({
       workspaceId,
       filename: input.filename,
-      bytes
+      bytes,
     });
     const row = await prisma.mediaAsset.create({
       data: {
@@ -144,13 +191,20 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
         sizeBytes: stored.sizeBytes,
         ...(input.width === undefined ? {} : { width: input.width }),
         ...(input.height === undefined ? {} : { height: input.height }),
-        ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
-      }
+        ...(input.durationSeconds === undefined
+          ? {}
+          : { durationSeconds: input.durationSeconds }),
+      },
     });
 
     return toMediaAssetRecord(row);
   } catch (error) {
-    await refundMediaUsage(workspaceId, input.type, bytes.byteLength, usagePeriodDate);
+    await refundMediaUsage(
+      workspaceId,
+      input.type,
+      bytes.byteLength,
+      usagePeriodDate,
+    );
     throw error;
   }
 }
@@ -158,14 +212,14 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
 export async function generateImageForContent(
   workspaceId: string,
   contentItemId: string,
-  input: GenerateImageForContentInput
+  input: GenerateImageForContentInput,
 ): Promise<AiImageGenerationResult> {
   const contentItem = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!contentItem) {
@@ -178,13 +232,20 @@ export async function generateImageForContent(
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     imageAgentName,
-    `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`
+    `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`,
   );
   const generated = await generateImageAsset({
     aspectRatio: input.aspectRatio,
     prompt,
-    ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-    workspaceId
+    ...(promptTemplate === undefined
+      ? {}
+      : {
+          promptTemplate: {
+            body: promptTemplate.body,
+            version: promptTemplate.version,
+          },
+        }),
+    workspaceId,
   });
   const promptVersion = promptTemplate?.version ?? generated.prompt_version;
   const bytes = Buffer.from(generated.base64_data, "base64");
@@ -194,103 +255,115 @@ export async function generateImageForContent(
   }
 
   const usagePeriodDate = new Date();
-  await reserveMediaUsage(workspaceId, "AI_GENERATED", bytes.byteLength, usagePeriodDate);
+  await reserveMediaUsage(
+    workspaceId,
+    "AI_GENERATED",
+    bytes.byteLength,
+    usagePeriodDate,
+  );
 
   try {
     const stored = await storeWorkspaceMedia({
       workspaceId,
       filename: generated.filename,
-      bytes
+      bytes,
     });
-    const { mediaAsset, updatedContent } = await prisma.$transaction(async (tx) => {
-      const asset = await tx.mediaAsset.create({
-        data: {
-          workspaceId,
-          type: "AI_GENERATED",
-          filename: generated.filename,
-          s3Key: stored.key,
-          cdnUrl: stored.publicUrl,
-          mimeType: generated.mime_type,
-          sizeBytes: stored.sizeBytes,
-          width: generated.width,
-          height: generated.height
-        }
-      });
-      const content = await tx.contentItem.update({
-        where: {
-          id: contentItem.id
-        },
-        data: {
-          mediaIds: Array.from(new Set([...contentItem.mediaIds, asset.id]))
-        }
-      });
-
-      await tx.aiInteraction.create({
-        data: {
-          workspaceId,
-          agent: imageAgentName,
-          promptVersion,
-          prompt: {
-            aspectRatio: input.aspectRatio,
-            contentItemId,
-            prompt,
-            ...(promptTemplate === undefined ? {} : { promptTemplate }),
-            source: contentImagePromptSource(contentItem)
-          } as unknown as Prisma.InputJsonValue,
-          response: {
-            mediaAssetId: asset.id,
-            publicUrl: stored.publicUrl,
+    const { mediaAsset, updatedContent } = await prisma.$transaction(
+      async (tx) => {
+        const asset = await tx.mediaAsset.create({
+          data: {
+            workspaceId,
+            type: "AI_GENERATED",
+            filename: generated.filename,
+            s3Key: stored.key,
+            cdnUrl: stored.publicUrl,
+            mimeType: generated.mime_type,
             sizeBytes: stored.sizeBytes,
-            providerPromptVersion: generated.prompt_version
-          } as unknown as Prisma.InputJsonValue,
+            width: generated.width,
+            height: generated.height,
+          },
+        });
+        const content = await tx.contentItem.update({
+          where: {
+            id: contentItem.id,
+          },
+          data: {
+            mediaIds: Array.from(new Set([...contentItem.mediaIds, asset.id])),
+          },
+        });
+
+        await tx.aiInteraction.create({
+          data: {
+            workspaceId,
+            agent: imageAgentName,
+            promptVersion,
+            prompt: {
+              aspectRatio: input.aspectRatio,
+              contentItemId,
+              prompt,
+              ...(promptTemplate === undefined ? {} : { promptTemplate }),
+              source: contentImagePromptSource(contentItem),
+            } as unknown as Prisma.InputJsonValue,
+            response: {
+              mediaAssetId: asset.id,
+              publicUrl: stored.publicUrl,
+              sizeBytes: stored.sizeBytes,
+              providerPromptVersion: generated.prompt_version,
+            } as unknown as Prisma.InputJsonValue,
+            tokensIn: generated.tokens_in,
+            tokensOut: generated.tokens_out,
+            costMinor: 0,
+            currency: localCurrency,
+            model: generated.model || env.IMAGE_MODEL_PRIMARY,
+          },
+        });
+        await recordAiTokenUsage({
+          client: tx,
+          workspaceId,
           tokensIn: generated.tokens_in,
           tokensOut: generated.tokens_out,
-          costMinor: 0,
-          currency: localCurrency,
-          model: generated.model || env.IMAGE_MODEL_PRIMARY
-        }
-      });
-      await recordAiTokenUsage({
-        client: tx,
-        workspaceId,
-        tokensIn: generated.tokens_in,
-        tokensOut: generated.tokens_out,
-        now: usagePeriodDate
-      });
+          now: usagePeriodDate,
+        });
 
-      return {
-        mediaAsset: asset,
-        updatedContent: content
-      };
-    });
+        return {
+          mediaAsset: asset,
+          updatedContent: content,
+        };
+      },
+    );
 
     return {
       contentItem: toContentRecord(updatedContent),
       mediaAsset: toMediaAssetRecord(mediaAsset),
       model: generated.model || env.IMAGE_MODEL_PRIMARY,
       prompt,
-      promptVersion
+      promptVersion,
     };
   } catch (error) {
-    await refundMediaUsage(workspaceId, "AI_GENERATED", bytes.byteLength, usagePeriodDate);
+    await refundMediaUsage(
+      workspaceId,
+      "AI_GENERATED",
+      bytes.byteLength,
+      usagePeriodDate,
+    );
     throw error;
   }
 }
 
 export async function listGeneratedMediaVariants(
   workspaceId: string,
-  input: VisualStudioVariantListQueryInput
+  input: VisualStudioVariantListQueryInput,
 ): Promise<GeneratedMediaVariantRecord[]> {
   const rows = await prisma.generatedMediaVariant.findMany({
     where: {
       workspaceId,
       deletedAt: null,
-      ...(input.status === undefined ? {} : { status: input.status })
+      ...(input.status === undefined ? {} : { status: input.status }),
     },
     orderBy: {
-      createdAt: "desc"
+      createdAt: "desc",
     },
-    take: input.limit
+    take: input.limit,
   });
 
   return toGeneratedMediaVariantRecords(workspaceId, rows);
@@ -298,7 +371,7 @@ export async function listGeneratedMediaVariants(
 
 export async function generateVisualStudioVariants(
   workspaceId: string,
-  input: VisualStudioGenerateInput
+  input: VisualStudioGenerateInput,
 ): Promise<VisualStudioGenerationResult> {
   const contentItem =
     input.contentItemId === undefined
@@ -307,8 +380,8 @@ export async function generateVisualStudioVariants(
           where: {
             id: input.contentItemId,
             workspaceId,
-            deletedAt: null
-          }
+            deletedAt: null,
+          },
         });
 
   if (input.contentItemId !== undefined && contentItem === null) {
@@ -319,22 +392,31 @@ export async function generateVisualStudioVariants(
     assertMediaEditable(contentItem.status);
   }
 
-  const sourceMediaAssets = await findWorkspaceMediaAssets(workspaceId, input.sourceMediaAssetIds);
+  const sourceMediaAssets = await findWorkspaceMediaAssets(
+    workspaceId,
+    input.sourceMediaAssetIds,
+  );
   const catalogContext = await listCatalogGenerationContext(workspaceId, {
     limit: 8,
     ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
-    ...(input.productId === undefined ? {} : { productId: input.productId })
+    ...(input.productId === undefined ? {} : { productId: input.productId }),
   });
   const vaultContext = await readVisualVaultContext(workspaceId);
+  const creativeLearningContext = await getCreativeLearningContext(workspaceId);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     imageAgentName,
-    `${workspaceId}:visual-studio:${input.visualMode}:${input.aspectRatio}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}:${input.prompt ?? "auto"}`
+    `${workspaceId}:visual-studio:${input.visualMode}:${input.aspectRatio}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}:${input.prompt ?? "auto"}`,
   );
   const negativePrompt = buildVisualNegativePrompt(input.negativePrompt);
   const usagePeriodDate = new Date();
 
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", amount: input.count, now: usagePeriodDate });
+  await reserveWorkspaceUsage({
+    workspaceId,
+    metric: "AI_IMAGE",
+    amount: input.count,
+    now: usagePeriodDate,
+  });
 
   let reservedStorageBytes = 0;
 
@@ -350,17 +432,25 @@ export async function generateVisualStudioVariants(
       const prompt = buildVisualStudioPrompt({
         catalogContext,
         contentItem,
+        creativeLearningContext,
         input,
         negativePrompt,
         sourceMediaAssets,
         variantIndex: index + 1,
-        vaultContext
+        vaultContext,
       });
       const generated = await generateImageAsset({
         aspectRatio: input.aspectRatio,
         prompt,
-        ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-        workspaceId
+        ...(promptTemplate === undefined
+          ? {}
+          : {
+              promptTemplate: {
+                body: promptTemplate.body,
+                version: promptTemplate.version,
+              },
+            }),
+        workspaceId,
       });
       const bytes = Buffer.from(generated.base64_data, "base64");
 
@@ -368,25 +458,33 @@ export async function generateVisualStudioVariants(
         throw new MediaImageGenerationInvalidError();
       }
 
-      await reserveWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: bytes.byteLength, now: usagePeriodDate });
+      await reserveWorkspaceUsage({
+        workspaceId,
+        metric: "STORAGE_BYTES",
+        amount: bytes.byteLength,
+        now: usagePeriodDate,
+      });
       reservedStorageBytes += bytes.byteLength;
 
       const stored = await storeWorkspaceMedia({
         workspaceId,
         filename: generated.filename,
-        bytes
+        bytes,
       });
 
       generatedVariants.push({
         generated,
         prompt,
         stored,
-        variantIndex: index + 1
+        variantIndex: index + 1,
       });
     }
 
     const records = await prisma.$transaction(async (tx) => {
-      const created: Array<{ mediaAsset: MediaAsset; variant: GeneratedMediaVariant }> = [];
+      const created: Array<{
+        mediaAsset: MediaAsset;
+        variant: GeneratedMediaVariant;
+      }> = [];
 
       for (const item of generatedVariants) {
         const mediaAsset = await tx.mediaAsset.create({
@@ -399,17 +497,22 @@ export async function generateVisualStudioVariants(
             mimeType: item.generated.mime_type,
             sizeBytes: item.stored.sizeBytes,
             width: item.generated.width,
-            height: item.generated.height
-          }
+            height: item.generated.height,
+          },
         });
-        const promptVersion = promptTemplate?.version ?? item.generated.prompt_version;
+        const promptVersion =
+          promptTemplate?.version ?? item.generated.prompt_version;
         const model = item.generated.model || env.IMAGE_MODEL_PRIMARY;
         const variant = await tx.generatedMediaVariant.create({
           data: {
             workspaceId,
             mediaAssetId: mediaAsset.id,
-            ...(input.contentItemId === undefined ? {} : { contentItemId: input.contentItemId }),
-            ...(input.productId === undefined ? {} : { productId: input.productId }),
+            ...(input.contentItemId === undefined
+              ? {}
+              : { contentItemId: input.contentItemId }),
+            ...(input.productId === undefined
+              ? {}
+              : { productId: input.productId }),
             ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
             sourceMediaAssetIds: unique(input.sourceMediaAssetIds),
             visualMode: input.visualMode,
@@ -418,20 +521,27 @@ export async function generateVisualStudioVariants(
             negativePrompt,
             model,
             promptVersion,
+            qualityScores: buildInitialCreativeQualityScores({
+              hasCatalogContext: catalogContext.length > 0,
+              hasContentContext: contentItem !== null,
+              hasSourceMedia: sourceMediaAssets.length > 0,
+              hasVaultContext: vaultContext.length > 0,
+            }) as Prisma.InputJsonValue,
             status: "PENDING_REVIEW",
             qualityStatus: "REVIEW_REQUIRED",
             metadata: buildVisualVariantMetadata({
               catalogContext,
               contentItem,
+              creativeLearningContext,
               input,
               sourceMediaAssets,
               variantIndex: item.variantIndex,
-              vaultContext
-            }) as Prisma.InputJsonValue
-          }
+              vaultContext,
+            }) as Prisma.InputJsonValue,
+          },
         });
 
-        await tx.aiInteraction.create({
+        const interaction = await tx.aiInteraction.create({
           data: {
             workspaceId,
             agent: imageAgentName,
@@ -444,97 +554,142 @@ export async function generateVisualStudioVariants(
               offerId: input.offerId,
               productId: input.productId,
               prompt: item.prompt,
+              creativeLearningContext,
               sourceMediaAssetIds: unique(input.sourceMediaAssetIds),
               source: "visual_studio",
               visualMode: input.visualMode,
-              ...(promptTemplate === undefined ? {} : { promptTemplate })
+              ...(promptTemplate === undefined ? {} : { promptTemplate }),
             } as unknown as Prisma.InputJsonValue,
             response: {
               mediaAssetId: mediaAsset.id,
               publicUrl: item.stored.publicUrl,
               providerPromptVersion: item.generated.prompt_version,
               sizeBytes: item.stored.sizeBytes,
-              variantId: variant.id
+              variantId: variant.id,
             } as unknown as Prisma.InputJsonValue,
             tokensIn: item.generated.tokens_in,
             tokensOut: item.generated.tokens_out,
             costMinor: 0,
             currency: localCurrency,
-            model
-          }
+            model,
+          },
+        });
+        const linkedVariant = await tx.generatedMediaVariant.update({
+          where: {
+            id: variant.id,
+          },
+          data: {
+            aiInteractionId: interaction.id,
+          },
         });
         await recordAiTokenUsage({
           client: tx,
           workspaceId,
           tokensIn: item.generated.tokens_in,
           tokensOut: item.generated.tokens_out,
-          now: usagePeriodDate
+          now: usagePeriodDate,
         });
 
-        created.push({ mediaAsset, variant });
+        created.push({ mediaAsset, variant: linkedVariant });
       }
 
-      return created.map((item) => toGeneratedMediaVariantRecord(item.variant, item.mediaAsset));
+      return created.map((item) =>
+        toGeneratedMediaVariantRecord(item.variant, item.mediaAsset),
+      );
     });
 
     return {
       variants: records,
       model: records[0]?.model ?? env.IMAGE_MODEL_PRIMARY,
-      promptVersion: records[0]?.promptVersion ?? promptTemplate?.version ?? "image.visual-studio"
+      promptVersion:
+        records[0]?.promptVersion ??
+        promptTemplate?.version ??
+        "image.visual-studio",
     };
   } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", amount: input.count, now: usagePeriodDate });
+    await refundWorkspaceUsage({
+      workspaceId,
+      metric: "AI_IMAGE",
+      amount: input.count,
+      now: usagePeriodDate,
+    });
 
     if (reservedStorageBytes > 0) {
-      await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: reservedStorageBytes, now: usagePeriodDate });
+      await refundWorkspaceUsage({
+        workspaceId,
+        metric: "STORAGE_BYTES",
+        amount: reservedStorageBytes,
+        now: usagePeriodDate,
+      });
     }
 
     throw error;
   }
 }
 
-export async function approveGeneratedMediaVariant(workspaceId: string, variantId: string): Promise<GeneratedMediaVariantRecord> {
-  const current = await getGeneratedMediaVariantWithAsset(workspaceId, variantId);
-  const updated = await prisma.generatedMediaVariant.update({
-    where: {
-      id: current.variant.id
+export async function approveGeneratedMediaVariant(
+  workspaceId: string,
+  actorId: string,
+  variantId: string,
+  input: ApproveGeneratedMediaVariantInput,
+): Promise<GeneratedMediaVariantRecord> {
+  const current = await getGeneratedMediaVariantWithAsset(
+    workspaceId,
+    variantId,
+  );
+  const result = await recordGeneratedMediaFeedback(
+    workspaceId,
+    actorId,
+    current.variant.id,
+    {
+      decision: "APPROVED",
+      ...input,
     },
-    data: {
-      qualityStatus: "APPROVED",
-      rejectionReason: null,
-      status: "APPROVED"
-    }
-  });
+  );
 
-  return toGeneratedMediaVariantRecord(updated, current.mediaAsset);
+  return toGeneratedMediaVariantRecord(
+    result.variant,
+    current.mediaAsset,
+    result.feedback,
+  );
 }
 
 export async function rejectGeneratedMediaVariant(
   workspaceId: string,
+  actorId: string,
   variantId: string,
-  input: RejectGeneratedMediaVariantInput
+  input: RejectGeneratedMediaVariantInput,
 ): Promise<GeneratedMediaVariantRecord> {
-  const current = await getGeneratedMediaVariantWithAsset(workspaceId, variantId);
-  const updated = await prisma.generatedMediaVariant.update({
-    where: {
-      id: current.variant.id
+  const current = await getGeneratedMediaVariantWithAsset(
+    workspaceId,
+    variantId,
+  );
+  const result = await recordGeneratedMediaFeedback(
+    workspaceId,
+    actorId,
+    current.variant.id,
+    {
+      decision: "REJECTED",
+      ...input,
     },
-    data: {
-      qualityStatus: "REJECTED",
-      rejectionReason: input.reason,
-      status: "REJECTED"
-    }
-  });
+  );
 
-  return toGeneratedMediaVariantRecord(updated, current.mediaAsset);
+  return toGeneratedMediaVariantRecord(
+    result.variant,
+    current.mediaAsset,
+    result.feedback,
+  );
 }
 
 export async function attachGeneratedMediaVariantToContent(
   workspaceId: string,
   variantId: string,
-  input: AttachGeneratedMediaVariantInput
+  input: AttachGeneratedMediaVariantInput,
 ): Promise<ContentRecord> {
-  const current = await getGeneratedMediaVariantWithAsset(workspaceId, variantId);
+  const current = await getGeneratedMediaVariantWithAsset(
+    workspaceId,
+    variantId,
+  );
 
   if (current.variant.status !== "APPROVED") {
     throw new GeneratedMediaVariantNotApprovedError();
@@ -544,8 +699,8 @@ export async function attachGeneratedMediaVariantToContent(
     where: {
       id: input.contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!contentItem) {
@@ -557,33 +712,38 @@ export async function attachGeneratedMediaVariantToContent(
   const updated = await prisma.$transaction(async (tx) => {
     await tx.generatedMediaVariant.update({
       where: {
-        id: current.variant.id
+        id: current.variant.id,
       },
       data: {
-        contentItemId: contentItem.id
-      }
+        contentItemId: contentItem.id,
+      },
     });
 
     return tx.contentItem.update({
       where: {
-        id: contentItem.id
+        id: contentItem.id,
       },
       data: {
-        mediaIds: Array.from(new Set([...contentItem.mediaIds, current.mediaAsset.id]))
-      }
+        mediaIds: Array.from(
+          new Set([...contentItem.mediaIds, current.mediaAsset.id]),
+        ),
+      },
     });
   });
 
   return toContentRecord(updated);
 }
 
-export async function readPublicMediaFile(workspaceId: string, storedFilename: string): Promise<{ bytes: Buffer; mimeType: string }> {
+export async function readPublicMediaFile(
+  workspaceId: string,
+  storedFilename: string,
+): Promise<{ bytes: Buffer; mimeType: string }> {
   const asset = await prisma.mediaAsset.findFirst({
     where: {
       workspaceId,
       s3Key: localKeyForRoute(workspaceId, storedFilename),
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!asset) {
@@ -592,30 +752,30 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
 
   return {
     bytes: await readStoredMedia(workspaceId, storedFilename),
-    mimeType: asset.mimeType
+    mimeType: asset.mimeType,
   };
 }
 
 export async function attachMediaToContent(
   workspaceId: string,
   contentItemId: string,
-  mediaAssetId: string
+  mediaAssetId: string,
 ): Promise<ContentRecord> {
   const [contentItem, mediaAsset] = await Promise.all([
     prisma.contentItem.findFirst({
       where: {
         id: contentItemId,
         workspaceId,
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     }),
     prisma.mediaAsset.findFirst({
       where: {
         id: mediaAssetId,
         workspaceId,
-        deletedAt: null
-      }
-    })
+        deletedAt: null,
+      },
+    }),
   ]);
 
   if (!contentItem) {
@@ -629,14 +789,16 @@ export async function attachMediaToContent(
   assertMediaEditable(contentItem.status);
   await assertGeneratedMediaApprovedForAttachment(workspaceId, mediaAsset.id);
 
-  const mediaIds = Array.from(new Set([...contentItem.mediaIds, mediaAsset.id]));
+  const mediaIds = Array.from(
+    new Set([...contentItem.mediaIds, mediaAsset.id]),
+  );
   const row = await prisma.contentItem.update({
     where: {
-      id: contentItem.id
+      id: contentItem.id,
     },
     data: {
-      mediaIds
-    }
+      mediaIds,
+    },
   });
 
   return toContentRecord(row);
@@ -645,14 +807,14 @@ export async function attachMediaToContent(
 export async function detachMediaFromContent(
   workspaceId: string,
   contentItemId: string,
-  mediaAssetId: string
+  mediaAssetId: string,
 ): Promise<ContentRecord> {
   const contentItem = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!contentItem) {
@@ -663,17 +825,20 @@ export async function detachMediaFromContent(
 
   const row = await prisma.contentItem.update({
     where: {
-      id: contentItem.id
+      id: contentItem.id,
     },
     data: {
-      mediaIds: contentItem.mediaIds.filter((id) => id !== mediaAssetId)
-    }
+      mediaIds: contentItem.mediaIds.filter((id) => id !== mediaAssetId),
+    },
   });
 
   return toContentRecord(row);
 }
 
-async function findWorkspaceMediaAssets(workspaceId: string, mediaAssetIds: string[]): Promise<MediaAsset[]> {
+async function findWorkspaceMediaAssets(
+  workspaceId: string,
+  mediaAssetIds: string[],
+): Promise<MediaAsset[]> {
   const ids = unique(mediaAssetIds);
 
   if (ids.length === 0) {
@@ -683,11 +848,11 @@ async function findWorkspaceMediaAssets(workspaceId: string, mediaAssetIds: stri
   const rows = await prisma.mediaAsset.findMany({
     where: {
       id: {
-        in: ids
+        in: ids,
       },
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (rows.length !== ids.length) {
@@ -697,12 +862,14 @@ async function findWorkspaceMediaAssets(workspaceId: string, mediaAssetIds: stri
   return rows;
 }
 
-async function readVisualVaultContext(workspaceId: string): Promise<KnowledgeVaultEntry[]> {
+async function readVisualVaultContext(
+  workspaceId: string,
+): Promise<KnowledgeVaultEntry[]> {
   const [company, brand, tone, audience] = await Promise.all([
     listVaultSection(workspaceId, "COMPANY"),
     listVaultSection(workspaceId, "BRAND"),
     listVaultSection(workspaceId, "TONE"),
-    listVaultSection(workspaceId, "AUDIENCE")
+    listVaultSection(workspaceId, "AUDIENCE"),
   ]);
 
   return [...company, ...brand, ...tone, ...audience].slice(0, 12);
@@ -710,14 +877,14 @@ async function readVisualVaultContext(workspaceId: string): Promise<KnowledgeVau
 
 async function getGeneratedMediaVariantWithAsset(
   workspaceId: string,
-  variantId: string
+  variantId: string,
 ): Promise<{ mediaAsset: MediaAsset; variant: GeneratedMediaVariant }> {
   const variant = await prisma.generatedMediaVariant.findFirst({
     where: {
       id: variantId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!variant) {
@@ -728,8 +895,8 @@ async function getGeneratedMediaVariantWithAsset(
     where: {
       id: variant.mediaAssetId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!mediaAsset) {
@@ -739,16 +906,19 @@ async function getGeneratedMediaVariantWithAsset(
   return { mediaAsset, variant };
 }
 
-async function assertGeneratedMediaApprovedForAttachment(workspaceId: string, mediaAssetId: string): Promise<void> {
+async function assertGeneratedMediaApprovedForAttachment(
+  workspaceId: string,
+  mediaAssetId: string,
+): Promise<void> {
   const variant = await prisma.generatedMediaVariant.findFirst({
     where: {
       mediaAssetId,
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
     },
     orderBy: {
-      createdAt: "desc"
-    }
+      createdAt: "desc",
+    },
   });
 
   if (variant !== null && variant.status !== "APPROVED") {
@@ -758,23 +928,35 @@ async function assertGeneratedMediaApprovedForAttachment(workspaceId: string, me
 
 async function toGeneratedMediaVariantRecords(
   workspaceId: string,
-  rows: GeneratedMediaVariant[]
+  rows: GeneratedMediaVariant[],
 ): Promise<GeneratedMediaVariantRecord[]> {
   const mediaAssets = await prisma.mediaAsset.findMany({
     where: {
       id: {
-        in: rows.map((row) => row.mediaAssetId)
+        in: rows.map((row) => row.mediaAssetId),
       },
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
   const mediaById = new Map(mediaAssets.map((asset) => [asset.id, asset]));
+  const feedbackByVariant = await latestCreativeFeedbackByVariant(
+    workspaceId,
+    rows.map((row) => row.id),
+  );
 
   return rows.flatMap((row) => {
     const mediaAsset = mediaById.get(row.mediaAssetId);
 
-    return mediaAsset === undefined ? [] : [toGeneratedMediaVariantRecord(row, mediaAsset)];
+    return mediaAsset === undefined
+      ? []
+      : [
+          toGeneratedMediaVariantRecord(
+            row,
+            mediaAsset,
+            feedbackByVariant.get(row.id),
+          ),
+        ];
   });
 }
 
@@ -789,13 +971,19 @@ export function toMediaAssetRecord(row: MediaAsset): MediaAssetRecord {
     sizeBytes: row.sizeBytes,
     ...(row.width === null ? {} : { width: row.width }),
     ...(row.height === null ? {} : { height: row.height }),
-    ...(row.durationSeconds === null ? {} : { durationSeconds: row.durationSeconds }),
+    ...(row.durationSeconds === null
+      ? {}
+      : { durationSeconds: row.durationSeconds }),
     createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-function toGeneratedMediaVariantRecord(row: GeneratedMediaVariant, mediaAsset: MediaAsset): GeneratedMediaVariantRecord {
+function toGeneratedMediaVariantRecord(
+  row: GeneratedMediaVariant,
+  mediaAsset: MediaAsset,
+  latestFeedback?: CreativeFeedbackRecord,
+): GeneratedMediaVariantRecord {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -808,21 +996,37 @@ function toGeneratedMediaVariantRecord(row: GeneratedMediaVariant, mediaAsset: M
     visualMode: row.visualMode,
     aspectRatio: toAspectRatio(row.aspectRatio),
     prompt: row.prompt,
-    ...(row.negativePrompt === null ? {} : { negativePrompt: row.negativePrompt }),
+    ...(row.negativePrompt === null
+      ? {}
+      : { negativePrompt: row.negativePrompt }),
     model: row.model,
     promptVersion: row.promptVersion,
+    ...(row.aiInteractionId === null
+      ? {}
+      : { aiInteractionId: row.aiInteractionId }),
     status: row.status,
     qualityStatus: row.qualityStatus,
-    ...(row.rejectionReason === null ? {} : { rejectionReason: row.rejectionReason }),
+    ...(row.rejectionReason === null
+      ? {}
+      : { rejectionReason: row.rejectionReason }),
+    qualityScores: toCreativeQualityScores(row.qualityScores),
+    ...(row.performanceScore === null
+      ? {}
+      : { performanceScore: row.performanceScore }),
+    ...(row.lastLearnedAt === null
+      ? {}
+      : { lastLearnedAt: row.lastLearnedAt.toISOString() }),
+    ...(latestFeedback === undefined ? {} : { latestFeedback }),
     metadata: toRecord(row.metadata),
     createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 function buildVisualStudioPrompt(input: {
   catalogContext: VaultRagChunk[];
   contentItem: ContentItem | null;
+  creativeLearningContext: CreativeLearningContext;
   input: VisualStudioGenerateInput;
   negativePrompt: string;
   sourceMediaAssets: MediaAsset[];
@@ -833,15 +1037,31 @@ function buildVisualStudioPrompt(input: {
   const lines = [
     `Create a production-ready Instagram ${input.input.aspectRatio} visual for MARKOS AI.`,
     `Visual mode: ${visualModeInstruction(input.input.visualMode)}.`,
-    userPrompt === undefined ? "Creative brief: use the approved Vault and catalog context below." : `Creative brief: ${userPrompt}.`,
-    input.contentItem === null ? "" : `Content context: ${summarizeContentItem(input.contentItem)}.`,
-    input.catalogContext.length === 0 ? "" : `Approved catalog context: ${summarizeCatalogContext(input.catalogContext)}.`,
-    input.vaultContext.length === 0 ? "" : `Approved brand memory: ${summarizeVaultContext(input.vaultContext)}.`,
-    input.sourceMediaAssets.length === 0 ? "" : `Reference media: ${summarizeSourceAssets(input.sourceMediaAssets)}.`,
+    userPrompt === undefined
+      ? "Creative brief: use the approved Vault and catalog context below."
+      : `Creative brief: ${userPrompt}.`,
+    input.contentItem === null
+      ? ""
+      : `Content context: ${summarizeContentItem(input.contentItem)}.`,
+    input.catalogContext.length === 0
+      ? ""
+      : `Approved catalog context: ${summarizeCatalogContext(input.catalogContext)}.`,
+    input.vaultContext.length === 0
+      ? ""
+      : `Approved brand memory: ${summarizeVaultContext(input.vaultContext)}.`,
+    input.sourceMediaAssets.length === 0
+      ? ""
+      : `Reference media: ${summarizeSourceAssets(input.sourceMediaAssets)}.`,
+    input.creativeLearningContext.positive.length === 0
+      ? ""
+      : `Proven creative patterns to repeat: ${summarizeCreativeLearning(input.creativeLearningContext.positive)}.`,
+    input.creativeLearningContext.negative.length === 0
+      ? ""
+      : `Rejected or low-performing patterns that must not be reused: ${summarizeCreativeLearning(input.creativeLearningContext.negative)}.`,
     `Variant ${input.variantIndex}: make this distinct while staying on brand.`,
     "Use premium composition, clear focal hierarchy, strong mobile readability, and Bahrain/GCC market suitability.",
     "Do not invent logos, product details, prices, certifications, awards, or claims that are not in the approved context.",
-    `Negative prompt: ${input.negativePrompt}.`
+    `Negative prompt: ${input.negativePrompt}.`,
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -850,6 +1070,7 @@ function buildVisualStudioPrompt(input: {
 function buildVisualVariantMetadata(input: {
   catalogContext: VaultRagChunk[];
   contentItem: ContentItem | null;
+  creativeLearningContext: CreativeLearningContext;
   input: VisualStudioGenerateInput;
   sourceMediaAssets: MediaAsset[];
   variantIndex: number;
@@ -859,7 +1080,7 @@ function buildVisualVariantMetadata(input: {
     catalogContext: input.catalogContext.map((chunk) => ({
       key: chunk.key,
       section: chunk.section,
-      value: chunk.value
+      value: chunk.value,
     })),
     content:
       input.contentItem === null
@@ -870,35 +1091,43 @@ function buildVisualVariantMetadata(input: {
             captionEn: input.contentItem.captionEn,
             contentPillar: input.contentItem.contentPillar,
             contentType: input.contentItem.contentType,
-            hashtags: input.contentItem.hashtags
+            hashtags: input.contentItem.hashtags,
           },
     qualityPolicy: {
       humanApprovalRequired: true,
       noUnapprovedClaims: true,
       noUnreadableText: true,
-      noUnlicensedAssetReuse: true
+      noUnlicensedAssetReuse: true,
+    },
+    creativeLearningContext: {
+      positivePatternKeys: input.creativeLearningContext.positive.map(
+        (item) => item.patternKey,
+      ),
+      negativePatternKeys: input.creativeLearningContext.negative.map(
+        (item) => item.patternKey,
+      ),
     },
     source: "visual_studio",
     sourceMediaAssets: input.sourceMediaAssets.map((asset) => ({
       filename: asset.filename,
       id: asset.id,
       mimeType: asset.mimeType,
-      type: asset.type
+      type: asset.type,
     })),
     variantIndex: input.variantIndex,
     vaultContext: input.vaultContext.map((entry) => ({
       key: entry.key,
       section: entry.section,
-      value: entry.value
+      value: entry.value,
     })),
-    visualMode: input.input.visualMode
+    visualMode: input.input.visualMode,
   };
 }
 
 function buildVisualNegativePrompt(input: string | undefined): string {
   return [
     "No distorted logos, malformed text, fake UI, fake awards, fake certifications, misleading price text, extra fingers, warped product details, low-resolution artifacts, cluttered stock-photo styling, or off-brand colors.",
-    input?.trim() ?? ""
+    input?.trim() ?? "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -911,7 +1140,10 @@ function assertMediaEditable(status: ContentStatus): void {
 }
 
 function isValidBase64Payload(value: string, bytes: Buffer): boolean {
-  return bytes.byteLength > 0 && bytes.toString("base64").replace(/=+$/, "") === value.replace(/=+$/, "");
+  return (
+    bytes.byteLength > 0 &&
+    bytes.toString("base64").replace(/=+$/, "") === value.replace(/=+$/, "")
+  );
 }
 
 function promptFromContent(contentItem: {
@@ -922,7 +1154,10 @@ function promptFromContent(contentItem: {
   contentType: string;
   hashtags: string[];
 }): string {
-  const caption = contentItem.captionEn ?? contentItem.captionAr ?? "Instagram marketing visual";
+  const caption =
+    contentItem.captionEn ??
+    contentItem.captionAr ??
+    "Instagram marketing visual";
   const pillar = contentItem.contentPillar ?? "brand awareness";
   const hashtags = contentItem.hashtags.slice(0, 5).join(" ");
 
@@ -930,9 +1165,11 @@ function promptFromContent(contentItem: {
     `Create a Bahrain-ready Instagram ${contentItem.contentType.toLowerCase()} visual.`,
     `Theme: ${pillar}.`,
     `Caption context: ${caption}.`,
-    contentItem.callToAction ? `Call to action: ${contentItem.callToAction}.` : "",
+    contentItem.callToAction
+      ? `Call to action: ${contentItem.callToAction}.`
+      : "",
     hashtags ? `Hashtag context: ${hashtags}.` : "",
-    "No unreadable text, distorted logos, or generic stock-photo styling."
+    "No unreadable text, distorted logos, or generic stock-photo styling.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -952,17 +1189,24 @@ function contentImagePromptSource(contentItem: {
     captionAr: contentItem.captionAr,
     hashtags: contentItem.hashtags,
     callToAction: contentItem.callToAction,
-    contentPillar: contentItem.contentPillar
+    contentPillar: contentItem.contentPillar,
   };
 }
 
-function visualModeInstruction(mode: VisualStudioGenerateInput["visualMode"]): string {
-  const instructions: Record<VisualStudioGenerateInput["visualMode"], string> = {
-    AD_CREATIVE: "paid-social creative with clear offer hierarchy and conversion intent",
-    BACKGROUND_VARIANT: "brand-safe background or supporting visual that can hold copy without clutter",
-    LIFESTYLE_STORY: "aspirational lifestyle storytelling visual for Instagram feed or story adaptation",
-    PRODUCT_PHOTO: "product-led hero visual with accurate product representation and premium lighting"
-  };
+function visualModeInstruction(
+  mode: VisualStudioGenerateInput["visualMode"],
+): string {
+  const instructions: Record<VisualStudioGenerateInput["visualMode"], string> =
+    {
+      AD_CREATIVE:
+        "paid-social creative with clear offer hierarchy and conversion intent",
+      BACKGROUND_VARIANT:
+        "brand-safe background or supporting visual that can hold copy without clutter",
+      LIFESTYLE_STORY:
+        "aspirational lifestyle storytelling visual for Instagram feed or story adaptation",
+      PRODUCT_PHOTO:
+        "product-led hero visual with accurate product representation and premium lighting",
+    };
 
   return instructions[mode];
 }
@@ -970,10 +1214,16 @@ function visualModeInstruction(mode: VisualStudioGenerateInput["visualMode"]): s
 function summarizeContentItem(contentItem: ContentItem): string {
   return compact([
     `type=${contentItem.contentType}`,
-    contentItem.contentPillar === null ? "" : `pillar=${contentItem.contentPillar}`,
-    contentItem.captionEn === null ? "" : `caption=${truncate(contentItem.captionEn, 180)}`,
+    contentItem.contentPillar === null
+      ? ""
+      : `pillar=${contentItem.contentPillar}`,
+    contentItem.captionEn === null
+      ? ""
+      : `caption=${truncate(contentItem.captionEn, 180)}`,
     contentItem.callToAction === null ? "" : `cta=${contentItem.callToAction}`,
-    contentItem.hashtags.length === 0 ? "" : `hashtags=${contentItem.hashtags.slice(0, 6).join(" ")}`
+    contentItem.hashtags.length === 0
+      ? ""
+      : `hashtags=${contentItem.hashtags.slice(0, 6).join(" ")}`,
   ]).join("; ");
 }
 
@@ -987,17 +1237,69 @@ function summarizeCatalogContext(chunks: VaultRagChunk[]): string {
 function summarizeVaultContext(entries: KnowledgeVaultEntry[]): string {
   return entries
     .slice(0, 8)
-    .map((entry) => `${entry.section}/${entry.key}: ${summarizeObject(entry.value)}`)
+    .map(
+      (entry) =>
+        `${entry.section}/${entry.key}: ${summarizeObject(entry.value)}`,
+    )
     .join(" | ");
 }
 
 function summarizeSourceAssets(assets: MediaAsset[]): string {
-  return assets.map((asset) => `${asset.filename} (${asset.type}, ${asset.mimeType})`).join(", ");
+  return assets
+    .map((asset) => `${asset.filename} (${asset.type}, ${asset.mimeType})`)
+    .join(", ");
+}
+
+function summarizeCreativeLearning(
+  exemplars: CreativeLearningContext["positive"],
+): string {
+  return exemplars
+    .slice(0, 5)
+    .map((exemplar) => exemplar.summary)
+    .join(" | ");
+}
+
+function toCreativeQualityScores(
+  value: Prisma.JsonValue,
+): GeneratedMediaVariantRecord["qualityScores"] {
+  const record = toRecord(value);
+  const scores: GeneratedMediaVariantRecord["qualityScores"] = {};
+
+  for (const key of [
+    "brandAlignment",
+    "composition",
+    "overall",
+    "platformReadiness",
+    "productAccuracy",
+  ] as const) {
+    const score = record[key];
+
+    if (typeof score === "number" && Number.isFinite(score)) {
+      scores[key] = score;
+    }
+  }
+
+  return scores;
 }
 
 function summarizeObject(value: Record<string, unknown>): string {
-  const preferred = ["name", "title", "category", "description", "benefits", "priceMinor", "currency", "segment", "personality", "rules"];
-  const selected = Object.fromEntries(preferred.flatMap((key) => (value[key] === undefined ? [] : [[key, value[key]]])));
+  const preferred = [
+    "name",
+    "title",
+    "category",
+    "description",
+    "benefits",
+    "priceMinor",
+    "currency",
+    "segment",
+    "personality",
+    "rules",
+  ];
+  const selected = Object.fromEntries(
+    preferred.flatMap((key) =>
+      value[key] === undefined ? [] : [[key, value[key]]],
+    ),
+  );
   const summary = Object.keys(selected).length === 0 ? value : selected;
 
   return truncate(JSON.stringify(summary), 420);
@@ -1008,7 +1310,9 @@ function toAspectRatio(value: string): "1:1" | "4:5" | "9:16" {
 }
 
 function toRecord(value: Prisma.JsonValue): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function unique(values: string[]): string[] {
@@ -1020,24 +1324,51 @@ function compact(values: string[]): string[] {
 }
 
 function truncate(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}...`;
+  return value.length <= maxLength
+    ? value
+    : `${value.slice(0, maxLength - 1)}...`;
 }
 
-async function reserveMediaUsage(workspaceId: string, mediaType: string, sizeBytes: number, now: Date): Promise<void> {
-  await reserveWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+async function reserveMediaUsage(
+  workspaceId: string,
+  mediaType: string,
+  sizeBytes: number,
+  now: Date,
+): Promise<void> {
+  await reserveWorkspaceUsage({
+    workspaceId,
+    metric: "STORAGE_BYTES",
+    amount: sizeBytes,
+    now,
+  });
 
   if (mediaType === "AI_GENERATED") {
     try {
       await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now });
     } catch (error) {
-      await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+      await refundWorkspaceUsage({
+        workspaceId,
+        metric: "STORAGE_BYTES",
+        amount: sizeBytes,
+        now,
+      });
       throw error;
     }
   }
 }
 
-async function refundMediaUsage(workspaceId: string, mediaType: string, sizeBytes: number, now: Date): Promise<void> {
-  await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: sizeBytes, now });
+async function refundMediaUsage(
+  workspaceId: string,
+  mediaType: string,
+  sizeBytes: number,
+  now: Date,
+): Promise<void> {
+  await refundWorkspaceUsage({
+    workspaceId,
+    metric: "STORAGE_BYTES",
+    amount: sizeBytes,
+    now,
+  });
 
   if (mediaType === "AI_GENERATED") {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now });

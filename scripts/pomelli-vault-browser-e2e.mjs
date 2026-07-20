@@ -1,16 +1,25 @@
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
 const baseUrl = process.env.UI_BASE_URL ?? "http://127.0.0.1:3000";
 const browserPath =
   process.env.UI_BROWSER_PATH ??
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const outputPath = path.resolve(
-  process.env.POMELLI_E2E_SCREENSHOT ??
-    path.join("evidence", "ui", "pomelli-vault-browser-e2e.png"),
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
 );
+const outputPath = process.env.POMELLI_E2E_SCREENSHOT
+  ? path.resolve(process.env.POMELLI_E2E_SCREENSHOT)
+  : path.join(
+      repositoryRoot,
+      "evidence",
+      "ui",
+      "pomelli-vault-browser-e2e.png",
+    );
 const workspaceId = "018ffd04-3f8a-7000-8000-000000000002";
 const userId = "018ffd04-3f8a-7000-8000-000000000001";
 const jobId = "018ffd04-3f8a-7000-8000-000000000101";

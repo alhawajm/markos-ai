@@ -730,9 +730,62 @@ export const visualStudioVariantListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
-export const rejectGeneratedMediaVariantSchema = z.object({
-  reason: z.string().min(3).max(500),
+export const creativeFeedbackReasonCodeSchema = z.enum([
+  "ON_BRAND",
+  "STRONG_COMPOSITION",
+  "PRODUCT_ACCURATE",
+  "READY_TO_PUBLISH",
+  "OFF_BRAND",
+  "PRODUCT_INACCURATE",
+  "POOR_COMPOSITION",
+  "COLOR_MISMATCH",
+  "TEXT_QUALITY",
+  "CLAIM_RISK",
+  "LOW_RESOLUTION",
+  "OTHER",
+]);
+
+export const creativeQualityScoresSchema = z
+  .object({
+    brandAlignment: z.number().min(0).max(100).optional(),
+    composition: z.number().min(0).max(100).optional(),
+    overall: z.number().min(0).max(100).optional(),
+    platformReadiness: z.number().min(0).max(100).optional(),
+    productAccuracy: z.number().min(0).max(100).optional(),
+  })
+  .strict();
+
+export const approveGeneratedMediaVariantSchema = z.object({
+  reasonCodes: z
+    .array(creativeFeedbackReasonCodeSchema)
+    .min(1)
+    .max(8)
+    .default(["ON_BRAND"]),
+  notes: z.string().trim().min(3).max(500).optional(),
+  scores: creativeQualityScoresSchema.optional(),
 });
+
+export const rejectGeneratedMediaVariantSchema = z
+  .object({
+    reasonCodes: z
+      .array(creativeFeedbackReasonCodeSchema)
+      .min(1)
+      .max(8)
+      .default(["OTHER"]),
+    notes: z.string().trim().min(3).max(500).optional(),
+    reason: z.string().trim().min(3).max(500).optional(),
+    scores: creativeQualityScoresSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      !value.reasonCodes.includes("OTHER") ||
+      value.notes !== undefined ||
+      value.reason !== undefined,
+    {
+      message: "Notes are required when the reason is OTHER",
+      path: ["notes"],
+    },
+  );
 
 export const attachGeneratedMediaVariantSchema = z.object({
   contentItemId: z.string().uuid(),
@@ -884,6 +937,9 @@ export type VisualStudioGenerateInput = z.infer<
 >;
 export type VisualStudioVariantListQueryInput = z.infer<
   typeof visualStudioVariantListQuerySchema
+>;
+export type ApproveGeneratedMediaVariantInput = z.infer<
+  typeof approveGeneratedMediaVariantSchema
 >;
 export type RejectGeneratedMediaVariantInput = z.infer<
   typeof rejectGeneratedMediaVariantSchema

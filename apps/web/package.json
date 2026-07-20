@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "lint": "eslint .",
     "test": "echo \"test: web\"",
-    "test:e2e": "node ../../scripts/pomelli-vault-browser-e2e.mjs"
+    "test:e2e": "node ../../scripts/pomelli-vault-browser-e2e.mjs && node ../../scripts/pomelli-visual-browser-e2e.mjs && node ../../scripts/pomelli-campaign-browser-e2e.mjs"
   },
   "dependencies": {
     "@markos/api-client": "workspace:*",
