@@ -179,3 +179,85 @@ Use separate deep-health timeouts for database, Redis, and HTTP dependencies. In
 ## 2026-06-17: OpenTelemetry Core Is Patched By Workspace Override
 
 Pin `@opentelemetry/core` to `2.8.0` through `pnpm-workspace.yaml` overrides because Sentry 10.57.0 resolves a vulnerable `2.7.1` transitive version and the Sentry/OpenTelemetry peer range accepts the patched 2.x package. Keep the override until Sentry resolves to a patched OpenTelemetry version without pinning.
+
+## 2026-07-12: Pomelli-inspired visual features
+
+Pomelli-inspired capabilities enter MARKOS as native extensions to Vault, catalog, media, and campaign workflows. Business DNA becomes Vault Auto-Ingest, product context becomes Product/Offer Catalog, visual generation becomes AI Visual Studio, and campaign generation becomes Campaign Workbench 2.0. Website and ads generation are deferred until after the Instagram-first publishing loop is stable.
+
+Pomelli is a useful reference for brand-aware visual generation, but MARKOS must remain an Instagram-first AI marketing operating system with workspace isolation, RAG-grounded output, review states, publishing, analytics, metering, and bilingual UX. We will not introduce a hard dependency on Pomelli or Google-specific APIs; provider choices remain configurable.
+
+## 2026-07-12: Website Auto-Ingest Starts Deterministic
+
+Start Vault website auto-ingest with deterministic DOM signal extraction rather than an LLM call. This keeps PE-M1 usable before paid model keys are configured, avoids unmetered AI work, and gives users reviewable source-backed candidates. LLM extraction can be added later behind model settings and usage metering, but approved facts must continue flowing through the normal Vault upsert and embedding path.
+
+## 2026-07-14: Local Embedding Fallback Is Development Only
+
+Use deterministic local embeddings in development and test when the AI embedding service is unavailable, so Vault Auto-Ingest and RAG search remain usable before paid model infrastructure is connected. Production does not use this fallback: it still requires the configured AI embedding service to return the 1536-dimension Vault contract, and invalid provider responses fail loudly in every environment.
+
+## 2026-07-14: Catalog Archive Preserves Commercial History
+
+Archive product and offer catalog records by setting their status to `ARCHIVED` instead of soft-deleting them. Archived records remain workspace-scoped and queryable by explicit status so past campaigns, audit views, and reporting can still explain what was offered. Archiving a product also archives linked offers because an active offer should not point at an inactive product.
+
+## 2026-07-14: Catalog Context Uses Vault-Compatible Chunks
+
+Sync product and offer catalog rows into the `PRODUCTS` Vault section with stable `catalog:product:*` and `catalog:offer:*` keys. Strategy and content generation also merge active catalog rows into retrieved context as Vault-compatible chunks, deduped by `section/key`, so commercial facts are available to AI prompts even when vector search would not rank them highly.
+
+## 2026-07-14: Selected Catalog Context Is Explicit
+
+Strategy, campaign, content, and slot generation may include a selected `productId` and/or `offerId`. The backend validates those IDs inside the current workspace, only accepts active and non-expired commercial records, adds linked product context for selected offers, and marks selected chunks with `selectedForGeneration` in the retrieved prompt context. Cross-workspace or inactive selections fail clearly instead of falling back to generic Vault context.
+
+## 2026-07-14: Catalog Is A First-Class Command Center Section
+
+Expose active products and offers as their own app section instead of hiding them only inside Vault. Campaign Builder and Content Studio can still select commercial context inline, but the dedicated catalog screen is the workspace owner entry point for maintaining products, prices, validity windows, and offer status before generation.
+
+## 2026-07-15: Catalog Commercial Briefs Gate Generation
+
+Strategy and content generation now build a deterministic commercial brief from selected products, selected offers, active catalog rows, audience Vault facts, and approved Vault evidence. The brief is passed as a Vault-compatible `PRODUCTS` chunk so AI prompts receive campaign angles, selected commercial context, and explicit guardrails before generic RAG context.
+
+Catalog-backed generation rejects price-led requests when neither selected catalog context nor the user prompt supplies a price, and rejects comparative or proof claims unless the wording is supported by selected product benefits or approved Vault facts. This keeps MARKOS from inventing prices, discounts, superiority claims, or proof points while still allowing approved business memory to drive sharper campaign output.
+
+## 2026-07-15: Demo Catalog Seed Is Opt-In
+
+Keep `prisma/seed.ts` production-safe by default: it still creates only plan rows unless `MARKOS_SEED_DEMO_WORKSPACE=true` is set. The optional demo fixture creates a verified Maryam Jewelry workspace with owner membership, active product and offer rows, and matching Vault entries so local or staging environments can exercise the commercial generation path without polluting production seeds.
+
+## 2026-07-15: Visual Studio Media Requires Review Before Use
+
+Represent AI Visual Studio output as normal workspace-scoped `MediaAsset` rows plus a `GeneratedMediaVariant` lineage/review record. The variant stores source media IDs, selected product/offer IDs, visual mode, aspect ratio, prompt, negative prompt, model, prompt version, quality state, and generation metadata.
+
+Generated variants start in `PENDING_REVIEW` and cannot be attached through the generic content-media route until approved. The dedicated approve/reject/attach workflow preserves human review while still letting downstream publishing treat approved output as standard media. Visual Studio image quota is reserved before calling the image provider, and storage/token usage is metered around successful persisted variants.
+
+## 2026-07-15: Campaign Workbench Packages Are Review-Gated
+
+Use `Campaign` as the package container for Campaign Workbench 2.0. The campaign stores a structured brief, selected product/offer IDs, package JSON, rationale, status, rejected-idea feedback, and schedule bounds, while each generated asset remains a normal workspace-scoped `ContentItem` linked by `campaignId`.
+
+Campaign packages are assembled from approved Vault context and active catalog context, validated against a runtime package schema before persistence, and cannot be scheduled until the campaign and every linked content item are approved. Item edits stay on the existing content API while draft/in-review, item rejections return the package to review, and scheduling writes approved items into the publishing queue/calendar in one workspace-scoped transaction.
+
+## 2026-07-19: Brand Book Exports Are Immutable Source-Grounded Snapshots
+
+Build the live Brand Kit from the current workspace's approved Knowledge Vault entries and approved brand assets. Derive tone, messaging, and visual rules only from those records; expose confidence and missing-section notes instead of filling gaps with unsupported claims.
+
+Each Brand Book export stores an immutable versioned snapshot, the exact Vault source entry IDs, confidence, missing sections, and an audit record. Later Vault edits affect the live Brand Kit and future versions but do not rewrite prior exports, preserving traceability for approved campaign work.
+
+## 2026-07-19: Railway Uses a Cost-Controlled Five-Service Production Topology
+
+Deploy the public Next.js web app and Fastify API as separate Railway services, with the Python AI service private to the project network. Use a pinned pgvector PostgreSQL image and managed Redis; keep OpenSearch disabled until a product feature actually requires it. Persist API media on a Railway volume mounted at `/app/var/media` so generated and uploaded assets survive deployments and retain public API URLs.
+
+Railway's free-plan resource limit allows five services, so the API runtime starts the maintenance scheduler behind `WORKER_EMBEDDED=true`. The worker remains an independently deployable image and must move to its own private service before horizontal API scaling or when the project upgrades its Railway plan.
+
+The API container runs the idempotent `db:deploy` release command before starting. That command installs required PostgreSQL extensions/functions, prepares compatibility roles for the existing RLS migrations, applies forward-only Prisma migrations, and upserts plan reference data without creating a demo workspace. `INSTAGRAM_PUBLISH_MODE` and analytics sync remain `dry_run` until Meta credentials, App Review, and live-publish acceptance are complete.
+
+## 2026-07-19: Website Auto-Ingest Uses Review-Gated Async Extraction
+
+Keep the existing single-page deterministic preview for fast local review, and add a workspace-scoped asynchronous job for multi-page or slow-source extraction. The maintenance worker claims jobs with `FOR UPDATE SKIP LOCKED`, crawls at most ten same-origin public pages, retries failures three times with backoff, and records queue, completion, retry, and failure audit evidence. Job and draft reads always include `workspaceId`, and the job table has row-level security coverage.
+
+Route multi-page extraction through the configurable `WEBSITE_EXTRACTION_MODEL` slot and require a strict runtime-validated JSON response. Invalid JSON or unsupported evidence receives one repair attempt. Every accepted candidate must meet the confidence floor and cite a non-empty snippet that exists on its declared source page; unsupported candidates are refused instead of becoming Vault memory. Reserve one AI generation before extraction, meter model tokens after persistence, and refund only reservations that actually succeeded.
+
+Approval remains a human decision. `MERGE` is the default and preserves existing object fields while applying reviewed values; `OVERWRITE` replaces the reviewed entry. Approval writes the Vault update, reviewed draft, and an audit trail containing the chosen write mode plus per-candidate edited/unchanged and created/merged/overwritten decisions in one transaction.
+
+## 2026-07-20: Creative Learning Uses Durable Feedback And Attached-Media Attribution
+
+Store every generated-asset approval or rejection as workspace-scoped `CreativeFeedback`, with structured reason codes, reviewer notes, and dimension scores. Materialize the latest human or Instagram performance signal as a stable-keyed `CreativeLearningExemplar`, update the linked `AiInteraction`, and expose the resulting winning and rejected patterns to Visual Studio, Content generation, Campaign generation, the Analytics Consultant, and the dashboard.
+
+Attribute Instagram performance to a generated visual only when that exact `MediaAsset` is attached to the measured `ContentItem`. A variant's generation-time `contentItemId` is context lineage, not proof that the asset was published. This prevents rejected or unused variants from receiving performance credit.
+
+Vault synchronization is recoverable. Exemplars track `vaultSyncedAt` and `vaultSyncError`; feedback remains successful when embedding or Vault infrastructure is temporarily unavailable, and the maintenance learning worker retries unsynced exemplars. Generation also reads the exemplar table directly, so a temporary Vault sync delay cannot remove reviewer feedback from the next prompt.

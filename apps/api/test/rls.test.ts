@@ -9,11 +9,19 @@ const rlsTables = [
   "workspace_members",
   "knowledge_vault",
   "knowledge_vault_history",
+  "vault_ingest_drafts",
+  "vault_website_ingest_jobs",
   "strategies",
   "content_calendars",
   "campaigns",
   "content_items",
+  "generated_media_variants",
+  "creative_feedback",
+  "creative_learning_exemplars",
+  "brand_book_exports",
   "media_assets",
+  "products",
+  "offers",
   "instagram_analytics",
   "ai_interactions",
   "subscriptions",
@@ -21,19 +29,23 @@ const rlsTables = [
   "payments",
   "usage_counters",
   "notifications",
-  "audit_logs"
+  "audit_logs",
 ];
 
 describe("database row-level security", () => {
   it("enables workspace policies on every workspace-scoped table", async () => {
-    const policies = await prisma.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+    const policies = await prisma.$queryRaw<
+      Array<{ tablename: string; policyname: string }>
+    >`
       SELECT tablename, policyname
       FROM pg_policies
       WHERE schemaname = 'public'
         AND policyname LIKE '%_workspace_rls'
       ORDER BY tablename
     `;
-    const tables = await prisma.$queryRaw<Array<{ relname: string; relrowsecurity: boolean }>>`
+    const tables = await prisma.$queryRaw<
+      Array<{ relname: string; relrowsecurity: boolean }>
+    >`
       SELECT relname, relrowsecurity
       FROM pg_class
       WHERE relkind = 'r'
@@ -43,7 +55,9 @@ describe("database row-level security", () => {
 
     expect(tables).toHaveLength(rlsTables.length);
     expect(tables.every((table) => table.relrowsecurity)).toBe(true);
-    expect(policies.map((policy) => policy.tablename).sort()).toEqual([...rlsTables].sort());
+    expect(policies.map((policy) => policy.tablename).sort()).toEqual(
+      [...rlsTables].sort(),
+    );
   });
 
   it("fails closed for the app role unless app.current_workspace is set", async () => {
@@ -51,12 +65,22 @@ describe("database row-level security", () => {
     const second = await createWorkspace("second");
 
     const firstItem = await prisma.contentItem.create({
-      data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
-      select: { id: true }
+      data: {
+        workspaceId: first.workspaceId,
+        contentType: "POST",
+        hashtags: [],
+        mediaIds: [],
+      },
+      select: { id: true },
     });
     await prisma.contentItem.create({
-      data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
-      select: { id: true }
+      data: {
+        workspaceId: second.workspaceId,
+        contentType: "POST",
+        hashtags: [],
+        mediaIds: [],
+      },
+      select: { id: true },
     });
 
     const noContextRows = await prisma.$transaction(async (tx) => {
@@ -67,7 +91,9 @@ describe("database row-level security", () => {
     const firstContextRows = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SET LOCAL ROLE markos_app`;
       await tx.$executeRaw`SELECT set_config('app.current_workspace', ${first.workspaceId}, true)`;
-      return tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM content_items ORDER BY id`;
+      return tx.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM content_items ORDER BY id`;
     });
 
     expect(noContextRows).toEqual([]);
@@ -81,8 +107,13 @@ describe("database row-level security", () => {
     await withWorkspaceDbContext(first.workspaceId, async (tx) => {
       await tx.$executeRaw`SET LOCAL ROLE markos_app`;
       await tx.contentItem.create({
-        data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
-        select: { id: true }
+        data: {
+          workspaceId: first.workspaceId,
+          contentType: "POST",
+          hashtags: [],
+          mediaIds: [],
+        },
+        select: { id: true },
       });
     });
 
@@ -90,15 +121,22 @@ describe("database row-level security", () => {
       withWorkspaceDbContext(first.workspaceId, async (tx) => {
         await tx.$executeRaw`SET LOCAL ROLE markos_app`;
         await tx.contentItem.create({
-          data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
-          select: { id: true }
+          data: {
+            workspaceId: second.workspaceId,
+            contentType: "POST",
+            hashtags: [],
+            mediaIds: [],
+          },
+          select: { id: true },
         });
-      })
+      }),
     ).rejects.toThrow();
   });
 });
 
-async function createWorkspace(label: string): Promise<{ workspaceId: string }> {
+async function createWorkspace(
+  label: string,
+): Promise<{ workspaceId: string }> {
   const app = await buildApp();
   const response = await app.inject({
     method: "POST",
@@ -108,13 +146,13 @@ async function createWorkspace(label: string): Promise<{ workspaceId: string }> 
       password: "CorrectHorseBattery99!",
       fullName: `${label} User`,
       workspaceName: `${label} Workspace ${randomUUID()}`,
-      locale: "en"
-    }
+      locale: "en",
+    },
   });
 
   await app.close();
 
   return {
-    workspaceId: response.json().data.workspace.id
+    workspaceId: response.json().data.workspace.id,
   };
 }

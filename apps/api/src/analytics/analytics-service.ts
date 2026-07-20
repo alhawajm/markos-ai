@@ -7,15 +7,16 @@ import type {
   AnalyticsSyncResult,
   InstagramAnalyticsRecord,
   InstagramMetricType,
-  Locale
+  Locale,
 } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
+import { processWorkspaceCreativeLearning } from "../learning/creative-learning-service";
 import { upsertVaultSection } from "../vault/vault-service";
 import {
   createInstagramAnalyticsProvider,
   InstagramAnalyticsProviderError,
-  type InstagramAnalyticsProvider
+  type InstagramAnalyticsProvider,
 } from "./instagram-analytics-provider";
 
 export class AnalyticsWorkspaceNotFoundError extends Error {
@@ -29,12 +30,19 @@ export interface AnalyticsSyncForAllWorkspacesResult {
   results: AnalyticsSyncResult[];
 }
 
-const analyticsRequiredEnv = ["INSTAGRAM_ANALYTICS_SYNC_MODE", "META_APP_ID", "META_APP_SECRET"];
-const analyticsRequiredScopes = ["instagram_business_basic", "instagram_business_manage_insights"];
+const analyticsRequiredEnv = [
+  "INSTAGRAM_ANALYTICS_SYNC_MODE",
+  "META_APP_ID",
+  "META_APP_SECRET",
+];
+const analyticsRequiredScopes = [
+  "instagram_business_basic",
+  "instagram_business_manage_insights",
+];
 
 export async function getAnalyticsSummary(
   workspaceId: string,
-  input: { days?: number; from?: Date; to?: Date } = {}
+  input: { days?: number; from?: Date; to?: Date } = {},
 ): Promise<AnalyticsSummary> {
   const range = analyticsRange(input);
   const rows = await prisma.instagramAnalytics.findMany({
@@ -43,19 +51,25 @@ export async function getAnalyticsSummary(
       workspaceId,
       dataDate: {
         gte: range.from,
-        lte: range.to
+        lte: range.to,
       },
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
   const records = rows.map(toInstagramAnalyticsRecord);
   const contentItems = await prisma.contentItem.findMany({
     where: {
       id: {
-        in: [...new Set(records.map((record) => record.contentItemId).filter((id): id is string => id !== undefined))]
+        in: [
+          ...new Set(
+            records
+              .map((record) => record.contentItemId)
+              .filter((id): id is string => id !== undefined),
+          ),
+        ],
       },
-      workspaceId
-    }
+      workspaceId,
+    },
   });
   const contentById = new Map(contentItems.map((item) => [item.id, item]));
 
@@ -64,20 +78,24 @@ export async function getAnalyticsSummary(
     daily: summarizeDaily(records),
     days: range.days,
     from: range.from.toISOString(),
-    ...(records[0] === undefined ? {} : { latestSyncedAt: records[0].syncedAt }),
+    ...(records[0] === undefined
+      ? {}
+      : { latestSyncedAt: records[0].syncedAt }),
     records,
     topContent: summarizeTopContent(records, contentById),
     to: range.to.toISOString(),
-    totals: summarizeMetrics(records)
+    totals: summarizeMetrics(records),
   };
 }
 
-export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<AnalyticsLiveReadiness> {
+export async function getAnalyticsLiveReadiness(
+  workspaceId: string,
+): Promise<AnalyticsLiveReadiness> {
   const workspace = await prisma.workspace.findFirst({
     where: {
       deletedAt: null,
-      id: workspaceId
-    }
+      id: workspaceId,
+    },
   });
 
   if (!workspace) {
@@ -96,7 +114,11 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     }
   }
 
-  const configuredScopes = new Set(env.INSTAGRAM_OAUTH_SCOPES.split(",").map((scope) => scope.trim()).filter(Boolean));
+  const configuredScopes = new Set(
+    env.INSTAGRAM_OAUTH_SCOPES.split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean),
+  );
 
   for (const scope of analyticsRequiredScopes) {
     if (!configuredScopes.has(scope)) {
@@ -110,15 +132,22 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
       workspace.instagramAccessToken !== null &&
       workspace.instagramTokenExpiresAt !== null &&
       workspace.instagramTokenExpiresAt > new Date(),
-    ...(workspace.instagramAccountId === null ? {} : { accountId: workspace.instagramAccountId }),
-    ...(workspace.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() })
+    ...(workspace.instagramAccountId === null
+      ? {}
+      : { accountId: workspace.instagramAccountId }),
+    ...(workspace.instagramTokenExpiresAt === null
+      ? {}
+      : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() }),
   };
 
   if (!connection.connected) {
     reasons.push("INSTAGRAM_NOT_CONNECTED");
   }
 
-  if (workspace.instagramTokenExpiresAt !== null && workspace.instagramTokenExpiresAt <= new Date()) {
+  if (
+    workspace.instagramTokenExpiresAt !== null &&
+    workspace.instagramTokenExpiresAt <= new Date()
+  ) {
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");
   }
 
@@ -128,19 +157,19 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     ready: reasons.length === 0,
     reasons,
     requiredEnv: analyticsRequiredEnv,
-    requiredScopes: analyticsRequiredScopes
+    requiredScopes: analyticsRequiredScopes,
   };
 }
 
 export async function exportMonthlyAnalyticsPdf(
   workspaceId: string,
-  input: { locale?: Locale; month?: string; now?: Date } = {}
+  input: { locale?: Locale; month?: string; now?: Date } = {},
 ): Promise<{ bytes: Buffer; filename: string; month: string }> {
   const workspace = await prisma.workspace.findFirst({
     where: {
       deletedAt: null,
-      id: workspaceId
-    }
+      id: workspaceId,
+    },
   });
 
   if (!workspace) {
@@ -156,16 +185,20 @@ export async function exportMonthlyAnalyticsPdf(
       locale: input.locale ?? "en",
       month,
       summary,
-      workspaceName: workspace.name
+      workspaceName: workspace.name,
     }),
     filename: `markos-analytics-${slugForFilename(workspace.name)}-${month}.pdf`,
-    month
+    month,
   };
 }
 
 export async function syncInstagramAnalytics(
   workspaceId: string,
-  options: { days?: number; now?: Date; provider?: InstagramAnalyticsProvider } = {}
+  options: {
+    days?: number;
+    now?: Date;
+    provider?: InstagramAnalyticsProvider;
+  } = {},
 ): Promise<AnalyticsSyncResult> {
   const days = clampDays(options.days ?? 30);
   const to = options.now ?? new Date();
@@ -173,8 +206,8 @@ export async function syncInstagramAnalytics(
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!workspace) {
@@ -183,27 +216,27 @@ export async function syncInstagramAnalytics(
 
   const contentItems = await prisma.contentItem.findMany({
     orderBy: {
-      publishedAt: "desc"
+      publishedAt: "desc",
     },
     where: {
       workspaceId,
       deletedAt: null,
       instagramPostId: {
-        not: null
+        not: null,
       },
       publishedAt: {
         gte: dayStart(from),
-        lte: endOfDay(to)
+        lte: endOfDay(to),
       },
-      status: "PUBLISHED"
-    }
+      status: "PUBLISHED",
+    },
   });
   const provider = options.provider ?? createInstagramAnalyticsProvider();
   const snapshots = await provider.syncWorkspace({
     contentItems,
     from: dayStart(from),
     to: dayStart(to),
-    workspace
+    workspace,
   });
   const syncedAt = options.now ?? new Date();
   const records: InstagramAnalyticsRecord[] = [];
@@ -215,52 +248,65 @@ export async function syncInstagramAnalytics(
         dataDate: snapshot.dataDate,
         deletedAt: null,
         metricType: snapshot.metricType,
-        workspaceId
-      }
+        workspaceId,
+      },
     });
     const row =
       existing === null
         ? await prisma.instagramAnalytics.create({
             data: {
-              ...(snapshot.contentItemId === undefined ? {} : { contentItemId: snapshot.contentItemId }),
+              ...(snapshot.contentItemId === undefined
+                ? {}
+                : { contentItemId: snapshot.contentItemId }),
               dataDate: snapshot.dataDate,
               metricType: snapshot.metricType,
               metrics: snapshot.metrics,
               syncedAt,
-              workspaceId
-            }
+              workspaceId,
+            },
           })
         : await prisma.instagramAnalytics.update({
             data: {
               metrics: snapshot.metrics,
-              syncedAt
+              syncedAt,
             },
             where: {
-              id: existing.id
-            }
+              id: existing.id,
+            },
           });
 
     records.push(toInstagramAnalyticsRecord(row));
   }
-  const learning = await writeAnalyticsLearningToVault(workspaceId, { days, now: syncedAt });
+  const learning = await writeAnalyticsLearningToVault(workspaceId, {
+    days,
+    now: syncedAt,
+  });
+  const creativeLearning = await processWorkspaceCreativeLearning(workspaceId, {
+    days,
+    now: syncedAt,
+  });
 
   return {
     created: records.length,
+    creativeLearning,
     from: dayStart(from).toISOString(),
     learning,
     mode: provider.mode,
     records,
     to: dayStart(to).toISOString(),
-    workspaceId
+    workspaceId,
   };
 }
 
 export async function writeAnalyticsLearningToVault(
   workspaceId: string,
-  input: { days?: number; now?: Date } = {}
+  input: { days?: number; now?: Date } = {},
 ): Promise<AnalyticsLearningResult> {
   const days = clampDays(input.days ?? 30);
-  const summary = await getAnalyticsSummary(workspaceId, { days, to: input.now ?? new Date() });
+  const summary = await getAnalyticsSummary(workspaceId, {
+    days,
+    to: input.now ?? new Date(),
+  });
   const key = analyticsLearningKey(summary);
   const observations = buildAnalyticsObservations(summary);
   const saved = await upsertVaultSection(workspaceId, "OBJECTIVES", {
@@ -272,13 +318,13 @@ export async function writeAnalyticsLearningToVault(
           kind: "ANALYTICS_PERFORMANCE_LEARNING",
           metricBuckets: summary.byMetricType.map((bucket) => ({
             metricType: bucket.metricType,
-            totals: bucket.totals
+            totals: bucket.totals,
           })),
           observations,
           period: {
             days: summary.days,
             from: summary.from,
-            to: summary.to
+            to: summary.to,
           },
           topContent: summary.topContent.slice(0, 5).map((item) => ({
             caption: item.caption ?? null,
@@ -286,12 +332,12 @@ export async function writeAnalyticsLearningToVault(
             contentType: item.contentType,
             dataDate: item.dataDate,
             engagement: item.engagement,
-            metrics: item.metrics
+            metrics: item.metrics,
           })),
-          totals: summary.totals
-        }
-      }
-    ]
+          totals: summary.totals,
+        },
+      },
+    ],
   });
   const entry = saved[0];
 
@@ -305,12 +351,17 @@ export async function writeAnalyticsLearningToVault(
     observations,
     recordCount: summary.records.length,
     topContentCount: summary.topContent.length,
-    workspaceId
+    workspaceId,
   };
 }
 
 export async function syncInstagramAnalyticsForAllWorkspaces(
-  options: { days?: number; now?: Date; provider?: InstagramAnalyticsProvider; workspaceIds?: string[] } = {}
+  options: {
+    days?: number;
+    now?: Date;
+    provider?: InstagramAnalyticsProvider;
+    workspaceIds?: string[];
+  } = {},
 ): Promise<AnalyticsSyncForAllWorkspacesResult> {
   const workspaces = await prisma.workspace.findMany({
     where: {
@@ -319,19 +370,19 @@ export async function syncInstagramAnalyticsForAllWorkspaces(
         ? {}
         : {
             id: {
-              in: options.workspaceIds
-            }
+              in: options.workspaceIds,
+            },
           }),
       instagramAccountId: {
-        not: null
+        not: null,
       },
       instagramAccessToken: {
-        not: null
+        not: null,
       },
       instagramTokenExpiresAt: {
-        gt: options.now ?? new Date()
-      }
-    }
+        gt: options.now ?? new Date(),
+      },
+    },
   });
   const results: AnalyticsSyncResult[] = [];
 
@@ -341,8 +392,10 @@ export async function syncInstagramAnalyticsForAllWorkspaces(
         await syncInstagramAnalytics(workspace.id, {
           ...(options.days === undefined ? {} : { days: options.days }),
           ...(options.now === undefined ? {} : { now: options.now }),
-          ...(options.provider === undefined ? {} : { provider: options.provider })
-        })
+          ...(options.provider === undefined
+            ? {}
+            : { provider: options.provider }),
+        }),
       );
     } catch (error) {
       if (!(error instanceof InstagramAnalyticsProviderError)) {
@@ -353,11 +406,13 @@ export async function syncInstagramAnalyticsForAllWorkspaces(
 
   return {
     attempted: results.length,
-    results
+    results,
   };
 }
 
-function toInstagramAnalyticsRecord(row: InstagramAnalytics): InstagramAnalyticsRecord {
+function toInstagramAnalyticsRecord(
+  row: InstagramAnalytics,
+): InstagramAnalyticsRecord {
   return {
     createdAt: row.createdAt.toISOString(),
     dataDate: row.dataDate.toISOString(),
@@ -367,7 +422,7 @@ function toInstagramAnalyticsRecord(row: InstagramAnalytics): InstagramAnalytics
     metrics: isRecord(row.metrics) ? row.metrics : {},
     syncedAt: row.syncedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    workspaceId: row.workspaceId
+    workspaceId: row.workspaceId,
   };
 }
 
@@ -381,15 +436,19 @@ function emptyTotals(): AnalyticsMetricTotals {
     reach: 0,
     saves: 0,
     shares: 0,
-    views: 0
+    views: 0,
   };
 }
 
-function summarizeMetrics(records: InstagramAnalyticsRecord[]): AnalyticsMetricTotals {
+function summarizeMetrics(
+  records: InstagramAnalyticsRecord[],
+): AnalyticsMetricTotals {
   const totals = emptyTotals();
 
   for (const record of records) {
-    for (const key of Object.keys(totals) as Array<keyof AnalyticsMetricTotals>) {
+    for (const key of Object.keys(totals) as Array<
+      keyof AnalyticsMetricTotals
+    >) {
       const value = record.metrics[key];
 
       if (typeof value === "number") {
@@ -399,28 +458,36 @@ function summarizeMetrics(records: InstagramAnalyticsRecord[]): AnalyticsMetricT
   }
 
   if (totals.engagement === 0) {
-    totals.engagement = totals.likes + totals.comments + totals.shares + totals.saves;
+    totals.engagement =
+      totals.likes + totals.comments + totals.shares + totals.saves;
   }
 
   return totals;
 }
 
-function summarizeByMetricType(records: InstagramAnalyticsRecord[]): AnalyticsSummary["byMetricType"] {
+function summarizeByMetricType(
+  records: InstagramAnalyticsRecord[],
+): AnalyticsSummary["byMetricType"] {
   const grouped = new Map<InstagramMetricType, InstagramAnalyticsRecord[]>();
 
   for (const record of records) {
-    grouped.set(record.metricType, [...(grouped.get(record.metricType) ?? []), record]);
+    grouped.set(record.metricType, [
+      ...(grouped.get(record.metricType) ?? []),
+      record,
+    ]);
   }
 
   return [...grouped.entries()]
     .map(([metricType, metricRecords]) => ({
       metricType,
-      totals: summarizeMetrics(metricRecords)
+      totals: summarizeMetrics(metricRecords),
     }))
     .sort((left, right) => left.metricType.localeCompare(right.metricType));
 }
 
-function summarizeDaily(records: InstagramAnalyticsRecord[]): AnalyticsSummary["daily"] {
+function summarizeDaily(
+  records: InstagramAnalyticsRecord[],
+): AnalyticsSummary["daily"] {
   const grouped = new Map<string, InstagramAnalyticsRecord[]>();
 
   for (const record of records) {
@@ -431,21 +498,22 @@ function summarizeDaily(records: InstagramAnalyticsRecord[]): AnalyticsSummary["
   return [...grouped.entries()]
     .map(([dataDate, dateRecords]) => ({
       dataDate,
-      totals: summarizeMetrics(dateRecords)
+      totals: summarizeMetrics(dateRecords),
     }))
     .sort((left, right) => left.dataDate.localeCompare(right.dataDate));
 }
 
 function summarizeTopContent(
   records: InstagramAnalyticsRecord[],
-  contentById: Map<string, ContentItem>
+  contentById: Map<string, ContentItem>,
 ): AnalyticsSummary["topContent"] {
   return records
     .filter((record) => record.contentItemId !== undefined)
     .map((record) => {
       const totals = summarizeMetrics([record]);
       const contentItem = contentById.get(record.contentItemId ?? "");
-      const caption = contentItem?.captionEn ?? contentItem?.captionAr ?? undefined;
+      const caption =
+        contentItem?.captionEn ?? contentItem?.captionAr ?? undefined;
 
       return {
         ...(caption === undefined ? {} : { caption }),
@@ -453,7 +521,7 @@ function summarizeTopContent(
         contentType: contentItem?.contentType ?? "POST",
         dataDate: record.dataDate,
         engagement: totals.engagement,
-        metrics: totals
+        metrics: totals,
       };
     })
     .sort((left, right) => right.engagement - left.engagement)
@@ -469,33 +537,39 @@ function buildAnalyticsObservations(summary: AnalyticsSummary): string[] {
   const totals = summary.totals;
   const previousDaily = summary.daily.at(-2);
   const latestDaily = summary.daily.at(-1);
-  const strongestBucket = [...summary.byMetricType].sort((left, right) => right.totals.engagement - left.totals.engagement)[0];
+  const strongestBucket = [...summary.byMetricType].sort(
+    (left, right) => right.totals.engagement - left.totals.engagement,
+  )[0];
   const bestContent = summary.topContent[0];
 
   if (summary.records.length === 0) {
-    return ["No Instagram analytics were available for this window; future recommendations should ask for fresh sync data."];
+    return [
+      "No Instagram analytics were available for this window; future recommendations should ask for fresh sync data.",
+    ];
   }
 
   observations.push(
-    `Performance window captured ${summary.records.length} analytics records with reach ${totals.reach}, impressions ${totals.impressions}, and engagement ${totals.engagement}.`
+    `Performance window captured ${summary.records.length} analytics records with reach ${totals.reach}, impressions ${totals.impressions}, and engagement ${totals.engagement}.`,
   );
 
   if (bestContent !== undefined) {
     observations.push(
-      `Top content was ${bestContent.contentType} ${bestContent.contentItemId} with engagement ${bestContent.engagement} and reach ${bestContent.metrics.reach}.`
+      `Top content was ${bestContent.contentType} ${bestContent.contentItemId} with engagement ${bestContent.engagement} and reach ${bestContent.metrics.reach}.`,
     );
   }
 
   if (strongestBucket !== undefined) {
     observations.push(
-      `${strongestBucket.metricType} metrics were the strongest engagement bucket at ${strongestBucket.totals.engagement}.`
+      `${strongestBucket.metricType} metrics were the strongest engagement bucket at ${strongestBucket.totals.engagement}.`,
     );
   }
 
   if (previousDaily !== undefined && latestDaily !== undefined) {
     const delta = latestDaily.totals.reach - previousDaily.totals.reach;
     const direction = delta >= 0 ? "increased" : "decreased";
-    observations.push(`Latest daily reach ${direction} by ${Math.abs(delta)} compared with the prior metric day.`);
+    observations.push(
+      `Latest daily reach ${direction} by ${Math.abs(delta)} compared with the prior metric day.`,
+    );
   }
 
   return observations;
@@ -505,17 +579,24 @@ function clampDays(days: number): number {
   return Math.min(Math.max(Math.trunc(days), 1), 90);
 }
 
-function analyticsRange(input: { days?: number; from?: Date; to?: Date }): { days: number; from: Date; to: Date } {
+function analyticsRange(input: { days?: number; from?: Date; to?: Date }): {
+  days: number;
+  from: Date;
+  to: Date;
+} {
   const to = dayStart(input.to ?? new Date());
 
   if (input.from !== undefined) {
     const from = dayStart(input.from);
-    const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    const days = Math.max(
+      1,
+      Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+    );
 
     return {
       days,
       from,
-      to
+      to,
     };
   }
 
@@ -525,7 +606,7 @@ function analyticsRange(input: { days?: number; from?: Date; to?: Date }): { day
   return {
     days,
     from,
-    to
+    to,
   };
 }
 
@@ -534,13 +615,18 @@ function monthDateRange(month: string): { from: Date; to: Date } {
   const year = Number(yearText);
   const monthIndex = Number(monthText) - 1;
 
-  if (!Number.isInteger(year) || !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(monthIndex) ||
+    monthIndex < 0 ||
+    monthIndex > 11
+  ) {
     throw new Error("Invalid analytics report month");
   }
 
   return {
     from: new Date(Date.UTC(year, monthIndex, 1)),
-    to: new Date(Date.UTC(year, monthIndex + 1, 0))
+    to: new Date(Date.UTC(year, monthIndex + 1, 0)),
   };
 }
 
@@ -552,7 +638,9 @@ function monthKey(date: Date): string {
 }
 
 function dayStart(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
 
 function endOfDay(date: Date): Date {
@@ -569,7 +657,12 @@ function hasConfiguredEnv(key: string): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: AnalyticsSummary; workspaceName: string }): Buffer {
+function buildAnalyticsPdf(input: {
+  locale: Locale;
+  month: string;
+  summary: AnalyticsSummary;
+  workspaceName: string;
+}): Buffer {
   const totals = input.summary.totals;
   const labels = pdfLabels(input.locale);
   const lines = [
@@ -593,7 +686,7 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
     labels.metricBuckets,
     ...input.summary.byMetricType.map(
       (bucket) =>
-        `- ${bucket.metricType}: ${labels.reach} ${bucket.totals.reach}, ${labels.engagement} ${bucket.totals.engagement}`
+        `- ${bucket.metricType}: ${labels.reach} ${bucket.totals.reach}, ${labels.engagement} ${bucket.totals.engagement}`,
     ),
     "",
     labels.topContent,
@@ -601,15 +694,20 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
       ? [`- ${labels.noTopContent}`]
       : input.summary.topContent.map(
           (item) =>
-            `- ${item.caption ?? item.contentType}: ${labels.engagement} ${item.engagement}, ${labels.reach} ${item.metrics.reach}`
+            `- ${item.caption ?? item.contentType}: ${labels.engagement} ${item.engagement}, ${labels.reach} ${item.metrics.reach}`,
         )),
     "",
     labels.dailyReach,
     ...(input.summary.daily.length === 0
       ? [`- ${labels.noDailyData}`]
-      : input.summary.daily.map((row) => `- ${row.dataDate.slice(0, 10)}: ${row.totals.reach}`))
+      : input.summary.daily.map(
+          (row) => `- ${row.dataDate.slice(0, 10)}: ${row.totals.reach}`,
+        )),
   ];
-  const pages = paginatePdfLines(lines.map((line) => sanitizePdfText(line ?? "")), 42);
+  const pages = paginatePdfLines(
+    lines.map((line) => sanitizePdfText(line ?? "")),
+    42,
+  );
   const objects: string[] = [];
   const addObject = (body: string): number => {
     objects.push(body);
@@ -617,19 +715,24 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
   };
   const catalogId = addObject("<< /Type /Catalog /Pages 2 0 R >>");
   const pagesId = addObject("PAGES_PLACEHOLDER");
-  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const fontId = addObject(
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  );
   const pageIds: number[] = [];
 
   for (const pageLines of pages) {
     const stream = buildPdfContentStream(pageLines);
-    const contentId = addObject(`<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`);
+    const contentId = addObject(
+      `<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`,
+    );
     const pageId = addObject(
-      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
     );
     pageIds.push(pageId);
   }
 
-  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+  objects[pagesId - 1] =
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
 
   return assemblePdf(objects, catalogId);
 }
@@ -655,7 +758,7 @@ function pdfLabels(locale: Locale): Record<string, string> {
       shares: "Shares",
       topContent: "Top content",
       views: "Views",
-      workspace: "Workspace"
+      workspace: "Workspace",
     };
   }
 
@@ -678,7 +781,7 @@ function pdfLabels(locale: Locale): Record<string, string> {
     shares: "Shares",
     topContent: "Top content",
     views: "Views",
-    workspace: "Workspace"
+    workspace: "Workspace",
   };
 }
 
@@ -720,7 +823,9 @@ function assemblePdf(objects: string[], catalogId: number): Buffer {
     chunks.push(`${String(offset).padStart(10, "0")} 00000 n \n`);
   }
 
-  chunks.push(`trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\n`);
+  chunks.push(
+    `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\n`,
+  );
   chunks.push(`startxref\n${xrefOffset}\n%%EOF\n`);
 
   return Buffer.from(chunks.join(""), "utf8");
@@ -734,7 +839,10 @@ function sanitizePdfText(value: string): string {
 }
 
 function escapePdfString(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
 }
 
 function slugForFilename(value: string): string {

@@ -1,5 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } from "@markos/validation";
+import {
+  upsertVaultSectionSchema,
+  vaultRagSearchSchema,
+  vaultSectionSchema,
+  vaultWebsiteIngestApproveSchema,
+  vaultWebsiteIngestJobCreateSchema,
+  vaultWebsiteIngestJobParamsSchema,
+  vaultWebsiteIngestParamsSchema,
+  vaultWebsiteIngestPreviewSchema,
+  vaultWebsiteIngestRejectSchema,
+} from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import {
@@ -8,8 +18,17 @@ import {
   listVaultEntryHistory,
   listVaultSection,
   searchVaultContext,
-  upsertVaultSection
+  upsertVaultSection,
 } from "./vault-service";
+import {
+  approveWebsiteIngest,
+  getWebsiteIngestDraft,
+  getWebsiteIngestJob,
+  previewWebsiteIngest,
+  queueWebsiteIngestJob,
+  rejectWebsiteIngest,
+  VaultWebsiteIngestError,
+} from "./website-ingest-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -17,13 +36,13 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:read"]
-      }
+        permissions: ["vault:read"],
+      },
     },
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listVault(workspaceId));
-    }
+    },
   );
 
   app.get(
@@ -31,13 +50,13 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:read"]
-      }
+        permissions: ["vault:read"],
+      },
     },
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await getVaultScore(workspaceId));
-    }
+    },
   );
 
   app.post(
@@ -45,19 +64,329 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:read"]
-      }
+        permissions: ["vault:read"],
+      },
     },
     async (request, reply) => {
       const parsed = vaultRagSearchSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Vault RAG search request", parsed.error.issues));
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid Vault RAG search request",
+              parsed.error.issues,
+            ),
+          );
       }
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await searchVaultContext(workspaceId, parsed.data));
-    }
+    },
+  );
+
+  app.post(
+    "/v1/vault/ingest/website/preview",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"],
+      },
+    },
+    async (request, reply) => {
+      const parsed = vaultWebsiteIngestPreviewSchema.safeParse(
+        request.body ?? {},
+      );
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest request",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await previewWebsiteIngest(workspaceId, userId, parsed.data));
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.post(
+    "/v1/vault/ingest/website/jobs",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"],
+      },
+    },
+    async (request, reply) => {
+      const parsed = vaultWebsiteIngestJobCreateSchema.safeParse(
+        request.body ?? {},
+      );
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest job request",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return reply
+          .status(202)
+          .send(
+            ok(await queueWebsiteIngestJob(workspaceId, userId, parsed.data)),
+          );
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.get(
+    "/v1/vault/ingest/website/jobs/:jobId",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:read"],
+      },
+    },
+    async (request, reply) => {
+      const parsed = vaultWebsiteIngestJobParamsSchema.safeParse(
+        request.params ?? {},
+      );
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest job id",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await getWebsiteIngestJob(workspaceId, parsed.data.jobId));
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.post(
+    "/v1/vault/ingest/:draftId/approve",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"],
+      },
+    },
+    async (request, reply) => {
+      const params = vaultWebsiteIngestParamsSchema.safeParse(
+        request.params ?? {},
+      );
+      const parsed = vaultWebsiteIngestApproveSchema.safeParse(
+        request.body ?? {},
+      );
+
+      if (!params.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest draft id",
+              params.error.issues,
+            ),
+          );
+      }
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest approval",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(
+          await approveWebsiteIngest(
+            workspaceId,
+            userId,
+            params.data.draftId,
+            parsed.data,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.get(
+    "/v1/vault/ingest/:draftId",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:read"],
+      },
+    },
+    async (request, reply) => {
+      const parsed = vaultWebsiteIngestParamsSchema.safeParse(
+        request.params ?? {},
+      );
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest draft id",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(
+          await getWebsiteIngestDraft(workspaceId, parsed.data.draftId),
+        );
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.post(
+    "/v1/vault/ingest/:draftId/reject",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["vault:write"],
+      },
+    },
+    async (request, reply) => {
+      const params = vaultWebsiteIngestParamsSchema.safeParse(
+        request.params ?? {},
+      );
+      const parsed = vaultWebsiteIngestRejectSchema.safeParse(
+        request.body ?? {},
+      );
+
+      if (!params.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest draft id",
+              params.error.issues,
+            ),
+          );
+      }
+
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid website ingest rejection",
+              parsed.error.issues,
+            ),
+          );
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(
+          await rejectWebsiteIngest(
+            workspaceId,
+            userId,
+            params.data.draftId,
+            parsed.data,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof VaultWebsiteIngestError) {
+          return reply
+            .status(error.statusCode)
+            .send(errorEnvelope(error.code, error.message));
+        }
+
+        throw error;
+      }
+    },
   );
 
   app.get(
@@ -65,24 +394,34 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:read"]
-      }
+        permissions: ["vault:read"],
+      },
     },
     async (request, reply) => {
       const params = request.params as { key?: string; section?: string };
       const section = parseSection(params.section);
 
       if (section === undefined) {
-        return reply.status(404).send(errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"));
+        return reply
+          .status(404)
+          .send(
+            errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"),
+          );
       }
 
-      if (params.key === undefined || params.key.trim().length === 0 || params.key.length > 120) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Vault key"));
+      if (
+        params.key === undefined ||
+        params.key.trim().length === 0 ||
+        params.key.length > 120
+      ) {
+        return reply
+          .status(400)
+          .send(errorEnvelope("VALIDATION_ERROR", "Invalid Vault key"));
       }
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listVaultEntryHistory(workspaceId, section, params.key));
-    }
+    },
   );
 
   app.get(
@@ -90,19 +429,25 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:read"]
-      }
+        permissions: ["vault:read"],
+      },
     },
     async (request, reply) => {
-      const section = parseSection((request.params as { section?: string }).section);
+      const section = parseSection(
+        (request.params as { section?: string }).section,
+      );
 
       if (section === undefined) {
-        return reply.status(404).send(errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"));
+        return reply
+          .status(404)
+          .send(
+            errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"),
+          );
       }
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listVaultSection(workspaceId, section));
-    }
+    },
   );
 
   app.put(
@@ -110,25 +455,39 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         workspaceRequired: true,
-        permissions: ["vault:write"]
-      }
+        permissions: ["vault:write"],
+      },
     },
     async (request, reply) => {
-      const section = parseSection((request.params as { section?: string }).section);
+      const section = parseSection(
+        (request.params as { section?: string }).section,
+      );
 
       if (section === undefined) {
-        return reply.status(404).send(errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"));
+        return reply
+          .status(404)
+          .send(
+            errorEnvelope("VAULT_SECTION_NOT_FOUND", "Unknown Vault section"),
+          );
       }
 
       const parsed = upsertVaultSectionSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid Vault section payload", parsed.error.issues));
+        return reply
+          .status(400)
+          .send(
+            errorEnvelope(
+              "VALIDATION_ERROR",
+              "Invalid Vault section payload",
+              parsed.error.issues,
+            ),
+          );
       }
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await upsertVaultSection(workspaceId, section, parsed.data));
-    }
+    },
   );
 }
 

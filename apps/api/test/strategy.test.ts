@@ -93,6 +93,24 @@ describe("strategy routes", () => {
         ]
       }
     });
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/audience",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "primary",
+            value: {
+              painPoints: ["need reliable office coffee supply"],
+              segment: "office managers"
+            }
+          }
+        ]
+      }
+    });
+    const product = await createCatalogProduct(app, headers);
+    const offer = await createCatalogOffer(app, headers, product.id);
 
     const response = await app.inject({
       method: "POST",
@@ -100,7 +118,9 @@ describe("strategy routes", () => {
       headers,
       payload: {
         objective: "increase wholesale cafe leads",
-        horizonDays: 90
+        horizonDays: 90,
+        productId: product.id,
+        offerId: offer.id
       }
     });
 
@@ -112,12 +132,37 @@ describe("strategy routes", () => {
         horizonDays: 90,
         content: {
           summary: "90-day plan for increase wholesale cafe leads",
-          retrievedContext: [
+          retrievedContext: expect.arrayContaining([
+            expect.objectContaining({
+              section: "PRODUCTS",
+              key: "catalog:commercial-brief",
+              value: expect.objectContaining({
+                audienceSignals: expect.arrayContaining(["office managers"]),
+                campaignAngles: expect.arrayContaining([expect.stringContaining("bulk packs for offices")]),
+                sourceType: "commercial_brief"
+              })
+            }),
+            expect.objectContaining({
+              section: "PRODUCTS",
+              key: `catalog:product:${product.id}`,
+              value: expect.objectContaining({
+                selectedForGeneration: true,
+                selectionRole: "selected_product"
+              })
+            }),
+            expect.objectContaining({
+              section: "PRODUCTS",
+              key: `catalog:offer:${offer.id}`,
+              value: expect.objectContaining({
+                selectedForGeneration: true,
+                selectionRole: "selected_offer"
+              })
+            }),
             expect.objectContaining({
               section: "COMPANY",
               key: "profile"
             })
-          ]
+          ])
         }
       }
     });
@@ -141,6 +186,41 @@ describe("strategy routes", () => {
       costMinor: 0,
       currency: "BHD",
       model: "test-strategy-model"
+    });
+    expect(interaction.prompt).toMatchObject({
+      productId: product.id,
+      offerId: offer.id,
+      retrievedContext: expect.arrayContaining([
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: "catalog:commercial-brief",
+          value: expect.objectContaining({
+            audienceSignals: expect.arrayContaining(["office managers"]),
+            campaignAngles: expect.arrayContaining([expect.stringContaining("bulk packs for offices")]),
+            guardrails: expect.objectContaining({
+              doNotInventComparativeClaims: true,
+              doNotInventPrices: true
+            }),
+            sourceType: "commercial_brief"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:product:${product.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_product"
+          })
+        }),
+        expect.objectContaining({
+          section: "PRODUCTS",
+          key: `catalog:offer:${offer.id}`,
+          value: expect.objectContaining({
+            selectedForGeneration: true,
+            selectionRole: "selected_offer"
+          })
+        })
+      ])
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -199,6 +279,101 @@ describe("strategy routes", () => {
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({
       title: "90-day strategy: increase wholesale cafe leads"
+    });
+
+    await app.close();
+  });
+
+  it("rejects price-led strategy requests when selected catalog context has no price", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              industry: "specialty coffee",
+              location: "Bahrain",
+              name: "Pearl Coffee"
+            }
+          }
+        ]
+      }
+    });
+    const product = await createCatalogProductWithoutPrice(app, headers);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/strategy/generate",
+      headers,
+      payload: {
+        objective: "promote discount pricing for office coffee",
+        horizonDays: 90,
+        productId: product.id
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "CATALOG_GENERATION_GUARDRAIL",
+        details: expect.arrayContaining([
+          expect.objectContaining({
+            issue: "missing_price"
+          })
+        ])
+      }
+    });
+
+    await app.close();
+  });
+
+  it("rejects selected catalog context from another workspace", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const ownerHeaders = authHeaders(owner.tokens.accessToken);
+    const other = await registerTestUser(app);
+    const otherHeaders = authHeaders(other.tokens.accessToken);
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers: otherHeaders,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "Other Workspace",
+              industry: "retail",
+              location: "Bahrain"
+            }
+          }
+        ]
+      }
+    });
+    const product = await createCatalogProduct(app, ownerHeaders);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/strategy/generate",
+      headers: otherHeaders,
+      payload: {
+        objective: "use another workspace product",
+        horizonDays: 90,
+        productId: product.id
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "CATALOG_SELECTION_NOT_FOUND"
+      }
     });
 
     await app.close();
@@ -456,6 +631,58 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
+}
+
+async function createCatalogProduct(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/catalog/products",
+    headers,
+    payload: {
+      benefits: ["bulk packs for offices", "same-day Bahrain delivery"],
+      category: "Coffee",
+      name: "Wholesale Coffee Starter Pack",
+      priceMinor: 32000,
+      salesChannels: ["Instagram", "WhatsApp"]
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json().data as { id: string };
+}
+
+async function createCatalogProductWithoutPrice(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/catalog/products",
+    headers,
+    payload: {
+      benefits: ["bulk packs for offices"],
+      category: "Coffee",
+      name: "Wholesale Coffee Starter Pack",
+      salesChannels: ["Instagram"]
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json().data as { id: string };
+}
+
+async function createCatalogOffer(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>, productId: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/catalog/offers",
+    headers,
+    payload: {
+      description: "Introductory discount for new cafe accounts.",
+      priceMinor: 28000,
+      productId,
+      title: "First wholesale order offer"
+    }
+  });
+
+  expect(response.statusCode).toBe(200);
+  return response.json().data as { id: string };
 }
 
 function testEmbedding(text: string): number[] {

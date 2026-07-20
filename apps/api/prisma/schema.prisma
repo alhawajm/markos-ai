@@ -70,6 +70,15 @@ enum ContentStatus {
   FAILED
 }
 
+enum CampaignStatus {
+  DRAFT
+  GENERATED
+  IN_REVIEW
+  APPROVED
+  SCHEDULED
+  ARCHIVED
+}
+
 enum MediaType {
   IMAGE
   VIDEO
@@ -119,6 +128,71 @@ enum UsageMetric {
   POST_PUBLISH
   STRATEGY
   STORAGE_BYTES
+}
+
+enum VaultIngestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VaultWebsiteIngestJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ProductStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum OfferStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+  ARCHIVED
+}
+
+enum VisualMode {
+  PRODUCT_PHOTO
+  LIFESTYLE_STORY
+  AD_CREATIVE
+  BACKGROUND_VARIANT
+}
+
+enum GeneratedMediaStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum GeneratedMediaQualityStatus {
+  REVIEW_REQUIRED
+  APPROVED
+  REJECTED
+}
+
+enum CreativeFeedbackDecision {
+  APPROVED
+  REJECTED
+}
+
+enum CreativeLearningSource {
+  HUMAN_FEEDBACK
+  INSTAGRAM_PERFORMANCE
+  CAMPAIGN_REVIEW
+}
+
+enum CreativePatternType {
+  POSITIVE
+  NEGATIVE
+}
+
+enum BrandBookExportStatus {
+  DRAFT
+  EXPORTED
 }
 
 model User {
@@ -176,15 +250,15 @@ model WorkspaceMember {
 }
 
 model KnowledgeVault {
-  id          String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String                   @db.Uuid
+  id          String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                       @db.Uuid
   section     VaultSection
   key         String
   value       Json
   embedding   Unsupported("vector(1536)")?
-  version     Int                      @default(1)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  version     Int                          @default(1)
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
   deletedAt   DateTime?
 
   @@index([workspaceId, section])
@@ -204,6 +278,48 @@ model KnowledgeVaultHistory {
   @@unique([knowledgeVaultId, version])
   @@index([workspaceId, section, key])
   @@map("knowledge_vault_history")
+}
+
+model VaultIngestDraft {
+  id                String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId       String            @db.Uuid
+  sourceUrl         String
+  sourceTitle       String?
+  sourceDescription String?
+  candidates        Json
+  status            VaultIngestStatus @default(PENDING)
+  confidence        Float
+  error             String?
+  reviewedAt        DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, sourceUrl])
+  @@map("vault_ingest_drafts")
+}
+
+model VaultWebsiteIngestJob {
+  id          String                      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                      @db.Uuid
+  actorId     String                      @db.Uuid
+  sourceUrl   String
+  maxPages    Int                         @default(5)
+  status      VaultWebsiteIngestJobStatus @default(QUEUED)
+  attempts    Int                         @default(0)
+  draftId     String?                     @db.Uuid
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  nextRunAt   DateTime                    @default(now())
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  deletedAt   DateTime?
+
+  @@index([status, nextRunAt])
+  @@index([workspaceId, status])
+  @@map("vault_website_ingest_jobs")
 }
 
 model Strategy {
@@ -235,17 +351,28 @@ model ContentCalendar {
 }
 
 model Campaign {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String    @db.Uuid
-  name        String
-  objective   String?
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id              String         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String         @db.Uuid
+  name            String
+  objective       String?
+  status          CampaignStatus @default(DRAFT)
+  structuredBrief Json           @default("{}")
+  package         Json?
+  productId       String?        @db.Uuid
+  offerId         String?        @db.Uuid
+  rationale       String?
+  rejectedIdeas   Json           @default("[]")
+  startsAt        DateTime?
+  endsAt          DateTime?
+  generatedAt     DateTime?
+  approvedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
 
   @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, startsAt])
   @@map("campaigns")
 }
 
@@ -273,6 +400,7 @@ model ContentItem {
   deletedAt       DateTime?
 
   @@index([workspaceId, status])
+  @@index([workspaceId, campaignId])
   @@index([workspaceId, scheduledAt])
   @@map("content_items")
 }
@@ -297,6 +425,157 @@ model MediaAsset {
   @@map("media_assets")
 }
 
+model GeneratedMediaVariant {
+  id                  String                      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId         String                      @db.Uuid
+  mediaAssetId        String                      @db.Uuid
+  contentItemId       String?                     @db.Uuid
+  productId           String?                     @db.Uuid
+  offerId             String?                     @db.Uuid
+  sourceMediaAssetIds String[]                    @db.Uuid
+  visualMode          VisualMode
+  aspectRatio         String
+  prompt              String
+  negativePrompt      String?
+  model               String
+  promptVersion       String
+  aiInteractionId     String?                     @db.Uuid
+  status              GeneratedMediaStatus        @default(PENDING_REVIEW)
+  qualityStatus       GeneratedMediaQualityStatus @default(REVIEW_REQUIRED)
+  rejectionReason     String?
+  qualityScores       Json                        @default("{}")
+  performanceScore    Float?
+  lastLearnedAt       DateTime?
+  metadata            Json
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  deletedAt           DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, mediaAssetId])
+  @@index([workspaceId, contentItemId])
+  @@index([workspaceId, productId])
+  @@index([workspaceId, offerId])
+  @@index([workspaceId, aiInteractionId])
+  @@map("generated_media_variants")
+}
+
+model CreativeFeedback {
+  id                      String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId             String                   @db.Uuid
+  generatedMediaVariantId String                   @db.Uuid
+  aiInteractionId         String?                  @db.Uuid
+  decision                CreativeFeedbackDecision
+  reasonCodes             String[]
+  notes                   String?
+  scores                  Json                     @default("{}")
+  createdBy               String?                  @db.Uuid
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+
+  @@index([workspaceId, generatedMediaVariantId, createdAt])
+  @@index([workspaceId, aiInteractionId])
+  @@index([workspaceId, decision, createdAt])
+  @@map("creative_feedback")
+}
+
+model CreativeLearningExemplar {
+  id                      String                 @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId             String                 @db.Uuid
+  source                  CreativeLearningSource
+  patternType             CreativePatternType
+  generatedMediaVariantId String?                @db.Uuid
+  contentItemId           String?                @db.Uuid
+  campaignId              String?                @db.Uuid
+  aiInteractionId         String?                @db.Uuid
+  patternKey              String
+  summary                 String
+  evidence                Json
+  score                   Float
+  active                  Boolean                @default(true)
+  lastObservedAt          DateTime               @default(now())
+  vaultSyncedAt           DateTime?
+  vaultSyncError          String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  deletedAt               DateTime?
+
+  @@unique([workspaceId, patternKey])
+  @@index([workspaceId, patternType, score])
+  @@index([workspaceId, source, lastObservedAt])
+  @@index([workspaceId, generatedMediaVariantId])
+  @@index([workspaceId, contentItemId])
+  @@index([workspaceId, campaignId])
+  @@index([workspaceId, vaultSyncedAt])
+  @@map("creative_learning_exemplars")
+}
+
+model BrandBookExport {
+  id              String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String                @db.Uuid
+  version         Int
+  status          BrandBookExportStatus @default(EXPORTED)
+  title           String
+  content         Json
+  sourceEntryIds  String[]              @db.Uuid
+  missingSections VaultSection[]
+  confidence      Float
+  exportedAt      DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId, createdAt])
+  @@map("brand_book_exports")
+}
+
+model Product {
+  id            String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String        @db.Uuid
+  name          String
+  description   String?
+  category      String?
+  priceMinor    Int?
+  currency      String        @default("BHD") @db.VarChar(3)
+  salesChannels String[]
+  benefits      String[]
+  mediaAssetIds String[]      @db.Uuid
+  status        ProductStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, category])
+  @@map("products")
+}
+
+model Offer {
+  id                  String      @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId         String      @db.Uuid
+  productId           String?     @db.Uuid
+  title               String
+  description         String?
+  priceMinor          Int?
+  compareAtPriceMinor Int?
+  currency            String      @default("BHD") @db.VarChar(3)
+  startsAt            DateTime?
+  endsAt              DateTime?
+  terms               String?
+  status              OfferStatus @default(ACTIVE)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  deletedAt           DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, productId])
+  @@index([workspaceId, startsAt])
+  @@index([workspaceId, endsAt])
+  @@map("offers")
+}
+
 model InstagramAnalytics {
   id            String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId   String     @db.Uuid
@@ -314,8 +593,8 @@ model InstagramAnalytics {
 }
 
 model AiInteraction {
-  id            String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId   String                   @db.Uuid
+  id            String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                       @db.Uuid
   agent         String
   promptVersion String
   prompt        Json
@@ -326,11 +605,11 @@ model AiInteraction {
   tokensIn      Int
   tokensOut     Int
   costMinor     Int
-  currency      String                   @default("BHD") @db.VarChar(3)
+  currency      String                       @default("BHD") @db.VarChar(3)
   model         String
   embedding     Unsupported("vector(1536)")?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
   deletedAt     DateTime?
 
   @@index([workspaceId, agent])
@@ -417,8 +696,8 @@ model UsageCounter {
   metric      UsageMetric
   periodStart DateTime
   periodEnd   DateTime
-  used         Int         @default(0)
-  limit        Int
+  used        Int         @default(0)
+  limit       Int
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -427,17 +706,17 @@ model UsageCounter {
 }
 
 model PromptTemplate {
-  id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid
-  agent      String
-  version    String
-  body       String
-  variantOf  String?   @db.Uuid
-  trafficPct Int       @default(100)
-  active     Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+  agent       String
+  version     String
+  body        String
+  variantOf   String?   @db.Uuid
+  trafficPct  Int       @default(100)
+  active      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   @@unique([workspaceId, agent, version])
   @@index([workspaceId, agent, active])
@@ -472,14 +751,14 @@ model Notification {
 }
 
 model AuditLog {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  actorId     String?   @db.Uuid
-  workspaceId String?   @db.Uuid
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  actorId     String?  @db.Uuid
+  workspaceId String?  @db.Uuid
   action      String
   targetType  String
   targetId    String?
   metadata    Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([workspaceId, action])
   @@index([actorId])

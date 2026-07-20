@@ -30,6 +30,43 @@ class VaultEmbedResponse(BaseModel):
     embeddings: list[list[float]]
 
 
+class WebsiteExtractionPage(BaseModel):
+    url: str
+    title: str | None = None
+    description: str | None = None
+    site_name: str | None = None
+    headline: str | None = None
+    paragraphs: list[str] = Field(default_factory=list, max_length=20)
+    links: list[str] = Field(default_factory=list, max_length=40)
+    image_alts: list[str] = Field(default_factory=list, max_length=30)
+    colors: list[str] = Field(default_factory=list, max_length=20)
+
+
+class WebsiteExtractRequest(BaseModel):
+    workspace_id: str
+    pages: list[WebsiteExtractionPage] = Field(min_length=1, max_length=10)
+    model: str | None = None
+    repair: bool = False
+
+
+class WebsiteExtractionCandidate(BaseModel):
+    section: Literal["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"]
+    key: str
+    value: dict[str, object]
+    confidence: float = Field(ge=0, le=1)
+    sourceUrl: str
+    extractedAt: str
+    sourceSnippet: str
+
+
+class WebsiteExtractResponse(BaseModel):
+    model: str
+    prompt_version: str
+    tokens_in: int
+    tokens_out: int
+    candidates: list[WebsiteExtractionCandidate]
+
+
 class StrategyContextChunk(BaseModel):
     section: str
     key: str
@@ -194,6 +231,21 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
     )
 
 
+@app.post("/ai/vault/extract-website", response_model=WebsiteExtractResponse)
+async def extract_website(request: WebsiteExtractRequest) -> WebsiteExtractResponse:
+    model = request.model or settings.website_extraction_model
+    candidates = build_website_candidates(request.pages)
+    prompt_text = f"{request.workspace_id} {request.pages} repair={request.repair}"
+
+    return WebsiteExtractResponse(
+        model=model,
+        prompt_version="website-extraction.v1.local",
+        tokens_in=estimate_tokens(prompt_text),
+        tokens_out=estimate_tokens(str(candidates)),
+        candidates=candidates,
+    )
+
+
 @app.post("/ai/strategy/generate", response_model=StrategyGenerateResponse)
 async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerateResponse:
     model = request.model or settings.llm_primary_model
@@ -278,6 +330,182 @@ def deterministic_embedding(text: str, dimensions: int) -> list[float]:
         return vector
 
     return [value / norm for value in vector]
+
+
+def build_website_candidates(pages: list[WebsiteExtractionPage]) -> list[WebsiteExtractionCandidate]:
+    extracted_at = datetime.now(UTC).isoformat()
+    root = pages[0]
+    if root is None:
+        return []
+
+    paragraphs = unique_strings([item for page in pages for item in page.paragraphs])
+    links = unique_strings([item for page in pages for item in page.links])
+    image_alts = unique_strings([item for page in pages for item in page.image_alts])
+    colors = unique_strings([item for page in pages for item in page.colors])
+    description = root.description or root.headline or (paragraphs[0] if paragraphs else None)
+    name_source = root.site_name or root.title
+    name = re.split(r"\s[|:\-]\s", name_source, maxsplit=1)[0].strip() if name_source else None
+    source = {
+        "type": "website_ingest",
+        "sourceUrl": root.url,
+        "sourceUrls": [page.url for page in pages],
+        "extractedAt": extracted_at,
+        "extractionMethod": "strict_model_json_v1",
+    }
+    candidates: list[WebsiteExtractionCandidate] = []
+
+    if name or description:
+        evidence = description or name or ""
+        candidates.append(
+            website_candidate(
+                section="COMPANY",
+                key="website-profile",
+                value={
+                    "source": source,
+                    **({"name": name} if name else {}),
+                    **({"headline": root.headline} if root.headline else {}),
+                    **({"description": root.description} if root.description else {}),
+                },
+                confidence=0.86 if root.description else 0.68,
+                page=root,
+                extracted_at=extracted_at,
+                evidence=evidence,
+            )
+        )
+
+    if paragraphs or root.headline:
+        evidence = paragraphs[0] if paragraphs else root.headline or ""
+        evidence_page = find_evidence_page(pages, evidence) or root
+        candidates.append(
+            website_candidate(
+                section="STORY",
+                key="website-story",
+                value={"source": source, "summary": " ".join(([root.headline] if root.headline else []) + paragraphs[:6])[:1200], "proofPoints": paragraphs[:5]},
+                confidence=0.78 if len(paragraphs) >= 2 else 0.58,
+                page=evidence_page,
+                extracted_at=extracted_at,
+                evidence=evidence,
+            )
+        )
+
+    product_evidence = [text for text in unique_strings(links + paragraphs) if contains_product_keyword(text)][:8]
+    if product_evidence:
+        evidence_page = find_evidence_page(pages, product_evidence[0]) or root
+        candidates.append(
+            website_candidate(
+                section="PRODUCTS",
+                key="website-products",
+                value={"source": source, "discoveredItems": [{"name": text[:120], "evidence": text[:300]} for text in product_evidence]},
+                confidence=min(0.88, 0.55 + len(product_evidence) * 0.04),
+                page=evidence_page,
+                extracted_at=extracted_at,
+                evidence=product_evidence[0],
+            )
+        )
+
+    if colors or image_alts:
+        evidence = (image_alts or colors)[0]
+        evidence_page = find_evidence_page(pages, evidence) or root
+        candidates.append(
+            website_candidate(
+                section="BRAND",
+                key="website-visual-signals",
+                value={"source": source, "colors": colors, "visualReferences": image_alts, "note": "Website imagery is reference-only until reuse rights are confirmed."},
+                confidence=min(0.82, 0.48 + len(colors) * 0.025 + len(image_alts) * 0.02),
+                page=evidence_page,
+                extracted_at=extracted_at,
+                evidence=evidence,
+            )
+        )
+
+    tone_words = infer_website_tone([root.title, root.description, root.headline, *paragraphs])
+    if tone_words and paragraphs:
+        evidence_page = find_evidence_page(pages, paragraphs[0]) or root
+        candidates.append(
+            website_candidate(
+                section="TONE",
+                key="website-voice",
+                value={"source": source, "toneWords": tone_words, "voiceEvidence": paragraphs[:4]},
+                confidence=min(0.8, 0.5 + len(tone_words) * 0.05),
+                page=evidence_page,
+                extracted_at=extracted_at,
+                evidence=paragraphs[0],
+            )
+        )
+
+    return [candidate for candidate in candidates if candidate.confidence >= 0.45 and candidate.sourceSnippet.strip()]
+
+
+def website_candidate(
+    *,
+    section: Literal["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+    key: str,
+    value: dict[str, object],
+    confidence: float,
+    page: WebsiteExtractionPage,
+    extracted_at: str,
+    evidence: str,
+) -> WebsiteExtractionCandidate:
+    return WebsiteExtractionCandidate(
+        section=section,
+        key=key,
+        value=value,
+        confidence=round(confidence, 2),
+        sourceUrl=page.url,
+        extractedAt=extracted_at,
+        sourceSnippet=" ".join(evidence.split())[:500],
+    )
+
+
+def unique_strings(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+
+def find_evidence_page(
+    pages: list[WebsiteExtractionPage], evidence: str
+) -> WebsiteExtractionPage | None:
+    normalized = " ".join(evidence.casefold().split())
+    if not normalized:
+        return None
+
+    for page in pages:
+        page_values = [
+            page.title,
+            page.description,
+            page.site_name,
+            page.headline,
+            *page.paragraphs,
+            *page.links,
+            *page.image_alts,
+            *page.colors,
+        ]
+        if any(
+            normalized in " ".join(value.casefold().split())
+            for value in page_values
+            if value
+        ):
+            return page
+
+    return None
+
+
+def contains_product_keyword(value: str) -> bool:
+    keywords = ("service", "product", "shop", "pricing", "package", "collection", "menu", "offer", "plan", "booking")
+    lowered = value.casefold()
+    return any(keyword in lowered for keyword in keywords)
+
+
+def infer_website_tone(values: list[str | None]) -> list[str]:
+    text = " ".join(value for value in values if value).casefold()
+    rules = {
+        "premium": ("premium", "luxury", "exclusive", "elegant"),
+        "warm": ("family", "community", "care", "welcome", "hospitality"),
+        "innovative": ("technology", "digital", "innovation", "smart", "ai"),
+        "trusted": ("trusted", "certified", "expert", "quality", "reliable"),
+        "sustainable": ("sustainable", "eco", "ethical", "recycled"),
+        "value-focused": ("affordable", "value", "save", "offer"),
+    }
+    return [tone for tone, keywords in rules.items() if any(keyword in text for keyword in keywords)][:6]
 
 
 def build_strategy(request: StrategyGenerateRequest) -> dict[str, object]:

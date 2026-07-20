@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
-import type { StrategyPlan, StrategyRecord } from "@markos/shared-types";
+import type { StrategyPlan, StrategyRecord, VaultRagChunk } from "@markos/shared-types";
 import type { GenerateStrategyInput } from "@markos/validation";
 import { generateStrategyPlan } from "../ai/strategy-client";
+import { buildCatalogCommercialBrief, listCatalogGenerationContext } from "../catalog/catalog-service";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
@@ -73,14 +74,27 @@ export async function generateWorkspaceStrategy(
   }
 
   const query = input.objective ?? "Instagram strategy content pillars Bahrain SMB";
-  const context = await searchVaultContext(workspaceId, {
+  const vaultContext = await searchVaultContext(workspaceId, {
     query,
     topK: 8
   });
+  const catalogContext = await listCatalogGenerationContext(workspaceId, {
+    limit: 8,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
+  const commercialContext = buildCatalogCommercialBrief({
+    catalogContext,
+    requestText: query,
+    vaultContext,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId })
+  });
+  const context = mergeGenerationContext([...commercialContext, ...catalogContext], vaultContext, 14);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     strategyAgentName,
-    `${workspaceId}:${query}:${input.horizonDays}`
+    `${workspaceId}:${query}:${input.horizonDays}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}`
   );
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
@@ -131,6 +145,8 @@ export async function generateWorkspaceStrategy(
           prompt: {
             ...(input.objective === undefined ? {} : { objective: input.objective }),
             horizonDays: input.horizonDays,
+            ...(input.productId === undefined ? {} : { productId: input.productId }),
+            ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             retrievedContext: context
           } as unknown as Prisma.InputJsonValue,
@@ -168,6 +184,24 @@ export async function generateWorkspaceStrategy(
 
 function titleForStrategy(horizonDays: number, objective: string | undefined): string {
   return objective === undefined ? `${horizonDays}-day Instagram strategy` : `${horizonDays}-day strategy: ${objective}`;
+}
+
+function mergeGenerationContext(preferred: VaultRagChunk[], fallback: VaultRagChunk[], limit: number): VaultRagChunk[] {
+  const seen = new Set<string>();
+  const merged: VaultRagChunk[] = [];
+
+  for (const chunk of [...preferred, ...fallback]) {
+    const key = `${chunk.section}:${chunk.key}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(chunk);
+  }
+
+  return merged.slice(0, limit);
 }
 
 function toStrategyRecord(row: {

@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   Brain,
   Calendar,
   ChevronLeft,
   Home,
   Lightbulb,
+  Package,
   Palette,
   Settings,
   Sparkles,
@@ -18,6 +20,8 @@ import {
 import type { Locale } from "@markos/shared-types";
 import {
   CampaignBuilderPanel,
+  BrandKitPanel,
+  CatalogPanel,
   ContentStudioPanel,
   DailyBriefingPanel,
   FinalAnalyticsPanel,
@@ -30,7 +34,9 @@ import {
 export type SectionSlug =
   | "analytics"
   | "briefing"
+  | "brand-kit"
   | "campaign-builder"
+  | "catalog"
   | "content-studio"
   | "dashboard"
   | "knowledge"
@@ -48,10 +54,12 @@ const navItems: Array<{
   { icon: Home, label: "Command Center", slug: "dashboard" },
   { icon: Calendar, label: "Daily Briefing", slug: "briefing" },
   { icon: Lightbulb, label: "Opportunities", slug: "opportunities" },
+  { icon: Package, label: "Product Catalog", slug: "catalog" },
   { icon: Zap, label: "Campaign Builder", notify: true, slug: "campaign-builder" },
   { icon: Palette, label: "Content Studio", notify: true, slug: "content-studio" },
   { icon: BarChart3, label: "Analytics", slug: "analytics" },
   { icon: Brain, label: "Knowledge Vault", slug: "knowledge" },
+  { icon: BookOpen, label: "Brand Kit", slug: "brand-kit" },
   { icon: Settings, label: "Settings", slug: "settings" }
 ];
 
@@ -157,10 +165,12 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
           {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
           {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
+          {activeSection === "catalog" ? <CatalogPanel locale={locale} /> : null}
           {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
           {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
           {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
           {activeSection === "knowledge" ? <FinalVaultPanel /> : null}
+          {activeSection === "brand-kit" ? <BrandKitPanel locale={locale} /> : null}
           {activeSection === "settings" ? <FinalSettingsPanel /> : null}
         </div>
       </section>

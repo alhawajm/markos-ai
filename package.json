@@ -1,9 +1,9 @@
 {
   "name": "markos",
   "private": true,
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.15.0",
   "engines": {
-    "node": ">=20.16.0 <21 || >=22.3.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "turbo dev",
@@ -21,12 +21,15 @@
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
+    "e2e:pomelli:vault": "node scripts/pomelli-vault-browser-e2e.mjs",
+    "e2e:pomelli:visual": "node scripts/pomelli-visual-browser-e2e.mjs",
+    "e2e:pomelli:campaign": "node scripts/pomelli-campaign-browser-e2e.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "playwright-core": "^1.61.1",
-    "pnpm": "11.5.2",
+    "pnpm": "11.15.0",
     "prettier": "^3.7.4",
     "turbo": "^2.9.17",
     "typescript": "^6.0.3"

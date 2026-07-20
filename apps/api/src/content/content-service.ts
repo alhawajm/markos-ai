@@ -1,18 +1,36 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
-import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import type {
+  ContentRecord,
+  ContentToneLock,
+  StrategyPlan,
+  VaultRagChunk,
+} from "@markos/shared-types";
 import type {
   GenerateContentForSlotInput,
   GenerateContentInput,
   ScheduleContentInput,
   UpdateContentInput,
-  UpdateContentStatusInput
+  UpdateContentStatusInput,
 } from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
+import {
+  buildCatalogCommercialBrief,
+  listCatalogGenerationContext,
+} from "../catalog/catalog-service";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { getCreativeLearningVaultChunks } from "../learning/creative-learning-service";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
-import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
+import {
+  recordAiTokenUsage,
+  refundWorkspaceUsage,
+  reserveWorkspaceUsage,
+} from "../usage/usage-service";
+import {
+  getVaultScore,
+  listVaultSection,
+  searchVaultContext,
+} from "../vault/vault-service";
 
 const contentAgentName = "CONTENT";
 const localCurrency = "BHD";
@@ -42,21 +60,25 @@ export class ContentStatusTransitionError extends Error {
 }
 
 export class ContentScheduleError extends Error {
-  constructor(message = "Content item cannot be scheduled in its current state") {
+  constructor(
+    message = "Content item cannot be scheduled in its current state",
+  ) {
     super(message);
   }
 }
 
-export async function listContentItems(workspaceId: string): Promise<ContentRecord[]> {
+export async function listContentItems(
+  workspaceId: string,
+): Promise<ContentRecord[]> {
   const rows = await prisma.contentItem.findMany({
     where: {
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
     },
     orderBy: {
-      createdAt: "desc"
+      createdAt: "desc",
     },
-    take: 50
+    take: 50,
   });
 
   return rows.map(toContentRecord);
@@ -64,7 +86,8 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
 
 export async function generateWorkspaceContent(
   workspaceId: string,
-  input: GenerateContentInput
+  input: GenerateContentInput,
+  options: { campaignId?: string } = {},
 ): Promise<ContentRecord[]> {
   const score = await getVaultScore(workspaceId);
 
@@ -75,18 +98,46 @@ export async function generateWorkspaceContent(
   const strategy = await findStrategy(workspaceId, input.strategyId);
   const context = await searchVaultContext(workspaceId, {
     query: input.topic,
-    topK: 8
+    topK: 8,
+  });
+  const creativeLearningContext =
+    await getCreativeLearningVaultChunks(workspaceId);
+  const catalogContext = await listCatalogGenerationContext(workspaceId, {
+    limit: 8,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId }),
   });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const commercialContext = buildCatalogCommercialBrief({
+    catalogContext,
+    requestText: input.topic,
+    vaultContext: [...toneLock.context, ...context],
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId }),
+  });
+  const lockedContext = mergeVaultContext(
+    [
+      toneLock.context,
+      creativeLearningContext,
+      commercialContext,
+      catalogContext,
+      context,
+    ],
+    20,
+  );
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}`,
   );
   const generationCount = input.count;
   const usagePeriodDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
+  await reserveWorkspaceUsage({
+    workspaceId,
+    metric: "AI_GENERATION",
+    amount: generationCount,
+    now: usagePeriodDate,
+  });
 
   try {
     const generated = await generateContentDrafts({
@@ -96,8 +147,15 @@ export async function generateWorkspaceContent(
       count: input.count,
       context: lockedContext,
       toneLock: toneLock.lock,
-      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(strategy === undefined ? {} : { strategy })
+      ...(promptTemplate === undefined
+        ? {}
+        : {
+            promptTemplate: {
+              body: promptTemplate.body,
+              version: promptTemplate.version,
+            },
+          }),
+      ...(strategy === undefined ? {} : { strategy }),
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
@@ -111,17 +169,38 @@ export async function generateWorkspaceContent(
               workspaceId,
               contentType: draft.contentType,
               status: "DRAFT",
-              ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
-              ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
+              ...(draft.captionEn === undefined
+                ? {}
+                : { captionEn: draft.captionEn }),
+              ...(draft.captionAr === undefined
+                ? {}
+                : { captionAr: draft.captionAr }),
               hashtags: draft.hashtags,
-              ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+              ...(draft.callToAction === undefined
+                ? {}
+                : { callToAction: draft.callToAction }),
               mediaIds: [],
-              ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
-              ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
-              ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-              aiPromptUsed: promptVersion
-            }
-          })
+              ...(options.campaignId === undefined
+                ? {}
+                : { campaignId: options.campaignId }),
+              ...(draft.carousel === undefined
+                ? {}
+                : {
+                    carousel:
+                      draft.carousel as unknown as Prisma.InputJsonValue,
+                  }),
+              ...(draft.reelScript === undefined
+                ? {}
+                : {
+                    reelScript:
+                      draft.reelScript as unknown as Prisma.InputJsonValue,
+                  }),
+              ...(draft.contentPillar === undefined
+                ? {}
+                : { contentPillar: draft.contentPillar }),
+              aiPromptUsed: promptVersion,
+            },
+          }),
         );
       }
 
@@ -134,28 +213,38 @@ export async function generateWorkspaceContent(
             topic: input.topic,
             contentType: input.contentType,
             count: input.count,
-            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.strategyId === undefined
+              ? {}
+              : { strategyId: input.strategyId }),
+            ...(input.productId === undefined
+              ? {}
+              : { productId: input.productId }),
+            ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+            ...(options.campaignId === undefined
+              ? {}
+              : { campaignId: options.campaignId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
-            retrievedContext: lockedContext
+            retrievedContext: lockedContext,
           } as unknown as Prisma.InputJsonValue,
           response: {
+            contentItemIds: rows.map((row) => row.id),
             drafts: generated.drafts,
-            providerPromptVersion: generated.prompt_version
+            providerPromptVersion: generated.prompt_version,
           } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
           tokensOut: generated.tokens_out,
           costMinor: 0,
           currency: localCurrency,
-          model: generated.model || env.LLM_PRIMARY_MODEL
-        }
+          model: generated.model || env.LLM_PRIMARY_MODEL,
+        },
       });
       await recordAiTokenUsage({
         client: tx,
         workspaceId,
         tokensIn: generated.tokens_in,
         tokensOut: generated.tokens_out,
-        now: usagePeriodDate
+        now: usagePeriodDate,
       });
 
       return rows;
@@ -163,14 +252,19 @@ export async function generateWorkspaceContent(
 
     return saved.map(toContentRecord);
   } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
+    await refundWorkspaceUsage({
+      workspaceId,
+      metric: "AI_GENERATION",
+      amount: generationCount,
+      now: usagePeriodDate,
+    });
     throw error;
   }
 }
 
 export async function generateWorkspaceContentForSlot(
   workspaceId: string,
-  input: GenerateContentForSlotInput
+  input: GenerateContentForSlotInput,
 ): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const score = await getVaultScore(workspaceId);
@@ -182,17 +276,44 @@ export async function generateWorkspaceContentForSlot(
   const strategy = await findStrategy(workspaceId, input.strategyId);
   const context = await searchVaultContext(workspaceId, {
     query: input.topic,
-    topK: 8
+    topK: 8,
+  });
+  const creativeLearningContext =
+    await getCreativeLearningVaultChunks(workspaceId);
+  const catalogContext = await listCatalogGenerationContext(workspaceId, {
+    limit: 8,
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId }),
   });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const commercialContext = buildCatalogCommercialBrief({
+    catalogContext,
+    requestText: input.topic,
+    vaultContext: [...toneLock.context, ...context],
+    ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
+    ...(input.productId === undefined ? {} : { productId: input.productId }),
+  });
+  const lockedContext = mergeVaultContext(
+    [
+      toneLock.context,
+      creativeLearningContext,
+      commercialContext,
+      catalogContext,
+      context,
+    ],
+    20,
+  );
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}:${input.productId ?? "no-product"}:${input.offerId ?? "no-offer"}`,
   );
   const usagePeriodDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+  await reserveWorkspaceUsage({
+    workspaceId,
+    metric: "AI_GENERATION",
+    now: usagePeriodDate,
+  });
 
   try {
     const generated = await generateContentDrafts({
@@ -202,8 +323,15 @@ export async function generateWorkspaceContentForSlot(
       count: 1,
       context: lockedContext,
       toneLock: toneLock.lock,
-      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(strategy === undefined ? {} : { strategy })
+      ...(promptTemplate === undefined
+        ? {}
+        : {
+            promptTemplate: {
+              body: promptTemplate.body,
+              version: promptTemplate.version,
+            },
+          }),
+      ...(strategy === undefined ? {} : { strategy }),
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
     const [draft] = generated.drafts;
@@ -219,16 +347,31 @@ export async function generateWorkspaceContentForSlot(
           contentType: draft.contentType,
           status: "SCHEDULED",
           scheduledAt,
-          ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
-          ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
+          ...(draft.captionEn === undefined
+            ? {}
+            : { captionEn: draft.captionEn }),
+          ...(draft.captionAr === undefined
+            ? {}
+            : { captionAr: draft.captionAr }),
           hashtags: draft.hashtags,
-          ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+          ...(draft.callToAction === undefined
+            ? {}
+            : { callToAction: draft.callToAction }),
           mediaIds: [],
-          ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
-          ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
-          ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-          aiPromptUsed: promptVersion
-        }
+          ...(draft.carousel === undefined
+            ? {}
+            : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
+          ...(draft.reelScript === undefined
+            ? {}
+            : {
+                reelScript:
+                  draft.reelScript as unknown as Prisma.InputJsonValue,
+              }),
+          ...(draft.contentPillar === undefined
+            ? {}
+            : { contentPillar: draft.contentPillar }),
+          aiPromptUsed: promptVersion,
+        },
       });
 
       await addToContentCalendar(tx, workspaceId, row.id, scheduledAt);
@@ -242,29 +385,36 @@ export async function generateWorkspaceContentForSlot(
             contentType: input.contentType,
             count: 1,
             scheduledAt: input.scheduledAt,
-            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.strategyId === undefined
+              ? {}
+              : { strategyId: input.strategyId }),
+            ...(input.productId === undefined
+              ? {}
+              : { productId: input.productId }),
+            ...(input.offerId === undefined ? {} : { offerId: input.offerId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
-            retrievedContext: lockedContext
+            retrievedContext: lockedContext,
           } as unknown as Prisma.InputJsonValue,
           response: {
+            contentItemIds: [row.id],
             drafts: generated.drafts,
             scheduledContentItemId: row.id,
-            providerPromptVersion: generated.prompt_version
+            providerPromptVersion: generated.prompt_version,
           } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
           tokensOut: generated.tokens_out,
           costMinor: 0,
           currency: localCurrency,
-          model: generated.model || env.LLM_PRIMARY_MODEL
-        }
+          model: generated.model || env.LLM_PRIMARY_MODEL,
+        },
       });
       await recordAiTokenUsage({
         client: tx,
         workspaceId,
         tokensIn: generated.tokens_in,
         tokensOut: generated.tokens_out,
-        now: usagePeriodDate
+        now: usagePeriodDate,
       });
 
       return row;
@@ -272,7 +422,11 @@ export async function generateWorkspaceContentForSlot(
 
     return toContentRecord(saved);
   } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    await refundWorkspaceUsage({
+      workspaceId,
+      metric: "AI_GENERATION",
+      now: usagePeriodDate,
+    });
     throw error;
   }
 }
@@ -280,14 +434,14 @@ export async function generateWorkspaceContentForSlot(
 export async function updateContentItem(
   workspaceId: string,
   contentItemId: string,
-  input: UpdateContentInput
+  input: UpdateContentInput,
 ): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!current) {
@@ -300,17 +454,25 @@ export async function updateContentItem(
 
   const row = await prisma.contentItem.update({
     where: {
-      id: current.id
+      id: current.id,
     },
     data: {
       ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
       ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
       ...(input.hashtags === undefined ? {} : { hashtags: input.hashtags }),
-      ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
-      ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
-      ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
-      ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue })
-    }
+      ...(input.callToAction === undefined
+        ? {}
+        : { callToAction: input.callToAction }),
+      ...(input.contentPillar === undefined
+        ? {}
+        : { contentPillar: input.contentPillar }),
+      ...(input.carousel === undefined
+        ? {}
+        : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
+      ...(input.reelScript === undefined
+        ? {}
+        : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
+    },
   });
 
   return toContentRecord(row);
@@ -319,14 +481,14 @@ export async function updateContentItem(
 export async function updateContentItemStatus(
   workspaceId: string,
   contentItemId: string,
-  input: UpdateContentStatusInput
+  input: UpdateContentStatusInput,
 ): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!current) {
@@ -339,11 +501,11 @@ export async function updateContentItemStatus(
 
   const row = await prisma.contentItem.update({
     where: {
-      id: current.id
+      id: current.id,
     },
     data: {
-      status: input.status
-    }
+      status: input.status,
+    },
   });
 
   return toContentRecord(row);
@@ -352,14 +514,14 @@ export async function updateContentItemStatus(
 export async function scheduleContentItem(
   workspaceId: string,
   contentItemId: string,
-  input: ScheduleContentInput
+  input: ScheduleContentInput,
 ): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!current) {
@@ -375,12 +537,12 @@ export async function scheduleContentItem(
   const row = await prisma.$transaction(async (tx) => {
     const updated = await tx.contentItem.update({
       where: {
-        id: current.id
+        id: current.id,
       },
       data: {
         scheduledAt,
-        status: "SCHEDULED"
-      }
+        status: "SCHEDULED",
+      },
     });
 
     await addToContentCalendar(tx, workspaceId, updated.id, scheduledAt);
@@ -391,13 +553,16 @@ export async function scheduleContentItem(
   return toContentRecord(row);
 }
 
-export async function unscheduleContentItem(workspaceId: string, contentItemId: string): Promise<ContentRecord> {
+export async function unscheduleContentItem(
+  workspaceId: string,
+  contentItemId: string,
+): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
       workspaceId,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!current) {
@@ -411,16 +576,21 @@ export async function unscheduleContentItem(workspaceId: string, contentItemId: 
   const row = await prisma.$transaction(async (tx) => {
     const updated = await tx.contentItem.update({
       where: {
-        id: current.id
+        id: current.id,
       },
       data: {
         scheduledAt: null,
-        status: "APPROVED"
-      }
+        status: "APPROVED",
+      },
     });
 
     if (current.scheduledAt) {
-      await removeFromContentCalendar(tx, workspaceId, current.id, current.scheduledAt);
+      await removeFromContentCalendar(
+        tx,
+        workspaceId,
+        current.id,
+        current.scheduledAt,
+      );
     }
 
     return updated;
@@ -433,26 +603,26 @@ async function addToContentCalendar(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   contentItemId: string,
-  scheduledAt: Date
+  scheduledAt: Date,
 ): Promise<void> {
   const month = monthStart(scheduledAt);
   const current = await tx.contentCalendar.findFirst({
     where: {
       workspaceId,
       month,
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
   const plan = mergeCalendarPlan(current?.plan, contentItemId);
 
   if (current) {
     await tx.contentCalendar.update({
       where: {
-        id: current.id
+        id: current.id,
       },
       data: {
-        plan: plan as unknown as Prisma.InputJsonValue
-      }
+        plan: plan as unknown as Prisma.InputJsonValue,
+      },
     });
     return;
   }
@@ -461,8 +631,8 @@ async function addToContentCalendar(
     data: {
       workspaceId,
       month,
-      plan: plan as unknown as Prisma.InputJsonValue
-    }
+      plan: plan as unknown as Prisma.InputJsonValue,
+    },
   });
 }
 
@@ -470,14 +640,14 @@ async function removeFromContentCalendar(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   contentItemId: string,
-  scheduledAt: Date
+  scheduledAt: Date,
 ): Promise<void> {
   const current = await tx.contentCalendar.findFirst({
     where: {
       workspaceId,
       month: monthStart(scheduledAt),
-      deletedAt: null
-    }
+      deletedAt: null,
+    },
   });
 
   if (!current) {
@@ -488,27 +658,35 @@ async function removeFromContentCalendar(
 
   await tx.contentCalendar.update({
     where: {
-      id: current.id
+      id: current.id,
     },
     data: {
-      plan: plan as unknown as Prisma.InputJsonValue
-    }
+      plan: plan as unknown as Prisma.InputJsonValue,
+    },
   });
 }
 
 function mergeCalendarPlan(
   value: Prisma.JsonValue | undefined,
   contentItemId: string,
-  mode: "add" | "remove" = "add"
+  mode: "add" | "remove" = "add",
 ): { scheduledContentIds: string[] } {
   const current =
-    typeof value === "object" && value !== null && !Array.isArray(value) && Array.isArray(value.scheduledContentIds)
-      ? value.scheduledContentIds.filter((id): id is string => typeof id === "string")
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Array.isArray(value.scheduledContentIds)
+      ? value.scheduledContentIds.filter(
+          (id): id is string => typeof id === "string",
+        )
       : [];
-  const ids = mode === "add" ? Array.from(new Set([...current, contentItemId])) : current.filter((id) => id !== contentItemId);
+  const ids =
+    mode === "add"
+      ? Array.from(new Set([...current, contentItemId]))
+      : current.filter((id) => id !== contentItemId);
 
   return {
-    scheduledContentIds: ids
+    scheduledContentIds: ids,
   };
 }
 
@@ -526,27 +704,35 @@ function parseFutureScheduleTime(value: string): Date {
   return scheduledAt;
 }
 
-async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
+async function getContentToneLock(
+  workspaceId: string,
+): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
   const [brandEntries, toneEntries] = await Promise.all([
     listVaultSection(workspaceId, "BRAND"),
-    listVaultSection(workspaceId, "TONE")
+    listVaultSection(workspaceId, "TONE"),
   ]);
   const toneWords = uniqueStrings(
     toneEntries.flatMap((entry) => {
       const value = entry.value.toneWords;
       return Array.isArray(value) ? value : [];
-    })
+    }),
   );
-  const voiceNotes = firstString(toneEntries.map((entry) => entry.value.voiceNotes));
-  const brandHints = Object.fromEntries(brandEntries.map((entry) => [entry.key, entry.value]));
-  const context: VaultRagChunk[] = [...brandEntries, ...toneEntries].map((entry) => ({
-    id: entry.id,
-    section: entry.section,
-    key: entry.key,
-    value: entry.value,
-    version: entry.version,
-    score: 1
-  }));
+  const voiceNotes = firstString(
+    toneEntries.map((entry) => entry.value.voiceNotes),
+  );
+  const brandHints = Object.fromEntries(
+    brandEntries.map((entry) => [entry.key, entry.value]),
+  );
+  const context: VaultRagChunk[] = [...brandEntries, ...toneEntries].map(
+    (entry) => ({
+      id: entry.id,
+      section: entry.section,
+      key: entry.key,
+      value: entry.value,
+      version: entry.version,
+      score: 1,
+    }),
+  );
 
   return {
     context,
@@ -554,59 +740,86 @@ async function getContentToneLock(workspaceId: string): Promise<{ context: Vault
       requiredLanguages: ["ar", "en"],
       toneWords,
       ...(voiceNotes === undefined ? {} : { voiceNotes }),
-      brandHints
-    }
+      brandHints,
+    },
   };
 }
 
-function mergeVaultContext(primary: VaultRagChunk[], locked: VaultRagChunk[]): VaultRagChunk[] {
+function mergeVaultContext(
+  groups: VaultRagChunk[][],
+  limit: number,
+): VaultRagChunk[] {
   const seen = new Set<string>();
   const merged: VaultRagChunk[] = [];
 
-  for (const chunk of [...locked, ...primary]) {
-    if (seen.has(chunk.id)) {
+  for (const chunk of groups.flat()) {
+    const key = `${chunk.section}:${chunk.key}`;
+
+    if (seen.has(key)) {
       continue;
     }
 
-    seen.add(chunk.id);
+    seen.add(key);
     merged.push(chunk);
   }
 
-  return merged.slice(0, 10);
+  return merged.slice(0, limit);
 }
 
 function uniqueStrings(values: unknown[]): string[] {
-  return Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+  return Array.from(
+    new Set(
+      values.filter(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      ),
+    ),
+  );
 }
 
 function firstString(values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return values.find(
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+  );
 }
 
-function isAllowedContentTransition(current: ContentStatus, next: UpdateContentStatusInput["status"]): boolean {
+function isAllowedContentTransition(
+  current: ContentStatus,
+  next: UpdateContentStatusInput["status"],
+): boolean {
   if (current === next) {
     return true;
   }
 
-  const allowed: Record<UpdateContentStatusInput["status"], UpdateContentStatusInput["status"][]> = {
+  const allowed: Record<
+    UpdateContentStatusInput["status"],
+    UpdateContentStatusInput["status"][]
+  > = {
     APPROVED: ["DRAFT"],
     DRAFT: ["IN_REVIEW"],
-    IN_REVIEW: ["APPROVED", "DRAFT"]
+    IN_REVIEW: ["APPROVED", "DRAFT"],
   };
 
-  return allowed[current as UpdateContentStatusInput["status"]]?.includes(next) ?? false;
+  return (
+    allowed[current as UpdateContentStatusInput["status"]]?.includes(next) ??
+    false
+  );
 }
 
-async function findStrategy(workspaceId: string, strategyId: string | undefined): Promise<StrategyPlan | undefined> {
+async function findStrategy(
+  workspaceId: string,
+  strategyId: string | undefined,
+): Promise<StrategyPlan | undefined> {
   const row = await prisma.strategy.findFirst({
     where: {
       workspaceId,
       deletedAt: null,
-      ...(strategyId === undefined ? {} : { id: strategyId })
+      ...(strategyId === undefined ? {} : { id: strategyId }),
     },
     orderBy: {
-      createdAt: "desc"
-    }
+      createdAt: "desc",
+    },
   });
 
   if (!row) {
@@ -648,16 +861,26 @@ export function toContentRecord(row: {
     hashtags: row.hashtags,
     ...(row.callToAction === null ? {} : { callToAction: row.callToAction }),
     mediaIds: row.mediaIds,
-    ...(row.carousel === null ? {} : { carousel: row.carousel as Record<string, unknown> }),
-    ...(row.reelScript === null ? {} : { reelScript: row.reelScript as Record<string, unknown> }),
+    ...(row.carousel === null
+      ? {}
+      : { carousel: row.carousel as Record<string, unknown> }),
+    ...(row.reelScript === null
+      ? {}
+      : { reelScript: row.reelScript as Record<string, unknown> }),
     ...(row.contentPillar === null ? {} : { contentPillar: row.contentPillar }),
     ...(row.campaignId === null ? {} : { campaignId: row.campaignId }),
     ...(row.aiPromptUsed === null ? {} : { aiPromptUsed: row.aiPromptUsed }),
-    ...(row.scheduledAt === null ? {} : { scheduledAt: row.scheduledAt.toISOString() }),
-    ...(row.publishedAt === null ? {} : { publishedAt: row.publishedAt.toISOString() }),
-    ...(row.instagramPostId === null ? {} : { instagramPostId: row.instagramPostId }),
+    ...(row.scheduledAt === null
+      ? {}
+      : { scheduledAt: row.scheduledAt.toISOString() }),
+    ...(row.publishedAt === null
+      ? {}
+      : { publishedAt: row.publishedAt.toISOString() }),
+    ...(row.instagramPostId === null
+      ? {}
+      : { instagramPostId: row.instagramPostId }),
     ...(row.failureReason === null ? {} : { failureReason: row.failureReason }),
     createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
