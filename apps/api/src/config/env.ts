@@ -2,6 +2,10 @@ import { z } from "zod";
 
 const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional());
+const optionalEncryptionKey = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().refine((item) => Buffer.from(item, "base64").length === 32, "must encode exactly 32 bytes").optional()
+);
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -24,9 +28,12 @@ const envSchema = z.object({
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
   MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
-  META_APP_ID: optionalString,
+  INSTAGRAM_APP_ID: optionalString,
+  INSTAGRAM_APP_SECRET: optionalString,
+  INSTAGRAM_OAUTH_REDIRECT_URI: optionalUrl,
+  INSTAGRAM_TOKEN_ENCRYPTION_KEY: optionalEncryptionKey,
+  INSTAGRAM_OAUTH_STATE_SECRET: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(32).optional()),
   META_APP_SECRET: optionalString,
-  META_REDIRECT_URI: optionalUrl,
   META_WEBHOOK_VERIFY_TOKEN: optionalString,
   META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
   META_GRAPH_VERSION: z
@@ -35,10 +42,9 @@ const envSchema = z.object({
   INSTAGRAM_OAUTH_TOKEN_URL: z.string().url().default("https://api.instagram.com/oauth/access_token"),
   INSTAGRAM_LONG_LIVED_TOKEN_URL: z.string().url().default("https://graph.instagram.com/access_token"),
   INSTAGRAM_REFRESH_TOKEN_URL: z.string().url().default("https://graph.instagram.com/refresh_access_token"),
-  INSTAGRAM_OAUTH_SCOPES: z
-    .string()
-    .min(1)
-    .default("instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights"),
+  INSTAGRAM_GRAPH_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
+  INSTAGRAM_GRAPH_BASE_URL: z.string().url().default("https://graph.instagram.com/v25.0"),
+  INSTAGRAM_OAUTH_SCOPES: z.literal("instagram_business_basic").default("instagram_business_basic"),
   IMAGE_MODEL_PRIMARY: z.string().min(1).default("local-image-generator"),
   IMAGE_MODEL_FALLBACK: optionalString,
   INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().default(14),

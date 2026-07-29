@@ -1,0 +1,228 @@
+import { randomUUID } from "node:crypto";
+import { SignJWT } from "jose";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { env } from "../src/config/env";
+import { prisma } from "../src/db/prisma";
+import { buildApp } from "../src/http/app";
+import { issueOAuthState } from "../src/security/oauth-state";
+import { createPrismaOAuthStateStore } from "../src/security/prisma-oauth-state-store";
+
+const databaseUrl = process.env.INSTAGRAM_DATABASE_TEST_URL;
+const safeDatabase = databaseUrl ? isDisposableLoopbackDatabase(databaseUrl) : false;
+const describeDatabase = safeDatabase ? describe : describe.skip;
+
+describeDatabase("registered Instagram routes", () => {
+  const workspaceIds: string[] = [];
+  const userIds: string[] = [];
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let originalFetch: typeof fetch;
+  let providerCalls = 0;
+
+  beforeAll(async () => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      providerCalls += 1;
+      const url = String(input);
+      if (url === "https://api.instagram.com/oauth/access_token")
+        return response({ access_token: "fake-short-token", user_id: "route-account" });
+      if (url.startsWith("https://graph.instagram.com/access_token?"))
+        return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
+      if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
+        return response({ user_id: "route-account", username: "route_business", media: { data: [] } });
+      throw new Error("Unexpected provider request");
+    };
+    app = await buildApp();
+  });
+
+  afterAll(async () => {
+    globalThis.fetch = originalFetch;
+    await app.close();
+    await prisma.oAuthStateNonce.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await prisma.auditLog.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await prisma.instagramRecentMedia.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await prisma.instagramConnectionCredential.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await prisma.workspaceMember.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await prisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  });
+
+  it("authorizes start and fixes the provider contract regardless of caller fields", async () => {
+    const owner = await principal("OWNER");
+    const editor = await member(owner.workspaceId, "EDITOR");
+    const outsider = await principal("OWNER");
+
+    const unauthenticated = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start" });
+    expect(unauthenticated.statusCode).toBe(401);
+    const forbidden = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(editor.token) });
+    expect(forbidden.statusCode).toBe(403);
+    const nonmember = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(await token(outsider.userId, owner.workspaceId)) });
+    expect(nonmember.statusCode).toBe(403);
+
+    const started = await app.inject({
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
+      headers: auth(owner.token),
+      payload: {
+        locale: "en",
+        returnTo: "/en/app/settings",
+        providerHost: "https://untrusted.invalid",
+        redirectUri: "https://untrusted.invalid/callback",
+        scope: "unrequested_scope",
+      },
+    });
+    expect(started.statusCode).toBe(200);
+    const authorization = new URL(started.json().data.authorizationUrl);
+    expect(authorization.origin + authorization.pathname).toBe("https://www.instagram.com/oauth/authorize");
+    expect(authorization.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(authorization.searchParams.get("redirect_uri")).toBe(env.INSTAGRAM_OAUTH_REDIRECT_URI);
+    expect(authorization.toString()).not.toContain("untrusted.invalid");
+    expect(authorization.toString()).not.toContain("unrequested_scope");
+  });
+
+  it("completes, transaction-binds, redirects safely, and rejects duplicate delivery", async () => {
+    const initiator = await principal("OWNER");
+    const other = await principal("OWNER");
+    const state = await start(initiator);
+    const before = providerCalls;
+    const completed = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+      headers: auth(other.token),
+    });
+    expect(completed.statusCode).toBe(302);
+    expect(completed.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=connected");
+    expect(completed.headers.location).not.toContain("fake-code");
+    expect(providerCalls - before).toBe(3);
+    expect((await status(initiator)).json().data).toMatchObject({ connected: true, accountId: "route-account" });
+    expect((await status(other)).json().data).toMatchObject({ connected: false });
+
+    const replay = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+    });
+    expect(replay.statusCode).toBe(302);
+    expect(replay.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
+    expect(providerCalls - before).toBe(3);
+    await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(initiator.token) });
+  });
+
+  it("rejects tampered and expired state before provider exchange and consumes denial", async () => {
+    const owner = await principal("OWNER");
+    const valid = await start(owner);
+    const before = providerCalls;
+    for (const state of [`${valid.slice(0, -1)}x`, await expiredState(owner)]) {
+      const result = await app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}` });
+      expect(result.statusCode).toBe(302);
+      expect(result.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
+    }
+    expect(providerCalls).toBe(before);
+
+    const deniedState = await start(owner);
+    const denied = await app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?error=access_denied&state=${encodeURIComponent(deniedState)}` });
+    expect(denied.statusCode).toBe(302);
+    expect(denied.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
+    const replay = await app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(deniedState)}` });
+    expect(replay.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
+    expect(providerCalls).toBe(before);
+  });
+
+  it("sanitizes an unexpected callback persistence conflict", async () => {
+    const currentOwner = await principal("OWNER");
+    const conflictingOwner = await principal("OWNER");
+    expect((await complete(currentOwner)).statusCode).toBe(302);
+    const state = await start(conflictingOwner);
+    const failed = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/instagram/oauth/callback?code=recognizable-callback-code&state=${encodeURIComponent(state)}&error_description=recognizable-provider-error`,
+      headers: { accept: "application/json" },
+    });
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toMatchObject({
+      error: { code: "INTERNAL_ERROR", message: "Unexpected server error" },
+    });
+    expect(failed.body).not.toContain("recognizable-callback-code");
+    expect(failed.body).not.toContain("recognizable-provider-error");
+    await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(currentOwner.token) });
+  });
+
+  it("authorizes status, refresh, reconnect, and disconnect by workspace membership and permission", async () => {
+    const owner = await principal("OWNER");
+    const editor = await member(owner.workspaceId, "EDITOR");
+    const outsider = await principal("OWNER");
+    await complete(owner);
+
+    for (const [method, url] of [
+      ["GET", "/v1/workspace/instagram"],
+      ["POST", "/v1/workspace/instagram/refresh"],
+      ["DELETE", "/v1/workspace/instagram"],
+    ] as const) {
+      expect((await app.inject({ method, url })).statusCode).toBe(401);
+      expect((await app.inject({ method, url, headers: auth(await token(outsider.userId, owner.workspaceId)) })).statusCode).toBe(403);
+    }
+    expect((await app.inject({ method: "GET", url: "/v1/workspace/instagram", headers: auth(editor.token) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/v1/workspace/instagram/refresh", headers: auth(editor.token) })).statusCode).toBe(403);
+    expect((await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(editor.token) })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(owner.token), payload: { returnTo: "/en/app/settings" } })).statusCode).toBe(200);
+    const refreshed = await app.inject({ method: "POST", url: "/v1/workspace/instagram/refresh", headers: auth(owner.token) });
+    expect(refreshed.statusCode).toBe(200);
+    expect(refreshed.json().data.reason).toBe("INSTAGRAM_TOKEN_TOO_NEW");
+    const disconnected = await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(owner.token) });
+    expect(disconnected.statusCode).toBe(200);
+    expect(disconnected.json().data).toMatchObject({ connected: false, status: "DISCONNECTED" });
+  });
+
+  async function complete(input: Principal) {
+    const state = await start(input);
+    return app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}` });
+  }
+  async function start(input: Principal): Promise<string> {
+    const result = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(input.token), payload: { returnTo: "/en/app/settings" } });
+    expect(result.statusCode).toBe(200);
+    return new URL(result.json().data.authorizationUrl).searchParams.get("state")!;
+  }
+  async function status(input: Principal) {
+    return app.inject({ method: "GET", url: "/v1/workspace/instagram", headers: auth(input.token) });
+  }
+  async function expiredState(input: Principal): Promise<string> {
+    return issueOAuthState({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      returnTo: "/en/app/settings",
+      secret: env.INSTAGRAM_OAUTH_STATE_SECRET!,
+      store: createPrismaOAuthStateStore(input.userId, input.workspaceId),
+      now: new Date(Date.now() - 120_000),
+      ttlSeconds: 1,
+    });
+  }
+  async function principal(role: "OWNER" | "EDITOR"): Promise<Principal> {
+    const userId = randomUUID();
+    const workspaceId = randomUUID();
+    userIds.push(userId);
+    workspaceIds.push(workspaceId);
+    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route User", locale: "EN", isVerified: true } });
+    await prisma.workspace.create({ data: { id: workspaceId, ownerUserId: userId, name: `Route ${workspaceId}`, slug: `route-${workspaceId}` } });
+    await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
+    return { userId, workspaceId, token: await token(userId, workspaceId), role };
+  }
+  async function member(workspaceId: string, role: "EDITOR"): Promise<Principal> {
+    const userId = randomUUID();
+    userIds.push(userId);
+    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route Member", locale: "EN", isVerified: true } });
+    await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
+    return { userId, workspaceId, token: await token(userId, workspaceId), role };
+  }
+});
+
+type Principal = { userId: string; workspaceId: string; token: string; role: "OWNER" | "EDITOR" };
+function auth(value: string) { return { authorization: `Bearer ${value}` }; }
+async function token(userId: string, workspaceId: string) {
+  return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified: false })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(userId).setIssuedAt().setExpirationTime("15m")
+    .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));
+}
+function response(value: unknown) { return new Response(JSON.stringify(value), { status: 200 }); }
+function isDisposableLoopbackDatabase(value: string): boolean {
+  const url = new URL(value);
+  return ["localhost", "127.0.0.1", "::1"].includes(url.hostname) && /(?:test|spec|ci)/i.test(url.pathname);
+}

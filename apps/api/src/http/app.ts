@@ -12,7 +12,7 @@ import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
 import { registerMetaRoutes } from "../meta/meta-routes";
-import { captureException, initObservability } from "../observability/sentry";
+import { initObservability } from "../observability/sentry";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { registerPromptRoutes } from "../prompts/prompt-routes";
 import { registerPublishingRoutes } from "../publishing/publishing-routes";
@@ -22,6 +22,7 @@ import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes";
 import { errorEnvelope, ok } from "./envelope";
+import { reportUnexpectedRequestError } from "./error-telemetry";
 
 const devCorsOrigins = [
   env.WEB_BASE_URL,
@@ -85,15 +86,23 @@ export async function buildApp(): Promise<FastifyInstance> {
     const statusCode = details.statusCode;
 
     if (statusCode >= 500) {
-      request.log.error(error);
       const workspaceId = getWorkspaceContext()?.workspaceId;
-      captureException(error, {
+      reportUnexpectedRequestError({
+        error,
+        logger: app.log,
         method: request.method,
         url: request.url,
         ...(workspaceId ? { workspaceId } : {})
       });
     } else {
-      request.log.warn(error);
+      app.log.warn(
+        {
+          err: error,
+          method: request.method,
+          url: request.url.split("?", 1)[0],
+        },
+        "Request failed",
+      );
     }
 
     void reply
