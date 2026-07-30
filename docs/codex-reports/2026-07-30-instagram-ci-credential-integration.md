@@ -17,7 +17,7 @@ Corrected PR #3's CI configuration and completed the migration of active Instagr
 
 ## Files changed
 
-Implementation commit `f67eaf6` changed CI, Instagram connection/refresh services, publishing and analytics consumers, Meta/PDPL cleanup, workspace routes, generic RLS/isolation tests, and secure test fixtures. `docs/decisions.md` records the single encrypted credential-source decision. The authoritative review artifact remains the verified base-to-current-head PR diff; reviewers should resolve `HEAD` from Git.
+The task-local implementation reference `f67eaf6` was later removed by platform-managed consolidation and is not reachable in the current graph. The authoritative implementation is the committed PR diff from verified base `251cfd511744f71b67cfe835584e5c41b29d73f6` through the PR's current `HEAD`; reviewers must resolve `HEAD` from Git at review time. That diff contains the CI, Instagram connection/refresh services, publishing and analytics consumers, Meta/PDPL cleanup, workspace routes, generic RLS/isolation tests, secure test fixtures, and the encrypted credential-source decision.
 
 ## Commands and outcomes
 

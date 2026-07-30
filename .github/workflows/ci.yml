@@ -104,7 +104,11 @@ jobs:
           curl -fsS http://localhost:9200 >/dev/null
 
       - name: Prepare disposable Instagram test database
-        run: docker compose exec -T postgres createdb -U markos markos_ci_test
+        run: |
+          docker compose exec -T postgres createdb -U markos markos_ci_test
+          docker compose exec -T postgres \
+            psql --set=ON_ERROR_STOP=1 -U markos -d markos_ci_test \
+            --file=/docker-entrypoint-initdb.d/001-init.sql
 
       - name: Apply database migrations
         run: corepack pnpm --filter api prisma migrate deploy
