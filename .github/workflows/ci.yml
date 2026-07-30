@@ -126,8 +126,9 @@ jobs:
         run: corepack pnpm exec playwright-core install --with-deps chromium
 
       - name: Start built web application
+        working-directory: apps/web
         run: |
-          apps/web/node_modules/.bin/next start --hostname 127.0.0.1 --port 3000 \
+          node_modules/.bin/next start --hostname 127.0.0.1 --port 3000 \
             > /tmp/markos-web.log 2>&1 &
           echo $! > /tmp/markos-web.pid
           ready=false
