@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 
 describe("Meta callback routes", () => {
   it("verifies Instagram webhook subscriptions with the configured challenge token", async () => {
@@ -39,16 +40,7 @@ describe("Meta callback routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const accountId = `meta-${randomUUID()}`;
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "connected-token",
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
 
     const deauthorize = await app.inject({
       method: "POST",
@@ -73,17 +65,9 @@ describe("Meta callback routes", () => {
         workspaceId: session.workspace.id
       }
     });
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "connected-token",
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
     const deletion = await app.inject({
       method: "POST",
       payload: {
@@ -107,6 +91,7 @@ describe("Meta callback routes", () => {
         workspaceId: session.workspace.id
       }
     });
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
     expect(deauthorize.statusCode).toBe(200);
     expect(deauthorize.json().data.received).toBe(true);

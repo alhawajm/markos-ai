@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 
 describe("workspace routes", () => {
   it("connects and disconnects Instagram metadata", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
+    const accountId = `workspace-account-${randomUUID()}`;
     const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
 
     const initial = await app.inject({
@@ -15,16 +17,13 @@ describe("workspace routes", () => {
       url: "/v1/workspace/instagram",
       headers
     });
-    const connected = await app.inject({
-      method: "PUT",
-      url: "/v1/workspace/instagram",
-      headers,
-      payload: {
-        accountId: "17841400000000000",
-        accessToken: "test-instagram-token",
-        tokenExpiresAt: expiresAt
-      }
+    await persistTestInstagramConnection({
+      workspaceId: session.workspace.id,
+      actorId: session.user.id,
+      accountId,
+      expiresAt: new Date(expiresAt)
     });
+    const connected = await app.inject({ method: "GET", url: "/v1/workspace/instagram", headers });
     const disconnected = await app.inject({
       method: "DELETE",
       url: "/v1/workspace/instagram",
@@ -36,7 +35,7 @@ describe("workspace routes", () => {
     expect(connected.statusCode).toBe(200);
     expect(connected.json()).toMatchObject({
       data: {
-        accountId: "17841400000000000",
+        accountId,
         connected: true,
         tokenExpiresAt: expiresAt
       }
@@ -58,13 +57,13 @@ describe("workspace routes", () => {
     expect(auditLogs[0]).toMatchObject({
       action: "INSTAGRAM_CONNECTED",
       actorId: session.user.id,
-      targetId: "17841400000000000",
+      targetId: accountId,
       targetType: "InstagramConnection"
     });
     expect(auditLogs[1]).toMatchObject({
       action: "INSTAGRAM_DISCONNECTED",
       actorId: session.user.id,
-      targetId: "17841400000000000",
+      targetId: accountId,
       targetType: "InstagramConnection"
     });
 
@@ -93,16 +92,7 @@ describe("workspace routes", () => {
       headers
     });
 
-    await app.inject({
-      method: "PUT",
-      url: "/v1/workspace/instagram",
-      headers,
-      payload: {
-        accountId: "17841400000000000",
-        accessToken: "test-instagram-token",
-        tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
     const media = await prisma.mediaAsset.create({
       data: {
         workspaceId: session.workspace.id,

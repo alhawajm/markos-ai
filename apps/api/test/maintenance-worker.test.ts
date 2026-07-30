@@ -5,6 +5,9 @@ import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
 import type { InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
+import { decryptCredential } from "../src/security/credential-encryption";
+import { env } from "../src/config/env";
 
 describe("maintenance worker", () => {
   it("publishes due content across workspaces", async () => {
@@ -70,16 +73,7 @@ describe("maintenance worker", () => {
   it("refreshes due Instagram tokens", async () => {
     const workspace = await createWorkspace("worker-refresh");
     const oldToken = `old-token-${randomUUID()}`;
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: oldToken,
-        instagramAccountId: `refresh-account-${randomUUID()}`,
-        instagramTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, accessToken: oldToken, expiresAt: new Date(Date.now() + 86_400_000) });
     const fetchImpl: typeof fetch = async (_input, _init): Promise<Response> =>
       new Response(
         JSON.stringify({
@@ -101,11 +95,7 @@ describe("maintenance worker", () => {
       runPublishing: false,
       runUsageReset: false
     });
-    const updated = await prisma.workspace.findUniqueOrThrow({
-      where: {
-        id: workspace.id
-      }
-    });
+    const updated = await prisma.instagramConnectionCredential.findUniqueOrThrow({ where: { workspaceId: workspace.id } });
 
     expect(result.tokenRefresh).toEqual(
       expect.arrayContaining([
@@ -115,7 +105,7 @@ describe("maintenance worker", () => {
         })
       ])
     );
-    expect(updated.instagramAccessToken).not.toBe(oldToken);
+    expect(decryptCredential(updated.encryptedAccessToken, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!)).not.toBe(oldToken);
   }, 60_000);
 
   it("rolls monthly usage counters forward without resetting lifetime storage", async () => {
@@ -254,16 +244,7 @@ describe("maintenance worker", () => {
 
 async function createPublishableWorkspace(label: string, now = new Date()) {
   const workspace = await createWorkspace(label);
-  await prisma.workspace.update({
-    data: {
-      instagramAccessToken: `publish-token-${randomUUID()}`,
-      instagramAccountId: `publish-account-${randomUUID()}`,
-      instagramTokenExpiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000)
-    },
-    where: {
-      id: workspace.id
-    }
-  });
+  await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, issuedAt: new Date(now.getTime() - 2 * 86_400_000), expiresAt: new Date(now.getTime() + 86_400_000) });
   const media = await prisma.mediaAsset.create({
     data: {
       cdnUrl: `https://cdn.example.com/${randomUUID()}.jpg`,

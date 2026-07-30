@@ -10,6 +10,7 @@ import {
   type InstagramPublishingLimit,
   MetaGraphPublishError
 } from "./instagram-publisher";
+import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
 
 export interface PublishAttemptRecord {
   contentItemId: string;
@@ -108,21 +109,13 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
     }
   }
 
-  const connection = {
-    connected:
-      workspace.instagramAccountId !== null &&
-      workspace.instagramAccessToken !== null &&
-      workspace.instagramTokenExpiresAt !== null &&
-      workspace.instagramTokenExpiresAt > new Date(),
-    ...(workspace.instagramAccountId === null ? {} : { accountId: workspace.instagramAccountId }),
-    ...(workspace.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() })
-  };
+  const connection = await getSecureInstagramConnection(workspaceId);
 
   if (!connection.connected) {
     reasons.push("INSTAGRAM_NOT_CONNECTED");
   }
 
-  if (workspace.instagramTokenExpiresAt !== null && workspace.instagramTokenExpiresAt <= new Date()) {
+  if (connection.status === "REAUTHORIZE_REQUIRED") {
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");
   }
 
@@ -250,7 +243,7 @@ export async function publishContentItem(
   options: { now?: Date; publisher?: InstagramPublisher } = {}
 ): Promise<PublishAttemptRecord> {
   const now = options.now ?? new Date();
-  const [workspace, contentItem] = await Promise.all([
+  const [storedWorkspace, contentItem] = await Promise.all([
     prisma.workspace.findFirst({
       where: {
         id: workspaceId,
@@ -266,9 +259,10 @@ export async function publishContentItem(
     })
   ]);
 
-  if (!workspace || !contentItem) {
+  if (!storedWorkspace || !contentItem) {
     throw new PublishContentItemNotFoundError();
   }
+  const workspace = await withSecureInstagramCredential(storedWorkspace);
 
   const mediaAssets = await prisma.mediaAsset.findMany({
     where: {

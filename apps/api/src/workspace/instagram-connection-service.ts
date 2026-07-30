@@ -1,3 +1,4 @@
+import type { Workspace } from "@prisma/client";
 import type { InstagramConnection } from "@markos/shared-types";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -168,11 +169,28 @@ export async function getDecryptedCredential(workspaceId: string) {
   };
 }
 
+/** Loads the secure credential and exposes it only to the authorized provider-call boundary. */
+export async function withSecureInstagramCredential(
+  workspace: Workspace,
+): Promise<Workspace> {
+  const credential = await getDecryptedCredential(workspace.id);
+  return {
+    ...workspace,
+    instagramAccountId: credential?.providerAccountId ?? null,
+    instagramAccessToken: credential?.accessToken ?? null,
+    instagramTokenExpiresAt: credential?.tokenExpiresAt ?? null,
+  };
+}
+
 export async function disconnectSecureInstagram(
   workspaceId: string,
   actorId: string,
 ): Promise<InstagramConnection> {
   await withWorkspaceDbContext(workspaceId, async (tx) => {
+    const connection = await tx.instagramConnectionCredential.findUnique({
+      where: { workspaceId },
+      select: { providerAccountId: true },
+    });
     await tx.instagramRecentMedia.deleteMany({ where: { workspaceId } });
     await tx.instagramConnectionCredential.deleteMany({
       where: { workspaceId },
@@ -190,7 +208,9 @@ export async function disconnectSecureInstagram(
         action: "INSTAGRAM_DISCONNECTED",
         actorId,
         workspaceId,
+        targetId: connection?.providerAccountId ?? null,
         targetType: "InstagramConnection",
+        metadata: connection ? { accountId: connection.providerAccountId } : {},
       },
     });
   });
@@ -198,6 +218,7 @@ export async function disconnectSecureInstagram(
 }
 export async function refreshSecureInstagram(input: {
   workspaceId: string;
+  actorId?: string;
   client?: InstagramBasicClient;
   now?: Date;
 }) {
@@ -226,18 +247,28 @@ export async function refreshSecureInstagram(input: {
     const result = await (input.client ?? new InstagramBasicClient()).refresh(
       credential.accessToken,
     );
-    await updateConnection(input.workspaceId, {
-      where: { workspaceId: input.workspaceId },
-      data: {
-        encryptedAccessToken: encryptCredential(
-          result.accessToken,
-          requiredKey(),
-        ),
-        tokenIssuedAt: now,
-        tokenExpiresAt: new Date(now.getTime() + result.expiresIn * 1000),
-        status: "CONNECTED",
-        lastErrorCode: null,
-      },
+    const expiresAt = new Date(now.getTime() + result.expiresIn * 1000);
+    await withWorkspaceDbContext(input.workspaceId, async (tx) => {
+      await tx.instagramConnectionCredential.update({
+        where: { workspaceId: input.workspaceId },
+        data: {
+          encryptedAccessToken: encryptCredential(result.accessToken, requiredKey()),
+          tokenIssuedAt: now,
+          tokenExpiresAt: expiresAt,
+          status: "CONNECTED",
+          lastErrorCode: null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "INSTAGRAM_TOKEN_REFRESHED",
+          ...(input.actorId ? { actorId: input.actorId } : {}),
+          workspaceId: input.workspaceId,
+          targetId: credential.providerAccountId,
+          targetType: "InstagramConnection",
+          metadata: { accountId: credential.providerAccountId, tokenExpiresAt: expiresAt.toISOString() },
+        },
+      });
     });
     return {
       refreshed: true,

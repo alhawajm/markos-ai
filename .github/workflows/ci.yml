@@ -19,7 +19,13 @@ jobs:
     env:
       AI_BASE_URL: http://localhost:8000
       API_BASE_URL: http://localhost:4000
-      DATABASE_URL: postgresql://markos:markos@localhost:5432/markos
+      DATABASE_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
+      INSTAGRAM_DATABASE_TEST_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
+      INSTAGRAM_APP_ID: ci-instagram-app-id
+      INSTAGRAM_APP_SECRET: ci-instagram-app-secret
+      INSTAGRAM_OAUTH_REDIRECT_URI: http://localhost:4000/v1/workspace/instagram/oauth/callback
+      INSTAGRAM_OAUTH_STATE_SECRET: ci-instagram-state-secret-at-least-32-bytes
+      INSTAGRAM_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       GOOGLE_OAUTH_ISSUER: https://accounts.google.com
       GOOGLE_OAUTH_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
       JWT_ACCESS_SECRET: ci-access-secret-change-me
@@ -96,6 +102,9 @@ jobs:
           docker compose exec -T postgres pg_isready -U markos -d markos
           docker compose exec -T redis redis-cli ping
           curl -fsS http://localhost:9200 >/dev/null
+
+      - name: Prepare disposable Instagram test database
+        run: docker compose exec -T postgres createdb -U markos markos_ci_test
 
       - name: Apply database migrations
         run: corepack pnpm --filter api prisma migrate deploy

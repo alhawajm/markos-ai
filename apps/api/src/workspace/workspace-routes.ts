@@ -183,8 +183,8 @@ export async function registerWorkspaceRoutes(
       },
     },
     async () => {
-      const { workspaceId } = requireWorkspaceContext();
-      return ok(await refreshSecureInstagram({ workspaceId }));
+      const { userId, workspaceId } = requireWorkspaceContext();
+      return ok(await refreshSecureInstagram({ workspaceId, actorId: userId }));
     },
   );
 

@@ -53,38 +53,39 @@ export async function disconnectInstagramFromMetaCallback(
     };
   }
 
-  const matchingWorkspaces = await prisma.workspace.findMany({
+  const matchingConnections = await prisma.instagramConnectionCredential.findMany({
     select: {
-      id: true
+      workspaceId: true
     },
     where: {
       deletedAt: null,
-      instagramAccountId: accountId
+      provider: "INSTAGRAM",
+      providerAccountId: accountId
     }
   });
-  const result = await prisma.workspace.updateMany({
-    data: {
-      instagramAccessToken: null,
-      instagramAccountId: null,
-      instagramTokenExpiresAt: null
-    },
-    where: {
-      deletedAt: null,
-      instagramAccountId: accountId
-    }
+  const workspaceIds = matchingConnections.map((connection) => connection.workspaceId);
+  await prisma.$transaction(async (tx) => {
+    await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await tx.instagramConnectionCredential.deleteMany({
+      where: { workspaceId: { in: workspaceIds }, providerAccountId: accountId }
+    });
+    await tx.workspace.updateMany({
+      data: { instagramAccessToken: null, instagramAccountId: null, instagramTokenExpiresAt: null },
+      where: { id: { in: workspaceIds } }
+    });
   });
 
   await recordMetaCallbackAudit({
     accountId,
     action,
     body,
-    disconnected: result.count,
-    workspaceIds: matchingWorkspaces.map((workspace) => workspace.id)
+    disconnected: workspaceIds.length,
+    workspaceIds
   });
 
   return {
     accountId,
-    disconnected: result.count,
+    disconnected: workspaceIds.length,
     received: true
   };
 }
