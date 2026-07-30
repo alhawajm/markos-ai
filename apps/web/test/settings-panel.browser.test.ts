@@ -3,7 +3,10 @@ import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
-const describeBrowser = baseUrl ? describe : describe.skip;
+if (!baseUrl)
+  throw new Error(
+    "SETTINGS_BROWSER_BASE_URL is required for rendered Settings tests",
+  );
 let browser: Browser;
 const session = {
   tokens: {
@@ -44,7 +47,7 @@ const connected = {
   ],
 };
 
-describeBrowser("active SettingsPanel Instagram interactions", () => {
+describe("active SettingsPanel Instagram interactions", () => {
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true });
     mkdirSync("evidence", { recursive: true });

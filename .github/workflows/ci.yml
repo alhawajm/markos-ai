@@ -122,6 +122,43 @@ jobs:
       - name: Build
         run: corepack pnpm build
 
+      - name: Install Chromium
+        run: corepack pnpm exec playwright-core install --with-deps chromium
+
+      - name: Start built web application
+        run: |
+          apps/web/node_modules/.bin/next start --hostname 127.0.0.1 --port 3000 \
+            > /tmp/markos-web.log 2>&1 &
+          echo $! > /tmp/markos-web.pid
+          ready=false
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/en/app/settings >/dev/null; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/markos-web.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            cat /tmp/markos-web.log
+            exit 1
+          fi
+
+      - name: Test rendered Instagram Settings
+        env:
+          SETTINGS_BROWSER_BASE_URL: http://127.0.0.1:3000
+        run: corepack pnpm --filter web test:browser
+
+      - name: Dump web application log on failure
+        if: failure()
+        run: test ! -f /tmp/markos-web.log || cat /tmp/markos-web.log
+
+      - name: Stop built web application
+        if: always()
+        run: test ! -f /tmp/markos-web.pid || kill "$(cat /tmp/markos-web.pid)" 2>/dev/null || true
+
       - name: Dump infrastructure logs on failure
         if: failure()
         run: docker compose logs --no-color postgres redis opensearch

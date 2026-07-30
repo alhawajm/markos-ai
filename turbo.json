@@ -33,6 +33,32 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "api#test": {
+      "cache": false,
+      "env": [
+        "AI_BASE_URL",
+        "API_BASE_URL",
+        "CI",
+        "DATABASE_URL",
+        "GOOGLE_OAUTH_ISSUER",
+        "GOOGLE_OAUTH_JWKS_URL",
+        "INSTAGRAM_APP_ID",
+        "INSTAGRAM_APP_SECRET",
+        "INSTAGRAM_DATABASE_TEST_URL",
+        "INSTAGRAM_GRAPH_VERSION",
+        "INSTAGRAM_OAUTH_REDIRECT_URI",
+        "INSTAGRAM_OAUTH_STATE_SECRET",
+        "INSTAGRAM_TOKEN_ENCRYPTION_KEY",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_SECRET",
+        "MEDIA_STORAGE_DIR",
+        "NODE_ENV",
+        "OPENSEARCH_URL",
+        "REDIS_URL",
+        "WEB_BASE_URL"
+      ],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true

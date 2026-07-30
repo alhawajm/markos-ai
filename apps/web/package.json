@@ -9,7 +9,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "lint": "eslint .",
-    "test": "pnpm exec vitest run",
+    "test": "pnpm exec vitest run --config vitest.config.ts",
+    "test:browser": "pnpm exec vitest run --config vitest.browser.config.ts",
     "test:e2e": "echo \"test:e2e: web\""
   },
   "dependencies": {

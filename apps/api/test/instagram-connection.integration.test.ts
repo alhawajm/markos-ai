@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { decryptCredential } from "../src/security/credential-encryption";
 import { createPrismaOAuthStateStore } from "../src/security/prisma-oauth-state-store";
@@ -17,17 +17,13 @@ import {
   refreshSecureInstagram,
 } from "../src/workspace/instagram-connection-service";
 import { InstagramBasicClient } from "../src/workspace/instagram-basic-client";
+import { describeInstagramDatabase } from "./helpers/instagram-database";
 
-const databaseUrl = process.env.INSTAGRAM_DATABASE_TEST_URL;
-const safeDatabase = databaseUrl
-  ? isDisposableLoopbackDatabase(databaseUrl)
-  : false;
-const describeDatabase = safeDatabase ? describe : describe.skip;
 const workspaceIds: string[] = [];
 const actorId = randomUUID();
 const encryptionKey = process.env.INSTAGRAM_TOKEN_ENCRYPTION_KEY ?? "";
 
-describeDatabase("Instagram encrypted persistence integration", () => {
+describeInstagramDatabase("Instagram encrypted persistence integration", () => {
   beforeAll(async () => {
     if (!encryptionKey)
       throw new Error("INSTAGRAM_TOKEN_ENCRYPTION_KEY is required");
@@ -341,14 +337,6 @@ async function persist(
 function response(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200 });
 }
-function isDisposableLoopbackDatabase(value: string): boolean {
-  const url = new URL(value);
-  return (
-    ["localhost", "127.0.0.1", "::1"].includes(url.hostname) &&
-    /(?:test|spec|ci)/i.test(url.pathname)
-  );
-}
-
 async function asApplicationRole<T>(
   workspaceId: string,
   callback: (tx: Prisma.TransactionClient) => Promise<T>,

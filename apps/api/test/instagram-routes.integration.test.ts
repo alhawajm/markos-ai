@@ -1,17 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { SignJWT } from "jose";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { issueOAuthState } from "../src/security/oauth-state";
 import { createPrismaOAuthStateStore } from "../src/security/prisma-oauth-state-store";
+import { describeInstagramDatabase } from "./helpers/instagram-database";
 
-const databaseUrl = process.env.INSTAGRAM_DATABASE_TEST_URL;
-const safeDatabase = databaseUrl ? isDisposableLoopbackDatabase(databaseUrl) : false;
-const describeDatabase = safeDatabase ? describe : describe.skip;
-
-describeDatabase("registered Instagram routes", () => {
+describeInstagramDatabase("registered Instagram routes", () => {
   const workspaceIds: string[] = [];
   const userIds: string[] = [];
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -222,7 +219,3 @@ async function token(userId: string, workspaceId: string) {
     .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));
 }
 function response(value: unknown) { return new Response(JSON.stringify(value), { status: 200 }); }
-function isDisposableLoopbackDatabase(value: string): boolean {
-  const url = new URL(value);
-  return ["localhost", "127.0.0.1", "::1"].includes(url.hostname) && /(?:test|spec|ci)/i.test(url.pathname);
-}
