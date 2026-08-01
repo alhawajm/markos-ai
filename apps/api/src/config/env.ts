@@ -9,6 +9,7 @@ const optionalEncryptionKey = z.preprocess(
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
+  PORT: z.coerce.number().int().positive().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   WEB_BASE_URL: z.string().url().default("http://localhost:3000"),

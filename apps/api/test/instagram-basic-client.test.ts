@@ -88,6 +88,18 @@ describe("Instagram basic provider boundary", () => {
     }
   });
 
+  it("maps the documented data-wrapped professional account response", async () => {
+    const client = new InstagramBasicClient(async () => response({
+      data: [{ user_id: "documented-user-id", username: "documented_username", media: { data: [] } }]
+    }));
+
+    await expect(client.profile("secret-token")).resolves.toMatchObject({
+      userId: "documented-user-id",
+      username: "documented_username",
+      media: []
+    });
+  });
+
   it("uses the unversioned refresh contract", async () => {
     let request = "";
     const client = new InstagramBasicClient(async (input, init) => {

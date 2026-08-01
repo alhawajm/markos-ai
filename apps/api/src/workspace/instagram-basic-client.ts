@@ -89,7 +89,8 @@ export class InstagramBasicClient {
       "user_id,username,account_type,profile_picture_url,media.limit(6){id,media_type,caption,media_url,thumbnail_url,permalink,timestamp}",
     );
     url.searchParams.set("access_token", accessToken);
-    const value = await this.json(url, { method: "GET" });
+    const response = await this.json(url, { method: "GET" });
+    const value = Array.isArray(response.data) && isRecord(response.data[0]) ? response.data[0] : response;
     if (
       !["string", "number"].includes(typeof value.user_id) ||
       typeof value.username !== "string"
@@ -139,9 +140,26 @@ export class InstagramBasicClient {
         ...init,
         signal: controller.signal,
       });
-      const body = await response.text();
-      if (body.length > (this.limits.maxResponseBytes ?? MAX_RESPONSE_BYTES))
+      const maxBytes = this.limits.maxResponseBytes ?? MAX_RESPONSE_BYTES;
+      const declaredLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > maxBytes)
         throw new InstagramProviderError();
+      if (!response.body) throw new InstagramProviderError();
+
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let bytesRead = 0;
+      while (true) {
+        const { done, value: chunk } = await reader.read();
+        if (done) break;
+        bytesRead += chunk.byteLength;
+        if (bytesRead > maxBytes) {
+          await reader.cancel();
+          throw new InstagramProviderError();
+        }
+        chunks.push(chunk);
+      }
+      const body = Buffer.concat(chunks, bytesRead).toString("utf8");
       const value: unknown = JSON.parse(body);
       if (!response.ok || !isRecord(value))
         throw new InstagramProviderError(

@@ -46,7 +46,7 @@ Use the API as the Instagram OAuth redirect target at `/v1/workspace/instagram/o
 
 ## 2026-06-11: Meta Dashboard Callback URLs
 
-Expose API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Deauthorization and data deletion callbacks disconnect matching workspace Instagram credentials when the callback includes the stored Instagram account id.
+Expose API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Verify webhook payload bytes with `X-Hub-Signature-256` and the Instagram App Secret before processing. Deauthorization and data deletion callbacks accept only a valid Meta `signed_request`; untrusted direct account identifiers cannot disconnect credentials.
 
 ## 2026-06-11: Instagram Token Refresh Starts Manual
 

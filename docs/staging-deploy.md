@@ -96,12 +96,29 @@ Staging runtime must provide production-shaped values for:
 - `WEB_BASE_URL`
 - `AI_BASE_URL`
 - `MEDIA_PUBLIC_BASE_URL`
-- `META_APP_ID`
-- `META_APP_SECRET`
-- `META_REDIRECT_URI`
+- `INSTAGRAM_APP_ID`
+- `INSTAGRAM_APP_SECRET`
+- `INSTAGRAM_OAUTH_REDIRECT_URI`
+- `INSTAGRAM_OAUTH_STATE_SECRET`
+- `INSTAGRAM_TOKEN_ENCRYPTION_KEY`
+- `INSTAGRAM_GRAPH_VERSION`
 - `META_WEBHOOK_VERIFY_TOKEN`
 
 Keep `INSTAGRAM_PUBLISH_MODE=dry_run` until Meta App Review and test-account live publish acceptance are complete.
+
+## Railway deployment contract
+
+For Railway, deploy the web and API as separate services from the repository Dockerfiles. Set `NEXT_PUBLIC_API_BASE_URL` as a **build variable** for the web image; Next.js embeds public variables during `next build`, and the web Dockerfile declares the corresponding build `ARG`. Set the API's public HTTPS URL, not a private hostname, because browser requests originate outside Railway's private network.
+
+The API accepts Railway's injected `PORT`. Its image includes the PostgreSQL client so the Railway pre-deploy command can apply the canonical prerequisites and migrations without duplicating SQL:
+
+```bash
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy
+```
+
+A failed pre-deploy command must stop deployment. The PostgreSQL service must support `pgcrypto`, `vector`, role creation, and the repository's `uuid_generate_v7()` helper. Railway's default PostgreSQL image does not guarantee every extension, so use a compatible pgvector template or a managed PostgreSQL target whose privileges and extensions have been verified before deployment.
+
+Do not mark Railway acceptance complete until the canonical initialization, all migrations, application-role RLS, public HTTPS callback URLs, and a supervised real-Meta connection have been exercised on a disposable staging deployment.
 
 ## Smoke Evidence
 

@@ -82,7 +82,6 @@ describe("database row-level security", () => {
     const second = await createWorkspace("second");
 
     await withWorkspaceDbContext(first.workspaceId, async (tx) => {
-      await tx.$executeRaw`SET LOCAL ROLE markos_app`;
       await tx.contentItem.create({
         data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
         select: { id: true }
@@ -91,7 +90,6 @@ describe("database row-level security", () => {
 
     await expect(
       withWorkspaceDbContext(first.workspaceId, async (tx) => {
-        await tx.$executeRaw`SET LOCAL ROLE markos_app`;
         await tx.contentItem.create({
           data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
           select: { id: true }

@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -10,11 +11,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify and Build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       AI_BASE_URL: http://localhost:8000
@@ -31,7 +35,9 @@ jobs:
       JWT_ACCESS_SECRET: ci-access-secret-change-me
       JWT_REFRESH_SECRET: ci-refresh-secret-change-me
       MEDIA_STORAGE_DIR: var/media
+      META_WEBHOOK_VERIFY_TOKEN: ci-webhook-verify-token
       NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
       NODE_ENV: test
       SENTRY_TRACES_SAMPLE_RATE: "0"
       NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: "0"
@@ -121,6 +127,17 @@ jobs:
 
       - name: Build
         run: corepack pnpm build
+
+      - name: Validate API deployment image
+        run: docker build --file apps/api/Dockerfile --tag markos-api:ci .
+
+      - name: Validate web deployment image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
+            --file apps/web/Dockerfile \
+            --tag markos-web:ci \
+            .
 
       - name: Install Chromium
         run: corepack pnpm exec playwright-core install --with-deps chromium
