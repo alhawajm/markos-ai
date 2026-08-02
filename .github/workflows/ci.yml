@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -10,22 +11,33 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify and Build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       AI_BASE_URL: http://localhost:8000
       API_BASE_URL: http://localhost:4000
-      DATABASE_URL: postgresql://markos:markos@localhost:5432/markos
+      DATABASE_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
+      INSTAGRAM_DATABASE_TEST_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
+      INSTAGRAM_APP_ID: ci-instagram-app-id
+      INSTAGRAM_APP_SECRET: ci-instagram-app-secret
+      INSTAGRAM_OAUTH_REDIRECT_URI: http://localhost:4000/v1/workspace/instagram/oauth/callback
+      INSTAGRAM_OAUTH_STATE_SECRET: ci-instagram-state-secret-at-least-32-bytes
+      INSTAGRAM_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       GOOGLE_OAUTH_ISSUER: https://accounts.google.com
       GOOGLE_OAUTH_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
       JWT_ACCESS_SECRET: ci-access-secret-change-me
       JWT_REFRESH_SECRET: ci-refresh-secret-change-me
       MEDIA_STORAGE_DIR: var/media
+      META_WEBHOOK_VERIFY_TOKEN: ci-webhook-verify-token
       NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
       NODE_ENV: test
       SENTRY_TRACES_SAMPLE_RATE: "0"
       NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: "0"
@@ -97,17 +109,76 @@ jobs:
           docker compose exec -T redis redis-cli ping
           curl -fsS http://localhost:9200 >/dev/null
 
+      - name: Prepare disposable Instagram test database
+        run: |
+          docker compose exec -T postgres createdb -U markos markos_ci_test
+          docker compose exec -T postgres \
+            psql --set=ON_ERROR_STOP=1 -U markos -d markos_ci_test \
+            --file=/docker-entrypoint-initdb.d/001-init.sql
+
       - name: Apply database migrations
         run: corepack pnpm --filter api prisma migrate deploy
 
-      - name: Seed database
-        run: corepack pnpm --filter api prisma db seed
+      - name: Seed database twice and verify migration status
+        run: |
+          corepack pnpm --filter api prisma db seed
+          corepack pnpm --filter api prisma db seed
+          corepack pnpm --filter api prisma migrate status
 
       - name: Verify
         run: corepack pnpm verify
 
       - name: Build
         run: corepack pnpm build
+
+      - name: Validate API deployment image
+        run: docker build --file apps/api/Dockerfile --tag markos-api:ci .
+
+      - name: Validate web deployment image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="$NEXT_PUBLIC_API_BASE_URL" \
+            --file apps/web/Dockerfile \
+            --tag markos-web:ci \
+            .
+
+      - name: Install Chromium
+        run: corepack pnpm exec playwright-core install --with-deps chromium
+
+      - name: Start built web application
+        working-directory: apps/web
+        run: |
+          node_modules/.bin/next start --hostname 127.0.0.1 --port 3000 \
+            > /tmp/markos-web.log 2>&1 &
+          echo $! > /tmp/markos-web.pid
+          ready=false
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/en/app/settings >/dev/null; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/markos-web.pid)" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            cat /tmp/markos-web.log
+            exit 1
+          fi
+
+      - name: Test rendered Instagram Settings
+        env:
+          SETTINGS_BROWSER_BASE_URL: http://127.0.0.1:3000
+        run: corepack pnpm --filter web test:browser
+
+      - name: Dump web application log on failure
+        if: failure()
+        run: test ! -f /tmp/markos-web.log || cat /tmp/markos-web.log
+
+      - name: Stop built web application
+        if: always()
+        run: test ! -f /tmp/markos-web.pid || kill "$(cat /tmp/markos-web.pid)" 2>/dev/null || true
 
       - name: Dump infrastructure logs on failure
         if: failure()

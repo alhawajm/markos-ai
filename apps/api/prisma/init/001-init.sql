@@ -22,7 +22,12 @@ $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'markos_app') THEN
-    CREATE ROLE markos_app LOGIN PASSWORD 'markos_app';
+    CREATE ROLE markos_app NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'markos') THEN
+    CREATE ROLE markos NOLOGIN;
   END IF;
 END
 $$;
+
+GRANT markos_app TO CURRENT_USER;

@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { refreshDueInstagramTokens } from "../src/workspace/instagram-token-service";
+import { decryptCredential } from "../src/security/credential-encryption";
+import { env } from "../src/config/env";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 
 describe("Instagram token refresh", () => {
   it("refreshes a connected workspace token on demand", async () => {
@@ -10,16 +13,7 @@ describe("Instagram token refresh", () => {
     const session = await registerTestUser(app);
     const accountId = `refresh-${randomUUID()}`;
     const oldToken = `old-token-${randomUUID()}`;
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: oldToken,
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: oldToken, expiresAt: new Date(Date.now() + 7 * 86_400_000) });
     const calls: string[] = [];
     const fetchImpl = async (input: string | URL | Request) => {
       calls.push(String(input));
@@ -33,13 +27,13 @@ describe("Instagram token refresh", () => {
       fetchImpl,
       now: new Date()
     });
-    const workspace = await prisma.workspace.findUniqueOrThrow({
+    const credential = await prisma.instagramConnectionCredential.findUniqueOrThrow({
       select: {
-        instagramAccessToken: true,
-        instagramTokenExpiresAt: true
+        encryptedAccessToken: true,
+        tokenExpiresAt: true
       },
       where: {
-        id: session.workspace.id
+        workspaceId: session.workspace.id
       }
     });
 
@@ -53,8 +47,8 @@ describe("Instagram token refresh", () => {
     );
     expect(calls[0]).toContain("grant_type=ig_refresh_token");
     expect(calls).toEqual(expect.arrayContaining([expect.stringContaining(`access_token=${oldToken}`)]));
-    expect(workspace.instagramAccessToken).toBe("new-token");
-    expect(workspace.instagramTokenExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+    expect(decryptCredential(credential.encryptedAccessToken, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!)).toBe("new-token");
+    expect(credential.tokenExpiresAt.getTime()).toBeGreaterThan(Date.now());
 
     await app.close();
   });
@@ -63,16 +57,7 @@ describe("Instagram token refresh", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const accountId = `refresh-route-${randomUUID()}`;
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "old-token-route",
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "old-token-route", expiresAt: new Date(Date.now() + 7 * 86_400_000) });
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       jsonResponse({
@@ -88,19 +73,19 @@ describe("Instagram token refresh", () => {
         method: "POST",
         url: "/v1/workspace/instagram/refresh"
       });
-      const workspace = await prisma.workspace.findUniqueOrThrow({
+      const credential = await prisma.instagramConnectionCredential.findUniqueOrThrow({
         select: {
-          instagramAccessToken: true
+          encryptedAccessToken: true
         },
         where: {
-          id: session.workspace.id
+          workspaceId: session.workspace.id
         }
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().data.refreshed).toBe(true);
       expect(response.json().data.connection.accountId).toBe(accountId);
-      expect(workspace.instagramAccessToken).toBe("new-token-route");
+      expect(decryptCredential(credential.encryptedAccessToken, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!)).toBe("new-token-route");
       await expect(
         prisma.auditLog.findFirstOrThrow({
           where: {

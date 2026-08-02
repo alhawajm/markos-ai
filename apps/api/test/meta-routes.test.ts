@@ -1,8 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 
 describe("Meta callback routes", () => {
   it("verifies Instagram webhook subscriptions with the configured challenge token", async () => {
@@ -36,25 +37,15 @@ describe("Meta callback routes", () => {
   });
 
   it("disconnects matching Instagram credentials from Meta callbacks", async () => {
+    env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
     const app = await buildApp();
     const session = await registerTestUser(app);
     const accountId = `meta-${randomUUID()}`;
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "connected-token",
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
 
     const deauthorize = await app.inject({
       method: "POST",
-      payload: {
-        account_id: accountId
-      },
+      payload: { signed_request: signedRequest(accountId) },
       url: "/v1/meta/deauthorize"
     });
     const workspaceAfterDeauthorize = await prisma.workspace.findUniqueOrThrow({
@@ -73,22 +64,12 @@ describe("Meta callback routes", () => {
         workspaceId: session.workspace.id
       }
     });
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "connected-token",
-        instagramAccountId: accountId,
-        instagramTokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      },
-      where: {
-        id: session.workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
     const deletion = await app.inject({
       method: "POST",
-      payload: {
-        account_id: accountId
-      },
+      payload: { signed_request: signedRequest(accountId) },
       url: "/v1/meta/data-deletion"
     });
     const workspaceAfterDeletion = await prisma.workspace.findUniqueOrThrow({
@@ -107,6 +88,7 @@ describe("Meta callback routes", () => {
         workspaceId: session.workspace.id
       }
     });
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
     expect(deauthorize.statusCode).toBe(200);
     expect(deauthorize.json().data.received).toBe(true);
@@ -120,14 +102,13 @@ describe("Meta callback routes", () => {
       accountId,
       disconnected: 1,
       payload: {
-        account_id: accountId
+        signed_request: "[redacted]"
       }
     });
     expect(deletion.statusCode).toBe(200);
-    expect(deletion.json()).toMatchObject({
-      confirmation_code: "markos-meta-deletion-received",
-      disconnected: 1
-    });
+    expect(deletion.json().disconnected).toBe(1);
+    expect(deletion.json().confirmation_code).toMatch(/^[0-9a-f-]{36}$/);
+    expect(deletion.json().url).toContain("/en/app/settings?dataDeletion=received");
     expect(workspaceAfterDeletion.instagramAccountId).toBeNull();
     expect(workspaceAfterDeletion.instagramAccessToken).toBeNull();
     expect(workspaceAfterDeletion.instagramTokenExpiresAt).toBeNull();
@@ -138,24 +119,22 @@ describe("Meta callback routes", () => {
   });
 
   it("records Instagram webhook events with sanitized payload metadata", async () => {
+    env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
     const app = await buildApp();
+    const payload = JSON.stringify({
+      access_token: "secret-token",
+      entry: [{ changes: [{ field: "comments" }] }],
+      object: "instagram",
+      signed_request: "signed.secret"
+    });
 
     const response = await app.inject({
-      method: "POST",
-      payload: {
-        access_token: "secret-token",
-        entry: [
-          {
-            changes: [
-              {
-                field: "comments"
-              }
-            ]
-          }
-        ],
-        object: "instagram",
-        signed_request: "signed.secret"
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": webhookSignature(payload)
       },
+      method: "POST",
+      payload,
       url: "/v1/meta/webhooks/instagram"
     });
     const audit = await prisma.auditLog.findFirstOrThrow({
@@ -181,7 +160,30 @@ describe("Meta callback routes", () => {
 
     await app.close();
   });
+
+  it("rejects unsigned webhooks and destructive callbacks without changing credentials", async () => {
+    env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
+    const app = await buildApp();
+    const accountId = `meta-${randomUUID()}`;
+
+    const webhook = await app.inject({ method: "POST", payload: { object: "instagram" }, url: "/v1/meta/webhooks/instagram" });
+    const callback = await app.inject({ method: "POST", payload: { account_id: accountId }, url: "/v1/meta/deauthorize" });
+
+    expect(webhook.statusCode).toBe(403);
+    expect(callback.statusCode).toBe(403);
+    await app.close();
+  });
 });
+
+function signedRequest(accountId: string): string {
+  const payload = Buffer.from(JSON.stringify({ user_id: accountId })).toString("base64url");
+  const signature = createHmac("sha256", env.INSTAGRAM_APP_SECRET!).update(payload).digest("base64url");
+  return `${signature}.${payload}`;
+}
+
+function webhookSignature(payload: string): string {
+  return `sha256=${createHmac("sha256", env.INSTAGRAM_APP_SECRET!).update(payload).digest("hex")}`;
+}
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   const email = `meta-callback-${randomUUID()}@markos.test`;

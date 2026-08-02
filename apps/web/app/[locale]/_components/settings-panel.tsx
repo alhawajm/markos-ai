@@ -14,33 +14,38 @@ import {
   Link2Off,
   LockKeyhole,
   RefreshCcw,
-  Save,
   ScrollText,
+  Save,
   ShieldCheck,
-  UserRound
+  UserRound,
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, Locale, MfaTotpSetup } from "@markos/shared-types";
+import type {
+  AuditLogRecord,
+  AuthSession,
+  BillingSummary,
+  InstagramConnection,
+  Locale,
+  MfaTotpSetup,
+} from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import {
+  instagramStatusLabel,
+  sanitizedCallbackUrl,
+} from "./instagram-settings-state";
 
 const sessionKey = "markos.session";
 const apiBaseUrl = getBrowserApiBaseUrl();
 
-const previewConnection: InstagramConnection = {
-  accountId: "@zain_bh",
-  connected: true,
-  tokenExpiresAt: new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString()
-};
 type AuditState = "loading" | "error" | "success" | "limit";
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [connection, setConnection] = useState<InstagramConnection | null>(previewConnection);
+  const [connection, setConnection] = useState<InstagramConnection | null>(
+    null,
+  );
   const [billing, setBilling] = useState<BillingSummary | null>(null);
-  const [accountId, setAccountId] = useState("@zain_bh");
-  const [accessToken, setAccessToken] = useState("");
-  const [tokenExpiresAt, setTokenExpiresAt] = useState(defaultTokenExpiry());
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [mfaSetup, setMfaSetup] = useState<MfaTotpSetup | null>(null);
   const [mfaCode, setMfaCode] = useState("");
@@ -49,15 +54,19 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
   const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
+    const options = { baseUrl: apiBaseUrl } satisfies {
+      baseUrl: string;
+      accessToken?: string;
+      workspaceId?: string;
+    };
     return new MarkosApiClient(
       session
         ? {
             ...options,
             accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
+            workspaceId: session.workspace.id,
           }
-        : options
+        : options,
     );
   }, [session]);
 
@@ -65,19 +74,42 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     const stored = window.localStorage.getItem(sessionKey);
     const params = new URLSearchParams(window.location.search);
     const requestedState = params.get("state");
+    const instagramResult = params.get("instagram");
 
     if (isAuditState(requestedState)) {
       setAuditState(requestedState);
+    }
+    if (instagramResult === "connected") setMessage(copy(locale, "connected"));
+    if (instagramResult === "error")
+      setMessage(copy(locale, "authorizationFailed"));
+    if (
+      instagramResult === "connected" ||
+      instagramResult === "error" ||
+      params.has("code") ||
+      params.has("state") ||
+      params.has("error")
+    ) {
+      window.history.replaceState(
+        {},
+        "",
+        sanitizedCallbackUrl(window.location.href),
+      );
     }
 
     if (stored) {
       setSession(JSON.parse(stored) as AuthSession);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!session) return;
-    void refreshSettings(client, setConnection, setBilling, setAuditLogs, setMessage);
+    void refreshSettings(
+      client,
+      setConnection,
+      setBilling,
+      setAuditLogs,
+      setMessage,
+    );
   }, [client, session]);
 
   async function refreshAllSettings() {
@@ -91,34 +123,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     setAuditState("loading");
     setMessage("");
 
-    const loaded = await refreshSettings(client, setConnection, setBilling, setAuditLogs, setMessage);
+    const loaded = await refreshSettings(
+      client,
+      setConnection,
+      setBilling,
+      setAuditLogs,
+      setMessage,
+    );
     setAuditState(loaded ? "success" : "error");
     setIsBusy(false);
-  }
-
-  async function connect() {
-    if (!session) {
-      setMessage(copy(locale, "previewOnly"));
-      return;
-    }
-
-    setIsBusy(true);
-    setMessage("");
-
-    try {
-      const updated = await client.connectInstagram({
-        accountId: accountId.trim(),
-        accessToken: accessToken.trim(),
-        tokenExpiresAt: new Date(tokenExpiresAt).toISOString()
-      });
-      setConnection(updated);
-      setAccessToken("");
-      setMessage(copy(locale, "connected"));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
-    } finally {
-      setIsBusy(false);
-    }
   }
 
   async function startOAuth() {
@@ -131,10 +144,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     setMessage("");
 
     try {
-      const start = await client.instagramOAuthStart({ locale });
+      const start = await client.instagramOAuthStart({
+        locale,
+        returnTo: `/${locale}/app/settings`,
+      });
       window.location.href = start.authorizationUrl;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -142,10 +160,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function disconnect() {
     if (!session) {
-      setConnection({ ...previewConnection, connected: false });
       setMessage(copy(locale, "previewOnly"));
       return;
     }
+
+    if (!window.confirm(copy(locale, "disconnectConfirm"))) return;
 
     setIsBusy(true);
     setMessage("");
@@ -154,7 +173,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setConnection(await client.disconnectInstagram());
       setMessage(copy(locale, "disconnected"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -174,9 +195,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       if (result.connection) {
         setConnection(result.connection);
       }
-      setMessage(result.refreshed ? copy(locale, "tokenRefreshed") : result.reason ?? copy(locale, "failed"));
+      setMessage(
+        result.refreshed
+          ? copy(locale, "tokenRefreshed")
+          : (result.reason ?? copy(locale, "failed")),
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -195,7 +222,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMfaSetup(await client.setupMfaTotp());
       setMessage(copy(locale, "mfaReady"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -212,10 +241,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       const status = await client.enableMfaTotp({ code: mfaCode.trim() });
-      setMessage(status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"));
+      setMessage(
+        status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"),
+      );
       setMfaCode("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
@@ -232,7 +265,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       const data = await client.exportWorkspaceData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -241,13 +276,19 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       URL.revokeObjectURL(url);
       setMessage(copy(locale, "exportReady"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
     } finally {
       setIsBusy(false);
     }
   }
 
-  const activeConnection = connection ?? previewConnection;
+  const activeConnection = connection ?? {
+    connected: false,
+    status: "DISCONNECTED" as const,
+    recentMedia: [],
+  };
   const workspaceName = session?.workspace.name ?? "Zain Arabia";
   const userName = session?.user.fullName ?? "Ahmed Khalil";
   const userEmail = session?.user.email ?? "ahmed@zain.example";
@@ -262,8 +303,12 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               <ShieldCheck size={13} />
               {copy(locale, "eyebrow")}
             </div>
-            <h1 className="mt-4 font-display text-[28px] font-bold leading-tight">{copy(locale, "title")}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{copy(locale, "subtitle")}</p>
+            <h1 className="mt-4 font-display text-[28px] font-bold leading-tight">
+              {copy(locale, "title")}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+              {copy(locale, "subtitle")}
+            </p>
           </div>
           <button
             className="inline-flex items-center justify-center gap-2 rounded-button border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
@@ -282,87 +327,241 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           <SurfaceState
             action={
               auditState === "limit" ? (
-                <a className="inline-flex h-10 items-center rounded-button bg-accent px-4 text-sm font-bold text-white" href={`/${locale}/admin`}>
+                <a
+                  className="inline-flex h-10 items-center rounded-button bg-accent px-4 text-sm font-bold text-white"
+                  href={`/${locale}/admin`}
+                >
                   {copy(locale, "openAdmin")}
                 </a>
               ) : (
-                <button className="inline-flex h-10 items-center gap-2 rounded-button border border-border bg-card px-4 text-sm font-bold text-navy disabled:opacity-60" disabled={isBusy || !session} onClick={refreshAllSettings} type="button">
+                <button
+                  className="inline-flex h-10 items-center gap-2 rounded-button border border-border bg-card px-4 text-sm font-bold text-navy disabled:opacity-60"
+                  disabled={isBusy || !session}
+                  onClick={refreshAllSettings}
+                  type="button"
+                >
                   <RefreshCcw size={15} />
                   {copy(locale, "refresh")}
                 </button>
               )
             }
             body={auditStateText(locale, isBusy ? "loading" : auditState).body}
-            title={auditStateText(locale, isBusy ? "loading" : auditState).title}
-            tone={auditState === "error" ? "error" : auditState === "success" ? "success" : auditState === "limit" ? "limit" : "loading"}
+            title={
+              auditStateText(locale, isBusy ? "loading" : auditState).title
+            }
+            tone={
+              auditState === "error"
+                ? "error"
+                : auditState === "success"
+                  ? "success"
+                  : auditState === "limit"
+                    ? "limit"
+                    : "loading"
+            }
           />
         </div>
       ) : null}
 
       <aside className="grid gap-4">
-        <Panel icon={UserRound} kicker={copy(locale, "account")} title={userName} body={userEmail}>
+        <Panel
+          icon={UserRound}
+          kicker={copy(locale, "account")}
+          title={userName}
+          body={userEmail}
+        >
           <div className="mt-4 grid gap-2">
-            <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
-            <SettingRow label={copy(locale, "role")} value={(session?.roles ?? ["OWNER"]).join(", ")} />
-            <SettingRow label={copy(locale, "verified")} value={session?.user.isVerified ? copy(locale, "yes") : copy(locale, "pending")} />
+            <SettingRow
+              label={copy(locale, "workspace")}
+              value={workspaceName}
+            />
+            <SettingRow
+              label={copy(locale, "role")}
+              value={(session?.roles ?? ["OWNER"]).join(", ")}
+            />
+            <SettingRow
+              label={copy(locale, "verified")}
+              value={
+                session?.user.isVerified
+                  ? copy(locale, "yes")
+                  : copy(locale, "pending")
+              }
+            />
           </div>
         </Panel>
 
-        <Panel icon={Globe2} kicker={copy(locale, "language")} title={copy(locale, "languageTitle")} body={copy(locale, "languageBody")}>
+        <Panel
+          icon={Globe2}
+          kicker={copy(locale, "language")}
+          title={copy(locale, "languageTitle")}
+          body={copy(locale, "languageBody")}
+        >
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Link className={languageClass(locale === "ar")} href="/ar/settings">
+            <Link
+              className={languageClass(locale === "ar")}
+              href="/ar/app/settings"
+            >
               العربية
             </Link>
-            <Link className={languageClass(locale === "en")} href="/en/settings">
+            <Link
+              className={languageClass(locale === "en")}
+              href="/en/app/settings"
+            >
               English
             </Link>
           </div>
         </Panel>
 
-        <Panel icon={CreditCard} kicker={copy(locale, "billing")} title={subscription?.planCode ?? "STARTER"} body={subscription?.status ?? copy(locale, "trial")}>
+        <Panel
+          icon={CreditCard}
+          kicker={copy(locale, "billing")}
+          title={subscription?.planCode ?? "STARTER"}
+          body={subscription?.status ?? copy(locale, "trial")}
+        >
           <div className="mt-4 grid gap-2">
             <SettingRow label={copy(locale, "currency")} value="BHD" />
-            <SettingRow label={copy(locale, "invoices")} value={String(billing?.invoices.length ?? 0)} />
-            <SettingRow label={copy(locale, "payments")} value={String(billing?.payments.length ?? 0)} />
+            <SettingRow
+              label={copy(locale, "invoices")}
+              value={String(billing?.invoices.length ?? 0)}
+            />
+            <SettingRow
+              label={copy(locale, "payments")}
+              value={String(billing?.payments.length ?? 0)}
+            />
           </div>
         </Panel>
       </aside>
 
       <div className="grid gap-4">
         <div className="grid gap-4 lg:grid-cols-2">
-          <Panel icon={Instagram} kicker={copy(locale, "channels")} title={copy(locale, "instagram")} body={copy(locale, activeConnection.connected ? "connectedStatus" : "disconnectedStatus")}>
+          <Panel
+            icon={Instagram}
+            kicker={copy(locale, "channels")}
+            title={copy(locale, "instagram")}
+            body={copy(
+              locale,
+              activeConnection.connected
+                ? "connectedStatus"
+                : "disconnectedStatus",
+            )}
+          >
             <div className="mt-4 grid gap-3 rounded-[18px] border border-border bg-canvas p-4">
-              <SettingRow label={copy(locale, "accountId")} value={activeConnection.accountId ?? "Not set"} />
-              <SettingRow label={copy(locale, "publishMode")} value={session ? copy(locale, "liveWorkspace") : copy(locale, "previewWorkspace")} />
+              <SettingRow
+                label={copy(locale, "accountId")}
+                value={
+                  activeConnection.username
+                    ? `@${activeConnection.username}`
+                    : (activeConnection.accountId ?? "Not set")
+                }
+              />
+              <SettingRow
+                label={copy(locale, "status")}
+                value={instagramStatusLabel(activeConnection)}
+              />
+              <SettingRow
+                label={copy(locale, "lastSync")}
+                value={
+                  activeConnection.lastSyncedAt
+                    ? new Date(activeConnection.lastSyncedAt).toLocaleString(
+                        locale,
+                      )
+                    : copy(locale, "pending")
+                }
+              />
+              <SettingRow
+                label={copy(locale, "publishMode")}
+                value={copy(locale, "dryRun")}
+              />
               <SettingRow
                 label={copy(locale, "expires")}
-                value={activeConnection.tokenExpiresAt ? new Date(activeConnection.tokenExpiresAt).toLocaleDateString(locale) : copy(locale, "pending")}
+                value={
+                  activeConnection.tokenExpiresAt
+                    ? new Date(
+                        activeConnection.tokenExpiresAt,
+                      ).toLocaleDateString(locale)
+                    : copy(locale, "pending")
+                }
               />
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent" onChange={(event) => setAccountId(event.target.value)} placeholder={copy(locale, "accountId")} value={accountId} />
-              <input className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent" onChange={(event) => setTokenExpiresAt(event.target.value)} type="datetime-local" value={tokenExpiresAt} />
+            <div
+              className="mt-4 grid gap-3 sm:grid-cols-2"
+              aria-label={copy(locale, "recentMedia")}
+            >
+              {(activeConnection.recentMedia ?? []).map((media) => (
+                <a
+                  className="rounded-[18px] border border-border bg-canvas p-3"
+                  href={media.permalink ?? "#"}
+                  key={media.id}
+                  rel="noreferrer"
+                  target={media.permalink ? "_blank" : undefined}
+                >
+                  {(media.thumbnailUrl ?? media.mediaUrl) ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- Instagram media hosts are dynamic and short-lived.
+                    <img
+                      alt={media.caption ?? media.mediaType}
+                      className="aspect-square w-full rounded-xl object-cover"
+                      src={media.thumbnailUrl ?? media.mediaUrl}
+                    />
+                  ) : null}
+                  <p className="mt-2 truncate text-sm font-bold">
+                    {media.caption ?? media.mediaType}
+                  </p>
+                </a>
+              ))}
+              {activeConnection.connected &&
+              (activeConnection.recentMedia?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted">
+                  {copy(locale, "emptyMedia")}
+                </p>
+              ) : null}
             </div>
-            <input
-              className="mt-3 w-full rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent"
-              onChange={(event) => setAccessToken(event.target.value)}
-              placeholder={copy(locale, "token")}
-              type="password"
-              value={accessToken}
-            />
             <div className="mt-4 flex flex-wrap gap-2">
-              <ActionButton disabled={isBusy} icon={ExternalLink} label={copy(locale, "oauth")} onClick={startOAuth} tone="primary" />
-              <ActionButton disabled={isBusy} icon={Save} label={copy(locale, "save")} onClick={connect} />
-              <ActionButton disabled={isBusy} icon={RefreshCcw} label={copy(locale, "refreshToken")} onClick={refreshToken} />
-              <ActionButton disabled={isBusy} icon={Link2Off} label={copy(locale, "disconnect")} onClick={disconnect} />
+              <ActionButton
+                disabled={isBusy}
+                icon={ExternalLink}
+                label={copy(
+                  locale,
+                  activeConnection.connected ? "reconnect" : "oauth",
+                )}
+                onClick={startOAuth}
+                tone="primary"
+              />
+              <ActionButton
+                disabled={isBusy || !activeConnection.connected}
+                icon={RefreshCcw}
+                label={copy(locale, "refreshToken")}
+                onClick={refreshToken}
+              />
+              <ActionButton
+                disabled={isBusy || !activeConnection.connected}
+                icon={Link2Off}
+                label={copy(locale, "disconnect")}
+                onClick={disconnect}
+              />
             </div>
           </Panel>
 
-          <Panel icon={LockKeyhole} kicker={copy(locale, "security")} title={copy(locale, "securityTitle")} body={copy(locale, "securityBody")}>
+          <Panel
+            icon={LockKeyhole}
+            kicker={copy(locale, "security")}
+            title={copy(locale, "securityTitle")}
+            body={copy(locale, "securityBody")}
+          >
             <div className="mt-4 rounded-[18px] border border-border bg-canvas p-4">
-              <SettingRow label={copy(locale, "mfa")} value={mfaSetup?.enabled ? copy(locale, "enabled") : copy(locale, "notEnabled")} />
-              {mfaSetup?.secret ? <SettingRow label={copy(locale, "secret")} value={mfaSetup.secret} /> : null}
+              <SettingRow
+                label={copy(locale, "mfa")}
+                value={
+                  mfaSetup?.enabled
+                    ? copy(locale, "enabled")
+                    : copy(locale, "notEnabled")
+                }
+              />
+              {mfaSetup?.secret ? (
+                <SettingRow
+                  label={copy(locale, "secret")}
+                  value={mfaSetup.secret}
+                />
+              ) : null}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
               <input
@@ -371,25 +570,55 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 placeholder={copy(locale, "mfaCode")}
                 value={mfaCode}
               />
-              <ActionButton disabled={isBusy || mfaCode.trim().length === 0} icon={KeyRound} label={copy(locale, "enableMfa")} onClick={enableMfa} tone="primary" />
+              <ActionButton
+                disabled={isBusy || mfaCode.trim().length === 0}
+                icon={KeyRound}
+                label={copy(locale, "enableMfa")}
+                onClick={enableMfa}
+                tone="primary"
+              />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <ActionButton disabled={isBusy} icon={ShieldCheck} label={copy(locale, "setupMfa")} onClick={setupMfa} />
-              <ActionButton disabled={isBusy} icon={Download} label={copy(locale, "exportData")} onClick={exportData} />
+              <ActionButton
+                disabled={isBusy}
+                icon={ShieldCheck}
+                label={copy(locale, "setupMfa")}
+                onClick={setupMfa}
+              />
+              <ActionButton
+                disabled={isBusy}
+                icon={Download}
+                label={copy(locale, "exportData")}
+                onClick={exportData}
+              />
             </div>
           </Panel>
         </div>
 
-        <Panel icon={ScrollText} kicker={copy(locale, "audit")} title={copy(locale, "auditTitle")} body={copy(locale, "auditBody")}>
+        <Panel
+          icon={ScrollText}
+          kicker={copy(locale, "audit")}
+          title={copy(locale, "auditTitle")}
+          body={copy(locale, "auditBody")}
+        >
           {auditLogs.length === 0 ? (
-            <div className="mt-4 rounded-[18px] border border-dashed border-border bg-canvas p-6 text-sm text-muted">{copy(locale, "auditEmpty")}</div>
+            <div className="mt-4 rounded-[18px] border border-dashed border-border bg-canvas p-6 text-sm text-muted">
+              {copy(locale, "auditEmpty")}
+            </div>
           ) : (
             <div className="mt-4 overflow-hidden rounded-[18px] border border-border">
               {auditLogs.slice(0, 8).map((log) => (
-                <div className="grid gap-1 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]" key={log.id}>
-                  <span className="font-bold text-navy">{formatAction(log.action)}</span>
+                <div
+                  className="grid gap-1 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
+                  key={log.id}
+                >
+                  <span className="font-bold text-navy">
+                    {formatAction(log.action)}
+                  </span>
                   <span className="text-muted">{log.targetType}</span>
-                  <span className="text-muted">{new Date(log.createdAt).toLocaleString(locale)}</span>
+                  <span className="text-muted">
+                    {new Date(log.createdAt).toLocaleString(locale)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -403,18 +632,38 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 <Database size={20} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-navy">{copy(locale, "dataControls")}</h2>
-                <p className="text-xs text-muted">{copy(locale, "dataControlsBody")}</p>
+                <h2 className="text-base font-bold text-navy">
+                  {copy(locale, "dataControls")}
+                </h2>
+                <p className="text-xs text-muted">
+                  {copy(locale, "dataControlsBody")}
+                </p>
               </div>
             </div>
-            <a className="inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-3 text-sm font-bold text-navy hover:border-accent hover:text-accent" href={`/${locale}/vault`}>
+            <a
+              className="inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-3 text-sm font-bold text-navy hover:border-accent hover:text-accent"
+              href={`/${locale}/vault`}
+            >
               {copy(locale, "openVault")}
               <ArrowRight size={16} />
             </a>
           </div>
         </div>
 
-        {message ? <SurfaceState body={message} title={copy(locale, auditState === "error" ? "attention" : "status")} tone={auditState === "error" ? "error" : "info"} /> : <p className="min-h-5" />}
+        {message ? (
+          <div aria-live="polite" role="status">
+            <SurfaceState
+              body={message}
+              title={copy(
+                locale,
+                auditState === "error" ? "attention" : "status",
+              )}
+              tone={auditState === "error" ? "error" : "info"}
+            />
+          </div>
+        ) : (
+          <p className="min-h-5" />
+        )}
       </div>
     </section>
   );
@@ -425,7 +674,7 @@ function Panel({
   children,
   icon: Icon,
   kicker,
-  title
+  title,
 }: {
   body: string;
   children?: React.ReactNode;
@@ -437,7 +686,9 @@ function Panel({
     <article className="rounded-[20px] border border-border bg-card p-5 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{kicker}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+            {kicker}
+          </p>
           <h2 className="mt-2 text-lg font-bold text-navy">{title}</h2>
           <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
         </div>
@@ -464,7 +715,7 @@ function ActionButton({
   icon: Icon,
   label,
   onClick,
-  tone = "secondary"
+  tone = "secondary",
 }: {
   disabled: boolean;
   icon: typeof Save;
@@ -494,24 +745,24 @@ async function refreshSettings(
   setConnection: (connection: InstagramConnection) => void,
   setBilling: (billing: BillingSummary) => void,
   setAuditLogs: (auditLogs: AuditLogRecord[]) => void,
-  setMessage: (message: string) => void
+  setMessage: (message: string) => void,
 ): Promise<boolean> {
   try {
-    const [connection, billing, auditLogs] = await Promise.all([client.instagramConnection(), client.billingSummary(), client.auditLogs({ limit: 10 })]);
+    const [connection, billing, auditLogs] = await Promise.all([
+      client.instagramConnection(),
+      client.billingSummary(),
+      client.auditLogs({ limit: 10 }),
+    ]);
     setConnection(connection);
     setBilling(billing);
     setAuditLogs(auditLogs);
     return true;
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : "Settings could not be loaded.");
+    setMessage(
+      error instanceof Error ? error.message : "Settings could not be loaded.",
+    );
     return false;
   }
-}
-
-function defaultTokenExpiry(): string {
-  const date = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function formatAction(action: string): string {
@@ -529,48 +780,59 @@ function languageClass(active: boolean): string {
 }
 
 function isAuditState(value: string | null): value is AuditState {
-  return value === "loading" || value === "error" || value === "success" || value === "limit";
+  return (
+    value === "loading" ||
+    value === "error" ||
+    value === "success" ||
+    value === "limit"
+  );
 }
 
-function auditStateText(locale: Locale, state: AuditState | null): { body: string; title: string } {
+function auditStateText(
+  locale: Locale,
+  state: AuditState | null,
+): { body: string; title: string } {
   const resolved = state ?? "success";
-  const dictionary: Record<Locale, Record<AuditState, { body: string; title: string }>> = {
+  const dictionary: Record<
+    Locale,
+    Record<AuditState, { body: string; title: string }>
+  > = {
     ar: {
       error: {
         body: "تعذر تحميل إعدادات مساحة العمل. لن يتم تنفيذ التغييرات الحساسة حتى تعود بيانات الحساب والفوترة والقنوات.",
-        title: "تعذر تحميل الإعدادات"
+        title: "تعذر تحميل الإعدادات",
       },
       limit: {
         body: "بعض تغييرات الخطة أو القنوات تحتاج ترقية أو مراجعة حدود الاشتراك قبل المتابعة.",
-        title: "تحتاج مراجعة الخطة"
+        title: "تحتاج مراجعة الخطة",
       },
       loading: {
         body: "يتم تحميل الحساب، الفوترة، اتصال Instagram، وسجل التدقيق لمساحة العمل الحالية.",
-        title: "جار تحديث الإعدادات"
+        title: "جار تحديث الإعدادات",
       },
       success: {
         body: "الإعدادات جاهزة. يمكنك إدارة اللغة، القنوات، الأمان، والبيانات مع بقاء كل شيء مرتبطا بمساحة العمل.",
-        title: "الإعدادات جاهزة"
-      }
+        title: "الإعدادات جاهزة",
+      },
     },
     en: {
       error: {
         body: "Workspace settings could not be loaded. Sensitive changes stay blocked until account, billing, and channel data return.",
-        title: "Settings load failed"
+        title: "Settings load failed",
       },
       limit: {
         body: "Some plan or channel changes need a subscription upgrade or quota review before they can continue.",
-        title: "Plan review needed"
+        title: "Plan review needed",
       },
       loading: {
         body: "Loading account, billing, Instagram connection, and audit history for the current workspace.",
-        title: "Refreshing settings"
+        title: "Refreshing settings",
       },
       success: {
         body: "Settings are ready. Manage language, channels, security, and data controls while everything remains workspace-scoped.",
-        title: "Settings ready"
-      }
-    }
+        title: "Settings ready",
+      },
+    },
   };
 
   return dictionary[locale][resolved];
@@ -582,6 +844,7 @@ function copy(locale: Locale, key: string): string {
       account: "الحساب",
       accountId: "حساب إنستغرام",
       attention: "تنبيه",
+      authorizationFailed: "تعذر إكمال تفويض Instagram. حاول الاتصال مجدداً.",
       audit: "السجل",
       auditBody: "آخر أحداث مساحة العمل والإعدادات الحساسة.",
       auditEmpty: "لا توجد أحداث تدقيق بعد.",
@@ -592,10 +855,15 @@ function copy(locale: Locale, key: string): string {
       connectedStatus: "متصل",
       currency: "العملة",
       dataControls: "البيانات والذاكرة",
-      dataControlsBody: "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
+      dataControlsBody:
+        "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
       disconnect: "فصل",
       disconnected: "تم فصل إنستغرام.",
+      disconnectConfirm: "هل تريد فصل Instagram وحذف بيانات الاعتماد المحفوظة؟",
+      recentMedia: "وسائط Instagram الحديثة",
+      emptyMedia: "لا توجد وسائط حديثة لهذا الحساب.",
       disconnectedStatus: "غير متصل",
+      dryRun: "تشغيل تجريبي",
       enableMfa: "تفعيل",
       enabled: "مفعّل",
       error: "خطأ",
@@ -609,6 +877,7 @@ function copy(locale: Locale, key: string): string {
       language: "اللغة",
       languageBody: "التبديل يحافظ على نفس مسار الإعدادات.",
       languageTitle: "العربية والإنجليزية",
+      lastSync: "آخر مزامنة",
       liveWorkspace: "مساحة عمل مباشرة",
       mfa: "MFA",
       mfaCode: "رمز التحقق",
@@ -625,6 +894,7 @@ function copy(locale: Locale, key: string): string {
       publishMode: "وضع النشر",
       refresh: "تحديث",
       refreshToken: "تحديث الرمز",
+      reconnect: "إعادة الاتصال",
       role: "الدور",
       save: "حفظ",
       secret: "السر",
@@ -633,19 +903,22 @@ function copy(locale: Locale, key: string): string {
       securityTitle: "ضوابط الوصول",
       setupMfa: "إعداد MFA",
       status: "الحالة",
-      subtitle: "إدارة الحساب، مساحة العمل، اللغة، الفوترة، القنوات، والأمان من شاشة واحدة.",
+      subtitle:
+        "إدارة الحساب، مساحة العمل، اللغة، الفوترة، القنوات، والأمان من شاشة واحدة.",
       title: "الإعدادات",
       token: "رمز الوصول",
       tokenRefreshed: "تم تحديث رمز إنستغرام.",
       trial: "تجربة",
       verified: "التحقق",
       workspace: "مساحة العمل",
-      yes: "نعم"
+      yes: "نعم",
     },
     en: {
       account: "Account",
       accountId: "Instagram account",
       attention: "Attention",
+      authorizationFailed:
+        "Instagram authorization could not be completed. Try connecting again.",
       audit: "Audit",
       auditBody: "Recent workspace and sensitive settings events.",
       auditEmpty: "No audit events yet.",
@@ -656,10 +929,16 @@ function copy(locale: Locale, key: string): string {
       connectedStatus: "Connected",
       currency: "Currency",
       dataControls: "Data and memory",
-      dataControlsBody: "Export, audit, and business memory stay workspace-scoped.",
+      dataControlsBody:
+        "Export, audit, and business memory stay workspace-scoped.",
       disconnect: "Disconnect",
       disconnected: "Instagram disconnected.",
+      disconnectConfirm:
+        "Disconnect Instagram and remove its stored credential?",
+      recentMedia: "Recent Instagram media",
+      emptyMedia: "No recent media was returned for this account.",
       disconnectedStatus: "Disconnected",
+      dryRun: "Dry run",
       enableMfa: "Enable",
       enabled: "Enabled",
       error: "Error",
@@ -673,6 +952,7 @@ function copy(locale: Locale, key: string): string {
       language: "Language",
       languageBody: "Switching keeps you on the same settings route.",
       languageTitle: "Arabic and English",
+      lastSync: "Last synchronized",
       liveWorkspace: "Live workspace",
       mfa: "MFA",
       mfaCode: "Verification code",
@@ -689,23 +969,26 @@ function copy(locale: Locale, key: string): string {
       publishMode: "Publish mode",
       refresh: "Refresh",
       refreshToken: "Refresh token",
+      reconnect: "Reconnect",
       role: "Role",
       save: "Save",
       secret: "Secret",
       security: "Security",
-      securityBody: "MFA, access permissions, and sensitive data export controls.",
+      securityBody:
+        "MFA, access permissions, and sensitive data export controls.",
       securityTitle: "Access controls",
       setupMfa: "Set up MFA",
       status: "Status",
-      subtitle: "Manage account, workspace, language, billing, channels, and security from one screen.",
+      subtitle:
+        "Manage account, workspace, language, billing, channels, and security from one screen.",
       title: "Settings",
       token: "Access token",
       tokenRefreshed: "Instagram token refreshed.",
       trial: "Trial",
       verified: "Verified",
       workspace: "Workspace",
-      yes: "Yes"
-    }
+      yes: "Yes",
+    },
   } as const;
 
   return dictionary[locale][key as keyof (typeof dictionary)["en"]] ?? key;

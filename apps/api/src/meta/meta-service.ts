@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -15,6 +15,27 @@ export interface MetaWebhookEventResult {
 
 interface SignedRequestPayload {
   user_id?: string | number;
+}
+
+export class MetaCallbackVerificationError extends Error {
+  constructor() {
+    super("Meta callback verification failed");
+  }
+}
+
+export function verifyInstagramWebhookSignature(rawBody: Buffer, signatureHeader: string | undefined): boolean {
+  if (!env.INSTAGRAM_APP_SECRET || !signatureHeader?.startsWith("sha256=")) return false;
+
+  const suppliedHex = signatureHeader.slice("sha256=".length);
+  if (!/^[a-f0-9]{64}$/i.test(suppliedHex)) return false;
+
+  const supplied = Buffer.from(suppliedHex, "hex");
+  const expected = createHmac("sha256", env.INSTAGRAM_APP_SECRET).update(rawBody).digest();
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
+export function createDataDeletionConfirmationCode(): string {
+  return randomUUID();
 }
 
 export async function recordInstagramWebhookEvent(body: unknown): Promise<MetaWebhookEventResult> {
@@ -37,7 +58,7 @@ export async function disconnectInstagramFromMetaCallback(
     action?: "META_DATA_DELETION_RECEIVED" | "META_DEAUTHORIZE_RECEIVED";
   } = {}
 ): Promise<MetaCallbackResult> {
-  const accountId = getAccountId(body);
+  const accountId = getVerifiedAccountId(body);
   const action = input.action ?? "META_DEAUTHORIZE_RECEIVED";
 
   if (!accountId) {
@@ -53,38 +74,39 @@ export async function disconnectInstagramFromMetaCallback(
     };
   }
 
-  const matchingWorkspaces = await prisma.workspace.findMany({
+  const matchingConnections = await prisma.instagramConnectionCredential.findMany({
     select: {
-      id: true
+      workspaceId: true
     },
     where: {
       deletedAt: null,
-      instagramAccountId: accountId
+      provider: "INSTAGRAM",
+      providerAccountId: accountId
     }
   });
-  const result = await prisma.workspace.updateMany({
-    data: {
-      instagramAccessToken: null,
-      instagramAccountId: null,
-      instagramTokenExpiresAt: null
-    },
-    where: {
-      deletedAt: null,
-      instagramAccountId: accountId
-    }
+  const workspaceIds = matchingConnections.map((connection) => connection.workspaceId);
+  await prisma.$transaction(async (tx) => {
+    await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+    await tx.instagramConnectionCredential.deleteMany({
+      where: { workspaceId: { in: workspaceIds }, providerAccountId: accountId }
+    });
+    await tx.workspace.updateMany({
+      data: { instagramAccessToken: null, instagramAccountId: null, instagramTokenExpiresAt: null },
+      where: { id: { in: workspaceIds } }
+    });
   });
 
   await recordMetaCallbackAudit({
     accountId,
     action,
     body,
-    disconnected: result.count,
-    workspaceIds: matchingWorkspaces.map((workspace) => workspace.id)
+    disconnected: workspaceIds.length,
+    workspaceIds
   });
 
   return {
     accountId,
-    disconnected: result.count,
+    disconnected: workspaceIds.length,
     received: true
   };
 }
@@ -162,26 +184,23 @@ function sanitizeMetaPayload(body: unknown): Prisma.InputJsonObject {
   return sanitized;
 }
 
-function getAccountId(body: unknown): string | undefined {
+function getVerifiedAccountId(body: unknown): string | undefined {
   if (typeof body !== "object" || body === null) {
-    return undefined;
+    throw new MetaCallbackVerificationError();
   }
 
   const record = body as Record<string, unknown>;
-  const direct = firstString(record.instagram_account_id, record.account_id, record.user_id);
-
-  if (direct) {
-    return direct;
-  }
-
   const signedRequest = typeof record.signed_request === "string" ? record.signed_request : undefined;
   const payload = signedRequest ? parseSignedRequest(signedRequest) : undefined;
+  const accountId = firstString(payload?.user_id);
 
-  return firstString(payload?.user_id);
+  if (!accountId) throw new MetaCallbackVerificationError();
+
+  return accountId;
 }
 
 function parseSignedRequest(signedRequest: string): SignedRequestPayload | undefined {
-  if (!env.META_APP_SECRET) {
+  if (!env.INSTAGRAM_APP_SECRET) {
     return undefined;
   }
 
@@ -192,7 +211,7 @@ function parseSignedRequest(signedRequest: string): SignedRequestPayload | undef
   }
 
   const signature = base64UrlDecode(encodedSignature);
-  const expected = createHmac("sha256", env.META_APP_SECRET).update(encodedPayload).digest();
+  const expected = createHmac("sha256", env.INSTAGRAM_APP_SECRET).update(encodedPayload).digest();
 
   if (signature.length !== expected.length || !timingSafeEqual(signature, expected)) {
     return undefined;

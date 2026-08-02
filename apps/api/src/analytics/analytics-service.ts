@@ -17,6 +17,7 @@ import {
   InstagramAnalyticsProviderError,
   type InstagramAnalyticsProvider
 } from "./instagram-analytics-provider";
+import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
 
 export class AnalyticsWorkspaceNotFoundError extends Error {
   constructor() {
@@ -104,21 +105,13 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     }
   }
 
-  const connection = {
-    connected:
-      workspace.instagramAccountId !== null &&
-      workspace.instagramAccessToken !== null &&
-      workspace.instagramTokenExpiresAt !== null &&
-      workspace.instagramTokenExpiresAt > new Date(),
-    ...(workspace.instagramAccountId === null ? {} : { accountId: workspace.instagramAccountId }),
-    ...(workspace.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() })
-  };
+  const connection = await getSecureInstagramConnection(workspaceId);
 
   if (!connection.connected) {
     reasons.push("INSTAGRAM_NOT_CONNECTED");
   }
 
-  if (workspace.instagramTokenExpiresAt !== null && workspace.instagramTokenExpiresAt <= new Date()) {
+  if (connection.status === "REAUTHORIZE_REQUIRED") {
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");
   }
 
@@ -199,11 +192,12 @@ export async function syncInstagramAnalytics(
     }
   });
   const provider = options.provider ?? createInstagramAnalyticsProvider();
+  const providerWorkspace = await withSecureInstagramCredential(workspace);
   const snapshots = await provider.syncWorkspace({
     contentItems,
     from: dayStart(from),
     to: dayStart(to),
-    workspace
+    workspace: providerWorkspace
   });
   const syncedAt = options.now ?? new Date();
   const records: InstagramAnalyticsRecord[] = [];
@@ -312,33 +306,29 @@ export async function writeAnalyticsLearningToVault(
 export async function syncInstagramAnalyticsForAllWorkspaces(
   options: { days?: number; now?: Date; provider?: InstagramAnalyticsProvider; workspaceIds?: string[] } = {}
 ): Promise<AnalyticsSyncForAllWorkspacesResult> {
-  const workspaces = await prisma.workspace.findMany({
+  const connections = await prisma.instagramConnectionCredential.findMany({
     where: {
       deletedAt: null,
+      status: "CONNECTED",
       ...(options.workspaceIds === undefined
         ? {}
         : {
-            id: {
+            workspaceId: {
               in: options.workspaceIds
             }
           }),
-      instagramAccountId: {
-        not: null
-      },
-      instagramAccessToken: {
-        not: null
-      },
-      instagramTokenExpiresAt: {
+      tokenExpiresAt: {
         gt: options.now ?? new Date()
       }
-    }
+    },
+    select: { workspaceId: true }
   });
   const results: AnalyticsSyncResult[] = [];
 
-  for (const workspace of workspaces) {
+  for (const connection of connections) {
     try {
       results.push(
-        await syncInstagramAnalytics(workspace.id, {
+        await syncInstagramAnalytics(connection.workspaceId, {
           ...(options.days === undefined ? {} : { days: options.days }),
           ...(options.now === undefined ? {} : { now: options.now }),
           ...(options.provider === undefined ? {} : { provider: options.provider })

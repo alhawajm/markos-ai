@@ -121,6 +121,14 @@ enum UsageMetric {
   STORAGE_BYTES
 }
 
+enum InstagramConnectionStatus {
+  PENDING
+  CONNECTED
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
 model User {
   id           String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   email        String     @unique
@@ -173,6 +181,62 @@ model WorkspaceMember {
   @@unique([workspaceId, userId, role])
   @@index([userId])
   @@map("workspace_members")
+}
+
+model InstagramConnectionCredential {
+  id                      String                    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId             String                    @unique @db.Uuid
+  provider                String                    @default("INSTAGRAM")
+  providerAccountId       String
+  username                String
+  accountType             String?
+  profilePictureUrl       String?
+  encryptedAccessToken    String
+  tokenIssuedAt           DateTime
+  tokenExpiresAt          DateTime
+  status                  InstagramConnectionStatus @default(PENDING)
+  requestedScopes         String[]
+  providerConfirmedScopes String[]
+  lastSyncedAt            DateTime?
+  lastErrorCode           String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  deletedAt               DateTime?
+
+  @@index([workspaceId, status])
+  @@unique([provider, providerAccountId])
+  @@map("instagram_connection_credentials")
+}
+
+model InstagramRecentMedia {
+  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String   @db.Uuid
+  connectionId   String   @db.Uuid
+  providerMediaId String
+  mediaType      String
+  caption        String?
+  mediaUrl       String?
+  thumbnailUrl   String?
+  permalink      String?
+  providerTimestamp DateTime?
+  syncedAt       DateTime @default(now())
+
+  @@unique([connectionId, providerMediaId])
+  @@index([workspaceId, connectionId])
+  @@map("instagram_recent_media")
+}
+
+model OAuthStateNonce {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  nonceHash   String    @unique
+  workspaceId String    @db.Uuid
+  userId      String    @db.Uuid
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, userId])
+  @@map("oauth_state_nonces")
 }
 
 model KnowledgeVault {

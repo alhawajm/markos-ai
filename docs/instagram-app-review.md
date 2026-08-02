@@ -1,6 +1,6 @@
-# Instagram App Review Readiness
+# Instagram Business-Basic Connection Readiness
 
-MARKOS uses Instagram Business Login and Content Publishing. Keep this file aligned with Meta dashboard settings before `INSTAGRAM_PUBLISH_MODE=live`.
+This milestone uses Instagram Login and requests exactly `instagram_business_basic`. Publishing, insights, comments, messages, and their additional permissions remain outside this connection milestone and stay disabled.
 
 ## Required Meta Dashboard URLs
 
@@ -16,22 +16,19 @@ Use HTTPS URLs in production.
 Local defaults:
 
 ```env
-META_REDIRECT_URI=http://localhost:4000/v1/workspace/instagram/oauth/callback
+INSTAGRAM_OAUTH_REDIRECT_URI=http://localhost:4000/v1/workspace/instagram/oauth/callback
 META_WEBHOOK_VERIFY_TOKEN=change-me-for-meta-dashboard
-INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights
-INSTAGRAM_REFRESH_TOKEN_URL=https://graph.instagram.com/refresh_access_token
+INSTAGRAM_OAUTH_SCOPES=instagram_business_basic
 INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS=14
 ```
 
 ## Permissions To Request
 
-Request only the permissions currently used by the product:
+Request exactly the permission used by this milestone:
 
 - `instagram_business_basic`
-- `instagram_business_content_publish`
-- `instagram_business_manage_insights`
 
-Do not request comments, mentions, messaging, or ad permissions until the matching product surface and tests exist.
+Do not request publishing, insights, comments, mentions, messaging, or ad permissions until the matching product surface, provider integration, review evidence, and tests exist.
 
 ## App Review Screencast Script
 
@@ -39,27 +36,23 @@ Do not request comments, mentions, messaging, or ad permissions until the matchi
 2. Click `Connect Instagram`.
 3. Complete Instagram Business Login for a professional test account.
 4. Return to MARKOS Settings and show the connected account state.
-5. Open Schedule and show a scheduled content item with an HTTPS public media URL.
-6. Run a dry-run publish and show readiness checks.
-7. For live-review testing only, set `INSTAGRAM_PUBLISH_MODE=live`, publish one approved due item, and show the generated Instagram post.
-8. Open Analytics, show `/v1/analytics/live-readiness`, sync analytics, and show real metrics plus Vault learning evidence.
-9. Disconnect Instagram from MARKOS Settings.
+5. Show the stored basic profile and the bounded recent-owned-media result (including the valid empty state).
+6. Refresh an eligible long-lived token, reconnect, and disconnect from MARKOS Settings.
 
 ## Operational Gates Before Live Mode
 
 - Production API is served over HTTPS.
-- `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, and `META_WEBHOOK_VERIFY_TOKEN` are set in production secrets.
-- Meta dashboard OAuth redirect URI exactly matches `META_REDIRECT_URI`.
+- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, `INSTAGRAM_OAUTH_STATE_SECRET`, and `META_WEBHOOK_VERIFY_TOKEN` are set in production secrets.
+- Meta dashboard OAuth redirect URI exactly matches `INSTAGRAM_OAUTH_REDIRECT_URI`.
 - Webhook verification succeeds against `/v1/meta/webhooks/instagram`.
-- Public media URLs use HTTPS and are reachable by Meta.
-- Publishing remains behind `INSTAGRAM_PUBLISH_MODE=live`.
-- Daily publishing caps are enforced before background publishing is enabled.
 - Long-lived token refresh succeeds from MARKOS Settings and from the maintenance worker for connected accounts.
-- Analytics live readiness passes before `INSTAGRAM_ANALYTICS_SYNC_MODE=live`.
-- Analytics sync creates workspace-scoped `instagram_analytics` rows and a Vault learning entry.
-- Data deletion/deauthorization callbacks disconnect Instagram credentials when the callback account identifier matches a stored `instagramAccountId`.
-- Instagram webhook, deauthorization, and data deletion callbacks are persisted to `AuditLog` with sensitive payload fields redacted.
+- Data deletion/deauthorization callbacks carry a valid Meta `signed_request` and disconnect the matching encrypted credential.
+- Webhook POSTs carry a valid `X-Hub-Signature-256`; invalid or unsigned payloads are rejected before audit processing.
+- Instagram webhook, deauthorization, and data deletion callback audits redact signed requests and secrets.
+- `INSTAGRAM_PUBLISH_MODE` and `INSTAGRAM_ANALYTICS_SYNC_MODE` remain `dry_run`.
 
-## Current Limitations
+## Webhook and Live-Provider Limitations
 
-- Deauthorization and data deletion callbacks cannot disconnect accounts when Meta sends only an app-scoped user id that is not stored by MARKOS.
+- Dashboard callback verification does not subscribe a professional account to webhook fields. Meta requires a separate per-account `/{ig-user-id}/subscribed_apps` operation and field selection.
+- The exact `instagram_business_basic` permission does not by itself authorize webhook fields that require comments or messaging permissions. No additional permission is requested by this milestone, so those subscriptions must not be represented as active.
+- Live Meta authorization, callback payloads, field availability, per-account webhook subscription, refresh timing, and deauthorization/data-deletion delivery still require supervised validation with the real Meta App.

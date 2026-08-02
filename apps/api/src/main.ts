@@ -5,7 +5,7 @@ import { captureException, flushObservability } from "./observability/sentry";
 const app = await buildApp();
 
 try {
-  await app.listen({ port: env.API_PORT, host: "0.0.0.0" });
+  await app.listen({ port: env.PORT ?? env.API_PORT, host: "0.0.0.0" });
 } catch (error) {
   app.log.error(error);
   captureException(error);

@@ -46,7 +46,7 @@ Use the API as the Instagram OAuth redirect target at `/v1/workspace/instagram/o
 
 ## 2026-06-11: Meta Dashboard Callback URLs
 
-Expose API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Deauthorization and data deletion callbacks disconnect matching workspace Instagram credentials when the callback includes the stored Instagram account id.
+Expose API callback URLs for Instagram webhook verification, deauthorization, and data deletion so the Meta app can be configured during App Review. Verify webhook payload bytes with `X-Hub-Signature-256` and the Instagram App Secret before processing. Deauthorization and data deletion callbacks accept only a valid Meta `signed_request`; untrusted direct account identifiers cannot disconnect credentials.
 
 ## 2026-06-11: Instagram Token Refresh Starts Manual
 
@@ -179,3 +179,33 @@ Use separate deep-health timeouts for database, Redis, and HTTP dependencies. In
 ## 2026-06-17: OpenTelemetry Core Is Patched By Workspace Override
 
 Pin `@opentelemetry/core` to `2.8.0` through `pnpm-workspace.yaml` overrides because Sentry 10.57.0 resolves a vulnerable `2.7.1` transitive version and the Sentry/OpenTelemetry peer range accepts the patched 2.x package. Keep the override until Sentry resolves to a patched OpenTelemetry version without pinning.
+
+# Instagram OAuth security foundation (2026-07-29)
+
+- Instagram Login is a distinct provider contract and requests only `instagram_business_basic`; Facebook Login and Page discovery are intentionally excluded from this slice.
+- Access tokens use randomized AES-256-GCM envelopes. OAuth state uses a short-lived HMAC-protected payload plus an atomic, persisted nonce consumption record so it remains single-use across API instances.
+- Requested scopes and provider-confirmed scopes are stored separately because consent requested by MarkOS is not evidence of what the provider actually granted.
+
+## 2026-07-29: Instagram basic connection lifecycle
+
+The active Settings connection uses the persisted encrypted credential record as its only source of truth. Provider profile reads are capped at six owned media items, provider-confirmed scopes remain empty unless Instagram explicitly returns confirmation, and external account IDs are unique across workspaces. Legacy workspace credential columns remain for compatibility but the new OAuth path never writes them.
+
+## 2026-07-29: Instagram identity and ownership release hardening
+
+Instagram Login's stable professional-account identity is the documented `user_id`, paired with `username`; `id` is not treated as interchangeable. Active `(provider, providerAccountId)` ownership remains globally unique, while disconnect deletes the credential record and releases that identity for a later authorized connection. New Instagram tables use the repository-standard `app_current_workspace_id()` RLS context and explicit `markos_app` grants.
+
+## 2026-07-29: Instagram callbacks use transaction binding
+
+The web app and API use bearer tokens stored by the browser client rather than an API-origin server session, and Instagram returns to a public API callback. The callback therefore uses transaction binding, not independent returning-browser authentication: only an authenticated member with `instagram:manage` can create the signed, expiring state and persisted nonce; atomic nonce consumption maps the callback back to that initiating user and workspace before any provider exchange. A different browser session cannot redirect the result to its own workspace because the callback accepts no workspace input and persistence uses only the integrity-protected transaction binding. Callback query values are stripped from application URLs and error telemetry. A future server-session design may add returning-browser binding, but this slice does not claim it.
+
+The active business-basic connection consumes `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, and `INSTAGRAM_OAUTH_STATE_SECRET`. Its authorization, short-token, long-token, refresh, and Graph hosts are constrained in code, and its permission is exactly `instagram_business_basic`.
+
+Retained compatibility inputs have narrower meanings. `INSTAGRAM_OAUTH_SCOPES` is consumed by unchanged analytics-readiness logic and appears in App Review documentation, but it does not alter the active connection permission. `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, `INSTAGRAM_REFRESH_TOKEN_URL`, and `INSTAGRAM_GRAPH_BASE_URL` currently have no runtime consumer and remain inert compatibility inputs pending a later coordinated cleanup. Secure refresh delegates to `InstagramBasicClient`, whose refresh endpoint is constrained in code. None of these compatibility inputs controls the active business-basic client or activates publishing, analytics, workers, schedulers, or additional permissions.
+
+## 2026-07-30 — Encrypted Instagram credentials are the only active credential source
+
+Publishing, analytics, readiness, scheduled refresh, Meta deauthorization, and workspace erasure resolve Instagram connections through `instagram_connection_credentials`. Provider adapters may receive a transient workspace-shaped value only at the authorized provider-call boundary; no active consumer reads or writes legacy plaintext workspace token columns. The legacy columns remain nullable for migration compatibility and are cleared during disconnect/erasure. CI uses a disposable `markos_ci_test` database and test-only encryption/OAuth values so encrypted integration suites execute without Meta access.
+
+## 2026-08-02: Local API Environment Loading Is Explicit
+
+Load an optional repository-root `.env` from the API environment module for local API, worker, and seed entry points, while preserving already-injected process variables. Keep Prisma CLI migrations, Next.js environment files, Docker build arguments, GitHub Actions variables, and Railway runtime variables as separate explicit contracts. Treat an empty optional `MEDIA_PUBLIC_BASE_URL` as absent and fall back to the public API media route for the business-basic connection milestone.

@@ -3,6 +3,7 @@ import type { AnalyticsSummary } from "@markos/shared-types";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { MetaGraphInstagramAnalyticsProvider, type InstagramAnalyticsProvider } from "../src/analytics/instagram-analytics-provider";
 import { syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
 
@@ -40,7 +41,7 @@ describe("analytics routes", () => {
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
 
-    await connectInstagram(app, headers);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
     const response = await app.inject({
       method: "GET",
@@ -52,7 +53,7 @@ describe("analytics routes", () => {
     expect(response.json()).toMatchObject({
       data: {
         connection: {
-          accountId: "17841400000000000",
+          accountId: expect.any(String),
           connected: true
         },
         mode: "dry_run",
@@ -72,7 +73,7 @@ describe("analytics routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const content = await createPublishedContent(session.workspace.id);
 
-    await connectInstagram(app, headers);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
     const syncResponse = await app.inject({
       method: "POST",
@@ -180,8 +181,8 @@ describe("analytics routes", () => {
     const firstHeaders = authHeaders(first.tokens.accessToken);
     const secondHeaders = authHeaders(second.tokens.accessToken);
 
-    await connectInstagram(app, firstHeaders);
-    await connectInstagram(app, secondHeaders);
+    await persistTestInstagramConnection({ workspaceId: first.workspace.id, actorId: first.user.id });
+    await persistTestInstagramConnection({ workspaceId: second.workspace.id, actorId: second.user.id });
     await createPublishedContent(first.workspace.id);
     await createPublishedContent(second.workspace.id);
 
@@ -555,16 +556,7 @@ describe("analytics routes", () => {
 
   it("maintenance worker analytics sync scans connected workspaces", async () => {
     const workspace = await createWorkspace("analytics-worker");
-    await prisma.workspace.update({
-      data: {
-        instagramAccessToken: "analytics-worker-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000)
-      },
-      where: {
-        id: workspace.id
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, accessToken: "analytics-worker-token" });
     const content = await createPublishedContent(workspace.id);
     const provider: InstagramAnalyticsProvider = {
       mode: "dry_run",
@@ -719,19 +711,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
-async function connectInstagram(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
-  await app.inject({
-    method: "PUT",
-    url: "/v1/workspace/instagram",
-    headers,
-    payload: {
-      accountId: "17841400000000000",
-      accessToken: "test-instagram-token",
-      tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
-    }
-  });
-}
 
 async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   await app.inject({

@@ -148,6 +148,9 @@ export async function eraseWorkspaceData(input: {
     counts.contentItems = (await tx.contentItem.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.mediaAssets = (await tx.mediaAsset.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.instagramAnalytics = (await tx.instagramAnalytics.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
+    counts.instagramRecentMedia = (await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.instagramConnectionCredentials = (await tx.instagramConnectionCredential.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.oauthStateNonces = (await tx.oAuthStateNonce.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.aiInteractions = (await tx.aiInteraction.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.subscriptions = (await tx.subscription.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.invoices = (await tx.invoice.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;

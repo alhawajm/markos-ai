@@ -435,18 +435,10 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async instagramOAuthStart(input: { locale?: "ar" | "en" } = {}): Promise<InstagramOAuthStart> {
+  async instagramOAuthStart(input: { locale?: "ar" | "en"; returnTo?: string } = {}): Promise<InstagramOAuthStart> {
     const response = await this.request<InstagramOAuthStart>("/v1/workspace/instagram/oauth/start", {
       body: input,
       method: "POST"
-    });
-    return response.data;
-  }
-
-  async connectInstagram(input: { accountId: string; accessToken: string; tokenExpiresAt: string }): Promise<InstagramConnection> {
-    const response = await this.request<InstagramConnection>("/v1/workspace/instagram", {
-      body: input,
-      method: "PUT"
     });
     return response.data;
   }

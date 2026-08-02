@@ -6,6 +6,8 @@ import type { FastifyInstance } from "fastify";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { env } from "../src/config/env";
+import { encryptCredential } from "../src/security/credential-encryption";
 
 interface WorkspaceFixture {
   userId: string;
@@ -132,6 +134,53 @@ const isolationCases: IsolationCase[] = [
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.instagramAnalytics.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "InstagramConnectionCredential",
+    create: (fixture) =>
+      prisma.instagramConnectionCredential.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          providerAccountId: `account-${randomUUID()}`,
+          username: `user-${randomUUID()}`,
+          encryptedAccessToken: encryptCredential(`token-${randomUUID()}`, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!),
+          tokenIssuedAt: new Date(),
+          tokenExpiresAt: new Date(Date.now() + 86_400_000),
+          status: "CONNECTED",
+          requestedScopes: ["instagram_business_basic"],
+          providerConfirmedScopes: []
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.instagramConnectionCredential.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "InstagramRecentMedia",
+    create: async (fixture) => {
+      const connection = await prisma.instagramConnectionCredential.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          providerAccountId: `media-account-${randomUUID()}`,
+          username: `media-user-${randomUUID()}`,
+          encryptedAccessToken: encryptCredential(`token-${randomUUID()}`, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!),
+          tokenIssuedAt: new Date(), tokenExpiresAt: new Date(Date.now() + 86_400_000), status: "CONNECTED",
+          requestedScopes: ["instagram_business_basic"], providerConfirmedScopes: []
+        }
+      });
+      return prisma.instagramRecentMedia.create({
+        data: { workspaceId: fixture.workspaceId, connectionId: connection.id, providerMediaId: `media-${randomUUID()}`, mediaType: "IMAGE" },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.instagramRecentMedia.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OAuthStateNonce",
+    create: (fixture) => prisma.oAuthStateNonce.create({
+      data: { nonceHash: `nonce-${randomUUID()}`, workspaceId: fixture.workspaceId, userId: fixture.userId, expiresAt: new Date(Date.now() + 60_000) },
+      select: { id: true, workspaceId: true }
+    }),
+    list: (workspaceId) => prisma.oAuthStateNonce.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "AiInteraction",

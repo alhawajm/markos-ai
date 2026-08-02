@@ -14,5 +14,6 @@ export async function withWorkspaceDbContext<T>(
 }
 
 export async function setWorkspaceDbContext(tx: WorkspaceTransactionClient, workspaceId: string): Promise<void> {
+  await tx.$executeRawUnsafe("SET LOCAL ROLE markos_app");
   await tx.$executeRaw`SELECT set_config('app.current_workspace', ${workspaceId}, true)`;
 }

@@ -1,7 +1,7 @@
 import type { AuditLogRecord, InstagramConnection, PublishReadiness } from "@markos/shared-types";
-import type { ConnectInstagramInput } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { toContentRecord } from "../content/content-service";
+import { getSecureInstagramConnection } from "./instagram-connection-service";
 
 export class WorkspaceNotFoundError extends Error {
   constructor() {
@@ -27,82 +27,9 @@ export async function getInstagramConnection(workspaceId: string): Promise<Insta
     throw new WorkspaceNotFoundError();
   }
 
-  return toInstagramConnection(workspace);
+  return getSecureInstagramConnection(workspaceId);
 }
 
-export async function connectInstagram(
-  workspaceId: string,
-  input: ConnectInstagramInput,
-  audit: { actorId?: string } = {}
-): Promise<InstagramConnection> {
-  const workspace = await prisma.workspace.update({
-    where: {
-      id: workspaceId
-    },
-    data: {
-      instagramAccountId: input.accountId,
-      instagramAccessToken: input.accessToken,
-      instagramTokenExpiresAt: new Date(input.tokenExpiresAt)
-    }
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      action: "INSTAGRAM_CONNECTED",
-      ...(audit.actorId === undefined ? {} : { actorId: audit.actorId }),
-      metadata: {
-        accountId: input.accountId,
-        tokenExpiresAt: new Date(input.tokenExpiresAt).toISOString()
-      },
-      targetId: input.accountId,
-      targetType: "InstagramConnection",
-      workspaceId
-    }
-  });
-
-  return toInstagramConnection(workspace);
-}
-
-export async function disconnectInstagram(
-  workspaceId: string,
-  audit: { actorId?: string } = {}
-): Promise<InstagramConnection> {
-  const workspace = await prisma.$transaction(async (tx) => {
-    const existing = await tx.workspace.findUniqueOrThrow({
-      select: {
-        instagramAccountId: true
-      },
-      where: {
-        id: workspaceId
-      }
-    });
-    const updated = await tx.workspace.update({
-      where: {
-        id: workspaceId
-      },
-      data: {
-        instagramAccountId: null,
-        instagramAccessToken: null,
-        instagramTokenExpiresAt: null
-      }
-    });
-
-    await tx.auditLog.create({
-      data: {
-        action: "INSTAGRAM_DISCONNECTED",
-        ...(audit.actorId === undefined ? {} : { actorId: audit.actorId }),
-        metadata: existing.instagramAccountId === null ? {} : { accountId: existing.instagramAccountId },
-        targetId: existing.instagramAccountId,
-        targetType: "InstagramConnection",
-        workspaceId
-      }
-    });
-
-    return updated;
-  });
-
-  return toInstagramConnection(workspace);
-}
 
 export async function listWorkspaceAuditLogs(workspaceId: string, input: { limit?: number } = {}): Promise<AuditLogRecord[]> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
@@ -214,22 +141,4 @@ function toAuditLogRecord(row: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toInstagramConnection(workspace: {
-  instagramAccountId: string | null;
-  instagramAccessToken: string | null;
-  instagramTokenExpiresAt: Date | null;
-}): InstagramConnection {
-  const connected =
-    workspace.instagramAccountId !== null &&
-    workspace.instagramAccessToken !== null &&
-    workspace.instagramTokenExpiresAt !== null &&
-    workspace.instagramTokenExpiresAt > new Date();
-
-  return {
-    connected,
-    ...(workspace.instagramAccountId === null ? {} : { accountId: workspace.instagramAccountId }),
-    ...(workspace.instagramTokenExpiresAt === null ? {} : { tokenExpiresAt: workspace.instagramTokenExpiresAt.toISOString() })
-  };
 }

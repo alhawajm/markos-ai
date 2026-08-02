@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { MetaGraphPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { publishContentItem } from "../src/publishing/publishing-service";
 
@@ -56,7 +57,7 @@ describe("publishing routes", () => {
     try {
       const session = await registerTestUser(app);
       const headers = authHeaders(session.tokens.accessToken);
-      await connectInstagram(app, headers);
+      await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
       const response = await app.inject({
         method: "GET",
@@ -68,7 +69,7 @@ describe("publishing routes", () => {
       expect(response.json()).toMatchObject({
         data: {
           connection: {
-            accountId: "17841400000000000",
+            accountId: expect.any(String),
             connected: true
           },
           mode: "live",
@@ -223,7 +224,7 @@ describe("publishing routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const { content, media } = await createPublishableDueContent(session.workspace.id);
 
-    await connectInstagram(app, headers);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
     const response = await app.inject({
       method: "POST",
@@ -245,7 +246,7 @@ describe("publishing routes", () => {
         result: {
           dryRun: true,
           payload: {
-            accountId: "17841400000000000",
+            accountId: expect.any(String),
             caption: "Ready to publish\n\n#Bahrain #MarkosAI",
             contentItemId: content.id,
             contentType: "POST",
@@ -269,7 +270,7 @@ describe("publishing routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const due = await createPublishableDueContent(session.workspace.id);
     await createPublishableFutureContent(session.workspace.id);
-    await connectInstagram(app, headers);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
     const response = await app.inject({
       method: "POST",
@@ -297,16 +298,7 @@ describe("publishing routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     const publisher: InstagramPublisher = {
       async publish() {
         throw new MetaGraphPublishError("Meta rejected the media container");
@@ -337,16 +329,7 @@ describe("publishing routes", () => {
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
 
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
 
     const publisher: InstagramPublisher = {
       async getPublishingLimit() {
@@ -361,7 +344,7 @@ describe("publishing routes", () => {
           dryRun: false,
           instagramPostId: "ig-post-1",
           payload: {
-            accountId: "17841400000000000",
+            accountId: expect.any(String),
             caption: "Ready to publish\n\n#Bahrain #MarkosAI",
             contentItemId: content.id,
             contentType: "POST",
@@ -397,16 +380,7 @@ describe("publishing routes", () => {
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
 
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     await prisma.usageCounter.create({
       data: {
         workspaceId: session.workspace.id,
@@ -463,16 +437,7 @@ describe("publishing routes", () => {
         id: session.user.id
       }
     });
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
 
     const publisher: InstagramPublisher = {
       async getPublishingLimit() {
@@ -510,16 +475,7 @@ describe("publishing routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     const publisher: InstagramPublisher = {
       async getPublishingLimit() {
         return {
@@ -561,16 +517,7 @@ describe("publishing routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
-    await prisma.workspace.update({
-      where: {
-        id: session.workspace.id
-      },
-      data: {
-        instagramAccessToken: "test-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.now() + 3600000)
-      }
-    });
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     const publisher: InstagramPublisher = {
       async getPublishingLimit() {
         throw new MetaGraphPublishError("Meta publishing limit check failed");
@@ -634,19 +581,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
-async function connectInstagram(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
-  await app.inject({
-    method: "PUT",
-    url: "/v1/workspace/instagram",
-    headers,
-    payload: {
-      accountId: "17841400000000000",
-      accessToken: "test-instagram-token",
-      tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
-    }
-  });
-}
 
 async function createPublishableDueContent(workspaceId: string) {
   return createPublishableContent(workspaceId, new Date(Date.now() - 60 * 1000));

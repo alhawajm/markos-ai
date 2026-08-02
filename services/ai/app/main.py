@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
 import base64
 import hashlib
 import math
 import re
+from datetime import UTC, datetime
 from typing import Literal, TypedDict
 
 from fastapi import FastAPI, Request
@@ -433,7 +433,7 @@ def build_image_svg(request: ImageGenerateRequest) -> BuiltImage:
         "9:16": (1080, 1920),
     }
     width, height = dimensions[request.aspect_ratio]
-    digest = hashlib.sha256(f"{request.workspace_id}:{request.prompt}:{request.aspect_ratio}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{request.workspace_id}:{request.prompt}:{request.aspect_ratio}".encode()).hexdigest()
     primary = f"#{digest[:6]}"
     secondary = f"#{digest[6:12]}"
     accent = f"#{digest[12:18]}"

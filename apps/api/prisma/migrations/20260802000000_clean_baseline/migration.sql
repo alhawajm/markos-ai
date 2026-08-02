@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "Locale" AS ENUM ('EN', 'AR');
 
@@ -41,7 +44,10 @@ CREATE TYPE "SubStatus" AS ENUM ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELLED');
 CREATE TYPE "InvoiceStatus" AS ENUM ('DRAFT', 'PAID', 'FAILED', 'VOID');
 
 -- CreateEnum
-CREATE TYPE "UsageMetric" AS ENUM ('AI_GENERATION', 'AI_IMAGE', 'POST_PUBLISH', 'STRATEGY', 'STORAGE_BYTES');
+CREATE TYPE "UsageMetric" AS ENUM ('AI_GENERATION', 'AI_IMAGE', 'AI_TOKENS_IN', 'AI_TOKENS_OUT', 'POST_PUBLISH', 'STRATEGY', 'STORAGE_BYTES');
+
+-- CreateEnum
+CREATE TYPE "InstagramConnectionStatus" AS ENUM ('PENDING', 'CONNECTED', 'EXPIRED', 'REVOKED', 'ERROR');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -98,6 +104,60 @@ CREATE TABLE "workspace_members" (
 );
 
 -- CreateTable
+CREATE TABLE "instagram_connection_credentials" (
+    "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "workspaceId" UUID NOT NULL,
+    "provider" TEXT NOT NULL DEFAULT 'INSTAGRAM',
+    "providerAccountId" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
+    "accountType" TEXT,
+    "profilePictureUrl" TEXT,
+    "encryptedAccessToken" TEXT NOT NULL,
+    "tokenIssuedAt" TIMESTAMP(3) NOT NULL,
+    "tokenExpiresAt" TIMESTAMP(3) NOT NULL,
+    "status" "InstagramConnectionStatus" NOT NULL DEFAULT 'PENDING',
+    "requestedScopes" TEXT[],
+    "providerConfirmedScopes" TEXT[],
+    "lastSyncedAt" TIMESTAMP(3),
+    "lastErrorCode" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "instagram_connection_credentials_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "instagram_recent_media" (
+    "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "workspaceId" UUID NOT NULL,
+    "connectionId" UUID NOT NULL,
+    "providerMediaId" TEXT NOT NULL,
+    "mediaType" TEXT NOT NULL,
+    "caption" TEXT,
+    "mediaUrl" TEXT,
+    "thumbnailUrl" TEXT,
+    "permalink" TEXT,
+    "providerTimestamp" TIMESTAMP(3),
+    "syncedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "instagram_recent_media_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "oauth_state_nonces" (
+    "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "nonceHash" TEXT NOT NULL,
+    "workspaceId" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "consumedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "oauth_state_nonces_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "knowledge_vault" (
     "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
     "workspaceId" UUID NOT NULL,
@@ -111,6 +171,20 @@ CREATE TABLE "knowledge_vault" (
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "knowledge_vault_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "knowledge_vault_history" (
+    "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "workspaceId" UUID NOT NULL,
+    "knowledgeVaultId" UUID NOT NULL,
+    "section" "VaultSection" NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+    "version" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "knowledge_vault_history_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -336,6 +410,7 @@ CREATE TABLE "usage_counters" (
 -- CreateTable
 CREATE TABLE "prompt_templates" (
     "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "workspaceId" UUID NOT NULL,
     "agent" TEXT NOT NULL,
     "version" TEXT NOT NULL,
     "body" TEXT NOT NULL,
@@ -347,6 +422,18 @@ CREATE TABLE "prompt_templates" (
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "prompt_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "model_settings" (
+    "id" UUID NOT NULL DEFAULT uuid_generate_v7(),
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "model_settings_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -398,7 +485,34 @@ CREATE INDEX "workspace_members_userId_idx" ON "workspace_members"("userId");
 CREATE UNIQUE INDEX "workspace_members_workspaceId_userId_role_key" ON "workspace_members"("workspaceId", "userId", "role");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "instagram_connection_credentials_workspaceId_key" ON "instagram_connection_credentials"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "instagram_connection_credentials_workspaceId_status_idx" ON "instagram_connection_credentials"("workspaceId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "instagram_connection_credentials_provider_providerAccountId_key" ON "instagram_connection_credentials"("provider", "providerAccountId");
+
+-- CreateIndex
+CREATE INDEX "instagram_recent_media_workspaceId_connectionId_idx" ON "instagram_recent_media"("workspaceId", "connectionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "instagram_recent_media_connectionId_providerMediaId_key" ON "instagram_recent_media"("connectionId", "providerMediaId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "oauth_state_nonces_nonceHash_key" ON "oauth_state_nonces"("nonceHash");
+
+-- CreateIndex
+CREATE INDEX "oauth_state_nonces_workspaceId_userId_idx" ON "oauth_state_nonces"("workspaceId", "userId");
+
+-- CreateIndex
 CREATE INDEX "knowledge_vault_workspaceId_section_idx" ON "knowledge_vault"("workspaceId", "section");
+
+-- CreateIndex
+CREATE INDEX "knowledge_vault_history_workspaceId_section_key_idx" ON "knowledge_vault_history"("workspaceId", "section", "key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "knowledge_vault_history_knowledgeVaultId_version_key" ON "knowledge_vault_history"("knowledgeVaultId", "version");
 
 -- CreateIndex
 CREATE INDEX "strategies_workspaceId_idx" ON "strategies"("workspaceId");
@@ -440,10 +554,13 @@ CREATE INDEX "payments_workspaceId_status_idx" ON "payments"("workspaceId", "sta
 CREATE UNIQUE INDEX "usage_counters_workspaceId_metric_periodStart_key" ON "usage_counters"("workspaceId", "metric", "periodStart");
 
 -- CreateIndex
-CREATE INDEX "prompt_templates_agent_active_idx" ON "prompt_templates"("agent", "active");
+CREATE INDEX "prompt_templates_workspaceId_agent_active_idx" ON "prompt_templates"("workspaceId", "agent", "active");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "prompt_templates_agent_version_key" ON "prompt_templates"("agent", "version");
+CREATE UNIQUE INDEX "prompt_templates_workspaceId_agent_version_key" ON "prompt_templates"("workspaceId", "agent", "version");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "model_settings_key_key" ON "model_settings"("key");
 
 -- CreateIndex
 CREATE INDEX "notifications_userId_readAt_idx" ON "notifications"("userId", "readAt");
@@ -453,3 +570,95 @@ CREATE INDEX "audit_logs_workspaceId_action_idx" ON "audit_logs"("workspaceId", 
 
 -- CreateIndex
 CREATE INDEX "audit_logs_actorId_idx" ON "audit_logs"("actorId");
+
+
+-- pgvector indexes are not represented by the Prisma schema.
+CREATE INDEX "knowledge_vault_embedding_hnsw_idx"
+  ON "knowledge_vault" USING hnsw ("embedding" vector_cosine_ops)
+  WHERE "embedding" IS NOT NULL;
+
+-- Application-role workspace isolation. The provisioning script creates the roles
+-- and uuid helper before Prisma applies this migration.
+CREATE OR REPLACE FUNCTION app_current_workspace_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_workspace', true), '')::uuid;
+$$;
+
+GRANT markos_app TO markos;
+GRANT USAGE ON SCHEMA public TO markos_app;
+GRANT EXECUTE ON FUNCTION app_current_workspace_id() TO markos_app;
+GRANT EXECUTE ON FUNCTION uuid_generate_v7() TO markos_app;
+GRANT USAGE ON TYPE "Locale", "PlanStatus", "OnboardingStatus", "VatMode", "Role",
+  "VaultSection", "ContentType", "ContentStatus", "MediaType", "MetricType",
+  "PaymentPurpose", "PaymentStatus", "SubStatus", "InvoiceStatus", "UsageMetric",
+  "InstagramConnectionStatus" TO markos_app;
+-- Keep this explicit grant visible for the OAuth security contract.
+GRANT USAGE ON TYPE "InstagramConnectionStatus" TO markos_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO markos_app;
+
+ALTER TABLE "workspaces" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "workspaces_workspace_rls" ON "workspaces" FOR ALL TO markos_app
+  USING ("id" = app_current_workspace_id()) WITH CHECK ("id" = app_current_workspace_id());
+ALTER TABLE "workspace_members" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "workspace_members_workspace_rls" ON "workspace_members" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "knowledge_vault" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "knowledge_vault_workspace_rls" ON "knowledge_vault" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "knowledge_vault_history" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "knowledge_vault_history_workspace_rls" ON "knowledge_vault_history" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "strategies" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "strategies_workspace_rls" ON "strategies" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "content_calendars" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "content_calendars_workspace_rls" ON "content_calendars" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "campaigns" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "campaigns_workspace_rls" ON "campaigns" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "content_items" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "content_items_workspace_rls" ON "content_items" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "media_assets" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "media_assets_workspace_rls" ON "media_assets" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "instagram_analytics" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "instagram_analytics_workspace_rls" ON "instagram_analytics" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "ai_interactions" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "ai_interactions_workspace_rls" ON "ai_interactions" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "subscriptions_workspace_rls" ON "subscriptions" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "invoices" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "invoices_workspace_rls" ON "invoices" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "payments_workspace_rls" ON "payments" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "usage_counters" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "usage_counters_workspace_rls" ON "usage_counters" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "prompt_templates" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "prompt_templates_workspace_rls" ON "prompt_templates" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "notifications" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "notifications_workspace_rls" ON "notifications" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "audit_logs" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "audit_logs_workspace_rls" ON "audit_logs" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "instagram_connection_credentials" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "instagram_connection_credentials_workspace_rls" ON "instagram_connection_credentials" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "instagram_recent_media" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "instagram_recent_media_workspace_rls" ON "instagram_recent_media" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());
+ALTER TABLE "oauth_state_nonces" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "oauth_state_nonces_workspace_rls" ON "oauth_state_nonces" FOR ALL TO markos_app
+  USING ("workspaceId" = app_current_workspace_id()) WITH CHECK ("workspaceId" = app_current_workspace_id());

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
-import { buildApp } from "../src/http/app";
 import {
   completeInstagramOAuth,
   createInstagramOAuthStart,
@@ -11,40 +10,40 @@ import {
 const oauthConfig: InstagramOAuthConfig = {
   appId: "instagram-app-id",
   appSecret: "instagram-app-secret",
-  authorizeUrl: "https://www.instagram.com/oauth/authorize",
-  jwtSecret: "test-oauth-secret-change-me",
-  longLivedTokenUrl: "https://graph.instagram.com/access_token",
   redirectUri: "http://localhost:4000/v1/workspace/instagram/oauth/callback",
-  scopes: "instagram_business_basic,instagram_business_content_publish",
-  tokenUrl: "https://api.instagram.com/oauth/access_token"
+  stateSecret: "test-oauth-secret-that-is-at-least-thirty-two-bytes"
 };
 
 describe("Instagram OAuth", () => {
   it("builds an Instagram authorization URL with signed state", async () => {
+    const workspaceId = randomUUID();
     const start = await createInstagramOAuthStart({
       config: oauthConfig,
       locale: "ar",
       userId: randomUUID(),
-      workspaceId: randomUUID()
+      workspaceId
     });
     const url = new URL(start.authorizationUrl);
 
-    expect(url.origin + url.pathname).toBe(oauthConfig.authorizeUrl);
+    expect(url.origin + url.pathname).toBe("https://www.instagram.com/oauth/authorize");
     expect(url.searchParams.get("client_id")).toBe(oauthConfig.appId);
     expect(url.searchParams.get("redirect_uri")).toBe(oauthConfig.redirectUri);
     expect(url.searchParams.get("response_type")).toBe("code");
-    expect(url.searchParams.get("scope")).toBe(oauthConfig.scopes);
-    expect(url.searchParams.get("state")).toMatch(/\S+\.\S+\.\S+/);
+    expect(url.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(url.searchParams.get("state")).toMatch(/\S+\.\S+/);
     expect(new Date(start.stateExpiresAt).getTime()).toBeGreaterThan(Date.now());
+    await prisma.oAuthStateNonce.deleteMany({ where: { workspaceId } });
   });
 
   it("exchanges the callback code and stores the long-lived token", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
+    const userId = randomUUID();
+    const workspaceId = randomUUID();
+    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Instagram OAuth User", locale: "EN", isVerified: true } });
+    await prisma.workspace.create({ data: { id: workspaceId, ownerUserId: userId, name: `Instagram OAuth ${workspaceId}`, slug: `instagram-oauth-${workspaceId}` } });
     const start = await createInstagramOAuthStart({
       config: oauthConfig,
-      userId: session.user.id,
-      workspaceId: session.workspace.id
+      userId,
+      workspaceId
     });
     const state = new URL(start.authorizationUrl).searchParams.get("state");
     const calls: Array<{ input: string; body?: string }> = [];
@@ -54,16 +53,22 @@ describe("Instagram OAuth", () => {
         ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() })
       });
 
-      if (String(input) === oauthConfig.tokenUrl) {
+      if (String(input) === "https://api.instagram.com/oauth/access_token") {
         return jsonResponse({
           access_token: "short-lived-token",
           user_id: "17841400000000000"
         });
       }
 
+      if (String(input).startsWith("https://graph.instagram.com/access_token?"))
+        return jsonResponse({
+          access_token: "long-lived-token",
+          expires_in: 60 * 24 * 60 * 60
+        });
       return jsonResponse({
-        access_token: "long-lived-token",
-        expires_in: 60 * 24 * 60 * 60
+        user_id: "17841400000000000",
+        username: "markos_business",
+        media: { data: [] }
       });
     };
 
@@ -75,7 +80,7 @@ describe("Instagram OAuth", () => {
     });
     const workspace = await prisma.workspace.findUniqueOrThrow({
       where: {
-        id: session.workspace.id
+        id: workspaceId
       },
       select: {
         instagramAccessToken: true,
@@ -83,58 +88,33 @@ describe("Instagram OAuth", () => {
         instagramTokenExpiresAt: true
       }
     });
+    const credential = await prisma.instagramConnectionCredential.findUniqueOrThrow({
+      where: { workspaceId }
+    });
 
     expect(result.connection).toMatchObject({
       accountId: "17841400000000000",
       connected: true
     });
-    expect(workspace.instagramAccountId).toBe("17841400000000000");
-    expect(workspace.instagramAccessToken).toBe("long-lived-token");
-    expect(workspace.instagramTokenExpiresAt?.getTime()).toBeGreaterThan(Date.now());
-    expect(calls).toHaveLength(2);
+    expect(workspace.instagramAccountId).toBeNull();
+    expect(workspace.instagramAccessToken).toBeNull();
+    expect(workspace.instagramTokenExpiresAt).toBeNull();
+    expect(credential.encryptedAccessToken).not.toContain("long-lived-token");
+    expect(credential.providerConfirmedScopes).toEqual([]);
+    expect(calls).toHaveLength(3);
     expect(calls[0]?.body).toContain("grant_type=authorization_code");
     expect(calls[0]?.body).toContain("code=callback-code");
     expect(calls[1]?.input).toContain("grant_type=ig_exchange_token");
     expect(calls[1]?.input).toContain("access_token=short-lived-token");
 
-    await app.close();
+    await prisma.oAuthStateNonce.deleteMany({ where: { workspaceId } });
+    await prisma.auditLog.deleteMany({ where: { workspaceId } });
+    await prisma.instagramRecentMedia.deleteMany({ where: { workspaceId } });
+    await prisma.instagramConnectionCredential.deleteMany({ where: { workspaceId } });
+    await prisma.workspace.delete({ where: { id: workspaceId } });
+    await prisma.user.delete({ where: { id: userId } });
   });
 });
-
-async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
-  const email = `instagram-oauth-${randomUUID()}@markos.test`;
-  const response = await app.inject({
-    method: "POST",
-    payload: {
-      email,
-      fullName: "Instagram OAuth User",
-      locale: "en",
-      password: "CorrectHorseBattery99!",
-      workspaceName: `Instagram OAuth ${randomUUID()}`
-    },
-    url: "/v1/auth/register"
-  });
-
-  const session = response.json().data;
-
-  await prisma.user.update({
-    data: {
-      isVerified: true
-    },
-    where: {
-      id: session.user.id
-    }
-  });
-
-  return {
-    ...session,
-    user: {
-      ...session.user,
-      isVerified: true
-    }
-  };
-}
-
 
 function jsonResponse(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {

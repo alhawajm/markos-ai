@@ -68,14 +68,10 @@ describe("workspace RBAC", () => {
       headers: authHeaders(session.tokens.accessToken)
     });
     const instagramResponse = await app.inject({
-      method: "PUT",
-      url: "/v1/workspace/instagram",
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
       headers: authHeaders(session.tokens.accessToken),
-      payload: {
-        accountId: "17841400000000000",
-        accessToken: "test-instagram-token",
-        tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
-      }
+      payload: { returnTo: "/en/app/settings" }
     });
 
     expect(auditResponse.statusCode).toBe(403);

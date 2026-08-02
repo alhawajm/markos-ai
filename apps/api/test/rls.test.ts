@@ -15,11 +15,15 @@ const rlsTables = [
   "content_items",
   "media_assets",
   "instagram_analytics",
+  "instagram_connection_credentials",
+  "instagram_recent_media",
+  "oauth_state_nonces",
   "ai_interactions",
   "subscriptions",
   "invoices",
   "payments",
   "usage_counters",
+  "prompt_templates",
   "notifications",
   "audit_logs"
 ];
@@ -79,7 +83,6 @@ describe("database row-level security", () => {
     const second = await createWorkspace("second");
 
     await withWorkspaceDbContext(first.workspaceId, async (tx) => {
-      await tx.$executeRaw`SET LOCAL ROLE markos_app`;
       await tx.contentItem.create({
         data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
         select: { id: true }
@@ -88,7 +91,6 @@ describe("database row-level security", () => {
 
     await expect(
       withWorkspaceDbContext(first.workspaceId, async (tx) => {
-        await tx.$executeRaw`SET LOCAL ROLE markos_app`;
         await tx.contentItem.create({
           data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
           select: { id: true }

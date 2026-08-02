@@ -22,10 +22,10 @@ import {
   DailyBriefingPanel,
   FinalAnalyticsPanel,
   FinalDashboard,
-  FinalSettingsPanel,
   FinalVaultPanel,
   OpportunitiesPanel
 } from "./final-command-panels";
+import { SettingsPanel } from "./settings-panel";
 
 export type SectionSlug =
   | "analytics"
@@ -161,7 +161,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
           {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
           {activeSection === "knowledge" ? <FinalVaultPanel /> : null}
-          {activeSection === "settings" ? <FinalSettingsPanel /> : null}
+          {activeSection === "settings" ? <SettingsPanel locale={locale} /> : null}
         </div>
       </section>
     </main>
