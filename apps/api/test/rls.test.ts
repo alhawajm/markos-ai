@@ -23,6 +23,7 @@ const rlsTables = [
   "invoices",
   "payments",
   "usage_counters",
+  "prompt_templates",
   "notifications",
   "audit_logs"
 ];
