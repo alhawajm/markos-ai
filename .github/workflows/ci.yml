@@ -119,8 +119,11 @@ jobs:
       - name: Apply database migrations
         run: corepack pnpm --filter api prisma migrate deploy
 
-      - name: Seed database
-        run: corepack pnpm --filter api prisma db seed
+      - name: Seed database twice and verify migration status
+        run: |
+          corepack pnpm --filter api prisma db seed
+          corepack pnpm --filter api prisma db seed
+          corepack pnpm --filter api prisma migrate status
 
       - name: Verify
         run: corepack pnpm verify

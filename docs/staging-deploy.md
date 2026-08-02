@@ -127,7 +127,7 @@ For Railway, deploy the web and API as separate services from the repository Doc
 The API accepts Railway's injected `PORT`. Its image includes the PostgreSQL client so the Railway pre-deploy command can apply the canonical prerequisites and migrations without duplicating SQL:
 
 ```bash
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy && pnpm --filter api prisma db seed
 ```
 
 A failed pre-deploy command must stop deployment. The PostgreSQL service must support `pgcrypto`, `vector`, role creation, and the repository's `uuid_generate_v7()` helper. Railway's default PostgreSQL image does not guarantee every extension, so use a compatible pgvector template or a managed PostgreSQL target whose privileges and extensions have been verified before deployment.
@@ -176,3 +176,30 @@ The GitHub workflow also uploads two non-secret artifacts on `main` when staging
 - `m6-staging-smoke-evidence-<sha>`: the generated smoke report for the configured staging URLs.
 
 Download those artifacts and place them under `evidence/m6/<yyyy-mm-dd>/staging/` before marking the staging manifest as verified.
+
+## Clean database baseline (2026-08-02)
+
+The migration directory is intentionally a **single baseline for a brand-new, empty pgvector PostgreSQL database**. It replaces the inherited migration history and includes the complete current Prisma schema, the pgvector HNSW index, application-role grants, workspace row-level security, and the Instagram OAuth state, encrypted credential, and recent-media tables.
+
+Do not apply this rewritten history to an existing database that contains valuable data or an existing `_prisma_migrations` history. Preserve that database and design a forward migration instead. Railway operators must provision a new pgvector database (or explicitly confirm the target is disposable) before using this baseline. No Railway resource is changed by this repository update.
+
+The seed creates only the four active plan catalog rows (`STARTER`, `GROWTH`, `PREMIUM`, and `ENTERPRISE`) using upserts. `STARTER` is required by password and Google registration, and the complete catalog is required by billing plan listing and upgrade paths. It creates no users, workspaces, memberships, content, analytics, OAuth state, Instagram credentials, or media.
+
+Use this exact Railway pre-deploy command from the repository root:
+
+```bash
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy && pnpm --filter api prisma db seed
+```
+
+The target database user must be allowed to install `vector` and `pgcrypto`, create the `markos` and `markos_app` roles, and grant role membership. The initialization file is idempotent and must run before Prisma because the baseline uses `vector` columns and `uuid_generate_v7()` defaults.
+
+To verify a clean bootstrap, run the initialization and deployment sequence, run the seed command a second time, then run:
+
+```bash
+pnpm --filter api prisma migrate status
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c '\dt'
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c 'SELECT code FROM plans ORDER BY code'
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM workspaces) AS workspaces, (SELECT count(*) FROM content_items) AS content_items, (SELECT count(*) FROM oauth_state_nonces) AS oauth_states, (SELECT count(*) FROM instagram_connection_credentials) AS instagram_credentials, (SELECT count(*) FROM instagram_recent_media) AS instagram_media'
+```
+
+Migration status must report that the schema is up to date; all three Instagram tables must appear; the catalog query must return exactly four plans; and every tenant/sample-data count must be zero before registration tests create their own isolated fixtures.
