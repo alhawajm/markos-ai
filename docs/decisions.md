@@ -205,3 +205,7 @@ Retained compatibility inputs have narrower meanings. `INSTAGRAM_OAUTH_SCOPES` i
 ## 2026-07-30 — Encrypted Instagram credentials are the only active credential source
 
 Publishing, analytics, readiness, scheduled refresh, Meta deauthorization, and workspace erasure resolve Instagram connections through `instagram_connection_credentials`. Provider adapters may receive a transient workspace-shaped value only at the authorized provider-call boundary; no active consumer reads or writes legacy plaintext workspace token columns. The legacy columns remain nullable for migration compatibility and are cleared during disconnect/erasure. CI uses a disposable `markos_ci_test` database and test-only encryption/OAuth values so encrypted integration suites execute without Meta access.
+
+## 2026-08-02: Local API Environment Loading Is Explicit
+
+Load an optional repository-root `.env` from the API environment module for local API, worker, and seed entry points, while preserving already-injected process variables. Keep Prisma CLI migrations, Next.js environment files, Docker build arguments, GitHub Actions variables, and Railway runtime variables as separate explicit contracts. Treat an empty optional `MEDIA_PUBLIC_BASE_URL` as absent and fall back to the public API media route for the business-basic connection milestone.

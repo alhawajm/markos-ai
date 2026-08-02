@@ -1,4 +1,5 @@
 import { z } from "zod";
+import "./load-repository-env";
 
 const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.string().url().optional());
@@ -7,7 +8,7 @@ const optionalEncryptionKey = z.preprocess(
   z.string().refine((item) => Buffer.from(item, "base64").length === 32, "must encode exactly 32 bytes").optional()
 );
 
-const envSchema = z.object({
+export const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   PORT: z.coerce.number().int().positive().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -28,7 +29,7 @@ const envSchema = z.object({
   GOOGLE_OAUTH_JWKS_URL: z.string().url().default("https://www.googleapis.com/oauth2/v3/certs"),
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
-  MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
+  MEDIA_PUBLIC_BASE_URL: optionalUrl,
   INSTAGRAM_APP_ID: optionalString,
   INSTAGRAM_APP_SECRET: optionalString,
   INSTAGRAM_OAUTH_REDIRECT_URI: optionalUrl,
@@ -68,7 +69,11 @@ const envSchema = z.object({
   HEALTH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(200)
 });
 
-export const env = envSchema.parse(process.env);
+export function parseEnvironment(input: NodeJS.ProcessEnv) {
+  return envSchema.parse(input);
+}
+
+export const env = parseEnvironment(process.env);
 
 process.env.DATABASE_URL ??= env.DATABASE_URL;
 process.env.REDIS_URL ??= env.REDIS_URL;
