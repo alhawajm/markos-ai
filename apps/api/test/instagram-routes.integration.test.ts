@@ -133,9 +133,9 @@ describeInstagramDatabase("registered Instagram routes", () => {
       url: `/v1/workspace/instagram/oauth/callback?code=recognizable-callback-code&state=${encodeURIComponent(state)}&error_description=recognizable-provider-error`,
       headers: { accept: "application/json" },
     });
-    expect(failed.statusCode).toBe(500);
+    expect(failed.statusCode).toBe(400);
     expect(failed.json()).toMatchObject({
-      error: { code: "INTERNAL_ERROR", message: "Unexpected server error" },
+      error: { code: "INSTAGRAM_OAUTH_FAILED", message: "Instagram authorization could not be completed" },
     });
     expect(failed.body).not.toContain("recognizable-callback-code");
     expect(failed.body).not.toContain("recognizable-provider-error");

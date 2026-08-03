@@ -21,6 +21,7 @@ import {
   INSTAGRAM_REQUESTED_SCOPES,
   canonicalRedirectUri,
 } from "./instagram-provider";
+import type { InstagramOAuthFailureDiagnostic } from "./instagram-oauth-telemetry";
 
 export interface InstagramOAuthConfig {
   appId?: string | undefined;
@@ -39,13 +40,26 @@ export class InstagramOAuthConfigurationError extends Error {
   }
 }
 export class InstagramOAuthStateError extends Error {
-  constructor() {
+  constructor(
+    readonly diagnostic: InstagramOAuthFailureDiagnostic = {
+      stage: "state_validation",
+      category: "oauth_state_invalid",
+      retryable: false,
+    },
+  ) {
     super("Instagram OAuth state is invalid or expired");
   }
 }
 export class InstagramOAuthExchangeError extends Error {
-  constructor() {
-    super("Instagram authorization could not be completed");
+  constructor(
+    readonly diagnostic: InstagramOAuthFailureDiagnostic = {
+      stage: "short_lived_token_exchange",
+      category: "provider_exchange_failed",
+      retryable: false,
+    },
+    cause?: unknown,
+  ) {
+    super("Instagram authorization could not be completed", { cause });
   }
 }
 export interface InstagramOAuthCallbackResult {
@@ -102,6 +116,11 @@ export async function completeInstagramOAuth(input: {
   let binding;
   try {
     binding = verifyOAuthState(input.state, config.stateSecret, input.now);
+  } catch (error) {
+    if (error instanceof OAuthStateError) throw new InstagramOAuthStateError();
+    throw error;
+  }
+  try {
     await consumeOAuthState({
       state: input.state,
       userId: binding.userId,
@@ -111,26 +130,60 @@ export async function completeInstagramOAuth(input: {
       ...(input.now ? { now: input.now } : {}),
     });
   } catch (error) {
-    if (error instanceof OAuthStateError) throw new InstagramOAuthStateError();
-    throw error;
+    if (error instanceof OAuthStateError)
+      throw new InstagramOAuthStateError({
+        stage: "state_consumption",
+        category: "oauth_state_invalid_or_consumed",
+        retryable: false,
+      });
+    throw new InstagramOAuthExchangeError(
+      {
+        stage: "state_consumption",
+        category: "state_store_failure",
+        retryable: true,
+      },
+      error,
+    );
   }
 
   const client = input.client ?? new InstagramBasicClient(input.fetchImpl);
+  let short;
   try {
-    const short = await client.exchangeCode({
+    short = await client.exchangeCode({
       appId: config.appId,
       appSecret: config.appSecret,
       code: input.code,
       redirectUri: config.redirectUri,
     });
-    const long = await client.exchangeLongLived(
-      short.accessToken,
-      config.appSecret,
+  } catch (error) {
+    throw classifyInstagramOAuthProviderFailure(
+      "short_lived_token_exchange",
+      error,
     );
-    const profile = await client.profile(long.accessToken);
-    if (profile.userId !== short.accountId)
-      throw new InstagramOAuthExchangeError();
-    const issuedAt = input.now ?? new Date();
+  }
+  let long;
+  try {
+    long = await client.exchangeLongLived(short.accessToken, config.appSecret);
+  } catch (error) {
+    throw classifyInstagramOAuthProviderFailure(
+      "long_lived_token_exchange",
+      error,
+    );
+  }
+  let profile;
+  try {
+    profile = await client.profile(long.accessToken);
+  } catch (error) {
+    throw classifyInstagramOAuthProviderFailure("profile_retrieval", error);
+  }
+  if (profile.userId !== short.accountId)
+    throw new InstagramOAuthExchangeError({
+      stage: "provider_account_validation",
+      category: "provider_account_id_mismatch",
+      retryable: false,
+    });
+  const issuedAt = input.now ?? new Date();
+  try {
     const connection = await persistInstagramConnection({
       workspaceId: binding.workspaceId,
       actorId: binding.userId,
@@ -141,11 +194,51 @@ export async function completeInstagramOAuth(input: {
     });
     return { connection, returnTo: binding.returnTo };
   } catch (error) {
-    if (error instanceof InstagramOAuthExchangeError) throw error;
-    if (error instanceof InstagramProviderError)
-      throw new InstagramOAuthExchangeError();
-    throw error;
+    throw new InstagramOAuthExchangeError(
+      {
+        stage: "credential_persistence",
+        category: "credential_persistence_failed",
+        retryable: false,
+      },
+      error,
+    );
   }
+}
+
+export function classifyInstagramOAuthProviderFailure(
+  stage: InstagramOAuthFailureDiagnostic["stage"],
+  error: unknown,
+): InstagramOAuthExchangeError {
+  if (error instanceof InstagramProviderError) {
+    return new InstagramOAuthExchangeError(
+      {
+        stage,
+        category: "provider_request_failed",
+        retryable: error.diagnostic.retryable,
+        ...(error.diagnostic.httpStatus === undefined
+          ? {}
+          : { providerHttpStatus: error.diagnostic.httpStatus }),
+        ...(error.diagnostic.errorType === undefined
+          ? {}
+          : { providerErrorType: error.diagnostic.errorType }),
+        ...(error.diagnostic.errorCode === undefined
+          ? {}
+          : { providerErrorCode: error.diagnostic.errorCode }),
+        ...(error.diagnostic.errorSubcode === undefined
+          ? {}
+          : { providerErrorSubcode: error.diagnostic.errorSubcode }),
+      },
+      error,
+    );
+  }
+  return new InstagramOAuthExchangeError(
+    {
+      stage,
+      category: "provider_client_failure",
+      retryable: false,
+    },
+    error,
+  );
 }
 
 export async function cancelInstagramOAuth(

@@ -26,7 +26,16 @@ export interface InstagramBasicMedia {
 }
 
 export class InstagramProviderError extends Error {
-  constructor(readonly authorizationInvalid = false) {
+  constructor(
+    readonly authorizationInvalid = false,
+    readonly diagnostic: {
+      httpStatus?: number;
+      errorType?: string;
+      errorCode?: string | number;
+      errorSubcode?: string | number;
+      retryable: boolean;
+    } = { retryable: false },
+  ) {
     super("Instagram could not complete the request");
   }
 }
@@ -90,7 +99,10 @@ export class InstagramBasicClient {
     );
     url.searchParams.set("access_token", accessToken);
     const response = await this.json(url, { method: "GET" });
-    const value = Array.isArray(response.data) && isRecord(response.data[0]) ? response.data[0] : response;
+    const value =
+      Array.isArray(response.data) && isRecord(response.data[0])
+        ? response.data[0]
+        : response;
     if (
       !["string", "number"].includes(typeof value.user_id) ||
       typeof value.username !== "string"
@@ -161,10 +173,20 @@ export class InstagramBasicClient {
       }
       const body = Buffer.concat(chunks, bytesRead).toString("utf8");
       const value: unknown = JSON.parse(body);
-      if (!response.ok || !isRecord(value))
+      if (!response.ok || !isRecord(value)) {
+        const providerError =
+          isRecord(value) && isRecord(value.error) ? value.error : undefined;
         throw new InstagramProviderError(
           response.status === 400 || response.status === 401,
+          {
+            httpStatus: response.status,
+            retryable: response.status === 429 || response.status >= 500,
+            ...safeString(providerError, "type", "errorType"),
+            ...safeIdentifier(providerError, "code", "errorCode"),
+            ...safeIdentifier(providerError, "error_subcode", "errorSubcode"),
+          },
         );
+      }
       return value;
     } catch (error) {
       if (error instanceof InstagramProviderError) throw error;
@@ -173,6 +195,29 @@ export class InstagramBasicClient {
       clearTimeout(timeout);
     }
   }
+}
+
+function safeString(
+  value: Record<string, unknown> | undefined,
+  source: string,
+  target: string,
+): Record<string, string> {
+  const item = value?.[source];
+  return typeof item === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(item)
+    ? { [target]: item }
+    : {};
+}
+
+function safeIdentifier(
+  value: Record<string, unknown> | undefined,
+  source: string,
+  target: string,
+): Record<string, string | number> {
+  const item = value?.[source];
+  return (typeof item === "number" && Number.isFinite(item)) ||
+    (typeof item === "string" && /^\d{1,20}$/.test(item))
+    ? { [target]: item }
+    : {};
 }
 
 function mapMedia(value: unknown): InstagramBasicMedia[] {
