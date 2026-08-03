@@ -18,6 +18,10 @@ import {
   InstagramOAuthStateError,
 } from "./instagram-oauth-service";
 import {
+  reportInstagramOAuthCallbackFailure,
+  type InstagramOAuthFailureDiagnostic,
+} from "./instagram-oauth-telemetry";
+import {
   disconnectSecureInstagram,
   getSecureInstagramConnection,
   refreshSecureInstagram,
@@ -90,29 +94,43 @@ export async function registerWorkspaceRoutes(
         request.headers.accept?.includes("application/json") ?? false;
 
       if (query.error && query.state) {
+        let returnTo: string | undefined;
+        let diagnostic: InstagramOAuthFailureDiagnostic = {
+          stage: "callback_input",
+          category: "authorization_denied",
+          retryable: false,
+        };
         try {
-          const returnTo = await cancelInstagramOAuth(query.state);
-          if (!acceptsJson) {
-            const url = new URL(returnTo, env.WEB_BASE_URL);
-            url.searchParams.set("instagram", "error");
-            return reply.redirect(url.toString());
-          }
-        } catch {
+          returnTo = await cancelInstagramOAuth(query.state);
+        } catch (error) {
+          if (error instanceof InstagramOAuthStateError)
+            diagnostic = error.diagnostic;
           // Always return the same sanitized denial response.
         }
-        return sendInstagramOAuthCallbackError(
-          reply,
-          acceptsJson,
-          "Instagram authorization was cancelled or denied",
-        );
+        reportInstagramOAuthCallbackFailure({
+          logger: app.log,
+          requestId: request.id,
+          diagnostic,
+        });
+        if (!acceptsJson && returnTo) {
+          const url = new URL(returnTo, env.WEB_BASE_URL);
+          url.searchParams.set("instagram", "error");
+          return reply.redirect(url.toString());
+        }
+        return sendInstagramOAuthCallbackError(reply, acceptsJson);
       }
 
       if (!query.code || !query.state) {
-        return sendInstagramOAuthCallbackError(
-          reply,
-          acceptsJson,
-          "Missing Instagram OAuth callback parameters",
-        );
+        reportInstagramOAuthCallbackFailure({
+          logger: app.log,
+          requestId: request.id,
+          diagnostic: {
+            stage: "callback_input",
+            category: "missing_callback_parameters",
+            retryable: false,
+          },
+        });
+        return sendInstagramOAuthCallbackError(reply, acceptsJson);
       }
 
       try {
@@ -129,19 +147,27 @@ export async function registerWorkspaceRoutes(
         url.searchParams.set("instagram", "connected");
         return reply.redirect(url.toString());
       } catch (error) {
-        if (
-          error instanceof InstagramOAuthConfigurationError ||
+        const diagnostic: InstagramOAuthFailureDiagnostic =
           error instanceof InstagramOAuthStateError ||
           error instanceof InstagramOAuthExchangeError
-        ) {
-          return sendInstagramOAuthCallbackError(
-            reply,
-            acceptsJson,
-            error.message,
-          );
-        }
-
-        throw error;
+            ? error.diagnostic
+            : error instanceof InstagramOAuthConfigurationError
+              ? {
+                  stage: "callback_input",
+                  category: "oauth_configuration_invalid",
+                  retryable: false,
+                }
+              : {
+                  stage: "credential_persistence",
+                  category: "unexpected_internal_failure",
+                  retryable: false,
+                };
+        reportInstagramOAuthCallbackFailure({
+          logger: app.log,
+          requestId: request.id,
+          diagnostic,
+        });
+        return sendInstagramOAuthCallbackError(reply, acceptsJson);
       }
     },
   );
@@ -340,12 +366,16 @@ export async function registerWorkspaceRoutes(
 function sendInstagramOAuthCallbackError(
   reply: FastifyReply,
   acceptsJson: boolean,
-  message: string,
 ) {
   if (acceptsJson) {
     return reply
       .status(400)
-      .send(errorEnvelope("INSTAGRAM_OAUTH_FAILED", message));
+      .send(
+        errorEnvelope(
+          "INSTAGRAM_OAUTH_FAILED",
+          "Instagram authorization could not be completed",
+        ),
+      );
   }
 
   return reply.redirect(getSettingsRedirectUrl("error"));

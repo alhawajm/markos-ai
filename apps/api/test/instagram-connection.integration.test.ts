@@ -279,6 +279,11 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
         where: { workspaceId: rollback },
       }),
     ).toBeNull();
+    expect(
+      await prisma.auditLog.count({
+        where: { workspaceId: rollback, action: "INSTAGRAM_CONNECTED" },
+      }),
+    ).toBe(0);
 
     const disconnectRollback = await workspace();
     await persist(

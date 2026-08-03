@@ -134,6 +134,14 @@ A failed pre-deploy command must stop deployment. The PostgreSQL service must su
 
 Do not mark Railway acceptance complete until the canonical initialization, all migrations, application-role RLS, public HTTPS callback URLs, and a supervised real-Meta connection have been exercised on a disposable staging deployment.
 
+### Instagram OAuth callback diagnostics
+
+The callback keeps ordinary route logging disabled so authorization codes and OAuth state cannot enter access logs. A handled callback failure instead emits exactly one allowlisted structured warning named `instagram_oauth_callback_failure`. Inspect `stage`, `category`, `requestId`, and `retryable` in Railway; provider failures can additionally include `providerHttpStatus`, `providerErrorType`, `providerErrorCode`, and `providerErrorSubcode` when the provider supplied values that pass the identifier allowlist.
+
+Possible stages are `callback_input`, `state_validation`, `state_consumption`, `short_lived_token_exchange`, `long_lived_token_exchange`, `profile_retrieval`, `provider_account_validation`, and `credential_persistence`. The event never includes the originating error, callback URL/query, authorization code, token, app secret, OAuth state, encryption key, or raw provider body. The browser continues to receive only the generic handled-error redirect or JSON message.
+
+After deployment, sign in to a fresh MARKOS browser session, start **Connect Auth**, grant the requested Instagram permission once, and capture the single `instagram_oauth_callback_failure` event for that callback request. Correlate using `requestId` and retain only the safe fields listed above; do not capture the callback URL or provider payload.
+
 ## Smoke Evidence
 
 After a merge to `main` deploys staging, run the staging smoke evidence script against the live URLs:

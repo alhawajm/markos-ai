@@ -78,9 +78,10 @@ describe("Instagram basic provider boundary", () => {
           { status: 401 },
         ),
     );
-    await expect(failed.profile("secret-token")).rejects.toEqual(
-      new InstagramProviderError(true),
-    );
+    await expect(failed.profile("secret-token")).rejects.toMatchObject({
+      authorizationInvalid: true,
+      diagnostic: { httpStatus: 401, retryable: false },
+    });
     try {
       await failed.profile("secret-token");
     } catch (error) {
