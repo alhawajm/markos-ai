@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SignJWT } from "jose";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
@@ -77,6 +77,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
   });
 
   it("completes, transaction-binds, redirects safely, and rejects duplicate delivery", async () => {
+    const info = vi.spyOn(app.log, "info");
     const initiator = await principal("OWNER");
     const other = await principal("OWNER");
     const state = await start(initiator);
@@ -90,6 +91,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(completed.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=connected");
     expect(completed.headers.location).not.toContain("fake-code");
     expect(providerCalls - before).toBe(3);
+    expect(info.mock.calls.filter(([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_success")).toHaveLength(1);
     expect((await status(initiator)).json().data).toMatchObject({ connected: true, accountId: "route-professional-account" });
     expect((await status(other)).json().data).toMatchObject({ connected: false });
 
@@ -101,6 +103,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(replay.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
     expect(providerCalls - before).toBe(3);
     await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(initiator.token) });
+    info.mockRestore();
   });
 
   it("rejects tampered and expired state before provider exchange and consumes denial", async () => {
@@ -124,6 +127,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
   });
 
   it("sanitizes an unexpected callback persistence conflict", async () => {
+    const warn = vi.spyOn(app.log, "warn");
     const currentOwner = await principal("OWNER");
     const conflictingOwner = await principal("OWNER");
     expect((await complete(currentOwner)).statusCode).toBe(302);
@@ -139,7 +143,11 @@ describeInstagramDatabase("registered Instagram routes", () => {
     });
     expect(failed.body).not.toContain("recognizable-callback-code");
     expect(failed.body).not.toContain("recognizable-provider-error");
+    const terminal = warn.mock.calls.filter(([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_failure");
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]?.[0]).toMatchObject({ stage: "connection_upsert", category: "database_unique_constraint", databaseCode: "P2002" });
     await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(currentOwner.token) });
+    warn.mockRestore();
   });
 
   it("authorizes status, refresh, reconnect, and disconnect by workspace membership and permission", async () => {

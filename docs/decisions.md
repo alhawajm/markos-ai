@@ -220,3 +220,7 @@ Official contract references:
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/get-started
 - https://developers.facebook.com/docs/instagram-platform/reference/me
+
+## 2026-08-03: Instagram OAuth diagnostics terminate at route boundaries
+
+Use one typed, low-cardinality diagnostic taxonomy across Instagram OAuth start, callback security, provider exchange/validation, atomic credential persistence, secured post-write reads, redirect completion, and connection status. Lower layers annotate and rethrow without logging; the owning request boundary emits exactly one sanitized terminal failure. Emit only start and fully completed callback success lifecycle events. Allowlist provider status/type/numeric codes and recognized Prisma codes, never raw errors, metadata, queries, URLs, secrets, state, tokens, or identities. Preserve the existing transaction and security controls while tracking the active inner persistence operation so rollback does not erase the diagnostic stage.

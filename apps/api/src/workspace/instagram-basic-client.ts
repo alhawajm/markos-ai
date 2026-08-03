@@ -28,6 +28,13 @@ export interface InstagramBasicMedia {
 
 export class InstagramProviderError extends Error {
   constructor(
+    readonly kind:
+      | "http"
+      | "network"
+      | "timeout"
+      | "response_not_json"
+      | "response_too_large"
+      | "schema" = "schema",
     readonly authorizationInvalid = false,
     readonly diagnostic: {
       httpStatus?: number;
@@ -71,7 +78,7 @@ export class InstagramBasicClient {
       typeof value.access_token !== "string" ||
       !["string", "number"].includes(typeof value.user_id)
     )
-      throw new InstagramProviderError();
+      throw new InstagramProviderError("schema");
     return {
       accessToken: value.access_token,
       exchangeUserId: String(value.user_id),
@@ -85,7 +92,7 @@ export class InstagramBasicClient {
     url.searchParams.set("access_token", shortToken);
     const value = await this.json(url, { method: "GET" });
     if (typeof value.access_token !== "string")
-      throw new InstagramProviderError();
+      throw new InstagramProviderError("schema");
     return {
       accessToken: value.access_token,
       expiresIn: numberOr(value.expires_in, 5_184_000),
@@ -108,7 +115,7 @@ export class InstagramBasicClient {
       !["string", "number"].includes(typeof value.user_id) ||
       typeof value.username !== "string"
     )
-      throw new InstagramProviderError();
+      throw new InstagramProviderError("schema");
     const data =
       isRecord(value.media) && Array.isArray(value.media.data)
         ? value.media.data.slice(0, RECENT_MEDIA_LIMIT)
@@ -156,8 +163,8 @@ export class InstagramBasicClient {
       const maxBytes = this.limits.maxResponseBytes ?? MAX_RESPONSE_BYTES;
       const declaredLength = Number(response.headers.get("content-length"));
       if (Number.isFinite(declaredLength) && declaredLength > maxBytes)
-        throw new InstagramProviderError();
-      if (!response.body) throw new InstagramProviderError();
+        throw new InstagramProviderError("response_too_large");
+      if (!response.body) throw new InstagramProviderError("schema");
 
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
@@ -168,16 +175,22 @@ export class InstagramBasicClient {
         bytesRead += chunk.byteLength;
         if (bytesRead > maxBytes) {
           await reader.cancel();
-          throw new InstagramProviderError();
+          throw new InstagramProviderError("response_too_large");
         }
         chunks.push(chunk);
       }
       const body = Buffer.concat(chunks, bytesRead).toString("utf8");
-      const value: unknown = JSON.parse(body);
+      let value: unknown;
+      try {
+        value = JSON.parse(body);
+      } catch {
+        throw new InstagramProviderError("response_not_json");
+      }
       if (!response.ok || !isRecord(value)) {
         const providerError =
           isRecord(value) && isRecord(value.error) ? value.error : undefined;
         throw new InstagramProviderError(
+          "http",
           response.status === 400 || response.status === 401,
           {
             httpStatus: response.status,
@@ -191,7 +204,11 @@ export class InstagramBasicClient {
       return value;
     } catch (error) {
       if (error instanceof InstagramProviderError) throw error;
-      throw new InstagramProviderError();
+      throw new InstagramProviderError(
+        controller.signal.aborted ? "timeout" : "network",
+        false,
+        { retryable: true },
+      );
     } finally {
       clearTimeout(timeout);
     }

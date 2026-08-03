@@ -27,7 +27,14 @@ export function createPrismaOAuthStateStore(
           },
         }),
       );
-      return result.count === 1;
+      if (result.count === 1) return "consumed";
+      const record = await withWorkspaceDbContext(workspaceId, (tx) =>
+        tx.oAuthStateNonce.findUnique({
+          where: { nonceHash: hashNonce(nonce) },
+          select: { consumedAt: true, expiresAt: true },
+        }),
+      );
+      return record?.consumedAt ? "already_consumed" : "not_found_or_expired";
     },
   };
 }

@@ -18,7 +18,14 @@ import {
   InstagramOAuthStateError,
 } from "./instagram-oauth-service";
 import {
+  INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT,
+  INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT,
+  INSTAGRAM_OAUTH_START_FAILURE_EVENT,
+  INSTAGRAM_OAUTH_START_SUCCESS_EVENT,
+  InstagramOAuthDiagnosticError,
   reportInstagramOAuthCallbackFailure,
+  reportInstagramOAuthFailure,
+  reportInstagramOAuthLifecycleSuccess,
   type InstagramOAuthFailureDiagnostic,
 } from "./instagram-oauth-telemetry";
 import {
@@ -42,6 +49,7 @@ export async function registerWorkspaceRoutes(
       config: {
         workspaceRequired: true,
         permissions: ["instagram:manage"],
+        instagramOAuthBoundary: "start",
       },
     },
     async (request, reply) => {
@@ -55,7 +63,7 @@ export async function registerWorkspaceRoutes(
           : undefined;
 
       try {
-        return ok(
+        const response = ok(
           await createInstagramOAuthStart({
             ...(locale === undefined ? {} : { locale }),
             userId,
@@ -63,7 +71,32 @@ export async function registerWorkspaceRoutes(
             ...(body?.returnTo ? { returnTo: body.returnTo } : {}),
           }),
         );
+        reportInstagramOAuthLifecycleSuccess({
+          event: INSTAGRAM_OAUTH_START_SUCCESS_EVENT,
+          logger: app.log,
+          requestId: request.id,
+        });
+        return response;
       } catch (error) {
+        reportInstagramOAuthFailure({
+          event: INSTAGRAM_OAUTH_START_FAILURE_EVENT,
+          logger: app.log,
+          requestId: request.id,
+          diagnostic:
+            error instanceof InstagramOAuthDiagnosticError
+              ? error.diagnostic
+              : error instanceof InstagramOAuthConfigurationError
+                ? {
+                    stage: "provider_configuration",
+                    category: "provider_configuration_missing",
+                    retryable: false,
+                  }
+                : {
+                    stage: "oauth_transaction_creation",
+                    category: "oauth_transaction_create_failed",
+                    retryable: false,
+                  },
+        });
         if (error instanceof InstagramOAuthConfigurationError) {
           return reply
             .status(409)
@@ -96,8 +129,11 @@ export async function registerWorkspaceRoutes(
       if (query.error && query.state) {
         let returnTo: string | undefined;
         let diagnostic: InstagramOAuthFailureDiagnostic = {
-          stage: "callback_input",
-          category: "authorization_denied",
+          stage: "provider_authorization_denied",
+          category:
+            query.error === "access_denied"
+              ? "provider_access_denied"
+              : "provider_callback_error",
           retryable: false,
         };
         try {
@@ -125,7 +161,7 @@ export async function registerWorkspaceRoutes(
           logger: app.log,
           requestId: request.id,
           diagnostic: {
-            stage: "callback_input",
+            stage: "callback_request_validation",
             category: "missing_callback_parameters",
             retryable: false,
           },
@@ -140,11 +176,21 @@ export async function registerWorkspaceRoutes(
         });
 
         if (acceptsJson) {
+          reportInstagramOAuthLifecycleSuccess({
+            event: INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT,
+            logger: app.log,
+            requestId: request.id,
+          });
           return ok(result.connection);
         }
 
         const url = new URL(result.returnTo, env.WEB_BASE_URL);
         url.searchParams.set("instagram", "connected");
+        reportInstagramOAuthLifecycleSuccess({
+          event: INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT,
+          logger: app.log,
+          requestId: request.id,
+        });
         return reply.redirect(url.toString());
       } catch (error) {
         const diagnostic: InstagramOAuthFailureDiagnostic =
@@ -153,12 +199,12 @@ export async function registerWorkspaceRoutes(
             ? error.diagnostic
             : error instanceof InstagramOAuthConfigurationError
               ? {
-                  stage: "callback_input",
-                  category: "oauth_configuration_invalid",
+                  stage: "provider_configuration",
+                  category: "provider_configuration_missing",
                   retryable: false,
                 }
               : {
-                  stage: "credential_persistence",
+                  stage: "database_transaction_commit",
                   category: "unexpected_internal_failure",
                   retryable: false,
                 };
@@ -178,11 +224,45 @@ export async function registerWorkspaceRoutes(
       config: {
         workspaceRequired: true,
         permissions: ["workspace:read"],
+        instagramOAuthBoundary: "status",
       },
     },
-    async () => {
+    async (request, reply) => {
       const { workspaceId } = requireWorkspaceContext();
-      return ok(await getSecureInstagramConnection(workspaceId));
+      try {
+        return ok(await getSecureInstagramConnection(workspaceId));
+      } catch (error) {
+        const source =
+          error instanceof InstagramOAuthDiagnosticError
+            ? error.diagnostic
+            : undefined;
+        reportInstagramOAuthFailure({
+          event: INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT,
+          logger: app.log,
+          requestId: request.id,
+          diagnostic: source
+            ? {
+                ...source,
+                stage:
+                  source.stage === "connection_status_transformation"
+                    ? "connection_status_transformation"
+                    : "connection_status_read",
+              }
+            : {
+                stage: "connection_status_read",
+                category: "status_read_failed",
+                retryable: true,
+              },
+        });
+        return reply
+          .status(500)
+          .send(
+            errorEnvelope(
+              "INSTAGRAM_STATUS_FAILED",
+              "Instagram connection status could not be loaded",
+            ),
+          );
+      }
     },
   );
 

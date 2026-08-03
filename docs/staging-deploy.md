@@ -134,13 +134,42 @@ A failed pre-deploy command must stop deployment. The PostgreSQL service must su
 
 Do not mark Railway acceptance complete until the canonical initialization, all migrations, application-role RLS, public HTTPS callback URLs, and a supervised real-Meta connection have been exercised on a disposable staging deployment.
 
-### Instagram OAuth callback diagnostics
+### Instagram OAuth lifecycle diagnostics
 
-The callback keeps ordinary route logging disabled so authorization codes and OAuth state cannot enter access logs. A handled callback failure instead emits exactly one allowlisted structured warning named `instagram_oauth_callback_failure`. Inspect `stage`, `category`, `requestId`, and `retryable` in Railway; provider failures can additionally include `providerHttpStatus`, `providerErrorType`, `providerErrorCode`, and `providerErrorSubcode` when the provider supplied values that pass the identifier allowlist.
+The OAuth routes use three terminal failure events: `instagram_oauth_start_failure`, `instagram_oauth_callback_failure`, and `instagram_connection_status_failure`. The only success events are `instagram_oauth_start_success` (a signed transaction and authorization URL were issued) and `instagram_oauth_callback_success` (the credential/media/audit transaction committed, the secured read succeeded, and the response/redirect was constructed). Meta's internal login, account selection, and consent screens are not observable and are never claimed as successes.
 
-Possible stages are `callback_input`, `state_validation`, `state_consumption`, `short_lived_token_exchange`, `long_lived_token_exchange`, `profile_retrieval`, and `credential_persistence`. Required profile-field/schema failures are reported at `profile_retrieval`; the obsolete `provider_account_validation` stage and `provider_account_id_mismatch` category are not emitted. The event never includes the originating error, callback URL/query, authorization code, token, app secret, OAuth state, encryption key, raw provider body, or provider account identifier. The browser continues to receive only the generic handled-error redirect or JSON message.
+Each failed request emits exactly one terminal event at its owning route boundary. Lower layers throw typed safe diagnostics and never log. The authoritative stages are:
 
-After deployment, sign in to a fresh MARKOS browser session, start **Connect Auth**, grant the requested Instagram permission once, and capture the single `instagram_oauth_callback_failure` event for that callback request. Correlate using `requestId` and retain only the safe fields listed above; do not capture the callback URL or provider payload.
+| Flow                    | Stages                                                                                                                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start                   | `start_request_validation`, `start_authentication`, `start_workspace_authorization`, `provider_configuration`, `oauth_transaction_creation`, `oauth_transaction_persistence`, `authorization_url_construction`                                                                               |
+| Callback input/security | `callback_request_validation`, `provider_authorization_denied`, `state_verification`, `oauth_transaction_binding`, `oauth_transaction_consumption`                                                                                                                                           |
+| Provider                | `short_lived_token_exchange`, `short_lived_token_response_validation`, `long_lived_token_exchange`, `long_lived_token_response_validation`, `profile_fetch`, `profile_response_validation`, `professional_account_resolution`                                                                |
+| Persistence             | `credential_configuration`, `credential_serialization`, `credential_encryption`, `database_transaction_begin`, `connection_upsert`, `recent_media_delete`, `recent_media_insert`, `audit_insert`, `database_transaction_commit`, `post_persistence_read`, `connection_status_transformation` |
+| Completion/status       | `success_redirect`, `failure_redirect`, `connection_status_authentication`, `connection_status_authorization`, `connection_status_read`                                                                                                                                                      |
+
+Categories are fixed, low-cardinality operation outcomes such as `authentication_required`, `workspace_forbidden`, `state_signature_invalid`, `state_expired`, `transaction_already_consumed`, `provider_timeout`, `provider_http_error`, `provider_response_not_json`, `provider_response_schema_invalid`, `encryption_key_missing`, `encryption_key_invalid`, and the database categories below. Required-field failures belong to the applicable response-validation stage. The removed `provider_account_validation`, `provider_account_id_mismatch`, and broad `credential_persistence` classifications are not emitted.
+
+Database metadata is limited to explicitly recognized Prisma codes: `P1000`, `P1001`, `P1002`, `P1008`, `P1017`, `P2002`, `P2003`, `P2025`, and `P2034`. These map to fixed categories; unknown errors become `database_unknown_failure` without a code. Only transient connection/timeout codes `P1001`, `P1002`, `P1008`, `P1017`, and transaction conflict `P2034` are retryable. Provider HTTP 429/5xx, timeouts, and network failures are retryable; invalid state, configuration, schema, encryption, authorization, and integrity/constraint failures are not.
+
+Every event is constructed from an explicit allowlist: `event`, `stage`, `category`, `retryable`, `requestId`, validated provider HTTP/type/numeric code/subcode, recognized `databaseCode`, and fixed `validationCode`. It never includes errors, causes, messages, stacks, Prisma `meta`, SQL, parameters, headers, cookies, identities, usernames, URLs, query strings, state or derived state values, authorization codes, tokens, secrets, keys, ciphertext components, or provider/database bodies.
+
+Search the Railway **API service logs** for one of the event names and correlate only by `requestId`. Prisma has no separate Railway log page; database failures appear only through the API's sanitized event. Never share a complete callback URL, code, state, token, raw provider body, raw Prisma error, or Prisma metadata.
+
+Synthetic example:
+
+```json
+{
+  "event": "instagram_oauth_callback_failure",
+  "stage": "connection_upsert",
+  "category": "database_unique_constraint",
+  "retryable": false,
+  "requestId": "req-example",
+  "databaseCode": "P2002"
+}
+```
+
+After deployment, wait for the API deployment to become Active and perform one fresh connection. On failure, retain only the single event's stage, category, retryability, request ID, and safe allowlisted provider/database code. On success, confirm Settings reports Connected and `INSTAGRAM_CONNECTED` exists.
 
 ## Smoke Evidence
 

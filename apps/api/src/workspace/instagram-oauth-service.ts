@@ -21,7 +21,12 @@ import {
   INSTAGRAM_REQUESTED_SCOPES,
   canonicalRedirectUri,
 } from "./instagram-provider";
-import type { InstagramOAuthFailureDiagnostic } from "./instagram-oauth-telemetry";
+import {
+  classifyDatabaseFailure,
+  InstagramOAuthDiagnosticError,
+  type InstagramOAuthFailureDiagnostic,
+  type InstagramOAuthFailureStage,
+} from "./instagram-oauth-telemetry";
 
 export interface InstagramOAuthConfig {
   appId?: string | undefined;
@@ -42,8 +47,8 @@ export class InstagramOAuthConfigurationError extends Error {
 export class InstagramOAuthStateError extends Error {
   constructor(
     readonly diagnostic: InstagramOAuthFailureDiagnostic = {
-      stage: "state_validation",
-      category: "oauth_state_invalid",
+      stage: "state_verification",
+      category: "state_malformed",
       retryable: false,
     },
   ) {
@@ -85,19 +90,55 @@ export async function createInstagramOAuthStart(input: {
 }): Promise<InstagramOAuthStart> {
   const config = validConfig(input.config ?? getInstagramOAuthConfig());
   const returnTo = input.returnTo ?? `/${input.locale ?? "en"}/app/settings`;
-  const state = await issueOAuthState({
-    userId: input.userId,
-    workspaceId: input.workspaceId,
-    returnTo,
-    secret: config.stateSecret,
-    store: createPrismaOAuthStateStore(input.userId, input.workspaceId),
-  });
-  const url = new URL(INSTAGRAM_AUTHORIZATION_URL);
-  url.searchParams.set("client_id", config.appId);
-  url.searchParams.set("redirect_uri", config.redirectUri);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", INSTAGRAM_REQUESTED_SCOPES.join(","));
-  url.searchParams.set("state", state);
+  let state: string;
+  try {
+    state = await issueOAuthState({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      returnTo,
+      secret: config.stateSecret,
+      store: createPrismaOAuthStateStore(input.userId, input.workspaceId),
+    });
+  } catch (error) {
+    if (
+      error instanceof OAuthStateError &&
+      error.reason === "return_path_invalid"
+    )
+      throw new InstagramOAuthDiagnosticError(
+        {
+          stage: "start_request_validation",
+          category: "request_invalid",
+          retryable: false,
+          validationCode: "RETURN_PATH_INVALID",
+        },
+        error,
+      );
+    throw new InstagramOAuthDiagnosticError(
+      {
+        stage: "oauth_transaction_persistence",
+        ...classifyDatabaseFailure(error),
+      },
+      error,
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(INSTAGRAM_AUTHORIZATION_URL);
+    url.searchParams.set("client_id", config.appId);
+    url.searchParams.set("redirect_uri", config.redirectUri);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", INSTAGRAM_REQUESTED_SCOPES.join(","));
+    url.searchParams.set("state", state);
+  } catch (error) {
+    throw new InstagramOAuthDiagnosticError(
+      {
+        stage: "authorization_url_construction",
+        category: "authorization_url_build_failed",
+        retryable: false,
+      },
+      error,
+    );
+  }
   return {
     authorizationUrl: url.toString(),
     stateExpiresAt: new Date(Date.now() + 600_000).toISOString(),
@@ -117,7 +158,7 @@ export async function completeInstagramOAuth(input: {
   try {
     binding = verifyOAuthState(input.state, config.stateSecret, input.now);
   } catch (error) {
-    if (error instanceof OAuthStateError) throw new InstagramOAuthStateError();
+    if (error instanceof OAuthStateError) throw stateError(error);
     throw error;
   }
   try {
@@ -130,17 +171,11 @@ export async function completeInstagramOAuth(input: {
       ...(input.now ? { now: input.now } : {}),
     });
   } catch (error) {
-    if (error instanceof OAuthStateError)
-      throw new InstagramOAuthStateError({
-        stage: "state_consumption",
-        category: "oauth_state_invalid_or_consumed",
-        retryable: false,
-      });
+    if (error instanceof OAuthStateError) throw stateError(error);
     throw new InstagramOAuthExchangeError(
       {
-        stage: "state_consumption",
-        category: "state_store_failure",
-        retryable: true,
+        stage: "oauth_transaction_consumption",
+        ...classifyDatabaseFailure(error),
       },
       error,
     );
@@ -158,6 +193,7 @@ export async function completeInstagramOAuth(input: {
   } catch (error) {
     throw classifyInstagramOAuthProviderFailure(
       "short_lived_token_exchange",
+      "short_lived_token_response_validation",
       error,
     );
   }
@@ -167,6 +203,7 @@ export async function completeInstagramOAuth(input: {
   } catch (error) {
     throw classifyInstagramOAuthProviderFailure(
       "long_lived_token_exchange",
+      "long_lived_token_response_validation",
       error,
     );
   }
@@ -174,7 +211,11 @@ export async function completeInstagramOAuth(input: {
   try {
     profile = await client.profile(long.accessToken);
   } catch (error) {
-    throw classifyInstagramOAuthProviderFailure("profile_retrieval", error);
+    throw classifyInstagramOAuthProviderFailure(
+      "profile_fetch",
+      "profile_response_validation",
+      error,
+    );
   }
   // The profile comes from Meta through the long-lived token derived from this
   // validated callback. Meta documents `/me.user_id` as the professional
@@ -191,10 +232,12 @@ export async function completeInstagramOAuth(input: {
     });
     return { connection, returnTo: binding.returnTo };
   } catch (error) {
+    if (error instanceof InstagramOAuthDiagnosticError)
+      throw new InstagramOAuthExchangeError(error.diagnostic, error);
     throw new InstagramOAuthExchangeError(
       {
-        stage: "credential_persistence",
-        category: "credential_persistence_failed",
+        stage: "database_transaction_commit",
+        category: "database_unknown_failure",
         retryable: false,
       },
       error,
@@ -203,14 +246,31 @@ export async function completeInstagramOAuth(input: {
 }
 
 export function classifyInstagramOAuthProviderFailure(
-  stage: InstagramOAuthFailureDiagnostic["stage"],
+  requestStage: InstagramOAuthFailureStage,
+  responseStage: InstagramOAuthFailureStage,
   error: unknown,
 ): InstagramOAuthExchangeError {
   if (error instanceof InstagramProviderError) {
     return new InstagramOAuthExchangeError(
       {
-        stage,
-        category: "provider_request_failed",
+        stage:
+          error.kind === "schema" ||
+          error.kind === "response_not_json" ||
+          error.kind === "response_too_large"
+            ? responseStage
+            : requestStage,
+        category:
+          error.kind === "http"
+            ? "provider_http_error"
+            : error.kind === "network"
+              ? "provider_network_error"
+              : error.kind === "timeout"
+                ? "provider_timeout"
+                : error.kind === "response_not_json"
+                  ? "provider_response_not_json"
+                  : error.kind === "response_too_large"
+                    ? "provider_response_too_large"
+                    : "provider_response_schema_invalid",
         retryable: error.diagnostic.retryable,
         ...(error.diagnostic.httpStatus === undefined
           ? {}
@@ -230,12 +290,39 @@ export function classifyInstagramOAuthProviderFailure(
   }
   return new InstagramOAuthExchangeError(
     {
-      stage,
+      stage: requestStage,
       category: "provider_client_failure",
       retryable: false,
     },
     error,
   );
+}
+
+function stateError(error: OAuthStateError): InstagramOAuthStateError {
+  const binding = error.reason === "binding_invalid";
+  const consumption =
+    error.reason === "already_consumed" ||
+    error.reason === "not_found_or_expired";
+  return new InstagramOAuthStateError({
+    stage: binding
+      ? "oauth_transaction_binding"
+      : consumption
+        ? "oauth_transaction_consumption"
+        : "state_verification",
+    category:
+      error.reason === "signature_invalid"
+        ? "state_signature_invalid"
+        : error.reason === "expired"
+          ? "state_expired"
+          : error.reason === "binding_invalid"
+            ? "transaction_binding_invalid"
+            : error.reason === "already_consumed"
+              ? "transaction_already_consumed"
+              : error.reason === "not_found_or_expired"
+                ? "transaction_not_found_or_expired"
+                : "state_malformed",
+    retryable: false,
+  });
 }
 
 export async function cancelInstagramOAuth(
@@ -253,8 +340,15 @@ export async function cancelInstagramOAuth(
       store: createPrismaOAuthStateStore(binding.userId, binding.workspaceId),
     });
     return binding.returnTo;
-  } catch {
-    throw new InstagramOAuthStateError();
+  } catch (error) {
+    if (error instanceof OAuthStateError) throw stateError(error);
+    throw new InstagramOAuthExchangeError(
+      {
+        stage: "oauth_transaction_consumption",
+        ...classifyDatabaseFailure(error),
+      },
+      error,
+    );
   }
 }
 

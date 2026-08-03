@@ -91,14 +91,22 @@ describe("Instagram basic provider boundary", () => {
   });
 
   it("maps the documented data-wrapped professional account response", async () => {
-    const client = new InstagramBasicClient(async () => response({
-      data: [{ user_id: "documented-professional-id", username: "documented_username", media: { data: [] } }]
-    }));
+    const client = new InstagramBasicClient(async () =>
+      response({
+        data: [
+          {
+            user_id: "documented-professional-id",
+            username: "documented_username",
+            media: { data: [] },
+          },
+        ],
+      }),
+    );
 
     await expect(client.profile("secret-token")).resolves.toMatchObject({
       professionalAccountId: "documented-professional-id",
       username: "documented_username",
-      media: []
+      media: [],
     });
   });
 
@@ -124,6 +132,8 @@ describe("Instagram basic provider boundary", () => {
     [
       "malformed",
       new InstagramBasicClient(async () => new Response("not-json")),
+      "response_not_json",
+      false,
     ],
     [
       "oversized",
@@ -131,6 +141,8 @@ describe("Instagram basic provider boundary", () => {
         async () => response({ user_id: "1", username: "x" }),
         { maxResponseBytes: 2 },
       ),
+      "response_too_large",
+      false,
     ],
     [
       "timeout",
@@ -143,12 +155,18 @@ describe("Instagram basic provider boundary", () => {
           ),
         { timeoutMs: 1 },
       ),
+      "timeout",
+      true,
     ],
-  ])("sanitizes %s provider responses", async (_name, client) => {
-    await expect(client.profile("never-exposed")).rejects.toEqual(
-      new InstagramProviderError(),
-    );
-  });
+  ] as const)(
+    "sanitizes %s provider responses",
+    async (_name, client, kind, retryable) => {
+      await expect(client.profile("never-exposed")).rejects.toMatchObject({
+        kind,
+        diagnostic: { retryable },
+      });
+    },
+  );
 });
 
 function response(value: unknown): Response {

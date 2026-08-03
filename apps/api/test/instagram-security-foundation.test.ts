@@ -29,7 +29,9 @@ class MemoryStore implements OAuthStateStore {
     this.values.set(nonce, expiresAt);
   }
   async consume(nonce: string) {
-    return this.values.delete(nonce);
+    return this.values.delete(nonce)
+      ? ("consumed" as const)
+      : ("not_found_or_expired" as const);
   }
 }
 
