@@ -228,14 +228,15 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     const client = new InstagramBasicClient();
     client.exchangeCode = async () => {
       exchanges += 1;
-      return { accessToken: "short-only", accountId: "17841400000000201" };
+      return { accessToken: "short-only", scopedUserId: "scoped-callback-user" };
     };
     client.exchangeLongLived = async () => ({
       accessToken: "long-only",
       expiresIn: 3600,
     });
     client.profile = async () => ({
-      userId: "17841400000000201",
+      scopedUserId: "scoped-callback-user",
+      professionalAccountId: "17841400000000201",
       username: "callback_account",
       media: [],
     });
@@ -333,7 +334,8 @@ async function persist(
     issuedAt,
     expiresAt,
     profile: {
-      userId: providerUserId,
+      scopedUserId: `scoped-${providerUserId}`,
+      professionalAccountId: providerUserId,
       username: "markos_business",
       media,
     },

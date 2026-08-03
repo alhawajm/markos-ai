@@ -56,7 +56,7 @@ describe("Instagram OAuth", () => {
       if (String(input) === "https://api.instagram.com/oauth/access_token") {
         return jsonResponse({
           access_token: "short-lived-token",
-          user_id: "17841400000000000"
+          user_id: "instagram-scoped-app-user-9001"
         });
       }
 
@@ -66,7 +66,8 @@ describe("Instagram OAuth", () => {
           expires_in: 60 * 24 * 60 * 60
         });
       return jsonResponse({
-        user_id: "17841400000000000",
+        id: "instagram-scoped-app-user-9001",
+        user_id: "instagram-professional-account-7007",
         username: "markos_business",
         media: { data: [] }
       });
@@ -91,15 +92,20 @@ describe("Instagram OAuth", () => {
     const credential = await prisma.instagramConnectionCredential.findUniqueOrThrow({
       where: { workspaceId }
     });
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { workspaceId, action: "INSTAGRAM_CONNECTED" }
+    });
 
     expect(result.connection).toMatchObject({
-      accountId: "17841400000000000",
+      accountId: "instagram-professional-account-7007",
       connected: true
     });
     expect(workspace.instagramAccountId).toBeNull();
     expect(workspace.instagramAccessToken).toBeNull();
     expect(workspace.instagramTokenExpiresAt).toBeNull();
     expect(credential.encryptedAccessToken).not.toContain("long-lived-token");
+    expect(credential.providerAccountId).toBe("instagram-professional-account-7007");
+    expect(audit.targetId).toBe("instagram-professional-account-7007");
     expect(credential.providerConfirmedScopes).toEqual([]);
     expect(calls).toHaveLength(3);
     expect(calls[0]?.body).toContain("grant_type=authorization_code");

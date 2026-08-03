@@ -21,11 +21,11 @@ describeInstagramDatabase("registered Instagram routes", () => {
       providerCalls += 1;
       const url = String(input);
       if (url === "https://api.instagram.com/oauth/access_token")
-        return response({ access_token: "fake-short-token", user_id: "route-account" });
+        return response({ access_token: "fake-short-token", user_id: "route-scoped-user" });
       if (url.startsWith("https://graph.instagram.com/access_token?"))
         return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
       if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
-        return response({ user_id: "route-account", username: "route_business", media: { data: [] } });
+        return response({ id: "route-scoped-user", user_id: "route-professional-account", username: "route_business", media: { data: [] } });
       throw new Error("Unexpected provider request");
     };
     app = await buildApp();
@@ -90,7 +90,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(completed.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=connected");
     expect(completed.headers.location).not.toContain("fake-code");
     expect(providerCalls - before).toBe(3);
-    expect((await status(initiator)).json().data).toMatchObject({ connected: true, accountId: "route-account" });
+    expect((await status(initiator)).json().data).toMatchObject({ connected: true, accountId: "route-professional-account" });
     expect((await status(other)).json().data).toMatchObject({ connected: false });
 
     const replay = await app.inject({

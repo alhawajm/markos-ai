@@ -17,7 +17,8 @@ export async function persistTestInstagramConnection(input: {
     issuedAt,
     expiresAt: input.expiresAt ?? new Date(Date.now() + 60 * 86_400_000),
     profile: {
-      userId: input.accountId ?? `test-account-${randomUUID()}`,
+      scopedUserId: `test-scoped-user-${randomUUID()}`,
+      professionalAccountId: input.accountId ?? `test-account-${randomUUID()}`,
       username: `test-user-${randomUUID()}`,
       media: [],
     },

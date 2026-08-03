@@ -19,7 +19,8 @@ describe("Instagram basic provider boundary", () => {
       if (String(input).includes("/access_token"))
         return response({ access_token: "long-secret", expires_in: 5000 });
       return response({
-        user_id: "account-1",
+        id: "account-1",
+        user_id: "professional-account-1",
         username: "markos_business",
         account_type: "BUSINESS",
         media: {
@@ -42,7 +43,9 @@ describe("Instagram basic provider boundary", () => {
     const long = await client.exchangeLongLived(short.accessToken, "secret");
     const profile = await client.profile(long.accessToken);
     expect(profile.media).toHaveLength(RECENT_MEDIA_LIMIT);
-    expect(profile.userId).toBe("account-1");
+    expect(short.scopedUserId).toBe("account-1");
+    expect(profile.scopedUserId).toBe("account-1");
+    expect(profile.professionalAccountId).toBe("professional-account-1");
     expect(profile.media[0]).toEqual({
       id: "media-0",
       mediaType: "IMAGE",
@@ -59,14 +62,13 @@ describe("Instagram basic provider boundary", () => {
       "https://graph.instagram.com/access_token?",
     );
     expect(calls[2]?.url).toContain("https://graph.instagram.com/v25.0/me?");
-    expect(calls[2]?.url).toContain("fields=user_id%2Cusername");
-    expect(calls[2]?.url).not.toContain("fields=id%2Cusername");
+    expect(calls[2]?.url).toContain("fields=id%2Cuser_id%2Cusername");
     expect(calls[2]?.url).toContain("media.limit%286%29");
   });
 
   it("supports an empty media response and sanitizes provider failures", async () => {
     const empty = new InstagramBasicClient(async () =>
-      response({ user_id: "1", username: "empty", media: { data: [] } }),
+      response({ id: "scoped-1", user_id: "1", username: "empty", media: { data: [] } }),
     );
     await expect(empty.profile("secret-token")).resolves.toMatchObject({
       media: [],
@@ -91,11 +93,12 @@ describe("Instagram basic provider boundary", () => {
 
   it("maps the documented data-wrapped professional account response", async () => {
     const client = new InstagramBasicClient(async () => response({
-      data: [{ user_id: "documented-user-id", username: "documented_username", media: { data: [] } }]
+      data: [{ id: "documented-scoped-id", user_id: "documented-professional-id", username: "documented_username", media: { data: [] } }]
     }));
 
     await expect(client.profile("secret-token")).resolves.toMatchObject({
-      userId: "documented-user-id",
+      scopedUserId: "documented-scoped-id",
+      professionalAccountId: "documented-professional-id",
       username: "documented_username",
       media: []
     });

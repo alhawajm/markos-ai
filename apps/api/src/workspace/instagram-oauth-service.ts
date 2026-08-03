@@ -176,7 +176,10 @@ export async function completeInstagramOAuth(input: {
   } catch (error) {
     throw classifyInstagramOAuthProviderFailure("profile_retrieval", error);
   }
-  if (profile.userId !== short.accountId)
+  // Meta documents the exchange `user_id` as the app user's Instagram-scoped
+  // identity. `/me.id` is that same token-bound identity, while `/me.user_id`
+  // is the professional account ID used by Instagram API operations.
+  if (profile.scopedUserId !== short.scopedUserId)
     throw new InstagramOAuthExchangeError({
       stage: "provider_account_validation",
       category: "provider_account_id_mismatch",
