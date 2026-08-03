@@ -210,9 +210,9 @@ Publishing, analytics, readiness, scheduled refresh, Meta deauthorization, and w
 
 Load an optional repository-root `.env` from the API environment module for local API, worker, and seed entry points, while preserving already-injected process variables. Keep Prisma CLI migrations, Next.js environment files, Docker build arguments, GitHub Actions variables, and Railway runtime variables as separate explicit contracts. Treat an empty optional `MEDIA_PUBLIC_BASE_URL` as absent and fall back to the public API media route for the business-basic connection milestone.
 
-## 2026-08-03: Instagram Login identities remain namespace-specific
+## 2026-08-03: Instagram Login professional identity comes from the token-authenticated profile
 
-For Instagram Login, treat the authorization-code exchange `user_id` as the app user's Instagram-scoped identity and validate it only against `/me.id`, which represents the access-token-bound app user. Treat `/me.user_id` as the Instagram professional account identity and persist that value as `providerAccountId`. Meta's Instagram Login documentation gives the two fields different meanings and does not document equality between the exchange `user_id` and `/me.user_id`; fixtures must therefore keep the scoped and professional identifiers conspicuously distinct. Facebook Login for Business uses a different discovery contract (Facebook User token -> Pages -> `instagram_business_account.id`) and is not interchangeable with this flow.
+For Instagram Login, retain the authorization-code exchange `user_id` only as a required response field from the exchange contract. Retrieve `/me` with the access token derived from that validated callback, request the documented `user_id` and `username` fields, and persist `/me.user_id` as the professional account `providerAccountId`. Do not request `/me.id` or compare identifiers across the exchange and profile responses: Meta documents the exchange value as an Instagram-scoped user ID and `/me.user_id` as the Instagram professional account ID, but does not explicitly guarantee equality between either value and `/me.id`. Production has also shown that the previously required exchange `user_id === /me.id` equality rejects a legitimate authorization. No client-supplied account ID needs comparison because the profile is obtained directly from Meta with the exchanged token. Facebook Login for Business uses a different discovery contract (Facebook User token -> Pages -> `instagram_business_account.id`) and is not interchangeable with this flow.
 
 Official contract references:
 
@@ -220,3 +220,7 @@ Official contract references:
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/get-started
 - https://developers.facebook.com/docs/instagram-platform/reference/me
+
+## 2026-08-03: Instagram OAuth diagnostics terminate at route boundaries
+
+Use one typed, low-cardinality diagnostic taxonomy across Instagram OAuth start, callback security, provider exchange/validation, atomic credential persistence, secured post-write reads, redirect completion, and connection status. Lower layers annotate and rethrow without logging; the owning request boundary emits exactly one sanitized terminal failure. Emit only start and fully completed callback success lifecycle events. Allowlist provider status/type/numeric codes and recognized Prisma codes, never raw errors, metadata, queries, URLs, secrets, state, tokens, or identities. Preserve the existing transaction and security controls while tracking the active inner persistence operation so rollback does not erase the diagnostic stage.

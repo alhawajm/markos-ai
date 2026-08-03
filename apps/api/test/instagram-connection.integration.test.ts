@@ -157,12 +157,14 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     });
     expect(counts).toEqual([1, 1, 1]);
 
-    const firstConnection = await prisma.instagramConnectionCredential.findUniqueOrThrow({
-      where: { workspaceId: first },
-    });
-    const secondConnection = await prisma.instagramConnectionCredential.findUniqueOrThrow({
-      where: { workspaceId: second },
-    });
+    const firstConnection =
+      await prisma.instagramConnectionCredential.findUniqueOrThrow({
+        where: { workspaceId: first },
+      });
+    const secondConnection =
+      await prisma.instagramConnectionCredential.findUniqueOrThrow({
+        where: { workspaceId: second },
+      });
     const secondMedia = await prisma.instagramRecentMedia.findFirstOrThrow({
       where: { workspaceId: second },
     });
@@ -176,24 +178,46 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
       `INSERT INTO oauth_state_nonces (id, "nonceHash", "workspaceId", "userId", "expiresAt") VALUES ('${randomUUID()}', 'blocked-${randomUUID()}', '${second}', '${actorId}', now() + interval '1 minute')`,
       `UPDATE instagram_connection_credentials SET "workspaceId" = '${second}' WHERE id = '${firstConnection.id}'`,
     ]) {
-      await expect(asApplicationRole(first, (tx) => tx.$executeRawUnsafe(statement))).rejects.toThrow();
+      await expect(
+        asApplicationRole(first, (tx) => tx.$executeRawUnsafe(statement)),
+      ).rejects.toThrow();
     }
 
-    expect(await asApplicationRole(first, (tx) => tx.$executeRawUnsafe(
-      `UPDATE instagram_connection_credentials SET username = 'blocked' WHERE id = '${secondConnection.id}'`,
-    ))).toBe(0);
-    expect(await asApplicationRole(first, (tx) => tx.$executeRawUnsafe(
-      `DELETE FROM instagram_connection_credentials WHERE id = '${secondConnection.id}'`,
-    ))).toBe(0);
-    expect(await asApplicationRole(first, (tx) => tx.$executeRawUnsafe(
-      `DELETE FROM instagram_recent_media WHERE id = '${secondMedia.id}'`,
-    ))).toBe(0);
-    expect(await asApplicationRole(first, (tx) => tx.$executeRawUnsafe(
-      `DELETE FROM oauth_state_nonces WHERE id = '${secondNonce.id}'`,
-    ))).toBe(0);
-    expect(await asApplicationRole(first, (tx) => tx.$executeRawUnsafe(
-      `UPDATE oauth_state_nonces SET "consumedAt" = now() WHERE id = '${secondNonce.id}' AND "consumedAt" IS NULL`,
-    ))).toBe(0);
+    expect(
+      await asApplicationRole(first, (tx) =>
+        tx.$executeRawUnsafe(
+          `UPDATE instagram_connection_credentials SET username = 'blocked' WHERE id = '${secondConnection.id}'`,
+        ),
+      ),
+    ).toBe(0);
+    expect(
+      await asApplicationRole(first, (tx) =>
+        tx.$executeRawUnsafe(
+          `DELETE FROM instagram_connection_credentials WHERE id = '${secondConnection.id}'`,
+        ),
+      ),
+    ).toBe(0);
+    expect(
+      await asApplicationRole(first, (tx) =>
+        tx.$executeRawUnsafe(
+          `DELETE FROM instagram_recent_media WHERE id = '${secondMedia.id}'`,
+        ),
+      ),
+    ).toBe(0);
+    expect(
+      await asApplicationRole(first, (tx) =>
+        tx.$executeRawUnsafe(
+          `DELETE FROM oauth_state_nonces WHERE id = '${secondNonce.id}'`,
+        ),
+      ),
+    ).toBe(0);
+    expect(
+      await asApplicationRole(first, (tx) =>
+        tx.$executeRawUnsafe(
+          `UPDATE oauth_state_nonces SET "consumedAt" = now() WHERE id = '${secondNonce.id}' AND "consumedAt" IS NULL`,
+        ),
+      ),
+    ).toBe(0);
   });
 
   it("consumes a nonce atomically and prevents duplicate callback exchange", async () => {
@@ -208,7 +232,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
           store.consume(atomicNonce),
         ])
       ).sort(),
-    ).toEqual([false, true]);
+    ).toEqual(["already_consumed", "consumed"]);
 
     const config = {
       appId: "test-app",
@@ -228,14 +252,16 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     const client = new InstagramBasicClient();
     client.exchangeCode = async () => {
       exchanges += 1;
-      return { accessToken: "short-only", scopedUserId: "scoped-callback-user" };
+      return {
+        accessToken: "short-only",
+        exchangeUserId: "exchange-callback-user",
+      };
     };
     client.exchangeLongLived = async () => ({
       accessToken: "long-only",
       expiresIn: 3600,
     });
     client.profile = async () => ({
-      scopedUserId: "scoped-callback-user",
       professionalAccountId: "17841400000000201",
       username: "callback_account",
       media: [],
@@ -249,6 +275,54 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     ).toHaveLength(1);
     expect(exchanges).toBe(1);
   });
+
+  it.each([
+    "database_transaction_begin",
+    "connection_upsert",
+    "recent_media_delete",
+    "recent_media_insert",
+    "audit_insert",
+    "database_transaction_commit",
+    "post_persistence_read",
+  ] as const)(
+    "classifies and rolls back the %s boundary",
+    async (failedStage) => {
+      const id = await workspace();
+      await expect(
+        persistInstagramConnection({
+          workspaceId: id,
+          actorId,
+          accessToken: "never-logged-token",
+          issuedAt: new Date("2026-08-03T00:00:00Z"),
+          expiresAt: new Date("2026-09-03T00:00:00Z"),
+          profile: {
+            professionalAccountId: `professional-${randomUUID()}`,
+            username: "never_logged_username",
+            media: [{ id: "media", mediaType: "IMAGE" }],
+          },
+          beforeOperation(stage) {
+            if (stage === failedStage)
+              throw Object.assign(new Error("CANARY_PRISMA_MESSAGE"), {
+                code: failedStage === "connection_upsert" ? "P2002" : "EVIL",
+                meta: { secret: "CANARY_META" },
+              });
+          },
+        }),
+      ).rejects.toMatchObject({ diagnostic: { stage: failedStage } });
+      if (failedStage !== "post_persistence_read") {
+        expect(
+          await prisma.instagramConnectionCredential.findUnique({
+            where: { workspaceId: id },
+          }),
+        ).toBeNull();
+        expect(
+          await prisma.auditLog.count({
+            where: { workspaceId: id, action: "INSTAGRAM_CONNECTED" },
+          }),
+        ).toBe(0);
+      }
+    },
+  );
 
   it("enforces concurrent uniqueness and rolls back failed persistence and disconnect", async () => {
     const first = await workspace();
@@ -334,7 +408,6 @@ async function persist(
     issuedAt,
     expiresAt,
     profile: {
-      scopedUserId: `scoped-${providerUserId}`,
       professionalAccountId: providerUserId,
       username: "markos_business",
       media,

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/http/app";
 
 describe("Instagram route security without provider or database services", () => {
@@ -25,6 +25,7 @@ describe("Instagram route security without provider or database services", () =>
   });
 
   it("sanitizes malformed and denied callbacks", async () => {
+    const warn = vi.spyOn(app.log, "warn");
     const missing = await app.inject({
       method: "GET",
       url: "/v1/workspace/instagram/oauth/callback?code=secret-code",
@@ -45,5 +46,37 @@ describe("Instagram route security without provider or database services", () =>
       error: { code: "INSTAGRAM_OAUTH_FAILED" },
     });
     expect(denied.body).not.toContain("access_denied");
+    expect(
+      warn.mock.calls.filter(
+        ([fields]) =>
+          typeof fields === "object" &&
+          fields !== null &&
+          "event" in fields &&
+          fields.event === "instagram_oauth_callback_failure",
+      ),
+    ).toHaveLength(2);
+    warn.mockRestore();
+  });
+
+  it("emits exactly one classified start authentication failure", async () => {
+    const warn = vi.spyOn(app.log, "warn");
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/v1/workspace/instagram/oauth/start",
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      warn.mock.calls.filter(
+        ([fields]) =>
+          typeof fields === "object" &&
+          fields !== null &&
+          "event" in fields &&
+          fields.event === "instagram_oauth_start_failure",
+      ),
+    ).toHaveLength(1);
+    warn.mockRestore();
   });
 });

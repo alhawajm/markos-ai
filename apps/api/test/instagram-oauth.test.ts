@@ -66,7 +66,6 @@ describe("Instagram OAuth", () => {
           expires_in: 60 * 24 * 60 * 60
         });
       return jsonResponse({
-        id: "instagram-scoped-app-user-9001",
         user_id: "instagram-professional-account-7007",
         username: "markos_business",
         media: { data: [] }

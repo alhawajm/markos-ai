@@ -4,6 +4,7 @@ import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { withWorkspaceDbContext } from "../db/workspace-transaction";
 import {
+  decodeEncryptionKey,
   decryptCredential,
   encryptCredential,
 } from "../security/credential-encryption";
@@ -16,10 +17,20 @@ import {
   INSTAGRAM_PROVIDER,
   INSTAGRAM_REQUESTED_SCOPES,
 } from "./instagram-provider";
+import {
+  classifyDatabaseFailure,
+  InstagramOAuthDiagnosticError,
+  type InstagramOAuthFailureStage,
+} from "./instagram-oauth-telemetry";
 
-export class InstagramConnectionConflictError extends Error {
+export class InstagramConnectionConflictError extends InstagramOAuthDiagnosticError {
   constructor() {
-    super("Instagram account cannot be connected");
+    super({
+      stage: "connection_upsert",
+      category: "database_unique_constraint",
+      retryable: false,
+      databaseCode: "P2002",
+    });
   }
 }
 
@@ -30,10 +41,75 @@ export async function persistInstagramConnection(input: {
   accessToken: string;
   issuedAt: Date;
   expiresAt: Date;
+  /** Test-only fault boundary; production callers must omit it. */
+  beforeOperation?: (stage: InstagramOAuthFailureStage) => void;
+  /** Test-only configuration boundary; production callers must omit it. */
+  encryptionKeyOverride?: string | null;
 }): Promise<InstagramConnection> {
-  const key = requiredKey();
+  const stage = (value: InstagramOAuthFailureStage) =>
+    input.beforeOperation?.(value);
+  stage("credential_configuration");
+  const key = requiredKeyForOAuth(input.encryptionKeyOverride);
   try {
+    decodeEncryptionKey(key);
+  } catch (error) {
+    throw new InstagramOAuthDiagnosticError(
+      {
+        stage: "credential_configuration",
+        category: "encryption_key_invalid",
+        retryable: false,
+      },
+      error,
+    );
+  }
+  let encryptedAccessToken: string;
+  let mediaRows;
+  try {
+    stage("credential_serialization");
+    mediaRows = input.profile.media.slice(0, 6).map((media) => ({
+      workspaceId: input.workspaceId,
+      providerMediaId: media.id,
+      mediaType: media.mediaType,
+      caption: media.caption ?? null,
+      mediaUrl: media.mediaUrl ?? null,
+      thumbnailUrl: media.thumbnailUrl ?? null,
+      permalink: media.permalink ?? null,
+      providerTimestamp: media.timestamp ? new Date(media.timestamp) : null,
+      syncedAt: input.issuedAt,
+    }));
+    if (
+      mediaRows.some(
+        (row) =>
+          row.providerTimestamp &&
+          Number.isNaN(row.providerTimestamp.getTime()),
+      )
+    )
+      throw new Error("invalid provider timestamp");
+  } catch (error) {
+    throw diagnostic(
+      "credential_serialization",
+      "credential_serialization_failed",
+      false,
+      error,
+    );
+  }
+  try {
+    stage("credential_encryption");
+    encryptedAccessToken = encryptCredential(input.accessToken, key);
+  } catch (error) {
+    throw diagnostic(
+      "credential_encryption",
+      "credential_encryption_failed",
+      false,
+      error,
+    );
+  }
+  let activeStage: InstagramOAuthFailureStage = "database_transaction_begin";
+  try {
+    stage(activeStage);
     await withWorkspaceDbContext(input.workspaceId, async (tx) => {
+      activeStage = "connection_upsert";
+      stage(activeStage);
       const connection = await tx.instagramConnectionCredential.upsert({
         where: { workspaceId: input.workspaceId },
         create: {
@@ -43,7 +119,7 @@ export async function persistInstagramConnection(input: {
           username: input.profile.username,
           accountType: input.profile.accountType ?? null,
           profilePictureUrl: input.profile.profilePictureUrl ?? null,
-          encryptedAccessToken: encryptCredential(input.accessToken, key),
+          encryptedAccessToken,
           tokenIssuedAt: input.issuedAt,
           tokenExpiresAt: input.expiresAt,
           status: "CONNECTED",
@@ -56,7 +132,7 @@ export async function persistInstagramConnection(input: {
           username: input.profile.username,
           accountType: input.profile.accountType ?? null,
           profilePictureUrl: input.profile.profilePictureUrl ?? null,
-          encryptedAccessToken: encryptCredential(input.accessToken, key),
+          encryptedAccessToken,
           tokenIssuedAt: input.issuedAt,
           tokenExpiresAt: input.expiresAt,
           status: "CONNECTED",
@@ -67,26 +143,23 @@ export async function persistInstagramConnection(input: {
           deletedAt: null,
         },
       });
+      activeStage = "recent_media_delete";
+      stage(activeStage);
       await tx.instagramRecentMedia.deleteMany({
         where: { workspaceId: input.workspaceId },
       });
-      if (input.profile.media.length)
+      if (mediaRows.length) {
+        activeStage = "recent_media_insert";
+        stage(activeStage);
         await tx.instagramRecentMedia.createMany({
-          data: input.profile.media.slice(0, 6).map((media) => ({
-            workspaceId: input.workspaceId,
+          data: mediaRows.map((media) => ({
+            ...media,
             connectionId: connection.id,
-            providerMediaId: media.id,
-            mediaType: media.mediaType,
-            caption: media.caption ?? null,
-            mediaUrl: media.mediaUrl ?? null,
-            thumbnailUrl: media.thumbnailUrl ?? null,
-            permalink: media.permalink ?? null,
-            providerTimestamp: media.timestamp
-              ? new Date(media.timestamp)
-              : null,
-            syncedAt: input.issuedAt,
           })),
         });
+      }
+      activeStage = "audit_insert";
+      stage(activeStage);
       await tx.auditLog.create({
         data: {
           action: "INSTAGRAM_CONNECTED",
@@ -100,28 +173,69 @@ export async function persistInstagramConnection(input: {
           },
         },
       });
+      activeStage = "database_transaction_commit";
+      stage(activeStage);
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new InstagramConnectionConflictError();
-    throw error;
+    if (error instanceof InstagramOAuthDiagnosticError) throw error;
+    if (isUniqueViolation(error))
+      throw new InstagramConnectionConflictError();
+    throw new InstagramOAuthDiagnosticError(
+      { stage: activeStage, ...classifyDatabaseFailure(error) },
+      error,
+    );
   }
-  return getSecureInstagramConnection(input.workspaceId);
+  try {
+    stage("post_persistence_read");
+    return await getSecureInstagramConnection(input.workspaceId);
+  } catch (error) {
+    if (error instanceof InstagramOAuthDiagnosticError)
+      throw new InstagramOAuthDiagnosticError(
+        {
+          ...error.diagnostic,
+          stage:
+            error.diagnostic.stage === "connection_status_transformation"
+              ? "connection_status_transformation"
+              : "post_persistence_read",
+        },
+        error,
+      );
+    throw diagnostic(
+      "post_persistence_read",
+      "post_persistence_read_failed",
+      true,
+      error,
+    );
+  }
 }
 
 export async function getSecureInstagramConnection(
   workspaceId: string,
 ): Promise<InstagramConnection> {
-  return withWorkspaceDbContext(workspaceId, async (tx) => {
-    const row = await tx.instagramConnectionCredential.findUnique({
-      where: { workspaceId },
-    });
+  let row;
+  let media;
+  try {
+    ({ row, media } = await withWorkspaceDbContext(workspaceId, async (tx) => {
+      const row = await tx.instagramConnectionCredential.findUnique({
+        where: { workspaceId },
+      });
+      if (!row) return { row, media: [] };
+      const media = await tx.instagramRecentMedia.findMany({
+        where: { workspaceId, connectionId: row.id },
+        orderBy: { providerTimestamp: "desc" },
+        take: 6,
+      });
+      return { row, media };
+    }));
+  } catch (error) {
+    throw new InstagramOAuthDiagnosticError(
+      { stage: "connection_status_read", ...classifyDatabaseFailure(error) },
+      error,
+    );
+  }
+  try {
     if (!row || row.deletedAt)
       return { connected: false, status: "DISCONNECTED", recentMedia: [] };
-    const media = await tx.instagramRecentMedia.findMany({
-      where: { workspaceId, connectionId: row.id },
-      orderBy: { providerTimestamp: "desc" },
-      take: 6,
-    });
     const expired = row.tokenExpiresAt <= new Date();
     const status =
       expired || row.status === "EXPIRED"
@@ -156,7 +270,14 @@ export async function getSecureInstagramConnection(
           : {}),
       })),
     };
-  });
+  } catch (error) {
+    throw diagnostic(
+      "connection_status_transformation",
+      "connection_status_transformation_failed",
+      false,
+      error,
+    );
+  }
 }
 export async function getDecryptedCredential(workspaceId: string) {
   const row = await withWorkspaceDbContext(workspaceId, (tx) =>
@@ -252,7 +373,10 @@ export async function refreshSecureInstagram(input: {
       await tx.instagramConnectionCredential.update({
         where: { workspaceId: input.workspaceId },
         data: {
-          encryptedAccessToken: encryptCredential(result.accessToken, requiredKey()),
+          encryptedAccessToken: encryptCredential(
+            result.accessToken,
+            requiredKey(),
+          ),
           tokenIssuedAt: now,
           tokenExpiresAt: expiresAt,
           status: "CONNECTED",
@@ -266,7 +390,10 @@ export async function refreshSecureInstagram(input: {
           workspaceId: input.workspaceId,
           targetId: credential.providerAccountId,
           targetType: "InstagramConnection",
-          metadata: { accountId: credential.providerAccountId, tokenExpiresAt: expiresAt.toISOString() },
+          metadata: {
+            accountId: credential.providerAccountId,
+            tokenExpiresAt: expiresAt.toISOString(),
+          },
         },
       });
     });
@@ -304,6 +431,28 @@ function requiredKey(): string {
   if (!env.INSTAGRAM_TOKEN_ENCRYPTION_KEY)
     throw new Error("Instagram credential storage is not configured");
   return env.INSTAGRAM_TOKEN_ENCRYPTION_KEY;
+}
+function requiredKeyForOAuth(override?: string | null): string {
+  const key =
+    override === undefined ? env.INSTAGRAM_TOKEN_ENCRYPTION_KEY : override;
+  if (!key)
+    throw new InstagramOAuthDiagnosticError({
+      stage: "credential_configuration",
+      category: "encryption_key_missing",
+      retryable: false,
+    });
+  return key;
+}
+function diagnostic(
+  stage: InstagramOAuthFailureStage,
+  category: string,
+  retryable: boolean,
+  cause?: unknown,
+) {
+  return new InstagramOAuthDiagnosticError(
+    { stage, category, retryable },
+    cause,
+  );
 }
 function isUniqueViolation(error: unknown): boolean {
   return (
