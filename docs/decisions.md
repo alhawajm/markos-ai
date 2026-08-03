@@ -209,3 +209,14 @@ Publishing, analytics, readiness, scheduled refresh, Meta deauthorization, and w
 ## 2026-08-02: Local API Environment Loading Is Explicit
 
 Load an optional repository-root `.env` from the API environment module for local API, worker, and seed entry points, while preserving already-injected process variables. Keep Prisma CLI migrations, Next.js environment files, Docker build arguments, GitHub Actions variables, and Railway runtime variables as separate explicit contracts. Treat an empty optional `MEDIA_PUBLIC_BASE_URL` as absent and fall back to the public API media route for the business-basic connection milestone.
+
+## 2026-08-03: Instagram Login identities remain namespace-specific
+
+For Instagram Login, treat the authorization-code exchange `user_id` as the app user's Instagram-scoped identity and validate it only against `/me.id`, which represents the access-token-bound app user. Treat `/me.user_id` as the Instagram professional account identity and persist that value as `providerAccountId`. Meta's Instagram Login documentation gives the two fields different meanings and does not document equality between the exchange `user_id` and `/me.user_id`; fixtures must therefore keep the scoped and professional identifiers conspicuously distinct. Facebook Login for Business uses a different discovery contract (Facebook User token -> Pages -> `instagram_business_account.id`) and is not interchangeable with this flow.
+
+Official contract references:
+
+- https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login
+- https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started
+- https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/get-started
+- https://developers.facebook.com/docs/instagram-platform/reference/me

@@ -39,7 +39,7 @@ export async function persistInstagramConnection(input: {
         create: {
           workspaceId: input.workspaceId,
           provider: INSTAGRAM_PROVIDER,
-          providerAccountId: input.profile.userId,
+          providerAccountId: input.profile.professionalAccountId,
           username: input.profile.username,
           accountType: input.profile.accountType ?? null,
           profilePictureUrl: input.profile.profilePictureUrl ?? null,
@@ -52,7 +52,7 @@ export async function persistInstagramConnection(input: {
           lastSyncedAt: input.issuedAt,
         },
         update: {
-          providerAccountId: input.profile.userId,
+          providerAccountId: input.profile.professionalAccountId,
           username: input.profile.username,
           accountType: input.profile.accountType ?? null,
           profilePictureUrl: input.profile.profilePictureUrl ?? null,
@@ -92,7 +92,7 @@ export async function persistInstagramConnection(input: {
           action: "INSTAGRAM_CONNECTED",
           actorId: input.actorId,
           workspaceId: input.workspaceId,
-          targetId: input.profile.userId,
+          targetId: input.profile.professionalAccountId,
           targetType: "InstagramConnection",
           metadata: {
             username: input.profile.username,
