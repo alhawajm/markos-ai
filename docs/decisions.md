@@ -224,3 +224,19 @@ Official contract references:
 ## 2026-08-03: Instagram OAuth diagnostics terminate at route boundaries
 
 Use one typed, low-cardinality diagnostic taxonomy across Instagram OAuth start, callback security, provider exchange/validation, atomic credential persistence, secured post-write reads, redirect completion, and connection status. Lower layers annotate and rethrow without logging; the owning request boundary emits exactly one sanitized terminal failure. Emit only start and fully completed callback success lifecycle events. Allowlist provider status/type/numeric codes and recognized Prisma codes, never raw errors, metadata, queries, URLs, secrets, state, tokens, or identities. Preserve the existing transaction and security controls while tracking the active inner persistence operation so rollback does not erase the diagnostic stage.
+
+## 2026-08-03: Instagram credential keys use one canonical contract
+
+`INSTAGRAM_TOKEN_ENCRYPTION_KEY` must be canonical Base64 that decodes to exactly 32 bytes. Environment parsing checks the decoded length when the optional value is present; the credential boundary additionally round-trips the value to enforce canonical Base64 before AES-256-GCM encryption or decryption. A variable being present is not configuration readiness. Missing or invalid configuration must remain a non-retryable sanitized OAuth diagnostic and must never print the key, decoded bytes, ciphertext, IV, or authentication tag.
+
+The production incident that established this operational lesson was classified only as `credential_configuration` / `encryption_key_invalid` / `retryable: false`. Replacing the invalid value through the external secret manager allowed a fresh connection to succeed. No credential value or derivative belongs in repository documentation or evidence.
+
+## 2026-08-03: A production connection does not activate adjacent Instagram scope
+
+Treat the 2026-08-03 production business-basic OAuth success as completion of the first real professional-account connection milestone only. It proves the connection path for that attempt; it does not activate or verify publishing, insights, App Review, full-lifecycle refresh, provider-side revocation, or launch readiness. The active Instagram Login client continues to request exactly `instagram_business_basic`. Any permission expansion must be an explicit coordinated code, Meta dashboard, environment, test, and external-evidence change.
+
+## 2026-08-03: Railway is the early-stage operating platform
+
+Use Railway as the current early-stage deployment direction, with an approximate planning horizon through the first 50 users while capacity, reliability, and security are observed. This does not approve or schedule a migration at a numeric threshold. AWS remains a possible later expansion or migration direction.
+
+The existing GHCR image pipeline, optional ECS rollout, placeholder CDK stack, and build specification's AWS target remain useful future references, but they are not evidence that AWS is the current runtime. Exact Railway project, environment, service, networking, and variable state remains externally managed and must be inventoried in Railway before it is described as current fact.

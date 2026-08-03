@@ -2,6 +2,8 @@
 
 This runbook closes the M6 launch-runbook planning gate. It does not close the external launch gates by itself; live staging, Meta App Review, real Instagram publishing, real analytics, and Bahrain payment certification still require provider evidence.
 
+Status update, 2026-08-03: the production business-basic Instagram connection succeeded once and is recorded in `docs/project-status.md`. Publishing, analytics, App Review, a full token lifecycle, production AI, durable media storage, and broad launch readiness remain open. Railway is the current early-stage platform; AWS is only a possible later direction.
+
 ## Launch Principle
 
 Launch only when the release candidate is boring:
@@ -13,13 +15,13 @@ Launch only when the release candidate is boring:
 
 ## Launch Roles
 
-| Role | Responsibility |
-| --- | --- |
-| Release owner | Owns the final go/no-go call and records evidence. |
-| Technical owner | Runs deploy, smoke tests, rollback, and incident checks. |
-| Product owner | Confirms beta/launch scope and customer messaging. |
+| Role             | Responsibility                                           |
+| ---------------- | -------------------------------------------------------- |
+| Release owner    | Owns the final go/no-go call and records evidence.       |
+| Technical owner  | Runs deploy, smoke tests, rollback, and incident checks. |
+| Product owner    | Confirms beta/launch scope and customer messaging.       |
 | Compliance owner | Confirms PDPL, VAT, Meta, and payment-provider evidence. |
-| Support owner | Watches beta/customer channels and tracks issues. |
+| Support owner    | Watches beta/customer channels and tracks issues.        |
 
 ## Required Evidence Pack
 
@@ -44,17 +46,18 @@ Save this evidence before marking M6 acceptance complete:
 
 ## Go/No-Go Matrix
 
-| Area | Go condition | No-go condition |
-| --- | --- | --- |
-| Build health | Verify and build pass on the release commit. | Any failing typecheck, lint, unit, integration, build, or RTL QA check. |
-| Infrastructure | Staging deploy is proven and health checks pass. | Staging cannot deploy from `main` or deep health is degraded. |
-| Security | OWASP audit is clean for known moderate+ dependency issues. | Critical/high app issue or unresolved dependency vulnerability. |
-| Tenant isolation | Workspace isolation and RLS tests pass. | Any workspace-owned table can leak or cross-write data. |
-| Instagram publishing | Meta App Review and real image/reel publish evidence exist. | Live publish mode is enabled without provider evidence. |
-| Analytics | Live analytics sync evidence exists. | Live analytics mode is enabled without verified Meta insights access. |
-| Billing | Starter/Growth are active in BHD and one local gateway is certified live. | CrediMax/BENEFIT are uncertified or live checkout evidence is missing. |
-| Compliance | PDPL export/erasure and VAT compliance pass. | Seller VAT/legal wording or data-rights gaps are unresolved for launch scope. |
-| Arabic/RTL | Automated RTL QA passes and manual screenshots are reviewed. | Arabic text, direction, or dense screens block use. |
+| Area                 | Go condition                                                                                                  | No-go condition                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Build health         | Verify and build pass on the release commit.                                                                  | Any failing typecheck, lint, unit, integration, build, or RTL QA check.                                           |
+| Infrastructure       | Staging deploy is proven and health checks pass.                                                              | Staging cannot deploy from `main` or deep health is degraded.                                                     |
+| AI service           | Protected API-to-AI connectivity and the intended provider-backed behavior are verified for the launch scope. | Only shallow health or deterministic local scaffolding is available, or the internal boundary is unauthenticated. |
+| Security             | OWASP audit is clean for known moderate+ dependency issues.                                                   | Critical/high app issue or unresolved dependency vulnerability.                                                   |
+| Tenant isolation     | Workspace isolation and RLS tests pass.                                                                       | Any workspace-owned table can leak or cross-write data.                                                           |
+| Instagram publishing | Meta App Review and real image/reel publish evidence exist.                                                   | Live publish mode is enabled without provider evidence.                                                           |
+| Analytics            | Live analytics sync evidence exists.                                                                          | Live analytics mode is enabled without verified Meta insights access.                                             |
+| Billing              | Starter/Growth are active in BHD and one local gateway is certified live.                                     | CrediMax/BENEFIT are uncertified or live checkout evidence is missing.                                            |
+| Compliance           | PDPL export/erasure and VAT compliance pass.                                                                  | Seller VAT/legal wording or data-rights gaps are unresolved for launch scope.                                     |
+| Arabic/RTL           | Automated RTL QA passes and manual screenshots are reviewed.                                                  | Arabic text, direction, or dense screens block use.                                                               |
 
 ## Preflight Sequence
 
@@ -74,11 +77,11 @@ corepack pnpm security:audit
 5. Confirm production/staging environment variables are set for the intended launch mode.
 6. Confirm provider modes:
 
-| Provider | Launch-safe default | Live only when |
-| --- | --- | --- |
-| Instagram publish | `INSTAGRAM_PUBLISH_MODE=dry_run` | Meta App Review and live post/reel evidence are complete. |
-| Instagram analytics | `INSTAGRAM_ANALYTICS_SYNC_MODE=dry_run` | Live insights sync evidence is complete. |
-| Payments | Dry-run/local adapter mode | CrediMax or BENEFIT is certified and webhook secrets are configured. |
+| Provider            | Launch-safe default                     | Live only when                                                       |
+| ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| Instagram publish   | `INSTAGRAM_PUBLISH_MODE=dry_run`        | Meta App Review and live post/reel evidence are complete.            |
+| Instagram analytics | `INSTAGRAM_ANALYTICS_SYNC_MODE=dry_run` | Live insights sync evidence is complete.                             |
+| Payments            | Dry-run/local adapter mode              | CrediMax or BENEFIT is certified and webhook secrets are configured. |
 
 7. Confirm support and incident channels are staffed.
 8. Confirm rollback target is known: previous image tag, previous commit SHA, and database rollback strategy.

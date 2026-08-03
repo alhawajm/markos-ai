@@ -2,6 +2,8 @@
 
 This runbook closes the M6 private beta readiness planning gate. It does not close live external gates by itself; staging proof, Meta App Review, live Instagram publishing, live analytics, and payment certification remain open until verified with real provider accounts.
 
+Status update, 2026-08-03: one real professional account completed the production business-basic connection and loaded recent media. Keep the broader external gates open. The AI service still returns deterministic local scaffolding and is not OpenAI-backed; do not invite users on the promise of production AI behavior until the phased AI gate in `docs/project-status.md` is satisfied.
+
 ## Beta Scope
 
 Private beta is for a small Bahrain SMB cohort using MARKOS as an Instagram-first marketing operating system.
@@ -11,7 +13,7 @@ Allowed beta surfaces:
 - Register, verify email, login, Google login, and MFA for sensitive roles.
 - Arabic and English app shell with RTL behavior.
 - Seven-module onboarding and Knowledge Vault completeness.
-- Vault-grounded strategy, content, image generation, and all eight agents.
+- Vault-grounded local strategy/content scaffolding and the current deterministic image/agent-shaped paths, with their limitation explained to testers.
 - Content approval, scheduling, failed-publish queue, and rescheduling.
 - Instagram connection, live-readiness checks, and dry-run publishing by default.
 - Analytics screens, analytics consultant, monthly PDF generation, and Vault learning loop.
@@ -28,18 +30,19 @@ Excluded from unattended beta until separately approved:
 
 All items below must be true before inviting external beta users.
 
-| Area | Required evidence |
-| --- | --- |
-| Build health | `corepack pnpm verify` and `corepack pnpm build` pass on the release candidate. |
-| Staging | GitHub Actions publishes images and the staging environment is reachable over HTTPS. |
-| Tenant isolation | Workspace isolation test suite passes, including every Prisma model with `workspaceId`. |
-| Auth | Register, verify, login, Google login, refresh rotation, and MFA sensitive-role checks pass. |
-| Arabic/RTL | Arabic routes render with RTL direction and no blocking layout regressions. |
-| Vault/RAG | A grounded Strategy Agent call returns workspace-specific Vault context. |
-| Billing | BHD fils, 10 percent VAT, invoice PDF, quotas, and prorated upgrade flows pass in dry-run mode. |
-| Admin | Admin roles can edit plan limits, prompt templates, and approved model settings without deploy. |
-| Observability | Web, API, worker, and AI services have Sentry or equivalent DSNs configured in staging. |
-| External blockers | Open provider gates are listed for the beta owner and are not hidden as product-complete. |
+| Area              | Required evidence                                                                                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build health      | `corepack pnpm verify` and `corepack pnpm build` pass on the release candidate.                                                                                                                    |
+| Staging           | GitHub Actions publishes images and the staging environment is reachable over HTTPS.                                                                                                               |
+| Tenant isolation  | Workspace isolation test suite passes, including every Prisma model with `workspaceId`.                                                                                                            |
+| Auth              | Register, verify, login, Google login, refresh rotation, and MFA sensitive-role checks pass.                                                                                                       |
+| Arabic/RTL        | Arabic routes render with RTL direction and no blocking layout regressions.                                                                                                                        |
+| Vault/RAG         | A grounded Strategy Agent call returns workspace-specific Vault context.                                                                                                                           |
+| AI provider       | The deployed AI service is reachable through a protected backend boundary and the beta scope explicitly states whether responses are deterministic scaffolding or verified provider-backed output. |
+| Billing           | BHD fils, 10 percent VAT, invoice PDF, quotas, and prorated upgrade flows pass in dry-run mode.                                                                                                    |
+| Admin             | Admin roles can edit plan limits, prompt templates, and approved model settings without deploy.                                                                                                    |
+| Observability     | Web, API, worker, and AI services have Sentry or equivalent DSNs configured in staging.                                                                                                            |
+| External blockers | Open provider gates are listed for the beta owner and are not hidden as product-complete.                                                                                                          |
 
 ## Beta Cohort
 
