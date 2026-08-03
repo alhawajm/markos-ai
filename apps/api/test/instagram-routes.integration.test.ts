@@ -25,7 +25,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
       if (url.startsWith("https://graph.instagram.com/access_token?"))
         return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
       if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
-        return response({ id: "route-scoped-user", user_id: "route-professional-account", username: "route_business", media: { data: [] } });
+        return response({ user_id: "route-professional-account", username: "route_business", media: { data: [] } });
       throw new Error("Unexpected provider request");
     };
     app = await buildApp();

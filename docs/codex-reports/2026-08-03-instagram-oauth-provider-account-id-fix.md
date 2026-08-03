@@ -1,4 +1,4 @@
-+# Instagram OAuth provider account ID root-cause fix completion report
+# Instagram OAuth provider account ID root-cause fix completion report
 
 ## Task scope
 
@@ -66,10 +66,11 @@ These consumers require the Instagram professional account ID, confirming that `
 - `apps/api/test/instagram-routes.integration.test.ts`
 - `apps/api/test/helpers/instagram-connection.ts`
 - `docs/decisions.md`
+- `docs/codex-reports/2026-08-03-instagram-oauth-provider-account-id-fix.md`
 
-## Implementation commit
+## Implementation provenance
 
-- `8f74544594f633a4c1c864819c1622f0c0be3fc9` — `fix(instagram): validate OAuth IDs by namespace`
+The platform consolidated the task commits when PR #7 was merged, so the task-local implementation hash is not a currently reachable commit. The authoritative merged PR comparison is `2b06bd3075c8447ab452c66cb84e4665d3cc47f1..149eea5300a7e2bcfa65a071b011a038bd85806e`; reviewers should resolve the endpoints from Git rather than substitute an unstable PR-head hash.
 
 ## Commands and exact outcomes
 
@@ -123,4 +124,3 @@ These consumers require the Instagram professional account ID, confirming that `
 - Review and merge the pull request after CI and code review; do not change Meta or Railway configuration for this fix.
 - Perform the post-deployment validation above after Railway's existing automatic deployment from `main`.
 - Rerun `corepack pnpm security:audit` in an environment with npm advisory access.
-

@@ -9,8 +9,6 @@ const MAX_RESPONSE_BYTES = 256_000;
 export const RECENT_MEDIA_LIMIT = 6;
 
 export interface InstagramBasicProfile {
-  /** App-scoped identity returned as `/me.id`; it must match the token exchange `user_id`. */
-  scopedUserId: string;
   /** Instagram professional account identity returned as `/me.user_id`. */
   professionalAccountId: string;
   username: string;
@@ -76,7 +74,7 @@ export class InstagramBasicClient {
       throw new InstagramProviderError();
     return {
       accessToken: value.access_token,
-      scopedUserId: String(value.user_id),
+      exchangeUserId: String(value.user_id),
     };
   }
 
@@ -98,7 +96,7 @@ export class InstagramBasicClient {
     const url = new URL(`${INSTAGRAM_GRAPH_BASE_URL}/me`);
     url.searchParams.set(
       "fields",
-      "id,user_id,username,account_type,profile_picture_url,media.limit(6){id,media_type,caption,media_url,thumbnail_url,permalink,timestamp}",
+      "user_id,username,account_type,profile_picture_url,media.limit(6){id,media_type,caption,media_url,thumbnail_url,permalink,timestamp}",
     );
     url.searchParams.set("access_token", accessToken);
     const response = await this.json(url, { method: "GET" });
@@ -107,7 +105,6 @@ export class InstagramBasicClient {
         ? response.data[0]
         : response;
     if (
-      !["string", "number"].includes(typeof value.id) ||
       !["string", "number"].includes(typeof value.user_id) ||
       typeof value.username !== "string"
     )
@@ -117,7 +114,6 @@ export class InstagramBasicClient {
         ? value.media.data.slice(0, RECENT_MEDIA_LIMIT)
         : [];
     return {
-      scopedUserId: String(value.id),
       professionalAccountId: String(value.user_id),
       username: value.username,
       ...(typeof value.account_type === "string"

@@ -10,7 +10,6 @@ export type InstagramOAuthFailureStage =
   | "short_lived_token_exchange"
   | "long_lived_token_exchange"
   | "profile_retrieval"
-  | "provider_account_validation"
   | "credential_persistence";
 
 export type InstagramOAuthFailureDiagnostic = {

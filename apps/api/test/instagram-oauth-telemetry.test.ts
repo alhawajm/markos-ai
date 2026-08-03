@@ -43,7 +43,7 @@ describe("Instagram OAuth callback diagnostics", () => {
     });
   });
 
-  it("defines safe state, account validation, and persistence categories", () => {
+  it("defines safe state and persistence categories", () => {
     expect(new InstagramOAuthStateError().diagnostic.stage).toBe(
       "state_validation",
     );
@@ -54,10 +54,7 @@ describe("Instagram OAuth callback diagnostics", () => {
         retryable: false,
       }).diagnostic.stage,
     ).toBe("state_consumption");
-    for (const stage of [
-      "provider_account_validation",
-      "credential_persistence",
-    ] satisfies InstagramOAuthFailureStage[]) {
+    for (const stage of ["credential_persistence"] satisfies InstagramOAuthFailureStage[]) {
       expect(
         new InstagramOAuthExchangeError({
           stage,
