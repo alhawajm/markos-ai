@@ -55,17 +55,35 @@ import type {
 export interface MarkosApiClientOptions {
   baseUrl: string;
   accessToken?: string;
+  onSessionExpired?: () => Promise<void> | void;
+  renewAccessToken?: () => Promise<string>;
   workspaceId?: string;
+}
+
+export class MarkosApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly details?: unknown[]
+  ) {
+    super(message);
+    this.name = "MarkosApiError";
+  }
 }
 
 export class MarkosApiClient {
   private readonly baseUrl: string;
-  private readonly accessToken: string | undefined;
+  private accessToken: string | undefined;
+  private readonly onSessionExpired: (() => Promise<void> | void) | undefined;
+  private readonly renewAccessToken: (() => Promise<string>) | undefined;
   private readonly workspaceId: string | undefined;
 
   constructor(options: MarkosApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.accessToken = options.accessToken;
+    this.onSessionExpired = options.onSessionExpired;
+    this.renewAccessToken = options.renewAccessToken;
     this.workspaceId = options.workspaceId;
   }
 
@@ -74,13 +92,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async register(input: {
-    email: string;
-    password: string;
-    fullName: string;
-    workspaceName?: string;
-    locale?: "ar" | "en";
-  }): Promise<AuthSession> {
+  async register(input: { email: string; password: string; fullName: string; workspaceName?: string; locale?: "ar" | "en" }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/register", {
       body: input,
       method: "POST"
@@ -119,12 +131,19 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async refreshSession(input: { refreshToken: string }): Promise<AuthSession> {
+  async refreshSession(): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/refresh", {
-      body: input,
+      browserSession: true,
       method: "POST"
     });
     return response.data;
+  }
+
+  async logout(): Promise<void> {
+    await this.request<{ loggedOut: true }>("/v1/auth/logout", {
+      browserSession: true,
+      method: "POST"
+    });
   }
 
   async requestEmailVerification(input: { email: string }): Promise<EmailVerificationChallenge> {
@@ -174,10 +193,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async saveVaultSection(
-    section: VaultSection,
-    input: { entries: Array<{ key: string; value: Record<string, unknown> }> }
-  ): Promise<KnowledgeVaultEntry[]> {
+  async saveVaultSection(section: VaultSection, input: { entries: Array<{ key: string; value: Record<string, unknown> }> }): Promise<KnowledgeVaultEntry[]> {
     const response = await this.request<KnowledgeVaultEntry[]>(`/v1/vault/${section}`, {
       body: input,
       method: "PUT"
@@ -186,9 +202,7 @@ export class MarkosApiClient {
   }
 
   async vaultEntryHistory(section: VaultSection, key: string): Promise<KnowledgeVaultHistoryEntry[]> {
-    const response = await this.request<KnowledgeVaultHistoryEntry[]>(
-      `/v1/vault/${section}/${encodeURIComponent(key)}/history`
-    );
+    const response = await this.request<KnowledgeVaultHistoryEntry[]>(`/v1/vault/${section}/${encodeURIComponent(key)}/history`);
     return response.data;
   }
 
@@ -219,12 +233,7 @@ export class MarkosApiClient {
     });
   }
 
-  async runAgent(input: {
-    agent: AgentName;
-    task: string;
-    locale?: "ar" | "en";
-    inputs?: Record<string, unknown>;
-  }): Promise<AgentRunRecord> {
+  async runAgent(input: { agent: AgentName; task: string; locale?: "ar" | "en"; inputs?: Record<string, unknown> }): Promise<AgentRunRecord> {
     const response = await this.request<AgentRunRecord>("/v1/agents/run", {
       body: input,
       method: "POST"
@@ -326,12 +335,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContent(input: {
-    topic: string;
-    contentType?: ContentType;
-    count?: number;
-    strategyId?: string;
-  }): Promise<ContentRecord[]> {
+  async generateContent(input: { topic: string; contentType?: ContentType; count?: number; strategyId?: string }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
       method: "POST"
@@ -339,12 +343,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContentForSlot(input: {
-    topic: string;
-    contentType?: ContentType;
-    scheduledAt: string;
-    strategyId?: string;
-  }): Promise<ContentRecord> {
+  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; strategyId?: string }): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
       body: input,
       method: "POST"
@@ -700,66 +699,101 @@ export class MarkosApiClient {
 
   private async request<TData>(
     path: string,
-    options: { body?: Record<string, unknown>; method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT" } = {}
+    options: {
+      body?: Record<string, unknown>;
+      browserSession?: boolean;
+      method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
+    } = {}
   ): Promise<ApiEnvelope<TData>> {
-    const headers: Record<string, string> = {
-      Accept: "application/json"
+    const perform = async () => {
+      const headers = this.requestHeaders("application/json");
+
+      if (options.body !== undefined) headers["Content-Type"] = "application/json";
+      if (options.browserSession) headers["X-Markos-Session"] = "browser";
+
+      const init: RequestInit = {
+        credentials: "include",
+        headers,
+        method: options.method ?? "GET"
+      };
+
+      if (options.body !== undefined) init.body = JSON.stringify(options.body);
+
+      const response = await fetch(`${this.baseUrl}${path}`, init);
+      if (!response.ok) throw await apiError(response);
+      return (await response.json()) as ApiEnvelope<TData>;
     };
 
-    if (options.body !== undefined) {
-      headers["Content-Type"] = "application/json";
-    }
-
-    if (this.accessToken !== undefined) {
-      headers.Authorization = `Bearer ${this.accessToken}`;
-    }
-
-    if (this.workspaceId !== undefined) {
-      headers["X-Workspace-Id"] = this.workspaceId;
-    }
-
-    const init: RequestInit = {
-      headers,
-      method: options.method ?? "GET"
-    };
-
-    if (options.body !== undefined) {
-      init.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(`${this.baseUrl}${path}`, init);
-
-    if (!response.ok) {
-      const body = (await response.json().catch(() => undefined)) as { error?: { message?: string } } | undefined;
-      throw new Error(body?.error?.message ?? `MARKOS API request failed: ${response.status}`);
-    }
-
-    return (await response.json()) as ApiEnvelope<TData>;
+    return this.withSessionRenewal(perform);
   }
 
-  private async requestBinary(path: string, options: { accept: string; method?: "GET" } = { accept: "application/octet-stream" }): Promise<ArrayBuffer> {
-    const headers: Record<string, string> = {
-      Accept: options.accept
+  private async requestBinary(
+    path: string,
+    options: { accept: string; method?: "GET" } = {
+      accept: "application/octet-stream"
+    }
+  ): Promise<ArrayBuffer> {
+    const perform = async () => {
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        credentials: "include",
+        headers: this.requestHeaders(options.accept),
+        method: options.method ?? "GET"
+      });
+
+      if (!response.ok) throw await apiError(response);
+      return response.arrayBuffer();
     };
 
-    if (this.accessToken !== undefined) {
-      headers.Authorization = `Bearer ${this.accessToken}`;
-    }
-
-    if (this.workspaceId !== undefined) {
-      headers["X-Workspace-Id"] = this.workspaceId;
-    }
-
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      headers,
-      method: options.method ?? "GET"
-    });
-
-    if (!response.ok) {
-      const body = (await response.json().catch(() => undefined)) as { error?: { message?: string } } | undefined;
-      throw new Error(body?.error?.message ?? `MARKOS API request failed: ${response.status}`);
-    }
-
-    return response.arrayBuffer();
+    return this.withSessionRenewal(perform);
   }
+
+  private requestHeaders(accept: string): Record<string, string> {
+    const headers: Record<string, string> = { Accept: accept };
+
+    if (this.accessToken !== undefined) headers.Authorization = `Bearer ${this.accessToken}`;
+    if (this.workspaceId !== undefined) headers["X-Workspace-Id"] = this.workspaceId;
+    return headers;
+  }
+
+  private async withSessionRenewal<T>(perform: () => Promise<T>): Promise<T> {
+    try {
+      return await perform();
+    } catch (error) {
+      if (!isExpiredAccessTokenError(error) || !this.renewAccessToken) throw error;
+    }
+
+    try {
+      this.accessToken = await this.renewAccessToken();
+    } catch (error) {
+      if (isTerminalSessionError(error)) await this.onSessionExpired?.();
+      throw error;
+    }
+
+    try {
+      return await perform();
+    } catch (error) {
+      if (isExpiredAccessTokenError(error)) await this.onSessionExpired?.();
+      throw error;
+    }
+  }
+}
+
+async function apiError(response: Response): Promise<MarkosApiError> {
+  const body = (await response.json().catch(() => undefined)) as { error?: { code?: unknown; details?: unknown; message?: unknown } } | undefined;
+  const code = typeof body?.error?.code === "string" ? body.error.code : undefined;
+  const details = Array.isArray(body?.error?.details) ? body.error.details : undefined;
+  const message = typeof body?.error?.message === "string" ? body.error.message : `MARKOS API request failed: ${response.status}`;
+
+  return new MarkosApiError(message, response.status, code, details);
+}
+
+function isExpiredAccessTokenError(error: unknown): error is MarkosApiError {
+  return error instanceof MarkosApiError && error.status === 401 && error.code === "INVALID_TOKEN";
+}
+
+function isTerminalSessionError(error: unknown): boolean {
+  return (
+    error instanceof MarkosApiError &&
+    ["INVALID_REFRESH_TOKEN", "REFRESH_TOKEN_REUSE_DETECTED", "MFA_REQUIRED", "MFA_SETUP_REQUIRED"].includes(error.code ?? "")
+  );
 }

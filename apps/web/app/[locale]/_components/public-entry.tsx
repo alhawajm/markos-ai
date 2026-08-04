@@ -19,13 +19,13 @@ import {
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import { getBrowserApiBaseUrl } from "./api-base-url";
+import { setBrowserSession, useMarkosSession } from "./browser-session";
 import type { AuthSession, Locale } from "@markos/shared-types";
 import { loginSchema, registerSchema } from "@markos/validation";
 
 type AuthMode = "login" | "signup";
 
 const apiBaseUrl = getBrowserApiBaseUrl();
-const sessionKey = "markos.session";
 
 export function PublicLandingPage({ locale }: { locale: Locale }) {
   const isArabic = locale === "ar";
@@ -141,7 +141,8 @@ export function AuthPortal({ locale, mode }: { locale: Locale; mode: AuthMode })
   const [message, setMessage] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
   const [isHydrated, setHydrated] = useState(false);
-  const [existingSession, setExistingSession] = useState<AuthSession | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const existingSession = useMarkosSession();
   const isArabic = locale === "ar";
 
   const client = useMemo(() => new MarkosApiClient({ baseUrl: apiBaseUrl }), []);
@@ -149,22 +150,15 @@ export function AuthPortal({ locale, mode }: { locale: Locale; mode: AuthMode })
   useEffect(() => {
     setHydrated(true);
 
-    const stored = window.localStorage.getItem(sessionKey);
-    if (!stored) return;
-
-    try {
-      const parsed = JSON.parse(stored);
-
-      if (isValidStoredSession(parsed)) {
-        setExistingSession(parsed);
-        return;
-      }
-
-      window.localStorage.removeItem(sessionKey);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
+    if (new URLSearchParams(window.location.search).get("reason") === "session-expired") {
+      setSessionExpired(true);
+      setMessage(
+        locale === "ar"
+          ? "انتهت جلستك. سجّل الدخول مرة أخرى للمتابعة إلى ملفك الشخصي."
+          : "Your session expired. Sign in again to continue to your profile."
+      );
     }
-  }, []);
+  }, [locale]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -191,9 +185,8 @@ export function AuthPortal({ locale, mode }: { locale: Locale; mode: AuthMode })
               password,
               ...(workspaceName.trim().length === 0 ? {} : { workspaceName: workspaceName.trim() })
             }, locale);
-      window.localStorage.setItem(sessionKey, JSON.stringify(session));
-      setExistingSession(session);
-      router.push(activeMode === "login" ? `/${locale}/app` : `/${locale}/onboarding`);
+      setBrowserSession(session);
+      router.push(activeMode === "login" ? (sessionExpired ? `/${locale}/app/settings#profile` : `/${locale}/app`) : `/${locale}/onboarding`);
     } catch (error) {
       setMessage(error instanceof Error ? friendlyAuthError(error.message, locale) : isArabic ? "تعذر إكمال الطلب." : "Could not complete the request.");
     } finally {
@@ -438,29 +431,4 @@ function friendlyAuthError(message: string, locale: Locale): string {
   }
 
   return message;
-}
-
-function isValidStoredSession(value: unknown): value is AuthSession {
-  if (typeof value !== "object" || value === null) return false;
-
-  const session = value as {
-    roles?: unknown;
-    tokens?: { accessToken?: unknown; refreshToken?: unknown };
-    user?: { id?: unknown; email?: unknown };
-    workspace?: { id?: unknown };
-  };
-
-  return (
-    Array.isArray(session.roles) &&
-    typeof session.tokens?.accessToken === "string" &&
-    session.tokens.accessToken.length > 0 &&
-    typeof session.tokens?.refreshToken === "string" &&
-    session.tokens.refreshToken.length > 0 &&
-    typeof session.user?.id === "string" &&
-    session.user.id.length > 0 &&
-    typeof session.user?.email === "string" &&
-    session.user.email.length > 0 &&
-    typeof session.workspace?.id === "string" &&
-    session.workspace.id.length > 0
-  );
 }

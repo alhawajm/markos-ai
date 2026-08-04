@@ -44,6 +44,7 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Google OAuth login.
 - [x] JWT access token and refresh token issuance.
 - [x] Refresh token rotation and reuse detection.
+- [x] Cookie-backed browser refresh, in-memory access-token renewal, cross-tab serialization, and terminal-expiry reauthentication to Profile.
 - [x] Argon2id password hashing.
 - [x] TOTP MFA for admin/finance roles.
 - [x] RBAC permission catalog with role and permission guards.

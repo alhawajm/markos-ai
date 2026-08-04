@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   BarChart3,
   Brain,
@@ -26,6 +25,7 @@ import {
   OpportunitiesPanel
 } from "./final-command-panels";
 import { SettingsPanel } from "./settings-panel";
+import { initializeBrowserSession, watchBrowserSession } from "./browser-session";
 
 export type SectionSlug =
   | "analytics"
@@ -56,38 +56,41 @@ const navItems: Array<{
 ];
 
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
-  const router = useRouter();
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+
+  const checkSession = useCallback(() => {
+    setSessionCheckFailed(false);
+    void initializeBrowserSession(locale)
+      .then(() => setSessionChecked(true))
+      .catch(() => setSessionCheckFailed(true));
+  }, [locale]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("markos.session");
-
-    if (!stored) {
-      router.replace(`/${locale}/login`);
-      return;
-    }
-
-    try {
-      if (isValidStoredSession(JSON.parse(stored))) {
-        setSessionChecked(true);
-        return;
-      }
-
-      window.localStorage.removeItem("markos.session");
-      router.replace(`/${locale}/login`);
-    } catch {
-      window.localStorage.removeItem("markos.session");
-      router.replace(`/${locale}/login`);
-    }
-  }, [locale, router]);
+    checkSession();
+    return watchBrowserSession(locale);
+  }, [checkSession, locale]);
 
   if (!sessionChecked) {
     return (
       <main className="lux-page grid min-h-screen place-items-center px-6 text-white">
         <section className="lux-card max-w-md rounded-[2rem] p-8 text-center">
           <span className="lux-ai-core mx-auto" />
-          <h1 className="mt-8 text-3xl font-black">Opening MARKOS</h1>
-          <p className="mt-3 text-base leading-relaxed text-[#9AA7BD]">Checking your workspace session before loading the command center.</p>
+          <h1 className="mt-8 text-3xl font-black">{sessionCheckFailed ? (locale === "ar" ? "تعذر فتح MARKOS" : "Could not open MARKOS") : locale === "ar" ? "جارٍ فتح MARKOS" : "Opening MARKOS"}</h1>
+          <p className="mt-3 text-base leading-relaxed text-[#9AA7BD]">
+            {sessionCheckFailed
+              ? locale === "ar"
+                ? "تعذر تجديد جلستك مؤقتاً. تحقق من اتصالك ثم حاول مرة أخرى."
+                : "Your session could not be renewed temporarily. Check your connection and try again."
+              : locale === "ar"
+                ? "نتحقق من جلسة مساحة العمل قبل تحميل مركز القيادة."
+                : "Checking your workspace session before loading the command center."}
+          </p>
+          {sessionCheckFailed ? (
+            <button className="mt-6 rounded-full bg-[#D4AF37] px-6 py-3 font-black text-[#0F1419]" onClick={checkSession} type="button">
+              {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
+            </button>
+          ) : null}
         </section>
       </main>
     );
@@ -195,27 +198,4 @@ function LocaleSwitch({ activeSection, locale }: { activeSection: SectionSlug; l
 
 function localizedHref(locale: Locale, section: SectionSlug): string {
   return section === "dashboard" ? `/${locale}/app` : `/${locale}/app/${section}`;
-}
-
-function isValidStoredSession(value: unknown): value is {
-  tokens: { accessToken: string };
-  user: { id: string };
-  workspace: { id: string };
-} {
-  if (typeof value !== "object" || value === null) return false;
-
-  const session = value as {
-    tokens?: { accessToken?: unknown };
-    user?: { id?: unknown };
-    workspace?: { id?: unknown };
-  };
-
-  return (
-    typeof session.tokens?.accessToken === "string" &&
-    session.tokens.accessToken.length > 0 &&
-    typeof session.user?.id === "string" &&
-    session.user.id.length > 0 &&
-    typeof session.workspace?.id === "string" &&
-    session.workspace.id.length > 0
-  );
 }

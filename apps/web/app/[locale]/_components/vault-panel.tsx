@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Brain, CheckCircle2, Clock3, Database, RefreshCcw, Save, Search, ShieldCheck } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
 import type {
-  AuthSession,
   KnowledgeVaultEntry,
   KnowledgeVaultHistoryEntry,
   Locale,
@@ -13,13 +10,12 @@ import type {
   VaultRagChunk,
   VaultSection
 } from "@markos/shared-types";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 const sections: VaultSection[] = ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"];
 
 export function VaultPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [vault, setVault] = useState<Record<VaultSection, KnowledgeVaultEntry[]>>(() => demoVault());
   const [score, setScore] = useState<VaultCompletenessScore>(() => demoScore());
   const [activeSection, setActiveSection] = useState<VaultSection>("COMPANY");
@@ -32,35 +28,7 @@ export function VaultPanel({ locale }: { locale: Locale }) {
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
 
-  const client = useMemo(
-    () =>
-      new MarkosApiClient(
-        session
-          ? {
-              accessToken: session.tokens.accessToken,
-              baseUrl: apiBaseUrl,
-              workspaceId: session.workspace.id
-            }
-          : {
-              baseUrl: apiBaseUrl
-            }
-      ),
-    [session]
-  );
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
-  }, []);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
     if (!session) {

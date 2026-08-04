@@ -45,7 +45,10 @@ describe("auth routes", () => {
       roles: ["OWNER"]
     });
     expect(registerBody.data.tokens.accessToken).toEqual(expect.any(String));
-    expect(registerBody.data.tokens.refreshToken).toEqual(expect.any(String));
+    expect(registerBody.data.tokens.refreshToken).toBeUndefined();
+    expect(registerResponse.headers["set-cookie"]).toContain("markos_refresh=");
+    expect(registerResponse.headers["set-cookie"]).toContain("HttpOnly");
+    expect(registerResponse.headers["set-cookie"]).toContain("Path=/v1/auth");
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { email }
@@ -356,7 +359,11 @@ describe("auth routes", () => {
     };
 
     expect((await app.inject({ method: "POST", url: "/v1/auth/register", payload })).statusCode).toBe(201);
-    const duplicateResponse = await app.inject({ method: "POST", url: "/v1/auth/register", payload });
+    const duplicateResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload
+    });
 
     expect(duplicateResponse.statusCode).toBe(409);
     expect(duplicateResponse.json()).toMatchObject({
@@ -481,16 +488,12 @@ describe("auth routes", () => {
     const staleRefreshResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/refresh",
-      payload: {
-        refreshToken: session.tokens.refreshToken
-      }
+      headers: browserSessionHeaders(session.refreshCookie)
     });
     const verifiedRefreshResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/refresh",
-      payload: {
-        refreshToken: validLoginResponse.json().data.tokens.refreshToken
-      }
+      headers: browserSessionHeaders(cookiePair(validLoginResponse))
     });
 
     expect(staleRefreshResponse.statusCode).toBe(401);
@@ -547,21 +550,20 @@ describe("auth routes", () => {
       }
     });
     const originalSession = registerResponse.json().data;
-    const originalRefreshToken = originalSession.tokens.refreshToken;
+    const originalRefreshCookie = cookiePair(registerResponse);
 
     const refreshResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/refresh",
-      payload: {
-        refreshToken: originalRefreshToken
-      }
+      headers: browserSessionHeaders(originalRefreshCookie)
     });
     const refreshedSession = refreshResponse.json().data;
+    const refreshedCookie = cookiePair(refreshResponse);
 
     expect(refreshResponse.statusCode).toBe(200);
     expect(refreshedSession.user.email).toBe(email);
-    expect(refreshedSession.tokens.refreshToken).toEqual(expect.any(String));
-    expect(refreshedSession.tokens.refreshToken).not.toBe(originalRefreshToken);
+    expect(refreshedSession.tokens.refreshToken).toBeUndefined();
+    expect(refreshedCookie).not.toBe(originalRefreshCookie);
 
     const contextResponse = await app.inject({
       method: "GET",
@@ -583,9 +585,7 @@ describe("auth routes", () => {
     const replayResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/refresh",
-      payload: {
-        refreshToken: originalRefreshToken
-      }
+      headers: browserSessionHeaders(originalRefreshCookie)
     });
 
     expect(replayResponse.statusCode).toBe(401);
@@ -598,9 +598,7 @@ describe("auth routes", () => {
     const revokedFamilyResponse = await app.inject({
       method: "POST",
       url: "/v1/auth/refresh",
-      payload: {
-        refreshToken: refreshedSession.tokens.refreshToken
-      }
+      headers: browserSessionHeaders(refreshedCookie)
     });
 
     expect(revokedFamilyResponse.statusCode).toBe(401);
@@ -609,6 +607,39 @@ describe("auth routes", () => {
         code: "REFRESH_TOKEN_REUSE_DETECTED"
       }
     });
+
+    await app.close();
+  });
+
+  it("revokes the current refresh cookie on logout", async () => {
+    const app = await buildApp();
+    const registerResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: `logout-${randomUUID()}@markos.test`,
+        password: "CorrectHorseBattery99!",
+        fullName: "Logout User",
+        locale: "en"
+      }
+    });
+    const refreshCookie = cookiePair(registerResponse);
+
+    const logoutResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/logout",
+      headers: browserSessionHeaders(refreshCookie)
+    });
+    const refreshAfterLogout = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      headers: browserSessionHeaders(refreshCookie)
+    });
+
+    expect(logoutResponse.statusCode).toBe(200);
+    expect(logoutResponse.headers["set-cookie"]).toContain("Max-Age=0");
+    expect(refreshAfterLogout.statusCode).toBe(401);
+    expect(refreshAfterLogout.json().error.code).toBe("REFRESH_TOKEN_REUSE_DETECTED");
 
     await app.close();
   });
@@ -638,11 +669,27 @@ async function registerVerifiedUser(app: Awaited<ReturnType<typeof buildApp>>, i
 
   return {
     ...session,
+    refreshCookie: cookiePair(response),
     user: {
       ...session.user,
       isVerified: true
     }
   };
+}
+
+function browserSessionHeaders(cookie: string): Record<string, string> {
+  return {
+    cookie,
+    "x-markos-session": "browser"
+  };
+}
+
+function cookiePair(response: { headers: Record<string, number | string | string[] | undefined> }): string {
+  const setCookie = response.headers["set-cookie"];
+  const value = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+
+  if (typeof value !== "string") throw new Error("Expected refresh cookie");
+  return value.split(";", 1)[0]!;
 }
 
 function authHeaders(accessToken: string): Record<string, string> {

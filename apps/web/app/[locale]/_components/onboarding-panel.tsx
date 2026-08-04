@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,13 +19,10 @@ import {
   Zap
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, Locale } from "@markos/shared-types";
+import type { Locale } from "@markos/shared-types";
+import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
 const draftKey = "markos.onboarding.draft";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type Icon = ComponentType<{ className?: string; color?: string; size?: number; strokeWidth?: number }>;
@@ -340,33 +337,31 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultDraftForLocale(locale));
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [step, setStep] = useState<StepId>(1);
   const router = useRouter();
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : options
-    );
-  }, [session]);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const storedSession = window.localStorage.getItem(sessionKey);
     const storedDraft = window.localStorage.getItem(draftKey);
 
     const baseDraft = defaultDraftForLocale(locale);
-    if (storedSession) setSession(JSON.parse(storedSession) as AuthSession);
     if (storedDraft) setDraft({ ...baseDraft, ...(JSON.parse(storedDraft) as Partial<OnboardingDraft>) });
     setStep(getInitialStep());
   }, [locale]);
+
+  useEffect(() => {
+    if (session) return;
+
+    void initializeBrowserSession(locale).catch(() => {
+      setMessage(
+        locale === "ar"
+          ? "تعذر تجديد الجلسة مؤقتاً. حاول مجدداً بعد التحقق من الاتصال."
+          : "Your session could not be renewed temporarily. Check your connection and try again."
+      );
+    });
+  }, [locale, session]);
 
   useEffect(() => {
     window.localStorage.setItem(draftKey, JSON.stringify(draft));

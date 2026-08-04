@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, CheckCircle2, Languages, MapPin, RefreshCcw, Target, TrendingUp, Users } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, KnowledgeVaultEntry, Locale, VaultSection } from "@markos/shared-types";
+import type { KnowledgeVaultEntry, Locale, VaultSection } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 const demoSegments = [
   { color: "#E94560", label: "Young professionals", match: 94, note: "Mobile-first buyers in Bahrain, 25-34" },
@@ -21,30 +18,15 @@ const painPoints = ["Reliable connectivity", "Digital transformation support", "
 type AuditState = "loading" | "error" | "success" | "limit";
 
 export function AudiencePanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [vault, setVault] = useState<Record<VaultSection, KnowledgeVaultEntry[]> | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
-  const client = useMemo(
-    () =>
-      new MarkosApiClient(
-        session
-          ? {
-              accessToken: session.tokens.accessToken,
-              baseUrl: apiBaseUrl,
-              workspaceId: session.workspace.id
-            }
-          : {
-              baseUrl: apiBaseUrl
-            }
-      ),
-    [session]
-  );
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
     const params = new URLSearchParams(window.location.search);
     const requestedState = params.get("state");
 
@@ -52,15 +34,6 @@ export function AudiencePanel({ locale }: { locale: Locale }) {
       setAuditState(requestedState);
     }
 
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
   }, []);
 
   useEffect(() => {

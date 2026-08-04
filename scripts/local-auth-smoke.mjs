@@ -62,11 +62,14 @@ try {
       page.getByRole("button", { name: /create account/i }).click(),
     ]);
 
-    const session = await readStoredSession(page);
-    assertValidSession(session, email);
+    const identity = await readStoredIdentity(page);
+    assertValidStoredIdentity(identity, email);
   });
 
   await runStep("browser-login", async () => {
+    await page.request.post(`${apiBaseUrl}/v1/auth/logout`, {
+      headers: { "X-Markos-Session": "browser" },
+    });
     await page.evaluate((key) => window.localStorage.removeItem(key), sessionKey);
     await page.goto(`${webBaseUrl}/en/login`, { waitUntil: "domcontentloaded" });
     await page.locator('button[type="submit"]:not([disabled])').waitFor();
@@ -80,19 +83,19 @@ try {
       ]);
     } catch (error) {
       const bodyText = await page.locator("body").innerText({ timeout: 1000 });
-      const session = await readStoredSession(page).catch(() => null);
+      const identity = await readStoredIdentity(page).catch(() => null);
       throw new Error(
         [
           error instanceof Error ? error.message : "Login did not route",
           `Current URL: ${page.url()}`,
-          `Stored session: ${session ? "present" : "missing"}`,
+          `Stored identity: ${identity ? "present" : "missing"}`,
           `Page text: ${bodyText.replace(/\s+/g, " ").slice(0, 700)}`,
         ].join("\n"),
       );
     }
 
-    const session = await readStoredSession(page);
-    assertValidSession(session, email);
+    const identity = await readStoredIdentity(page);
+    assertValidStoredIdentity(identity, email);
   });
 
   await context.close();
@@ -177,24 +180,21 @@ function findInstalledBrowserExecutable() {
   return candidates.find((candidate) => existsSync(candidate));
 }
 
-async function readStoredSession(page) {
+async function readStoredIdentity(page) {
   return page.evaluate((key) => {
     const stored = window.localStorage.getItem(key);
     return stored ? JSON.parse(stored) : null;
   }, sessionKey);
 }
 
-function assertValidSession(session, expectedEmail) {
-  assert(session && typeof session === "object", "Missing stored auth session");
-  assert(session.user?.email === expectedEmail, "Stored session email mismatch");
+function assertValidStoredIdentity(identity, expectedEmail) {
+  assert(identity && typeof identity === "object", "Missing stored auth identity");
+  assert(identity.user?.email === expectedEmail, "Stored identity email mismatch");
+  assert(!("tokens" in identity), "Stored identity must not contain auth tokens");
   assert(
-    typeof session.tokens?.accessToken === "string" &&
-      session.tokens.accessToken.length > 0,
-    "Stored session has no access token",
-  );
-  assert(
-    typeof session.workspace?.id === "string" && session.workspace.id.length > 0,
-    "Stored session has no workspace id",
+    typeof identity.workspace?.id === "string" &&
+      identity.workspace.id.length > 0,
+    "Stored identity has no workspace id",
   );
 }
 
@@ -222,7 +222,7 @@ Optional environment:
 
 Checks:
   1. API health endpoint responds.
-  2. Browser signup creates a stored session and routes to /en/onboarding.
-  3. Browser login creates a stored session and routes to /en/app.
+  2. Browser signup stores token-free identity metadata and routes to /en/onboarding.
+  3. Browser login stores token-free identity metadata and routes to /en/app.
 `);
 }

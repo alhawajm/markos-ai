@@ -1,43 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, Facebook, Instagram, Link2Off, RefreshCcw, ShieldCheck, Twitter, Zap } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, InstagramConnection, Locale } from "@markos/shared-types";
+import type { InstagramConnection, Locale } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type ChannelState = "connected" | "disconnected" | "expired" | "review";
 type AuditState = "loading" | "error" | "success" | "limit";
 
 export function ChannelsPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [connection, setConnection] = useState<InstagramConnection | null>(null);
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
-  const client = useMemo(
-    () =>
-      new MarkosApiClient(
-        session
-          ? {
-              accessToken: session.tokens.accessToken,
-              baseUrl: apiBaseUrl,
-              workspaceId: session.workspace.id
-            }
-          : {
-              baseUrl: apiBaseUrl
-            }
-      ),
-    [session]
-  );
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
     const params = new URLSearchParams(window.location.search);
     const requestedState = params.get("state");
 
@@ -45,15 +27,6 @@ export function ChannelsPanel({ locale }: { locale: Locale }) {
       setAuditState(requestedState);
     }
 
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
   }, []);
 
   useEffect(() => {

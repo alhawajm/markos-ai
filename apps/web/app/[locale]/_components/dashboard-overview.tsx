@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -21,12 +21,9 @@ import {
   Users,
   Zap
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AnalyticsMetricTotals, AnalyticsSummary, AuthSession, ContentRecord, Locale } from "@markos/shared-types";
+import type { AnalyticsMetricTotals, AnalyticsSummary, ContentRecord, Locale } from "@markos/shared-types";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 const demoTotals: AnalyticsMetricTotals = {
   comments: 847,
@@ -75,32 +72,14 @@ const demoUpcoming = [
 }>;
 
 export function DashboardOverview({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [queue, setQueue] = useState<ContentRecord[] | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [dismissedInsight, setDismissedInsight] = useState(false);
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : options
-    );
-  }, [session]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
-    }
-  }, []);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
     if (!session) return;

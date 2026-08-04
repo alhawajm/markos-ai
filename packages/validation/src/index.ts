@@ -16,9 +16,7 @@ export const loginSchema = z.object({
   totpCode: z.string().regex(/^\d{6}$/).optional()
 });
 
-export const refreshSessionSchema = z.object({
-  refreshToken: z.string().min(1)
-});
+export const refreshSessionSchema = z.object({});
 
 export const googleLoginSchema = z.object({
   idToken: z.string().min(1),

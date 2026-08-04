@@ -35,8 +35,8 @@ import {
   Zap
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AnalyticsSummary, AuthSession, ContentRecord, ContentStatus, ContentType, Locale, VaultCompletenessScore } from "@markos/shared-types";
+import type { AnalyticsSummary, ContentRecord, ContentStatus, ContentType, Locale, VaultCompletenessScore } from "@markos/shared-types";
+import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
@@ -60,9 +60,6 @@ interface DashboardLiveState {
   publishingQueue: ContentRecord[];
   vaultScore: VaultCompletenessScore | null;
 }
-
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 const accent = {
   amber: {
@@ -91,41 +88,6 @@ const studioTypes: Array<[StudioContentType, string, IconType]> = [
   ["CAROUSEL", "Carousel", Image],
   ["STORY", "Story", Instagram]
 ];
-
-function useMarkosSession() {
-  const [session, setSession] = useState<AuthSession | null>(null);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
-  }, []);
-
-  return session;
-}
-
-function useMarkosClient(session: AuthSession | null) {
-  return useMemo(() => {
-    const baseOptions = { baseUrl: apiBaseUrl };
-
-    return new MarkosApiClient(
-      session
-        ? {
-            ...baseOptions,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : baseOptions
-    );
-  }, [session]);
-}
 
 function recordTitle(record: ContentRecord): string {
   const caption = record.captionEn ?? record.captionAr ?? record.contentPillar ?? "";
@@ -349,7 +311,7 @@ const performanceRows = [
 export function FinalDashboard({ locale }: { locale: Locale }) {
   const now = useMemo(() => new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(new Date()), [locale]);
   const session = useMarkosSession();
-  const client = useMarkosClient(session);
+  const client = useMarkosClient(locale);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [liveState, setLiveState] = useState<DashboardLiveState>({
     analytics: null,
@@ -611,7 +573,7 @@ export function OpportunitiesPanel({ locale }: { locale: Locale }) {
 
 export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
-  const client = useMarkosClient(session);
+  const client = useMarkosClient(locale);
   const [step, setStep] = useState(1);
   const [saved, setSaved] = useState(false);
   const [campaignPrompt, setCampaignPrompt] = useState("Launch a high-performing campaign for our most important offer. Use the Knowledge Vault for audience, positioning, language, and brand voice.");
@@ -811,7 +773,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 
 export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
-  const client = useMarkosClient(session);
+  const client = useMarkosClient(locale);
   const [contentType, setContentType] = useState<StudioContentType>("POST");
   const [prompt, setPrompt] = useState("");
   const [records, setRecords] = useState<ContentRecord[]>([]);
@@ -1383,9 +1345,8 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
             <button
               className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-base font-semibold text-[#FF6B6B] transition hover:bg-[#FF6B6B]/10 focus:bg-[#FF6B6B]/10 focus:outline-none"
               onClick={() => {
-                window.localStorage.removeItem(sessionKey);
                 setLogoutQueued(true);
-                window.location.href = `/${locale}/login`;
+                void logoutBrowserSession(locale);
               }}
               role="menuitem"
               type="button"

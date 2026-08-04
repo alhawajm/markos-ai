@@ -11,7 +11,7 @@ let browser: Browser;
 const session = {
   tokens: {
     accessToken: "browser-session-token",
-    refreshToken: "browser-refresh-token",
+    expiresIn: 900,
   },
   user: {
     id: "user-1",
@@ -22,6 +22,11 @@ const session = {
   },
   workspace: { id: "workspace-1", name: "Browser Workspace" },
   roles: ["OWNER"],
+};
+const storedIdentity = {
+  roles: session.roles,
+  user: session.user,
+  workspace: session.workspace,
 };
 const disconnected = {
   connected: false,
@@ -49,11 +54,16 @@ const connected = {
 
 describe("active SettingsPanel Instagram interactions", () => {
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+        : {}),
+      headless: true,
+    });
     mkdirSync("evidence", { recursive: true });
   });
   afterAll(async () => {
-    await browser.close();
+    await browser?.close();
   });
 
   it("is the active route, renders a truthful disconnected state, and prevents duplicate connect requests", async () => {
@@ -382,6 +392,116 @@ describe("active SettingsPanel Instagram interactions", () => {
     ).resolves.toBe(true);
     await failed.page.close();
   });
+
+  it("requires interactive login after terminal renewal failure and lands on profile settings", async () => {
+    const page = await browserPage();
+    await page.addInitScript(
+      (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
+      storedIdentity,
+    );
+    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
+      const request = route.request();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/v1/auth/refresh") {
+        return route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: {
+              code: "INVALID_REFRESH_TOKEN",
+              message: "Refresh token is invalid or expired",
+            },
+          }),
+        });
+      }
+      if (pathname === "/v1/auth/login") return route.fulfill(json(session));
+      if (pathname === "/v1/workspace/instagram")
+        return route.fulfill(json(disconnected));
+      if (pathname === "/v1/billing/summary")
+        return route.fulfill(json({ invoices: [], payments: [] }));
+      if (pathname === "/v1/workspace/audit-logs")
+        return route.fulfill(json([]));
+      return route.fulfill({ status: 404, body: "{}" });
+    });
+
+    await page.goto(`${baseUrl}/en/app/settings`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/en\/login\?reason=session-expired$/);
+    await page
+      .getByText(
+        "Your session expired. Sign in again to continue to your profile.",
+      )
+      .waitFor();
+    await page.locator('input[autocomplete="email"]').fill("owner@markos.test");
+    await page
+      .locator('input[autocomplete="current-password"]')
+      .fill("CorrectHorseBattery99!");
+    await page.getByRole("button", { name: "Log in to MARKOS" }).click();
+    await page.waitForURL(/\/en\/app\/settings#profile$/);
+    await page.getByRole("heading", { name: "Settings" }).waitFor();
+    await expect(
+      page.locator("#profile").getByText("owner@markos.test").isVisible(),
+    ).resolves.toBe(true);
+
+    await page.close();
+  });
+
+  it("serializes cookie refresh across tabs", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1100 },
+    });
+    await context.addInitScript(
+      (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
+      storedIdentity,
+    );
+    let activeRefreshes = 0;
+    let maxActiveRefreshes = 0;
+    let refreshCalls = 0;
+
+    await context.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname === "/v1/auth/refresh") {
+        refreshCalls += 1;
+        activeRefreshes += 1;
+        maxActiveRefreshes = Math.max(maxActiveRefreshes, activeRefreshes);
+        await new Promise((resolve) => setTimeout(resolve, 75));
+        activeRefreshes -= 1;
+        return route.fulfill(
+          json({
+            ...session,
+            tokens: {
+              accessToken: `browser-session-token-${refreshCalls}`,
+              expiresIn: 900,
+            },
+          }),
+        );
+      }
+      if (pathname === "/v1/workspace/instagram")
+        return route.fulfill(json(disconnected));
+      if (pathname === "/v1/billing/summary")
+        return route.fulfill(json({ invoices: [], payments: [] }));
+      if (pathname === "/v1/workspace/audit-logs")
+        return route.fulfill(json([]));
+      return route.fulfill({ status: 404, body: "{}" });
+    });
+
+    const first = await context.newPage();
+    const second = await context.newPage();
+    await Promise.all([
+      first.goto(`${baseUrl}/en/app/settings`, { waitUntil: "domcontentloaded" }),
+      second.goto(`${baseUrl}/en/app/settings`, { waitUntil: "domcontentloaded" }),
+    ]);
+    await Promise.all([
+      first.getByRole("heading", { name: "Settings" }).waitFor(),
+      second.getByRole("heading", { name: "Settings" }).waitFor(),
+    ]);
+
+    expect(refreshCalls).toBe(2);
+    expect(maxActiveRefreshes).toBe(1);
+    await context.close();
+  });
 });
 
 async function settingsPage(
@@ -392,7 +512,7 @@ async function settingsPage(
   const requests: string[] = [];
   await page.addInitScript(
     (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
-    session,
+    storedIdentity,
   );
   await page.route("https://media.markos.test/**", (route) =>
     route.fulfill({
@@ -410,6 +530,8 @@ async function settingsPage(
       const request = route.request();
       requests.push(request.url());
       const pathname = new URL(request.url()).pathname;
+      if (pathname === "/v1/auth/refresh")
+        return route.fulfill(json(session));
       if (pathname === "/v1/workspace/instagram" && request.method() === "GET")
         return route.fulfill(json(connection));
       if (pathname === "/v1/billing/summary")

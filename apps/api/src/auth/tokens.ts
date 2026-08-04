@@ -121,6 +121,26 @@ export async function consumeRefreshToken(token: string): Promise<TokenInput> {
   };
 }
 
+export async function revokeRefreshToken(token: string): Promise<void> {
+  let claims: z.infer<typeof refreshClaimsSchema>;
+
+  try {
+    const result = await jwtVerify(token, refreshSecret);
+    claims = refreshClaimsSchema.parse(result.payload);
+  } catch {
+    return;
+  }
+
+  const redis = createRedisClient();
+
+  try {
+    await redis.connect();
+    await redis.del(refreshTokenKey(claims.sub, claims.jti));
+  } finally {
+    redis.disconnect();
+  }
+}
+
 async function storeRefreshToken(userId: string, refreshJti: string): Promise<void> {
   const redis = createRedisClient();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -14,14 +14,11 @@ import {
   Sparkles,
   Target
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AgentName, AgentRunRecord, AuthSession, Locale, VaultRagChunk } from "@markos/shared-types";
+import type { AgentName, AgentRunRecord, Locale, VaultRagChunk } from "@markos/shared-types";
 import { MeteredActionNotice, quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
 import { VaultGroundingNotice, useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type ChatMessage = {
   id: string;
@@ -65,7 +62,7 @@ const demoContext: VaultRagChunk[] = [
 ];
 
 export function AiAssistantPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [selectedAgent, setSelectedAgent] = useState<AgentName>("BUSINESS_GROWTH_ADVISOR");
   const [prompt, setPrompt] = useState(copy(locale, "defaultPrompt"));
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -86,25 +83,7 @@ export function AiAssistantPanel({ locale }: { locale: Locale }) {
     metric: "AI_GENERATION"
   });
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : options
-    );
-  }, [session]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
-    }
-  }, []);
+  const client = useMarkosClient(locale);
 
   async function askMarkos() {
     const task = prompt.trim();

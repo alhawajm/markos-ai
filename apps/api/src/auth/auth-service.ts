@@ -6,7 +6,6 @@ import type {
   EnableMfaTotpInput,
   GoogleLoginInput,
   LoginInput,
-  RefreshSessionInput,
   RegisterInput,
   RequestEmailVerificationInput,
   VerifyEmailInput
@@ -24,6 +23,11 @@ import { buildTotpUri, generateTotpSecret, verifyTotpCode } from "./totp";
 import { consumeRefreshToken, issueAuthTokens } from "./tokens";
 
 let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
+
+export interface AuthSessionGrant {
+  refreshToken: string;
+  session: AuthSession;
+}
 
 export class AuthConflictError extends Error {
   constructor() {
@@ -79,7 +83,7 @@ export class MfaSetupMissingError extends Error {
   }
 }
 
-export async function register(input: RegisterInput): Promise<AuthSession> {
+export async function register(input: RegisterInput): Promise<AuthSessionGrant> {
   const email = normalizeEmail(input.email);
   const passwordHash = await argon2.hash(input.password, {
     type: argon2.argon2id
@@ -147,7 +151,7 @@ export async function register(input: RegisterInput): Promise<AuthSession> {
 export async function loginWithGoogle(
   input: GoogleLoginInput,
   verifier: GoogleTokenVerifier = googleTokenVerifier
-): Promise<AuthSession> {
+): Promise<AuthSessionGrant> {
   const identity = await verifier(input.idToken);
 
   if (!identity.emailVerified) {
@@ -238,7 +242,7 @@ export function resetGoogleTokenVerifierForTest(): void {
   googleTokenVerifier = verifyGoogleIdToken;
 }
 
-export async function login(input: LoginInput): Promise<AuthSession> {
+export async function login(input: LoginInput): Promise<AuthSessionGrant> {
   const email = normalizeEmail(input.email);
   const user = await prisma.user.findUnique({
     where: {
@@ -497,8 +501,8 @@ export async function verifyEmail(input: VerifyEmailInput): Promise<EmailVerific
   };
 }
 
-export async function refreshSession(input: RefreshSessionInput): Promise<AuthSession> {
-  const tokenInput = await consumeRefreshToken(input.refreshToken);
+export async function refreshSession(refreshToken: string): Promise<AuthSessionGrant> {
+  const tokenInput = await consumeRefreshToken(refreshToken);
   const user = await prisma.user.findFirstOrThrow({
     where: {
       deletedAt: null,
@@ -595,7 +599,7 @@ async function sessionFor(input: {
   user: AuthSession["user"];
   workspace: AuthSession["workspace"];
   roles: Role[];
-}): Promise<AuthSession> {
+}): Promise<AuthSessionGrant> {
   const tokens = await issueAuthTokens({
     userId: input.user.id,
     workspaceId: input.workspace.id,
@@ -604,13 +608,15 @@ async function sessionFor(input: {
   });
 
   return {
-    user: input.user,
-    workspace: input.workspace,
-    roles: input.roles,
-    tokens: {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresIn: env.JWT_ACCESS_TTL
+    refreshToken: tokens.refreshToken,
+    session: {
+      user: input.user,
+      workspace: input.workspace,
+      roles: input.roles,
+      tokens: {
+        accessToken: tokens.accessToken,
+        expiresIn: env.JWT_ACCESS_TTL
+      }
     }
   };
 }
