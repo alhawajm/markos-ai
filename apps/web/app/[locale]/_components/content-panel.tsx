@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import {
   ArrowRight,
   Bookmark,
@@ -23,14 +23,11 @@ import {
   Video,
   Wand2
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, ContentRecord, ContentType, Locale } from "@markos/shared-types";
+import type { ContentRecord, ContentType, Locale } from "@markos/shared-types";
 import { MeteredActionNotice, quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
 import { VaultGroundingNotice, useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type UiContentType = "reel" | "post" | "carousel" | "story";
 type Icon = ComponentType<{ color?: string; className?: string; size?: number; strokeWidth?: number }>;
@@ -64,7 +61,7 @@ const initialContent: GeneratedContent = {
 };
 
 export function ContentPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [contentType, setContentType] = useState<UiContentType>("reel");
   const [prompt, setPrompt] = useState(contentCopy(locale, "defaultPrompt"));
   const [tone, setTone] = useState("Casual & Fun");
@@ -82,26 +79,9 @@ export function ContentPanel({ locale }: { locale: Locale }) {
     metric: "AI_GENERATION"
   });
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : options
-    );
-  }, [session]);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
-    }
-
     const params = new URLSearchParams(window.location.search);
     const previewType = params.get("type");
     const requestedType = isUiContentType(previewType) ? previewType : null;

@@ -1,18 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, CalendarDays, Download, FileText, RefreshCcw, Sparkles, Target, Zap } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, Locale, StrategyRecord } from "@markos/shared-types";
+import type { Locale, StrategyRecord } from "@markos/shared-types";
 import { MeteredActionNotice, quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
 import { VaultGroundingNotice, useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 export function StrategyPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [strategies, setStrategies] = useState<StrategyRecord[]>(() => [demoStrategy(locale)]);
   const [objective, setObjective] = useState(text(locale, "defaultObjective"));
   const [horizonDays, setHorizonDays] = useState(90);
@@ -26,35 +23,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     metric: "STRATEGY"
   });
 
-  const client = useMemo(
-    () =>
-      new MarkosApiClient(
-        session
-          ? {
-              accessToken: session.tokens.accessToken,
-              baseUrl: apiBaseUrl,
-              workspaceId: session.workspace.id
-            }
-          : {
-              baseUrl: apiBaseUrl
-            }
-      ),
-    [session]
-  );
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
-  }, []);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
     if (!session) {

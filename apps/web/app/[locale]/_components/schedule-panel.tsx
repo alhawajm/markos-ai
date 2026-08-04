@@ -23,12 +23,9 @@ import {
   Twitter,
   X
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
-import type { AuthSession, ContentRecord, Locale, PublishingLiveReadiness } from "@markos/shared-types";
+import type { ContentRecord, Locale, PublishingLiveReadiness } from "@markos/shared-types";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type ViewMode = "list" | "calendar";
 type PublishScenario = "blocked" | "failed" | "ready";
@@ -141,12 +138,11 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
   const [livePosts, setLivePosts] = useState<QueuePost[]>([]);
   const [publishMessage, setPublishMessage] = useState("");
   const [publishScenario, setPublishScenario] = useState<PublishScenario>("ready");
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
+  const client = useMarkosClient(locale);
   const [view, setView] = useState<ViewMode>("list");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-    if (stored) setSession(JSON.parse(stored) as AuthSession);
     setView(getInitialView());
     setAiOverlay(getInitialBestTimes());
     setPublishScenario(getInitialPublishScenario());
@@ -154,12 +150,6 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     if (!session) return;
-
-    const client = new MarkosApiClient({
-      baseUrl: apiBaseUrl,
-      accessToken: session.tokens.accessToken,
-      workspaceId: session.workspace.id
-    });
 
     void Promise.all([client.contentItems(), client.publishingQueue(), client.publishingLiveReadiness()])
       .then(([content, queue, readiness]) => {
@@ -170,7 +160,7 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
       .catch(() => {
         setLivePosts([]);
       });
-  }, [session]);
+  }, [client, session]);
 
   const sourcePosts = livePosts.length > 0 ? livePosts : demoPosts;
   const days = useMemo(() => getDaysInMonth(calendarYear, calendarMonth), [calendarMonth, calendarYear]);
@@ -196,11 +186,6 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
         return;
       }
 
-      const client = new MarkosApiClient({
-        baseUrl: apiBaseUrl,
-        accessToken: session.tokens.accessToken,
-        workspaceId: session.workspace.id
-      });
       const target = postId ? sourcePosts.find((post) => post.id === postId) : sourcePosts.find((post) => post.status === "scheduled");
 
       if (!target) {
@@ -228,11 +213,6 @@ export function SchedulePanel({ locale }: { locale: Locale }) {
         return;
       }
 
-      const client = new MarkosApiClient({
-        baseUrl: apiBaseUrl,
-        accessToken: session.tokens.accessToken,
-        workspaceId: session.workspace.id
-      });
       const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       await client.rescheduleFailedPublish(postId, scheduledAt);
       setPublishMessage(readinessText(locale, "retrySaved"));

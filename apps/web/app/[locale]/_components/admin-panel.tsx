@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   Banknote,
   Bot,
@@ -20,23 +20,20 @@ import {
   Sparkles
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
 import type {
   AdminBahrainLaunchReadiness,
   AdminBillingOperations,
   AdminGatewayReadiness,
   AdminModelConfiguration,
   AuditLogRecord,
-  AuthSession,
   BillingPlanCatalogItem,
   Locale,
   PlanCode,
   PromptTemplateRecord
 } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 const planCodes: PlanCode[] = ["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"];
 const modelSettingKeys = ["LLM_PRIMARY_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"] as const;
 type ModelSettingKey = (typeof modelSettingKeys)[number];
@@ -153,7 +150,7 @@ const previewReadiness: AdminBahrainLaunchReadiness = {
 };
 
 export function AdminPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [activeView, setActiveView] = useState<AdminView>("overview");
   const [plans, setPlans] = useState<BillingPlanCatalogItem[]>(previewPlans);
   const [billingOperations, setBillingOperations] = useState<AdminBillingOperations>(previewOperations);
@@ -175,30 +172,14 @@ export function AdminPanel({ locale }: { locale: Locale }) {
   const [isBusy, setIsBusy] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies { baseUrl: string; accessToken?: string; workspaceId?: string };
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id
-          }
-        : options
-    );
-  }, [session]);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
     const params = new URLSearchParams(window.location.search);
     const requestedState = params.get("state");
 
     if (isAuditState(requestedState)) {
       setAuditState(requestedState);
-    }
-
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
     }
   }, []);
 

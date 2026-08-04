@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -20,28 +20,24 @@ import {
   UserRound,
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
 import type {
   AuditLogRecord,
-  AuthSession,
   BillingSummary,
   InstagramConnection,
   Locale,
   MfaTotpSetup,
 } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 import {
   instagramStatusLabel,
   sanitizedCallbackUrl,
 } from "./instagram-settings-state";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
-
 type AuditState = "loading" | "error" | "success" | "limit";
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [connection, setConnection] = useState<InstagramConnection | null>(
     null,
   );
@@ -53,25 +49,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [isBusy, setIsBusy] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
-  const client = useMemo(() => {
-    const options = { baseUrl: apiBaseUrl } satisfies {
-      baseUrl: string;
-      accessToken?: string;
-      workspaceId?: string;
-    };
-    return new MarkosApiClient(
-      session
-        ? {
-            ...options,
-            accessToken: session.tokens.accessToken,
-            workspaceId: session.workspace.id,
-          }
-        : options,
-    );
-  }, [session]);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
     const params = new URLSearchParams(window.location.search);
     const requestedState = params.get("state");
     const instagramResult = params.get("instagram");
@@ -94,10 +74,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         "",
         sanitizedCallbackUrl(window.location.href),
       );
-    }
-
-    if (stored) {
-      setSession(JSON.parse(stored) as AuthSession);
     }
   }, [locale]);
 
@@ -364,6 +340,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
       <aside className="grid gap-4">
         <Panel
+          id="profile"
           icon={UserRound}
           kicker={copy(locale, "account")}
           title={userName}
@@ -672,18 +649,20 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 function Panel({
   body,
   children,
+  id,
   icon: Icon,
   kicker,
   title,
 }: {
   body: string;
   children?: React.ReactNode;
+  id?: string;
   icon: typeof ShieldCheck;
   kicker: string;
   title: string;
 }) {
   return (
-    <article className="rounded-[20px] border border-border bg-card p-5 shadow-card">
+    <article className="scroll-mt-6 rounded-[20px] border border-border bg-card p-5 shadow-card" id={id}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">

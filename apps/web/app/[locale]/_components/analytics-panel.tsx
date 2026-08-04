@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -24,8 +24,6 @@ import {
   Users,
   Zap
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import { getBrowserApiBaseUrl } from "./api-base-url";
 import type {
   AnalyticsChatResult,
   AnalyticsDigestResult,
@@ -33,13 +31,11 @@ import type {
   AnalyticsLiveReadiness,
   AnalyticsMetricTotals,
   AnalyticsSummary,
-  AuthSession,
   InstagramMetricType,
   Locale
 } from "@markos/shared-types";
+import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-const sessionKey = "markos.session";
-const apiBaseUrl = getBrowserApiBaseUrl();
 
 type Tone = "blue" | "green" | "pink" | "slate" | "amber";
 
@@ -63,7 +59,7 @@ const channelMeta: Array<{
 ];
 
 export function AnalyticsPanel({ locale }: { locale: Locale }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const session = useMarkosSession();
   const [summary, setSummary] = useState<AnalyticsSummary>(() => demoSummary(30));
   const [readiness, setReadiness] = useState<AnalyticsLiveReadiness | null>(null);
   const [days, setDays] = useState(30);
@@ -75,35 +71,7 @@ export function AnalyticsPanel({ locale }: { locale: Locale }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
 
-  const client = useMemo(
-    () =>
-      new MarkosApiClient(
-        session
-          ? {
-              accessToken: session.tokens.accessToken,
-              baseUrl: apiBaseUrl,
-              workspaceId: session.workspace.id
-            }
-          : {
-              baseUrl: apiBaseUrl
-            }
-      ),
-    [session]
-  );
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(sessionKey);
-
-    if (!stored) {
-      return;
-    }
-
-    try {
-      setSession(JSON.parse(stored) as AuthSession);
-    } catch {
-      window.localStorage.removeItem(sessionKey);
-    }
-  }, []);
+  const client = useMarkosClient(locale);
 
   useEffect(() => {
     setSummary((current) => (session ? current : demoSummary(days)));
