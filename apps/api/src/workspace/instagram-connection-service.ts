@@ -1,5 +1,8 @@
 import type { Workspace } from "@prisma/client";
-import type { InstagramConnection } from "@markos/shared-types";
+import type {
+  InstagramConnection,
+  InstagramDisconnectResult,
+} from "@markos/shared-types";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { withWorkspaceDbContext } from "../db/workspace-transaction";
@@ -15,6 +18,7 @@ import {
 } from "./instagram-basic-client";
 import {
   INSTAGRAM_PROVIDER,
+  INSTAGRAM_MANAGE_ACCESS_URL,
   INSTAGRAM_REQUESTED_SCOPES,
 } from "./instagram-provider";
 import {
@@ -306,7 +310,34 @@ export async function withSecureInstagramCredential(
 export async function disconnectSecureInstagram(
   workspaceId: string,
   actorId: string,
-): Promise<InstagramConnection> {
+  client: Pick<InstagramBasicClient, "revoke"> = new InstagramBasicClient(),
+): Promise<InstagramDisconnectResult> {
+  const storedCredential = await withWorkspaceDbContext(workspaceId, (tx) =>
+    tx.instagramConnectionCredential.findUnique({
+      where: { workspaceId },
+      select: {
+        encryptedAccessToken: true,
+      },
+    }),
+  );
+  let providerRevocation: InstagramDisconnectResult["providerRevocation"] = {
+    status: "NOT_APPLICABLE",
+  };
+  if (storedCredential) {
+    try {
+      const accessToken = decryptCredential(
+        storedCredential.encryptedAccessToken,
+        requiredKey(),
+      );
+      await client.revoke(accessToken);
+      providerRevocation = { status: "CONFIRMED" };
+    } catch {
+      providerRevocation = {
+        status: "UNCONFIRMED",
+        manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
+      };
+    }
+  }
   await withWorkspaceDbContext(workspaceId, async (tx) => {
     const connection = await tx.instagramConnectionCredential.findUnique({
       where: { workspaceId },
@@ -331,11 +362,21 @@ export async function disconnectSecureInstagram(
         workspaceId,
         targetId: connection?.providerAccountId ?? null,
         targetType: "InstagramConnection",
-        metadata: connection ? { accountId: connection.providerAccountId } : {},
+        metadata: {
+          ...(connection ? { accountId: connection.providerAccountId } : {}),
+          providerRevocation: providerRevocation.status,
+        },
       },
     });
   });
-  return { connected: false, status: "DISCONNECTED", recentMedia: [] };
+  return {
+    connection: {
+      connected: false,
+      status: "DISCONNECTED",
+      recentMedia: [],
+    },
+    providerRevocation,
+  };
 }
 export async function refreshSecureInstagram(input: {
   workspaceId: string;

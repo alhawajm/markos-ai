@@ -239,6 +239,12 @@ Treat the 2026-08-03 production business-basic OAuth success as completion of th
 
 Use Railway as the current early-stage deployment direction, with an approximate planning horizon through the first 50 users while capacity, reliability, and security are observed. This does not approve or schedule a migration at a numeric threshold. AWS remains a possible later expansion or migration direction.
 
+## 2026-08-04: Instagram disconnect does not depend on provider confirmation
+
+When a workspace disconnects Instagram, first attempt to remove the current Instagram Login permissions through the versioned `graph.instagram.com` `/me/permissions` edge using the encrypted credential only at the provider-call boundary. Treat only an explicit `{ "success": true }` response as confirmed revocation. A timeout, provider error, malformed response, or unavailable local decryption key must not trap the user in a connected MARKOS state: atomically delete the local encrypted credential, legacy credential fields, and bounded recent-media cache, record the sanitized revocation outcome in the disconnect audit, and return an unconfirmed status with Instagram's manual app-permissions URL.
+
+Disconnect is not workspace-data erasure. Preserve generated/imported content, publishing history, analytics, and Knowledge Vault learning until the user invokes the separate workspace erasure controls. OAuth authorization URLs disable Facebook Login and force Instagram authentication so a connect or reconnect attempt can use a different professional account. The Graph revocation response and subsequent token invalidation remain a controlled live-provider verification gate; local and mocked tests cannot close it.
+
 The existing GHCR image pipeline, optional ECS rollout, placeholder CDK stack, and build specification's AWS target remain useful future references, but they are not evidence that AWS is the current runtime. Exact Railway project, environment, service, networking, and variable state remains externally managed and must be inventoried in Railway before it is described as current fact.
 
 ## 2026-08-04: Browser sessions use cookie-backed silent renewal

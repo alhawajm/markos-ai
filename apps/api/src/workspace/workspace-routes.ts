@@ -274,9 +274,19 @@ export async function registerWorkspaceRoutes(
         permissions: ["instagram:manage"],
       },
     },
-    async () => {
+    async (request) => {
       const { userId, workspaceId } = requireWorkspaceContext();
-      return ok(await disconnectSecureInstagram(workspaceId, userId));
+      const result = await disconnectSecureInstagram(workspaceId, userId);
+      if (result.providerRevocation.status === "UNCONFIRMED") {
+        app.log.warn(
+          {
+            event: "instagram_provider_revocation_unconfirmed",
+            requestId: request.id,
+          },
+          "Instagram credential removed locally; provider revocation is unconfirmed",
+        );
+      }
+      return ok(result);
     },
   );
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
@@ -24,11 +24,13 @@ describe("workspace routes", () => {
       expiresAt: new Date(expiresAt)
     });
     const connected = await app.inject({ method: "GET", url: "/v1/workspace/instagram", headers });
+    const provider = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
     const disconnected = await app.inject({
       method: "DELETE",
       url: "/v1/workspace/instagram",
       headers
     });
+    provider.mockRestore();
 
     expect(initial.statusCode).toBe(200);
     expect(initial.json().data.connected).toBe(false);
@@ -41,7 +43,10 @@ describe("workspace routes", () => {
       }
     });
     expect(disconnected.statusCode).toBe(200);
-    expect(disconnected.json().data.connected).toBe(false);
+    expect(disconnected.json().data).toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: { status: "CONFIRMED" }
+    });
     const auditLogs = await prisma.auditLog.findMany({
       orderBy: {
         createdAt: "asc"
@@ -63,6 +68,7 @@ describe("workspace routes", () => {
     expect(auditLogs[1]).toMatchObject({
       action: "INSTAGRAM_DISCONNECTED",
       actorId: session.user.id,
+      metadata: { accountId, providerRevocation: "CONFIRMED" },
       targetId: accountId,
       targetType: "InstagramConnection"
     });

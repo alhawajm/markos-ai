@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { decryptCredential } from "../src/security/credential-encryption";
 import { createPrismaOAuthStateStore } from "../src/security/prisma-oauth-state-store";
@@ -35,6 +35,12 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await prisma.auditLog.deleteMany({
       where: { workspaceId: { in: workspaceIds } },
     });
+    await prisma.instagramAnalytics.deleteMany({
+      where: { workspaceId: { in: workspaceIds } },
+    });
+    await prisma.contentItem.deleteMany({
+      where: { workspaceId: { in: workspaceIds } },
+    });
     await prisma.instagramRecentMedia.deleteMany({
       where: { workspaceId: { in: workspaceIds } },
     });
@@ -65,12 +71,19 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await expect(persist(second, "other-workspace")).rejects.toBeInstanceOf(
       InstagramConnectionConflictError,
     );
-    await disconnectSecureInstagram(first, actorId);
+    const revoke = vi.fn(async () => undefined);
+    await expect(
+      disconnectSecureInstagram(first, actorId, { revoke }),
+    ).resolves.toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: { status: "CONFIRMED" },
+    });
+    expect(revoke).toHaveBeenCalledWith("long-lived-two");
     expect(await getDecryptedCredential(first)).toBeNull();
     await expect(persist(first, "same-workspace-again")).resolves.toMatchObject(
       { connected: true },
     );
-    await disconnectSecureInstagram(first, actorId);
+    await disconnectSecureInstagram(first, actorId, { revoke });
     await expect(persist(second, "legitimate-transfer")).resolves.toMatchObject(
       { connected: true },
     );
@@ -103,10 +116,90 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
       refreshSecureInstagram({ workspaceId: id, client: success, now }),
     ).resolves.toMatchObject({ refreshed: true });
     expect((await getDecryptedCredential(id))?.accessToken).toBe("replacement");
-    await disconnectSecureInstagram(id, actorId);
+    await disconnectSecureInstagram(id, actorId, {
+      revoke: async () => undefined,
+    });
     await expect(
       refreshSecureInstagram({ workspaceId: id, client: success, now }),
     ).resolves.toEqual({ refreshed: false, reason: "INSTAGRAM_NOT_CONNECTED" });
+  });
+
+  it("finishes local cleanup when provider revocation is unconfirmed and preserves workspace history", async () => {
+    const id = await workspace();
+    await persist(
+      id,
+      "provider-failure-token",
+      undefined,
+      undefined,
+      "17841400000000304",
+      [{ id: "retained-history-media", mediaType: "IMAGE" }],
+    );
+    const content = await prisma.contentItem.create({
+      data: {
+        workspaceId: id,
+        contentType: "POST",
+        status: "PUBLISHED",
+        captionEn: "Retained workspace content",
+        hashtags: ["#markos"],
+        mediaIds: [],
+        instagramPostId: "published-history-id",
+      },
+    });
+    const analytics = await prisma.instagramAnalytics.create({
+      data: {
+        workspaceId: id,
+        contentItemId: content.id,
+        metricType: "POST",
+        dataDate: new Date("2026-08-01T00:00:00Z"),
+        metrics: { reach: 12 },
+        syncedAt: new Date("2026-08-02T00:00:00Z"),
+      },
+    });
+    const revoke = vi.fn(async () => {
+      throw new Error("provider unavailable");
+    });
+
+    await expect(
+      disconnectSecureInstagram(id, actorId, { revoke }),
+    ).resolves.toEqual({
+      connection: {
+        connected: false,
+        status: "DISCONNECTED",
+        recentMedia: [],
+      },
+      providerRevocation: {
+        status: "UNCONFIRMED",
+        manualRevocationUrl:
+          "https://www.instagram.com/accounts/manage_access/",
+      },
+    });
+    expect(revoke).toHaveBeenCalledWith("provider-failure-token");
+    expect(
+      await prisma.instagramConnectionCredential.findUnique({
+        where: { workspaceId: id },
+      }),
+    ).toBeNull();
+    expect(
+      await prisma.instagramRecentMedia.count({ where: { workspaceId: id } }),
+    ).toBe(0);
+    expect(
+      await prisma.contentItem.findUnique({ where: { id: content.id } }),
+    ).not.toBeNull();
+    expect(
+      await prisma.instagramAnalytics.findUnique({
+        where: { id: analytics.id },
+      }),
+    ).not.toBeNull();
+    expect(
+      await prisma.auditLog.findFirst({
+        where: { workspaceId: id, action: "INSTAGRAM_DISCONNECTED" },
+      }),
+    ).toMatchObject({
+      metadata: {
+        accountId: "17841400000000304",
+        providerRevocation: "UNCONFIRMED",
+      },
+    });
   });
 
   it("enforces application-role RLS for states, credentials, and media", async () => {
@@ -370,7 +463,9 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     );
     await prisma.workspace.delete({ where: { id: disconnectRollback } });
     await expect(
-      disconnectSecureInstagram(disconnectRollback, actorId),
+      disconnectSecureInstagram(disconnectRollback, actorId, {
+        revoke: async () => undefined,
+      }),
     ).rejects.toThrow();
     expect(
       await prisma.instagramConnectionCredential.findUnique({

@@ -6,7 +6,7 @@ The current connection milestone uses Instagram Login and requests exactly `inst
 
 ## Evidence classification
 
-- **Implemented and locally/CI verified:** the current source and tests cover OAuth start/callback, signed state, expiry, transaction binding, single-use consumption, provider exchanges, professional-account resolution, encrypted persistence, bounded recent media, secure status, refresh/disconnect foundations, redirects, and sanitized telemetry.
+- **Implemented and locally/CI verified:** the current source and tests cover OAuth start/callback, signed state, expiry, transaction binding, single-use consumption, provider exchanges, professional-account resolution, encrypted persistence, bounded recent media, secure status, refresh, best-effort provider revocation with guaranteed local disconnect, redirects, and sanitized telemetry.
 - **Production-verified on 2026-08-03:** one real professional account completed the deployed OAuth flow, appeared Connected in production Settings, and loaded recent provider-owned media.
 - **Not yet externally verified:** formal App Review submission/approval, publishing, insights, a complete token-refresh lifetime, provider-side revocation/deauthorization/data-deletion delivery, and webhook subscriptions.
 - **Externally managed:** current Meta dashboard settings, app mode, roles, permissions, Graph version, URLs, and App Review status. Repository code and this handoff cannot prove their current dashboard values.
@@ -98,7 +98,7 @@ META_WEBHOOK_VERIFY_TOKEN=<local-fake-value>
 5. Show the stored basic profile and bounded recent-owned-media result, including the valid empty state.
 6. Show that callback query material is removed from the browser URL.
 7. Demonstrate refresh only when the provider makes the token eligible.
-8. Disconnect and show that MARKOS removes the active encrypted credential.
+8. Disconnect and show that MARKOS removes the active encrypted credential. Record whether Meta confirms revocation; when it does not, show the manual Instagram-permissions action without treating the local disconnect as failed.
 
 Do not record a real authorization code, token, state, callback URL with a query string, provider identifier, email, username, header, cookie, or raw provider response in the screencast or evidence pack.
 
@@ -110,6 +110,7 @@ Do not record a real authorization code, token, state, callback URL with a query
 - `INSTAGRAM_TOKEN_ENCRYPTION_KEY` is canonical Base64 that decodes to exactly 32 bytes. Presence alone is not validity.
 - Webhook verification succeeds against `/v1/meta/webhooks/instagram`.
 - Long-lived token refresh is verified from Settings and the worker over a real eligible lifecycle before it is described as production-complete.
+- A controlled disconnect receives explicit provider revocation confirmation and the former token can no longer read `/me`; also verify that provider failure still removes the local credential and presents the manual permissions action.
 - Deauthorization and data-deletion callbacks accept only a valid Meta `signed_request` and are verified with controlled provider delivery.
 - Webhook POSTs require a valid `X-Hub-Signature-256`; invalid or unsigned payloads are rejected before audit processing.
 - Callback audit persistence redacts signed requests and secrets.

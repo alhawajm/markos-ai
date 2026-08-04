@@ -17,7 +17,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
 
   beforeAll(async () => {
     originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init) => {
       providerCalls += 1;
       const url = String(input);
       if (url === "https://api.instagram.com/oauth/access_token")
@@ -26,6 +26,11 @@ describeInstagramDatabase("registered Instagram routes", () => {
         return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
       if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
         return response({ user_id: "route-professional-account", username: "route_business", media: { data: [] } });
+      if (url === "https://graph.instagram.com/v25.0/me/permissions") {
+        expect(init?.method).toBe("DELETE");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fake-long-token");
+        return response({ success: true });
+      }
       throw new Error("Unexpected provider request");
     };
     app = await buildApp();
@@ -71,6 +76,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const authorization = new URL(started.json().data.authorizationUrl);
     expect(authorization.origin + authorization.pathname).toBe("https://www.instagram.com/oauth/authorize");
     expect(authorization.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(authorization.searchParams.get("enable_fb_login")).toBe("0");
+    expect(authorization.searchParams.get("force_authentication")).toBe("1");
     expect(authorization.searchParams.get("redirect_uri")).toBe(env.INSTAGRAM_OAUTH_REDIRECT_URI);
     expect(authorization.toString()).not.toContain("untrusted.invalid");
     expect(authorization.toString()).not.toContain("unrequested_scope");
@@ -173,7 +180,10 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(refreshed.json().data.reason).toBe("INSTAGRAM_TOKEN_TOO_NEW");
     const disconnected = await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(owner.token) });
     expect(disconnected.statusCode).toBe(200);
-    expect(disconnected.json().data).toMatchObject({ connected: false, status: "DISCONNECTED" });
+    expect(disconnected.json().data).toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: { status: "CONFIRMED" },
+    });
   });
 
   async function complete(input: Principal) {

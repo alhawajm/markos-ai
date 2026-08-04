@@ -29,6 +29,7 @@ import type {
   EmailVerificationResult,
   HealthResponse,
   InstagramConnection,
+  InstagramDisconnectResult,
   InstagramOAuthStart,
   InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
@@ -442,8 +443,8 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async disconnectInstagram(): Promise<InstagramConnection> {
-    const response = await this.request<InstagramConnection>("/v1/workspace/instagram", {
+  async disconnectInstagram(): Promise<InstagramDisconnectResult> {
+    const response = await this.request<InstagramDisconnectResult>("/v1/workspace/instagram", {
       method: "DELETE"
     });
     return response.data;

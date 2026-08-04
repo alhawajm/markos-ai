@@ -7,6 +7,8 @@ export const INSTAGRAM_LONG_LIVED_TOKEN_URL =
   "https://graph.instagram.com/access_token";
 export const INSTAGRAM_GRAPH_VERSION = env.INSTAGRAM_GRAPH_VERSION;
 export const INSTAGRAM_GRAPH_BASE_URL = `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`;
+export const INSTAGRAM_MANAGE_ACCESS_URL =
+  "https://www.instagram.com/accounts/manage_access/";
 export const INSTAGRAM_REQUESTED_SCOPES = ["instagram_business_basic"] as const;
 
 export function canonicalRedirectUri(value: string): string {

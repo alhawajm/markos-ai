@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
+import { InstagramBasicClient, InstagramProviderError } from "../src/workspace/instagram-basic-client";
 import {
   completeInstagramOAuth,
   createInstagramOAuthStart,
@@ -30,9 +31,29 @@ describe("Instagram OAuth", () => {
     expect(url.searchParams.get("redirect_uri")).toBe(oauthConfig.redirectUri);
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(url.searchParams.get("enable_fb_login")).toBe("0");
+    expect(url.searchParams.get("force_authentication")).toBe("1");
     expect(url.searchParams.get("state")).toMatch(/\S+\.\S+/);
     expect(new Date(start.stateExpiresAt).getTime()).toBeGreaterThan(Date.now());
     await prisma.oAuthStateNonce.deleteMany({ where: { workspaceId } });
+  });
+
+  it("revokes Instagram Login permissions with a bearer token and requires provider confirmation", async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    const client = new InstagramBasicClient(async (input, init) => {
+      calls.push({ input: String(input), ...(init ? { init } : {}) });
+      return jsonResponse({ success: true });
+    });
+
+    await expect(client.revoke("revoke-token")).resolves.toBeUndefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe("https://graph.instagram.com/v25.0/me/permissions");
+    expect(calls[0]?.init?.method).toBe("DELETE");
+    expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe("Bearer revoke-token");
+    expect(calls[0]?.input).not.toContain("revoke-token");
+
+    const unconfirmed = new InstagramBasicClient(async () => jsonResponse({ success: false }));
+    await expect(unconfirmed.revoke("unconfirmed-token")).rejects.toBeInstanceOf(InstagramProviderError);
   });
 
   it("exchanges the callback code and stores the long-lived token", async () => {
