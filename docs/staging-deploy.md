@@ -1,144 +1,333 @@
-# Staging Deploy
+# Railway Deployment and Staging Runbook
 
-MARKOS staging deploys from GitHub Actions on every merge to `main`.
+Status date: 2026-08-03.
 
-## Pipeline
+Railway is the current early-stage operating direction for MARKOS AI. The working planning horizon is approximately the first 50 users while capacity, reliability, cost, and security are observed. AWS may be considered later; no migration is approved or scheduled.
 
-Workflow: `.github/workflows/deploy-staging.yml`
+This is the A-to-Z repository runbook for reconstructing and auditing the deployment. It records variable **names and contracts only**. Never add values, credentials, provider identifiers, signed URLs, callback query strings, database connection strings, or customer data.
 
-The pipeline builds and publishes four container images to GitHub Container Registry with immutable commit SHA tags and a moving `staging` tag from `main`:
+## Evidence boundary
 
-- `web`
-- `api`
-- `worker`
-- `ai`
+The repository proves Dockerfiles, commands, health endpoints, environment parsing, database initialization, CI behavior, and application contracts. It cannot prove the current Railway dashboard.
 
-If the GitHub `staging` environment is configured with AWS deployment variables, the workflow also forces a new ECS deployment for the configured services.
+The handoff reports one repository, one Railway project, one Railway environment, a deployed Next.js web service, a deployed API service, and Railway PostgreSQL. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. The exact project/environment layout, deployment source, domains, Redis/OpenSearch topology, variables, health checks, and service counts still require a Railway dashboard inventory.
 
-## Required GitHub Environment Variables
+The handoff also reports that the FastAPI AI service had not yet been deployed. A Dockerfile or GHCR image is not deployment evidence.
 
-Set these on the `staging` GitHub environment:
+## Current service contract
 
-- `STAGING_AWS_ROLE_ARN`
-- `STAGING_AWS_REGION`
-- `STAGING_ECS_CLUSTER`
-- `STAGING_WEB_SERVICE`
-- `STAGING_API_SERVICE`
-- `STAGING_WORKER_SERVICE`
-- `STAGING_AI_SERVICE`
-- `STAGING_API_BASE_URL`
-- `STAGING_WEB_BASE_URL`
+| Service/dependency | Repository source                                      | Start/listen contract                                                                                 | Health/readiness                                            | Current external status                                                                                                                                            |
+| ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web                | `apps/web/Dockerfile`                                  | `pnpm --filter web start`; Next.js default port 3000                                                  | `/ar`, `/en`, and `/en/app/settings` for rendered Settings  | Reported deployed; production Settings participated in the 2026-08-03 connection. Verify Railway source, domain, build variable, and health check.                 |
+| API                | `apps/api/Dockerfile`                                  | `pnpm --filter api start`; listens on injected `PORT` or `API_PORT`                                   | `/v1/health`, `/v1/health/deep`                             | Reported deployed; callback and persistence completed on 2026-08-03. Verify current deployment and dependencies.                                                   |
+| Worker             | `apps/api/worker.Dockerfile`                           | `pnpm --filter api worker`; no HTTP port                                                              | Worker lifecycle logs and resulting database/audit state    | Repository implementation only; verify whether a Railway worker service exists and is healthy.                                                                     |
+| AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | Not production-verified. Review port/routing, authentication, and health before deployment.                                                                        |
+| PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | Persistence worked for the production connection, but version, extensions, roles, backups, connection limits, and migration history require operator verification. |
+| Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | Verify Railway deployment, private networking, persistence expectations, and availability.                                                                         |
+| OpenSearch         | `docker-compose.yml`, API deep health/search code      | Reachable HTTP service                                                                                | API deep health checks `/_cluster/health`                   | Verify whether it is deployed. Loopback is invalid from a separate Railway API service.                                                                            |
+| Media storage      | `apps/api/src/media/storage-service.ts`                | Local filesystem under `MEDIA_STORAGE_DIR`; public URL from `MEDIA_PUBLIC_BASE_URL` or `API_BASE_URL` | Upload/read smoke plus Meta fetchability when publishing    | Not durable CDN infrastructure. Acceptable only for current connection work; not approved for live publishing.                                                     |
 
-The ECS services should reference the moving `:staging` tags or a separate image mirroring/task-definition step must update task definitions before service rollout.
+The repository's `.github/workflows/deploy-staging.yml` builds and publishes web, API, worker, and AI images to GHCR. It can optionally roll AWS ECS when GitHub environment variables exist. That workflow is not proof of the current Railway deployment and does not make AWS the current platform.
 
-`STAGING_API_BASE_URL` and `STAGING_WEB_BASE_URL` are used by the workflow smoke job after images are published and the optional ECS rollout has completed or been skipped. Use public HTTPS URLs that match the Meta callback/runtime configuration.
+## Runtime prerequisites
 
-Run the GitHub environment preflight before expecting the workflow to produce live staging evidence:
+- Node.js `>=20.16.0 <21 || >=22.3.0`; deployment Dockerfiles use Node 22.
+- pnpm 11.5.2 through Corepack.
+- Python `>=3.11,<3.12`; the AI Dockerfile uses Python 3.11.
+- PostgreSQL 16-compatible server with pgvector and privileges needed by the initialization contract.
+- Redis 7-compatible service where cache/worker behavior is enabled.
+- OpenSearch 2-compatible service for the current deep-health/search contract.
+- Public HTTPS domains for browser, API, and Meta callbacks.
 
-```bash
-corepack pnpm staging:github-preflight
-corepack pnpm staging:github-preflight -- --strict
-```
+## Environment loading contract
 
-The preflight writes:
+Environment sources are deliberately separate:
 
-```text
-evidence/m6/<yyyy-mm-dd>/staging/github-staging-preflight.json
-```
+- Local API, worker, and Prisma seed entry points load an optional repository-root `.env` without overriding variables already supplied by the shell. That ignored file is for local/fake values only.
+- Prisma generation/migration commands do not import the API entry point. Supply `DATABASE_URL` to the invoking process or through Prisma's package-local convention.
+- Next.js uses `apps/web/.env*` locally. `NEXT_PUBLIC_*` values are browser-visible build inputs, not server-only secrets.
+- GitHub Actions supplies explicit fake test values in `.github/workflows/ci.yml`; it does not consume `.env` or `.env.example`.
+- Docker build contexts exclude `.env` files. The images do not copy local environment files.
+- Railway injects runtime variables per service. `NEXT_PUBLIC_API_BASE_URL` must also be available during the web image build because Next.js embeds public variables at `next build` time.
 
-It records only variable names and readiness state, not variable values.
+## Variable inventory by service
 
-Set environment variables with GitHub CLI once the real values are known:
+This inventory reflects current consumers. Sarah owns the external audit and the decision about service-local versus shared organization. Do not infer that a name exists in Railway because it exists here.
 
-```bash
-gh variable set STAGING_API_BASE_URL --env staging --body "https://api.staging.markos.ai"
-gh variable set STAGING_WEB_BASE_URL --env staging --body "https://staging.markos.ai"
-gh variable set STAGING_AWS_ROLE_ARN --env staging --body "arn:aws:iam::<account-id>:role/<role-name>"
-gh variable set STAGING_AWS_REGION --env staging --body "me-south-1"
-gh variable set STAGING_ECS_CLUSTER --env staging --body "<cluster-name>"
-gh variable set STAGING_WEB_SERVICE --env staging --body "<web-service-name>"
-gh variable set STAGING_API_SERVICE --env staging --body "<api-service-name>"
-gh variable set STAGING_WORKER_SERVICE --env staging --body "<worker-service-name>"
-gh variable set STAGING_AI_SERVICE --env staging --body "<ai-service-name>"
-```
+### Web build/runtime
 
-After setting values, rerun:
+- `NEXT_PUBLIC_API_BASE_URL` — public API HTTPS origin; required at build time.
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `NEXT_PUBLIC_SENTRY_ENVIRONMENT`
+- `NEXT_PUBLIC_SENTRY_RELEASE`
+- `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE`
 
-```bash
-corepack pnpm staging:github-preflight -- --strict
-```
+### API runtime
 
-After a successful `Deploy Staging` workflow run, download the generated evidence artifacts:
+Core and dependencies:
 
-```bash
-corepack pnpm staging:evidence-download -- --sha <release-sha>
-corepack pnpm staging:evidence-download -- --sha <release-sha> --strict
-```
-
-This writes:
-
-```text
-evidence/m6/<yyyy-mm-dd>/staging/github-staging-artifact-download.json
-```
-
-and flattens the downloaded workflow artifacts into the same staging evidence folder.
-
-## Required Runtime Secrets
-
-Staging runtime must provide production-shaped values for:
-
-- `DATABASE_URL`
-- `REDIS_URL`
-- `OPENSEARCH_URL`
-- `JWT_ACCESS_SECRET`
-- `JWT_REFRESH_SECRET`
+- `NODE_ENV`
+- `PORT` or `API_PORT`
 - `API_BASE_URL`
 - `WEB_BASE_URL`
 - `AI_BASE_URL`
-- `MEDIA_PUBLIC_BASE_URL`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `OPENSEARCH_URL`
+- `HEALTH_DEPENDENCY_TIMEOUT_MS`
+- `HEALTH_DATABASE_TIMEOUT_MS`
+- `HEALTH_REDIS_TIMEOUT_MS`
+- `HEALTH_HTTP_TIMEOUT_MS`
+
+Authentication and application security:
+
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_TTL`
+- `JWT_REFRESH_TTL`
+- `EMAIL_VERIFICATION_TTL`
+- `MFA_ISSUER`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_ISSUER`
+- `GOOGLE_OAUTH_JWKS_URL`
+
+Media and models:
+
+- `MEDIA_STORAGE_DIR`
+- `MEDIA_PUBLIC_BASE_URL` (optional for connection; not durable storage by itself)
+- `LLM_PRIMARY_MODEL`
+- `IMAGE_MODEL_PRIMARY`
+- `IMAGE_MODEL_FALLBACK`
+
+Instagram Login and callbacks:
+
 - `INSTAGRAM_APP_ID`
 - `INSTAGRAM_APP_SECRET`
 - `INSTAGRAM_OAUTH_REDIRECT_URI`
 - `INSTAGRAM_OAUTH_STATE_SECRET`
 - `INSTAGRAM_TOKEN_ENCRYPTION_KEY`
 - `INSTAGRAM_GRAPH_VERSION`
+- `INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS`
+- `META_APP_SECRET`
 - `META_WEBHOOK_VERIFY_TOKEN`
 
-Keep `INSTAGRAM_PUBLISH_MODE=dry_run` until Meta App Review and test-account live publish acceptance are complete.
+Publishing and analytics foundations:
 
-## Environment loading contract
+- `INSTAGRAM_PUBLISH_MODE`
+- `INSTAGRAM_ANALYTICS_SYNC_MODE`
+- `INSTAGRAM_CONTAINER_POLL_ATTEMPTS`
+- `INSTAGRAM_CONTAINER_POLL_DELAY_MS`
+- `META_APP_ID`
+- `META_APP_SECRET`
+- `META_REDIRECT_URI`
+- `META_GRAPH_BASE_URL`
+- `META_GRAPH_VERSION`
 
-Environment sources are intentionally separated:
+The active OAuth request is fixed in code to `instagram_business_basic`. Compatibility/readiness variables do not grant additional permissions.
 
-- Local API, worker, and Prisma seed entry points import the API environment module. It loads the repository-root `.env` when that file exists, without overriding variables already supplied by the shell. The file is optional, ignored by Git, and must contain local or fake-only values.
-- Prisma schema generation and migration commands run through the Prisma CLI and do not import the API environment module. Supply `DATABASE_URL` in the invoking process (or through Prisma's own package-local environment-file convention); do not assume the repository-root `.env` is loaded for migrations.
-- The Next.js application follows Next's `apps/web/.env*` behavior in local development. Browser-visible `NEXT_PUBLIC_*` values are build-time inputs and are not sourced from the repository-root API `.env`.
-- GitHub Actions supplies explicit fake test variables in `.github/workflows/ci.yml`. It does not consume `.env` or `.env.example`.
-- Docker build contexts exclude `.env` files and the images do not copy them. Railway injects runtime variables into each service, while `NEXT_PUBLIC_API_BASE_URL` must also be supplied to the web Docker build as a build argument.
+Observability:
 
-`MEDIA_PUBLIC_BASE_URL` is optional for the business-basic account-connection milestone. When it is empty or absent, media generated by MARKOS uses the public `API_BASE_URL` media route. That is acceptable for the first supervised connection test, which reads provider-owned recent-media URLs and does not publish. Before enabling publishing, configure durable public media storage because Railway container filesystems are not a durable CDN.
+- `SENTRY_DSN`
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
+- `SENTRY_TRACES_SAMPLE_RATE`
 
-`AI_BASE_URL` and `OPENSEARCH_URL` may use loopback URLs only for local infrastructure. On Railway they must identify their separately deployed, reachable services. OAuth connection does not call either dependency, but `/v1/health/deep` reports a degraded result when they are unreachable, so both remain staging-acceptance dependencies.
+### Worker runtime
 
-## Railway deployment contract
+The worker imports the same API environment schema. At minimum, mirror the database, Redis, relevant provider, encryption, model, media, and Sentry settings needed by its enabled tasks. Worker intervals are:
 
-For Railway, deploy the web and API as separate services from the repository Dockerfiles. Set `NEXT_PUBLIC_API_BASE_URL` as a **build variable** for the web image; Next.js embeds public variables during `next build`, and the web Dockerfile declares the corresponding build `ARG`. Set the API's public HTTPS URL, not a private hostname, because browser requests originate outside Railway's private network.
+- `WORKER_PUBLISHING_INTERVAL_MS`
+- `WORKER_ANALYTICS_EMAIL_INTERVAL_MS`
+- `WORKER_ANALYTICS_SYNC_INTERVAL_MS`
+- `WORKER_TOKEN_REFRESH_INTERVAL_MS`
+- `WORKER_USAGE_RESET_INTERVAL_MS`
 
-The API accepts Railway's injected `PORT`. Its image includes the PostgreSQL client so the Railway pre-deploy command can apply the canonical prerequisites and migrations without duplicating SQL:
+Do not copy all API secrets blindly. Record which worker task consumes each shared secret before choosing shared variables.
+
+### AI runtime
+
+Current code consumes:
+
+- `AI_PORT`
+- `INTERNAL_SERVICE_TOKEN` (currently not enforced)
+- `DATABASE_URL` (configured but not used by current handlers)
+- `LLM_PRIMARY_MODEL`
+- `LLM_FLAGSHIP_MODEL`
+- `LLM_LONGFORM_MODEL`
+- `LLM_CHEAP_MODEL`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
+- `IMAGE_MODEL_PRIMARY`
+- `IMAGE_MODEL_FALLBACK`
+- `SENTRY_DSN`
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
+- `SENTRY_TRACES_SAMPLE_RATE`
+
+`OPENAI_API_KEY` is inventoried for future work but is not consumed by the current FastAPI source. Do not add a real key until a provider implementation uses it and the API-to-AI boundary is protected.
+
+## Secret handling
+
+Treat at least database URLs, JWT secrets, Instagram/Meta app secrets, OAuth state secrets, token-encryption keys, webhook verification secrets, future OpenAI/provider keys, and Sentry DSNs as secrets. Keep them out of:
+
+- Git and `.env.example` real values;
+- Docker build arguments and `NEXT_PUBLIC_*` names;
+- PR text, screenshots, chat, terminal transcripts, and evidence manifests;
+- callback URLs or logs containing query data;
+- client-side responses and browser storage.
+
+Use names, presence/readiness state, and safe validation outcomes in audits. Never print a secret to prove it exists.
+
+## A-to-Z Railway reconstruction
+
+### 1. Inventory the actual target
+
+In Railway, record without values:
+
+- project and environment names;
+- every service and its repository/Dockerfile source;
+- current deployment branch/commit;
+- public and private domains;
+- build, pre-deploy, start, health-check, restart, and replica settings;
+- attached PostgreSQL/Redis/OpenSearch/storage resources;
+- variable names and whether they are service-local or shared;
+- current deployment/health status and last successful deploy.
+
+Compare the result with the service table above. Do not change the dashboard during the inventory pass unless the change is separately authorized.
+
+### 2. Provision dependencies deliberately
+
+For a new environment:
+
+1. Provision PostgreSQL with pgvector support and the privileges required by `001-init.sql`.
+2. Provision Redis if auth/worker/cache flows require it.
+3. Provision OpenSearch or explicitly record why the current deep-health gate will remain degraded.
+4. Decide whether the AI service is in scope. If yes, complete the AI review below before pointing `AI_BASE_URL` at it.
+5. Do not use a Railway container filesystem as the durable publishing-media store.
+
+### 3. Create application services
+
+Create separate services from the repository root:
+
+| Service | Dockerfile                   |
+| ------- | ---------------------------- |
+| Web     | `apps/web/Dockerfile`        |
+| API     | `apps/api/Dockerfile`        |
+| Worker  | `apps/api/worker.Dockerfile` |
+| AI      | `services/ai/Dockerfile`     |
+
+Set the web's `NEXT_PUBLIC_API_BASE_URL` build input before building. Confirm the API uses Railway's injected `PORT`. Confirm how Railway routes to the AI image's fixed port 8000 before relying on its health check.
+
+### 4. Initialize a confirmed-new database
+
+The current migration directory is a single baseline for a new, empty pgvector database. Do **not** apply it as rewritten history to a valuable database or one with a different `_prisma_migrations` history. Preserve such a database and design a reviewed forward migration.
+
+For a confirmed-new/disposable target, the API image contains `psql` and supports this repository-root pre-deploy sequence:
 
 ```bash
 psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy && pnpm --filter api prisma db seed
 ```
 
-A failed pre-deploy command must stop deployment. The PostgreSQL service must support `pgcrypto`, `vector`, role creation, and the repository's `uuid_generate_v7()` helper. Railway's default PostgreSQL image does not guarantee every extension, so use a compatible pgvector template or a managed PostgreSQL target whose privileges and extensions have been verified before deployment.
+A failed command must stop deployment. The initialization is idempotent; the seed upserts only the four active plan rows (`STARTER`, `GROWTH`, `PREMIUM`, and `ENTERPRISE`). It creates no users, workspaces, content, OAuth state, Instagram credentials, recent media, or analytics.
 
-Do not mark Railway acceptance complete until the canonical initialization, all migrations, application-role RLS, public HTTPS callback URLs, and a supervised real-Meta connection have been exercised on a disposable staging deployment.
+For an existing Railway database, first inspect migration status, roles, extensions, backups, and valuable data without running the baseline command. Never use `prisma db push` as a substitute for a reviewed migration.
 
-### Instagram OAuth lifecycle diagnostics
+### 5. Configure variables by consumer
 
-The OAuth routes use three terminal failure events: `instagram_oauth_start_failure`, `instagram_oauth_callback_failure`, and `instagram_connection_status_failure`. The only success events are `instagram_oauth_start_success` (a signed transaction and authorization URL were issued) and `instagram_oauth_callback_success` (the credential/media/audit transaction committed, the secured read succeeded, and the response/redirect was constructed). Meta's internal login, account selection, and consent screens are not observable and are never claimed as successes.
+Populate required names from the inventory above using Railway variables/secrets. Verify:
 
-Each failed request emits exactly one terminal event at its owning route boundary. Lower layers throw typed safe diagnostics and never log. The authoritative stages are:
+- browser-facing API URL is public HTTPS and embedded in the web build;
+- API/worker database and Redis URLs use reachable service addresses;
+- `AI_BASE_URL` and `OPENSEARCH_URL` are not loopback URLs when services are separate;
+- `API_BASE_URL` and `WEB_BASE_URL` are the deployed public origins;
+- OAuth redirect and Meta callback paths match `instagram-app-review.md` exactly;
+- provider modes remain `dry_run` unless their separate acceptance runbooks are satisfied.
+
+### 6. Deploy in dependency order
+
+For a new environment:
+
+1. PostgreSQL and required extensions/roles.
+2. Redis and OpenSearch if included.
+3. AI service if included and reviewed.
+4. API after database pre-deploy succeeds.
+5. Worker after API/database/provider configuration is coherent.
+6. Web after the public API build variable is set.
+
+Automatic Railway deployments from `main` are externally configured behavior. Confirm the actual trigger rather than assuming it from this repository.
+
+### 7. Configure domains and callbacks
+
+Use HTTPS for public web/API domains. Update externally managed Meta URLs only through an authorized change. Do not paste a callback URL containing `code`, `state`, or any query string into logs, tickets, or evidence.
+
+### 8. Verify infrastructure health
+
+Run read-only checks against the deployed hosts:
+
+```bash
+curl https://<api-host>/v1/health
+curl https://<api-host>/v1/health/deep
+curl https://<web-host>/ar
+curl https://<web-host>/en
+curl https://<ai-host>/ai/health
+```
+
+Interpret results narrowly:
+
+- API shallow health proves the API process responds.
+- API deep health reports database, Redis, OpenSearch, and AI reachability; a degraded dependency remains an acceptance gap.
+- Web 200 responses prove rendered routes, not authentication or business behavior.
+- AI shallow health proves only the FastAPI process. Current deep health is always degraded and provider inference remains absent.
+
+### 9. Run application smoke tests
+
+Use a fresh test workspace and non-sensitive evidence:
+
+1. Register, verify, and log in using the intended environment's supported email path.
+2. Load Arabic and English routes.
+3. Confirm workspace isolation and access controls.
+4. Complete a narrow onboarding/Vault request.
+5. Check Settings connection status.
+6. For a controlled Meta test, follow `instagram-app-review.md` and retain only sanitized evidence.
+7. Keep publishing/analytics in `dry_run` unless their runbooks are explicitly authorized.
+
+### 10. Capture reconstruction evidence
+
+Record commit/ref, service names, Dockerfile mapping, variable-name inventory, health outcomes, migration status, and known gaps. Do not record values or real identifiers. Link the evidence to the exact reachable branch/commit; do not use a task-local or unreachable hash as durable provenance.
+
+## AI service deployment review
+
+Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify these known gaps:
+
+- outputs and embeddings are deterministic local scaffolding;
+- no OpenAI provider call exists;
+- `OPENAI_API_KEY` is unused;
+- `INTERNAL_SERVICE_TOKEN` is not enforced and the API does not send it;
+- `/ai/health/deep` does not check dependencies;
+- Docker listens on fixed port 8000.
+
+The immediate infrastructure goal is process health and protected backend connectivity, followed by one real provider response only after application code and an authorized OpenAI project credential exist. Do not claim the onboarding agent, RAG, or eight agents are production-ready from a successful shallow health check.
+
+## Instagram OAuth operations
+
+### Production verification record
+
+On 2026-08-03, a project-supervised production attempt completed the current business-basic flow: Settings showed Connected and recent provider media. This documentation update did not access Railway logs, Meta, credentials, or production data. The result does not close publishing, analytics, App Review, full token-lifecycle, storage/CDN, or launch gates.
+
+### Terminal events and stages
+
+The OAuth routes use three terminal failure events:
+
+- `instagram_oauth_start_failure`
+- `instagram_oauth_callback_failure`
+- `instagram_connection_status_failure`
+
+The only success events are:
+
+- `instagram_oauth_start_success`
+- `instagram_oauth_callback_success`
+
+Each failed request emits exactly one terminal event at its owning route boundary. Lower layers attach typed safe diagnostics and do not log independently.
 
 | Flow                    | Stages                                                                                                                                                                                                                                                                                       |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -148,95 +337,86 @@ Each failed request emits exactly one terminal event at its owning route boundar
 | Persistence             | `credential_configuration`, `credential_serialization`, `credential_encryption`, `database_transaction_begin`, `connection_upsert`, `recent_media_delete`, `recent_media_insert`, `audit_insert`, `database_transaction_commit`, `post_persistence_read`, `connection_status_transformation` |
 | Completion/status       | `success_redirect`, `failure_redirect`, `connection_status_authentication`, `connection_status_authorization`, `connection_status_read`                                                                                                                                                      |
 
-Categories are fixed, low-cardinality operation outcomes such as `authentication_required`, `workspace_forbidden`, `state_signature_invalid`, `state_expired`, `transaction_already_consumed`, `provider_timeout`, `provider_http_error`, `provider_response_not_json`, `provider_response_schema_invalid`, `encryption_key_missing`, `encryption_key_invalid`, and the database categories below. Required-field failures belong to the applicable response-validation stage. The removed `provider_account_validation`, `provider_account_id_mismatch`, and broad `credential_persistence` classifications are not emitted.
+Only these scalar metadata classes are allowed: event, stage, category, retryability, request ID, validated provider HTTP/type/numeric code/subcode, recognized Prisma code, and fixed validation code. Never serialize errors, causes, messages, stacks, Prisma metadata, SQL, parameters, URLs, query strings, headers, cookies, sessions, identities, usernames, emails, state or fingerprints, authorization codes, tokens, app secrets, encryption keys, ciphertext, IVs, tags, or provider/database bodies.
 
-Database metadata is limited to explicitly recognized Prisma codes: `P1000`, `P1001`, `P1002`, `P1008`, `P1017`, `P2002`, `P2003`, `P2025`, and `P2034`. These map to fixed categories; unknown errors become `database_unknown_failure` without a code. Only transient connection/timeout codes `P1001`, `P1002`, `P1008`, `P1017`, and transaction conflict `P2034` are retryable. Provider HTTP 429/5xx, timeouts, and network failures are retryable; invalid state, configuration, schema, encryption, authorization, and integrity/constraint failures are not.
+Recognized Prisma codes are `P1000`, `P1001`, `P1002`, `P1008`, `P1017`, `P2002`, `P2003`, `P2025`, and `P2034`. Only transient connection/timeout codes `P1001`, `P1002`, `P1008`, `P1017`, and transaction conflict `P2034` are retryable. Provider HTTP 429/5xx, timeout, and network failures are retryable; state, configuration, authorization, schema, encryption, integrity, and unknown database failures are not.
 
-Every event is constructed from an explicit allowlist: `event`, `stage`, `category`, `retryable`, `requestId`, validated provider HTTP/type/numeric code/subcode, recognized `databaseCode`, and fixed `validationCode`. It never includes errors, causes, messages, stacks, Prisma `meta`, SQL, parameters, headers, cookies, identities, usernames, URLs, query strings, state or derived state values, authorization codes, tokens, secrets, keys, ciphertext components, or provider/database bodies.
+Search Railway API logs by the stable event name and correlate only with `requestId`. Prisma failures appear through the API event; there is no separate Prisma log stream.
 
-Search the Railway **API service logs** for one of the event names and correlate only by `requestId`. Prisma has no separate Railway log page; database failures appear only through the API's sanitized event. Never share a complete callback URL, code, state, token, raw provider body, raw Prisma error, or Prisma metadata.
+### Encryption-key contract and 2026-08-03 incident
 
-Synthetic example:
+`INSTAGRAM_TOKEN_ENCRYPTION_KEY` must be canonical Base64 encoding exactly 32 bytes. The environment parser checks the decoded length when present; the credential boundary also checks canonical round-trip encoding. Because the variable is optional for general API startup, the OAuth credential-configuration stage remains an important runtime guard.
+
+The production failure was safely isolated as:
 
 ```json
 {
-  "event": "instagram_oauth_callback_failure",
-  "stage": "connection_upsert",
-  "category": "database_unique_constraint",
-  "retryable": false,
-  "requestId": "req-example",
-  "databaseCode": "P2002"
+  "stage": "credential_configuration",
+  "category": "encryption_key_invalid",
+  "retryable": false
 }
 ```
 
-After deployment, wait for the API deployment to become Active and perform one fresh connection. On failure, retain only the single event's stage, category, retryability, request ID, and safe allowlisted provider/database code. On success, confirm Settings reports Connected and `INSTAGRAM_CONNECTED` exists.
+The Railway variable existed but did not satisfy the contract. It was replaced through the external secret manager with a securely generated canonical Base64 32-byte value, and a fresh OAuth attempt succeeded. Never record the value or any derivative.
 
-## Smoke Evidence
-
-After a merge to `main` deploys staging, run the staging smoke evidence script against the live URLs:
+Validate without outputting the key:
 
 ```bash
-API_BASE_URL=https://api.staging.markos.ai \
-WEB_BASE_URL=https://staging.markos.ai \
-RELEASE_SHA=<commit-sha> \
-corepack pnpm staging:smoke
+node -e "const v=process.env.INSTAGRAM_TOKEN_ENCRYPTION_KEY??'';const b=Buffer.from(v,'base64');process.exit(b.length===32&&b.toString('base64')===v?0:1)"
 ```
 
-PowerShell:
+Run this only in the service environment where the secret is already injected. A zero exit code proves format only, not authorization or successful encryption/persistence.
 
-```powershell
-$env:API_BASE_URL="https://api.staging.markos.ai"
-$env:WEB_BASE_URL="https://staging.markos.ai"
-$env:RELEASE_SHA="<commit-sha>"
-corepack pnpm staging:smoke
-```
+## Safe test database setup
 
-The script checks:
+Repository API tests create users, workspaces, content, analytics, and other records. `NODE_ENV=test` does not select a separate database. Never run `corepack pnpm verify` with `DATABASE_URL` pointing to an ordinary development, staging, or production database.
 
-- `GET /v1/health`
-- `GET /v1/health/deep`
-- `/ar`
-- `/en`
+CI creates a dedicated loopback `markos_ci_test` database, applies the initialization/baseline, seeds plans, and sets both `DATABASE_URL` and `INSTAGRAM_DATABASE_TEST_URL` to that disposable target. Instagram database suites additionally require:
 
-It writes the ignored local artifact:
+- explicit `INSTAGRAM_DATABASE_TEST_URL` opt-in;
+- a matching actual Prisma target;
+- loopback host;
+- database name containing `test`, `spec`, or `ci`.
 
-```text
-evidence/m6/<yyyy-mm-dd>/staging/staging-smoke-report.json
-```
+Those guards do not make an ordinary database safe for the broader API suite. Use an isolated disposable database for every repository-wide local verification, then remove only that explicitly identified test database through a safe, reviewed operation.
 
-Attach that artifact to the M6 evidence pack after redacting anything sensitive.
+## GitHub staging image pipeline
 
-The GitHub workflow also uploads two non-secret artifacts on `main` when staging URLs are configured:
+Workflow: `.github/workflows/deploy-staging.yml`.
 
-- `m6-staging-image-evidence-<sha>`: immutable GHCR image references for web, API, worker, and AI.
-- `m6-staging-ecs-rollout-evidence-<sha>`: ECS cluster/service rollout proof when AWS staging variables are configured.
-- `m6-staging-smoke-evidence-<sha>`: the generated smoke report for the configured staging URLs.
+On `main`, it builds and publishes immutable commit-tagged plus moving `staging` GHCR images for web, API, worker, and AI. Optional AWS ECS rollout occurs only when GitHub `staging` environment variables such as `STAGING_AWS_ROLE_ARN`, `STAGING_AWS_REGION`, and `STAGING_ECS_CLUSTER` are configured. Smoke evidence runs only when public staging URLs are configured.
 
-Download those artifacts and place them under `evidence/m6/<yyyy-mm-dd>/staging/` before marking the staging manifest as verified.
-
-## Clean database baseline (2026-08-02)
-
-The migration directory is intentionally a **single baseline for a brand-new, empty pgvector PostgreSQL database**. It replaces the inherited migration history and includes the complete current Prisma schema, the pgvector HNSW index, application-role grants, workspace row-level security, and the Instagram OAuth state, encrypted credential, and recent-media tables.
-
-Do not apply this rewritten history to an existing database that contains valuable data or an existing `_prisma_migrations` history. Preserve that database and design a forward migration instead. Railway operators must provision a new pgvector database (or explicitly confirm the target is disposable) before using this baseline. No Railway resource is changed by this repository update.
-
-The seed creates only the four active plan catalog rows (`STARTER`, `GROWTH`, `PREMIUM`, and `ENTERPRISE`) using upserts. `STARTER` is required by password and Google registration, and the complete catalog is required by billing plan listing and upgrade paths. It creates no users, workspaces, memberships, content, analytics, OAuth state, Instagram credentials, or media.
-
-Use this exact Railway pre-deploy command from the repository root:
+Use the repository helpers when operating that separate workflow:
 
 ```bash
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy && pnpm --filter api prisma db seed
+corepack pnpm staging:github-preflight
+corepack pnpm staging:github-preflight -- --strict
+corepack pnpm staging:evidence-download -- --sha <reachable-release-sha> --strict
 ```
 
-The target database user must be allowed to install `vector` and `pgcrypto`, create the `markos` and `markos_app` roles, and grant role membership. The initialization file is idempotent and must run before Prisma because the baseline uses `vector` columns and `uuid_generate_v7()` defaults.
+The preflight and artifacts record names/readiness, not secret values. Optional ECS output is future/AWS evidence and must not be described as Railway deployment proof.
 
-To verify a clean bootstrap, run the initialization and deployment sequence, run the seed command a second time, then run:
+## Troubleshooting map
 
-```bash
-pnpm --filter api prisma migrate status
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c '\dt'
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c 'SELECT code FROM plans ORDER BY code'
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM workspaces) AS workspaces, (SELECT count(*) FROM content_items) AS content_items, (SELECT count(*) FROM oauth_state_nonces) AS oauth_states, (SELECT count(*) FROM instagram_connection_credentials) AS instagram_credentials, (SELECT count(*) FROM instagram_recent_media) AS instagram_media'
-```
+| Symptom                                                           | First evidence to check                                                   | Important limit                                                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Web calls the wrong API                                           | Web build variable and deployed browser bundle                            | Changing a Railway runtime variable after `next build` may not change the embedded public URL. |
+| API deep health is degraded                                       | Per-dependency result for DB, Redis, OpenSearch, and AI                   | OAuth connection itself does not call AI/OpenSearch, but launch deep-health acceptance does.   |
+| OAuth generic failure                                             | One terminal OAuth event and its allowlisted stage/category               | Never request callback URLs, codes, state, tokens, raw provider bodies, or Prisma errors.      |
+| `credential_configuration` / `encryption_key_invalid`             | Canonical Base64 32-byte format check                                     | Variable presence is not validity; do not print it.                                            |
+| Migration mismatch                                                | `prisma migrate status`, `_prisma_migrations`, backup/data classification | Do not apply the clean baseline to valuable inherited history.                                 |
+| AI shallow health passes but API deep health or AI behavior fails | `AI_BASE_URL`, port/routing, AI logs, `/ai/health/deep`                   | Shallow health does not prove auth, providers, embeddings, RAG, or database access.            |
+| Publishing media rejected                                         | Public HTTPS reachability and durable storage design                      | Current container filesystem/API fallback is not approved durable publishing media.            |
 
-Migration status must report that the schema is up to date; all three Instagram tables must appear; the catalog query must return exactly four plans; and every tenant/sample-data count must be zero before registration tests create their own isolated fixtures.
+## Remaining manual verification
+
+- Confirm the Railway project/environment/service topology and automatic deploy triggers.
+- Confirm PostgreSQL extensions, roles, migration history, backups, connection limits, and application-role RLS.
+- Confirm Redis/OpenSearch service existence and private reachability.
+- Confirm web/API/worker/AI domains, ports, health checks, and restart behavior.
+- Confirm variable names by consumer without inspecting or copying values into documentation.
+- Confirm Meta dashboard URLs, mode, roles, permissions, Graph version, webhooks, and App Review status.
+- Confirm whether the AI service is still absent; if deployed, verify the exact commit and known security/health gaps.
+- Decide durable image storage/CDN and upload flow before live publishing.
+
+See `project-status.md` for roadmap/ownership and `instagram-app-review.md` for the Meta boundary.

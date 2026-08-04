@@ -2,33 +2,39 @@
 
 This runbook closes the M3 gates for real image post and reel publishing against a test Instagram Business account.
 
+Status on 2026-08-03: **not externally verified**. The successful production business-basic connection proves that MARKOS can connect one real professional account; it does not prove publish permission, durable public media, container creation/polling, media publication, failure recovery, or App Review.
+
 Keep `INSTAGRAM_PUBLISH_MODE=dry_run` until every prerequisite below is complete. Switch to `live` only for the verification window or a production-like environment with Meta App Review permissions.
 
 ## Prerequisites
 
 - Meta app has Instagram Business Login configured.
 - Meta app has `instagram_business_basic` and `instagram_business_content_publish` available for the test user.
+- The active OAuth client has been intentionally changed and tested to request the publishing permission. The current source requests exactly `instagram_business_basic`; changing `INSTAGRAM_OAUTH_SCOPES` alone does not expand it.
 - Test Instagram account is a Business or Creator account connected to the Meta app test user.
 - MARKOS workspace is connected through the Instagram OAuth flow.
 - API can reach Meta Graph API from the running environment.
-- Media URLs used for publishing are public `https://` URLs reachable by Meta.
+- Media URLs used for publishing are durable public `https://` URLs reachable by Meta for the entire container/publish window. Current Railway/local filesystem serving is not an accepted durable media design.
 - MARKOS plan quota allows at least two `POST_PUBLISH` events.
+- Formal App Review and the controlled test-account conditions required by Meta are confirmed in the current dashboard.
 
 ## Required Environment
 
-Set these in the API and worker environment:
+The publishing provider uses the Graph base URL and version below; the readiness service also checks the listed app and redirect settings. The connected credential comes from the separately configured `INSTAGRAM_*` OAuth variables. Supply names through the deployment secret manager; never put real values in this file or a command transcript.
 
 ```bash
 INSTAGRAM_PUBLISH_MODE=live
-META_APP_ID=...
-META_APP_SECRET=...
-META_REDIRECT_URI=https://<public-api-host>/v1/workspace/instagram/oauth/callback
-META_WEBHOOK_VERIFY_TOKEN=...
+META_APP_ID=<secret-manager-reference>
+META_APP_SECRET=<secret-manager-reference>
+META_REDIRECT_URI=<deployed-oauth-callback>
+META_WEBHOOK_VERIFY_TOKEN=<secret-manager-reference>
 META_GRAPH_BASE_URL=https://graph.facebook.com
-META_GRAPH_VERSION=v24.0
+META_GRAPH_VERSION=<reviewed-version>
 ```
 
 Then restart the API and worker.
+
+The live-readiness endpoint currently checks configuration presence and connection state; it cannot prove the granted provider permission, App Review state, media fetchability, or a successful publish. Treat `ready: true` as a preflight result, not acceptance evidence.
 
 ## Readiness Check
 
@@ -50,7 +56,7 @@ Expected ready response:
     "reasons": [],
     "connection": {
       "connected": true,
-      "accountId": "178..."
+      "accountId": "<provider-account-id>"
     }
   }
 }
@@ -74,6 +80,8 @@ Evidence to save:
 - API response with `instagramPostId`.
 - Screenshot or link showing the post on Instagram.
 - Audit/log entry for the publish run.
+
+Redact tokens, provider-account IDs, workspace/user IDs, callback data, headers, raw provider bodies, and customer data before sharing evidence. Store real evidence outside Git unless the repository evidence policy explicitly permits a sanitized artifact.
 
 ## Reel Verification
 

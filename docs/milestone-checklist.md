@@ -6,6 +6,8 @@ Use this file as the working progress tracker. Only tick an item when the implem
 
 UI, UX, and frontend journey parity are tracked separately in `docs/ui-functionality-checklist.md` and `docs/final-ui-implementation-checklist.md`.
 
+Current implementation, roadmap, ownership, and evidence classifications are summarized in `docs/project-status.md`.
+
 Legend:
 
 - `[x]` Done and verified
@@ -13,13 +15,12 @@ Legend:
 
 ## Current Snapshot
 
-- Current active build milestone: M6 Beta + Launch
-- Open foundation gates: live staging proof, formal Meta App Review submission, and M0 acceptance sign-off
-- Last confirmed internal gates: `corepack pnpm typecheck`, `corepack pnpm lint`, `corepack pnpm test`, `corepack pnpm build`, `corepack pnpm perf:baseline`, `corepack pnpm load:test`, `corepack pnpm security:audit`, and `corepack pnpm rtl:qa`
-- Last pushed commit at checklist creation: `de6ae1e Enforce AI generation quotas`
-- Latest completed implementation step: M6 internal build evidence gate verified with performance, load, audit, RTL, test, lint, typecheck, and build artifacts
-- Latest completed frontend step: final command-center visual shell, dashboard, briefing, opportunities, campaign builder, content studio, analytics, Knowledge Vault, Settings, route aliases, and UI screenshot evidence in `evidence/ui/2026-06-18`
-- Next M6 focus: attach real provider artifacts for staging, Meta App Review, Instagram publish/analytics, and Bahrain live payments
+- Status date: 2026-08-03.
+- Current milestone ledger: implementation spans M0 through M6, but M0, M3, M4, M5, and M6 external gates remain open. Do not infer launch readiness from the active M6 label.
+- Latest production-verified step: one real Instagram professional account completed the business-basic OAuth connection, appeared Connected in production Settings, and loaded recent media on 2026-08-03.
+- That production result closes the first connection milestone only. Publishing, insights/analytics, Meta App Review, a full token lifecycle, provider-side revocation, production AI, durable media delivery, and broad launch readiness remain unverified.
+- The current near-term focus is the complete user journey, verification email delivery, bearer-token lifecycle, UI work with Mohamed, continued security/API hardening, first AI-service deployment and provider connectivity, Railway/database operations, and an image storage/CDN decision.
+- Required external evidence remains live staging/production inventory, Meta App Review, real image/reel publishing, real analytics, and Bahrain live payments. See `docs/m6-acceptance-evidence.md`.
 
 ## M0 Foundation
 
@@ -38,7 +39,8 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Workspace isolation tests cover every Prisma model with a `workspaceId` field.
 - [x] Database RLS policies are implemented and fail closed with `app.current_workspace`.
 - [x] Email/password registration and login.
-- [x] Email verification flow.
+- [x] Email verification token/request/confirmation flow implemented and tested.
+- [ ] Production transactional verification-email delivery verified.
 - [x] Google OAuth login.
 - [x] JWT access token and refresh token issuance.
 - [x] Refresh token rotation and reuse detection.
@@ -46,7 +48,9 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] TOTP MFA for admin/finance roles.
 - [x] RBAC permission catalog with role and permission guards.
 - [x] Shared packages: shared types, validation, API client, i18n, UI tokens.
-- [x] Provider interfaces and configurable model IDs.
+- [x] AI HTTP client boundaries and configurable model slots.
+- [ ] A real AI provider interface is implemented and verified end to end.
+  - Note: the current FastAPI service returns deterministic local embeddings and fixed outputs; it does not call OpenAI or another provider.
 - [x] AI interaction token metering skeleton.
 - [x] Usage counters and plan quota enforcement for strategy/content AI generation.
 - [x] Usage enforcement covers AI image generation, MARKOS post publish caps, storage, and reset rules.
@@ -56,6 +60,8 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Staging deploy workflow builds and publishes deployable service images on merge to `main`.
   - Note: `.github/workflows/deploy-staging.yml` now uploads staging image evidence, ECS rollout evidence when AWS staging is configured, and smoke evidence when public staging URLs are configured. `corepack pnpm staging:github-preflight` checks the GitHub `staging` environment without printing variable values.
 - [ ] Live staging deploy on merge to `main` has been proven with configured cloud credentials.
+- [x] A deployed production web/API/database path completed one supervised real-Meta business-basic connection on 2026-08-03.
+  - Note: this is narrow production provider evidence, not proof that the repository's GitHub staging workflow deployed Railway or that every Railway service/dependency is healthy. The dashboard topology still requires an operator inventory.
 - [x] Sentry or equivalent observability in web, API, and AI services.
 - [x] Deep health checks cover DB/Redis/OpenSearch/AI.
   - Note: dependency checks now report per-dependency duration and fail fast by dependency class, preventing unavailable HTTP dependencies from stalling readiness.
@@ -72,44 +78,51 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] Onboarding screen scaffold exists in the web app.
 - [x] Vault screen scaffold exists in the web app.
 - [x] Vault storage APIs exist.
-- [x] Vault embeddings are generated and stored.
+- [x] Vault embeddings are generated and stored using the deterministic local embedding contract.
 - [x] Vault completeness score exists.
 - [x] RAG search exists and is used by strategy/content calls.
-- [x] One grounded Strategy Agent call returns Vault context.
+- [x] One locally grounded Strategy path returns workspace Vault context.
 - [x] Seven-module onboarding wizard is complete against the spec.
 - [x] Vault versioning UX and history are complete.
 - [x] Brand upload flow is complete.
 - [x] Completeness gaps are surfaced in the expected UX.
-- [x] M1 acceptance gate fully passed.
+- [ ] M1 acceptance gate fully passed with a live provider interface.
+  - Note: local deterministic grounding is covered, but provider-backed embeddings/generation and deployed cross-service behavior remain unverified.
 
 ## M2 AI Content Engine
 
 Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, moved through workflow; strategy PDF exports.
 
-- [x] Vault-grounded strategy generation exists.
-- [x] Vault-grounded content draft generation exists.
+- [x] Vault-grounded local strategy generation exists.
+- [x] Vault-grounded local content draft generation exists.
 - [x] Content approval workflow exists.
 - [x] Schedule/calendar foundation exists.
-- [x] All eight agents are implemented.
+- [ ] All eight agents are provider-backed and satisfy their production contracts.
+  - Note: one endpoint returns fixed local output shapes for all eight agent names; that is scaffolding, not mature provider-backed agent implementation.
 - [x] Strategy PDF export.
 - [x] Calendar slot to content generation workflow.
 - [x] Bilingual tone-locked content workflow.
 - [x] TipTap/editorial workflow.
-- [x] AI image pipeline.
+- [ ] Provider-backed AI image pipeline.
+  - Note: the current FastAPI path creates deterministic SVGs locally.
 - [x] Prompt A/B tooling.
-- [x] Full token and image metering.
-- [x] M2 acceptance gate fully passed.
+- [ ] Provider-reported token and image metering is verified.
+  - Note: current local responses estimate token counts; real provider usage is absent.
+- [ ] M2 acceptance gate fully passed.
 
 ## M3 Instagram
 
 Gate: Real post and reel publish to a test Instagram Business account; forced failure creates alert and reschedule path.
 
-- [x] Instagram OAuth connection flow scaffold.
+- [x] Instagram OAuth connection flow implemented and covered by focused source, integration, browser, persistence, and redaction tests.
+- [x] One production Instagram professional-account connection completed on 2026-08-03.
+  - Note: production Settings showed Connected and rendered bounded recent provider media. The successful path includes state/transaction security, provider exchanges, `/me.user_id` professional-account resolution, encrypted persistence, atomic recent-media and `INSTAGRAM_CONNECTED` writes, secured status read, redirect, and UI refresh.
 - [x] Meta Graph adapter behind live flag.
 - [x] Dry-run publishing worker.
 - [x] Publish readiness checks for public media URLs.
 - [x] Instagram daily publish cap guard.
-- [x] Token refresh flow and maintenance worker.
+- [x] Token refresh flow and maintenance worker implemented and locally/CI verified.
+- [ ] Token refresh across a full production lifetime and provider-side revocation/deauthorization behavior verified.
 - [x] Meta callback endpoints for webhooks, deauthorization, and data deletion.
 - [x] Callback audit logging.
 - [ ] Real image post publish verified against a test IG Business account.
@@ -124,10 +137,11 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 Gate: Real metrics render; AI interprets 30 days; monthly PDF emails; performance data feeds the Vault.
 
 - [ ] Instagram analytics sync workers.
-  - Note: foundation exists with workspace-scoped API sync, maintenance worker hook, provider boundary, live-readiness endpoint, tests, UI, and live verification runbook; remains unchecked until live Instagram metrics are verified.
+  - Note: foundation exists with workspace-scoped API sync, maintenance worker hook, provider boundary, live-readiness endpoint, tests, UI, and live verification runbook. The active OAuth client still requests only `instagram_business_basic`; permission expansion and live Instagram metrics remain unverified.
 - [x] Analytics screens AN-01 through AN-06.
-- [x] Analytics Consultant agent.
-- [x] Digest and analytics chat.
+- [ ] Provider-backed Analytics Consultant agent.
+  - Note: a fixed local agent-shaped response exists; real interpretation is not implemented.
+- [x] Digest and analytics chat application surfaces and API foundations.
 - [x] Monthly analytics PDF.
 - [x] Email delivery for monthly PDF.
 - [x] Learning loop writes performance data back to the Vault.
@@ -183,4 +197,4 @@ Gate: NFR met; security audit passed; Starter and Growth live in Bahrain.
 - [x] Staging smoke evidence capture.
   - Note: `corepack pnpm staging:smoke` checks staging API health, deep health, Arabic shell, and English shell, then writes ignored local proof to `evidence/m6/<date>/staging/staging-smoke-report.json`; the script refuses localhost unless `ALLOW_LOCAL_STAGING_SMOKE=true` is set for local validation. This does not close the live staging gate until real staging URLs, release SHA, and cloud deploy evidence are used.
 - [ ] M6 acceptance gate fully passed.
-  - Note: `docs/m6-acceptance-evidence.md` now tracks verified internal evidence and the remaining external provider blockers. Keep M6 open until live staging, Meta App Review, Instagram publish/analytics, and Bahrain live payment evidence are attached.
+  - Note: `docs/m6-acceptance-evidence.md` tracks verified internal evidence, the narrow 2026-08-03 production connection milestone, and the remaining external provider blockers. Keep M6 open until live staging inventory, Meta App Review, Instagram publish/analytics, and Bahrain live payment evidence are attached.

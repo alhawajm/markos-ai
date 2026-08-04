@@ -4,7 +4,11 @@ AI-powered marketing operating system for Bahrain SMBs. Version 1 is Instagram-o
 
 Start with M0 Foundation from `MARKOS_BUILD_SPEC. 2.pdf`.
 
-Progress is tracked in [`docs/milestone-checklist.md`](docs/milestone-checklist.md).
+Start with the current operational overlay in
+[`docs/project-status.md`](docs/project-status.md). Detailed progress is tracked in
+[`docs/milestone-checklist.md`](docs/milestone-checklist.md), durable engineering choices in
+[`docs/decisions.md`](docs/decisions.md), and Railway deployment operations in
+[`docs/staging-deploy.md`](docs/staging-deploy.md).
 
 ```bash
 corepack pnpm install
