@@ -17,7 +17,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
 
   beforeAll(async () => {
     originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = async (input) => {
       providerCalls += 1;
       const url = String(input);
       if (url === "https://api.instagram.com/oauth/access_token")
@@ -26,11 +26,6 @@ describeInstagramDatabase("registered Instagram routes", () => {
         return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
       if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
         return response({ user_id: "route-professional-account", username: "route_business", media: { data: [] } });
-      if (url === "https://graph.instagram.com/v25.0/me/permissions") {
-        expect(init?.method).toBe("DELETE");
-        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fake-long-token");
-        return response({ success: true });
-      }
       throw new Error("Unexpected provider request");
     };
     app = await buildApp();
@@ -182,7 +177,10 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(disconnected.statusCode).toBe(200);
     expect(disconnected.json().data).toMatchObject({
       connection: { connected: false, status: "DISCONNECTED" },
-      providerRevocation: { status: "CONFIRMED" },
+      providerRevocation: {
+        status: "ACTION_REQUIRED",
+        manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
+      },
     });
   });
 

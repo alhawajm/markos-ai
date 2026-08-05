@@ -43,9 +43,11 @@ describe("Meta callback routes", () => {
     const accountId = `meta-${randomUUID()}`;
     await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
 
+    const deauthorizeSignedRequest = signedRequest(accountId);
     const deauthorize = await app.inject({
+      headers: { "content-type": "application/x-www-form-urlencoded" },
       method: "POST",
-      payload: { signed_request: signedRequest(accountId) },
+      payload: `signed_request=${encodeURIComponent(deauthorizeSignedRequest)}`,
       url: "/v1/meta/deauthorize"
     });
     const workspaceAfterDeauthorize = await prisma.workspace.findUniqueOrThrow({
@@ -67,9 +69,11 @@ describe("Meta callback routes", () => {
     expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
     await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "connected-token" });
+    const deletionSignedRequest = signedRequest(accountId);
     const deletion = await app.inject({
+      headers: { "content-type": "application/octet-stream" },
       method: "POST",
-      payload: { signed_request: signedRequest(accountId) },
+      payload: `signed_request=${encodeURIComponent(deletionSignedRequest)}`,
       url: "/v1/meta/data-deletion"
     });
     const workspaceAfterDeletion = await prisma.workspace.findUniqueOrThrow({

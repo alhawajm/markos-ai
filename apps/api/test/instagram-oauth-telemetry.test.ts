@@ -90,12 +90,10 @@ describe("Instagram OAuth safe diagnostics", () => {
     expect(new Set(INSTAGRAM_DISCONNECT_STAGES).size).toBe(
       INSTAGRAM_DISCONNECT_STAGES.length,
     );
-    expect(INSTAGRAM_DISCONNECT_STAGES).toContain(
-      "provider_revocation_response_validation",
-    );
+    expect(INSTAGRAM_DISCONNECT_STAGES).toContain("provider_removal_action");
   });
 
-  it("logs sanitized disconnect stages with provider diagnostics", async () => {
+  it("logs the required provider removal action without sensitive data", async () => {
     const stream = new PassThrough();
     let serialized = "";
     stream.on("data", (chunk) => {
@@ -106,26 +104,18 @@ describe("Instagram OAuth safe diagnostics", () => {
       logger,
       requestId: "safe-disconnect-request",
       update: {
-        stage: "provider_revocation_request",
-        outcome: "unconfirmed",
-        providerRevocationStatus: "UNCONFIRMED",
-        diagnostic: {
-          stage: "provider_revocation_request",
-          category: "provider_http_error",
-          retryable: false,
-          providerHttpStatus: 400,
-          providerErrorType: "OAuthException",
-          providerErrorCode: 190,
-          providerErrorSubcode: 463,
-        },
+        stage: "provider_removal_action",
+        outcome: "action_required",
+        providerRevocationStatus: "ACTION_REQUIRED",
       },
     });
     await new Promise<void>((resolve) => stream.end(resolve));
     expect(serialized).toContain(INSTAGRAM_DISCONNECT_STAGE_EVENT);
-    expect(serialized).toContain('"stage":"provider_revocation_request"');
-    expect(serialized).toContain('"outcome":"unconfirmed"');
-    expect(serialized).toContain('"providerHttpStatus":400');
-    expect(serialized).toContain('"providerErrorCode":190');
+    expect(serialized).toContain('"stage":"provider_removal_action"');
+    expect(serialized).toContain('"outcome":"action_required"');
+    expect(serialized).toContain(
+      '"providerRevocationStatus":"ACTION_REQUIRED"',
+    );
     expect(serialized).not.toContain("access_token");
   });
 

@@ -354,7 +354,10 @@ describe("active SettingsPanel Instagram interactions", () => {
     await pending!.fulfill(
       json({
         connection: disconnected,
-        providerRevocation: { status: "CONFIRMED" },
+        providerRevocation: {
+          status: "ACTION_REQUIRED",
+          manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
+        },
       }),
     );
     await confirmed.page.getByText("Not set", { exact: true }).waitFor();
@@ -372,10 +375,17 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       confirmed.page
         .getByText(
-          "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
+          "Instagram was disconnected from MARKOS and its local credential was removed. To finish on Instagram, open Apps and websites and select Remove next to MarkOS AI-IG.",
         )
         .isVisible(),
     ).resolves.toBe(true);
+    const requiredAction = confirmed.page.getByRole("link", {
+      name: "Finish on Instagram",
+    });
+    await expect(requiredAction.isVisible()).resolves.toBe(true);
+    await expect(requiredAction.getAttribute("href")).resolves.toBe(
+      "https://www.instagram.com/accounts/manage_access/",
+    );
     await confirmed.page.close();
 
     const unconfirmed = await settingsPage(connected);
@@ -398,14 +408,12 @@ describe("active SettingsPanel Instagram interactions", () => {
     );
     unconfirmed.page.once("dialog", (dialog) => dialog.accept());
     await unconfirmed.page.getByRole("button", { name: "Disconnect" }).click();
-    await unconfirmed.page
-      .getByText(/Meta did not confirm revocation/)
-      .waitFor();
+    await unconfirmed.page.getByText(/To finish on Instagram/).waitFor();
     await expect(
       unconfirmed.page.getByText("Not set", { exact: true }).isVisible(),
     ).resolves.toBe(true);
     const manualAction = unconfirmed.page.getByRole("link", {
-      name: "Open Instagram permissions",
+      name: "Finish on Instagram",
     });
     await expect(manualAction.isVisible()).resolves.toBe(true);
     await expect(manualAction.getAttribute("href")).resolves.toBe(

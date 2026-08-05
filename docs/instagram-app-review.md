@@ -110,7 +110,7 @@ Do not record a real authorization code, token, state, callback URL with a query
 - `INSTAGRAM_TOKEN_ENCRYPTION_KEY` is canonical Base64 that decodes to exactly 32 bytes. Presence alone is not validity.
 - Webhook verification succeeds against `/v1/meta/webhooks/instagram`.
 - Long-lived token refresh is verified from Settings and the worker over a real eligible lifecycle before it is described as production-complete.
-- A controlled disconnect receives explicit provider revocation confirmation and the former token can no longer read `/me`; also verify that provider failure still removes the local credential and presents the manual permissions action.
+- A controlled disconnect removes the local credential and presents the required Instagram Apps and websites action; selecting **Remove** invalidates the former token and delivers a valid signed callback that receives HTTP 200.
 - Deauthorization and data-deletion callbacks accept only a valid Meta `signed_request` and are verified with controlled provider delivery.
 - Webhook POSTs require a valid `X-Hub-Signature-256`; invalid or unsigned payloads are rejected before audit processing.
 - Callback audit persistence redacts signed requests and secrets.

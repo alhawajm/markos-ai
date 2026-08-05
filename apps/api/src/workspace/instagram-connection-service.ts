@@ -25,7 +25,6 @@ import {
   classifyDatabaseFailure,
   InstagramOAuthDiagnosticError,
   type InstagramDisconnectStageUpdate,
-  type InstagramOAuthFailureDiagnostic,
   type InstagramOAuthFailureStage,
 } from "./instagram-oauth-telemetry";
 
@@ -312,11 +311,9 @@ export async function disconnectSecureInstagram(
   workspaceId: string,
   actorId: string,
   options: {
-    client?: Pick<InstagramBasicClient, "revoke">;
     onStage?: (update: InstagramDisconnectStageUpdate) => void;
   } = {},
 ): Promise<InstagramDisconnectResult> {
-  const client = options.client ?? new InstagramBasicClient();
   const report = (update: InstagramDisconnectStageUpdate) => {
     try {
       options.onStage?.(update);
@@ -327,13 +324,13 @@ export async function disconnectSecureInstagram(
   report({ stage: "disconnect_request", outcome: "started" });
   report({ stage: "credential_lookup", outcome: "started" });
 
-  let storedCredential: { encryptedAccessToken: string } | null;
+  let storedCredential: { workspaceId: string } | null;
   try {
     storedCredential = await withWorkspaceDbContext(workspaceId, (tx) =>
       tx.instagramConnectionCredential.findUnique({
         where: { workspaceId },
         select: {
-          encryptedAccessToken: true,
+          workspaceId: true,
         },
       }),
     );
@@ -358,61 +355,18 @@ export async function disconnectSecureInstagram(
     status: "NOT_APPLICABLE",
   };
   if (storedCredential) {
-    let accessToken: string | undefined;
-    try {
-      report({ stage: "credential_decryption", outcome: "started" });
-      accessToken = decryptCredential(
-        storedCredential.encryptedAccessToken,
-        requiredKey(),
-      );
-    } catch {
-      providerRevocation = {
-        status: "UNCONFIRMED",
-        manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
-      };
-      report({
-        stage: "credential_decryption",
-        outcome: "unconfirmed",
-        providerRevocationStatus: "UNCONFIRMED",
-        diagnostic: {
-          stage: "credential_decryption",
-          category: "credential_decryption_failed",
-          retryable: false,
-        },
-      });
-    }
-
-    if (accessToken) {
-      report({ stage: "credential_decryption", outcome: "completed" });
-      report({ stage: "provider_revocation_request", outcome: "started" });
-      try {
-        await client.revoke(accessToken);
-        providerRevocation = { status: "CONFIRMED" };
-        report({
-          stage: "provider_revocation_response_validation",
-          outcome: "confirmed",
-          providerRevocationStatus: "CONFIRMED",
-        });
-      } catch (error) {
-        const diagnostic = classifyProviderRevocationFailure(error);
-        providerRevocation = {
-          status: "UNCONFIRMED",
-          manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
-        };
-        report({
-          stage:
-            diagnostic.stage === "provider_revocation_request"
-              ? "provider_revocation_request"
-              : "provider_revocation_response_validation",
-          outcome: "unconfirmed",
-          providerRevocationStatus: "UNCONFIRMED",
-          diagnostic,
-        });
-      }
-    }
+    providerRevocation = {
+      status: "ACTION_REQUIRED",
+      manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
+    };
+    report({
+      stage: "provider_removal_action",
+      outcome: "action_required",
+      providerRevocationStatus: "ACTION_REQUIRED",
+    });
   } else {
     report({
-      stage: "provider_revocation_request",
+      stage: "provider_removal_action",
       outcome: "skipped",
       providerRevocationStatus: "NOT_APPLICABLE",
     });
@@ -475,52 +429,6 @@ export async function disconnectSecureInstagram(
       recentMedia: [],
     },
     providerRevocation,
-  };
-}
-
-function classifyProviderRevocationFailure(
-  error: unknown,
-): InstagramOAuthFailureDiagnostic {
-  if (!(error instanceof InstagramProviderError)) {
-    return {
-      stage: "provider_revocation_request",
-      category: "provider_client_failure",
-      retryable: false,
-    };
-  }
-
-  return {
-    stage:
-      error.kind === "schema" ||
-      error.kind === "response_not_json" ||
-      error.kind === "response_too_large"
-        ? "provider_revocation_response_validation"
-        : "provider_revocation_request",
-    category:
-      error.kind === "http"
-        ? "provider_http_error"
-        : error.kind === "network"
-          ? "provider_network_error"
-          : error.kind === "timeout"
-            ? "provider_timeout"
-            : error.kind === "response_not_json"
-              ? "provider_response_not_json"
-              : error.kind === "response_too_large"
-                ? "provider_response_too_large"
-                : "provider_response_schema_invalid",
-    retryable: error.diagnostic.retryable,
-    ...(error.diagnostic.httpStatus === undefined
-      ? {}
-      : { providerHttpStatus: error.diagnostic.httpStatus }),
-    ...(error.diagnostic.errorType === undefined
-      ? {}
-      : { providerErrorType: error.diagnostic.errorType }),
-    ...(error.diagnostic.errorCode === undefined
-      ? {}
-      : { providerErrorCode: error.diagnostic.errorCode }),
-    ...(error.diagnostic.errorSubcode === undefined
-      ? {}
-      : { providerErrorSubcode: error.diagnostic.errorSubcode }),
   };
 }
 export async function refreshSecureInstagram(input: {

@@ -154,7 +154,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     try {
       const result = await client.disconnectInstagram();
       setConnection(result.connection);
-      if (result.providerRevocation.status === "UNCONFIRMED") {
+      if (
+        result.providerRevocation.status === "ACTION_REQUIRED" ||
+        result.providerRevocation.status === "UNCONFIRMED"
+      ) {
         setDisconnectWarningUrl(
           result.providerRevocation.manualRevocationUrl ?? null,
         );
@@ -886,9 +889,9 @@ function copy(locale: Locale, key: string): string {
       disconnected: "تم فصل إنستغرام.",
       disconnectedRevoked: "تم فصل إنستغرام وإلغاء وصول MARKOS لدى Meta.",
       disconnectConfirm:
-        "هل تريد فصل Instagram ومحاولة إلغاء وصول MARKOS وحذف بيانات الاعتماد المحفوظة؟ سيبقى محتوى مساحة العمل والتحليلات محفوظاً.",
+        "هل تريد فصل Instagram من MARKOS وحذف بيانات الاعتماد المحفوظة؟ لإكمال إلغاء وصول MARKOS، افتح أذونات Instagram واختر «إزالة» بجانب MarkOS AI-IG. سيبقى محتوى مساحة العمل والتحليلات محفوظاً.",
       disconnectUnconfirmed:
-        "تم فصل Instagram من MARKOS وحذف بيانات الاعتماد المحلية، لكن Meta لم تؤكد إلغاء الوصول. افتح أذونات Instagram وأزل MARKOS يدوياً.",
+        "تم فصل Instagram من MARKOS وحذف بيانات الاعتماد المحلية. لإكمال العملية على Instagram، افتح التطبيقات ومواقع الويب واختر «إزالة» بجانب MarkOS AI-IG.",
       recentMedia: "وسائط Instagram الحديثة",
       emptyMedia: "لا توجد وسائط حديثة لهذا الحساب.",
       disconnectedStatus: "غير متصل",
@@ -915,7 +918,7 @@ function copy(locale: Locale, key: string): string {
       notEnabled: "غير مفعّل",
       oauth: "اتصال OAuth",
       openAdmin: "فتح الإدارة",
-      openInstagramAccess: "فتح أذونات Instagram",
+      openInstagramAccess: "إكمال الفصل على Instagram",
       openVault: "افتح الخزنة",
       payments: "المدفوعات",
       pending: "قيد الانتظار",
@@ -966,9 +969,9 @@ function copy(locale: Locale, key: string): string {
       disconnectedRevoked:
         "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
       disconnectConfirm:
-        "Disconnect Instagram, attempt to revoke MARKOS access, and remove its stored credential? Existing workspace content and analytics will remain.",
+        "Disconnect Instagram from MARKOS and remove its stored credential? To finish revoking MARKOS access, open Instagram permissions and select Remove next to MarkOS AI-IG. Existing workspace content and analytics will remain.",
       disconnectUnconfirmed:
-        "Instagram was disconnected from MARKOS and the local credential was removed, but Meta did not confirm revocation. Open Instagram permissions and remove MARKOS manually.",
+        "Instagram was disconnected from MARKOS and its local credential was removed. To finish on Instagram, open Apps and websites and select Remove next to MarkOS AI-IG.",
       recentMedia: "Recent Instagram media",
       emptyMedia: "No recent media was returned for this account.",
       disconnectedStatus: "Disconnected",
@@ -995,7 +998,7 @@ function copy(locale: Locale, key: string): string {
       notEnabled: "Not enabled",
       oauth: "Connect OAuth",
       openAdmin: "Open admin",
-      openInstagramAccess: "Open Instagram permissions",
+      openInstagramAccess: "Finish on Instagram",
       openVault: "Open Vault",
       payments: "Payments",
       pending: "Pending",

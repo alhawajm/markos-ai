@@ -146,17 +146,6 @@ export class InstagramBasicClient {
     };
   }
 
-  async revoke(accessToken: string): Promise<void> {
-    const value = await this.json(
-      new URL(`${INSTAGRAM_GRAPH_BASE_URL}/me/permissions`),
-      {
-        method: "DELETE",
-        headers: { authorization: `Bearer ${accessToken}` },
-      },
-    );
-    if (value.success !== true) throw new InstagramProviderError("schema");
-  }
-
   private async json(
     input: string | URL,
     init: RequestInit,

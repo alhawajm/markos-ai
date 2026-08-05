@@ -402,7 +402,7 @@ export interface InstagramOAuthStart {
 export interface InstagramDisconnectResult {
   connection: InstagramConnection;
   providerRevocation: {
-    status: "CONFIRMED" | "UNCONFIRMED" | "NOT_APPLICABLE";
+    status: "ACTION_REQUIRED" | "CONFIRMED" | "UNCONFIRMED" | "NOT_APPLICABLE";
     manualRevocationUrl?: string;
   };
 }

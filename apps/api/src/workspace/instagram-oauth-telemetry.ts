@@ -49,9 +49,6 @@ export const INSTAGRAM_OAUTH_FAILURE_STAGES = [
   "connection_status_authorization",
   "connection_status_read",
   "disconnect_credential_read",
-  "credential_decryption",
-  "provider_revocation_request",
-  "provider_revocation_response_validation",
   "disconnect_local_cleanup",
 ] as const;
 
@@ -108,9 +105,7 @@ export function reportInstagramOAuthFailure(input: {
 export const INSTAGRAM_DISCONNECT_STAGES = [
   "disconnect_request",
   "credential_lookup",
-  "credential_decryption",
-  "provider_revocation_request",
-  "provider_revocation_response_validation",
+  "provider_removal_action",
   "local_cleanup",
   "disconnect_complete",
 ] as const;
@@ -125,9 +120,14 @@ export type InstagramDisconnectStageUpdate = {
     | "skipped"
     | "confirmed"
     | "unconfirmed"
+    | "action_required"
     | "failed";
   credentialFound?: boolean;
-  providerRevocationStatus?: "CONFIRMED" | "UNCONFIRMED" | "NOT_APPLICABLE";
+  providerRevocationStatus?:
+    | "ACTION_REQUIRED"
+    | "CONFIRMED"
+    | "UNCONFIRMED"
+    | "NOT_APPLICABLE";
   diagnostic?: InstagramOAuthFailureDiagnostic;
 };
 
