@@ -171,6 +171,55 @@ describe("Meta callback routes", () => {
     await app.close();
   });
 
+  it("accepts a multipart signed deauthorization envelope and rejects a tampered signature", async () => {
+    env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const accountId = `meta-multipart-${randomUUID()}`;
+    await persistTestInstagramConnection({
+      workspaceId: session.workspace.id,
+      actorId: session.user.id,
+      accountId,
+      accessToken: "connected-token"
+    });
+
+    const boundary = `markos-${randomUUID()}`;
+    const validSignedRequest = signedRequest(accountId);
+    const validResponse = await app.inject({
+      headers: { "content-type": `multipart/form-data; boundary="${boundary}"` },
+      method: "POST",
+      payload: multipartSignedRequest(boundary, validSignedRequest),
+      url: "/v1/meta/deauthorize"
+    });
+
+    expect(validResponse.statusCode).toBe(200);
+    expect(validResponse.json().data).toMatchObject({ disconnected: 1, received: true });
+    expect(
+      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
+    ).toBeNull();
+
+    await persistTestInstagramConnection({
+      workspaceId: session.workspace.id,
+      actorId: session.user.id,
+      accountId,
+      accessToken: "connected-token"
+    });
+    const tamperedResponse = await app.inject({
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      method: "POST",
+      payload: multipartSignedRequest(boundary, tamperSignature(validSignedRequest)),
+      url: "/v1/meta/deauthorize"
+    });
+
+    expect(tamperedResponse.statusCode).toBe(403);
+    expect(tamperedResponse.json().error.code).toBe("META_CALLBACK_FORBIDDEN");
+    expect(
+      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
+    ).not.toBeNull();
+
+    await app.close();
+  });
+
   it("records Instagram webhook events with sanitized payload metadata", async () => {
     env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
     const app = await buildApp();
@@ -238,6 +287,17 @@ function tamperSignature(value: string): string {
   const [signature, payload] = value.split(".") as [string, string];
   const replacement = signature.startsWith("A") ? "B" : "A";
   return `${replacement}${signature.slice(1)}.${payload}`;
+}
+
+function multipartSignedRequest(boundary: string, value: string): string {
+  return [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="signed_request"',
+    "",
+    value,
+    `--${boundary}--`,
+    ""
+  ].join("\r\n");
 }
 
 function webhookSignature(payload: string): string {

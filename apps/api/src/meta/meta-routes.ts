@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Readable } from "node:stream";
 import { env } from "../config/env";
 import { errorEnvelope, ok } from "../http/envelope";
@@ -83,8 +83,8 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
 
 async function registerMetaCallbackRoutes(app: FastifyInstance): Promise<void> {
   await app.register(async (callbackApp) => {
-    const parseBody = (_request: unknown, body: string | Buffer, done: (error: Error | null, value?: unknown) => void) => {
-      done(null, parseMetaCallbackBody(body.toString()));
+    const parseBody = (request: FastifyRequest, body: string | Buffer, done: (error: Error | null, value?: unknown) => void) => {
+      done(null, parseMetaCallbackBody(body.toString(), request.headers["content-type"]));
     };
     callbackApp.removeContentTypeParser("text/plain");
     callbackApp.addContentTypeParser("text/plain", { bodyLimit: MAX_META_CALLBACK_BYTES, parseAs: "string" }, parseBody);
@@ -166,7 +166,7 @@ async function registerMetaCallbackRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
-function parseMetaCallbackBody(body: string): unknown {
+function parseMetaCallbackBody(body: string, contentType: string | string[] | undefined): unknown {
   const trimmed = body.trim();
   if (trimmed.startsWith("{")) {
     try {
@@ -174,6 +174,11 @@ function parseMetaCallbackBody(body: string): unknown {
     } catch {
       return {};
     }
+  }
+
+  const multipartSignedRequest = extractMultipartSignedRequest(body, contentType);
+  if (multipartSignedRequest) {
+    return { signed_request: multipartSignedRequest };
   }
 
   const form = Object.fromEntries(new URLSearchParams(body));
@@ -191,6 +196,52 @@ function parseMetaCallbackBody(body: string): unknown {
 function isRawSignedRequest(value: string): boolean {
   const parts = value.split(".");
   return parts.length === 2 && parts.every((part) => /^[A-Za-z0-9_-]+={0,2}$/.test(part));
+}
+
+function extractMultipartSignedRequest(
+  body: string,
+  contentType: string | string[] | undefined
+): string | undefined {
+  if (classifyMetaCallbackContentType(contentType) !== "multipart") return undefined;
+
+  const boundary = multipartBoundary(contentType);
+  if (!boundary) return undefined;
+
+  let signedRequest: string | undefined;
+  for (const rawPart of body.split(`--${boundary}`).slice(1)) {
+    if (rawPart.startsWith("--")) break;
+
+    const part = rawPart.replace(/^\r?\n/, "");
+    const separator = /\r?\n\r?\n/.exec(part);
+    if (!separator) continue;
+
+    const headers = part.slice(0, separator.index);
+    const disposition = headers
+      .split(/\r?\n/)
+      .find((line) => /^content-disposition\s*:/i.test(line));
+    if (!disposition || multipartPartName(disposition) !== "signed_request") continue;
+
+    const value = part.slice(separator.index + separator[0].length).replace(/\r?\n$/, "").trim();
+    if (!value || signedRequest !== undefined) return undefined;
+    signedRequest = value;
+  }
+
+  return signedRequest;
+}
+
+function multipartBoundary(contentType: string | string[] | undefined): string | undefined {
+  const value = Array.isArray(contentType) ? contentType[0] : contentType;
+  if (!value) return undefined;
+
+  const match = /(?:^|;)\s*boundary=(?:"([^"\r\n]{1,200})"|([^;\r\n]{1,200}))/i.exec(value);
+  const boundary = (match?.[1] ?? match?.[2])?.trim();
+  if (!boundary || boundary.length > 200) return undefined;
+  return boundary;
+}
+
+function multipartPartName(contentDisposition: string): string | undefined {
+  const match = /(?:^|;)\s*name=(?:"([^"\r\n]*)"|([^;\s\r\n]+))/i.exec(contentDisposition);
+  return match?.[1] ?? match?.[2];
 }
 
 function metaCallbackType(url: string): MetaCallbackType | undefined {

@@ -16,7 +16,14 @@ describe("Meta callback telemetry", () => {
     ).toBe("form");
     expect(classifyMetaCallbackContentType(undefined)).toBe("missing");
     expect(classifyMetaCallbackContentType("application/octet-stream")).toBe(
-      "other",
+      "octet_stream",
+    );
+    expect(
+      classifyMetaCallbackContentType(
+        'multipart/form-data; boundary="safe-test-boundary"',
+      ),
+    ).toBe(
+      "multipart",
     );
 
     const stream = new PassThrough();

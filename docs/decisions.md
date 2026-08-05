@@ -255,11 +255,13 @@ The existing GHCR image pipeline, optional ECS rollout, placeholder CDK stack, a
 
 Emit sanitized, structured lifecycle records for the workspace Instagram disconnect request, credential lookup, required provider-removal action, local cleanup, and terminal completion. Log the inbound Meta callback request, content-type category, payload parsing, signature verification, credential lookup, local cleanup, audit persistence, and terminal completion under its API request ID. Retain only low-cardinality allowlisted outcomes; never log tokens, encrypted credentials, raw provider bodies, URLs, account or workspace identities, signed requests, raw headers, or raw errors. Logging failure must not alter disconnect or callback behavior.
 
-## 2026-08-05: Deauthorization accepts a strict raw signed-request envelope
+## 2026-08-05: Deauthorization accepts strict raw and multipart signed-request envelopes
 
 Sanitized Railway evidence from the controlled removal showed two adjacent Meta requests: a form-encoded data-deletion callback completed HMAC verification and returned HTTP 200, while the deauthorization callback used a non-form content type and failed signed-request verification with HTTP 403. Because both paths use the same base64url/HMAC implementation and `INSTAGRAM_APP_SECRET`, treat the deauthorization failure as a request-envelope parsing/encoding incompatibility rather than weakening cryptographic verification or adding a second secret.
 
 For Meta callback media types handled as raw text, normalize only an exact two-segment base64url value into the existing `signed_request` field shape. Continue accepting the existing JSON and form shapes, and continue rejecting missing, malformed, or tampered signatures with HTTP 403 before any credential lookup or cleanup. Emit only an allowlisted verification-failure category so a controlled retry can distinguish envelope, configuration, signature, payload, and identity failures without recording secrets, signed requests, bodies, headers, or account identities. Data-deletion product behavior and live completion remain separate follow-up work.
+
+The first live retry after adding the raw-envelope fallback still produced HTTP 403 with `signed_request_missing`; sanitized telemetry showed that Meta used a media type outside URL-encoded form, JSON, plain text, and a raw two-segment token. Accept the remaining standard form envelope, `multipart/form-data`, only when a valid boundary contains exactly one non-empty field named `signed_request`. Keep the same HMAC verification and add allowlisted `multipart` and `octet_stream` media categories for the next controlled retry. Multipart delivery remains a hypothesis until that retry succeeds.
 
 ## 2026-08-04: Browser sessions use cookie-backed silent renewal
 

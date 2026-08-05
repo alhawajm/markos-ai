@@ -23,7 +23,14 @@ export type MetaCallbackStageUpdate = {
     | "audit_persistence"
     | "callback_complete";
   outcome: "received" | "started" | "completed" | "rejected" | "failed";
-  contentTypeCategory?: "form" | "json" | "text" | "missing" | "other";
+  contentTypeCategory?:
+    | "form"
+    | "json"
+    | "text"
+    | "multipart"
+    | "octet_stream"
+    | "missing"
+    | "other";
   credentialMatched?: boolean;
   verificationFailureCategory?: MetaCallbackVerificationFailureCategory;
   failureCategory?:
@@ -85,5 +92,7 @@ export function classifyMetaCallbackContentType(
   if (normalized === "application/x-www-form-urlencoded") return "form";
   if (normalized === "application/json") return "json";
   if (normalized === "text/plain") return "text";
+  if (normalized === "multipart/form-data") return "multipart";
+  if (normalized === "application/octet-stream") return "octet_stream";
   return "other";
 }
