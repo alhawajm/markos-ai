@@ -6,9 +6,10 @@ The current connection milestone uses Instagram Login and requests exactly `inst
 
 ## Evidence classification
 
-- **Implemented and locally/CI verified:** the current source and tests cover OAuth start/callback, signed state, expiry, transaction binding, single-use consumption, provider exchanges, professional-account resolution, encrypted persistence, bounded recent media, secure status, refresh, best-effort provider revocation with guaranteed local disconnect, redirects, and sanitized telemetry.
+- **Implemented and locally/CI verified:** the current source and tests cover OAuth start/callback, signed state, expiry, transaction binding, single-use consumption, provider exchanges, professional-account resolution, encrypted persistence, bounded recent media, secure status, refresh, guaranteed local disconnect, guided manual provider removal, signed callback parsing/handling, redirects, and sanitized telemetry.
 - **Production-verified on 2026-08-03:** one real professional account completed the deployed OAuth flow, appeared Connected in production Settings, and loaded recent provider-owned media.
-- **Not yet externally verified:** formal App Review submission/approval, publishing, insights, a complete token-refresh lifetime, provider-side revocation/deauthorization/data-deletion delivery, and webhook subscriptions.
+- **Railway test verified on 2026-08-05:** local disconnect completed, the UI presented the Instagram Apps and websites action, manual removal moved MarkOS AI-IG from Active to Removed, and Meta delivered a deauthorization request to MARKOS. The request failed signed-request verification with HTTP 403.
+- **Not yet externally verified:** formal App Review submission/approval, publishing, insights, a complete token-refresh lifetime, former-token invalidation, successful signed deauthorization/data-deletion handling, and webhook subscriptions.
 - **Externally managed:** current Meta dashboard settings, app mode, roles, permissions, Graph version, URLs, and App Review status. Repository code and this handoff cannot prove their current dashboard values.
 
 ## Production connection milestone
@@ -98,7 +99,7 @@ META_WEBHOOK_VERIFY_TOKEN=<local-fake-value>
 5. Show the stored basic profile and bounded recent-owned-media result, including the valid empty state.
 6. Show that callback query material is removed from the browser URL.
 7. Demonstrate refresh only when the provider makes the token eligible.
-8. Disconnect and show that MARKOS removes the active encrypted credential. Record whether Meta confirms revocation; when it does not, show the manual Instagram-permissions action without treating the local disconnect as failed.
+8. Disconnect and show that MARKOS removes the active encrypted credential and presents the manual Instagram-permissions action without treating the required provider step as a local failure.
 
 Do not record a real authorization code, token, state, callback URL with a query string, provider identifier, email, username, header, cookie, or raw provider response in the screencast or evidence pack.
 
