@@ -2,7 +2,6 @@ import json
 
 from app.contracts.strategy import StrategyGenerateRequest
 
-
 STRATEGY_PROMPT_VERSION = "strategy.v2"
 
 

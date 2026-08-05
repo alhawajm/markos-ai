@@ -2,7 +2,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 Locale = Literal["ar", "en"]
 ShortText = Annotated[str, Field(min_length=1, max_length=500)]
 
