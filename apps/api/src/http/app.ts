@@ -63,7 +63,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(helmet);
   await app.register(cors, {
     origin: env.NODE_ENV === "development" ? Array.from(new Set(devCorsOrigins)) : env.WEB_BASE_URL,
-    credentials: true
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
   });
   await registerWorkspaceContext(app);
   await registerAdminRoutes(app);
