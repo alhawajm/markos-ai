@@ -1,16 +1,27 @@
 import base64
+import asyncio
 import hashlib
 import math
 import re
+import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Literal, TypedDict
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.responses import Response
 
+from app.contracts.strategy import (
+    StrategyContextChunk,
+    StrategyGenerateRequest,
+    StrategyGenerateResponse,
+)
 from app.core.config import settings
+from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
+from app.providers.strategy import get_strategy_provider
 
 
 class HealthResponse(BaseModel):
@@ -30,13 +41,6 @@ class VaultEmbedResponse(BaseModel):
     embeddings: list[list[float]]
 
 
-class StrategyContextChunk(BaseModel):
-    section: str
-    key: str
-    value: dict[str, object]
-    score: float = 0
-
-
 def default_required_languages() -> list[Literal["ar", "en"]]:
     return ["ar", "en"]
 
@@ -46,22 +50,6 @@ class ContentToneLock(BaseModel):
     tone_words: list[str] = Field(default_factory=list, max_length=20)
     voice_notes: str | None = None
     brand_hints: dict[str, object] = Field(default_factory=dict)
-
-
-class StrategyGenerateRequest(BaseModel):
-    workspace_id: str
-    objective: str | None = None
-    horizon_days: int = Field(default=90, ge=30, le=180)
-    context: list[StrategyContextChunk] = Field(default_factory=list, max_length=10)
-    model: str | None = None
-
-
-class StrategyGenerateResponse(BaseModel):
-    model: str
-    prompt_version: str
-    tokens_in: int
-    tokens_out: int
-    strategy: dict[str, object]
 
 
 class ContentGenerateRequest(BaseModel):
@@ -145,6 +133,47 @@ init_observability()
 app = FastAPI(title="MARKOS AI Service", version="0.0.0")
 
 
+@app.middleware("http")
+async def authenticate_internal_request(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    if request.url.path in {"/ai/health", "/ai/health/deep"}:
+        return await call_next(request)
+
+    if request.url.path.startswith("/ai/"):
+        supplied = request.headers.get("authorization", "")
+        expected = f"Bearer {settings.internal_service_token}"
+
+        if not secrets.compare_digest(supplied, expected):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": {
+                        "code": "AI_SERVICE_UNAUTHORIZED",
+                        "message": "A valid internal service token is required",
+                        "details": [{"retryable": False}],
+                    }
+                },
+            )
+
+    return await call_next(request)
+
+
+@app.exception_handler(AiServiceError)
+async def ai_service_error_handler(_request: Request, error: AiServiceError) -> JSONResponse:
+    return JSONResponse(
+        status_code=error.status_code,
+        content={
+            "error": {
+                "code": error.code,
+                "message": error.message,
+                "details": [{"retryable": error.retryable}],
+            }
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_request: Request, error: Exception) -> JSONResponse:
     capture_exception(error)
@@ -196,18 +225,26 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
 
 @app.post("/ai/strategy/generate", response_model=StrategyGenerateResponse)
 async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerateResponse:
-    model = request.model or settings.llm_primary_model
-    prompt_text = strategy_prompt_text(request)
-    strategy = build_strategy(request)
-    response_text = str(strategy)
+    if not request.context:
+        raise AiServiceError(
+            code="AI_CONTEXT_MISSING",
+            message="Knowledge Vault context is required for strategy generation",
+            status_code=422,
+            retryable=False,
+        )
 
-    return StrategyGenerateResponse(
-        model=model,
-        prompt_version="strategy.v1.local",
-        tokens_in=estimate_tokens(prompt_text),
-        tokens_out=estimate_tokens(response_text),
-        strategy=strategy,
-    )
+    provider = get_strategy_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_strategy_timeout_seconds):
+            return await provider.generate_strategy(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
 
 
 @app.post("/ai/content/generate", response_model=ContentGenerateResponse)
@@ -280,59 +317,6 @@ def deterministic_embedding(text: str, dimensions: int) -> list[float]:
     return [value / norm for value in vector]
 
 
-def build_strategy(request: StrategyGenerateRequest) -> dict[str, object]:
-    context_summary = summarize_context(request.context)
-    objective = request.objective or "Grow Instagram visibility and qualified customer inquiries."
-
-    return {
-        "summary": f"{request.horizon_days}-day Instagram-first strategy grounded in {context_summary}.",
-        "horizonDays": request.horizon_days,
-        "objectives": [
-            objective,
-            "Turn Knowledge Vault insights into repeatable content pillars.",
-            "Build a consistent bilingual posting rhythm for Bahrain SMB audiences.",
-        ],
-        "pillars": [
-            {
-                "name": "Proof and trust",
-                "rationale": "Use company story, offers, and customer pain points to make the brand feel credible.",
-                "contentAngles": ["customer outcomes", "behind the scenes", "before and after", "founder point of view"],
-            },
-            {
-                "name": "Offer education",
-                "rationale": "Explain products and services in simple Arabic and English posts that reduce buying friction.",
-                "contentAngles": ["product explainers", "comparison posts", "FAQs", "how to choose"],
-            },
-            {
-                "name": "Local relevance",
-                "rationale": "Anchor content in Bahrain context, language, seasonality, and local buying behavior.",
-                "contentAngles": ["Bahrain moments", "community posts", "Arabic-first stories", "local partnerships"],
-            },
-        ],
-        "weeklyCadence": [
-            {"week": 1, "focus": "Message clarity", "actions": ["confirm core offer", "publish intro carousel", "test two caption tones"]},
-            {"week": 2, "focus": "Audience learning", "actions": ["post FAQ reel", "collect objections", "save high-signal comments"]},
-            {"week": 3, "focus": "Trust building", "actions": ["publish proof post", "share process story", "invite DM inquiries"]},
-            {"week": 4, "focus": "Conversion loop", "actions": ["promote lead magnet", "review analytics", "refresh Vault learnings"]},
-        ],
-        "kpis": [
-            {"name": "qualified Instagram inquiries", "target": "increase month over month"},
-            {"name": "engagement rate", "target": "maintain upward trend"},
-            {"name": "content consistency", "target": "3-5 feed posts or reels per week"},
-        ],
-        "risks": [
-            "Publishing generic content that ignores Vault context.",
-            "Skipping Arabic-ready content for a bilingual Bahrain audience.",
-            "Optimizing for likes without tracking inquiries or business outcomes.",
-        ],
-        "nextActions": [
-            "Review Vault completeness before generating content.",
-            "Choose one priority objective for the next 30 days.",
-            "Convert the three pillars into a first content calendar draft.",
-        ],
-    }
-
-
 def summarize_context(context: list[StrategyContextChunk]) -> str:
     if not context:
         return "the available workspace context"
@@ -344,10 +328,6 @@ def summarize_context(context: list[StrategyContextChunk]) -> str:
             sections.append(label)
 
     return ", ".join(sections[:5])
-
-
-def strategy_prompt_text(request: StrategyGenerateRequest) -> str:
-    return f"{request.workspace_id} {request.objective or ''} {request.horizon_days} {request.context}"
 
 
 def estimate_tokens(text: str) -> int:

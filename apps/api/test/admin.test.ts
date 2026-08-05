@@ -91,7 +91,7 @@ describe("admin routes", () => {
 
     await prisma.$executeRaw`
       DELETE FROM "model_settings"
-      WHERE "key" IN ('LLM_PRIMARY_MODEL', 'IMAGE_MODEL_PRIMARY', 'IMAGE_MODEL_FALLBACK')
+      WHERE "key" IN ('LLM_PRIMARY_MODEL', 'LLM_LONGFORM_MODEL', 'IMAGE_MODEL_PRIMARY', 'IMAGE_MODEL_FALLBACK')
     `;
 
     await app.inject({
@@ -151,6 +151,10 @@ describe("admin routes", () => {
       models: expect.arrayContaining([
         expect.objectContaining({
           key: "LLM_PRIMARY_MODEL",
+          source: "environment"
+        }),
+        expect.objectContaining({
+          key: "LLM_LONGFORM_MODEL",
           source: "environment"
         }),
         expect.objectContaining({

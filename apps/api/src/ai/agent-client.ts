@@ -1,6 +1,6 @@
 import type { AgentName, VaultRagChunk } from "@markos/shared-types";
-import { env } from "../config/env";
 import { resolveModelSetting } from "../admin/model-settings-service";
+import { requestAi } from "./request";
 
 export interface AgentRunResponse {
   model: string;
@@ -36,17 +36,5 @@ export async function runAiAgent(input: {
     model
   };
 
-  const response = await fetch(new URL("/ai/agents/run", env.AI_BASE_URL), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI agent request failed with ${response.status}`);
-  }
-
-  return (await response.json()) as AgentRunResponse;
+  return requestAi<AgentRunResponse>("/ai/agents/run", { body });
 }

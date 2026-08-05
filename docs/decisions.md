@@ -268,3 +268,13 @@ A subsequent controlled Railway retry confirmed that Meta delivered multipart fo
 ## 2026-08-04: Browser sessions use cookie-backed silent renewal
 
 Keep refresh tokens in a path-scoped `httpOnly` cookie and keep access tokens only in the browser's in-memory Zustand session store, as required by the build specification. Persist token-free user, workspace, and role identity metadata only so the app can distinguish a returning expired session from a visitor. Authenticated API requests renew only after the precise `INVALID_TOKEN` response, retry once, and preserve the session on temporary network or server failures. Serialize refresh requests with the browser Web Locks API so tabs sharing the rotating cookie do not reuse a token concurrently. A terminal refresh failure clears the browser identity and sends the user to localized login; successful forced reauthentication lands on `/{locale}/app/settings#profile`.
+
+## 2026-08-05: Strategy is the first provider-backed AI vertical slice
+
+Use the existing Strategy flow for the first real provider integration because it already joins workspace-scoped Vault retrieval, prompt selection, quota reservation, artifact persistence, AI interaction records, and token metering. Keep the other generation routes deterministic until each receives its own typed provider contract and focused acceptance criteria.
+
+Call OpenAI through a narrow Python adapter using the Responses API and strict Structured Outputs. Select the provider with `AI_TEXT_PROVIDER`, keep `local` as the safe development default, resolve the long-form model through configuration, disable provider-side response storage, and record the provider-returned model and token usage. Treat Vault chunks and optional database prompt templates as data, not instructions, and do not send the workspace identifier in provider prompt text.
+
+Generate Strategy content in the explicitly requested `ar` or `en` locale within the existing single-language Strategy schema. Do not expand the product contract to duplicate every field bilingually without a separate product decision. Enforce the shared internal bearer token on all non-health AI routes, bound both API-to-AI and provider calls with timeouts, and expose only sanitized typed errors.
+
+The adapter and fake-client tests are implementation evidence, not live-provider evidence. The first real-key smoke test must use synthetic non-client context, run only after the code path is green, and avoid printing the credential or raw provider payload. `costMinor` remains zero until model pricing and currency conversion have a reviewed implementation; actual token metering does not by itself complete cost governance.

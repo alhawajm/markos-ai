@@ -1,7 +1,10 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.core.observability import observability_enabled
 from app.main import app
+
+SERVICE_HEADERS = {"authorization": f"Bearer {settings.internal_service_token}"}
 
 
 def test_observability_disabled_without_dsn() -> None:
@@ -17,9 +20,21 @@ def test_health() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_ai_route_requires_internal_service_token() -> None:
+    client = TestClient(app)
+    response = client.post("/ai/strategy/generate", json={})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AI_SERVICE_UNAUTHORIZED"
+
+
 def test_vault_embedding_contract() -> None:
     client = TestClient(app)
-    response = client.post("/ai/vault/embed", json={"texts": ["Bahrain coffee cafe"]})
+    response = client.post(
+        "/ai/vault/embed",
+        headers=SERVICE_HEADERS,
+        json={"texts": ["Bahrain coffee cafe"]},
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -33,6 +48,7 @@ def test_strategy_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(
         "/ai/strategy/generate",
+        headers=SERVICE_HEADERS,
         json={
             "workspace_id": "workspace-1",
             "objective": "increase wholesale cafe leads",
@@ -52,7 +68,7 @@ def test_strategy_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-strategy-model"
-    assert body["prompt_version"] == "strategy.v1.local"
+    assert body["prompt_version"] == "strategy.v2.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert body["strategy"]["horizonDays"] == 90
@@ -63,6 +79,7 @@ def test_content_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(
         "/ai/content/generate",
+        headers=SERVICE_HEADERS,
         json={
             "workspace_id": "workspace-1",
             "topic": "wholesale coffee leads",
@@ -103,6 +120,7 @@ def test_image_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(
         "/ai/images/generate",
+        headers=SERVICE_HEADERS,
         json={
             "workspace_id": "workspace-1",
             "prompt": "Brand-aligned visual for Bahrain coffee leads",
@@ -140,6 +158,7 @@ def test_all_agent_run_contracts_are_grounded() -> None:
     for agent in agents:
         response = client.post(
             "/ai/agents/run",
+            headers=SERVICE_HEADERS,
             json={
                 "workspace_id": "workspace-1",
                 "agent": agent,

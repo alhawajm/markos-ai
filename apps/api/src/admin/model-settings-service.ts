@@ -7,6 +7,7 @@ import { prisma } from "../db/prisma";
 const modelSettingFallbacks = {
   IMAGE_MODEL_FALLBACK: env.IMAGE_MODEL_FALLBACK,
   IMAGE_MODEL_PRIMARY: env.IMAGE_MODEL_PRIMARY,
+  LLM_LONGFORM_MODEL: env.LLM_LONGFORM_MODEL ?? env.LLM_PRIMARY_MODEL,
   LLM_PRIMARY_MODEL: env.LLM_PRIMARY_MODEL
 } as const satisfies Record<AdminModelSettingKeyInput, string | undefined>;
 

@@ -15,6 +15,8 @@ export const envSchema = z.object({
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   WEB_BASE_URL: z.string().url().default("http://localhost:3000"),
   AI_BASE_URL: z.string().url().default("http://localhost:8000"),
+  INTERNAL_SERVICE_TOKEN: z.string().min(1).default("change-me"),
+  AI_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(25_000),
   DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   OPENSEARCH_URL: z.string().url().default("http://localhost:9200"),
@@ -28,6 +30,7 @@ export const envSchema = z.object({
   GOOGLE_OAUTH_ISSUER: z.string().url().default("https://accounts.google.com"),
   GOOGLE_OAUTH_JWKS_URL: z.string().url().default("https://www.googleapis.com/oauth2/v3/certs"),
   LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
+  LLM_LONGFORM_MODEL: optionalString,
   MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),
   MEDIA_PUBLIC_BASE_URL: optionalUrl,
   INSTAGRAM_APP_ID: optionalString,
@@ -79,5 +82,9 @@ process.env.DATABASE_URL ??= env.DATABASE_URL;
 process.env.REDIS_URL ??= env.REDIS_URL;
 process.env.OPENSEARCH_URL ??= env.OPENSEARCH_URL;
 process.env.AI_BASE_URL ??= env.AI_BASE_URL;
+process.env.INTERNAL_SERVICE_TOKEN ??= env.INTERNAL_SERVICE_TOKEN;
 process.env.LLM_PRIMARY_MODEL ??= env.LLM_PRIMARY_MODEL;
+if (env.LLM_LONGFORM_MODEL !== undefined) {
+  process.env.LLM_LONGFORM_MODEL ??= env.LLM_LONGFORM_MODEL;
+}
 process.env.IMAGE_MODEL_PRIMARY ??= env.IMAGE_MODEL_PRIMARY;

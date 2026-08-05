@@ -1,6 +1,6 @@
 import type { ContentDraft, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
 import { resolveModelSetting } from "../admin/model-settings-service";
-import { env } from "../config/env";
+import { requestAi } from "./request";
 
 interface ContentGenerateResponse {
   model: string;
@@ -43,17 +43,5 @@ export async function generateContentDrafts(input: {
   };
   const requestBody = input.strategy === undefined ? body : { ...body, strategy: input.strategy };
 
-  const response = await fetch(new URL("/ai/content/generate", env.AI_BASE_URL), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(requestBody)
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI content request failed with ${response.status}`);
-  }
-
-  return (await response.json()) as ContentGenerateResponse;
+  return requestAi<ContentGenerateResponse>("/ai/content/generate", { body: requestBody });
 }

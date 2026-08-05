@@ -37,6 +37,7 @@
       "cache": false,
       "env": [
         "AI_BASE_URL",
+        "AI_HTTP_TIMEOUT_MS",
         "API_BASE_URL",
         "CI",
         "DATABASE_URL",
@@ -49,13 +50,25 @@
         "INSTAGRAM_OAUTH_REDIRECT_URI",
         "INSTAGRAM_OAUTH_STATE_SECRET",
         "INSTAGRAM_TOKEN_ENCRYPTION_KEY",
+        "INTERNAL_SERVICE_TOKEN",
         "JWT_ACCESS_SECRET",
         "JWT_REFRESH_SECRET",
+        "LLM_LONGFORM_MODEL",
         "MEDIA_STORAGE_DIR",
         "NODE_ENV",
         "OPENSEARCH_URL",
         "REDIS_URL",
         "WEB_BASE_URL"
+      ],
+      "outputs": []
+    },
+    "ai#test": {
+      "cache": false,
+      "env": [
+        "AI_STRATEGY_TIMEOUT_SECONDS",
+        "AI_TEXT_PROVIDER",
+        "INTERNAL_SERVICE_TOKEN",
+        "LLM_LONGFORM_MODEL"
       ],
       "outputs": []
     },

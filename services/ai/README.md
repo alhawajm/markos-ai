@@ -1,8 +1,8 @@
 # MARKOS AI Service
 
-Status date: 2026-08-03.
+Status date: 2026-08-05.
 
-This Python 3.11 FastAPI service exposes the current AI-shaped HTTP contract. It is useful local scaffolding and a deployable health target, but it is **not currently OpenAI-backed or production-ready AI**.
+This Python 3.11 FastAPI service now contains the first provider-capable vertical slice. Strategy generation can use the OpenAI Responses API when explicitly configured; deterministic local generation remains the default for development. The OpenAI path is locally tested with a fake client, but it has not yet been exercised with a real credential or verified in Railway.
 
 ## Current behavior
 
@@ -11,22 +11,23 @@ The service currently provides:
 - `GET /ai/health`: shallow process health returning `ok`;
 - `GET /ai/health/deep`: deliberately returns `degraded` because database, provider, and embedding dependencies are `not_checked`;
 - `POST /ai/vault/embed`: deterministic 1,536-dimension local embeddings;
-- `POST /ai/strategy/generate`: fixed local strategy construction;
+- `POST /ai/strategy/generate`: strict, locale-aware Strategy generation through either the local adapter or the OpenAI adapter;
 - `POST /ai/content/generate`: fixed local bilingual draft construction;
 - `POST /ai/images/generate`: deterministic local SVG generation;
-- `POST /ai/agents/run`: fixed output shapes for the eight configured MARKOS agent names.
+- `POST /ai/agents/run`: fixed output shapes for the eight configured MARKOS agent names;
+- every non-health `/ai/*` route requires the shared API-to-AI bearer token.
 
-The API gateway already calls these endpoints and supplies workspace-scoped Vault context for several flows. The FastAPI service itself does not retrieve from pgvector, call an AI provider, validate a provider response, or report real provider token usage.
+The API gateway retrieves workspace-scoped Vault context, sends the requested locale and the configured long-form model, authenticates the request, applies a bounded timeout, and validates the Strategy response at runtime. The OpenAI adapter uses Structured Outputs, disables response storage, and reports the provider-returned model and input/output token counts. The FastAPI service does not retrieve directly from pgvector.
 
 Important current gaps:
 
-- `OPENAI_API_KEY` appears in the repository environment inventory but is not read by `app/core/config.py` or used by `app/main.py`.
-- No OpenAI SDK or provider HTTP call exists in the service.
-- `INTERNAL_SERVICE_TOKEN` is loaded into settings but is not enforced on any route, and the API clients do not send it.
+- No live OpenAI call, billing observation, or deployed gateway smoke test has been recorded yet.
+- Content, images, embeddings, and the generic eight-agent route remain deterministic scaffolding.
+- API interaction rows record real provider token counts for Strategy, but `costMinor` remains zero until a reviewed pricing calculation exists.
 - The Docker image listens on fixed port 8000; Railway port/routing behavior must be verified during deployment.
 - Deep health cannot support a production-ready claim while every dependency remains `not_checked`.
 
-Do not expose the service publicly or describe backend connectivity as secure until the internal service boundary is authenticated and tested.
+Do not describe backend connectivity or provider inference as production-verified until the deployed path is tested with independently configured secrets.
 
 ## Delivery phases
 
@@ -38,13 +39,13 @@ Sarah owns the Railway service, networking, health, availability, and secret con
 2. Deploy the current service without claiming provider inference.
 3. Configure a health check for `/ai/health`.
 4. Give the API a reachable `AI_BASE_URL`, preferably through the reviewed Railway network path.
-5. Protect the API-to-AI boundary and verify unauthorized requests fail.
+5. Configure the same non-default `INTERNAL_SERVICE_TOKEN` in both services and verify unauthorized requests fail.
 6. Send one simple API-to-AI request and receive a response.
 7. Document deployment and troubleshooting.
 
 ### Phase 1B: add one real provider-backed response
 
-OpenAI is the intended initial provider, with other providers possible later. This phase requires an explicit implementation change, tests, and an authorized OpenAI API Platform project credential. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
+OpenAI is the initial Strategy provider, behind a narrow adapter so other providers remain possible later. The implementation and local fake-client tests now exist. The remaining phase evidence requires an authorized OpenAI API Platform project credential and one controlled live response. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
 
 Prefer a project-owned service-account credential over a personal shared key. Inject the credential only into the AI service through the deployment secret manager. Never commit, print, return, or place it in build arguments, client-side variables, logs, screenshots, or evidence artifacts.
 
@@ -53,7 +54,7 @@ Official references:
 - [OpenAI API and ChatGPT billing are separate](https://help.openai.com/en/articles/8156019-i-want-to-move-my-chatgpt-subscription-to-the-api)
 - [OpenAI project API keys and service-account ownership](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/projects/subresources/api_keys)
 
-Completion requires one real provider response through the deployed service and gateway, plus safe error handling and usage reporting. Merely setting `OPENAI_API_KEY` does nothing in the current source.
+Completion requires one real provider response through the deployed service and gateway. Set `AI_TEXT_PROVIDER=openai`, configure a model slot, and provide `OPENAI_API_KEY` only to the AI service; merely creating a key does not prove the path.
 
 ### Phase 2: generate the first onboarding draft
 
@@ -75,13 +76,31 @@ py -3.11 -m venv .venv
 
 From the repository root, `corepack pnpm dev` also starts the AI service through `scripts/python-runner.mjs` when the local environment is installed.
 
+For a controlled local OpenAI smoke test, keep the credential in the ignored `services/ai/.env` file, not the repository-root `.env`. The AI service file needs:
+
+```dotenv
+AI_TEXT_PROVIDER=openai
+OPENAI_API_KEY=<project-service-account-key>
+LLM_LONGFORM_MODEL=gpt-5.6-sol
+INTERNAL_SERVICE_TOKEN=<same-local-token-as-api>
+```
+
+The repository-root `.env` should contain the matching `INTERNAL_SERVICE_TOKEN` and `LLM_LONGFORM_MODEL` for the API gateway, but not `OPENAI_API_KEY`. Railway must inject the key only into the AI service.
+
 ## Current configuration names
 
 Current FastAPI settings consume these names:
 
 - `AI_PORT`
-- `INTERNAL_SERVICE_TOKEN` (configured but not enforced)
+- `INTERNAL_SERVICE_TOKEN` (enforced on every non-health AI route)
 - `DATABASE_URL` (configured but not used by current request handlers)
+- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy)
+- `AI_STRATEGY_TIMEOUT_SECONDS`
+- `OPENAI_API_KEY`
+- `OPENAI_TIMEOUT_SECONDS`
+- `OPENAI_MAX_RETRIES`
+- `OPENAI_MAX_OUTPUT_TOKENS`
+- `OPENAI_REASONING_EFFORT`
 - `LLM_PRIMARY_MODEL`
 - `LLM_FLAGSHIP_MODEL`
 - `LLM_LONGFORM_MODEL`
@@ -95,7 +114,7 @@ Current FastAPI settings consume these names:
 - `SENTRY_RELEASE`
 - `SENTRY_TRACES_SAMPLE_RATE`
 
-`OPENAI_API_KEY` is a future provider variable, not a current runtime dependency. Add it to the service settings only in the provider implementation that actually consumes it.
+`OPENAI_API_KEY` is required only when `AI_TEXT_PROVIDER=openai`. Never place it in the API service, web environment, repository, command output, logs, screenshots, or test fixtures.
 
 ## Verification
 
@@ -107,6 +126,8 @@ corepack pnpm --filter ai lint
 corepack pnpm --filter ai test
 corepack pnpm --filter ai build
 ```
+
+Pull-request CI explicitly uses `AI_TEXT_PROVIDER=local`, installs the production and test dependencies, runs the repository gates, builds the AI image, and smoke-tests health, authentication rejection, and one authorized synthetic Strategy response. It does not receive an OpenAI key or make paid provider calls.
 
 After deployment, verify `/ai/health` directly and then verify `/v1/health/deep` from the API. A reachable shallow health endpoint proves process availability only; it does not prove providers, embeddings, database access, authentication, or onboarding behavior.
 

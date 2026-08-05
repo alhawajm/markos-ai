@@ -34,6 +34,7 @@ import type {
   InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
   KnowledgeVaultHistoryEntry,
+  Locale,
   MediaAssetRecord,
   MediaType,
   MfaStatus,
@@ -220,7 +221,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateStrategy(input: { objective?: string; horizonDays?: number }): Promise<StrategyRecord> {
+  async generateStrategy(input: { objective?: string; horizonDays?: number; locale?: Locale }): Promise<StrategyRecord> {
     const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
       body: input,
       method: "POST"
@@ -527,7 +528,7 @@ export class MarkosApiClient {
   }
 
   async updateAdminModelSetting(
-    key: "LLM_PRIMARY_MODEL" | "IMAGE_MODEL_PRIMARY" | "IMAGE_MODEL_FALLBACK",
+    key: "LLM_PRIMARY_MODEL" | "LLM_LONGFORM_MODEL" | "IMAGE_MODEL_PRIMARY" | "IMAGE_MODEL_FALLBACK",
     input: { value: string }
   ): Promise<AdminModelConfiguration> {
     const response = await this.request<AdminModelConfiguration>(`/v1/admin/model-config/${key}`, {

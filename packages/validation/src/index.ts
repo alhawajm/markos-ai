@@ -194,7 +194,8 @@ export const objectivesOnboardingSchema = z.object({
 
 export const generateStrategySchema = z.object({
   objective: z.string().min(3).max(500).optional(),
-  horizonDays: z.number().int().min(30).max(180).default(90)
+  horizonDays: z.number().int().min(30).max(180).default(90),
+  locale: localeSchema.default("en")
 });
 
 export const generateContentSchema = z.object({
@@ -273,7 +274,12 @@ export const adminUpdatePlanLimitsSchema = z.object({
     })
 });
 
-export const adminModelSettingKeySchema = z.enum(["LLM_PRIMARY_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"]);
+export const adminModelSettingKeySchema = z.enum([
+  "LLM_PRIMARY_MODEL",
+  "LLM_LONGFORM_MODEL",
+  "IMAGE_MODEL_PRIMARY",
+  "IMAGE_MODEL_FALLBACK"
+]);
 
 export const adminUpdateModelSettingSchema = z.object({
   value: z.string().min(1).max(200)

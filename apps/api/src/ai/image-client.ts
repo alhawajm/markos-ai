@@ -1,5 +1,5 @@
-import { env } from "../config/env";
 import { resolveModelSetting } from "../admin/model-settings-service";
+import { requestAi } from "./request";
 
 interface ImageGenerateResponse {
   base64_data: string;
@@ -22,23 +22,13 @@ export async function generateImageAsset(input: {
   workspaceId: string;
 }): Promise<ImageGenerateResponse> {
   const model = await resolveModelSetting("IMAGE_MODEL_PRIMARY");
-  const response = await fetch(new URL("/ai/images/generate", env.AI_BASE_URL), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
+  return requestAi<ImageGenerateResponse>("/ai/images/generate", {
+    body: {
       aspect_ratio: input.aspectRatio,
       model,
       prompt: input.prompt,
       ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
       workspace_id: input.workspaceId
-    })
+    }
   });
-
-  if (!response.ok) {
-    throw new Error(`AI image request failed with ${response.status}`);
-  }
-
-  return (await response.json()) as ImageGenerateResponse;
 }

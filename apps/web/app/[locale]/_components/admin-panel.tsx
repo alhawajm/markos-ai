@@ -35,7 +35,7 @@ import { SurfaceState } from "./surface-state";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 
 const planCodes: PlanCode[] = ["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"];
-const modelSettingKeys = ["LLM_PRIMARY_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"] as const;
+const modelSettingKeys = ["LLM_PRIMARY_MODEL", "LLM_LONGFORM_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"] as const;
 type ModelSettingKey = (typeof modelSettingKeys)[number];
 type AdminView = "overview" | "plans" | "billing" | "gateways" | "prompts" | "models" | "audit" | "security";
 type AuditState = "loading" | "error" | "success" | "limit";
@@ -81,6 +81,7 @@ const previewModelConfig: AdminModelConfiguration = {
   editable: true,
   models: [
     { key: "LLM_PRIMARY_MODEL", source: "database", value: "gpt-5-mini" },
+    { key: "LLM_LONGFORM_MODEL", source: "environment", value: "configured-longform-model" },
     { key: "IMAGE_MODEL_PRIMARY", source: "environment", value: "gpt-image-2" },
     { key: "IMAGE_MODEL_FALLBACK", source: "environment", value: "gpt-image-2-mini" }
   ],

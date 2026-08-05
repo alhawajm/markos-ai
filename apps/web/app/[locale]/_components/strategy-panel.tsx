@@ -78,10 +78,12 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
         objective.trim()
           ? {
               horizonDays,
+              locale,
               objective: objective.trim()
             }
           : {
-              horizonDays
+              horizonDays,
+              locale
             }
       );
       setStrategies((current) => [strategy, ...current.filter((item) => item.id !== strategy.id)]);

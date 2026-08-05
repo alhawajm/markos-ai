@@ -22,6 +22,9 @@ jobs:
 
     env:
       AI_BASE_URL: http://localhost:8000
+      AI_HTTP_TIMEOUT_MS: "25000"
+      AI_STRATEGY_TIMEOUT_SECONDS: "20"
+      AI_TEXT_PROVIDER: local
       API_BASE_URL: http://localhost:4000
       DATABASE_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
       INSTAGRAM_DATABASE_TEST_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
@@ -30,10 +33,12 @@ jobs:
       INSTAGRAM_OAUTH_REDIRECT_URI: http://localhost:4000/v1/workspace/instagram/oauth/callback
       INSTAGRAM_OAUTH_STATE_SECRET: ci-instagram-state-secret-at-least-32-bytes
       INSTAGRAM_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      INTERNAL_SERVICE_TOKEN: ci-internal-service-token
       GOOGLE_OAUTH_ISSUER: https://accounts.google.com
       GOOGLE_OAUTH_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
       JWT_ACCESS_SECRET: ci-access-secret-change-me
       JWT_REFRESH_SECRET: ci-refresh-secret-change-me
+      LLM_LONGFORM_MODEL: ci-strategy-model
       MEDIA_STORAGE_DIR: var/media
       META_WEBHOOK_VERIFY_TOKEN: ci-webhook-verify-token
       NEXT_TELEMETRY_DISABLED: "1"
@@ -141,6 +146,58 @@ jobs:
             --file apps/web/Dockerfile \
             --tag markos-web:ci \
             .
+
+      - name: Validate AI deployment image
+        run: docker build --file services/ai/Dockerfile --tag markos-ai:ci .
+
+      - name: Smoke-test AI deployment image
+        run: |
+          container=markos-ai-ci
+          cleanup() {
+            docker rm --force "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach --name "$container" \
+            --env AI_TEXT_PROVIDER="$AI_TEXT_PROVIDER" \
+            --env INTERNAL_SERVICE_TOKEN="$INTERNAL_SERVICE_TOKEN" \
+            --env LLM_LONGFORM_MODEL="$LLM_LONGFORM_MODEL" \
+            --publish 127.0.0.1:8000:8000 \
+            markos-ai:ci
+
+          ready=false
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8000/ai/health >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            docker logs "$container"
+            exit 1
+          fi
+
+          unauthorized_status="$(
+            curl --silent --output /dev/null --write-out "%{http_code}" \
+              --header "content-type: application/json" \
+              --request POST \
+              --data '{}' \
+              http://127.0.0.1:8000/ai/strategy/generate
+          )"
+          test "$unauthorized_status" = "401"
+
+          curl --fail --silent \
+            --header "Authorization: Bearer $INTERNAL_SERVICE_TOKEN" \
+            --header "content-type: application/json" \
+            --request POST \
+            --data '{"workspace_id":"ci-workspace","horizon_days":90,"locale":"en","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
+            http://127.0.0.1:8000/ai/strategy/generate \
+            > /tmp/markos-ai-strategy.json
+
+          jq --exit-status --arg model "$LLM_LONGFORM_MODEL" \
+            '.model == $model and .strategy.horizonDays == 90 and .tokens_in > 0 and .tokens_out > 0' \
+            /tmp/markos-ai-strategy.json >/dev/null
 
       - name: Install Chromium
         run: corepack pnpm exec playwright-core install --with-deps chromium

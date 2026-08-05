@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { StrategyPlan, StrategyRecord } from "@markos/shared-types";
 import type { GenerateStrategyInput } from "@markos/validation";
+import { AiServiceRequestError } from "../ai/request";
 import { generateStrategyPlan } from "../ai/strategy-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -72,15 +73,19 @@ export async function generateWorkspaceStrategy(
     throw new StrategyContextMissingError();
   }
 
-  const query = input.objective ?? "Instagram strategy content pillars Bahrain SMB";
+  const query =
+    input.objective ??
+    (input.locale === "ar"
+      ? "استراتيجية إنستغرام وركائز المحتوى للشركات الصغيرة في البحرين"
+      : "Instagram strategy content pillars Bahrain SMB");
   const context = await searchVaultContext(workspaceId, {
     query,
-    topK: 8
+    topK: 10
   });
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     strategyAgentName,
-    `${workspaceId}:${query}:${input.horizonDays}`
+    `${workspaceId}:${query}:${input.horizonDays}:${input.locale}`
   );
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
@@ -96,6 +101,7 @@ export async function generateWorkspaceStrategy(
     const request = {
       workspaceId,
       horizonDays: input.horizonDays,
+      locale: input.locale,
       context,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } })
     };
@@ -107,6 +113,16 @@ export async function generateWorkspaceStrategy(
             objective: input.objective
           }
     );
+
+    if (generated.strategy.horizonDays !== input.horizonDays) {
+      throw new AiServiceRequestError({
+        code: "AI_SERVICE_RESPONSE_INVALID",
+        message: "The AI service returned an invalid response",
+        retryable: true,
+        statusCode: 502
+      });
+    }
+
     const strategy: StrategyPlan = {
       ...generated.strategy,
       retrievedContext: context
@@ -117,7 +133,7 @@ export async function generateWorkspaceStrategy(
       const row = await tx.strategy.create({
         data: {
           workspaceId,
-          title: titleForStrategy(input.horizonDays, input.objective),
+          title: titleForStrategy(input.horizonDays, input.objective, input.locale),
           horizonDays: input.horizonDays,
           content: strategy as unknown as Prisma.InputJsonValue
         }
@@ -131,6 +147,7 @@ export async function generateWorkspaceStrategy(
           prompt: {
             ...(input.objective === undefined ? {} : { objective: input.objective }),
             horizonDays: input.horizonDays,
+            locale: input.locale,
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             retrievedContext: context
           } as unknown as Prisma.InputJsonValue,
@@ -166,7 +183,13 @@ export async function generateWorkspaceStrategy(
   }
 }
 
-function titleForStrategy(horizonDays: number, objective: string | undefined): string {
+function titleForStrategy(horizonDays: number, objective: string | undefined, locale: "ar" | "en"): string {
+  if (locale === "ar") {
+    return objective === undefined
+      ? `استراتيجية إنستغرام لمدة ${horizonDays} يومًا`
+      : `استراتيجية لمدة ${horizonDays} يومًا: ${objective}`;
+  }
+
   return objective === undefined ? `${horizonDays}-day Instagram strategy` : `${horizonDays}-day strategy: ${objective}`;
 }
 
