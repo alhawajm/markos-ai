@@ -16,7 +16,10 @@ import {
   persistInstagramConnection,
   refreshSecureInstagram,
 } from "../src/workspace/instagram-connection-service";
-import { InstagramBasicClient } from "../src/workspace/instagram-basic-client";
+import {
+  InstagramBasicClient,
+  InstagramProviderError,
+} from "../src/workspace/instagram-basic-client";
 import { describeInstagramDatabase } from "./helpers/instagram-database";
 
 const workspaceIds: string[] = [];
@@ -73,7 +76,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     );
     const revoke = vi.fn(async () => undefined);
     await expect(
-      disconnectSecureInstagram(first, actorId, { revoke }),
+      disconnectSecureInstagram(first, actorId, { client: { revoke } }),
     ).resolves.toMatchObject({
       connection: { connected: false, status: "DISCONNECTED" },
       providerRevocation: { status: "CONFIRMED" },
@@ -83,7 +86,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await expect(persist(first, "same-workspace-again")).resolves.toMatchObject(
       { connected: true },
     );
-    await disconnectSecureInstagram(first, actorId, { revoke });
+    await disconnectSecureInstagram(first, actorId, { client: { revoke } });
     await expect(persist(second, "legitimate-transfer")).resolves.toMatchObject(
       { connected: true },
     );
@@ -117,7 +120,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     ).resolves.toMatchObject({ refreshed: true });
     expect((await getDecryptedCredential(id))?.accessToken).toBe("replacement");
     await disconnectSecureInstagram(id, actorId, {
-      revoke: async () => undefined,
+      client: { revoke: async () => undefined },
     });
     await expect(
       refreshSecureInstagram({ workspaceId: id, client: success, now }),
@@ -155,12 +158,26 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
         syncedAt: new Date("2026-08-02T00:00:00Z"),
       },
     });
+    const stages: Array<{
+      stage: string;
+      outcome: string;
+      diagnostic?: { category: string; providerHttpStatus?: number };
+    }> = [];
     const revoke = vi.fn(async () => {
-      throw new Error("provider unavailable");
+      throw new InstagramProviderError("http", true, {
+        httpStatus: 400,
+        errorType: "OAuthException",
+        errorCode: 190,
+        errorSubcode: 463,
+        retryable: false,
+      });
     });
 
     await expect(
-      disconnectSecureInstagram(id, actorId, { revoke }),
+      disconnectSecureInstagram(id, actorId, {
+        client: { revoke },
+        onStage: (update) => stages.push(update),
+      }),
     ).resolves.toEqual({
       connection: {
         connected: false,
@@ -174,6 +191,27 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
       },
     });
     expect(revoke).toHaveBeenCalledWith("provider-failure-token");
+    expect(stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stage: "provider_revocation_request",
+          outcome: "unconfirmed",
+          diagnostic: expect.objectContaining({
+            category: "provider_http_error",
+            providerHttpStatus: 400,
+          }),
+        }),
+        expect.objectContaining({
+          stage: "local_cleanup",
+          outcome: "completed",
+        }),
+        expect.objectContaining({
+          stage: "disconnect_complete",
+          outcome: "completed",
+          providerRevocationStatus: "UNCONFIRMED",
+        }),
+      ]),
+    );
     expect(
       await prisma.instagramConnectionCredential.findUnique({
         where: { workspaceId: id },
@@ -464,7 +502,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await prisma.workspace.delete({ where: { id: disconnectRollback } });
     await expect(
       disconnectSecureInstagram(disconnectRollback, actorId, {
-        revoke: async () => undefined,
+        client: { revoke: async () => undefined },
       }),
     ).rejects.toThrow();
     expect(

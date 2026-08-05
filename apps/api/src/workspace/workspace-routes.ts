@@ -23,6 +23,7 @@ import {
   INSTAGRAM_OAUTH_START_FAILURE_EVENT,
   INSTAGRAM_OAUTH_START_SUCCESS_EVENT,
   InstagramOAuthDiagnosticError,
+  reportInstagramDisconnectStage,
   reportInstagramOAuthCallbackFailure,
   reportInstagramOAuthFailure,
   reportInstagramOAuthLifecycleSuccess,
@@ -276,16 +277,14 @@ export async function registerWorkspaceRoutes(
     },
     async (request) => {
       const { userId, workspaceId } = requireWorkspaceContext();
-      const result = await disconnectSecureInstagram(workspaceId, userId);
-      if (result.providerRevocation.status === "UNCONFIRMED") {
-        app.log.warn(
-          {
-            event: "instagram_provider_revocation_unconfirmed",
+      const result = await disconnectSecureInstagram(workspaceId, userId, {
+        onStage: (update) =>
+          reportInstagramDisconnectStage({
+            logger: app.log,
             requestId: request.id,
-          },
-          "Instagram credential removed locally; provider revocation is unconfirmed",
-        );
-      }
+            update,
+          }),
+      });
       return ok(result);
     },
   );

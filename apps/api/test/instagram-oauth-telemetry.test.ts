@@ -5,8 +5,11 @@ import { InstagramProviderError } from "../src/workspace/instagram-basic-client"
 import { classifyInstagramOAuthProviderFailure } from "../src/workspace/instagram-oauth-service";
 import {
   classifyDatabaseFailure,
+  INSTAGRAM_DISCONNECT_STAGE_EVENT,
+  INSTAGRAM_DISCONNECT_STAGES,
   INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT,
   INSTAGRAM_OAUTH_FAILURE_STAGES,
+  reportInstagramDisconnectStage,
   reportInstagramOAuthCallbackFailure,
 } from "../src/workspace/instagram-oauth-telemetry";
 
@@ -84,6 +87,46 @@ describe("Instagram OAuth safe diagnostics", () => {
     expect(INSTAGRAM_OAUTH_FAILURE_STAGES).not.toContain(
       "credential_persistence" as never,
     );
+    expect(new Set(INSTAGRAM_DISCONNECT_STAGES).size).toBe(
+      INSTAGRAM_DISCONNECT_STAGES.length,
+    );
+    expect(INSTAGRAM_DISCONNECT_STAGES).toContain(
+      "provider_revocation_response_validation",
+    );
+  });
+
+  it("logs sanitized disconnect stages with provider diagnostics", async () => {
+    const stream = new PassThrough();
+    let serialized = "";
+    stream.on("data", (chunk) => {
+      serialized += chunk.toString();
+    });
+    const logger = pino({ level: "info" }, stream);
+    reportInstagramDisconnectStage({
+      logger,
+      requestId: "safe-disconnect-request",
+      update: {
+        stage: "provider_revocation_request",
+        outcome: "unconfirmed",
+        providerRevocationStatus: "UNCONFIRMED",
+        diagnostic: {
+          stage: "provider_revocation_request",
+          category: "provider_http_error",
+          retryable: false,
+          providerHttpStatus: 400,
+          providerErrorType: "OAuthException",
+          providerErrorCode: 190,
+          providerErrorSubcode: 463,
+        },
+      },
+    });
+    await new Promise<void>((resolve) => stream.end(resolve));
+    expect(serialized).toContain(INSTAGRAM_DISCONNECT_STAGE_EVENT);
+    expect(serialized).toContain('"stage":"provider_revocation_request"');
+    expect(serialized).toContain('"outcome":"unconfirmed"');
+    expect(serialized).toContain('"providerHttpStatus":400');
+    expect(serialized).toContain('"providerErrorCode":190');
+    expect(serialized).not.toContain("access_token");
   });
 
   it("serializes only allowlisted fields under adversarial input", async () => {

@@ -247,6 +247,10 @@ Disconnect is not workspace-data erasure. Preserve generated/imported content, p
 
 The existing GHCR image pipeline, optional ECS rollout, placeholder CDK stack, and build specification's AWS target remain useful future references, but they are not evidence that AWS is the current runtime. Exact Railway project, environment, service, networking, and variable state remains externally managed and must be inventoried in Railway before it is described as current fact.
 
+## 2026-08-05: Instagram disconnect logs each external-operation stage
+
+Emit sanitized, structured lifecycle records for the workspace Instagram disconnect request, credential lookup and decryption, provider revocation request and response validation, local cleanup, and terminal completion. Correlate all stages with the API request ID and retain only low-cardinality outcomes plus allowlisted provider HTTP status, error type, numeric code, and numeric subcode. Never log tokens, encrypted credentials, raw provider bodies, URLs, account or workspace identities, signed requests, or raw errors. Logging failure must not alter disconnect behavior, and local cleanup remains independent of provider confirmation.
+
 ## 2026-08-04: Browser sessions use cookie-backed silent renewal
 
 Keep refresh tokens in a path-scoped `httpOnly` cookie and keep access tokens only in the browser's in-memory Zustand session store, as required by the build specification. Persist token-free user, workspace, and role identity metadata only so the app can distinguish a returning expired session from a visitor. Authenticated API requests renew only after the precise `INVALID_TOKEN` response, retry once, and preserve the session on temporary network or server failures. Serialize refresh requests with the browser Web Locks API so tabs sharing the rotating cookie do not reuse a token concurrently. A terminal refresh failure clears the browser identity and sends the user to localized login; successful forced reauthentication lands on `/{locale}/app/settings#profile`.

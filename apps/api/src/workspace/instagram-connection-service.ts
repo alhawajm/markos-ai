@@ -24,6 +24,8 @@ import {
 import {
   classifyDatabaseFailure,
   InstagramOAuthDiagnosticError,
+  type InstagramDisconnectStageUpdate,
+  type InstagramOAuthFailureDiagnostic,
   type InstagramOAuthFailureStage,
 } from "./instagram-oauth-telemetry";
 
@@ -182,8 +184,7 @@ export async function persistInstagramConnection(input: {
     });
   } catch (error) {
     if (error instanceof InstagramOAuthDiagnosticError) throw error;
-    if (isUniqueViolation(error))
-      throw new InstagramConnectionConflictError();
+    if (isUniqueViolation(error)) throw new InstagramConnectionConflictError();
     throw new InstagramOAuthDiagnosticError(
       { stage: activeStage, ...classifyDatabaseFailure(error) },
       error,
@@ -310,64 +311,162 @@ export async function withSecureInstagramCredential(
 export async function disconnectSecureInstagram(
   workspaceId: string,
   actorId: string,
-  client: Pick<InstagramBasicClient, "revoke"> = new InstagramBasicClient(),
+  options: {
+    client?: Pick<InstagramBasicClient, "revoke">;
+    onStage?: (update: InstagramDisconnectStageUpdate) => void;
+  } = {},
 ): Promise<InstagramDisconnectResult> {
-  const storedCredential = await withWorkspaceDbContext(workspaceId, (tx) =>
-    tx.instagramConnectionCredential.findUnique({
-      where: { workspaceId },
-      select: {
-        encryptedAccessToken: true,
+  const client = options.client ?? new InstagramBasicClient();
+  const report = (update: InstagramDisconnectStageUpdate) => {
+    try {
+      options.onStage?.(update);
+    } catch {
+      /* diagnostics cannot change disconnect behavior */
+    }
+  };
+  report({ stage: "disconnect_request", outcome: "started" });
+  report({ stage: "credential_lookup", outcome: "started" });
+
+  let storedCredential: { encryptedAccessToken: string } | null;
+  try {
+    storedCredential = await withWorkspaceDbContext(workspaceId, (tx) =>
+      tx.instagramConnectionCredential.findUnique({
+        where: { workspaceId },
+        select: {
+          encryptedAccessToken: true,
+        },
+      }),
+    );
+  } catch (error) {
+    report({
+      stage: "credential_lookup",
+      outcome: "failed",
+      diagnostic: {
+        stage: "disconnect_credential_read",
+        ...classifyDatabaseFailure(error),
       },
-    }),
-  );
+    });
+    throw error;
+  }
+  report({
+    stage: "credential_lookup",
+    outcome: "completed",
+    credentialFound: storedCredential !== null,
+  });
+
   let providerRevocation: InstagramDisconnectResult["providerRevocation"] = {
     status: "NOT_APPLICABLE",
   };
   if (storedCredential) {
+    let accessToken: string | undefined;
     try {
-      const accessToken = decryptCredential(
+      report({ stage: "credential_decryption", outcome: "started" });
+      accessToken = decryptCredential(
         storedCredential.encryptedAccessToken,
         requiredKey(),
       );
-      await client.revoke(accessToken);
-      providerRevocation = { status: "CONFIRMED" };
     } catch {
       providerRevocation = {
         status: "UNCONFIRMED",
         manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
       };
-    }
-  }
-  await withWorkspaceDbContext(workspaceId, async (tx) => {
-    const connection = await tx.instagramConnectionCredential.findUnique({
-      where: { workspaceId },
-      select: { providerAccountId: true },
-    });
-    await tx.instagramRecentMedia.deleteMany({ where: { workspaceId } });
-    await tx.instagramConnectionCredential.deleteMany({
-      where: { workspaceId },
-    });
-    await tx.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        instagramAccessToken: null,
-        instagramAccountId: null,
-        instagramTokenExpiresAt: null,
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        action: "INSTAGRAM_DISCONNECTED",
-        actorId,
-        workspaceId,
-        targetId: connection?.providerAccountId ?? null,
-        targetType: "InstagramConnection",
-        metadata: {
-          ...(connection ? { accountId: connection.providerAccountId } : {}),
-          providerRevocation: providerRevocation.status,
+      report({
+        stage: "credential_decryption",
+        outcome: "unconfirmed",
+        providerRevocationStatus: "UNCONFIRMED",
+        diagnostic: {
+          stage: "credential_decryption",
+          category: "credential_decryption_failed",
+          retryable: false,
         },
+      });
+    }
+
+    if (accessToken) {
+      report({ stage: "credential_decryption", outcome: "completed" });
+      report({ stage: "provider_revocation_request", outcome: "started" });
+      try {
+        await client.revoke(accessToken);
+        providerRevocation = { status: "CONFIRMED" };
+        report({
+          stage: "provider_revocation_response_validation",
+          outcome: "confirmed",
+          providerRevocationStatus: "CONFIRMED",
+        });
+      } catch (error) {
+        const diagnostic = classifyProviderRevocationFailure(error);
+        providerRevocation = {
+          status: "UNCONFIRMED",
+          manualRevocationUrl: INSTAGRAM_MANAGE_ACCESS_URL,
+        };
+        report({
+          stage:
+            diagnostic.stage === "provider_revocation_request"
+              ? "provider_revocation_request"
+              : "provider_revocation_response_validation",
+          outcome: "unconfirmed",
+          providerRevocationStatus: "UNCONFIRMED",
+          diagnostic,
+        });
+      }
+    }
+  } else {
+    report({
+      stage: "provider_revocation_request",
+      outcome: "skipped",
+      providerRevocationStatus: "NOT_APPLICABLE",
+    });
+  }
+
+  report({ stage: "local_cleanup", outcome: "started" });
+  try {
+    await withWorkspaceDbContext(workspaceId, async (tx) => {
+      const connection = await tx.instagramConnectionCredential.findUnique({
+        where: { workspaceId },
+        select: { providerAccountId: true },
+      });
+      await tx.instagramRecentMedia.deleteMany({ where: { workspaceId } });
+      await tx.instagramConnectionCredential.deleteMany({
+        where: { workspaceId },
+      });
+      await tx.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          instagramAccessToken: null,
+          instagramAccountId: null,
+          instagramTokenExpiresAt: null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "INSTAGRAM_DISCONNECTED",
+          actorId,
+          workspaceId,
+          targetId: connection?.providerAccountId ?? null,
+          targetType: "InstagramConnection",
+          metadata: {
+            ...(connection ? { accountId: connection.providerAccountId } : {}),
+            providerRevocation: providerRevocation.status,
+          },
+        },
+      });
+    });
+  } catch (error) {
+    report({
+      stage: "local_cleanup",
+      outcome: "failed",
+      diagnostic: {
+        stage: "disconnect_local_cleanup",
+        ...classifyDatabaseFailure(error),
       },
     });
+    throw error;
+  }
+  report({ stage: "local_cleanup", outcome: "completed" });
+  report({
+    stage: "disconnect_complete",
+    outcome: "completed",
+    providerRevocationStatus: providerRevocation.status,
   });
   return {
     connection: {
@@ -376,6 +475,52 @@ export async function disconnectSecureInstagram(
       recentMedia: [],
     },
     providerRevocation,
+  };
+}
+
+function classifyProviderRevocationFailure(
+  error: unknown,
+): InstagramOAuthFailureDiagnostic {
+  if (!(error instanceof InstagramProviderError)) {
+    return {
+      stage: "provider_revocation_request",
+      category: "provider_client_failure",
+      retryable: false,
+    };
+  }
+
+  return {
+    stage:
+      error.kind === "schema" ||
+      error.kind === "response_not_json" ||
+      error.kind === "response_too_large"
+        ? "provider_revocation_response_validation"
+        : "provider_revocation_request",
+    category:
+      error.kind === "http"
+        ? "provider_http_error"
+        : error.kind === "network"
+          ? "provider_network_error"
+          : error.kind === "timeout"
+            ? "provider_timeout"
+            : error.kind === "response_not_json"
+              ? "provider_response_not_json"
+              : error.kind === "response_too_large"
+                ? "provider_response_too_large"
+                : "provider_response_schema_invalid",
+    retryable: error.diagnostic.retryable,
+    ...(error.diagnostic.httpStatus === undefined
+      ? {}
+      : { providerHttpStatus: error.diagnostic.httpStatus }),
+    ...(error.diagnostic.errorType === undefined
+      ? {}
+      : { providerErrorType: error.diagnostic.errorType }),
+    ...(error.diagnostic.errorCode === undefined
+      ? {}
+      : { providerErrorCode: error.diagnostic.errorCode }),
+    ...(error.diagnostic.errorSubcode === undefined
+      ? {}
+      : { providerErrorSubcode: error.diagnostic.errorSubcode }),
   };
 }
 export async function refreshSecureInstagram(input: {
