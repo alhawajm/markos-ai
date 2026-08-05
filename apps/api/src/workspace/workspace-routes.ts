@@ -23,6 +23,7 @@ import {
   INSTAGRAM_OAUTH_START_FAILURE_EVENT,
   INSTAGRAM_OAUTH_START_SUCCESS_EVENT,
   InstagramOAuthDiagnosticError,
+  reportInstagramDisconnectStage,
   reportInstagramOAuthCallbackFailure,
   reportInstagramOAuthFailure,
   reportInstagramOAuthLifecycleSuccess,
@@ -274,9 +275,17 @@ export async function registerWorkspaceRoutes(
         permissions: ["instagram:manage"],
       },
     },
-    async () => {
+    async (request) => {
       const { userId, workspaceId } = requireWorkspaceContext();
-      return ok(await disconnectSecureInstagram(workspaceId, userId));
+      const result = await disconnectSecureInstagram(workspaceId, userId, {
+        onStage: (update) =>
+          reportInstagramDisconnectStage({
+            logger: app.log,
+            requestId: request.id,
+            update,
+          }),
+      });
+      return ok(result);
     },
   );
 

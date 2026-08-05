@@ -351,7 +351,15 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       confirmed.page.getByText("@markos_business").isVisible(),
     ).resolves.toBe(true);
-    await pending!.fulfill(json(disconnected));
+    await pending!.fulfill(
+      json({
+        connection: disconnected,
+        providerRevocation: {
+          status: "ACTION_REQUIRED",
+          manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
+        },
+      }),
+    );
     await confirmed.page.getByText("Not set", { exact: true }).waitFor();
     await expect(
       confirmed.page.getByText("Not set", { exact: true }).isVisible(),
@@ -364,7 +372,54 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       confirmed.page.getByRole("button", { name: "Disconnect" }).isDisabled(),
     ).resolves.toBe(true);
+    await expect(
+      confirmed.page
+        .getByText(
+          "Instagram was disconnected from MARKOS and its local credential was removed. To finish on Instagram, open Apps and websites and select Remove next to MarkOS AI-IG.",
+        )
+        .isVisible(),
+    ).resolves.toBe(true);
+    const requiredAction = confirmed.page.getByRole("link", {
+      name: "Finish on Instagram",
+    });
+    await expect(requiredAction.isVisible()).resolves.toBe(true);
+    await expect(requiredAction.getAttribute("href")).resolves.toBe(
+      "https://www.instagram.com/accounts/manage_access/",
+    );
     await confirmed.page.close();
+
+    const unconfirmed = await settingsPage(connected);
+    await unconfirmed.page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/workspace\/instagram$/,
+      async (route) => {
+        if (route.request().method() === "DELETE") {
+          await route.fulfill(
+            json({
+              connection: disconnected,
+              providerRevocation: {
+                status: "UNCONFIRMED",
+                manualRevocationUrl:
+                  "https://www.instagram.com/accounts/manage_access/",
+              },
+            }),
+          );
+        } else await route.fallback();
+      },
+    );
+    unconfirmed.page.once("dialog", (dialog) => dialog.accept());
+    await unconfirmed.page.getByRole("button", { name: "Disconnect" }).click();
+    await unconfirmed.page.getByText(/To finish on Instagram/).waitFor();
+    await expect(
+      unconfirmed.page.getByText("Not set", { exact: true }).isVisible(),
+    ).resolves.toBe(true);
+    const manualAction = unconfirmed.page.getByRole("link", {
+      name: "Finish on Instagram",
+    });
+    await expect(manualAction.isVisible()).resolves.toBe(true);
+    await expect(manualAction.getAttribute("href")).resolves.toBe(
+      "https://www.instagram.com/accounts/manage_access/",
+    );
+    await unconfirmed.page.close();
 
     const failed = await settingsPage(connected);
     await failed.page.route(

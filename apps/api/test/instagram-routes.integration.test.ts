@@ -71,6 +71,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const authorization = new URL(started.json().data.authorizationUrl);
     expect(authorization.origin + authorization.pathname).toBe("https://www.instagram.com/oauth/authorize");
     expect(authorization.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(authorization.searchParams.get("enable_fb_login")).toBe("0");
+    expect(authorization.searchParams.get("force_authentication")).toBe("1");
     expect(authorization.searchParams.get("redirect_uri")).toBe(env.INSTAGRAM_OAUTH_REDIRECT_URI);
     expect(authorization.toString()).not.toContain("untrusted.invalid");
     expect(authorization.toString()).not.toContain("unrequested_scope");
@@ -173,7 +175,13 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(refreshed.json().data.reason).toBe("INSTAGRAM_TOKEN_TOO_NEW");
     const disconnected = await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(owner.token) });
     expect(disconnected.statusCode).toBe(200);
-    expect(disconnected.json().data).toMatchObject({ connected: false, status: "DISCONNECTED" });
+    expect(disconnected.json().data).toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: {
+        status: "ACTION_REQUIRED",
+        manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
+      },
+    });
   });
 
   async function complete(input: Principal) {

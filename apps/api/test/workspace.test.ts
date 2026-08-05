@@ -41,7 +41,13 @@ describe("workspace routes", () => {
       }
     });
     expect(disconnected.statusCode).toBe(200);
-    expect(disconnected.json().data.connected).toBe(false);
+    expect(disconnected.json().data).toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: {
+        status: "ACTION_REQUIRED",
+        manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/"
+      }
+    });
     const auditLogs = await prisma.auditLog.findMany({
       orderBy: {
         createdAt: "asc"
@@ -63,6 +69,7 @@ describe("workspace routes", () => {
     expect(auditLogs[1]).toMatchObject({
       action: "INSTAGRAM_DISCONNECTED",
       actorId: session.user.id,
+      metadata: { accountId, providerRevocation: "ACTION_REQUIRED" },
       targetId: accountId,
       targetType: "InstagramConnection"
     });

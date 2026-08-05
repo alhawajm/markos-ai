@@ -399,6 +399,14 @@ export interface InstagramOAuthStart {
   stateExpiresAt: string;
 }
 
+export interface InstagramDisconnectResult {
+  connection: InstagramConnection;
+  providerRevocation: {
+    status: "ACTION_REQUIRED" | "CONFIRMED" | "UNCONFIRMED" | "NOT_APPLICABLE";
+    manualRevocationUrl?: string;
+  };
+}
+
 export interface InstagramTokenRefreshResult {
   refreshed: boolean;
   workspaceId?: string;

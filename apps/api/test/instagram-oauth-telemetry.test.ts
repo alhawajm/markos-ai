@@ -5,8 +5,11 @@ import { InstagramProviderError } from "../src/workspace/instagram-basic-client"
 import { classifyInstagramOAuthProviderFailure } from "../src/workspace/instagram-oauth-service";
 import {
   classifyDatabaseFailure,
+  INSTAGRAM_DISCONNECT_STAGE_EVENT,
+  INSTAGRAM_DISCONNECT_STAGES,
   INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT,
   INSTAGRAM_OAUTH_FAILURE_STAGES,
+  reportInstagramDisconnectStage,
   reportInstagramOAuthCallbackFailure,
 } from "../src/workspace/instagram-oauth-telemetry";
 
@@ -84,6 +87,36 @@ describe("Instagram OAuth safe diagnostics", () => {
     expect(INSTAGRAM_OAUTH_FAILURE_STAGES).not.toContain(
       "credential_persistence" as never,
     );
+    expect(new Set(INSTAGRAM_DISCONNECT_STAGES).size).toBe(
+      INSTAGRAM_DISCONNECT_STAGES.length,
+    );
+    expect(INSTAGRAM_DISCONNECT_STAGES).toContain("provider_removal_action");
+  });
+
+  it("logs the required provider removal action without sensitive data", async () => {
+    const stream = new PassThrough();
+    let serialized = "";
+    stream.on("data", (chunk) => {
+      serialized += chunk.toString();
+    });
+    const logger = pino({ level: "info" }, stream);
+    reportInstagramDisconnectStage({
+      logger,
+      requestId: "safe-disconnect-request",
+      update: {
+        stage: "provider_removal_action",
+        outcome: "action_required",
+        providerRevocationStatus: "ACTION_REQUIRED",
+      },
+    });
+    await new Promise<void>((resolve) => stream.end(resolve));
+    expect(serialized).toContain(INSTAGRAM_DISCONNECT_STAGE_EVENT);
+    expect(serialized).toContain('"stage":"provider_removal_action"');
+    expect(serialized).toContain('"outcome":"action_required"');
+    expect(serialized).toContain(
+      '"providerRevocationStatus":"ACTION_REQUIRED"',
+    );
+    expect(serialized).not.toContain("access_token");
   });
 
   it("serializes only allowlisted fields under adversarial input", async () => {

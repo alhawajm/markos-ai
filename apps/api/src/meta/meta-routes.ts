@@ -3,6 +3,12 @@ import { Readable } from "node:stream";
 import { env } from "../config/env";
 import { errorEnvelope, ok } from "../http/envelope";
 import {
+  classifyMetaCallbackContentType,
+  type MetaCallbackStageUpdate,
+  type MetaCallbackType,
+  reportMetaCallbackStage
+} from "./meta-callback-telemetry";
+import {
   createDataDeletionConfirmationCode,
   disconnectInstagramFromMetaCallback,
   MetaCallbackVerificationError,
@@ -11,6 +17,7 @@ import {
 } from "./meta-service";
 
 const MAX_META_WEBHOOK_BYTES = 1_048_576;
+const MAX_META_CALLBACK_BYTES = 65_536;
 
 export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
   const rawWebhookBodies = new WeakMap<object, Buffer>();
@@ -71,31 +78,117 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
     return ok(await recordInstagramWebhookEvent(request.body));
   });
 
-  app.post("/v1/meta/deauthorize", async (request, reply) => {
-    try {
-      return ok(await disconnectInstagramFromMetaCallback(request.body, { action: "META_DEAUTHORIZE_RECEIVED" }));
-    } catch (error) {
-      if (error instanceof MetaCallbackVerificationError) {
-        return reply.status(403).send(errorEnvelope("META_CALLBACK_FORBIDDEN", "Meta callback verification failed"));
-      }
-      throw error;
-    }
-  });
+  await registerMetaCallbackRoutes(app);
+}
 
-  app.post("/v1/meta/data-deletion", async (request, reply) => {
-    try {
-      const result = await disconnectInstagramFromMetaCallback(request.body, { action: "META_DATA_DELETION_RECEIVED" });
+async function registerMetaCallbackRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(async (callbackApp) => {
+    const parseBody = (_request: unknown, body: string | Buffer, done: (error: Error | null, value?: unknown) => void) => {
+      done(null, parseMetaCallbackBody(body.toString()));
+    };
+    callbackApp.removeContentTypeParser("text/plain");
+    callbackApp.addContentTypeParser("text/plain", { bodyLimit: MAX_META_CALLBACK_BYTES, parseAs: "string" }, parseBody);
+    callbackApp.addContentTypeParser("*", { bodyLimit: MAX_META_CALLBACK_BYTES, parseAs: "string" }, parseBody);
 
-      return {
-        ...result,
-        confirmation_code: createDataDeletionConfirmationCode(),
-        url: `${env.WEB_BASE_URL}/en/app/settings?dataDeletion=received`
-      };
-    } catch (error) {
-      if (error instanceof MetaCallbackVerificationError) {
-        return reply.status(403).send(errorEnvelope("META_CALLBACK_FORBIDDEN", "Meta callback verification failed"));
+    callbackApp.addHook("onRequest", async (request) => {
+      const callbackType = metaCallbackType(request.url);
+      if (!callbackType) return;
+      reportMetaCallbackStage({
+        callbackType,
+        logger: request.log,
+        requestId: request.id,
+        update: {
+          stage: "callback_request",
+          outcome: "received",
+          contentTypeCategory: classifyMetaCallbackContentType(request.headers["content-type"])
+        }
+      });
+    });
+
+    callbackApp.addHook("onError", async (request, _reply, error) => {
+      const callbackType = metaCallbackType(request.url);
+      if (!callbackType) return;
+      const code = typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+      if (typeof code !== "string" || !code.startsWith("FST_ERR_CTP_")) return;
+      reportMetaCallbackStage({
+        callbackType,
+        logger: request.log,
+        requestId: request.id,
+        update: {
+          stage: "payload_parse",
+          outcome: "failed",
+          failureCategory: code === "FST_ERR_CTP_INVALID_MEDIA_TYPE" ? "unsupported_media_type" : "payload_parse_failed"
+        }
+      });
+    });
+
+    callbackApp.post("/v1/meta/deauthorize", { bodyLimit: MAX_META_CALLBACK_BYTES }, async (request, reply) => {
+      const report = callbackReporter(request.log, request.id, "deauthorize");
+      report({ stage: "payload_parse", outcome: "completed" });
+      try {
+        const result = await disconnectInstagramFromMetaCallback(request.body, {
+          action: "META_DEAUTHORIZE_RECEIVED",
+          onStage: report
+        });
+        report({ stage: "callback_complete", outcome: "completed" });
+        return ok(result);
+      } catch (error) {
+        if (error instanceof MetaCallbackVerificationError) {
+          return reply.status(403).send(errorEnvelope("META_CALLBACK_FORBIDDEN", "Meta callback verification failed"));
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
+
+    callbackApp.post("/v1/meta/data-deletion", { bodyLimit: MAX_META_CALLBACK_BYTES }, async (request, reply) => {
+      const report = callbackReporter(request.log, request.id, "data_deletion");
+      report({ stage: "payload_parse", outcome: "completed" });
+      try {
+        const result = await disconnectInstagramFromMetaCallback(request.body, {
+          action: "META_DATA_DELETION_RECEIVED",
+          onStage: report
+        });
+        report({ stage: "callback_complete", outcome: "completed" });
+        return {
+          ...result,
+          confirmation_code: createDataDeletionConfirmationCode(),
+          url: `${env.WEB_BASE_URL}/en/app/settings?dataDeletion=received`
+        };
+      } catch (error) {
+        if (error instanceof MetaCallbackVerificationError) {
+          return reply.status(403).send(errorEnvelope("META_CALLBACK_FORBIDDEN", "Meta callback verification failed"));
+        }
+        throw error;
+      }
+    });
   });
+}
+
+function parseMetaCallbackBody(body: string): unknown {
+  const trimmed = body.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      return {};
+    }
+  }
+  return Object.fromEntries(new URLSearchParams(body));
+}
+
+function metaCallbackType(url: string): MetaCallbackType | undefined {
+  const path = url.split("?", 1)[0];
+  if (path === "/v1/meta/deauthorize") return "deauthorize";
+  if (path === "/v1/meta/data-deletion") return "data_deletion";
+  return undefined;
+}
+
+function callbackReporter(
+  logger: Parameters<typeof reportMetaCallbackStage>[0]["logger"],
+  requestId: string,
+  callbackType: MetaCallbackType
+): (update: MetaCallbackStageUpdate) => void {
+  return (update) => reportMetaCallbackStage({ callbackType, logger, requestId, update });
 }

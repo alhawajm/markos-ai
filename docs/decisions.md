@@ -239,7 +239,21 @@ Treat the 2026-08-03 production business-basic OAuth success as completion of th
 
 Use Railway as the current early-stage deployment direction, with an approximate planning horizon through the first 50 users while capacity, reliability, and security are observed. This does not approve or schedule a migration at a numeric threshold. AWS remains a possible later expansion or migration direction.
 
+## 2026-08-04: Instagram disconnect does not depend on provider confirmation
+
+Instagram Login with `instagram_business_basic` has no documented server-side permission-revocation operation equivalent to the Facebook Login revoke flow. A controlled live call to the previously assumed versioned `graph.instagram.com` `/me/permissions` edge was rejected with HTTP 400, provider type `IGApiException`, code 100, and subcode 33. Do not retry that unsupported operation or describe it as pending provider propagation.
+
+When a workspace disconnects Instagram, atomically delete the local encrypted credential, legacy credential fields, and bounded recent-media cache, record the sanitized outcome in the disconnect audit, and return `ACTION_REQUIRED` with Instagram's Apps and websites URL. The UI must tell the user to select **Remove** next to MarkOS AI-IG. A controlled Railway test on 2026-08-05 verified that this manual action moved MarkOS AI-IG from Instagram's Active list to Removed and caused Meta to call the configured deauthorization endpoint.
+
+That live callback reached MARKOS but failed signed-request verification with HTTP 403. Successful deauthorization callback verification, correlated audit completion, former-token invalidation, and live data-deletion delivery are therefore deferred follow-up work rather than part of this disconnect task's completion claim.
+
+Disconnect is not workspace-data erasure. Preserve generated/imported content, publishing history, analytics, and Knowledge Vault learning until the user invokes the separate workspace erasure controls. OAuth authorization URLs disable Facebook Login and force Instagram authentication so a connect or reconnect attempt can use a different professional account. Successful signed callback verification, data-deletion delivery, and former-token invalidation remain controlled live-provider verification gates; local and mocked tests cannot close them.
+
 The existing GHCR image pipeline, optional ECS rollout, placeholder CDK stack, and build specification's AWS target remain useful future references, but they are not evidence that AWS is the current runtime. Exact Railway project, environment, service, networking, and variable state remains externally managed and must be inventoried in Railway before it is described as current fact.
+
+## 2026-08-05: Instagram disconnect logs each external-operation stage
+
+Emit sanitized, structured lifecycle records for the workspace Instagram disconnect request, credential lookup, required provider-removal action, local cleanup, and terminal completion. Log the inbound Meta callback request, content-type category, payload parsing, signature verification, credential lookup, local cleanup, audit persistence, and terminal completion under its API request ID. Retain only low-cardinality allowlisted outcomes; never log tokens, encrypted credentials, raw provider bodies, URLs, account or workspace identities, signed requests, raw headers, or raw errors. Logging failure must not alter disconnect or callback behavior.
 
 ## 2026-08-04: Browser sessions use cookie-backed silent renewal
 

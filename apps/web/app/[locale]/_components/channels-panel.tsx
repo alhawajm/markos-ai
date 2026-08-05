@@ -85,8 +85,9 @@ export function ChannelsPanel({ locale }: { locale: Locale }) {
     setMessage("");
 
     try {
-      setConnection(await client.disconnectInstagram());
-      setMessage(text(locale, "disconnected"));
+      const result = await client.disconnectInstagram();
+      setConnection(result.connection);
+      setMessage(text(locale, result.providerRevocation.status === "ACTION_REQUIRED" || result.providerRevocation.status === "UNCONFIRMED" ? "disconnectUnconfirmed" : "disconnected"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : text(locale, "failed"));
     } finally {
@@ -358,6 +359,7 @@ function text(locale: Locale, key: string): string {
       dailyCapVisible: "حد النشر اليومي ظاهر",
       disconnect: "فصل",
       disconnected: "تم فصل إنستغرام",
+      disconnectUnconfirmed: "تم فصل إنستغرام من MARKOS. أكمل الإزالة من Instagram عبر صفحة الإعدادات.",
       expires: "ينتهي في",
       expired: "منتهي",
       failed: "فشل الطلب",
@@ -391,6 +393,7 @@ function text(locale: Locale, key: string): string {
       dailyCapVisible: "Daily cap visible",
       disconnect: "Disconnect",
       disconnected: "Instagram disconnected",
+      disconnectUnconfirmed: "Instagram was disconnected from MARKOS. Finish removing access from Instagram through Settings.",
       expires: "Expires",
       expired: "Expired",
       failed: "Request failed",

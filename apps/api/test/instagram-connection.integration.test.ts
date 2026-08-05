@@ -35,6 +35,12 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await prisma.auditLog.deleteMany({
       where: { workspaceId: { in: workspaceIds } },
     });
+    await prisma.instagramAnalytics.deleteMany({
+      where: { workspaceId: { in: workspaceIds } },
+    });
+    await prisma.contentItem.deleteMany({
+      where: { workspaceId: { in: workspaceIds } },
+    });
     await prisma.instagramRecentMedia.deleteMany({
       where: { workspaceId: { in: workspaceIds } },
     });
@@ -65,7 +71,16 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await expect(persist(second, "other-workspace")).rejects.toBeInstanceOf(
       InstagramConnectionConflictError,
     );
-    await disconnectSecureInstagram(first, actorId);
+    await expect(
+      disconnectSecureInstagram(first, actorId),
+    ).resolves.toMatchObject({
+      connection: { connected: false, status: "DISCONNECTED" },
+      providerRevocation: {
+        status: "ACTION_REQUIRED",
+        manualRevocationUrl:
+          "https://www.instagram.com/accounts/manage_access/",
+      },
+    });
     expect(await getDecryptedCredential(first)).toBeNull();
     await expect(persist(first, "same-workspace-again")).resolves.toMatchObject(
       { connected: true },
@@ -107,6 +122,104 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await expect(
       refreshSecureInstagram({ workspaceId: id, client: success, now }),
     ).resolves.toEqual({ refreshed: false, reason: "INSTAGRAM_NOT_CONNECTED" });
+  });
+
+  it("requires provider removal, finishes local cleanup, and preserves workspace history", async () => {
+    const id = await workspace();
+    await persist(
+      id,
+      "provider-failure-token",
+      undefined,
+      undefined,
+      "17841400000000304",
+      [{ id: "retained-history-media", mediaType: "IMAGE" }],
+    );
+    const content = await prisma.contentItem.create({
+      data: {
+        workspaceId: id,
+        contentType: "POST",
+        status: "PUBLISHED",
+        captionEn: "Retained workspace content",
+        hashtags: ["#markos"],
+        mediaIds: [],
+        instagramPostId: "published-history-id",
+      },
+    });
+    const analytics = await prisma.instagramAnalytics.create({
+      data: {
+        workspaceId: id,
+        contentItemId: content.id,
+        metricType: "POST",
+        dataDate: new Date("2026-08-01T00:00:00Z"),
+        metrics: { reach: 12 },
+        syncedAt: new Date("2026-08-02T00:00:00Z"),
+      },
+    });
+    const stages: Array<{
+      stage: string;
+      outcome: string;
+    }> = [];
+
+    await expect(
+      disconnectSecureInstagram(id, actorId, {
+        onStage: (update) => stages.push(update),
+      }),
+    ).resolves.toEqual({
+      connection: {
+        connected: false,
+        status: "DISCONNECTED",
+        recentMedia: [],
+      },
+      providerRevocation: {
+        status: "ACTION_REQUIRED",
+        manualRevocationUrl:
+          "https://www.instagram.com/accounts/manage_access/",
+      },
+    });
+    expect(stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stage: "provider_removal_action",
+          outcome: "action_required",
+          providerRevocationStatus: "ACTION_REQUIRED",
+        }),
+        expect.objectContaining({
+          stage: "local_cleanup",
+          outcome: "completed",
+        }),
+        expect.objectContaining({
+          stage: "disconnect_complete",
+          outcome: "completed",
+          providerRevocationStatus: "ACTION_REQUIRED",
+        }),
+      ]),
+    );
+    expect(
+      await prisma.instagramConnectionCredential.findUnique({
+        where: { workspaceId: id },
+      }),
+    ).toBeNull();
+    expect(
+      await prisma.instagramRecentMedia.count({ where: { workspaceId: id } }),
+    ).toBe(0);
+    expect(
+      await prisma.contentItem.findUnique({ where: { id: content.id } }),
+    ).not.toBeNull();
+    expect(
+      await prisma.instagramAnalytics.findUnique({
+        where: { id: analytics.id },
+      }),
+    ).not.toBeNull();
+    expect(
+      await prisma.auditLog.findFirst({
+        where: { workspaceId: id, action: "INSTAGRAM_DISCONNECTED" },
+      }),
+    ).toMatchObject({
+      metadata: {
+        accountId: "17841400000000304",
+        providerRevocation: "ACTION_REQUIRED",
+      },
+    });
   });
 
   it("enforces application-role RLS for states, credentials, and media", async () => {

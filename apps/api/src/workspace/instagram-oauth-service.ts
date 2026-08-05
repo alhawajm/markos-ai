@@ -129,6 +129,8 @@ export async function createInstagramOAuthStart(input: {
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", INSTAGRAM_REQUESTED_SCOPES.join(","));
     url.searchParams.set("state", state);
+    url.searchParams.set("enable_fb_login", "0");
+    url.searchParams.set("force_authentication", "1");
   } catch (error) {
     throw new InstagramOAuthDiagnosticError(
       {

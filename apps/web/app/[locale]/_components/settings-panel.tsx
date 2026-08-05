@@ -46,6 +46,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [mfaSetup, setMfaSetup] = useState<MfaTotpSetup | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [message, setMessage] = useState("");
+  const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<
+    string | null
+  >(null);
   const [isBusy, setIsBusy] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
@@ -98,6 +101,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     setIsBusy(true);
     setAuditState("loading");
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     const loaded = await refreshSettings(
       client,
@@ -118,6 +122,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
       const start = await client.instagramOAuthStart({
@@ -144,10 +149,29 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
-      setConnection(await client.disconnectInstagram());
-      setMessage(copy(locale, "disconnected"));
+      const result = await client.disconnectInstagram();
+      setConnection(result.connection);
+      if (
+        result.providerRevocation.status === "ACTION_REQUIRED" ||
+        result.providerRevocation.status === "UNCONFIRMED"
+      ) {
+        setDisconnectWarningUrl(
+          result.providerRevocation.manualRevocationUrl ?? null,
+        );
+        setMessage(copy(locale, "disconnectUnconfirmed"));
+      } else {
+        setMessage(
+          copy(
+            locale,
+            result.providerRevocation.status === "CONFIRMED"
+              ? "disconnectedRevoked"
+              : "disconnected",
+          ),
+        );
+      }
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
@@ -165,6 +189,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
       const result = await client.refreshInstagramToken();
@@ -193,6 +218,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
       setMfaSetup(await client.setupMfaTotp());
@@ -214,6 +240,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
       const status = await client.enableMfaTotp({ code: mfaCode.trim() });
@@ -238,6 +265,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     setIsBusy(true);
     setMessage("");
+    setDisconnectWarningUrl(null);
 
     try {
       const data = await client.exportWorkspaceData();
@@ -630,12 +658,33 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         {message ? (
           <div aria-live="polite" role="status">
             <SurfaceState
+              action={
+                disconnectWarningUrl ? (
+                  <a
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-accent/20 bg-white px-4 text-sm font-extrabold text-accent"
+                    href={disconnectWarningUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {copy(locale, "openInstagramAccess")}
+                    <ExternalLink size={15} />
+                  </a>
+                ) : undefined
+              }
               body={message}
               title={copy(
                 locale,
-                auditState === "error" ? "attention" : "status",
+                auditState === "error" || disconnectWarningUrl
+                  ? "attention"
+                  : "status",
               )}
-              tone={auditState === "error" ? "error" : "info"}
+              tone={
+                auditState === "error"
+                  ? "error"
+                  : disconnectWarningUrl
+                    ? "warning"
+                    : "info"
+              }
             />
           </div>
         ) : (
@@ -838,7 +887,11 @@ function copy(locale: Locale, key: string): string {
         "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
       disconnect: "فصل",
       disconnected: "تم فصل إنستغرام.",
-      disconnectConfirm: "هل تريد فصل Instagram وحذف بيانات الاعتماد المحفوظة؟",
+      disconnectedRevoked: "تم فصل إنستغرام وإلغاء وصول MARKOS لدى Meta.",
+      disconnectConfirm:
+        "هل تريد فصل Instagram من MARKOS وحذف بيانات الاعتماد المحفوظة؟ لإكمال إلغاء وصول MARKOS، افتح أذونات Instagram واختر «إزالة» بجانب MarkOS AI-IG. سيبقى محتوى مساحة العمل والتحليلات محفوظاً.",
+      disconnectUnconfirmed:
+        "تم فصل Instagram من MARKOS وحذف بيانات الاعتماد المحلية. لإكمال العملية على Instagram، افتح التطبيقات ومواقع الويب واختر «إزالة» بجانب MarkOS AI-IG.",
       recentMedia: "وسائط Instagram الحديثة",
       emptyMedia: "لا توجد وسائط حديثة لهذا الحساب.",
       disconnectedStatus: "غير متصل",
@@ -865,6 +918,7 @@ function copy(locale: Locale, key: string): string {
       notEnabled: "غير مفعّل",
       oauth: "اتصال OAuth",
       openAdmin: "فتح الإدارة",
+      openInstagramAccess: "إكمال الفصل على Instagram",
       openVault: "افتح الخزنة",
       payments: "المدفوعات",
       pending: "قيد الانتظار",
@@ -912,8 +966,12 @@ function copy(locale: Locale, key: string): string {
         "Export, audit, and business memory stay workspace-scoped.",
       disconnect: "Disconnect",
       disconnected: "Instagram disconnected.",
+      disconnectedRevoked:
+        "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
       disconnectConfirm:
-        "Disconnect Instagram and remove its stored credential?",
+        "Disconnect Instagram from MARKOS and remove its stored credential? To finish revoking MARKOS access, open Instagram permissions and select Remove next to MarkOS AI-IG. Existing workspace content and analytics will remain.",
+      disconnectUnconfirmed:
+        "Instagram was disconnected from MARKOS and its local credential was removed. To finish on Instagram, open Apps and websites and select Remove next to MarkOS AI-IG.",
       recentMedia: "Recent Instagram media",
       emptyMedia: "No recent media was returned for this account.",
       disconnectedStatus: "Disconnected",
@@ -940,6 +998,7 @@ function copy(locale: Locale, key: string): string {
       notEnabled: "Not enabled",
       oauth: "Connect OAuth",
       openAdmin: "Open admin",
+      openInstagramAccess: "Finish on Instagram",
       openVault: "Open Vault",
       payments: "Payments",
       pending: "Pending",

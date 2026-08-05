@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import type { MetaCallbackStageUpdate } from "./meta-callback-telemetry";
 
 export interface MetaCallbackResult {
   accountId?: string;
@@ -56,9 +57,25 @@ export async function disconnectInstagramFromMetaCallback(
   body: unknown,
   input: {
     action?: "META_DATA_DELETION_RECEIVED" | "META_DEAUTHORIZE_RECEIVED";
+    onStage?: (update: MetaCallbackStageUpdate) => void;
   } = {}
 ): Promise<MetaCallbackResult> {
-  const accountId = getVerifiedAccountId(body);
+  const report = (update: MetaCallbackStageUpdate) => {
+    try {
+      input.onStage?.(update);
+    } catch {
+      /* diagnostics cannot change callback behavior */
+    }
+  };
+  report({ stage: "signature_verification", outcome: "started" });
+  let accountId: string | undefined;
+  try {
+    accountId = getVerifiedAccountId(body);
+  } catch (error) {
+    report({ stage: "signature_verification", outcome: "rejected", failureCategory: "signature_verification_failed" });
+    throw error;
+  }
+  report({ stage: "signature_verification", outcome: "completed" });
   const action = input.action ?? "META_DEAUTHORIZE_RECEIVED";
 
   if (!accountId) {
@@ -74,35 +91,58 @@ export async function disconnectInstagramFromMetaCallback(
     };
   }
 
-  const matchingConnections = await prisma.instagramConnectionCredential.findMany({
-    select: {
-      workspaceId: true
-    },
-    where: {
-      deletedAt: null,
-      provider: "INSTAGRAM",
-      providerAccountId: accountId
-    }
-  });
+  report({ stage: "credential_lookup", outcome: "started" });
+  let matchingConnections: Array<{ workspaceId: string }>;
+  try {
+    matchingConnections = await prisma.instagramConnectionCredential.findMany({
+      select: {
+        workspaceId: true
+      },
+      where: {
+        deletedAt: null,
+        provider: "INSTAGRAM",
+        providerAccountId: accountId
+      }
+    });
+  } catch (error) {
+    report({ stage: "credential_lookup", outcome: "failed", failureCategory: "database_failure" });
+    throw error;
+  }
   const workspaceIds = matchingConnections.map((connection) => connection.workspaceId);
-  await prisma.$transaction(async (tx) => {
-    await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-    await tx.instagramConnectionCredential.deleteMany({
-      where: { workspaceId: { in: workspaceIds }, providerAccountId: accountId }
-    });
-    await tx.workspace.updateMany({
-      data: { instagramAccessToken: null, instagramAccountId: null, instagramTokenExpiresAt: null },
-      where: { id: { in: workspaceIds } }
-    });
-  });
+  report({ stage: "credential_lookup", outcome: "completed", credentialMatched: workspaceIds.length > 0 });
 
-  await recordMetaCallbackAudit({
-    accountId,
-    action,
-    body,
-    disconnected: workspaceIds.length,
-    workspaceIds
-  });
+  report({ stage: "local_cleanup", outcome: "started" });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+      await tx.instagramConnectionCredential.deleteMany({
+        where: { workspaceId: { in: workspaceIds }, providerAccountId: accountId }
+      });
+      await tx.workspace.updateMany({
+        data: { instagramAccessToken: null, instagramAccountId: null, instagramTokenExpiresAt: null },
+        where: { id: { in: workspaceIds } }
+      });
+    });
+  } catch (error) {
+    report({ stage: "local_cleanup", outcome: "failed", failureCategory: "database_failure" });
+    throw error;
+  }
+  report({ stage: "local_cleanup", outcome: "completed" });
+
+  report({ stage: "audit_persistence", outcome: "started" });
+  try {
+    await recordMetaCallbackAudit({
+      accountId,
+      action,
+      body,
+      disconnected: workspaceIds.length,
+      workspaceIds
+    });
+  } catch (error) {
+    report({ stage: "audit_persistence", outcome: "failed", failureCategory: "database_failure" });
+    throw error;
+  }
+  report({ stage: "audit_persistence", outcome: "completed" });
 
   return {
     accountId,
