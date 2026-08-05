@@ -8,8 +8,8 @@ The current connection milestone uses Instagram Login and requests exactly `inst
 
 - **Implemented and locally/CI verified:** the current source and tests cover OAuth start/callback, signed state, expiry, transaction binding, single-use consumption, provider exchanges, professional-account resolution, encrypted persistence, bounded recent media, secure status, refresh, guaranteed local disconnect, guided manual provider removal, signed callback parsing/handling, redirects, and sanitized telemetry.
 - **Production-verified on 2026-08-03:** one real professional account completed the deployed OAuth flow, appeared Connected in production Settings, and loaded recent provider-owned media.
-- **Railway test verified on 2026-08-05:** local disconnect completed, the UI presented the Instagram Apps and websites action, manual removal moved MarkOS AI-IG from Active to Removed, and Meta delivered a deauthorization request to MARKOS. The request failed signed-request verification with HTTP 403.
-- **Not yet externally verified:** formal App Review submission/approval, publishing, insights, a complete token-refresh lifetime, former-token invalidation, successful signed deauthorization/data-deletion handling, and webhook subscriptions.
+- **Railway test verified on 2026-08-05:** local disconnect completed, the UI presented the Instagram Apps and websites action, and manual removal moved MarkOS AI-IG from Active to Removed. Meta delivered the deauthorization request as multipart form data; MARKOS verified the signed request, matched and removed the stored credential, persisted the audit, completed the callback with HTTP 200, and refreshed Settings to Disconnected.
+- **Not yet externally verified:** formal App Review submission/approval, publishing, insights, a complete token-refresh lifetime, former-token invalidation, end-to-end data-deletion behavior, and webhook subscriptions.
 - **Externally managed:** current Meta dashboard settings, app mode, roles, permissions, Graph version, URLs, and App Review status. Repository code and this handoff cannot prove their current dashboard values.
 
 ## Production connection milestone
