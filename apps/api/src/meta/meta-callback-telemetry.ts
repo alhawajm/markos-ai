@@ -4,6 +4,15 @@ export const META_CALLBACK_STAGE_EVENT = "meta_callback_stage";
 
 export type MetaCallbackType = "deauthorize" | "data_deletion";
 
+export type MetaCallbackVerificationFailureCategory =
+  | "callback_body_invalid"
+  | "signed_request_missing"
+  | "signed_request_malformed"
+  | "app_secret_missing"
+  | "signature_mismatch"
+  | "payload_invalid"
+  | "account_id_missing";
+
 export type MetaCallbackStageUpdate = {
   stage:
     | "callback_request"
@@ -16,6 +25,7 @@ export type MetaCallbackStageUpdate = {
   outcome: "received" | "started" | "completed" | "rejected" | "failed";
   contentTypeCategory?: "form" | "json" | "text" | "missing" | "other";
   credentialMatched?: boolean;
+  verificationFailureCategory?: MetaCallbackVerificationFailureCategory;
   failureCategory?:
     | "unsupported_media_type"
     | "payload_parse_failed"
@@ -46,6 +56,9 @@ export function reportMetaCallbackStage(input: {
       : {}),
     ...(input.update.failureCategory
       ? { failureCategory: input.update.failureCategory }
+      : {}),
+    ...(input.update.verificationFailureCategory
+      ? { verificationFailureCategory: input.update.verificationFailureCategory }
       : {}),
   };
 

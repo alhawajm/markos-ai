@@ -2,7 +2,10 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
-import type { MetaCallbackStageUpdate } from "./meta-callback-telemetry";
+import type {
+  MetaCallbackStageUpdate,
+  MetaCallbackVerificationFailureCategory
+} from "./meta-callback-telemetry";
 
 export interface MetaCallbackResult {
   accountId?: string;
@@ -19,7 +22,7 @@ interface SignedRequestPayload {
 }
 
 export class MetaCallbackVerificationError extends Error {
-  constructor() {
+  constructor(readonly category: MetaCallbackVerificationFailureCategory) {
     super("Meta callback verification failed");
   }
 }
@@ -72,7 +75,14 @@ export async function disconnectInstagramFromMetaCallback(
   try {
     accountId = getVerifiedAccountId(body);
   } catch (error) {
-    report({ stage: "signature_verification", outcome: "rejected", failureCategory: "signature_verification_failed" });
+    report({
+      stage: "signature_verification",
+      outcome: "rejected",
+      failureCategory: "signature_verification_failed",
+      ...(error instanceof MetaCallbackVerificationError
+        ? { verificationFailureCategory: error.category }
+        : {})
+    });
     throw error;
   }
   report({ stage: "signature_verification", outcome: "completed" });
@@ -225,43 +235,70 @@ function sanitizeMetaPayload(body: unknown): Prisma.InputJsonObject {
 }
 
 function getVerifiedAccountId(body: unknown): string | undefined {
-  if (typeof body !== "object" || body === null) {
-    throw new MetaCallbackVerificationError();
+  const signedRequest = typeof body === "string"
+    ? body
+    : typeof body === "object" && body !== null && !Array.isArray(body)
+      ? (body as Record<string, unknown>).signed_request
+      : undefined;
+
+  if (typeof body !== "string" && (typeof body !== "object" || body === null || Array.isArray(body))) {
+    throw new MetaCallbackVerificationError("callback_body_invalid");
   }
 
-  const record = body as Record<string, unknown>;
-  const signedRequest = typeof record.signed_request === "string" ? record.signed_request : undefined;
-  const payload = signedRequest ? parseSignedRequest(signedRequest) : undefined;
+  if (typeof signedRequest !== "string" || signedRequest.length === 0) {
+    throw new MetaCallbackVerificationError("signed_request_missing");
+  }
+
+  const payload = parseSignedRequest(signedRequest);
   const accountId = firstString(payload?.user_id);
 
-  if (!accountId) throw new MetaCallbackVerificationError();
+  if (!accountId) throw new MetaCallbackVerificationError("account_id_missing");
 
   return accountId;
 }
 
-function parseSignedRequest(signedRequest: string): SignedRequestPayload | undefined {
+function parseSignedRequest(signedRequest: string): SignedRequestPayload {
   if (!env.INSTAGRAM_APP_SECRET) {
-    return undefined;
+    throw new MetaCallbackVerificationError("app_secret_missing");
   }
 
-  const [encodedSignature, encodedPayload] = signedRequest.split(".");
-
-  if (!encodedSignature || !encodedPayload) {
-    return undefined;
+  const parts = signedRequest.split(".");
+  if (
+    parts.length !== 2 ||
+    !parts[0] ||
+    !parts[1] ||
+    !isBase64UrlSegment(parts[0]) ||
+    !isBase64UrlSegment(parts[1])
+  ) {
+    throw new MetaCallbackVerificationError("signed_request_malformed");
   }
+  const [encodedSignature, encodedPayload] = parts as [string, string];
 
   const signature = base64UrlDecode(encodedSignature);
   const expected = createHmac("sha256", env.INSTAGRAM_APP_SECRET).update(encodedPayload).digest();
 
-  if (signature.length !== expected.length || !timingSafeEqual(signature, expected)) {
-    return undefined;
+  if (signature.length !== expected.length) {
+    throw new MetaCallbackVerificationError("signed_request_malformed");
+  }
+
+  if (!timingSafeEqual(signature, expected)) {
+    throw new MetaCallbackVerificationError("signature_mismatch");
   }
 
   try {
-    return JSON.parse(base64UrlDecode(encodedPayload).toString("utf8")) as SignedRequestPayload;
+    const payload = JSON.parse(base64UrlDecode(encodedPayload).toString("utf8")) as unknown;
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      throw new MetaCallbackVerificationError("payload_invalid");
+    }
+    return payload as SignedRequestPayload;
   } catch {
-    return undefined;
+    throw new MetaCallbackVerificationError("payload_invalid");
   }
+}
+
+function isBase64UrlSegment(value: string): boolean {
+  const unpadded = value.replace(/=+$/, "");
+  return /^[A-Za-z0-9_-]+={0,2}$/.test(value) && unpadded.length % 4 !== 1;
 }
 
 function base64UrlDecode(value: string): Buffer {

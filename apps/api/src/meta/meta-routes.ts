@@ -175,7 +175,22 @@ function parseMetaCallbackBody(body: string): unknown {
       return {};
     }
   }
-  return Object.fromEntries(new URLSearchParams(body));
+
+  const form = Object.fromEntries(new URLSearchParams(body));
+  if (typeof form.signed_request === "string" && form.signed_request.length > 0) {
+    return form;
+  }
+
+  if (isRawSignedRequest(trimmed)) {
+    return { signed_request: trimmed };
+  }
+
+  return form;
+}
+
+function isRawSignedRequest(value: string): boolean {
+  const parts = value.split(".");
+  return parts.length === 2 && parts.every((part) => /^[A-Za-z0-9_-]+={0,2}$/.test(part));
 }
 
 function metaCallbackType(url: string): MetaCallbackType | undefined {
