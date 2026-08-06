@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from typing import Generic, Protocol, TypeVar
 
@@ -16,6 +17,8 @@ from app.core.config import settings
 from app.core.errors import AiServiceError
 
 logger = logging.getLogger(__name__)
+
+SAFE_PROVIDER_DETAIL_PATTERN = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,160}$")
 
 
 class ResponseUsage(Protocol):
@@ -201,13 +204,23 @@ def log_provider_failure(error: BaseException, schema_name: str) -> None:
     request_id_present = bool(error.request_id) if isinstance(error, APIStatusError) else False
     cause_type = type(error.__cause__).__name__ if error.__cause__ is not None else None
     logger.warning(
-        "openai_structured_request_failed schema=%s error_type=%s status_code=%s cause_type=%s request_id_present=%s",
+        "openai_structured_request_failed schema=%s error_type=%s status_code=%s cause_type=%s request_id_present=%s provider_error_type=%s provider_code=%s provider_param=%s",
         schema_name,
         type(error).__name__,
         status_code,
         cause_type,
         request_id_present,
+        safe_provider_detail(getattr(error, "type", None)),
+        safe_provider_detail(getattr(error, "code", None)),
+        safe_provider_detail(getattr(error, "param", None)),
     )
+
+
+def safe_provider_detail(value: object) -> str | None:
+    if not isinstance(value, str) or SAFE_PROVIDER_DETAIL_PATTERN.fullmatch(value) is None:
+        return None
+
+    return value
 
 
 def log_response_rejection(
