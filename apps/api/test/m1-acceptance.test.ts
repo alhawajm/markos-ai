@@ -62,6 +62,16 @@ vi.mock("../src/ai/strategy-client", () => ({
   }
 }));
 
+vi.mock("../src/ai/business-profile-client", () => ({
+  generateBusinessProfile: async () => ({
+    model: "test-profile-model",
+    prompt_version: "onboarding-business-profile.v1.acceptance",
+    tokens_in: 160,
+    tokens_out: 280,
+    profile: acceptanceBusinessProfile()
+  })
+}));
+
 describe("M1 acceptance", () => {
   it("completes onboarding, clears gaps, retrieves Vault context, and grounds a Strategy Agent call", async () => {
     const app = await buildApp();
@@ -89,10 +99,27 @@ describe("M1 acceptance", () => {
 
     await saveAllOnboardingModules(app, headers);
 
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/generate",
+      headers
+    });
+
+    expect(generated.statusCode).toBe(200);
+    const draft = generated.json().data.businessProfile;
+    expect(draft).toMatchObject({
+      status: "DRAFT",
+      profile: acceptanceBusinessProfile()
+    });
+
     const complete = await app.inject({
       method: "POST",
-      url: "/v1/onboarding/complete",
-      headers
+      url: "/v1/onboarding/profile/approve",
+      headers,
+      payload: {
+        interactionId: draft.interactionId,
+        profile: draft.profile
+      }
     });
 
     expect(complete.statusCode).toBe(200);
@@ -117,7 +144,11 @@ describe("M1 acceptance", () => {
         expect.objectContaining({ module: "company", completed: true }),
         expect.objectContaining({ module: "brand", completed: true }),
         expect.objectContaining({ module: "objectives", completed: true })
-      ])
+      ]),
+      businessProfile: {
+        status: "APPROVED",
+        profile: acceptanceBusinessProfile()
+      }
     });
 
     const rag = await app.inject({
@@ -196,6 +227,25 @@ describe("M1 acceptance", () => {
     await app.close();
   });
 });
+
+function acceptanceBusinessProfile() {
+  const localized = {
+    en: "Grounded English business profile.",
+    ar: "ملف نشاط عربي موثوق."
+  };
+
+  return {
+    businessName: "Pearl Coffee",
+    tagline: localized,
+    overview: localized,
+    uniqueValue: localized,
+    offerSummary: localized,
+    idealCustomer: localized,
+    marketPosition: localized,
+    brandVoice: localized,
+    marketingFocus: localized
+  };
+}
 
 async function saveAllOnboardingModules(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   const requests = [

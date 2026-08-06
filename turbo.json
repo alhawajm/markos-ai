@@ -65,10 +65,15 @@
     "ai#test": {
       "cache": false,
       "env": [
+        "AI_PROFILE_TIMEOUT_SECONDS",
         "AI_STRATEGY_TIMEOUT_SECONDS",
         "AI_TEXT_PROVIDER",
         "INTERNAL_SERVICE_TOKEN",
-        "LLM_LONGFORM_MODEL"
+        "LLM_LONGFORM_MODEL",
+        "OPENAI_MAX_OUTPUT_TOKENS",
+        "OPENAI_MAX_RETRIES",
+        "OPENAI_REASONING_EFFORT",
+        "OPENAI_TIMEOUT_SECONDS"
       ],
       "outputs": []
     },

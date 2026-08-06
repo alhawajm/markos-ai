@@ -22,6 +22,7 @@ import type {
   BillingSummary,
   BillingUpgradeResult,
   BillingVatComplianceReport,
+  BusinessProfile,
   ContentRecord,
   ContentStatus,
   ContentType,
@@ -180,6 +181,22 @@ export class MarkosApiClient {
   async completeOnboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding/complete", {
       body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateBusinessProfile(): Promise<OnboardingState> {
+    const response = await this.request<OnboardingState>("/v1/onboarding/profile/generate", {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveBusinessProfile(input: { interactionId: string; profile: BusinessProfile }): Promise<OnboardingState> {
+    const response = await this.request<OnboardingState>("/v1/onboarding/profile/approve", {
+      body: input,
       method: "POST"
     });
     return response.data;

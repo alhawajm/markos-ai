@@ -240,11 +240,36 @@ export interface OnboardingModuleState {
   sections: VaultSection[];
 }
 
+export interface LocalizedBusinessProfileText {
+  en: string;
+  ar: string;
+}
+
+export interface BusinessProfile {
+  businessName: string;
+  tagline: LocalizedBusinessProfileText;
+  overview: LocalizedBusinessProfileText;
+  uniqueValue: LocalizedBusinessProfileText;
+  offerSummary: LocalizedBusinessProfileText;
+  idealCustomer: LocalizedBusinessProfileText;
+  marketPosition: LocalizedBusinessProfileText;
+  brandVoice: LocalizedBusinessProfileText;
+  marketingFocus: LocalizedBusinessProfileText;
+}
+
+export interface OnboardingBusinessProfileState {
+  status: "NOT_GENERATED" | "DRAFT" | "APPROVED";
+  interactionId: string | null;
+  profile: BusinessProfile | null;
+  updatedAt: string | null;
+}
+
 export interface OnboardingState {
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
   onboardingScore: number;
   vaultScore: VaultCompletenessScore;
   modules: OnboardingModuleState[];
+  businessProfile: OnboardingBusinessProfileState;
 }
 
 export interface StrategyPillar {

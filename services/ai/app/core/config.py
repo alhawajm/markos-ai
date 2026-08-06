@@ -11,9 +11,10 @@ class Settings(BaseSettings):
     internal_service_token: str = "change-me"
     database_url: str = "postgresql://markos:markos@localhost:5432/markos"
     ai_text_provider: Literal["local", "openai"] = "local"
-    ai_strategy_timeout_seconds: float = Field(default=20, gt=0, le=60)
+    ai_strategy_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
     openai_api_key: SecretStr | None = None
-    openai_timeout_seconds: float = Field(default=12, gt=0, le=60)
+    openai_timeout_seconds: float = Field(default=45, gt=0, le=60)
     openai_max_retries: int = Field(default=1, ge=0, le=3)
     openai_max_output_tokens: int = Field(default=4_000, ge=256, le=32_000)
     openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "low"

@@ -264,6 +264,102 @@ describe("active SettingsPanel Instagram interactions", () => {
     await arabic.close();
   });
 
+  it("renders an editable bilingual resolved profile and approves the reviewed version", async () => {
+    const page = await browserPage();
+    const interactionId = "019fd833-4bf3-7ed5-9db9-6f96ab379054";
+    let approvalPayload: Record<string, unknown> | undefined;
+    const profile = browserBusinessProfile();
+    const onboarding = {
+      status: "IN_PROGRESS",
+      onboardingScore: 100,
+      vaultScore: {
+        score: 100,
+        completedSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+        missingSections: [],
+        requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+        entryCount: 8,
+      },
+      modules: [],
+      businessProfile: {
+        status: "DRAFT",
+        interactionId,
+        profile,
+        updatedAt: "2026-08-06T12:00:00.000Z",
+      },
+    };
+
+    await page.addInitScript(
+      (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
+      storedIdentity,
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const request = route.request();
+        const pathname = new URL(request.url()).pathname;
+        if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding" && request.method() === "GET")
+          return route.fulfill(json(onboarding));
+        if (pathname === "/v1/onboarding/profile/approve") {
+          approvalPayload = request.postDataJSON() as Record<string, unknown>;
+          return route.fulfill(
+            json({
+              ...onboarding,
+              status: "COMPLETE",
+              businessProfile: {
+                ...onboarding.businessProfile,
+                status: "APPROVED",
+                profile: (approvalPayload.profile as Record<string, unknown>),
+              },
+            }),
+          );
+        }
+        return route.fulfill(json([]));
+      },
+    );
+
+    await page.goto(`${baseUrl}/en/onboarding?step=8`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("heading", { name: "This is your business identity" }).waitFor();
+    await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("Pearl Coffee");
+    await page.getByLabel("Short description").fill("Bahrain coffee, personally crafted.");
+    await page.getByRole("button", { name: "العربية", exact: true }).click();
+    await expect(page.getByLabel("Short description").inputValue()).resolves.toBe(profile.tagline.ar);
+    await page.getByRole("button", { name: "English", exact: true }).click();
+    await page.screenshot({
+      path: "evidence/onboarding-business-profile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ height: 844, width: 390 });
+    const profileWidths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(profileWidths.scroll).toBeLessThanOrEqual(profileWidths.client);
+    await page.screenshot({
+      path: "evidence/onboarding-business-profile-mobile.png",
+      fullPage: true,
+    });
+
+    await Promise.all([
+      page.waitForURL(/\/en\/app$/),
+      page.getByRole("button", { name: "Approve profile & continue" }).click(),
+    ]);
+
+    expect(approvalPayload).toMatchObject({
+      interactionId,
+      profile: {
+        businessName: "Pearl Coffee",
+        tagline: {
+          en: "Bahrain coffee, personally crafted.",
+          ar: profile.tagline.ar,
+        },
+      },
+    });
+    await page.close();
+  });
+
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {
     const { page } = await settingsPage(
       connected,
@@ -846,5 +942,24 @@ function json(data: unknown) {
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({ data }),
+  };
+}
+
+function browserBusinessProfile() {
+  const localized = {
+    en: "Grounded English business profile.",
+    ar: "ملف نشاط عربي موثوق.",
+  };
+
+  return {
+    businessName: "Pearl Coffee",
+    tagline: localized,
+    overview: localized,
+    uniqueValue: localized,
+    offerSummary: localized,
+    idealCustomer: localized,
+    marketPosition: localized,
+    brandVoice: localized,
+    marketingFocus: localized,
   };
 }
