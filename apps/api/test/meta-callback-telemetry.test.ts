@@ -16,7 +16,14 @@ describe("Meta callback telemetry", () => {
     ).toBe("form");
     expect(classifyMetaCallbackContentType(undefined)).toBe("missing");
     expect(classifyMetaCallbackContentType("application/octet-stream")).toBe(
-      "other",
+      "octet_stream",
+    );
+    expect(
+      classifyMetaCallbackContentType(
+        'multipart/form-data; boundary="safe-test-boundary"',
+      ),
+    ).toBe(
+      "multipart",
     );
 
     const stream = new PassThrough();
@@ -30,16 +37,18 @@ describe("Meta callback telemetry", () => {
       logger,
       requestId: "safe-meta-callback-request",
       update: {
-        stage: "credential_lookup",
-        outcome: "completed",
-        credentialMatched: false,
+        stage: "signature_verification",
+        outcome: "rejected",
+        failureCategory: "signature_verification_failed",
+        verificationFailureCategory: "signature_mismatch",
       },
     });
     await new Promise<void>((resolve) => stream.end(resolve));
 
     expect(serialized).toContain(META_CALLBACK_STAGE_EVENT);
     expect(serialized).toContain('"callbackType":"deauthorize"');
-    expect(serialized).toContain('"credentialMatched":false');
+    expect(serialized).toContain('"failureCategory":"signature_verification_failed"');
+    expect(serialized).toContain('"verificationFailureCategory":"signature_mismatch"');
     expect(serialized).not.toContain("signed_request");
     expect(serialized).not.toContain("accountId");
   });

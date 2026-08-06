@@ -4,6 +4,15 @@ export const META_CALLBACK_STAGE_EVENT = "meta_callback_stage";
 
 export type MetaCallbackType = "deauthorize" | "data_deletion";
 
+export type MetaCallbackVerificationFailureCategory =
+  | "callback_body_invalid"
+  | "signed_request_missing"
+  | "signed_request_malformed"
+  | "app_secret_missing"
+  | "signature_mismatch"
+  | "payload_invalid"
+  | "account_id_missing";
+
 export type MetaCallbackStageUpdate = {
   stage:
     | "callback_request"
@@ -14,8 +23,16 @@ export type MetaCallbackStageUpdate = {
     | "audit_persistence"
     | "callback_complete";
   outcome: "received" | "started" | "completed" | "rejected" | "failed";
-  contentTypeCategory?: "form" | "json" | "text" | "missing" | "other";
+  contentTypeCategory?:
+    | "form"
+    | "json"
+    | "text"
+    | "multipart"
+    | "octet_stream"
+    | "missing"
+    | "other";
   credentialMatched?: boolean;
+  verificationFailureCategory?: MetaCallbackVerificationFailureCategory;
   failureCategory?:
     | "unsupported_media_type"
     | "payload_parse_failed"
@@ -47,6 +64,9 @@ export function reportMetaCallbackStage(input: {
     ...(input.update.failureCategory
       ? { failureCategory: input.update.failureCategory }
       : {}),
+    ...(input.update.verificationFailureCategory
+      ? { verificationFailureCategory: input.update.verificationFailureCategory }
+      : {}),
   };
 
   try {
@@ -72,5 +92,7 @@ export function classifyMetaCallbackContentType(
   if (normalized === "application/x-www-form-urlencoded") return "form";
   if (normalized === "application/json") return "json";
   if (normalized === "text/plain") return "text";
+  if (normalized === "multipart/form-data") return "multipart";
+  if (normalized === "application/octet-stream") return "octet_stream";
   return "other";
 }
