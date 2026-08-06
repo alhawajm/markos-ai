@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Check,
+  Copy as CopyIcon,
   CreditCard,
   Database,
   Download,
@@ -19,6 +21,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { MarkosApiClient } from "@markos/api-client";
 import type {
   AuditLogRecord,
@@ -28,6 +31,7 @@ import type {
   MfaTotpSetup,
 } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
+import { NotificationToast } from "./notification-toast";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import {
   instagramStatusLabel,
@@ -35,6 +39,7 @@ import {
 } from "./instagram-settings-state";
 
 type AuditState = "loading" | "error" | "success" | "limit";
+type NotificationTone = "error" | "info" | "success" | "warning";
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -45,7 +50,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [mfaSetup, setMfaSetup] = useState<MfaTotpSetup | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  const [mfaSecretCopied, setMfaSecretCopied] = useState(false);
   const [message, setMessage] = useState("");
+  const [notificationTone, setNotificationTone] =
+    useState<NotificationTone>("info");
   const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<
     string | null
   >(null);
@@ -53,6 +61,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [auditState, setAuditState] = useState<AuditState | null>(null);
 
   const client = useMarkosClient(locale);
+  const dismissNotification = useCallback(() => {
+    setMessage("");
+    setDisconnectWarningUrl(null);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -62,9 +74,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     if (isAuditState(requestedState)) {
       setAuditState(requestedState);
     }
-    if (instagramResult === "connected") setMessage(copy(locale, "connected"));
-    if (instagramResult === "error")
+    if (instagramResult === "connected") {
+      setNotificationTone("success");
+      setMessage(copy(locale, "connected"));
+    }
+    if (instagramResult === "error") {
+      setNotificationTone("error");
       setMessage(copy(locale, "authorizationFailed"));
+    }
     if (
       instagramResult === "connected" ||
       instagramResult === "error" ||
@@ -88,12 +105,15 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setBilling,
       setAuditLogs,
       setMessage,
-    );
+    ).then((loaded) => {
+      if (!loaded) setNotificationTone("error");
+    });
   }, [client, session]);
 
   async function refreshAllSettings() {
     if (!session) {
       setAuditState("success");
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -110,12 +130,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setAuditLogs,
       setMessage,
     );
+    if (!loaded) setNotificationTone("error");
     setAuditState(loaded ? "success" : "error");
     setIsBusy(false);
   }
 
   async function startOAuth() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -131,6 +153,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       });
       window.location.href = start.authorizationUrl;
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -141,6 +164,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function disconnect() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -158,11 +182,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         result.providerRevocation.status === "ACTION_REQUIRED" ||
         result.providerRevocation.status === "UNCONFIRMED"
       ) {
+        setNotificationTone("warning");
         setDisconnectWarningUrl(
           result.providerRevocation.manualRevocationUrl ?? null,
         );
         setMessage(copy(locale, "disconnectUnconfirmed"));
       } else {
+        setNotificationTone("success");
         setMessage(
           copy(
             locale,
@@ -173,6 +199,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         );
       }
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -183,6 +210,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function refreshToken() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -196,12 +224,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       if (result.connection) {
         setConnection(result.connection);
       }
+      setNotificationTone(result.refreshed ? "success" : "warning");
       setMessage(
         result.refreshed
           ? copy(locale, "tokenRefreshed")
           : (result.reason ?? copy(locale, "failed")),
       );
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -212,6 +242,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function setupMfa() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -222,8 +253,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       setMfaSetup(await client.setupMfaTotp());
+      setMfaSecretCopied(false);
+      setNotificationTone("info");
       setMessage(copy(locale, "mfaReady"));
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -234,6 +268,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function enableMfa() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -244,11 +279,17 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       const status = await client.enableMfaTotp({ code: mfaCode.trim() });
+      setNotificationTone(status.enabled ? "success" : "error");
       setMessage(
         status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"),
       );
+      setMfaSetup((current) =>
+        current ? { ...current, enabled: status.enabled } : current,
+      );
       setMfaCode("");
+      setMfaSecretCopied(false);
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -257,8 +298,21 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  async function copyMfaSecret() {
+    if (!mfaSetup?.secret) return;
+
+    try {
+      await navigator.clipboard.writeText(mfaSetup.secret);
+      setMfaSecretCopied(true);
+    } catch {
+      setNotificationTone("error");
+      setMessage(copy(locale, "copyFailed"));
+    }
+  }
+
   async function exportData() {
     if (!session) {
+      setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
@@ -278,8 +332,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       link.download = `markos-workspace-${session.workspace.id}.json`;
       link.click();
       URL.revokeObjectURL(url);
+      setNotificationTone("success");
       setMessage(copy(locale, "exportReady"));
     } catch (error) {
+      setNotificationTone("error");
       setMessage(
         error instanceof Error ? error.message : copy(locale, "failed"),
       );
@@ -293,29 +349,55 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     status: "DISCONNECTED" as const,
     recentMedia: [],
   };
-  const workspaceName = session?.workspace.name ?? "Zain Arabia";
-  const userName = session?.user.fullName ?? "Ahmed Khalil";
-  const userEmail = session?.user.email ?? "ahmed@zain.example";
+  const workspaceName =
+    session?.workspace.name ?? copy(locale, "workspaceUnavailable");
+  const userName = session?.user.fullName ?? copy(locale, "accountUnavailable");
+  const userEmail = session?.user.email ?? "—";
   const subscription = billing?.subscription;
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <div className="rounded-[20px] bg-[linear-gradient(135deg,#14182b_0%,#102f54_55%,#24203f_100%)] p-5 text-white shadow-card xl:col-span-2">
+    <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+      <NotificationToast
+        action={
+          disconnectWarningUrl ? (
+            <a
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#F4A460]/30 bg-[#F4A460]/10 px-4 text-sm font-extrabold text-[#F4A460] transition hover:bg-[#F4A460]/15"
+              href={disconnectWarningUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {copy(locale, "openInstagramAccess")}
+              <ExternalLink size={15} />
+            </a>
+          ) : undefined
+        }
+        body={message}
+        dismissLabel={copy(locale, "dismissNotification")}
+        onDismiss={dismissNotification}
+        title={copy(
+          locale,
+          notificationTone === "error" || notificationTone === "warning"
+            ? "attention"
+            : "status",
+        )}
+        tone={notificationTone}
+      />
+      <div className="lux-card rounded-[1.5rem] p-5 text-white sm:p-6 xl:col-span-2 xl:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff4b6e]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#A3E5DE]">
               <ShieldCheck size={13} />
               {copy(locale, "eyebrow")}
             </div>
-            <h1 className="mt-4 font-display text-[28px] font-bold leading-tight">
+            <h1 className="mt-4 font-display text-3xl font-bold leading-tight tracking-normal text-white sm:text-4xl">
               {copy(locale, "title")}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#C7CDD8] sm:text-base">
               {copy(locale, "subtitle")}
             </p>
           </div>
           <button
-            className="inline-flex items-center justify-center gap-2 rounded-button border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/8 px-5 py-3 text-sm font-bold text-[#A3E5DE] transition hover:border-[#81D8D0]/45 hover:bg-[#81D8D0]/12 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isBusy || !session}
             onClick={refreshAllSettings}
             type="button"
@@ -329,17 +411,18 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       {isBusy || auditState ? (
         <div className="xl:col-span-2">
           <SurfaceState
+            appearance="luxury"
             action={
               auditState === "limit" ? (
                 <a
-                  className="inline-flex h-10 items-center rounded-button bg-accent px-4 text-sm font-bold text-white"
+                  className="lux-button-gold inline-flex h-10 items-center rounded-full px-4 text-sm font-bold"
                   href={`/${locale}/admin`}
                 >
                   {copy(locale, "openAdmin")}
                 </a>
               ) : (
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-button border border-border bg-card px-4 text-sm font-bold text-navy disabled:opacity-60"
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/8 px-4 text-sm font-bold text-[#A3E5DE] disabled:opacity-50"
                   disabled={isBusy || !session}
                   onClick={refreshAllSettings}
                   type="button"
@@ -449,7 +532,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 : "disconnectedStatus",
             )}
           >
-            <div className="mt-4 grid gap-3 rounded-[18px] border border-border bg-canvas p-4">
+            <div className="lux-card-quiet mt-4 grid gap-3 rounded-[1.25rem] p-4">
               <SettingRow
                 label={copy(locale, "accountId")}
                 value={
@@ -494,7 +577,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             >
               {(activeConnection.recentMedia ?? []).map((media) => (
                 <a
-                  className="rounded-[18px] border border-border bg-canvas p-3"
+                  className="lux-card-quiet rounded-[1.25rem] p-3 transition hover:border-[#81D8D0]/30"
                   href={media.permalink ?? "#"}
                   key={media.id}
                   rel="noreferrer"
@@ -515,7 +598,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               ))}
               {activeConnection.connected &&
               (activeConnection.recentMedia?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted">
+                <p className="text-sm text-[#9AA7BD]">
                   {copy(locale, "emptyMedia")}
                 </p>
               ) : null}
@@ -552,7 +635,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             title={copy(locale, "securityTitle")}
             body={copy(locale, "securityBody")}
           >
-            <div className="mt-4 rounded-[18px] border border-border bg-canvas p-4">
+            <div className="lux-card-quiet mt-4 rounded-[1.25rem] p-4">
               <SettingRow
                 label={copy(locale, "mfa")}
                 value={
@@ -561,31 +644,92 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                     : copy(locale, "notEnabled")
                 }
               />
-              {mfaSetup?.secret ? (
-                <SettingRow
-                  label={copy(locale, "secret")}
-                  value={mfaSetup.secret}
+            </div>
+
+            {mfaSetup && !mfaSetup.enabled ? (
+              <div className="mt-4 grid gap-4 rounded-[1.25rem] border border-[#D4AF37]/25 bg-[#D4AF37]/7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                <div className="mx-auto rounded-2xl bg-white p-2 shadow-[0_14px_35px_rgba(0,0,0,.28)] sm:mx-0">
+                  <QRCodeSVG
+                    bgColor="#FFFFFF"
+                    fgColor="#0F1419"
+                    level="M"
+                    marginSize={4}
+                    size={168}
+                    title={copy(locale, "mfaQrTitle")}
+                    value={mfaSetup.otpauthUri}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-display text-lg font-bold text-white">
+                    {copy(locale, "mfaScanTitle")}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#C7CDD8]">
+                    {copy(locale, "mfaScanBody")}
+                  </p>
+                  <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9AA7BD]">
+                    {copy(locale, "manualKey")}
+                  </p>
+                  <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[#81D8D0]/18 bg-black/20 p-2">
+                    <code
+                      className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[#A3E5DE]"
+                      dir="ltr"
+                    >
+                      {mfaSetup.secret}
+                    </code>
+                    <button
+                      aria-label={copy(locale, "copyKey")}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#81D8D0]/20 bg-[#81D8D0]/8 text-[#81D8D0] transition hover:bg-[#81D8D0]/15 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35"
+                      onClick={() => void copyMfaSecret()}
+                      title={copy(locale, "copyKey")}
+                      type="button"
+                    >
+                      {mfaSecretCopied ? (
+                        <Check size={16} />
+                      ) : (
+                        <CopyIcon size={16} />
+                      )}
+                    </button>
+                  </div>
+                  {mfaSecretCopied ? (
+                    <p className="mt-2 text-xs font-semibold text-[#00C9A7]">
+                      {copy(locale, "keyCopied")}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {!mfaSetup?.enabled ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                <input
+                  aria-label={copy(locale, "mfaCode")}
+                  autoComplete="one-time-code"
+                  className="rounded-xl border border-[#81D8D0]/20 bg-[#0F1419]/75 px-4 py-3 text-sm font-semibold text-white caret-[#81D8D0] outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/55 focus:ring-2 focus:ring-[#81D8D0]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!mfaSetup || isBusy}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setMfaCode(
+                      event.target.value.replace(/\D/g, "").slice(0, 6),
+                    )
+                  }
+                  pattern="[0-9]*"
+                  placeholder={copy(locale, "mfaCode")}
+                  value={mfaCode}
                 />
-              ) : null}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-              <input
-                className="rounded-button border border-border bg-canvas px-3 py-2 text-sm outline-none focus:border-accent"
-                onChange={(event) => setMfaCode(event.target.value)}
-                placeholder={copy(locale, "mfaCode")}
-                value={mfaCode}
-              />
-              <ActionButton
-                disabled={isBusy || mfaCode.trim().length === 0}
-                icon={KeyRound}
-                label={copy(locale, "enableMfa")}
-                onClick={enableMfa}
-                tone="primary"
-              />
-            </div>
+                <ActionButton
+                  disabled={
+                    isBusy || !mfaSetup || !/^\d{6}$/.test(mfaCode.trim())
+                  }
+                  icon={KeyRound}
+                  label={copy(locale, "enableMfa")}
+                  onClick={enableMfa}
+                  tone="primary"
+                />
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <ActionButton
-                disabled={isBusy}
+                disabled={isBusy || Boolean(mfaSetup?.enabled)}
                 icon={ShieldCheck}
                 label={copy(locale, "setupMfa")}
                 onClick={setupMfa}
@@ -607,21 +751,21 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           body={copy(locale, "auditBody")}
         >
           {auditLogs.length === 0 ? (
-            <div className="mt-4 rounded-[18px] border border-dashed border-border bg-canvas p-6 text-sm text-muted">
+            <div className="mt-4 rounded-[1.25rem] border border-dashed border-[#81D8D0]/20 bg-[#81D8D0]/5 p-6 text-sm text-[#9AA7BD]">
               {copy(locale, "auditEmpty")}
             </div>
           ) : (
-            <div className="mt-4 overflow-hidden rounded-[18px] border border-border">
+            <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-[#81D8D0]/15 bg-black/10">
               {auditLogs.slice(0, 8).map((log) => (
                 <div
-                  className="grid gap-1 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
+                  className="grid gap-1 border-b border-[#81D8D0]/10 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
                   key={log.id}
                 >
-                  <span className="font-bold text-navy">
+                  <span className="font-bold text-[#F5F5F7]">
                     {formatAction(log.action)}
                   </span>
-                  <span className="text-muted">{log.targetType}</span>
-                  <span className="text-muted">
+                  <span className="text-[#9AA7BD]">{log.targetType}</span>
+                  <span className="text-[#9AA7BD]">
                     {new Date(log.createdAt).toLocaleString(locale)}
                   </span>
                 </div>
@@ -630,23 +774,23 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           )}
         </Panel>
 
-        <div className="rounded-[20px] border border-border bg-card p-4 shadow-card">
+        <div className="lux-card-muted rounded-[1.5rem] p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]">
                 <Database size={20} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-navy">
+                <h2 className="text-base font-bold text-white">
                   {copy(locale, "dataControls")}
                 </h2>
-                <p className="text-xs text-muted">
+                <p className="text-xs text-[#9AA7BD]">
                   {copy(locale, "dataControlsBody")}
                 </p>
               </div>
             </div>
             <a
-              className="inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-3 text-sm font-bold text-navy hover:border-accent hover:text-accent"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-4 py-3 text-sm font-bold text-[#E8C968] transition hover:border-[#D4AF37]/45 hover:bg-[#D4AF37]/12 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/30"
               href={`/${locale}/vault`}
             >
               {copy(locale, "openVault")}
@@ -655,41 +799,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           </div>
         </div>
 
-        {message ? (
-          <div aria-live="polite" role="status">
-            <SurfaceState
-              action={
-                disconnectWarningUrl ? (
-                  <a
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-accent/20 bg-white px-4 text-sm font-extrabold text-accent"
-                    href={disconnectWarningUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {copy(locale, "openInstagramAccess")}
-                    <ExternalLink size={15} />
-                  </a>
-                ) : undefined
-              }
-              body={message}
-              title={copy(
-                locale,
-                auditState === "error" || disconnectWarningUrl
-                  ? "attention"
-                  : "status",
-              )}
-              tone={
-                auditState === "error"
-                  ? "error"
-                  : disconnectWarningUrl
-                    ? "warning"
-                    : "info"
-              }
-            />
-          </div>
-        ) : (
-          <p className="min-h-5" />
-        )}
       </div>
     </section>
   );
@@ -711,17 +820,24 @@ function Panel({
   title: string;
 }) {
   return (
-    <article className="scroll-mt-6 rounded-[20px] border border-border bg-card p-5 shadow-card" id={id}>
+    <article
+      className="lux-card scroll-mt-6 rounded-[1.5rem] p-5 sm:p-6"
+      id={id}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#81D8D0]">
             {kicker}
           </p>
-          <h2 className="mt-2 text-lg font-bold text-navy">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
+          <h2 className="mt-2 break-words text-lg font-bold text-white">
+            {title}
+          </h2>
+          <p className="mt-1 break-words text-sm leading-6 text-[#9AA7BD]">
+            {body}
+          </p>
         </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-[#FEEAF0] text-accent">
-          <Icon size={21} />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[#81D8D0]/25 bg-[#81D8D0]/10 text-[#81D8D0] shadow-[0_0_24px_rgba(129,216,208,.12)]">
+          <Icon size={21} strokeWidth={1.8} />
         </div>
       </div>
       {children}
@@ -732,8 +848,10 @@ function Panel({
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className="truncate font-bold text-navy">{value}</span>
+      <span className="text-[#9AA7BD]">{label}</span>
+      <span className="min-w-0 break-words text-end font-bold text-[#F5F5F7]">
+        {value}
+      </span>
     </div>
   );
 }
@@ -755,8 +873,8 @@ function ActionButton({
     <button
       className={
         tone === "primary"
-          ? "inline-flex items-center justify-center gap-2 rounded-button bg-accent px-4 py-2 text-sm font-bold text-white shadow-[0_10px_20px_rgba(239,62,91,.18)] disabled:opacity-60"
-          : "inline-flex items-center justify-center gap-2 rounded-button border border-border bg-canvas px-4 py-2 text-sm font-bold text-navy disabled:opacity-60"
+          ? "lux-button-primary inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35 disabled:cursor-not-allowed disabled:opacity-45"
+          : "inline-flex items-center justify-center gap-2 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/7 px-4 py-2.5 text-sm font-bold text-[#C7CDD8] transition hover:border-[#81D8D0]/40 hover:bg-[#81D8D0]/12 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/25 disabled:cursor-not-allowed disabled:opacity-40"
       }
       disabled={disabled}
       onClick={onClick}
@@ -803,8 +921,8 @@ function formatAction(action: string): string {
 
 function languageClass(active: boolean): string {
   return active
-    ? "rounded-button bg-navy px-3 py-2 text-center text-sm font-bold text-white"
-    : "rounded-button border border-border bg-canvas px-3 py-2 text-center text-sm font-bold text-navy";
+    ? "lux-button-primary rounded-full px-3 py-2 text-center text-sm font-bold"
+    : "rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/6 px-3 py-2 text-center text-sm font-bold text-[#C7CDD8] transition hover:border-[#81D8D0]/40 hover:text-white";
 }
 
 function isAuditState(value: string | null): value is AuditState {
@@ -870,8 +988,10 @@ function copy(locale: Locale, key: string): string {
   const dictionary = {
     ar: {
       account: "الحساب",
+      accountUnavailable: "الحساب غير متاح",
       accountId: "حساب إنستغرام",
       attention: "تنبيه",
+      dismissNotification: "إغلاق الإشعار",
       authorizationFailed: "تعذر إكمال تفويض Instagram. حاول الاتصال مجدداً.",
       audit: "السجل",
       auditBody: "آخر أحداث مساحة العمل والإعدادات الحساسة.",
@@ -881,6 +1001,8 @@ function copy(locale: Locale, key: string): string {
       channels: "القنوات",
       connected: "تم حفظ اتصال إنستغرام.",
       connectedStatus: "متصل",
+      copyFailed: "تعذر نسخ المفتاح. يمكنك تحديده ونسخه يدوياً.",
+      copyKey: "نسخ المفتاح اليدوي",
       currency: "العملة",
       dataControls: "البيانات والذاكرة",
       dataControlsBody:
@@ -915,6 +1037,12 @@ function copy(locale: Locale, key: string): string {
       mfaCode: "رمز التحقق",
       mfaEnabled: "تم تفعيل MFA.",
       mfaReady: "امسح الرمز في تطبيق المصادقة ثم أدخل الكود.",
+      mfaQrTitle: "رمز QR لإعداد المصادقة متعددة العوامل في MARKOS",
+      mfaScanBody:
+        "امسح رمز QR باستخدام تطبيق المصادقة، أو أدخل المفتاح اليدوي. ثم أدخل الرمز المكون من ستة أرقام.",
+      mfaScanTitle: "اربط تطبيق المصادقة",
+      manualKey: "المفتاح اليدوي",
+      keyCopied: "تم نسخ المفتاح.",
       notEnabled: "غير مفعّل",
       oauth: "اتصال OAuth",
       openAdmin: "فتح الإدارة",
@@ -944,12 +1072,15 @@ function copy(locale: Locale, key: string): string {
       trial: "تجربة",
       verified: "التحقق",
       workspace: "مساحة العمل",
+      workspaceUnavailable: "مساحة العمل غير متاحة",
       yes: "نعم",
     },
     en: {
       account: "Account",
+      accountUnavailable: "Account unavailable",
       accountId: "Instagram account",
       attention: "Attention",
+      dismissNotification: "Dismiss notification",
       authorizationFailed:
         "Instagram authorization could not be completed. Try connecting again.",
       audit: "Audit",
@@ -960,6 +1091,8 @@ function copy(locale: Locale, key: string): string {
       channels: "Channels",
       connected: "Instagram connection saved.",
       connectedStatus: "Connected",
+      copyFailed: "The key could not be copied. Select and copy it manually.",
+      copyKey: "Copy manual key",
       currency: "Currency",
       dataControls: "Data and memory",
       dataControlsBody:
@@ -994,7 +1127,13 @@ function copy(locale: Locale, key: string): string {
       mfa: "MFA",
       mfaCode: "Verification code",
       mfaEnabled: "MFA enabled.",
-      mfaReady: "Scan the secret in your authenticator, then enter the code.",
+      mfaReady: "Scan the QR code in your authenticator, then enter the code.",
+      mfaQrTitle: "QR code for setting up MARKOS multi-factor authentication",
+      mfaScanBody:
+        "Scan this QR code with your authenticator app, or enter the manual key. Then enter the six-digit code.",
+      mfaScanTitle: "Link your authenticator app",
+      manualKey: "Manual setup key",
+      keyCopied: "Key copied.",
       notEnabled: "Not enabled",
       oauth: "Connect OAuth",
       openAdmin: "Open admin",
@@ -1025,6 +1164,7 @@ function copy(locale: Locale, key: string): string {
       trial: "Trial",
       verified: "Verified",
       workspace: "Workspace",
+      workspaceUnavailable: "Workspace unavailable",
       yes: "Yes",
     },
   } as const;

@@ -278,3 +278,19 @@ Call OpenAI through a narrow Python adapter using the Responses API and strict S
 Generate Strategy content in the explicitly requested `ar` or `en` locale within the existing single-language Strategy schema. Do not expand the product contract to duplicate every field bilingually without a separate product decision. Enforce the shared internal bearer token on all non-health AI routes, bound both API-to-AI and provider calls with timeouts, and expose only sanitized typed errors.
 
 The adapter and fake-client tests are implementation evidence, not live-provider evidence. The first real-key smoke test must use synthetic non-client context, run only after the code path is green, and avoid printing the credential or raw provider payload. `costMinor` remains zero until model pricing and currency conversion have a reviewed implementation; actual token metering does not by itself complete cost governance.
+
+## 2026-08-06: TOTP enrollment QR codes render locally
+
+Treat the authenticated API's `otpauthUri` response as the sole input for the MFA enrollment QR code. Render that value as an SVG inside the browser instead of sending the URI or TOTP secret to an external QR service. Keep the manual setup key visible and copyable during enrollment as an accessibility and recovery fallback, and remove both the QR code and secret from the Settings surface after successful enablement.
+
+Accept exactly six numeric verification digits in a high-contrast, one-time-code input before calling the existing enable endpoint. This presentation decision does not change the role-based MFA policy, enrollment secret lifecycle, login challenge, or backend verification contract.
+
+## 2026-08-06: Onboarding persists only disclosed business answers
+
+Use the seven canonical onboarding modules in the experience flow—Company, Story, Products, Audience, Competitors, Brand, and Objectives—followed by a non-generative review screen. Prefill only the authenticated workspace name. Choices, examples, placeholders, color palettes, and option lists may guide the user, but they must not become stored business facts until the user selects or enters them.
+
+Retire the fixture-backed `markos.onboarding.draft` browser key and begin with the versioned `markos.onboarding.draft.v2` key. This intentionally discards old Zain-based drafts. Remove the simulated social connection screen, generated-content counts, readiness percentage, and hidden payload values. A validation or API failure keeps the draft locally and blocks forward navigation; completing onboarding clears the versioned draft only after the API confirms completion.
+
+## 2026-08-06: Workflow notifications appear at the top
+
+Use an accessible fixed top notification for Settings and onboarding workflow feedback instead of appending low-visibility messages after page content. Success and informational notifications dismiss automatically after six seconds and remain manually closable; errors and warnings remain until dismissed so consequential failures or required third-party actions are not lost. Preserve an inline action when the workflow requires the user to continue on an external provider page.

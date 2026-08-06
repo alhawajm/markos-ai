@@ -72,6 +72,9 @@ describe("active SettingsPanel Instagram interactions", () => {
       page.getByRole("heading", { name: "Settings" }).isVisible(),
     ).resolves.toBe(true);
     await expect(
+      page.locator(".bg-card, .bg-canvas, .text-navy").count(),
+    ).resolves.toBe(0);
+    await expect(
       page.getByText("Not set", { exact: true }).isVisible(),
     ).resolves.toBe(true);
     await expect(
@@ -110,20 +113,155 @@ describe("active SettingsPanel Instagram interactions", () => {
         error: { message: "Instagram connection is temporarily unavailable." },
       }),
     });
-    const status = page.getByRole("status");
-    await status
+    const alert = page.locator('[data-notification-toast][role="alert"]');
+    await alert
       .getByText("Instagram connection is temporarily unavailable.")
       .waitFor();
     await expect(
-      status
+      alert
         .getByText("Instagram connection is temporarily unavailable.")
         .isVisible(),
     ).resolves.toBe(true);
+    await expect(alert.getAttribute("class")).resolves.toContain("fixed");
     await page.screenshot({
       path: "evidence/settings-instagram-disconnected.png",
       fullPage: true,
     });
+    await page.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(
+      page.locator('[data-notification-toast][role="alert"]').count(),
+    ).resolves.toBe(0);
     await page.close();
+  });
+
+  it("keeps the luxury Settings surface usable in Arabic RTL on mobile", async () => {
+    const { page } = await settingsPage(disconnected, "/ar/app/settings");
+    await page.setViewportSize({ height: 844, width: 390 });
+
+    await expect(
+      page.locator('[lang="ar"][dir="rtl"]').count(),
+    ).resolves.toBeGreaterThan(0);
+    await expect(
+      page.getByRole("heading", { name: "الإعدادات" }).isVisible(),
+    ).resolves.toBe(true);
+    await expect(
+      page.locator(".bg-card, .bg-canvas, .text-navy").count(),
+    ).resolves.toBe(0);
+    const widths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+    await page.close();
+  });
+
+  it("resets the fixture onboarding draft and exposes honest Story and Products steps", async () => {
+    const page = await browserPage();
+    await page.addInitScript(
+      ({ identity }) => {
+        localStorage.setItem("markos.session", JSON.stringify(identity));
+        localStorage.setItem(
+          "markos.onboarding.draft",
+          JSON.stringify({
+            companyName: "Zain Arabia",
+            competitors: ["Batelco"],
+            industry: "Technology",
+          }),
+        );
+      },
+      { identity: storedIdentity },
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname === "/v1/auth/refresh")
+          return route.fulfill(json(session));
+        return route.fulfill({ status: 404, body: "{}" });
+      },
+    );
+
+    await page.goto(`${baseUrl}/en/onboarding`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("heading", { name: "Tell us about your company" }).waitFor();
+    await expect
+      .poll(() => page.getByLabel("Company Name *").inputValue())
+      .toBe("Browser Workspace");
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/Zain Arabia|Batelco|STC Bahrain|@zain_bh/i);
+    const stored = await page.evaluate(() => ({
+      legacy: localStorage.getItem("markos.onboarding.draft"),
+      next: localStorage.getItem("markos.onboarding.draft.v2"),
+    }));
+    expect(stored.legacy).toBeNull();
+    expect(JSON.parse(stored.next ?? "{}")).toMatchObject({
+      companyName: "Browser Workspace",
+      competitors: [],
+      products: [],
+    });
+
+    await page.getByRole("button", { name: /Business Story/ }).click();
+    await page.getByRole("heading", { name: "Tell your business story" }).waitFor();
+    await expect(page.getByLabel("Business mission *").inputValue()).resolves.toBe("");
+
+    await page.getByRole("button", { name: /Products & Services/ }).click();
+    await page.getByRole("heading", { name: "What do you offer?" }).waitFor();
+    await expect(page.getByText("No products or services added yet.").isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Continue" }).click();
+    const alert = page.locator('[data-notification-toast][role="alert"]');
+    await alert.getByText("Add at least one product or service.").waitFor();
+    await expect(alert.getAttribute("class")).resolves.toContain("fixed");
+    await page.screenshot({
+      path: "evidence/onboarding-products-empty.png",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Dismiss notification" }).click();
+    await expect(
+      page.locator('[data-notification-toast][role="alert"]').count(),
+    ).resolves.toBe(0);
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    const widths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+    await page.screenshot({
+      path: "evidence/onboarding-products-mobile.png",
+      fullPage: true,
+    });
+    await page.close();
+
+    const arabic = await browserPage();
+    await arabic.addInitScript(
+      (identity) =>
+        localStorage.setItem("markos.session", JSON.stringify(identity)),
+      storedIdentity,
+    );
+    await arabic.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname === "/v1/auth/refresh")
+          return route.fulfill(json(session));
+        return route.fulfill({ status: 404, body: "{}" });
+      },
+    );
+    await arabic.goto(`${baseUrl}/ar/onboarding?step=2`, {
+      waitUntil: "domcontentloaded",
+    });
+    await arabic.getByRole("heading", { name: "احكِ قصة نشاطك" }).waitFor();
+    await arabic.setViewportSize({ height: 844, width: 390 });
+    await expect(
+      arabic.locator('[lang="ar"][dir="rtl"]').count(),
+    ).resolves.toBeGreaterThan(0);
+    const arabicWidths = await arabic.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(arabicWidths.scroll).toBeLessThanOrEqual(arabicWidths.client);
+    await arabic.close();
   });
 
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {
@@ -209,6 +347,81 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expired.page.close();
   });
 
+  it("renders MFA enrollment as a local QR flow with a readable six-digit field", async () => {
+    const { page } = await settingsPage(disconnected);
+    const setup = {
+      enabled: false,
+      otpauthUri:
+        "otpauth://totp/MARKOS-AI%3Aowner%40markos.test?secret=JBSWY3DPEHPK3PXP&issuer=MARKOS-AI",
+      secret: "JBSWY3DPEHPK3PXP",
+    };
+
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/setup$/,
+      (route) => route.fulfill(json(setup)),
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/enable$/,
+      (route) => {
+        expect(route.request().postDataJSON()).toEqual({ code: "123456" });
+        return route.fulfill(json({ enabled: true }));
+      },
+    );
+
+    const code = page.getByRole("textbox", { name: "Verification code" });
+    await expect(code.isDisabled()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Set up MFA" }).click();
+    await page
+      .locator("svg title")
+      .filter({
+        hasText: "QR code for setting up MARKOS multi-factor authentication",
+      })
+      .waitFor({ state: "attached" });
+    await expect(
+      page.getByText("JBSWY3DPEHPK3PXP", { exact: true }).isVisible(),
+    ).resolves.toBe(true);
+    await expect(code.isEnabled()).resolves.toBe(true);
+
+    await code.fill("abc1234567");
+    await expect(code.inputValue()).resolves.toBe("123456");
+    const fieldColors = await code.evaluate((element) => {
+      const styles = window.getComputedStyle(element);
+      return {
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+      };
+    });
+    expect(fieldColors.color).toBe("rgb(255, 255, 255)");
+    expect(fieldColors.backgroundColor).not.toBe("rgb(255, 255, 255)");
+    await page.screenshot({
+      path: "evidence/settings-mfa-setup.png",
+      fullPage: true,
+    });
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    const widths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+
+    await page.getByRole("button", { name: "Enable" }).click();
+    await page
+      .locator('[data-notification-toast][role="status"]')
+      .getByText("MFA enabled.")
+      .waitFor();
+    await expect(
+      page.getByText("JBSWY3DPEHPK3PXP", { exact: true }).count(),
+    ).resolves.toBe(0);
+    await expect(
+      page.getByText("Enabled", { exact: true }).isVisible(),
+    ).resolves.toBe(true);
+    await page
+      .locator('[data-notification-toast][role="status"]')
+      .waitFor({ state: "detached", timeout: 8000 });
+    await page.close();
+  });
+
   it("refreshes once, updates only after confirmation, and preserves the connection on transient failure", async () => {
     const success = await settingsPage(connected);
     let pending: Route | undefined;
@@ -254,7 +467,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     );
     await failure.page.getByRole("button", { name: "Refresh token" }).click();
     await failure.page
-      .getByRole("status")
+      .locator('[data-notification-toast][role="alert"]')
       .getByText("Refresh is temporarily unavailable.")
       .waitFor();
     await expect(
@@ -262,7 +475,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     ).resolves.toBe(true);
     await expect(
       failure.page
-        .getByRole("status")
+        .locator('[data-notification-toast][role="alert"]')
         .getByText("Refresh is temporarily unavailable.")
         .isVisible(),
     ).resolves.toBe(true);
@@ -280,7 +493,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     );
     await expect(
       page
-        .getByRole("status")
+        .locator('[data-notification-toast][role="alert"]')
         .getByText(
           "Instagram authorization could not be completed. Try connecting again.",
         )
@@ -300,7 +513,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     );
     await page.getByRole("button", { name: "Reconnect" }).click();
     await page
-      .getByRole("status")
+      .locator('[data-notification-toast][role="alert"]')
       .getByText("Reconnect was not completed.")
       .waitFor();
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
@@ -308,7 +521,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     );
     await expect(
       page
-        .getByRole("status")
+        .locator('[data-notification-toast][role="alert"]')
         .getByText("Reconnect was not completed.")
         .isVisible(),
     ).resolves.toBe(true);
@@ -356,7 +569,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         connection: disconnected,
         providerRevocation: {
           status: "ACTION_REQUIRED",
-          manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
+          manualRevocationUrl:
+            "https://www.instagram.com/accounts/manage_access/",
         },
       }),
     );
@@ -439,7 +653,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     failed.page.once("dialog", (dialog) => dialog.accept());
     await failed.page.getByRole("button", { name: "Disconnect" }).click();
     await failed.page
-      .getByRole("status")
+      .locator('[data-notification-toast][role="alert"]')
       .getByText("Disconnect is temporarily unavailable.")
       .waitFor();
     await expect(
@@ -454,31 +668,34 @@ describe("active SettingsPanel Instagram interactions", () => {
       (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
       storedIdentity,
     );
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const request = route.request();
-      const pathname = new URL(request.url()).pathname;
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const request = route.request();
+        const pathname = new URL(request.url()).pathname;
 
-      if (pathname === "/v1/auth/refresh") {
-        return route.fulfill({
-          status: 401,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: {
-              code: "INVALID_REFRESH_TOKEN",
-              message: "Refresh token is invalid or expired",
-            },
-          }),
-        });
-      }
-      if (pathname === "/v1/auth/login") return route.fulfill(json(session));
-      if (pathname === "/v1/workspace/instagram")
-        return route.fulfill(json(disconnected));
-      if (pathname === "/v1/billing/summary")
-        return route.fulfill(json({ invoices: [], payments: [] }));
-      if (pathname === "/v1/workspace/audit-logs")
-        return route.fulfill(json([]));
-      return route.fulfill({ status: 404, body: "{}" });
-    });
+        if (pathname === "/v1/auth/refresh") {
+          return route.fulfill({
+            status: 401,
+            contentType: "application/json",
+            body: JSON.stringify({
+              error: {
+                code: "INVALID_REFRESH_TOKEN",
+                message: "Refresh token is invalid or expired",
+              },
+            }),
+          });
+        }
+        if (pathname === "/v1/auth/login") return route.fulfill(json(session));
+        if (pathname === "/v1/workspace/instagram")
+          return route.fulfill(json(disconnected));
+        if (pathname === "/v1/billing/summary")
+          return route.fulfill(json({ invoices: [], payments: [] }));
+        if (pathname === "/v1/workspace/audit-logs")
+          return route.fulfill(json([]));
+        return route.fulfill({ status: 404, body: "{}" });
+      },
+    );
 
     await page.goto(`${baseUrl}/en/app/settings`, {
       waitUntil: "domcontentloaded",
@@ -515,38 +732,45 @@ describe("active SettingsPanel Instagram interactions", () => {
     let maxActiveRefreshes = 0;
     let refreshCalls = 0;
 
-    await context.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === "/v1/auth/refresh") {
-        refreshCalls += 1;
-        activeRefreshes += 1;
-        maxActiveRefreshes = Math.max(maxActiveRefreshes, activeRefreshes);
-        await new Promise((resolve) => setTimeout(resolve, 75));
-        activeRefreshes -= 1;
-        return route.fulfill(
-          json({
-            ...session,
-            tokens: {
-              accessToken: `browser-session-token-${refreshCalls}`,
-              expiresIn: 900,
-            },
-          }),
-        );
-      }
-      if (pathname === "/v1/workspace/instagram")
-        return route.fulfill(json(disconnected));
-      if (pathname === "/v1/billing/summary")
-        return route.fulfill(json({ invoices: [], payments: [] }));
-      if (pathname === "/v1/workspace/audit-logs")
-        return route.fulfill(json([]));
-      return route.fulfill({ status: 404, body: "{}" });
-    });
+    await context.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname === "/v1/auth/refresh") {
+          refreshCalls += 1;
+          activeRefreshes += 1;
+          maxActiveRefreshes = Math.max(maxActiveRefreshes, activeRefreshes);
+          await new Promise((resolve) => setTimeout(resolve, 75));
+          activeRefreshes -= 1;
+          return route.fulfill(
+            json({
+              ...session,
+              tokens: {
+                accessToken: `browser-session-token-${refreshCalls}`,
+                expiresIn: 900,
+              },
+            }),
+          );
+        }
+        if (pathname === "/v1/workspace/instagram")
+          return route.fulfill(json(disconnected));
+        if (pathname === "/v1/billing/summary")
+          return route.fulfill(json({ invoices: [], payments: [] }));
+        if (pathname === "/v1/workspace/audit-logs")
+          return route.fulfill(json([]));
+        return route.fulfill({ status: 404, body: "{}" });
+      },
+    );
 
     const first = await context.newPage();
     const second = await context.newPage();
     await Promise.all([
-      first.goto(`${baseUrl}/en/app/settings`, { waitUntil: "domcontentloaded" }),
-      second.goto(`${baseUrl}/en/app/settings`, { waitUntil: "domcontentloaded" }),
+      first.goto(`${baseUrl}/en/app/settings`, {
+        waitUntil: "domcontentloaded",
+      }),
+      second.goto(`${baseUrl}/en/app/settings`, {
+        waitUntil: "domcontentloaded",
+      }),
     ]);
     await Promise.all([
       first.getByRole("heading", { name: "Settings" }).waitFor(),
@@ -585,8 +809,7 @@ async function settingsPage(
       const request = route.request();
       requests.push(request.url());
       const pathname = new URL(request.url()).pathname;
-      if (pathname === "/v1/auth/refresh")
-        return route.fulfill(json(session));
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
       if (pathname === "/v1/workspace/instagram" && request.method() === "GET")
         return route.fulfill(json(connection));
       if (pathname === "/v1/billing/summary")
@@ -603,7 +826,11 @@ async function settingsPage(
     },
   );
   await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("heading", { name: "Settings" }).waitFor();
+  await page
+    .getByRole("heading", {
+      name: path.startsWith("/ar/") ? "الإعدادات" : "Settings",
+    })
+    .waitFor();
   return { page, requests };
 }
 
