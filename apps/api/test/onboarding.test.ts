@@ -11,6 +11,16 @@ vi.mock("../src/ai/embeddings-client", () => ({
   })
 }));
 
+vi.mock("../src/ai/business-profile-client", () => ({
+  generateBusinessProfile: async () => ({
+    model: "test-profile-model",
+    prompt_version: "onboarding-business-profile.v1.test",
+    tokens_in: 180,
+    tokens_out: 320,
+    profile: testBusinessProfile()
+  })
+}));
+
 describe("onboarding routes", () => {
   it("persists onboarding modules into the Vault and completes when all sections are ready", async () => {
     const app = await buildApp();
@@ -30,6 +40,11 @@ describe("onboarding routes", () => {
         onboardingScore: 0,
         vaultScore: {
           score: 0
+        },
+        businessProfile: {
+          status: "NOT_GENERATED",
+          interactionId: null,
+          profile: null
         },
         modules: expect.arrayContaining([
           expect.objectContaining({ module: "company", completed: false }),
@@ -79,14 +94,51 @@ describe("onboarding routes", () => {
 
     await saveRemainingModules(app, headers);
 
-    const complete = await app.inject({
+    const notApproved = await app.inject({
       method: "POST",
       url: "/v1/onboarding/complete",
       headers
     });
 
-    expect(complete.statusCode).toBe(200);
-    expect(complete.json()).toMatchObject({
+    expect(notApproved.statusCode).toBe(409);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/generate",
+      headers
+    });
+
+    expect(generated.statusCode).toBe(200);
+    expect(generated.json()).toMatchObject({
+      data: {
+        status: "IN_PROGRESS",
+        businessProfile: {
+          status: "DRAFT",
+          profile: testBusinessProfile()
+        }
+      }
+    });
+
+    const draft = generated.json().data.businessProfile;
+    const approvedProfile = {
+      ...draft.profile,
+      tagline: {
+        ...draft.profile.tagline,
+        en: "Bahrain coffee, made personal."
+      }
+    };
+    const approved = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/approve",
+      headers,
+      payload: {
+        interactionId: draft.interactionId,
+        profile: approvedProfile
+      }
+    });
+
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toMatchObject({
       data: {
         status: "COMPLETE",
         onboardingScore: 100,
@@ -96,7 +148,11 @@ describe("onboarding routes", () => {
         },
         modules: expect.arrayContaining([
           expect.objectContaining({ module: "brand", completed: true })
-        ])
+        ]),
+        businessProfile: {
+          status: "APPROVED",
+          profile: approvedProfile
+        }
       }
     });
 
@@ -130,6 +186,19 @@ describe("onboarding routes", () => {
         key: "goals"
       }
     });
+    const profile = await prisma.knowledgeVault.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        section: "COMPANY",
+        key: "business-profile"
+      }
+    });
+    const interaction = await prisma.aiInteraction.findFirstOrThrow({
+      where: {
+        workspaceId: session.workspace.id,
+        agent: "ONBOARDING_PROFILE_RESOLVER"
+      }
+    });
 
     expect(workspace).toEqual({
       onboardingStatus: "COMPLETE",
@@ -145,6 +214,14 @@ describe("onboarding routes", () => {
       budgetRange: "BHD 200-500",
       instagramExperience: "Some strategy",
       success90Days: "25 wholesale leads from Instagram."
+    });
+    expect(profile.value).toMatchObject(approvedProfile);
+    expect(interaction).toMatchObject({
+      accepted: true,
+      edited: true,
+      model: "test-profile-model",
+      tokensIn: 180,
+      tokensOut: 320
     });
 
     await app.close();
@@ -171,7 +248,83 @@ describe("onboarding routes", () => {
 
     await app.close();
   });
+
+  it("requires verification and keeps profile drafts isolated by workspace", async () => {
+    const app = await buildApp();
+    const unverified = await registerTestUser(app, false);
+    const unverifiedHeaders = authHeaders(unverified.tokens.accessToken);
+    await saveCompanyAndRemainingModules(app, unverifiedHeaders);
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/generate",
+      headers: unverifiedHeaders
+    });
+
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json()).toMatchObject({
+      error: {
+        code: "EMAIL_VERIFICATION_REQUIRED"
+      }
+    });
+
+    const first = await registerTestUser(app);
+    const second = await registerTestUser(app);
+    const firstHeaders = authHeaders(first.tokens.accessToken);
+    const secondHeaders = authHeaders(second.tokens.accessToken);
+    await Promise.all([
+      saveCompanyAndRemainingModules(app, firstHeaders),
+      saveCompanyAndRemainingModules(app, secondHeaders)
+    ]);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/generate",
+      headers: firstHeaders
+    });
+    const firstDraft = generated.json().data.businessProfile;
+    const crossWorkspaceApproval = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/approve",
+      headers: secondHeaders,
+      payload: {
+        interactionId: firstDraft.interactionId,
+        profile: firstDraft.profile
+      }
+    });
+
+    expect(crossWorkspaceApproval.statusCode).toBe(404);
+    expect(crossWorkspaceApproval.json()).toMatchObject({
+      error: {
+        code: "BUSINESS_PROFILE_NOT_FOUND"
+      }
+    });
+
+    await app.close();
+  });
 });
+
+async function saveCompanyAndRemainingModules(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  headers: Record<string, string>
+): Promise<void> {
+  const company = await app.inject({
+    method: "PUT",
+    url: "/v1/onboarding/company",
+    headers,
+    payload: {
+      name: "Pearl Coffee",
+      industry: "Specialty coffee",
+      size: "SMB",
+      location: "Manama, Bahrain",
+      socials: ["instagram.com/pearlcoffee"],
+      website: "https://pearlcoffee.example",
+      languages: ["Arabic", "English"]
+    }
+  });
+  expect(company.statusCode).toBe(200);
+  await saveRemainingModules(app, headers);
+}
 
 async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   const requests = [
@@ -279,7 +432,7 @@ async function saveRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, h
   }
 }
 
-async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
+async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>, verified = true) {
   const email = `onboarding-${randomUUID()}@markos.test`;
   const response = await app.inject({
     method: "POST",
@@ -295,21 +448,42 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
 
   const session = response.json().data;
 
-  await prisma.user.update({
-    data: {
-      isVerified: true
-    },
-    where: {
-      id: session.user.id
-    }
-  });
+  if (verified) {
+    await prisma.user.update({
+      data: {
+        isVerified: true
+      },
+      where: {
+        id: session.user.id
+      }
+    });
+  }
 
   return {
     ...session,
     user: {
       ...session.user,
-      isVerified: true
+      isVerified: verified
     }
+  };
+}
+
+function testBusinessProfile() {
+  const localized = {
+    en: "Grounded English profile text.",
+    ar: "نص عربي موثوق لملف النشاط."
+  };
+
+  return {
+    businessName: "Pearl Coffee",
+    tagline: localized,
+    overview: localized,
+    uniqueValue: localized,
+    offerSummary: localized,
+    idealCustomer: localized,
+    marketPosition: localized,
+    brandVoice: localized,
+    marketingFocus: localized
   };
 }
 

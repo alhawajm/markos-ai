@@ -294,3 +294,11 @@ Retire the fixture-backed `markos.onboarding.draft` browser key and begin with t
 ## 2026-08-06: Workflow notifications appear at the top
 
 Use an accessible fixed top notification for Settings and onboarding workflow feedback instead of appending low-visibility messages after page content. Success and informational notifications dismiss automatically after six seconds and remain manually closable; errors and warnings remain until dismissed so consequential failures or required third-party actions are not lost. Preserve an inline action when the workflow requires the user to continue on an external provider page.
+
+## 2026-08-06: Onboarding completion requires an approved resolved profile
+
+Supersede the earlier non-generative final review with one narrow onboarding orchestration step. After all seven canonical modules reach 100% Vault completeness, a verified user may ask MARKOS to resolve those raw answers into a bilingual draft business profile. This is an internal onboarding profile resolver, not a ninth public agent; the eight-agent product taxonomy remains unchanged.
+
+Keep the raw onboarding entries as the source record. Store each generated draft and its token usage in the workspace-scoped AI interaction history, allow the owner to edit both Arabic and English, and write only the approved version to `COMPANY/business-profile`. Mark onboarding `COMPLETE` only after approval. Editing a canonical onboarding module invalidates the current resolved profile and returns the workspace to `IN_PROGRESS`, while preserving prior generated and approved interactions as history.
+
+Use the configured long-form model through the protected API-to-AI boundary, strict Responses API JSON Schema output, provider-returned token metering, and the existing `AI_GENERATION` quota. Disable provider-side response storage and emit only sanitized lifecycle diagnostics: schema name, model, terminal category, status code, cause type, request-ID presence, and token counts. Never log prompts, Vault values, provider bodies, credentials, raw errors, or workspace identities.

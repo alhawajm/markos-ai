@@ -13,6 +13,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.responses import Response
 
+from app.contracts.business_profile import (
+    BusinessProfileGenerateRequest,
+    BusinessProfileGenerateResponse,
+)
 from app.contracts.strategy import (
     StrategyContextChunk,
     StrategyGenerateRequest,
@@ -21,6 +25,7 @@ from app.contracts.strategy import (
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
+from app.providers.business_profile import get_business_profile_provider
 from app.providers.strategy import get_strategy_provider
 
 
@@ -238,6 +243,24 @@ async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerat
     try:
         async with asyncio.timeout(settings.ai_strategy_timeout_seconds):
             return await provider.generate_strategy(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post("/ai/onboarding/profile/generate", response_model=BusinessProfileGenerateResponse)
+async def generate_business_profile(
+    request: BusinessProfileGenerateRequest,
+) -> BusinessProfileGenerateResponse:
+    provider = get_business_profile_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_profile_timeout_seconds):
+            return await provider.generate_profile(request)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",

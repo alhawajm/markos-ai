@@ -2,16 +2,7 @@ import re
 from functools import lru_cache
 from typing import Protocol, cast
 
-from openai import (
-    APIConnectionError,
-    APIStatusError,
-    APITimeoutError,
-    AsyncOpenAI,
-    AuthenticationError,
-    OpenAIError,
-    RateLimitError,
-)
-from pydantic import ValidationError
+from openai import AsyncOpenAI
 
 from app.contracts.strategy import (
     GeneratedStrategyContent,
@@ -29,6 +20,7 @@ from app.prompts.strategy import (
     build_strategy_input,
     build_strategy_instructions,
 )
+from app.providers.openai_structured import OpenAIClient, generate_structured
 
 
 class StrategyProvider(Protocol):
@@ -36,28 +28,6 @@ class StrategyProvider(Protocol):
         self,
         request: StrategyGenerateRequest,
     ) -> StrategyGenerateResponse: ...
-
-
-class ParsedUsage(Protocol):
-    input_tokens: int
-    output_tokens: int
-
-
-class ParsedResponse(Protocol):
-    model: str
-    output_parsed: object
-    status: str
-    usage: ParsedUsage | None
-
-    def model_dump(self) -> dict[str, object]: ...
-
-
-class ResponsesApi(Protocol):
-    async def parse(self, **kwargs: object) -> ParsedResponse: ...
-
-
-class OpenAIClient(Protocol):
-    responses: ResponsesApi
 
 
 class LocalStrategyProvider:
@@ -120,119 +90,28 @@ class OpenAIStrategyProvider:
                 retryable=False,
             )
 
-        try:
-            response = await self._client.responses.parse(
-                input=build_strategy_input(request),
-                instructions=build_strategy_instructions(request),
-                max_output_tokens=settings.openai_max_output_tokens,
-                model=model,
-                reasoning={"effort": settings.openai_reasoning_effort},
-                store=False,
-                text_format=GeneratedStrategyContent,
-            )
-        except APITimeoutError:
-            raise provider_error(
-                code="AI_PROVIDER_TIMEOUT",
-                message="The AI provider timed out",
-                status_code=504,
-                retryable=True,
-            ) from None
-        except RateLimitError:
-            raise provider_error(
-                code="AI_PROVIDER_RATE_LIMITED",
-                message="The AI provider is temporarily rate limited",
-                status_code=503,
-                retryable=True,
-            ) from None
-        except AuthenticationError:
-            raise provider_error(
-                code="AI_PROVIDER_NOT_CONFIGURED",
-                message="The AI provider credential is not accepted",
-                status_code=503,
-                retryable=False,
-            ) from None
-        except APIConnectionError:
-            raise provider_error(
-                code="AI_PROVIDER_UNAVAILABLE",
-                message="The AI provider is temporarily unavailable",
-                status_code=503,
-                retryable=True,
-            ) from None
-        except APIStatusError as error:
-            retryable = error.status_code >= 500
-            raise provider_error(
-                code="AI_PROVIDER_UNAVAILABLE",
-                message="The AI provider could not complete the request",
-                status_code=503,
-                retryable=retryable,
-            ) from None
-        except OpenAIError:
-            raise provider_error(
-                code="AI_PROVIDER_UNAVAILABLE",
-                message="The AI provider could not complete the request",
-                status_code=503,
-                retryable=True,
-            ) from None
-        except (TypeError, ValueError, ValidationError):
-            raise provider_error(
-                code="AI_OUTPUT_INVALID",
-                message="The AI provider returned an invalid strategy",
-                status_code=502,
-                retryable=True,
-            ) from None
-
-        if response.status == "incomplete":
-            raise provider_error(
-                code="AI_OUTPUT_INCOMPLETE",
-                message="The AI provider returned an incomplete strategy",
-                status_code=502,
-                retryable=True,
-            )
-
-        if response.status != "completed":
-            raise provider_error(
-                code="AI_PROVIDER_UNAVAILABLE",
-                message="The AI provider could not complete the request",
-                status_code=503,
-                retryable=True,
-            )
-
-        if contains_refusal(response.model_dump()):
-            raise provider_error(
-                code="AI_OUTPUT_REFUSED",
-                message="The AI provider could not generate this strategy",
-                status_code=422,
-                retryable=False,
-            )
-
-        if not isinstance(response.output_parsed, GeneratedStrategyContent):
-            raise provider_error(
-                code="AI_OUTPUT_INVALID",
-                message="The AI provider returned an invalid strategy",
-                status_code=502,
-                retryable=True,
-            )
-
-        if response.usage is None:
-            raise provider_error(
-                code="AI_PROVIDER_USAGE_MISSING",
-                message="The AI provider did not return usage data",
-                status_code=502,
-                retryable=False,
-            )
+        generated = await generate_structured(
+            client=self._client,
+            input_text=build_strategy_input(request),
+            instructions=build_strategy_instructions(request),
+            model=model,
+            output_label="strategy",
+            schema=GeneratedStrategyContent,
+            schema_name="markos_strategy",
+        )
 
         strategy = StrategyPlan.model_validate(
             {
-                **response.output_parsed.model_dump(),
+                **generated.content.model_dump(),
                 "horizon_days": request.horizon_days,
             }
         )
 
         return StrategyGenerateResponse(
-            model=response.model,
+            model=generated.model,
             prompt_version=f"{STRATEGY_PROMPT_VERSION}.openai",
-            tokens_in=response.usage.input_tokens,
-            tokens_out=response.usage.output_tokens,
+            tokens_in=generated.tokens_in,
+            tokens_out=generated.tokens_out,
             strategy=strategy,
         )
 
@@ -243,33 +122,6 @@ def get_strategy_provider() -> StrategyProvider:
         return OpenAIStrategyProvider()
 
     return LocalStrategyProvider()
-
-
-def provider_error(
-    *,
-    code: str,
-    message: str,
-    status_code: int,
-    retryable: bool,
-) -> AiServiceError:
-    return AiServiceError(
-        code=code,
-        message=message,
-        status_code=status_code,
-        retryable=retryable,
-    )
-
-
-def contains_refusal(value: object) -> bool:
-    if isinstance(value, dict):
-        if value.get("type") == "refusal":
-            return True
-        return any(contains_refusal(item) for item in value.values())
-
-    if isinstance(value, list):
-        return any(contains_refusal(item) for item in value)
-
-    return False
 
 
 def estimate_tokens(text: str) -> int:

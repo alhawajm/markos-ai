@@ -14,6 +14,7 @@ import {
 import type { z } from "zod";
 import { prisma } from "../db/prisma";
 import { getVaultScore, upsertVaultSection } from "../vault/vault-service";
+import { getBusinessProfileState, invalidateBusinessProfile } from "./business-profile-service";
 
 type OnboardingPayload =
   | z.infer<typeof companyOnboardingSchema>
@@ -48,7 +49,7 @@ export class OnboardingIncompleteError extends Error {
 }
 
 export async function getOnboardingState(workspaceId: string): Promise<OnboardingState> {
-  const [workspace, vaultScore] = await Promise.all([
+  const [workspace, vaultScore, businessProfile] = await Promise.all([
     prisma.workspace.findFirstOrThrow({
       where: {
         id: workspaceId,
@@ -59,7 +60,8 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
         onboardingScore: true
       }
     }),
-    getVaultScore(workspaceId)
+    getVaultScore(workspaceId),
+    getBusinessProfileState(workspaceId)
   ]);
 
   const completed = new Set(vaultScore.completedSections);
@@ -68,6 +70,7 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
     status: workspace.onboardingStatus,
     onboardingScore: workspace.onboardingScore,
     vaultScore,
+    businessProfile,
     modules: onboardingModules.map((module) => ({
       module,
       sections: moduleSections[module],
@@ -86,12 +89,13 @@ export async function saveOnboardingModule(
   }
 
   const vaultScore = await getVaultScore(workspaceId);
+  await invalidateBusinessProfile(workspaceId);
   await prisma.workspace.update({
     where: {
       id: workspaceId
     },
     data: {
-      onboardingStatus: vaultScore.score === 100 ? "COMPLETE" : "IN_PROGRESS",
+      onboardingStatus: "IN_PROGRESS",
       onboardingScore: vaultScore.score
     }
   });
@@ -102,7 +106,7 @@ export async function saveOnboardingModule(
 export async function completeOnboarding(workspaceId: string): Promise<OnboardingState> {
   const state = await getOnboardingState(workspaceId);
 
-  if (state.vaultScore.score < 100) {
+  if (state.vaultScore.score < 100 || state.businessProfile.status !== "APPROVED") {
     throw new OnboardingIncompleteError(state);
   }
 

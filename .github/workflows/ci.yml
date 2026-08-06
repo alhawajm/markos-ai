@@ -22,8 +22,9 @@ jobs:
 
     env:
       AI_BASE_URL: http://localhost:8000
-      AI_HTTP_TIMEOUT_MS: "25000"
-      AI_STRATEGY_TIMEOUT_SECONDS: "20"
+      AI_HTTP_TIMEOUT_MS: "55000"
+      AI_PROFILE_TIMEOUT_SECONDS: "50"
+      AI_STRATEGY_TIMEOUT_SECONDS: "50"
       AI_TEXT_PROVIDER: local
       API_BASE_URL: http://localhost:4000
       DATABASE_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
@@ -47,6 +48,7 @@ jobs:
       SENTRY_TRACES_SAMPLE_RATE: "0"
       NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: "0"
       OPENSEARCH_URL: http://localhost:9200
+      OPENAI_TIMEOUT_SECONDS: "45"
       REDIS_URL: redis://localhost:6379
       WEB_BASE_URL: http://localhost:3000
 
@@ -159,6 +161,8 @@ jobs:
           trap cleanup EXIT
 
           docker run --detach --name "$container" \
+            --env AI_PROFILE_TIMEOUT_SECONDS="$AI_PROFILE_TIMEOUT_SECONDS" \
+            --env AI_STRATEGY_TIMEOUT_SECONDS="$AI_STRATEGY_TIMEOUT_SECONDS" \
             --env AI_TEXT_PROVIDER="$AI_TEXT_PROVIDER" \
             --env INTERNAL_SERVICE_TOKEN="$INTERNAL_SERVICE_TOKEN" \
             --env LLM_LONGFORM_MODEL="$LLM_LONGFORM_MODEL" \
@@ -199,6 +203,18 @@ jobs:
             '.model == $model and .strategy.horizonDays == 90 and .tokens_in > 0 and .tokens_out > 0' \
             /tmp/markos-ai-strategy.json >/dev/null
 
+          curl --fail --silent \
+            --header "Authorization: Bearer $INTERNAL_SERVICE_TOKEN" \
+            --header "content-type: application/json" \
+            --request POST \
+            --data '{"workspace_id":"ci-workspace","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
+            http://127.0.0.1:8000/ai/onboarding/profile/generate \
+            > /tmp/markos-ai-business-profile.json
+
+          jq --exit-status --arg model "$LLM_LONGFORM_MODEL" \
+            '.model == $model and .profile.businessName == "CI Coffee" and (.profile.tagline.en | length) > 0 and (.profile.tagline.ar | length) > 0 and .tokens_in > 0 and .tokens_out > 0' \
+            /tmp/markos-ai-business-profile.json >/dev/null
+
       - name: Install Chromium
         run: corepack pnpm exec playwright-core install --with-deps chromium
 
@@ -224,7 +240,7 @@ jobs:
             exit 1
           fi
 
-      - name: Test rendered Instagram Settings
+      - name: Test rendered Settings and onboarding
         env:
           SETTINGS_BROWSER_BASE_URL: http://127.0.0.1:3000
         run: corepack pnpm --filter web test:browser

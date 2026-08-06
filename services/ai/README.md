@@ -58,7 +58,9 @@ Completion requires one real provider response through the deployed service and 
 
 ### Phase 2: generate the first onboarding draft
 
-Khalid owns the product behavior and application integration. The intentionally small milestone is: take the user's onboarding/business information and produce a draft business profile for review. It is not the complete eight-agent platform.
+Khalid owns the product behavior and application integration. The intentionally small milestone takes the user's seven onboarding modules and produces a bilingual draft business profile for review, editing, and approval. It is implemented as onboarding orchestration rather than a ninth public agent, and it is not the complete eight-agent platform.
+
+The local provider remains deterministic for development. With `AI_TEXT_PROVIDER=openai`, both Strategy and onboarding profile resolution use the Responses API with strict JSON Schema output, provider-side storage disabled, and sanitized lifecycle logging.
 
 ### Phase 3: mature grounded retrieval and generation
 
@@ -94,8 +96,9 @@ Current FastAPI settings consume these names:
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (enforced on every non-health AI route)
 - `DATABASE_URL` (configured but not used by current request handlers)
-- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy)
+- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy and onboarding profile resolution)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
+- `AI_PROFILE_TIMEOUT_SECONDS`
 - `OPENAI_API_KEY`
 - `OPENAI_TIMEOUT_SECONDS`
 - `OPENAI_MAX_RETRIES`
