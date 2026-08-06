@@ -84,8 +84,10 @@ Acceptance gate:
 - [x] Verify register -> email verification -> login -> authenticated workspace endpoint against the local API.
 - [ ] Implement final onboarding entry route with immersive command-center styling.
 - [ ] Decide whether to use the wired 8-screen friendly onboarding flow or the unused `Future*` command-center onboarding variants.
+- [x] Remove fixture business answers from onboarding state and API payloads; prefill only the authenticated workspace name.
+- [x] Add the required Story and Products inputs instead of omitting those Vault modules or synthesizing undisclosed answers.
 - [ ] Build the chosen onboarding path with progress, back/continue, validation, completion, and skip rules from experience flows.
-- [ ] Persist onboarding answers to workspace business memory/Vault APIs.
+- [x] Persist all seven disclosed onboarding modules to workspace business memory/Vault APIs.
 - [ ] Include loading, failure, retry, and partial-completion recovery states.
 - [ ] Route completed onboarding into the final Command Center.
 - [ ] Verify Arabic copy and RTL form layout.
@@ -166,6 +168,8 @@ Acceptance gate:
 - [x] Re-skin Knowledge Vault while preserving module completeness, gaps, source history, and RAG grounding.
 - [ ] Re-skin Strategy while preserving 30/60/90 planning, pillars, refresh/export, and source context.
 - [x] Re-skin Settings with account, workspace, billing, language, security, and channels.
+- [x] Render TOTP enrollment as a local QR code with a manual-key fallback and a readable six-digit verification field.
+- [x] Present Settings and onboarding feedback as top-level, closable notifications; auto-dismiss non-urgent success/information states.
 - [ ] Decide whether Publishing Queue remains a primary route or is reached from Campaign/Content flows.
 - [ ] Decide whether AI Consultant remains separate or becomes the floating assistant plus a full chat route.
 - [ ] Keep admin/operations screens dense enough for real use while using the final token system.
@@ -183,6 +187,7 @@ Acceptance gate:
 - [ ] Verify keyboard navigation for sidebar, modals, forms, and AI assistant.
 - [ ] Verify focus states, accessible names, contrast, and reduced-motion behavior.
 - [x] Verify all text fits containers without overlap.
+- [x] Verify Settings/Profile in English and Arabic/RTL at desktop and mobile widths without horizontal overflow.
 - [ ] Verify Arabic/RTL layout for dashboard, onboarding, content studio, and settings.
 - [ ] Capture quota, Vault-gap, Instagram-disconnected, publish-failed, and analytics-no-data states.
 
@@ -212,6 +217,7 @@ Acceptance gate:
 ## Open Decisions To Keep Visible
 
 - [ ] Confirm whether the final brand should use only luxury turquoise/gold/amber or retain selected purple/pink quantum accents for auth/onboarding.
+- [ ] Re-evaluate whether either current visual theme expresses MARKOS's product idea before treating the visual migration as final; involve Mohamed in consequential direction.
 - [ ] Confirm whether onboarding should be the friendly 8-screen flow currently wired, or the darker unused `Future*` command-center flow.
 - [ ] Confirm whether the app shell should stay icon-only on desktop or reveal labels on hover/expanded mode.
 - [ ] Confirm final production customer examples: Zain Arabia/Ahmed/Maryam must be fixtures only, not hard-coded production identity.

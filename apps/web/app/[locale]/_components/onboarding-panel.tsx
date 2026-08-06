@@ -1,51 +1,37 @@
 "use client";
 
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
   BriefcaseBusiness,
   CheckCircle2,
-  Facebook,
   Gem,
-  Instagram,
   Plus,
   Sparkles,
   Target,
   Trash2,
-  Twitter,
-  Upload,
   Zap
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { NotificationToast } from "./notification-toast";
+import {
+  createEmptyOnboardingDraft,
+  legacyOnboardingDraftKey,
+  onboardingDraftKey,
+  payloadForOnboardingStep,
+  validateOnboardingStep,
+  type OnboardingDraft,
+  type OnboardingProductDraft,
+  type OnboardingStepId
+} from "./onboarding-draft";
 
-const draftKey = "markos.onboarding.draft";
-
-type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type StepId = OnboardingStepId;
 type Icon = ComponentType<{ className?: string; color?: string; size?: number; strokeWidth?: number }>;
 type SelectOption = { label: string; value: string };
-
-interface OnboardingDraft {
-  ageRange: string;
-  brandColor: string;
-  channels: Record<"facebook" | "instagram" | "twitter", boolean>;
-  companyName: string;
-  competitors: string[];
-  description: string;
-  genderFocus: string;
-  goals: string[];
-  industry: string;
-  languagePreference: string;
-  location: string;
-  logoUploaded: boolean;
-  newCompetitor: string;
-  painPoints: string;
-  tone: string;
-  website: string;
-}
 
 const toneMeta: Array<{ icon: Icon; id: string }> = [
   { id: "professional", icon: BriefcaseBusiness },
@@ -70,87 +56,110 @@ function onboardingCopy(locale: Locale) {
     return {
       add: "إضافة",
       addCompetitorPlaceholder: "أضف اسم منافس...",
+      addProduct: "إضافة المنتج أو الخدمة",
+      attention: "تنبيه",
       aiCardBody: "يتعلم MARKOS علامتك خلال دقائق ويولّد محتوى يشبه صوتك من اليوم الأول.",
       aiCardTitle: "إعداد مدعوم بالذكاء الاصطناعي",
       back: "السابق",
       brand: {
-        color: "لون العلامة الأساسي",
-        logoDone: "تم رفع الشعار",
-        logoHint: "PNG أو SVG أو JPG حتى 10MB",
-        logoIdle: "اسحب الشعار هنا أو اضغط للرفع",
+        color: "لون العلامة الأساسي *",
+        fonts: "خطوط العلامة (افصل بينها بفواصل)",
         tone: "نبرة صوت العلامة *",
-        title: "ارفع أصول علامتك",
-        body: "يساعد الشعار والألوان MARKOS في الحفاظ على اتساق بصري واضح."
+        visualWords: "كلمات تصف الهوية البصرية (افصل بينها بفواصل)",
+        voiceNotes: "ملاحظات إضافية عن أسلوب الكتابة",
+        title: "حدّد هوية علامتك",
+        body: "اختر القيم التي تمثل علامتك فعلاً. يمكنك إضافة الملفات من الخزنة لاحقاً."
       },
-      build: "ابنِ الذكاء الاصطناعي",
-      channels: {
-        body: "اربط حسابات التواصل للنشر مباشرة من MARKOS.",
-        connected: "متصل",
-        connect: "ربط",
-        notConnected: "غير متصل",
-        title: "اربط قنواتك"
-      },
+      build: "مراجعة الملف",
       company: {
         body: "يساعد هذا MARKOS على إنشاء محتوى يمثل علامتك بدقة.",
-        description: "وصف النشاط",
         industry: "القطاع *",
+        language: "لغات العمل *",
+        location: "موقع النشاط *",
         name: "اسم الشركة *",
         title: "حدثنا عن شركتك",
         website: "الموقع الإلكتروني"
       },
       complete: "مكتمل",
       competitors: {
-        body: "سيحلل MARKOS استراتيجيات محتواهم ليساعدك على التقدم.",
+        advantage: "ما ميزتك التنافسية؟",
+        body: "تساعد إجاباتك MARKOS على فهم موقع نشاطك في السوق.",
         hint: "يمكنك إضافة المزيد لاحقاً من الإعدادات.",
+        difference: "ماذا تريد أن تفعل بشكل مختلف؟",
         title: "من هم منافسوك؟"
       },
       continue: "متابعة",
+      dismiss: "إغلاق الإشعار",
       errors: {
         complete: "تعذر إنهاء الإعداد الآن.",
-        save: "تعذر حفظ هذه الخطوة الآن."
+        save: "تعذر حفظ هذه الخطوة الآن.",
+        session: "ما زلنا نتحقق من جلستك. حاول مرة أخرى بعد لحظة."
       },
       goals: {
         body: "اختر كل ما ينطبق. سيضبط MARKOS استراتيجية المحتوى وفقاً لذلك.",
+        budget: "نطاق الميزانية الاختياري",
+        instagramExperience: "خبرتك الحالية مع إنستغرام",
+        success90Days: "كيف يبدو النجاح بعد 90 يوماً؟",
         title: "ما أهدافك من المحتوى؟"
       },
-      launch: "افتح لوحة MARKOS",
+      launch: "إكمال الإعداد",
+      products: {
+        body: "أضف منتجاً أو خدمة واحدة على الأقل حتى يفهم MARKOS ما تبيعه.",
+        category: "الفئة",
+        description: "وصف مختصر",
+        differentiators: "عوامل التميز (افصل بينها بفواصل)",
+        empty: "لم تتم إضافة منتجات أو خدمات بعد.",
+        name: "اسم المنتج أو الخدمة *",
+        priceRange: "نطاق الأسعار الاختياري",
+        salesChannels: "قنوات البيع (افصل بينها بفواصل)",
+        title: "ماذا تقدم؟"
+      },
       progress: (step: StepId, total: number) => `الخطوة ${step} من ${total}`,
       saved: "تم الحفظ في الخزنة",
+      status: "تم الحفظ",
       setup: {
-        body: "يحلل MARKOS القطاع والمنافسين والأهداف لبناء طبقة ذكاء تسويقي مخصصة.",
-        loadingTitle: "نبني ذكاء علامتك...",
-        readyBody: "تعلم MARKOS علامتك. أنت جاهز لإنشاء محتوى مدعوم بالذكاء الاصطناعي يحقق نتائج.",
-        readyTitle: "ذكاء علامتك جاهز!",
-        stats: [
-          { value: "94%", label: "درجة مطابقة العلامة" },
-          { value: "47", label: "أفكار محتوى جاهزة" },
-          { value: "3", label: "قنوات مرتبطة" }
-        ],
-        tasks: [
-          "فحص اتجاهات القطاع في البحرين",
-          "تحليل استراتيجيات محتوى المنافسين",
-          "بناء نموذج صوت العلامة",
-          "توليد إطار تقويم المحتوى",
-          "إنهاء إعدادات الذكاء الاصطناعي"
-        ]
+        body: "راجِع أن الأقسام السبعة تعكس نشاطك الحقيقي. عند الإكمال سيحفظ MARKOS الملف في خزنة مساحة العمل.",
+        readyTitle: "ملف نشاطك جاهز للحفظ"
+      },
+      story: {
+        body: "ساعد MARKOS على فهم سبب وجود نشاطك وما الذي يجعله مختلفاً.",
+        mission: "رسالة النشاط *",
+        origin: "قصة البداية",
+        problemSolved: "المشكلة التي تحلها",
+        title: "احكِ قصة نشاطك",
+        usp: "عرض القيمة الفريد *",
+        values: "قيم النشاط * (افصل بينها بفواصل)",
+        vision: "الرؤية"
       },
       steps: [
         { id: 1 as const, label: "معلومات الشركة", desc: "عرّفنا على نشاطك" },
-        { id: 2 as const, label: "هوية العلامة", desc: "ارفع أصولك" },
-        { id: 3 as const, label: "الجمهور المستهدف", desc: "من تخدم؟" },
-        { id: 4 as const, label: "المنافسون", desc: "اعرف السوق" },
-        { id: 5 as const, label: "قنوات التواصل", desc: "اربط حساباتك" },
-        { id: 6 as const, label: "أهداف المحتوى", desc: "حدد أهدافك" },
-        { id: 7 as const, label: "إعداد الذكاء", desc: "نبني ذكاء علامتك" }
+        { id: 2 as const, label: "قصة النشاط", desc: "اشرح رسالتك وقيمك" },
+        { id: 3 as const, label: "المنتجات والخدمات", desc: "ماذا تقدم؟" },
+        { id: 4 as const, label: "الجمهور المستهدف", desc: "من تخدم؟" },
+        { id: 5 as const, label: "المنافسون", desc: "اعرف السوق" },
+        { id: 6 as const, label: "هوية العلامة", desc: "حدد صوتك وألوانك" },
+        { id: 7 as const, label: "أهداف المحتوى", desc: "حدد أهدافك" },
+        { id: 8 as const, label: "المراجعة", desc: "أكمل ملف النشاط" }
       ],
       audience: {
         age: "الفئة العمرية",
         body: "فهم جمهورك يساعد MARKOS على صياغة رسائل مؤثرة.",
+        demographics: "صف جمهورك الأساسي *",
         gender: "تركيز الجنس",
-        language: "تفضيلات اللغة",
-        location: "الموقع",
-        painPoints: "نقاط ألم العملاء",
+        interests: "الاهتمامات * (افصل بينها بفواصل)",
+        location: "مواقع الجمهور (افصل بينها بفواصل)",
+        motivations: "الدوافع (افصل بينها بفواصل)",
+        painPoints: "نقاط ألم العملاء * (افصل بينها بفواصل)",
         title: "من هو جمهورك؟"
+      },
+      validation: {
+        audience: "أضف وصفاً للجمهور واهتماماً واحداً ونقطة ألم واحدة على الأقل.",
+        brand: "اختر لوناً أساسياً ونبرة صوت للعلامة.",
+        company: "أدخل اسم الشركة والقطاع والموقع ولغة عمل واحدة على الأقل.",
+        competitors: "أضف منافساً واحداً على الأقل لإكمال هذا القسم.",
+        objectives: "اختر هدف محتوى واحداً على الأقل.",
+        products: "أضف منتجاً أو خدمة واحدة على الأقل.",
+        story: "أدخل الرسالة وعرض القيمة وقيمة واحدة على الأقل."
       }
     };
   }
@@ -158,87 +167,110 @@ function onboardingCopy(locale: Locale) {
   return {
     add: "Add",
     addCompetitorPlaceholder: "Add competitor name...",
+    addProduct: "Add product or service",
+    attention: "Attention",
     aiCardBody: "MARKOS learns your brand in minutes and generates content that sounds like you from day one.",
     aiCardTitle: "AI-Powered Setup",
     back: "Back",
     brand: {
       color: "Primary Brand Color",
-      logoDone: "Logo uploaded",
-      logoHint: "PNG, SVG, JPG up to 10MB",
-      logoIdle: "Drop your logo here or click to upload",
+      fonts: "Brand fonts (comma-separated)",
       tone: "Brand Tone of Voice *",
-      title: "Upload your brand assets",
-      body: "Your logo and brand colors help MARKOS maintain visual consistency."
+      visualWords: "Visual identity words (comma-separated)",
+      voiceNotes: "Additional writing-style notes",
+      title: "Define your brand identity",
+      body: "Choose values that genuinely represent your brand. You can add files from the Vault later."
     },
-    build: "Build My AI",
-    channels: {
-      body: "Connect your social accounts to publish directly from MARKOS.",
-      connected: "Connected",
-      connect: "Connect",
-      notConnected: "Not connected",
-      title: "Connect your channels"
-    },
+    build: "Review profile",
     company: {
       body: "This helps MARKOS create content that truly represents your brand.",
-      description: "Business Description",
       industry: "Industry *",
+      language: "Business languages *",
+      location: "Business location *",
       name: "Company Name *",
       title: "Tell us about your company",
       website: "Website"
     },
     complete: "complete",
     competitors: {
-      body: "MARKOS will analyze their content strategies to help you stay ahead.",
+      advantage: "What is your competitive advantage?",
+      body: "Your answers help MARKOS understand your position in the market.",
       hint: "You can always add more later from Settings.",
+      difference: "What do you want to do differently?",
       title: "Who are your competitors?"
     },
     continue: "Continue",
+    dismiss: "Dismiss notification",
     errors: {
       complete: "Could not complete onboarding yet.",
-      save: "Could not save this step yet."
+      save: "Could not save this step yet.",
+      session: "We are still checking your session. Try again in a moment."
     },
     goals: {
       body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
+      budget: "Optional budget range",
+      instagramExperience: "Current Instagram experience",
+      success90Days: "What would success look like in 90 days?",
       title: "What are your content goals?"
     },
-    launch: "Launch MARKOS Dashboard",
+    launch: "Complete onboarding",
+    products: {
+      body: "Add at least one product or service so MARKOS understands what you sell.",
+      category: "Category",
+      description: "Short description",
+      differentiators: "Differentiators (comma-separated)",
+      empty: "No products or services added yet.",
+      name: "Product or service name *",
+      priceRange: "Optional price range",
+      salesChannels: "Sales channels (comma-separated)",
+      title: "What do you offer?"
+    },
     progress: (step: StepId, total: number) => `Step ${step} of ${total}`,
     saved: "Saved to Vault",
+    status: "Saved",
     setup: {
-      body: "Analyzing your industry, competitors, and goals to create a personalized marketing intelligence layer.",
-      loadingTitle: "Building Your Brand AI...",
-      readyBody: "MARKOS has learned your brand. You're ready to create AI-powered content that converts.",
-      readyTitle: "Your Brand AI is Ready!",
-      stats: [
-        { value: "94%", label: "Brand Match Score" },
-        { value: "47", label: "Content Ideas Ready" },
-        { value: "3", label: "Channels Connected" }
-      ],
-      tasks: [
-        "Scanning industry trends in Bahrain",
-        "Analyzing competitor content strategies",
-        "Building your brand voice model",
-        "Generating content calendar framework",
-        "Finalizing AI configuration"
-      ]
+      body: "Review that all seven sections describe your real business. Completing onboarding saves the profile to your workspace Vault.",
+      readyTitle: "Your business profile is ready to save"
+    },
+    story: {
+      body: "Help MARKOS understand why your business exists and what makes it different.",
+      mission: "Business mission *",
+      origin: "Origin story",
+      problemSolved: "Problem you solve",
+      title: "Tell your business story",
+      usp: "Unique value proposition *",
+      values: "Business values * (comma-separated)",
+      vision: "Vision"
     },
     steps: [
       { id: 1 as const, label: "Company Info", desc: "Tell us about your business" },
-      { id: 2 as const, label: "Brand Identity", desc: "Upload your assets" },
-      { id: 3 as const, label: "Target Audience", desc: "Who do you serve?" },
-      { id: 4 as const, label: "Competitors", desc: "Know your market" },
-      { id: 5 as const, label: "Social Channels", desc: "Connect your accounts" },
-      { id: 6 as const, label: "Content Goals", desc: "Set your objectives" },
-      { id: 7 as const, label: "AI Setup", desc: "Building your brand AI" }
+      { id: 2 as const, label: "Business Story", desc: "Explain your mission and values" },
+      { id: 3 as const, label: "Products & Services", desc: "What do you offer?" },
+      { id: 4 as const, label: "Target Audience", desc: "Who do you serve?" },
+      { id: 5 as const, label: "Competitors", desc: "Know your market" },
+      { id: 6 as const, label: "Brand Identity", desc: "Define your voice and colors" },
+      { id: 7 as const, label: "Content Goals", desc: "Set your objectives" },
+      { id: 8 as const, label: "Review", desc: "Complete the business profile" }
     ],
     audience: {
       age: "Age Range",
       body: "Understanding your audience helps MARKOS craft messages that resonate.",
+      demographics: "Describe your primary audience *",
       gender: "Gender Focus",
-      language: "Language Preferences",
-      location: "Location",
-      painPoints: "Customer Pain Points",
+      interests: "Interests * (comma-separated)",
+      location: "Audience locations (comma-separated)",
+      motivations: "Motivations (comma-separated)",
+      painPoints: "Customer pain points * (comma-separated)",
       title: "Who is your audience?"
+    },
+    validation: {
+      audience: "Add an audience description, at least one interest, and at least one pain point.",
+      brand: "Choose a primary brand color and tone of voice.",
+      company: "Enter the company name, industry, location, and at least one business language.",
+      competitors: "Add at least one competitor to complete this section.",
+      objectives: "Choose at least one content goal.",
+      products: "Add at least one product or service.",
+      story: "Enter a mission, a unique value proposition, and at least one business value."
     }
   };
 }
@@ -297,64 +329,50 @@ function languageOptions(locale: Locale): SelectOption[] {
 
 type OnboardingCopy = ReturnType<typeof onboardingCopy>;
 
-const defaultDraft: OnboardingDraft = {
-  ageRange: "25-34",
-  brandColor: "#0F3460",
-  channels: { facebook: true, instagram: true, twitter: false },
-  companyName: "Zain Arabia",
-  competitors: ["STC Bahrain", "Batelco"],
-  description: "Leading telecommunications company serving Bahrain with mobile, internet, and digital services.",
-  genderFocus: "All",
-  goals: ["Increase brand awareness", "Build community"],
-  industry: "Technology",
-  languagePreference: "Both",
-  location: "Bahrain, GCC Region",
-  logoUploaded: false,
-  newCompetitor: "",
-  painPoints: "Need reliable connectivity, digital transformation support, competitive pricing",
-  tone: "professional",
-  website: "https://zain.com.bh"
-};
-
-function defaultDraftForLocale(locale: Locale): OnboardingDraft {
-  if (locale !== "ar") return defaultDraft;
-
-  return {
-    ...defaultDraft,
-    companyName: "زين العربية",
-    description: "شركة اتصالات رائدة تخدم البحرين بخدمات الهاتف والإنترنت والحلول الرقمية.",
-    location: "البحرين، دول الخليج",
-    painPoints: "الحاجة إلى اتصال موثوق، دعم التحول الرقمي، وأسعار تنافسية"
-  };
-}
-
 export function OnboardingPanel({ locale }: { locale: Locale }) {
   const copy = onboardingCopy(locale);
   const isRtl = locale === "ar";
   const steps = copy.steps;
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiProgress, setAiProgress] = useState(100);
-  const [draft, setDraft] = useState<OnboardingDraft>(() => defaultDraftForLocale(locale));
+  const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"error" | "success">("success");
   const [saving, setSaving] = useState(false);
   const session = useMarkosSession();
   const [step, setStep] = useState<StepId>(1);
   const router = useRouter();
+  const workspaceNameApplied = useRef(false);
 
   const client = useMarkosClient(locale);
+  const dismissMessage = useCallback(() => setMessage(""), []);
 
   useEffect(() => {
-    const storedDraft = window.localStorage.getItem(draftKey);
+    window.localStorage.removeItem(legacyOnboardingDraftKey);
+    const baseDraft = createEmptyOnboardingDraft();
+    const storedDraft = window.localStorage.getItem(onboardingDraftKey);
 
-    const baseDraft = defaultDraftForLocale(locale);
-    if (storedDraft) setDraft({ ...baseDraft, ...(JSON.parse(storedDraft) as Partial<OnboardingDraft>) });
+    if (storedDraft) {
+      try {
+        const parsed = JSON.parse(storedDraft) as Partial<OnboardingDraft>;
+        setDraft({ ...baseDraft, ...parsed });
+      } catch {
+        window.localStorage.removeItem(onboardingDraftKey);
+        setDraft(baseDraft);
+      }
+    } else {
+      setDraft(baseDraft);
+    }
+
+    workspaceNameApplied.current = false;
     setStep(getInitialStep());
+    setDraftHydrated(true);
   }, [locale]);
 
   useEffect(() => {
     if (session) return;
 
     void initializeBrowserSession(locale).catch(() => {
+      setMessageTone("error");
       setMessage(
         locale === "ar"
           ? "تعذر تجديد الجلسة مؤقتاً. حاول مجدداً بعد التحقق من الاتصال."
@@ -364,41 +382,35 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   }, [locale, session]);
 
   useEffect(() => {
-    window.localStorage.setItem(draftKey, JSON.stringify(draft));
-  }, [draft]);
+    if (!draftHydrated) return;
+    window.localStorage.setItem(onboardingDraftKey, JSON.stringify(draft));
+  }, [draft, draftHydrated]);
 
   useEffect(() => {
-    if (step !== 7 || aiProgress === 100) return;
+    const workspaceName = session?.workspace.name.trim();
+    if (!draftHydrated || !workspaceName || workspaceNameApplied.current) return;
 
-    const timer = window.setInterval(() => {
-      setAiProgress((current) => {
-        const next = Math.min(100, current + 20);
-        if (next === 100) {
-          window.clearInterval(timer);
-          setAiLoading(false);
-        }
-        return next;
-      });
-    }, 260);
-
-    return () => window.clearInterval(timer);
-  }, [aiProgress, step]);
+    workspaceNameApplied.current = true;
+    setDraft((current) =>
+      current.companyName.trim()
+        ? current
+        : { ...current, companyName: workspaceName },
+    );
+  }, [draftHydrated, session]);
 
   const progress = Math.round((step / steps.length) * 100);
 
   async function next() {
-    await persistStep(step);
+    const saved = await persistStep(step);
+    if (!saved) return;
 
-    if (step === 6) {
-      setStep(7);
-      setAiLoading(true);
-      setAiProgress(0);
+    if (step === 7) {
+      setStep(8);
       return;
     }
 
-    if (step < 7) {
+    if (step < 8) {
       setStep((current) => (current + 1) as StepId);
-      setMessage("");
     }
   }
 
@@ -408,34 +420,53 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   }
 
   async function launchDashboard() {
-    await persistStep(6);
-
-    if (session) {
-      setSaving(true);
-      try {
-        await client.completeOnboarding();
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : copy.errors.complete);
-        setSaving(false);
-        return;
-      }
+    if (!session) {
+      setMessageTone("error");
+      setMessage(copy.errors.session);
+      return;
     }
 
-    router.push(`/${locale}`);
+    setSaving(true);
+    setMessage("");
+    try {
+      await client.completeOnboarding();
+      window.localStorage.removeItem(onboardingDraftKey);
+      router.push(`/${locale}`);
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : copy.errors.complete);
+      setSaving(false);
+    }
   }
 
-  async function persistStep(stepToSave: StepId) {
-    if (!session || stepToSave === 5 || stepToSave === 7) return;
+  async function persistStep(stepToSave: StepId): Promise<boolean> {
+    if (!session) {
+      setMessageTone("error");
+      setMessage(copy.errors.session);
+      return false;
+    }
+
+    const validationIssue = validateOnboardingStep(stepToSave, draft);
+    if (validationIssue) {
+      setMessageTone("error");
+      setMessage(copy.validation[validationIssue]);
+      return false;
+    }
 
     setSaving(true);
     setMessage("");
 
     try {
-      const payload = payloadForStep(stepToSave, draft);
-      if (payload) await client.saveOnboardingModule(payload.module, payload.body);
+      const payload = payloadForOnboardingStep(stepToSave, draft);
+      if (!payload) return false;
+      await client.saveOnboardingModule(payload.module, payload.body);
+      setMessageTone("success");
       setMessage(copy.saved);
+      return true;
     } catch (error) {
+      setMessageTone("error");
       setMessage(error instanceof Error ? error.message : copy.errors.save);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -455,6 +486,33 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     setDraft((current) => ({ ...current, competitors: current.competitors.filter((_, itemIndex) => itemIndex !== index) }));
   }
 
+  function addProduct() {
+    if (!draft.newProduct.name.trim()) {
+      setMessageTone("error");
+      setMessage(copy.validation.products);
+      return;
+    }
+
+    const product: OnboardingProductDraft = {
+      category: draft.newProduct.category.trim(),
+      description: draft.newProduct.description.trim(),
+      name: draft.newProduct.name.trim()
+    };
+    setDraft((current) => ({
+      ...current,
+      newProduct: { category: "", description: "", name: "" },
+      products: [...current.products, product]
+    }));
+    setMessage("");
+  }
+
+  function removeProduct(index: number) {
+    setDraft((current) => ({
+      ...current,
+      products: current.products.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
   function toggleGoal(goal: string) {
     setDraft((current) => ({
       ...current,
@@ -467,6 +525,13 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="flex min-h-screen bg-[linear-gradient(135deg,#0F3460_0%,#1A1A2E_50%,#0a0a1a_100%)] text-white" dir={isRtl ? "rtl" : "ltr"}>
+      <NotificationToast
+        body={message}
+        dismissLabel={copy.dismiss}
+        onDismiss={dismissMessage}
+        title={messageTone === "error" ? copy.attention : copy.status}
+        tone={messageTone}
+      />
       <aside className={isRtl ? "hidden w-80 shrink-0 flex-col justify-between border-l border-white/[.08] p-10 lg:flex" : "hidden w-80 shrink-0 flex-col justify-between border-r border-white/[.08] p-10 lg:flex"}>
         <div>
           <a className="mb-12 flex items-center gap-3" href={`/${locale}`}>
@@ -529,16 +594,15 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
 
           <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,.18)] backdrop-blur sm:p-8">
             {step === 1 ? <CompanyStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 2 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 3 ? <AudienceStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 4 ? <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} /> : null}
-            {step === 5 ? <ChannelsStep copy={copy} draft={draft} update={update} /> : null}
-            {step === 6 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} /> : null}
-            {step === 7 ? <AiSetupStep aiLoading={aiLoading} aiProgress={aiProgress} copy={copy} launchDashboard={launchDashboard} saving={saving} /> : null}
+            {step === 2 ? <StoryStep copy={copy} draft={draft} update={update} /> : null}
+            {step === 3 ? <ProductsStep addProduct={addProduct} copy={copy} draft={draft} removeProduct={removeProduct} update={update} /> : null}
+            {step === 4 ? <AudienceStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
+            {step === 5 ? <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} /> : null}
+            {step === 6 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
+            {step === 7 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} update={update} /> : null}
+            {step === 8 ? <ReviewStep copy={copy} launchDashboard={launchDashboard} saving={saving} /> : null}
 
-            {message ? <p className="mt-5 rounded-lg border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-white/55">{message}</p> : null}
-
-            {step < 7 ? (
+            {step < 8 ? (
               <div className="mt-6 flex items-center justify-between sm:mt-8">
                 <button
                   className="flex items-center gap-2 rounded-lg bg-white/[.06] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[.09] disabled:bg-transparent disabled:text-white/20"
@@ -555,7 +619,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   onClick={next}
                   type="button"
                 >
-                  {step === 6 ? copy.build : copy.continue}
+                  {step === 7 ? copy.build : copy.continue}
                   <NextIcon size={16} />
                 </button>
               </div>
@@ -573,9 +637,99 @@ function CompanyStep({ copy, draft, locale, update }: StepProps & { copy: Onboar
       <StepHeading body={copy.company.body} title={copy.company.title} />
       <div className="grid gap-4">
         <DarkField label={copy.company.name} onChange={(value) => update("companyName", value)} value={draft.companyName} />
-        <DarkSelect label={copy.company.industry} onChange={(value) => update("industry", value)} options={industryOptions(locale)} value={draft.industry} />
+        <DarkSelect label={copy.company.industry} onChange={(value) => update("industry", value)} options={industryOptions(locale)} placeholder={copy.company.industry} value={draft.industry} />
+        <DarkField label={copy.company.location} onChange={(value) => update("location", value)} value={draft.location} />
         <DarkField label={copy.company.website} onChange={(value) => update("website", value)} value={draft.website} />
-        <DarkField area label={copy.company.description} onChange={(value) => update("description", value)} value={draft.description} />
+        <section>
+          <Label>{copy.company.language}</Label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {languageOptions(locale).map((language) => (
+              <button
+                className={
+                  draft.languagePreference === language.value
+                    ? "rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-accent"
+                    : "rounded-lg border border-white/10 bg-white/[.05] px-4 py-2 text-sm text-white/55"
+                }
+                key={language.value}
+                onClick={() => update("languagePreference", language.value)}
+                type="button"
+              >
+                {language.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function StoryStep({ copy, draft, update }: StepProps & { copy: OnboardingCopy }) {
+  return (
+    <div>
+      <StepHeading body={copy.story.body} title={copy.story.title} />
+      <div className="grid gap-4">
+        <DarkField area label={copy.story.mission} onChange={(value) => update("mission", value)} value={draft.mission} />
+        <DarkField area label={copy.story.usp} onChange={(value) => update("usp", value)} value={draft.usp} />
+        <DarkField label={copy.story.values} onChange={(value) => update("values", value)} value={draft.values} />
+        <DarkField area label={copy.story.origin} onChange={(value) => update("origin", value)} value={draft.origin} />
+        <DarkField area label={copy.story.problemSolved} onChange={(value) => update("problemSolved", value)} value={draft.problemSolved} />
+        <DarkField area label={copy.story.vision} onChange={(value) => update("vision", value)} value={draft.vision} />
+      </div>
+    </div>
+  );
+}
+
+function ProductsStep({
+  addProduct,
+  copy,
+  draft,
+  removeProduct,
+  update
+}: StepProps & {
+  addProduct: () => void;
+  copy: OnboardingCopy;
+  removeProduct: (index: number) => void;
+}) {
+  function updateNewProduct(key: keyof OnboardingProductDraft, value: string) {
+    update("newProduct", { ...draft.newProduct, [key]: value });
+  }
+
+  return (
+    <div>
+      <StepHeading body={copy.products.body} title={copy.products.title} />
+      <div className="grid gap-3">
+        {draft.products.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/15 bg-white/[.03] p-4 text-sm text-white/45">
+            {copy.products.empty}
+          </p>
+        ) : null}
+        {draft.products.map((product, index) => (
+          <article className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[.07] p-4" key={`${product.name}-${index}`}>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-white">{product.name}</p>
+              {product.category ? <p className="mt-1 text-xs text-white/45">{product.category}</p> : null}
+              {product.description ? <p className="mt-2 text-sm leading-6 text-white/60">{product.description}</p> : null}
+            </div>
+            <button aria-label={`Remove ${product.name}`} className="text-white/40 transition hover:text-accent" onClick={() => removeProduct(index)} type="button">
+              <Trash2 size={15} />
+            </button>
+          </article>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-white/[.03] p-4">
+        <DarkField label={copy.products.name} onChange={(value) => updateNewProduct("name", value)} value={draft.newProduct.name} />
+        <DarkField label={copy.products.category} onChange={(value) => updateNewProduct("category", value)} value={draft.newProduct.category} />
+        <DarkField area label={copy.products.description} onChange={(value) => updateNewProduct("description", value)} value={draft.newProduct.description} />
+        <button className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white" onClick={addProduct} type="button">
+          <Plus size={16} />
+          {copy.addProduct}
+        </button>
+      </div>
+      <div className="mt-4 grid gap-4">
+        <DarkField label={copy.products.differentiators} onChange={(value) => update("differentiators", value)} value={draft.differentiators} />
+        <DarkField label={copy.products.priceRange} onChange={(value) => update("priceRange", value)} value={draft.priceRange} />
+        <DarkField label={copy.products.salesChannels} onChange={(value) => update("salesChannels", value)} value={draft.salesChannels} />
       </div>
     </div>
   );
@@ -585,21 +739,7 @@ function BrandStep({ copy, draft, locale, update }: StepProps & { copy: Onboardi
   return (
     <div>
       <StepHeading body={copy.brand.body} title={copy.brand.title} />
-      <button
-        className={
-          draft.logoUploaded
-            ? "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-success/70 bg-success/10 p-5 text-success sm:min-h-36 sm:gap-3 sm:p-6"
-            : "flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-white/[.03] p-5 text-white/45 transition hover:border-accent/60 hover:text-white/65 sm:min-h-36 sm:gap-3 sm:p-6"
-        }
-        onClick={() => update("logoUploaded", !draft.logoUploaded)}
-        type="button"
-      >
-        {draft.logoUploaded ? <CheckCircle2 size={28} /> : <Upload size={28} />}
-        <span className="text-sm font-semibold">{draft.logoUploaded ? copy.brand.logoDone : copy.brand.logoIdle}</span>
-        <span className="text-xs text-white/30">{copy.brand.logoHint}</span>
-      </button>
-
-      <section className="mt-5 sm:mt-6">
+      <section>
         <Label>{copy.brand.tone}</Label>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {toneMeta.map((tone) => {
@@ -639,6 +779,11 @@ function BrandStep({ copy, draft, locale, update }: StepProps & { copy: Onboardi
           ))}
         </div>
       </section>
+      <div className="mt-5 grid gap-4 sm:mt-6">
+        <DarkField label={copy.brand.visualWords} onChange={(value) => update("brandVisualWords", value)} value={draft.brandVisualWords} />
+        <DarkField label={copy.brand.fonts} onChange={(value) => update("brandFonts", value)} value={draft.brandFonts} />
+        <DarkField area label={copy.brand.voiceNotes} onChange={(value) => update("brandVoiceNotes", value)} value={draft.brandVoiceNotes} />
+      </div>
     </div>
   );
 }
@@ -648,34 +793,20 @@ function AudienceStep({ copy, draft, locale, update }: StepProps & { copy: Onboa
     <div>
       <StepHeading body={copy.audience.body} title={copy.audience.title} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <DarkSelect label={copy.audience.age} onChange={(value) => update("ageRange", value)} options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))} value={draft.ageRange} />
-        <DarkSelect label={copy.audience.gender} onChange={(value) => update("genderFocus", value)} options={genderOptions(locale)} value={draft.genderFocus} />
+        <DarkSelect label={copy.audience.age} onChange={(value) => update("ageRange", value)} options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))} placeholder={copy.audience.age} value={draft.ageRange} />
+        <DarkSelect label={copy.audience.gender} onChange={(value) => update("genderFocus", value)} options={genderOptions(locale)} placeholder={copy.audience.gender} value={draft.genderFocus} />
         <div className="sm:col-span-2">
-          <DarkField label={copy.audience.location} onChange={(value) => update("location", value)} value={draft.location} />
+          <DarkField area label={copy.audience.demographics} onChange={(value) => update("audienceDescription", value)} value={draft.audienceDescription} />
         </div>
         <div className="sm:col-span-2">
           <DarkField area label={copy.audience.painPoints} onChange={(value) => update("painPoints", value)} value={draft.painPoints} />
         </div>
-      </div>
-      <section className="mt-6">
-        <Label>{copy.audience.language}</Label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {languageOptions(locale).map((language) => (
-            <button
-              className={
-                draft.languagePreference === language.value
-                  ? "rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-accent"
-                  : "rounded-lg border border-white/10 bg-white/[.05] px-4 py-2 text-sm text-white/55"
-              }
-              key={language.value}
-              onClick={() => update("languagePreference", language.value)}
-              type="button"
-            >
-              {language.label}
-            </button>
-          ))}
+        <div className="sm:col-span-2">
+          <DarkField label={copy.audience.interests} onChange={(value) => update("interests", value)} value={draft.interests} />
         </div>
-      </section>
+        <DarkField label={copy.audience.location} onChange={(value) => update("audienceLocations", value)} value={draft.audienceLocations} />
+        <DarkField label={copy.audience.motivations} onChange={(value) => update("motivations", value)} value={draft.motivations} />
+      </div>
     </div>
   );
 }
@@ -721,49 +852,15 @@ function CompetitorsStep({
         </button>
       </div>
       <p className="mt-2 text-xs text-white/30">{copy.competitors.hint}</p>
-    </div>
-  );
-}
-
-function ChannelsStep({ copy, draft, update }: StepProps & { copy: OnboardingCopy }) {
-  const channels = [
-    { id: "instagram" as const, label: "Instagram", handle: "@zain_bh", icon: Instagram, color: "#E1306C" },
-    { id: "facebook" as const, label: "Facebook", handle: "Zain Bahrain", icon: Facebook, color: "#1877F2" },
-    { id: "twitter" as const, label: "X (Twitter)", handle: "Not connected", icon: Twitter, color: "#111827" }
-  ];
-
-  return (
-    <div>
-      <StepHeading body={copy.channels.body} title={copy.channels.title} />
-      <div className="grid gap-3">
-        {channels.map((channel) => {
-          const Icon = channel.icon;
-          const connected = draft.channels[channel.id];
-          return (
-            <article className={connected ? "flex items-center gap-4 rounded-xl border border-success/30 bg-white/[.05] p-4" : "flex items-center gap-4 rounded-xl border border-white/10 bg-white/[.05] p-4"} key={channel.id}>
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${channel.color}22` }}>
-                <Icon color={channel.color} size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-white">{channel.label}</h3>
-                <p className={connected ? "text-xs text-success" : "text-xs text-white/30"}>{connected ? channel.handle : copy.channels.notConnected}</p>
-              </div>
-              <button
-                className={connected ? "rounded-lg border border-success/30 bg-success/15 px-3 py-1.5 text-xs font-semibold text-success" : "rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white"}
-                onClick={() => update("channels", { ...draft.channels, [channel.id]: !connected })}
-                type="button"
-              >
-                {connected ? copy.channels.connected : copy.channels.connect}
-              </button>
-            </article>
-          );
-        })}
+      <div className="mt-5 grid gap-4">
+        <DarkField area label={copy.competitors.advantage} onChange={(value) => update("competitiveAdvantage", value)} value={draft.competitiveAdvantage} />
+        <DarkField area label={copy.competitors.difference} onChange={(value) => update("competitorDifference", value)} value={draft.competitorDifference} />
       </div>
     </div>
   );
 }
 
-function GoalsStep({ copy, draft, locale, toggleGoal }: { copy: OnboardingCopy; draft: OnboardingDraft; locale: Locale; toggleGoal: (goal: string) => void }) {
+function GoalsStep({ copy, draft, locale, toggleGoal, update }: StepProps & { copy: OnboardingCopy; locale: Locale; toggleGoal: (goal: string) => void }) {
   return (
     <div>
       <StepHeading body={copy.goals.body} title={copy.goals.title} />
@@ -787,60 +884,28 @@ function GoalsStep({ copy, draft, locale, toggleGoal }: { copy: OnboardingCopy; 
           );
         })}
       </div>
+      <div className="mt-5 grid gap-4">
+        <DarkField label={copy.goals.budget} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
+        <DarkField label={copy.goals.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
+        <DarkField area label={copy.goals.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
+      </div>
     </div>
   );
 }
 
-function AiSetupStep({
-  aiLoading,
-  aiProgress,
+function ReviewStep({
   copy,
   launchDashboard,
   saving
 }: {
-  aiLoading: boolean;
-  aiProgress: number;
   copy: OnboardingCopy;
   launchDashboard: () => void;
   saving: boolean;
 }) {
-  if (aiLoading) {
-    const taskDoneAt = [20, 45, 65, 82, 100];
-
-    return (
-      <div className="py-4 text-center">
-        <BrandAiMark pulse />
-        <StepHeading center body={copy.setup.body} title={copy.setup.loadingTitle} />
-        <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-[linear-gradient(90deg,#E94560,#f472b6,#E94560)] transition-all duration-300" style={{ width: `${aiProgress}%` }} />
-        </div>
-        <div className="grid gap-2 text-start">
-          {copy.setup.tasks.map((task, index) => {
-            const done = aiProgress >= (taskDoneAt[index] ?? 100);
-            return (
-            <div className="flex items-center gap-3" key={task}>
-              <span className={done ? "h-2 w-2 rounded-full bg-success" : "h-2 w-2 rounded-full bg-white/20"} />
-              <span className={done ? "text-[13px] text-success" : "text-[13px] text-white/40"}>{task}</span>
-            </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="py-4 text-center">
       <BrandAiMark />
-      <StepHeading center body={copy.setup.readyBody} title={copy.setup.readyTitle} />
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        {copy.setup.stats.map((stat) => (
-          <div className="rounded-xl border border-white/10 bg-white/[.06] p-3" key={stat.label}>
-            <p className="font-display text-[22px] font-bold text-accent">{stat.value}</p>
-            <p className="text-[11px] text-white/50">{stat.label}</p>
-          </div>
-        ))}
-      </div>
+      <StepHeading center body={copy.setup.body} title={copy.setup.readyTitle} />
       <button
         className="w-full rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] py-3.5 text-base font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.4)] transition hover:opacity-90 disabled:opacity-60"
         disabled={saving}
@@ -867,11 +932,11 @@ function StepHeading({ body, center = false, title }: { body: string; center?: b
   );
 }
 
-function BrandAiMark({ pulse = false }: { pulse?: boolean }) {
+function BrandAiMark() {
   return (
     <div className="mb-6 flex justify-center">
       <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-accent/40 bg-[linear-gradient(135deg,rgba(233,69,96,.3),rgba(15,52,96,.3))]">
-        <Sparkles className={pulse ? "animate-pulse text-accent" : "text-accent"} size={32} />
+        <Sparkles className="text-accent" size={32} />
       </div>
     </div>
   );
@@ -904,17 +969,22 @@ function DarkSelect({
   label,
   onChange,
   options,
+  placeholder,
   value
 }: {
   label: string;
   onChange: (value: string) => void;
   options: SelectOption[];
+  placeholder: string;
   value: string;
 }) {
   return (
     <label>
       <Label>{label}</Label>
       <select className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#2d2d42] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value}>
+        <option disabled value="">
+          {placeholder}
+        </option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -929,78 +999,8 @@ function Label({ children }: { children: ReactNode }) {
   return <span className="text-xs font-semibold uppercase tracking-[.06em] text-white/60">{children}</span>;
 }
 
-function payloadForStep(step: StepId, draft: OnboardingDraft): { body: Record<string, unknown>; module: string } | null {
-  if (step === 1) {
-    return {
-      module: "company",
-      body: {
-        industry: draft.industry,
-        languages: draft.languagePreference === "Both" ? ["Arabic", "English"] : [draft.languagePreference],
-        location: draft.location,
-        name: draft.companyName,
-        socials: ["instagram.com/zain_bh"],
-        website: draft.website
-      }
-    };
-  }
-
-  if (step === 2) {
-    return {
-      module: "brand",
-      body: {
-        aestheticWords: ["clean", "modern", "confident"],
-        colors: [draft.brandColor, "#E94560"],
-        fonts: ["Inter", "Space Grotesk"],
-        toneWords: [draft.tone],
-        voiceNotes: "Professional, bilingual, helpful, and confident."
-      }
-    };
-  }
-
-  if (step === 3) {
-    return {
-      module: "audience",
-      body: {
-        ageRange: draft.ageRange,
-        demographics: draft.genderFocus,
-        genderBreakdown: draft.genderFocus,
-        interests: ["Connectivity", "Digital services", "Business growth"],
-        locations: draft.location.split(",").map((item) => item.trim()).filter(Boolean),
-        motivations: ["Reliability", "Speed", "Competitive pricing"],
-        painPoints: draft.painPoints.split(",").map((item) => item.trim()).filter(Boolean)
-      }
-    };
-  }
-
-  if (step === 4) {
-    return {
-      module: "competitors",
-      body: {
-        competitiveAdvantage: "Bilingual digital-first customer experience.",
-        doDifferently: "Publish clearer, more helpful content with consistent audience timing.",
-        items: draft.competitors.map((name) => ({ name }))
-      }
-    };
-  }
-
-  if (step === 6) {
-    return {
-      module: "objectives",
-      body: {
-        budgetRange: "BHD 500-1500",
-        goals: draft.goals,
-        instagramExperience: "Active business account",
-        kpiTargets: { engagementRate: "4.8%" },
-        success90Days: "More consistent content, higher engagement, and clearer campaign rhythm."
-      }
-    };
-  }
-
-  return null;
-}
-
 function getInitialStep(): StepId {
   if (typeof window === "undefined") return 1;
   const value = Number(new URLSearchParams(window.location.search).get("step") ?? "1");
-  return value >= 1 && value <= 7 ? (value as StepId) : 1;
+  return value >= 1 && value <= 8 ? (value as StepId) : 1;
 }
