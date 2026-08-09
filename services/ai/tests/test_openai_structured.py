@@ -1,5 +1,7 @@
 import logging
 
+from pytest import LogCaptureFixture
+
 from app.providers.openai_structured import log_provider_failure, safe_provider_detail
 
 
@@ -9,7 +11,7 @@ class FakeProviderError(Exception):
     param = "input"
 
 
-def test_provider_failure_logs_only_safe_classification_fields(caplog) -> None:
+def test_provider_failure_logs_only_safe_classification_fields(caplog: LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING):
         log_provider_failure(FakeProviderError("provider message is not logged"), "test_schema")
 
