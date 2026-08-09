@@ -178,6 +178,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         const pathname = new URL(route.request().url()).pathname;
         if (pathname === "/v1/auth/refresh")
           return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding")
+          return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
         return route.fulfill({ status: 404, body: "{}" });
       },
     );
@@ -246,6 +248,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         const pathname = new URL(route.request().url()).pathname;
         if (pathname === "/v1/auth/refresh")
           return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding")
+          return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
         return route.fulfill({ status: 404, body: "{}" });
       },
     );

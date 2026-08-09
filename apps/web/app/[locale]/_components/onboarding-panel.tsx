@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { BusinessProfile, Locale, OnboardingBusinessProfileState } from "@markos/shared-types";
+import { onboardingObjectiveFieldLimits } from "@markos/validation";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { NotificationToast } from "./notification-toast";
 import {
@@ -116,7 +117,7 @@ function onboardingCopy(locale: Locale) {
       goals: {
         body: "اختر كل ما ينطبق. سيضبط MARKOS استراتيجية المحتوى وفقاً لذلك.",
         budget: "نطاق الميزانية الاختياري",
-        instagramExperience: "خبرتك الحالية مع إنستغرام",
+        instagramExperience: "خبرتك الحالية مع إنستغرام (120 حرفاً كحد أقصى)",
         success90Days: "كيف يبدو النجاح بعد 90 يوماً؟",
         title: "ما أهدافك من المحتوى؟"
       },
@@ -203,6 +204,7 @@ function onboardingCopy(locale: Locale) {
         company: "أدخل اسم الشركة والقطاع والموقع ولغة عمل واحدة على الأقل.",
         competitors: "أضف منافساً واحداً على الأقل لإكمال هذا القسم.",
         objectives: "اختر هدف محتوى واحداً على الأقل.",
+        objectivesLength: "اجعل نطاق الميزانية وخبرة إنستغرام ضمن 120 حرفاً، وهدف 90 يوماً ضمن 1000 حرف.",
         products: "أضف منتجاً أو خدمة واحدة على الأقل.",
         story: "أدخل الرسالة وعرض القيمة وقيمة واحدة على الأقل."
       }
@@ -256,7 +258,7 @@ function onboardingCopy(locale: Locale) {
     goals: {
       body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
       budget: "Optional budget range",
-      instagramExperience: "Current Instagram experience",
+      instagramExperience: "Current Instagram experience (120 characters max)",
       success90Days: "What would success look like in 90 days?",
       title: "What are your content goals?"
     },
@@ -343,6 +345,7 @@ function onboardingCopy(locale: Locale) {
       company: "Enter the company name, industry, location, and at least one business language.",
       competitors: "Add at least one competitor to complete this section.",
       objectives: "Choose at least one content goal.",
+      objectivesLength: "Keep the budget and Instagram experience within 120 characters, and the 90-day goal within 1,000 characters.",
       products: "Add at least one product or service.",
       story: "Enter a mission, a unique value proposition, and at least one business value."
     }
@@ -537,6 +540,18 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  function selectStep(target: StepId) {
+    if (target === 8 && step === 7) {
+      void next();
+      return;
+    }
+
+    if (target !== 8) {
+      setStep(target);
+      setMessage("");
+    }
+  }
+
   function back() {
     setStep((current) => Math.max(1, current - 1) as StepId);
     setMessage("");
@@ -719,7 +734,13 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
               const complete = step > item.id;
 
               return (
-                <button className="flex items-center gap-3 py-2.5 text-start" key={item.id} onClick={() => setStep(item.id)} type="button">
+                <button
+                  className="flex items-center gap-3 py-2.5 text-start disabled:cursor-not-allowed"
+                  disabled={saving || (item.id === 8 && step < 7)}
+                  key={item.id}
+                  onClick={() => selectStep(item.id)}
+                  type="button"
+                >
                   <span
                     className={
                       complete
@@ -1071,9 +1092,9 @@ function GoalsStep({ copy, draft, locale, toggleGoal, update }: StepProps & { co
         })}
       </div>
       <div className="mt-5 grid gap-4">
-        <DarkField label={copy.goals.budget} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
-        <DarkField label={copy.goals.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
-        <DarkField area label={copy.goals.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
+        <DarkField label={copy.goals.budget} maxLength={onboardingObjectiveFieldLimits.budgetRange} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
+        <DarkField label={copy.goals.instagramExperience} maxLength={onboardingObjectiveFieldLimits.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
+        <DarkField area label={copy.goals.success90Days} maxLength={onboardingObjectiveFieldLimits.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
       </div>
     </div>
   );
@@ -1289,11 +1310,13 @@ function BrandAiMark() {
 function DarkField({
   area,
   label,
+  maxLength,
   onChange,
   value
 }: {
   area?: boolean;
   label: string;
+  maxLength?: number;
   onChange: (value: string) => void;
   value: string;
 }) {
@@ -1301,10 +1324,11 @@ function DarkField({
     <label>
       <Label>{label}</Label>
       {area ? (
-        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
       ) : (
-        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
       )}
+      {maxLength ? <span className="mt-1 block text-end text-[11px] text-white/35">{value.length}/{maxLength}</span> : null}
     </label>
   );
 }

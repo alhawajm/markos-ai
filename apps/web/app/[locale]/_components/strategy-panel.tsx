@@ -10,9 +10,9 @@ import { useMarkosClient, useMarkosSession } from "./browser-session";
 
 export function StrategyPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
-  const [strategies, setStrategies] = useState<StrategyRecord[]>(() => [demoStrategy(locale)]);
+  const [strategies, setStrategies] = useState<StrategyRecord[]>([]);
   const [objective, setObjective] = useState(text(locale, "defaultObjective"));
-  const [horizonDays, setHorizonDays] = useState(90);
+  const [horizonDays, setHorizonDays] = useState(30);
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const vaultGrounding = useVaultGroundingState({ area: "strategy", locale });
@@ -36,7 +36,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
 
   async function refreshStrategies() {
     if (!session) {
-      setStrategies([demoStrategy(locale)]);
+      setStrategies([]);
       return;
     }
 
@@ -45,7 +45,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
 
     try {
       const nextStrategies = await client.strategies();
-      setStrategies(nextStrategies.length > 0 ? nextStrategies : [demoStrategy(locale)]);
+      setStrategies(nextStrategies);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : text(locale, "failed"));
     } finally {
@@ -65,8 +65,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     }
 
     if (!session) {
-      setStrategies([demoStrategy(locale, objective, horizonDays)]);
-      setMessage(text(locale, "previewGenerated"));
+      setMessage(text(locale, "sessionRequired"));
       return;
     }
 
@@ -95,7 +94,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     }
   }
 
-  const active = strategies[0] ?? demoStrategy(locale, objective, horizonDays);
+  const active = strategies[0] ?? emptyStrategy(locale, horizonDays);
 
   return (
     <section className="grid gap-5">
@@ -179,20 +178,24 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
               <h3 className="mt-1 font-display text-2xl font-extrabold tracking-normal text-navy">{active.title}</h3>
               <p className="mt-2 text-sm leading-6 text-muted">{active.content.summary}</p>
             </div>
-            <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#E8ECF2] bg-canvas px-3 text-sm font-bold text-muted" type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#E8ECF2] bg-canvas px-3 text-sm font-bold text-muted disabled:opacity-50" disabled={strategies.length === 0} type="button">
               <Download size={15} />
               {text(locale, "export")}
             </button>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <PlanWindow label="30" text={active.content.objectives[0] ?? text(locale, "stabilize")} />
-            <PlanWindow label="60" text={active.content.objectives[1] ?? text(locale, "scale")} />
-            <PlanWindow label="90" text={active.content.objectives[2] ?? text(locale, "optimize")} />
-          </div>
+          {strategies.length > 0 ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <PlanWindow label="30" text={active.content.objectives[0] ?? text(locale, "stabilize")} />
+              <PlanWindow label="60" text={active.content.objectives[1] ?? text(locale, "scale")} />
+              <PlanWindow label="90" text={active.content.objectives[2] ?? text(locale, "optimize")} />
+            </div>
+          ) : null}
         </article>
       </section>
 
+      {strategies.length > 0 ? (
+        <>
       <section className="grid gap-4 xl:grid-cols-[1fr_340px]">
         <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
           <div className="flex items-start justify-between gap-3">
@@ -279,6 +282,8 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
           </div>
         </article>
       </section>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -302,58 +307,27 @@ function PlanWindow({ label, text: body }: { label: string; text: string }) {
   );
 }
 
-function demoStrategy(locale: Locale, objective = text(locale, "defaultObjective"), horizonDays = 90): StrategyRecord {
-  const now = "2026-06-15T09:00:00.000Z";
-  const arabic = locale === "ar";
-
+function emptyStrategy(locale: Locale, horizonDays: number): StrategyRecord {
+  const now = new Date().toISOString();
   return {
     content: {
       horizonDays,
-      kpis: [
-        { name: "Reach", target: "+18%" },
-        { name: "Engagement", target: "4.8%" }
-      ],
-      nextActions: arabic ? ["توليد سكربت ريل", "جدولة كاروسيل الجمعة", "مراجعة نقاط ألم الجمهور"] : ["Generate a Reel script", "Schedule the Friday carousel", "Review audience pain points"],
-      objectives: arabic ? ["تثبيت إيقاع النشر الأسبوعي", "زيادة الاستفسارات المؤهلة", "إعادة التعلم إلى الخزنة"] : ["Stabilize weekly content cadence", "Grow qualified campaign inquiries", "Feed learnings back into the Vault"],
-      pillars: [
-        {
-          contentAngles: arabic ? ["إثبات التغطية", "الاعتمادية", "الدعم المحلي"] : ["Coverage proof", "Reliability", "Local support"],
-          name: arabic ? "اتصال دائم" : "Always-on connectivity",
-          rationale: arabic ? "ابدأ بالثقة والسرعة للعملاء الذين يقارنون باقات الاتصالات." : "Lead with trust and speed for customers comparing telecom plans."
-        },
-        {
-          contentAngles: arabic ? ["سير عمل الأعمال", "أدوات السحابة", "الدعم"] : ["SMB workflows", "Cloud tools", "Support"],
-          name: arabic ? "تمكين نمو الأعمال" : "Business growth enablement",
-          rationale: arabic ? "اجعل Zain Arabia تبدو كشريك تحول رقمي، وليس مجرد مزود خدمة." : "Make Zain Arabia feel like a digital transformation partner, not just a service provider."
-        },
-        {
-          contentAngles: arabic ? ["باقات الطلاب", "باقات العائلة", "عروض رمضان"] : ["Student plans", "Family bundles", "Ramadan offers"],
-          name: arabic ? "عروض في وقتها" : "Timely offers",
-          rationale: arabic ? "حوّل الاحتياجات الموسمية إلى أسباب واضحة وسهلة لاتخاذ إجراء." : "Turn seasonal needs into clear, low-friction reasons to act."
-        }
-      ],
-      retrievedContext: [
-        { id: "ctx-company", key: "company", score: 0.96, section: "COMPANY", value: { name: "Zain Arabia" }, version: 1 },
-        { id: "ctx-audience", key: "target-audience", score: 0.92, section: "AUDIENCE", value: { location: "Bahrain" }, version: 1 },
-        { id: "ctx-tone", key: "brand-tone", score: 0.88, section: "TONE", value: { tone: "Professional" }, version: 1 }
-      ],
-      risks: arabic ? ["العروض العامة قد لا تحقق أداء جيدا دون إثبات محلي."] : ["Generic offers may underperform without local proof."],
-      summary: arabic
-        ? `${objective}. يجب أن يركز MARKOS على الاعتمادية، الملاءمة المحلية، وعروض واضحة تقود إلى الخطوة التالية.`
-        : `${objective}. MARKOS should focus on reliable connectivity, local relevance, and clear next-step offers across Instagram-first content.`,
-      weeklyCadence: [
-        { actions: arabic ? ["نشر ريل واحد", "جدولة كاروسيل واحد", "تحديث رؤية AI"] : ["Publish one Reel", "Schedule one carousel", "Refresh AI insight"], focus: arabic ? "إيقاع التأسيس" : "Foundation cadence", week: 1 },
-        { actions: arabic ? ["اختبار خطاف العرض", "مقارنة نوافذ نشر المنافسين"] : ["Test offer hook", "Compare competitor posting windows"], focus: arabic ? "استجابة الجمهور" : "Audience response", week: 2 },
-        { actions: arabic ? ["تعزيز أفضل ركيزة", "حفظ تعلم الأداء"] : ["Double down on best pillar", "Save performance learning"], focus: arabic ? "حلقة التحسين" : "Optimization loop", week: 3 }
-      ]
+      kpis: [],
+      nextActions: [],
+      objectives: [],
+      pillars: [],
+      retrievedContext: [],
+      risks: [],
+      summary: text(locale, "emptyBody"),
+      weeklyCadence: []
     },
     createdAt: now,
     horizonDays,
-    id: "demo-strategy",
-    title: arabic ? "استراتيجية نمو إنستغرام لمدة 90 يوما" : "90-day Instagram Growth Strategy",
+    id: "empty-strategy",
+    title: text(locale, "emptyTitle"),
     updatedAt: now,
-    version: 1,
-    workspaceId: "demo-workspace"
+    version: 0,
+    workspaceId: ""
   };
 }
 
@@ -363,7 +337,9 @@ function text(locale: Locale, key: string): string {
       cadence: "الإيقاع الأسبوعي",
       contentPillars: "ركائز المحتوى",
       days: "يوم",
-      defaultObjective: "زيادة الاستفسارات المؤهلة من إنستغرام خلال 90 يوما",
+      defaultObjective: "زيادة الاستفسارات المؤهلة من إنستغرام خلال 30 يوماً",
+      emptyBody: "حدد هدفاً واختر مدة الخطة، ثم ولّد أول استراتيجية حقيقية مبنية على خزنة مساحة العمل.",
+      emptyTitle: "لم يتم توليد استراتيجية بعد",
       export: "تصدير",
       failed: "فشل الطلب",
       generate: "توليد استراتيجية",
@@ -382,6 +358,7 @@ function text(locale: Locale, key: string): string {
       previewMode: "معاينة",
       ready: "جاهز",
       refresh: "تحديث",
+      sessionRequired: "سجّل الدخول قبل توليد الاستراتيجية.",
       scale: "توسيع الاستفسارات المؤهلة",
       stabilize: "تثبيت إيقاع النشر",
       subtitle: "حوّل ذاكرة الأعمال إلى خطة 30/60/90 واضحة، ركائز محتوى، وخطوات تنفيذ.",
@@ -395,7 +372,9 @@ function text(locale: Locale, key: string): string {
       cadence: "Weekly Cadence",
       contentPillars: "Content Pillars",
       days: "days",
-      defaultObjective: "Increase qualified Instagram inquiries over the next 90 days",
+      defaultObjective: "Increase qualified Instagram inquiries over the next 30 days",
+      emptyBody: "Set an objective and horizon, then generate the first real strategy grounded in this workspace's Vault.",
+      emptyTitle: "No strategy generated yet",
       export: "Export",
       failed: "Request failed",
       generate: "Generate Strategy",
@@ -414,6 +393,7 @@ function text(locale: Locale, key: string): string {
       previewMode: "Preview mode",
       ready: "Ready",
       refresh: "Refresh",
+      sessionRequired: "Sign in before generating a strategy.",
       scale: "Scale qualified inquiries",
       stabilize: "Stabilize publishing cadence",
       subtitle: "Turn business memory into a clear 30/60/90 plan, content pillars, and execution steps.",

@@ -84,6 +84,16 @@ describe("onboarding draft contract", () => {
     }
   });
 
+  it("rejects objective text that exceeds the API contract", () => {
+    const draft = completedDraft();
+
+    draft.instagramExperience = "x".repeat(121);
+    expect(validateOnboardingStep(7, draft)).toBe("objectivesLength");
+
+    draft.instagramExperience = "x".repeat(120);
+    expect(validateOnboardingStep(7, draft)).toBeNull();
+  });
+
   it("builds all seven payloads only from disclosed draft answers", () => {
     const draft = completedDraft();
     const payloads = ([1, 2, 3, 4, 5, 6, 7] as const).map((step) =>
@@ -144,5 +154,18 @@ describe("onboarding draft contract", () => {
       success90Days: "Generate 25 qualified office leads.",
     });
     expect(JSON.stringify(payloads)).not.toMatch(/Zain|Batelco|STC|zain_bh/i);
+  });
+
+  it("trims optional objective text before saving it", () => {
+    const draft = completedDraft();
+    draft.budgetRange = "  BHD 500-1000  ";
+    draft.instagramExperience = "  New professional account  ";
+    draft.success90Days = "  Generate 25 qualified office leads.  ";
+
+    expect(payloadForOnboardingStep(7, draft)?.body).toMatchObject({
+      budgetRange: "BHD 500-1000",
+      instagramExperience: "New professional account",
+      success90Days: "Generate 25 qualified office leads.",
+    });
   });
 });

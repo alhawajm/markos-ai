@@ -110,6 +110,12 @@ export const onboardingModuleSchema = z.enum([
   "objectives"
 ]);
 
+export const onboardingObjectiveFieldLimits = {
+  budgetRange: 120,
+  instagramExperience: 120,
+  success90Days: 1000
+} as const;
+
 const nonEmptyStringArraySchema = z.array(z.string().min(1).max(80)).min(1).max(30);
 
 export const companyOnboardingSchema = z.object({
@@ -187,10 +193,10 @@ export const brandOnboardingSchema = z.object({
 
 export const objectivesOnboardingSchema = z.object({
   goals: nonEmptyStringArraySchema,
-  budgetRange: z.string().max(120).optional(),
-  instagramExperience: z.string().max(120).optional(),
+  budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
+  instagramExperience: z.string().max(onboardingObjectiveFieldLimits.instagramExperience).optional(),
   kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-  success90Days: z.string().max(1000).optional()
+  success90Days: z.string().max(onboardingObjectiveFieldLimits.success90Days).optional()
 });
 
 export const generateStrategySchema = z.object({
