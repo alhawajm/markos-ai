@@ -28,11 +28,16 @@ import type {
   BillingSummary,
   InstagramConnection,
   Locale,
+  MfaStatus,
   MfaTotpSetup,
 } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
 import { NotificationToast } from "./notification-toast";
-import { useMarkosClient, useMarkosSession } from "./browser-session";
+import {
+  setBrowserSession,
+  useMarkosClient,
+  useMarkosSession,
+} from "./browser-session";
 import {
   instagramStatusLabel,
   sanitizedCallbackUrl,
@@ -48,6 +53,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   );
   const [billing, setBilling] = useState<BillingSummary | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [mfaSetup, setMfaSetup] = useState<MfaTotpSetup | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaSecretCopied, setMfaSecretCopied] = useState(false);
@@ -104,6 +110,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setConnection,
       setBilling,
       setAuditLogs,
+      setMfaStatus,
       setMessage,
     ).then((loaded) => {
       if (!loaded) setNotificationTone("error");
@@ -128,11 +135,40 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setConnection,
       setBilling,
       setAuditLogs,
+      setMfaStatus,
       setMessage,
     );
     if (!loaded) setNotificationTone("error");
     setAuditState(loaded ? "success" : "error");
     setIsBusy(false);
+  }
+
+  function instagramSecurityReady(): boolean {
+    if (!session?.user.isVerified) {
+      setNotificationTone("warning");
+      setMessage(copy(locale, "verifyEmailFirst"));
+      return false;
+    }
+
+    if (mfaStatus === null) {
+      setNotificationTone("info");
+      setMessage(copy(locale, "securityLoading"));
+      return false;
+    }
+
+    if (!mfaStatus.enabled) {
+      setNotificationTone("warning");
+      setMessage(copy(locale, "mfaInstagramRequired"));
+      return false;
+    }
+
+    if (!session.mfaVerified) {
+      setNotificationTone("warning");
+      setMessage(copy(locale, "mfaStepUpRequired"));
+      return false;
+    }
+
+    return true;
   }
 
   async function startOAuth() {
@@ -141,6 +177,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMessage(copy(locale, "previewOnly"));
       return;
     }
+
+    if (!instagramSecurityReady()) return;
 
     setIsBusy(true);
     setMessage("");
@@ -168,6 +206,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMessage(copy(locale, "previewOnly"));
       return;
     }
+
+    if (!instagramSecurityReady()) return;
 
     if (!window.confirm(copy(locale, "disconnectConfirm"))) return;
 
@@ -214,6 +254,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMessage(copy(locale, "previewOnly"));
       return;
     }
+
+    if (!instagramSecurityReady()) return;
 
     setIsBusy(true);
     setMessage("");
@@ -279,6 +321,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       const status = await client.enableMfaTotp({ code: mfaCode.trim() });
+      const verifiedSession = await client.verifyMfaTotp({
+        code: mfaCode.trim(),
+      });
+      setBrowserSession(verifiedSession);
+      setMfaStatus(status);
       setNotificationTone(status.enabled ? "success" : "error");
       setMessage(
         status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"),
@@ -288,6 +335,41 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       );
       setMfaCode("");
       setMfaSecretCopied(false);
+    } catch (error) {
+      setNotificationTone("error");
+      setMessage(
+        error instanceof Error ? error.message : copy(locale, "failed"),
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function verifyMfaSession() {
+    if (!session) {
+      setNotificationTone("info");
+      setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      setNotificationTone("warning");
+      setMessage(copy(locale, "mfaCodeRequired"));
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage("");
+    setDisconnectWarningUrl(null);
+
+    try {
+      const verifiedSession = await client.verifyMfaTotp({
+        code: mfaCode.trim(),
+      });
+      setBrowserSession(verifiedSession);
+      setNotificationTone("success");
+      setMessage(copy(locale, "mfaSessionVerified"));
+      setMfaCode("");
     } catch (error) {
       setNotificationTone("error");
       setMessage(
@@ -639,11 +721,18 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               <SettingRow
                 label={copy(locale, "mfa")}
                 value={
-                  mfaSetup?.enabled
-                    ? copy(locale, "enabled")
-                    : copy(locale, "notEnabled")
+                  mfaStatus === null
+                    ? copy(locale, "loading")
+                    : !mfaStatus.enabled
+                      ? copy(locale, "notEnabled")
+                      : session?.mfaVerified
+                        ? copy(locale, "mfaSessionVerified")
+                        : copy(locale, "enabled")
                 }
               />
+              <p className="mt-3 text-sm leading-6 text-[#9AA7BD]">
+                {copy(locale, "mfaInstagramBody")}
+              </p>
             </div>
 
             {mfaSetup && !mfaSetup.enabled ? (
@@ -699,7 +788,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               </div>
             ) : null}
 
-            {!mfaSetup?.enabled ? (
+            {mfaSetup && !mfaSetup.enabled ? (
               <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
                 <input
                   aria-label={copy(locale, "mfaCode")}
@@ -727,9 +816,36 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 />
               </div>
             ) : null}
+
+            {mfaStatus?.enabled && !session?.mfaVerified ? (
+              <div className="mt-4 grid gap-3 rounded-[1.25rem] border border-[#81D8D0]/20 bg-[#81D8D0]/7 p-4 md:grid-cols-[1fr_auto]">
+                <input
+                  aria-label={copy(locale, "mfaCode")}
+                  autoComplete="one-time-code"
+                  className="rounded-xl border border-[#81D8D0]/20 bg-[#0F1419]/75 px-4 py-3 text-sm font-semibold text-white caret-[#81D8D0] outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/55 focus:ring-2 focus:ring-[#81D8D0]/20"
+                  disabled={isBusy}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setMfaCode(
+                      event.target.value.replace(/\D/g, "").slice(0, 6),
+                    )
+                  }
+                  pattern="[0-9]*"
+                  placeholder={copy(locale, "mfaCode")}
+                  value={mfaCode}
+                />
+                <ActionButton
+                  disabled={isBusy || !/^\d{6}$/.test(mfaCode.trim())}
+                  icon={KeyRound}
+                  label={copy(locale, "verifyMfaSession")}
+                  onClick={verifyMfaSession}
+                  tone="primary"
+                />
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <ActionButton
-                disabled={isBusy || Boolean(mfaSetup?.enabled)}
+                disabled={isBusy || mfaStatus === null || mfaStatus.enabled}
                 icon={ShieldCheck}
                 label={copy(locale, "setupMfa")}
                 onClick={setupMfa}
@@ -798,7 +914,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             </a>
           </div>
         </div>
-
       </div>
     </section>
   );
@@ -891,17 +1006,20 @@ async function refreshSettings(
   setConnection: (connection: InstagramConnection) => void,
   setBilling: (billing: BillingSummary) => void,
   setAuditLogs: (auditLogs: AuditLogRecord[]) => void,
+  setMfaStatus: (status: MfaStatus) => void,
   setMessage: (message: string) => void,
 ): Promise<boolean> {
   try {
-    const [connection, billing, auditLogs] = await Promise.all([
+    const [connection, billing, auditLogs, mfaStatus] = await Promise.all([
       client.instagramConnection(),
       client.billingSummary(),
       client.auditLogs({ limit: 10 }),
+      client.mfaStatus(),
     ]);
     setConnection(connection);
     setBilling(billing);
     setAuditLogs(auditLogs);
+    setMfaStatus(mfaStatus);
     return true;
   } catch (error) {
     setMessage(
@@ -1035,12 +1153,19 @@ function copy(locale: Locale, key: string): string {
       liveWorkspace: "مساحة عمل مباشرة",
       mfa: "MFA",
       mfaCode: "رمز التحقق",
+      mfaCodeRequired: "أدخل رمز المصادقة المكون من ستة أرقام.",
       mfaEnabled: "تم تفعيل MFA.",
+      mfaInstagramBody:
+        "يلزم التحقق عبر MFA في الجلسة الحالية لربط Instagram أو تحديثه أو فصله.",
+      mfaInstagramRequired: "أكمل إعداد MFA أدناه قبل ربط Instagram.",
       mfaReady: "امسح الرمز في تطبيق المصادقة ثم أدخل الكود.",
       mfaQrTitle: "رمز QR لإعداد المصادقة متعددة العوامل في MARKOS",
       mfaScanBody:
         "امسح رمز QR باستخدام تطبيق المصادقة، أو أدخل المفتاح اليدوي. ثم أدخل الرمز المكون من ستة أرقام.",
       mfaScanTitle: "اربط تطبيق المصادقة",
+      mfaSessionVerified: "تم التحقق لهذه الجلسة",
+      mfaStepUpRequired:
+        "أدخل رمز MFA أدناه لتأكيد هذه الجلسة قبل إدارة Instagram.",
       manualKey: "المفتاح اليدوي",
       keyCopied: "تم نسخ المفتاح.",
       notEnabled: "غير مفعّل",
@@ -1063,6 +1188,7 @@ function copy(locale: Locale, key: string): string {
       securityBody: "MFA، صلاحيات الوصول، وتصدير البيانات الحساسة.",
       securityTitle: "ضوابط الوصول",
       setupMfa: "إعداد MFA",
+      securityLoading: "يتم تحميل حالة الأمان. حاول بعد لحظة.",
       status: "الحالة",
       subtitle:
         "إدارة الحساب، مساحة العمل، اللغة، الفوترة، القنوات، والأمان من شاشة واحدة.",
@@ -1071,6 +1197,9 @@ function copy(locale: Locale, key: string): string {
       tokenRefreshed: "تم تحديث رمز إنستغرام.",
       trial: "تجربة",
       verified: "التحقق",
+      verifyEmailFirst: "أكد بريدك الإلكتروني قبل إدارة اتصال Instagram.",
+      verifyMfaSession: "تحقق من الجلسة",
+      loading: "جار التحميل",
       workspace: "مساحة العمل",
       workspaceUnavailable: "مساحة العمل غير متاحة",
       yes: "نعم",
@@ -1126,12 +1255,19 @@ function copy(locale: Locale, key: string): string {
       liveWorkspace: "Live workspace",
       mfa: "MFA",
       mfaCode: "Verification code",
+      mfaCodeRequired: "Enter the six-digit authenticator code.",
       mfaEnabled: "MFA enabled.",
+      mfaInstagramBody:
+        "MFA must be verified in the current session before Instagram can be connected, refreshed, or disconnected.",
+      mfaInstagramRequired: "Set up MFA below before connecting Instagram.",
       mfaReady: "Scan the QR code in your authenticator, then enter the code.",
       mfaQrTitle: "QR code for setting up MARKOS multi-factor authentication",
       mfaScanBody:
         "Scan this QR code with your authenticator app, or enter the manual key. Then enter the six-digit code.",
       mfaScanTitle: "Link your authenticator app",
+      mfaSessionVerified: "Verified for this session",
+      mfaStepUpRequired:
+        "Enter your MFA code below to verify this session before managing Instagram.",
       manualKey: "Manual setup key",
       keyCopied: "Key copied.",
       notEnabled: "Not enabled",
@@ -1155,6 +1291,8 @@ function copy(locale: Locale, key: string): string {
         "MFA, access permissions, and sensitive data export controls.",
       securityTitle: "Access controls",
       setupMfa: "Set up MFA",
+      securityLoading:
+        "Security status is still loading. Try again in a moment.",
       status: "Status",
       subtitle:
         "Manage account, workspace, language, billing, channels, and security from one screen.",
@@ -1163,6 +1301,10 @@ function copy(locale: Locale, key: string): string {
       tokenRefreshed: "Instagram token refreshed.",
       trial: "Trial",
       verified: "Verified",
+      verifyEmailFirst:
+        "Verify your email before managing the Instagram connection.",
+      verifyMfaSession: "Verify this session",
+      loading: "Loading",
       workspace: "Workspace",
       workspaceUnavailable: "Workspace unavailable",
       yes: "Yes",

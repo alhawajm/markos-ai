@@ -58,8 +58,13 @@ try {
     await page.locator('input[type="checkbox"]').check();
 
     await Promise.all([
-      page.waitForURL(/\/en\/onboarding(?:$|[/?#])/, { timeout: timeoutMs }),
+      page.waitForURL(/\/en\/verify(?:$|[/?#])/, { timeout: timeoutMs }),
       page.getByRole("button", { name: /create account/i }).click(),
+    ]);
+
+    await Promise.all([
+      page.waitForURL(/\/en\/onboarding(?:$|[/?#])/, { timeout: timeoutMs }),
+      page.getByRole("button", { name: /verify locally and continue/i }).click(),
     ]);
 
     const identity = await readStoredIdentity(page);
@@ -222,7 +227,7 @@ Optional environment:
 
 Checks:
   1. API health endpoint responds.
-  2. Browser signup stores token-free identity metadata and routes to /en/onboarding.
+  2. Browser signup verifies email locally, stores token-free identity metadata, and routes to /en/onboarding.
   3. Browser login stores token-free identity metadata and routes to /en/app.
 `);
 }

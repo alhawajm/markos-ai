@@ -30,7 +30,8 @@ export const enableMfaTotpSchema = z.object({
 });
 
 export const requestEmailVerificationSchema = z.object({
-  email: z.string().email()
+  email: z.string().email(),
+  locale: localeSchema.default("ar")
 });
 
 export const verifyEmailSchema = z.object({

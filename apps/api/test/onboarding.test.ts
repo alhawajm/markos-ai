@@ -253,7 +253,19 @@ describe("onboarding routes", () => {
     const app = await buildApp();
     const unverified = await registerTestUser(app, false);
     const unverifiedHeaders = authHeaders(unverified.tokens.accessToken);
-    await saveCompanyAndRemainingModules(app, unverifiedHeaders);
+    const blockedSave = await app.inject({
+      method: "PUT",
+      url: "/v1/onboarding/company",
+      headers: unverifiedHeaders,
+      payload: {
+        name: "Pearl Coffee",
+        industry: "Specialty coffee",
+        size: "SMB",
+        location: "Manama, Bahrain",
+        socials: [],
+        languages: ["Arabic", "English"]
+      }
+    });
 
     const blocked = await app.inject({
       method: "POST",
@@ -261,12 +273,20 @@ describe("onboarding routes", () => {
       headers: unverifiedHeaders
     });
 
+    expect(blockedSave.statusCode).toBe(403);
     expect(blocked.statusCode).toBe(403);
-    expect(blocked.json()).toMatchObject({
-      error: {
-        code: "EMAIL_VERIFICATION_REQUIRED"
-      }
-    });
+    expect([blockedSave.json(), blocked.json()]).toEqual([
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: "EMAIL_VERIFICATION_REQUIRED"
+        })
+      }),
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: "EMAIL_VERIFICATION_REQUIRED"
+        })
+      })
+    ]);
 
     const first = await registerTestUser(app);
     const second = await registerTestUser(app);

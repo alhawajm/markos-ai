@@ -48,7 +48,9 @@ export async function registerWorkspaceRoutes(
     "/v1/workspace/instagram/oauth/start",
     {
       config: {
+        mfaRequired: true,
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["instagram:manage"],
         instagramOAuthBoundary: "start",
       },
@@ -271,7 +273,9 @@ export async function registerWorkspaceRoutes(
     "/v1/workspace/instagram",
     {
       config: {
+        mfaRequired: true,
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["instagram:manage"],
       },
     },
@@ -293,7 +297,9 @@ export async function registerWorkspaceRoutes(
     "/v1/workspace/instagram/refresh",
     {
       config: {
+        mfaRequired: true,
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["instagram:manage"],
       },
     },

@@ -16,6 +16,7 @@ import {
 
 declare module "fastify" {
   interface FastifyContextConfig {
+    mfaRequired?: boolean;
     permissions?: Permission[];
     verifiedUserRequired?: boolean;
     workspaceRequired?: boolean;
@@ -25,6 +26,7 @@ declare module "fastify" {
   interface FastifyRequest {
     auth?: {
       isVerified: boolean;
+      mfaVerified: boolean;
       userId: string;
       workspaceId: string;
       roles: Role[];
@@ -102,6 +104,7 @@ export async function registerWorkspaceContext(
         select: {
           deletedAt: true,
           isVerified: true,
+          mfaEnabled: true,
         },
       });
 
@@ -128,6 +131,7 @@ export async function registerWorkspaceContext(
 
       const auth = {
         isVerified: user.isVerified,
+        mfaVerified: principal.mfaVerified ?? false,
         userId: principal.userId,
         workspaceId: principal.workspaceId,
         roles: [membership.role as Role],
@@ -165,6 +169,27 @@ export async function registerWorkspaceContext(
             errorEnvelope(
               "EMAIL_VERIFICATION_REQUIRED",
               "Email verification is required before this action",
+            ),
+          );
+        return;
+      }
+
+      if (
+        request.routeOptions.config.mfaRequired === true &&
+        !auth.mfaVerified
+      ) {
+        reportBoundaryFailure(
+          true,
+          user.mfaEnabled ? "mfa_required" : "mfa_setup_required",
+        );
+        await reply
+          .status(403)
+          .send(
+            errorEnvelope(
+              user.mfaEnabled ? "MFA_REQUIRED" : "MFA_SETUP_REQUIRED",
+              user.mfaEnabled
+                ? "MFA verification is required before this action"
+                : "TOTP MFA must be enabled before this action",
             ),
           );
         return;

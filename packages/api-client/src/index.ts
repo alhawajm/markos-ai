@@ -126,9 +126,23 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async mfaStatus(): Promise<MfaStatus> {
+    const response = await this.request<MfaStatus>("/v1/auth/mfa/totp");
+    return response.data;
+  }
+
   async enableMfaTotp(input: { code: string }): Promise<MfaStatus> {
     const response = await this.request<MfaStatus>("/v1/auth/mfa/totp/enable", {
       body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async verifyMfaTotp(input: { code: string }): Promise<AuthSession> {
+    const response = await this.request<AuthSession>("/v1/auth/mfa/totp/verify", {
+      body: input,
+      browserSession: true,
       method: "POST"
     });
     return response.data;
@@ -149,7 +163,7 @@ export class MarkosApiClient {
     });
   }
 
-  async requestEmailVerification(input: { email: string }): Promise<EmailVerificationChallenge> {
+  async requestEmailVerification(input: { email: string; locale?: Locale }): Promise<EmailVerificationChallenge> {
     const response = await this.request<EmailVerificationChallenge>("/v1/auth/verification/request", {
       body: input,
       method: "POST"

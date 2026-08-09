@@ -122,6 +122,7 @@ export interface AuthTokens {
 }
 
 export interface AuthSession {
+  mfaVerified: boolean;
   user: {
     id: string;
     email: string;

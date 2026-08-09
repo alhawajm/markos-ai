@@ -9,6 +9,7 @@ if (!baseUrl)
   );
 let browser: Browser;
 const session = {
+  mfaVerified: true,
   tokens: {
     accessToken: "browser-session-token",
     expiresIn: 900,
@@ -444,7 +445,11 @@ describe("active SettingsPanel Instagram interactions", () => {
   });
 
   it("renders MFA enrollment as a local QR flow with a readable six-digit field", async () => {
-    const { page } = await settingsPage(disconnected);
+    const { page, setMfaEnabled } = await settingsPage(
+      disconnected,
+      "/en/app/settings",
+      false,
+    );
     const setup = {
       enabled: false,
       otpauthUri:
@@ -460,12 +465,20 @@ describe("active SettingsPanel Instagram interactions", () => {
       /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/enable$/,
       (route) => {
         expect(route.request().postDataJSON()).toEqual({ code: "123456" });
+        setMfaEnabled(true);
         return route.fulfill(json({ enabled: true }));
+      },
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/verify$/,
+      (route) => {
+        expect(route.request().postDataJSON()).toEqual({ code: "123456" });
+        return route.fulfill(json({ ...session, mfaVerified: true }));
       },
     );
 
     const code = page.getByRole("textbox", { name: "Verification code" });
-    await expect(code.isDisabled()).resolves.toBe(true);
+    await expect(code.count()).resolves.toBe(0);
     await page.getByRole("button", { name: "Set up MFA" }).click();
     await page
       .locator("svg title")
@@ -509,9 +522,12 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       page.getByText("JBSWY3DPEHPK3PXP", { exact: true }).count(),
     ).resolves.toBe(0);
-    await expect(
-      page.getByText("Enabled", { exact: true }).isVisible(),
-    ).resolves.toBe(true);
+    const mfaStatusRow = page
+      .getByText("MFA", { exact: true })
+      .locator("..");
+    expect(await mfaStatusRow.innerText()).toContain(
+      "Verified for this session",
+    );
     await page
       .locator('[data-notification-toast][role="status"]')
       .waitFor({ state: "detached", timeout: 8000 });
@@ -882,9 +898,11 @@ describe("active SettingsPanel Instagram interactions", () => {
 async function settingsPage(
   connection: Record<string, unknown>,
   path = "/en/app/settings",
+  mfaEnabled = true,
 ) {
   const page = await browserPage();
   const requests: string[] = [];
+  let currentMfaEnabled = mfaEnabled;
   await page.addInitScript(
     (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
     storedIdentity,
@@ -906,6 +924,8 @@ async function settingsPage(
       requests.push(request.url());
       const pathname = new URL(request.url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (pathname === "/v1/auth/mfa/totp")
+        return route.fulfill(json({ enabled: currentMfaEnabled }));
       if (pathname === "/v1/workspace/instagram" && request.method() === "GET")
         return route.fulfill(json(connection));
       if (pathname === "/v1/billing/summary")
@@ -927,7 +947,13 @@ async function settingsPage(
       name: path.startsWith("/ar/") ? "الإعدادات" : "Settings",
     })
     .waitFor();
-  return { page, requests };
+  return {
+    page,
+    requests,
+    setMfaEnabled: (enabled: boolean) => {
+      currentMfaEnabled = enabled;
+    },
+  };
 }
 
 async function browserPage(): Promise<Page> {

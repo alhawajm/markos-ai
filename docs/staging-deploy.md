@@ -1,6 +1,6 @@
 # Railway Deployment and Staging Runbook
 
-Status date: 2026-08-03.
+Status date: 2026-08-09.
 
 Railway is the current early-stage operating direction for MARKOS AI. The working planning horizon is approximately the first 50 users while capacity, reliability, cost, and security are observed. AWS may be considered later; no migration is approved or scheduled.
 
@@ -12,7 +12,7 @@ The repository proves Dockerfiles, commands, health endpoints, environment parsi
 
 The handoff reports one repository, one Railway project, one Railway environment, a deployed Next.js web service, a deployed API service, and Railway PostgreSQL. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. The exact project/environment layout, deployment source, domains, Redis/OpenSearch topology, variables, health checks, and service counts still require a Railway dashboard inventory.
 
-The handoff also reports that the FastAPI AI service had not yet been deployed. A Dockerfile or GHCR image is not deployment evidence.
+Railway status contexts on draft PR #18 report successful web, API, and AI deployments for the current committed branch head. That proves deployment completion signals only; the shared provider-backed Strategy and onboarding-profile application paths still require a controlled live request and persisted-result review.
 
 ## Current service contract
 
@@ -21,7 +21,7 @@ The handoff also reports that the FastAPI AI service had not yet been deployed. 
 | Web                | `apps/web/Dockerfile`                                  | `pnpm --filter web start`; Next.js default port 3000                                                  | `/ar`, `/en`, and `/en/app/settings` for rendered Settings  | Reported deployed; production Settings participated in the 2026-08-03 connection. Verify Railway source, domain, build variable, and health check.                 |
 | API                | `apps/api/Dockerfile`                                  | `pnpm --filter api start`; listens on injected `PORT` or `API_PORT`                                   | `/v1/health`, `/v1/health/deep`                             | Reported deployed; callback and persistence completed on 2026-08-03. Verify current deployment and dependencies.                                                   |
 | Worker             | `apps/api/worker.Dockerfile`                           | `pnpm --filter api worker`; no HTTP port                                                              | Worker lifecycle logs and resulting database/audit state    | Repository implementation only; verify whether a Railway worker service exists and is healthy.                                                                     |
-| AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | Not production-verified. Review port/routing, authentication, and health before deployment.                                                                        |
+| AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | Railway reports a successful deployment for the current committed PR head. Provider-backed application responses remain pending controlled live verification.       |
 | PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | Persistence worked for the production connection, but version, extensions, roles, backups, connection limits, and migration history require operator verification. |
 | Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | Verify Railway deployment, private networking, persistence expectations, and availability.                                                                         |
 | OpenSearch         | `docker-compose.yml`, API deep health/search code      | Reachable HTTP service                                                                                | API deep health checks `/_cluster/health`                   | Verify whether it is deployed. Loopback is invalid from a separate Railway API service.                                                                            |
@@ -49,6 +49,8 @@ Environment sources are deliberately separate:
 - GitHub Actions supplies explicit fake test values in `.github/workflows/ci.yml`; it does not consume `.env` or `.env.example`.
 - Docker build contexts exclude `.env` files. The images do not copy local environment files.
 - Railway injects runtime variables per service. `NEXT_PUBLIC_API_BASE_URL` must also be available during the web image build because Next.js embeds public variables at `next build` time.
+
+The active branch is connected to Railway deployment status checks. Configure the production email variables before pushing the email-verification candidate: with `NODE_ENV=production`, the API now refuses to start unless SendGrid delivery is complete. This ordering prevents a successful deployment that cannot complete signup.
 
 ## Variable inventory by service
 
@@ -86,6 +88,9 @@ Authentication and application security:
 - `JWT_ACCESS_TTL`
 - `JWT_REFRESH_TTL`
 - `EMAIL_VERIFICATION_TTL`
+- `EMAIL_PROVIDER` — must be `sendgrid` in production.
+- `SENDGRID_API_KEY` — API-only secret with transactional mail access.
+- `FROM_EMAIL` — a sender address authorized by the configured SendGrid account/domain.
 - `MFA_ISSUER`
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_ISSUER`
@@ -149,7 +154,15 @@ Do not copy all API secrets blindly. Record which worker task consumes each shar
 Current code consumes:
 
 - `AI_PORT`
-- `INTERNAL_SERVICE_TOKEN` (currently not enforced)
+- `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
+- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy and onboarding profiles)
+- `OPENAI_API_KEY` (AI service only; required when `AI_TEXT_PROVIDER=openai`)
+- `AI_STRATEGY_TIMEOUT_SECONDS`
+- `AI_PROFILE_TIMEOUT_SECONDS`
+- `OPENAI_TIMEOUT_SECONDS`
+- `OPENAI_MAX_RETRIES`
+- `OPENAI_MAX_OUTPUT_TOKENS`
+- `OPENAI_REASONING_EFFORT`
 - `DATABASE_URL` (configured but not used by current handlers)
 - `LLM_PRIMARY_MODEL`
 - `LLM_FLAGSHIP_MODEL`
@@ -164,7 +177,7 @@ Current code consumes:
 - `SENTRY_RELEASE`
 - `SENTRY_TRACES_SAMPLE_RATE`
 
-`OPENAI_API_KEY` is inventoried for future work but is not consumed by the current FastAPI source. Do not add a real key until a provider implementation uses it and the API-to-AI boundary is protected.
+Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request.
 
 ## Secret handling
 

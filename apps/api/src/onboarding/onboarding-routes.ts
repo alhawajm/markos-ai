@@ -56,6 +56,7 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     {
       config: {
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["onboarding:write"]
       }
     },
@@ -107,9 +108,7 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
         }
 
         if (error instanceof AiServiceRequestError) {
-          return reply
-            .status(error.statusCode)
-            .send(errorEnvelope(error.code, error.message, [{ retryable: error.retryable }]));
+          return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message, [{ retryable: error.retryable }]));
         }
 
         throw error;
@@ -157,6 +156,7 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     {
       config: {
         workspaceRequired: true,
+        verifiedUserRequired: true,
         permissions: ["onboarding:write"]
       }
     },

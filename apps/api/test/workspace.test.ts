@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { issueAuthTokens } from "../src/auth/tokens";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
@@ -461,8 +462,20 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   });
 
+  const steppedUpTokens = await issueAuthTokens({
+    mfaVerified: true,
+    roles: ["OWNER"],
+    userId: session.user.id,
+    workspaceId: session.workspace.id
+  });
+
   return {
     ...session,
+    mfaVerified: true,
+    tokens: {
+      ...session.tokens,
+      accessToken: steppedUpTokens.accessToken
+    },
     user: {
       ...session.user,
       isVerified: true

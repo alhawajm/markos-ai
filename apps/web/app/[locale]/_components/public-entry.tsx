@@ -186,6 +186,12 @@ export function AuthPortal({ locale, mode }: { locale: Locale; mode: AuthMode })
               ...(workspaceName.trim().length === 0 ? {} : { workspaceName: workspaceName.trim() })
             }, locale);
       setBrowserSession(session);
+      if (!session.user.isVerified) {
+        window.sessionStorage.setItem("markos.pending-verification-email", session.user.email);
+        router.push(`/${locale}/verify`);
+        return;
+      }
+
       router.push(activeMode === "login" ? (sessionExpired ? `/${locale}/app/settings#profile` : `/${locale}/app`) : `/${locale}/onboarding`);
     } catch (error) {
       setMessage(error instanceof Error ? friendlyAuthError(error.message, locale) : isArabic ? "تعذر إكمال الطلب." : "Could not complete the request.");
