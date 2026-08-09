@@ -22,7 +22,11 @@
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
-    "format": "prettier --write ."
+    "format": "node scripts/prettier-changed.mjs --write",
+    "format:check": "node scripts/prettier-changed.mjs --check",
+    "format:list": "node scripts/prettier-changed.mjs --list",
+    "format:all": "prettier --write --ignore-unknown .",
+    "format:all:check": "prettier --check --ignore-unknown ."
   },
   "devDependencies": {
     "playwright-core": "^1.61.1",

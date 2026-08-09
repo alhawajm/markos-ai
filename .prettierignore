@@ -1,0 +1,27 @@
+# Dependencies, caches, and generated output
+node_modules/
+.pnpm-store/
+**/.next/
+**/.turbo/
+**/build/
+**/coverage/
+**/dist/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.tsbuildinfo
+
+# Tool-owned or generated files
+pnpm-lock.yaml
+apps/web/next-env.d.ts
+var/
+apps/*/var/
+
+# Environment files and non-code records are reviewed manually
+.env*
+**/*.md
+**/*.pdf
+docs_khalid/
+evidence/
