@@ -1,8 +1,8 @@
 # MARKOS AI UI + Functionality Checklist
 
-> Active final-design tracker: `docs/final-ui-implementation-checklist.md`
+> Active redesign foundation: `docs/ui-design-foundation.md`
 >
-> This file records the completed parity pass for the earlier `Design AI Marketing Platform` export. The product UI direction has moved to `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`, so new design implementation work should be tracked in the final checklist.
+> This file records historical implementation and behavioral coverage for the older UI passes. The previous dark command-center tracker is also historical. Preserve its verified behavior during migration, but use the Sunlit Social Studio foundation for new visual work.
 
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`

@@ -1,5 +1,7 @@
 # MARKOS AI Final UI Source Inventory
 
+> **Historical reference:** This inventory describes the previous dark "AI Marketing Command Center" direction. It was superseded on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). Retain this document as implementation history; do not use its export or luxury token system as the visual source for new migration work.
+
 Final design export:
 `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
 
