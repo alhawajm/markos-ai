@@ -18,7 +18,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
   const strategyUsage = useMeteredActionState({
     fallbackTotal: 3,
     fallbackUsed: 1,
-    label: locale === "ar" ? "استراتيجيات الذكاء" : "AI strategies",
+    label: locale === "ar" ? "الاستراتيجيات" : "Strategies",
     metric: "STRATEGY"
   });
 
@@ -96,29 +96,29 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
   const active = strategies[0] ?? emptyStrategy(locale, horizonDays);
 
   return (
-    <section className="grid gap-5">
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#1A1A2E_0%,#0F3460_58%,#162447_100%)] p-6 text-white shadow-[0_8px_32px_rgba(15,52,96,.24)]">
-        <div className="absolute inset-0 opacity-60 [background-image:radial-gradient(rgba(255,255,255,.06)_1px,transparent_1px)] [background-size:28px_28px]" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+    <section className="grid gap-6">
+      <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 text-white sm:p-8 xl:p-10">
+        <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,.07)_1px,transparent_1px)] [background-size:30px_30px]" />
+        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-display text-[26px] font-bold leading-tight tracking-normal">{text(locale, "title")}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/15 px-3 py-1 text-sm font-bold text-accent">
+              <h2 className="font-display text-4xl font-black leading-tight tracking-[-.04em] sm:text-5xl">{text(locale, "title")}</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_28%)] bg-[rgb(33_191_174_/_16%)] px-3 py-1.5 text-sm font-extrabold text-[#77e0d4]">
                 <Target size={14} />
                 {session ? text(locale, "businessInformed") : text(locale, "previewMode")}
               </span>
             </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">{text(locale, "subtitle")}</p>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/[.72]">{text(locale, "subtitle")}</p>
             {strategies.length > 0 ? (
-              <div className="mt-5 flex flex-wrap gap-4">
-                <HeroStat color="#22C55E" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
-                <HeroStat color="#F59E0B" label={text(locale, "weeks")} value={active.content.weeklyCadence.length.toString()} />
-                <HeroStat color="#E94560" label={text(locale, "priorityActions")} value={Math.min(active.content.nextActions.length, 3).toString()} />
+              <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
+                <HeroStat color="#21BFAE" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
+                <HeroStat color="#F6C453" label={text(locale, "weeks")} value={active.content.weeklyCadence.length.toString()} />
+                <HeroStat color="#FF665A" label={text(locale, "priorityActions")} value={Math.min(active.content.nextActions.length, 3).toString()} />
               </div>
             ) : null}
           </div>
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 text-sm font-extrabold text-white hover:bg-white/[.16] disabled:opacity-50"
             disabled={isBusy}
             onClick={refreshStrategies}
             type="button"
@@ -129,31 +129,31 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[360px_1fr]">
-        <aside className="rounded-2xl border border-[#E8ECF2] bg-card p-5 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
+      <section className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <aside className="sunlit-panel rounded-[1.75rem] p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
               <Sparkles size={22} />
             </div>
             <div>
-              <h3 className="font-extrabold text-navy">{text(locale, "generate")}</h3>
-              <p className="text-sm text-muted">{text(locale, "generateSub")}</p>
+              <h3 className="font-extrabold text-[var(--sunlit-ink)]">{text(locale, "generate")}</h3>
+              <p className="text-sm text-[var(--sunlit-muted)]">{text(locale, "generateSub")}</p>
             </div>
           </div>
 
           <label className="mt-5 block">
-            <span className="text-xs font-bold uppercase tracking-[.08em] text-muted">{text(locale, "objective")}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "objective")}</span>
             <textarea
-              className="mt-2 min-h-32 w-full resize-y rounded-xl border border-[#E8ECF2] bg-canvas px-4 py-3 text-sm leading-6 text-navy outline-none focus:border-accent"
+              className="sunlit-field mt-2 min-h-36 resize-y rounded-xl px-4 py-3 text-[15px] leading-7 outline-none"
               onChange={(event) => setObjective(event.target.value)}
               value={objective}
             />
           </label>
 
           <label className="mt-4 block">
-            <span className="text-xs font-bold uppercase tracking-[.08em] text-muted">{text(locale, "horizon")}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "horizon")}</span>
             <select
-              className="mt-2 h-11 w-full rounded-xl border border-[#E8ECF2] bg-canvas px-3 text-sm font-bold text-navy outline-none focus:border-accent"
+              className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-extrabold outline-none"
               onChange={(event) => setHorizonDays(Number(event.target.value))}
               value={horizonDays}
             >
@@ -164,7 +164,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
           </label>
 
           <button
-            className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-4 text-sm font-extrabold text-white shadow-[0_3px_12px_rgba(233,69,96,.3)] disabled:opacity-50"
+            className="sunlit-primary mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
             disabled={isBusy}
             onClick={generate}
             type="button"
@@ -172,34 +172,34 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
             <Zap size={16} />
             {text(locale, "generateCta")}
           </button>
-          <p className="mt-3 min-h-5 text-sm leading-6 text-muted">{message}</p>
+          <p className="mt-3 min-h-5 text-sm leading-6 text-[var(--sunlit-muted)]">{message}</p>
         </aside>
 
-        <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-accent">{text(locale, "latest")}</p>
-            <h3 className="mt-1 font-display text-2xl font-extrabold tracking-normal text-navy">{active.title}</h3>
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-muted">{active.content.summary}</p>
+            <p className="sunlit-eyebrow">{text(locale, "latest")}</p>
+            <h3 className="mt-2 font-display text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{active.title}</h3>
+            <p className="mt-4 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">{active.content.summary}</p>
           </div>
 
           {strategies.length > 0 && active.content.nextActions.length > 0 ? (
-            <div className="mt-7 border-t border-[#E8ECF2] pt-5">
+            <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
                   <FileText size={18} />
                 </span>
                 <div>
-                  <h4 className="font-extrabold text-navy">{text(locale, "nextActions")}</h4>
-                  <p className="text-sm text-muted">{text(locale, "nextActionsSub")}</p>
+                  <h4 className="font-extrabold text-[var(--sunlit-ink)]">{text(locale, "nextActions")}</h4>
+                  <p className="text-sm text-[var(--sunlit-muted)]">{text(locale, "nextActionsSub")}</p>
                 </div>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {active.content.nextActions.slice(0, 3).map((action, index) => (
-                  <div className="flex items-start gap-3 rounded-xl border border-[#E8ECF2] bg-canvas p-4" key={`${index}-${action}`}>
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-midnavy text-xs font-extrabold text-white">
+                  <div className="flex items-start gap-3 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={`${index}-${action}`}>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-ink)] text-xs font-extrabold text-white">
                       {index + 1}
                     </span>
-                    <p className="text-sm font-bold leading-6 text-navy">{action}</p>
+                    <p className="text-sm font-bold leading-6 text-[var(--sunlit-ink)]">{action}</p>
                   </div>
                 ))}
               </div>
@@ -210,19 +210,19 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
 
       {strategies.length > 0 ? (
         <>
-          <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-            <h3 className="text-[15px] font-bold text-navy">{text(locale, "cadence")}</h3>
-            <p className="mt-1 text-sm text-muted">{text(locale, "cadenceSub")}</p>
+          <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+            <h3 className="text-xl font-black text-[var(--sunlit-ink)]">{text(locale, "cadence")}</h3>
+            <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{text(locale, "cadenceSub")}</p>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {active.content.weeklyCadence.slice(0, 4).map((week) => (
-                <div className="rounded-xl border border-[#E8ECF2] bg-canvas p-4" key={week.week}>
+                <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5" key={week.week}>
                   <div className="flex items-center gap-2">
-                    <CalendarDays size={16} className="text-accent" />
-                    <h4 className="font-extrabold text-navy">
+                    <CalendarDays size={17} className="text-[var(--sunlit-pink)]" />
+                    <h4 className="font-extrabold text-[var(--sunlit-ink)]">
                       {text(locale, "week")} {week.week}: {week.focus}
                     </h4>
                   </div>
-                  <ul className="mt-3 grid gap-2 text-sm leading-6 text-muted">
+                  <ul className="mt-3 grid gap-2 text-sm leading-6 text-[var(--sunlit-muted)]">
                     {week.actions.map((action) => (
                       <li key={action}>{action}</li>
                     ))}
@@ -233,27 +233,27 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
           </article>
 
           <section className="grid gap-4 xl:grid-cols-2">
-            <details className="group rounded-2xl border border-[#E8ECF2] bg-card p-5 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-navy">
+            <details className="sunlit-panel group rounded-[1.75rem] p-6">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-[var(--sunlit-ink)]">
                 <span>{text(locale, "contentPillars")}</span>
-                <span className="rounded-full bg-accent/10 px-3 py-1 text-xs text-accent">
+                <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-xs text-[var(--sunlit-pink)]">
                   {text(locale, "viewDetails")} · {active.content.pillars.length}
                 </span>
               </summary>
-              <p className="mt-2 text-sm text-muted">{text(locale, "pillarsSub")}</p>
+              <p className="mt-2 text-sm text-[var(--sunlit-muted)]">{text(locale, "pillarsSub")}</p>
               <div className="mt-5 grid gap-3">
                 {active.content.pillars.map((pillar, index) => (
-                  <div className="rounded-xl border border-[#E8ECF2] bg-canvas p-4" key={pillar.name}>
+                  <div className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={pillar.name}>
                     <div className="flex items-start gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-midnavy text-xs font-extrabold text-white">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-ink)] text-xs font-extrabold text-white">
                         {index + 1}
                       </span>
                       <div>
-                        <h4 className="font-extrabold text-navy">{pillar.name}</h4>
-                        <p className="mt-1 text-sm leading-6 text-muted">{pillar.rationale}</p>
+                        <h4 className="font-extrabold text-[var(--sunlit-ink)]">{pillar.name}</h4>
+                        <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{pillar.rationale}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           {pillar.contentAngles.map((angle) => (
-                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-muted" key={angle}>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--sunlit-muted)]" key={angle}>
                               {angle}
                             </span>
                           ))}
@@ -265,16 +265,24 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
               </div>
             </details>
 
-            <details className="group rounded-2xl border border-[#E8ECF2] bg-card p-5 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-navy">
+            <details className="sunlit-panel group rounded-[1.75rem] p-6">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-[var(--sunlit-ink)]">
                 <span>{text(locale, "whyTitle")}</span>
-                <span className="rounded-full bg-accent/10 px-3 py-1 text-xs text-accent">{text(locale, "viewDetails")}</span>
+                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs text-[var(--sunlit-aqua-dark)]">
+                  {text(locale, "viewDetails")}
+                </span>
               </summary>
-              <p className="mt-3 text-sm leading-6 text-muted">{text(locale, "whyBody")}</p>
+              <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">{text(locale, "whyBody")}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-bold text-muted">{text(locale, "profileSource")}</span>
-                <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-bold text-muted">{text(locale, "audienceSource")}</span>
-                <span className="rounded-full bg-canvas px-3 py-1.5 text-xs font-bold text-muted">{text(locale, "brandSource")}</span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "profileSource")}
+                </span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "audienceSource")}
+                </span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "brandSource")}
+                </span>
               </div>
             </details>
           </section>
@@ -333,7 +341,7 @@ function text(locale: Locale, key: string): string {
       emptyTitle: "لم يتم توليد استراتيجية بعد",
       failed: "فشل الطلب",
       generate: "توليد استراتيجية",
-      generateCta: "توليد بالذكاء",
+      generateCta: "إنشاء الاستراتيجية",
       generateSub: "مبنية على ملف النشاط المعتمد",
       generated: "تم توليد الاستراتيجية",
       horizon: "الأفق",
@@ -368,7 +376,7 @@ function text(locale: Locale, key: string): string {
       emptyTitle: "No strategy generated yet",
       failed: "Request failed",
       generate: "Generate Strategy",
-      generateCta: "Generate with AI",
+      generateCta: "Create Strategy",
       generateSub: "Based on your approved Business Profile",
       generated: "Strategy generated",
       horizon: "Horizon",

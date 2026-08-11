@@ -4,7 +4,7 @@
 - Working name: **Sunlit Social Studio**
 - Last updated: 2026-08-11
 
-This document is the active visual and interaction reference for the MARKOS redesign. It replaces the dark "AI Marketing Command Center" export as the direction for new UI work. The existing production UI remains in place until it is replaced and verified route by route.
+This document is the active visual and interaction reference for the MARKOS redesign. It replaces the dark "AI Marketing Command Center" export as the direction for new UI work. The public preview remains the reference for marketing and authentication surfaces; the mounted application shell and presentation journey now provide the most accurate reference for authenticated product surfaces.
 
 Product behavior still comes from:
 
@@ -133,6 +133,15 @@ The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-them
 - Explain the requirement and route the user to the action that unlocks it.
 - Treat the current settings contents as a foundation, not a final inventory of configurable features.
 
+### Authenticated application
+
+- MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
+- At large breakpoints, use a persistent labeled sidebar and a restrained workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
+- Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
+- Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
+- Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.
+- Give each page one authoritative heading. The workspace header may repeat the active destination visually, but it must not introduce a second page-level heading in the accessibility tree.
+
 ### Legal documents
 
 - Use a sticky on-page menu on desktop and a compact selector on mobile.
@@ -183,10 +192,25 @@ Each route is available in English and Arabic beneath `/{locale}/design-preview`
 
 These routes are isolated design references. They must not be mistaken for proof that the corresponding production route or backend integration has been replaced.
 
+The authenticated Sunlit journey is mounted at the real application routes:
+
+| Surface | Route |
+| --- | --- |
+| Overview | `/app` |
+| Strategy | `/app/strategy` |
+| Create | `/app/content-studio` |
+| Insights | `/app/analytics` |
+| Business Profile | `/app/knowledge` |
+| Settings | `/app/settings` |
+| Onboarding and profile review | `/onboarding` |
+
+These routes preserve their existing session, workspace, API, approval, and failure behavior. A mounted screen proves that its UI is connected to the application contract; it does not by itself prove that an external provider or undeveloped feature is live.
+
 ## Current coexistence boundary
 
 - `apps/web/app/sunlit-theme.css` and `apps/web/app/[locale]/design-preview` are the new visual reference.
-- `apps/web/app/globals.css`, `packages/ui-tokens`, and the mounted components under `apps/web/app/[locale]/_components` still support production and must remain until their consumers are migrated.
+- The application shell, onboarding, Overview, Strategy, Create, Insights, and Business Profile now use the scoped Sunlit foundation on the redesign branch.
+- `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy components still support unmigrated routes and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
 - Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
@@ -201,21 +225,21 @@ These routes are isolated design references. They must not be mistaken for proof
 6. Verify source tests, browser interaction, typecheck, lint, responsive layouts, keyboard operation, and RTL before retiring the old surface.
 7. Do not remove an old route until its replacement covers the real journey and recovery states.
 
-Suggested migration sequence after this preview is accepted:
+Migration sequence:
 
-1. Shared tokens, public header/footer, buttons, cards, and fields.
-2. Landing and authentication surfaces.
-3. Settings and account-related surfaces.
-4. App shell and navigation after their information architecture is agreed.
-5. Onboarding and the first Strategy handoff.
-6. Remaining production modules in small, behavior-preserving slices.
+1. Shared scoped tokens, public preview, authentication, legal placeholders, and Settings reference — complete.
+2. App shell, onboarding, Overview, Business Profile, and first Strategy handoff — complete on the redesign branch.
+3. Create and Insights presentation surfaces — complete on the redesign branch, using real APIs or explicit empty states.
+4. Replace remaining legacy production modules in small, behavior-preserving slices.
+5. Revisit each migrated page individually as product features and configuration needs become final.
+6. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
 
 ## Deferred decisions
 
-- Final app-shell navigation and page names.
-- New onboarding composition and detailed recovery states.
+- Detailed mobile and tablet composition beyond basic functional layouts.
+- Final onboarding recovery copy and per-step refinement after the presentation journey.
 - Plans page structure and commercial copy.
-- Insights graphs and analytics examples after feature planning.
+- Advanced Insights comparisons and recommendations beyond the current API-backed summary.
 - Final Terms and Privacy content and scroll-navigation tuning.
 - Production Google and Apple authentication integrations.
 - Whether a dedicated display typeface is needed.

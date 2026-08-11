@@ -348,7 +348,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     });
 
     await Promise.all([
-      page.waitForURL(/\/en\/app$/),
+      page.waitForURL(/\/en\/app\/strategy$/),
       page.getByRole("button", { name: "Approve profile & continue" }).click(),
     ]);
 

@@ -59,14 +59,7 @@ const toneMeta: Array<{ icon: Icon; id: string }> = [
   { id: "informative", icon: BookOpen }
 ];
 
-const goalValues = [
-  "Increase brand awareness",
-  "Drive website traffic",
-  "Generate leads",
-  "Boost sales",
-  "Build community",
-  "Customer retention"
-];
+const goalValues = ["Increase brand awareness", "Drive website traffic", "Generate leads", "Boost sales", "Build community", "Customer retention"];
 
 function onboardingCopy(locale: Locale) {
   if (locale === "ar") {
@@ -75,8 +68,8 @@ function onboardingCopy(locale: Locale) {
       addCompetitorPlaceholder: "أضف اسم منافس...",
       addProduct: "إضافة المنتج أو الخدمة",
       attention: "تنبيه",
-      aiCardBody: "يتعلم MARKOS علامتك خلال دقائق ويولّد محتوى يشبه صوتك من اليوم الأول.",
-      aiCardTitle: "إعداد مدعوم بالذكاء الاصطناعي",
+      aiCardBody: "تصبح إجاباتك السياق الذي يستخدمه MARKOS للاستراتيجية والمحتوى.",
+      aiCardTitle: "مصمم حول نشاطك",
       back: "السابق",
       brand: {
         color: "لون العلامة الأساسي *",
@@ -216,8 +209,8 @@ function onboardingCopy(locale: Locale) {
     addCompetitorPlaceholder: "Add competitor name...",
     addProduct: "Add product or service",
     attention: "Attention",
-    aiCardBody: "MARKOS learns your brand in minutes and generates content that sounds like you from day one.",
-    aiCardTitle: "AI-Powered Setup",
+    aiCardBody: "Your answers become the working context MARKOS uses for Strategy and content.",
+    aiCardTitle: "Built around your business",
     back: "Back",
     brand: {
       color: "Primary Brand Color",
@@ -248,13 +241,13 @@ function onboardingCopy(locale: Locale) {
     },
     continue: "Continue",
     dismiss: "Dismiss notification",
-      errors: {
-        approve: "Could not approve the business profile yet.",
-        complete: "Could not complete onboarding yet.",
-        generate: "Could not create the business profile yet. Your answers are safe, so you can try again.",
-        save: "Could not save this step yet.",
-        session: "We are still checking your session. Try again in a moment."
-      },
+    errors: {
+      approve: "Could not approve the business profile yet.",
+      complete: "Could not complete onboarding yet.",
+      generate: "Could not create the business profile yet. Your answers are safe, so you can try again.",
+      save: "Could not save this step yet.",
+      session: "We are still checking your session. Try again in a moment."
+    },
     goals: {
       body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
       budget: "Optional budget range",
@@ -355,9 +348,42 @@ function onboardingCopy(locale: Locale) {
 function industryOptions(locale: Locale): SelectOption[] {
   const labels =
     locale === "ar"
-      ? ["التجزئة والتجارة الإلكترونية", "المطاعم والمقاهي", "العقارات", "الرعاية الصحية", "التعليم", "السيارات", "الأزياء والجمال", "التقنية", "المالية", "الضيافة"]
-      : ["Retail & E-commerce", "Food & Beverage", "Real Estate", "Healthcare", "Education", "Automotive", "Fashion & Beauty", "Technology", "Finance", "Hospitality"];
-  const values = ["Retail & E-commerce", "Food & Beverage", "Real Estate", "Healthcare", "Education", "Automotive", "Fashion & Beauty", "Technology", "Finance", "Hospitality"];
+      ? [
+          "التجزئة والتجارة الإلكترونية",
+          "المطاعم والمقاهي",
+          "العقارات",
+          "الرعاية الصحية",
+          "التعليم",
+          "السيارات",
+          "الأزياء والجمال",
+          "التقنية",
+          "المالية",
+          "الضيافة"
+        ]
+      : [
+          "Retail & E-commerce",
+          "Food & Beverage",
+          "Real Estate",
+          "Healthcare",
+          "Education",
+          "Automotive",
+          "Fashion & Beauty",
+          "Technology",
+          "Finance",
+          "Hospitality"
+        ];
+  const values = [
+    "Retail & E-commerce",
+    "Food & Beverage",
+    "Real Estate",
+    "Healthcare",
+    "Education",
+    "Automotive",
+    "Fashion & Beauty",
+    "Technology",
+    "Finance",
+    "Hospitality"
+  ];
 
   return values.map((value, index) => ({ value, label: labels[index] ?? value }));
 }
@@ -385,7 +411,7 @@ function toneLabel(locale: Locale, toneId: string) {
 
 function goalOptions(locale: Locale): SelectOption[] {
   const ar = ["زيادة الوعي بالعلامة", "زيادة زيارات الموقع", "توليد العملاء المحتملين", "رفع المبيعات", "بناء مجتمع", "الاحتفاظ بالعملاء"];
-  return goalValues.map((value, index) => ({ value, label: locale === "ar" ? ar[index] ?? value : value }));
+  return goalValues.map((value, index) => ({ value, label: locale === "ar" ? (ar[index] ?? value) : value }));
 }
 
 function genderOptions(locale: Locale): SelectOption[] {
@@ -515,11 +541,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     if (!draftHydrated || !workspaceName || workspaceNameApplied.current) return;
 
     workspaceNameApplied.current = true;
-    setDraft((current) =>
-      current.companyName.trim()
-        ? current
-        : { ...current, companyName: workspaceName },
-    );
+    setDraft((current) => (current.companyName.trim() ? current : { ...current, companyName: workspaceName }));
   }, [draftHydrated, session]);
 
   const progress = Math.round((step / steps.length) * 100);
@@ -711,7 +733,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   const NextIcon = isRtl ? ArrowLeft : ArrowRight;
 
   return (
-    <section className="flex min-h-screen bg-[linear-gradient(135deg,#0F3460_0%,#1A1A2E_50%,#0a0a1a_100%)] text-white" dir={isRtl ? "rtl" : "ltr"}>
+    <section className="sunlit-theme sunlit-app flex min-h-screen text-[var(--sunlit-ink)]" dir={isRtl ? "rtl" : "ltr"}>
       <NotificationToast
         body={message}
         dismissLabel={copy.dismiss}
@@ -719,23 +741,36 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
         title={messageTone === "error" ? copy.attention : copy.status}
         tone={messageTone}
       />
-      <aside className={isRtl ? "hidden w-80 shrink-0 flex-col justify-between border-l border-white/[.08] p-10 lg:flex" : "hidden w-80 shrink-0 flex-col justify-between border-r border-white/[.08] p-10 lg:flex"}>
+      <aside
+        className={
+          isRtl
+            ? "sticky top-0 hidden h-screen w-[19rem] shrink-0 flex-col justify-between border-l border-[var(--sunlit-line)] bg-white/78 p-7 backdrop-blur-xl lg:flex xl:w-[21rem] xl:p-9"
+            : "sticky top-0 hidden h-screen w-[19rem] shrink-0 flex-col justify-between border-r border-[var(--sunlit-line)] bg-white/78 p-7 backdrop-blur-xl lg:flex xl:w-[21rem] xl:p-9"
+        }
+      >
         <div>
-          <a className="mb-12 flex items-center gap-3" href={`/${locale}`}>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-[0_4px_16px_rgba(233,69,96,.35)]">
+          <a className="mb-10 flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_12px_28px_rgb(32_33_43_/_18%)]">
               <Sparkles size={20} strokeWidth={2.4} />
             </span>
-            <span className="font-display text-xl font-bold tracking-normal">MARKOS AI</span>
+            <span>
+              <span className="block font-display text-xl font-black tracking-tight">MARKOS AI</span>
+              <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{copy.progress(step, steps.length)}</span>
+            </span>
           </a>
 
-          <nav className="grid gap-1" aria-label="Onboarding steps">
+          <nav className="grid gap-1.5" aria-label="Onboarding steps">
             {steps.map((item) => {
               const active = step === item.id;
               const complete = step > item.id;
 
               return (
                 <button
-                  className="flex items-center gap-3 py-2.5 text-start disabled:cursor-not-allowed"
+                  className={
+                    active
+                      ? "flex w-full items-center gap-3 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2.5 text-start"
+                      : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition hover:bg-white disabled:cursor-not-allowed"
+                  }
                   disabled={saving || (item.id === 8 && step < 7)}
                   key={item.id}
                   onClick={() => selectStep(item.id)}
@@ -744,17 +779,25 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   <span
                     className={
                       complete
-                        ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-success text-white"
+                        ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-aqua)] text-white"
                         : active
-                          ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-white"
-                          : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-xs font-bold text-white"
+                          ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-coral)] text-xs font-extrabold text-white"
+                          : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--sunlit-line)] bg-white text-xs font-extrabold text-[var(--sunlit-muted)]"
                     }
                   >
                     {complete ? <CheckCircle2 size={14} /> : item.id}
                   </span>
                   <span>
-                    <span className={active || complete ? "block text-[13px] font-semibold text-white" : "block text-[13px] text-white/40"}>{item.label}</span>
-                    <span className="block text-[11px] text-white/30">{item.desc}</span>
+                    <span
+                      className={
+                        active || complete
+                          ? "block text-[13px] font-extrabold text-[var(--sunlit-ink)]"
+                          : "block text-[13px] font-semibold text-[var(--sunlit-muted)]"
+                      }
+                    >
+                      {item.label}
+                    </span>
+                    <span className="block text-[11px] leading-4 text-[var(--sunlit-muted)]">{item.desc}</span>
                   </span>
                 </button>
               );
@@ -762,35 +805,49 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
           </nav>
         </div>
 
-        <div className="rounded-xl border border-accent/25 bg-accent/15 p-4">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-accent">
+        <div className="sunlit-panel-dark rounded-2xl p-5">
+          <div className="mb-2 flex items-center gap-2 text-xs font-extrabold text-[var(--sunlit-yellow)]">
             <Sparkles size={14} />
             {copy.aiCardTitle}
           </div>
-          <p className="text-xs leading-5 text-white/60">{copy.aiCardBody}</p>
+          <p className="text-xs leading-5 text-white/70">{copy.aiCardBody}</p>
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto px-5 py-6 sm:p-8 lg:items-center">
-        <div className={step === 8 ? "w-full min-w-0 max-w-[310px] sm:max-w-[920px]" : "w-full min-w-0 max-w-[310px] sm:max-w-[560px]"}>
-          <div className="mb-8">
-            <div className="mb-2 flex justify-between text-xs text-white/50">
+      <main className="flex min-w-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto px-5 py-7 sm:p-8 xl:px-12 xl:py-10 2xl:px-16">
+        <div className={step === 8 ? "w-full min-w-0 max-w-[1220px]" : "w-full min-w-0 max-w-[1060px]"}>
+          <div className="mb-6 flex items-end justify-between gap-6">
+            <div>
+              <p className="sunlit-eyebrow">{locale === "ar" ? "تأسيس ملف نشاطك" : "Build your business profile"}</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--sunlit-muted)]">{copy.progress(step, steps.length)}</p>
+            </div>
+            <span className="text-sm font-extrabold text-[var(--sunlit-aqua-dark)]">
+              {progress}%<span className="hidden sm:inline"> {copy.complete}</span>
+            </span>
+          </div>
+          <div className="mb-7">
+            <div className="sr-only">
               <span>{copy.progress(step, steps.length)}</span>
               <span>
                 {progress}%<span className="hidden sm:inline"> {copy.complete}</span>
               </span>
             </div>
-            <div className="h-1 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-[linear-gradient(90deg,#E94560,#f472b6)] transition-all duration-500" style={{ width: `${progress}%` }} />
+            <div className="h-2 overflow-hidden rounded-full bg-white shadow-[inset_0_0_0_1px_var(--sunlit-line)]">
+              <div
+                className="h-full rounded-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
 
-          <section className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,.18)] backdrop-blur sm:p-8">
+          <section className="sunlit-panel w-full min-w-0 overflow-hidden rounded-[2rem] p-6 sm:p-8 xl:p-10">
             {step === 1 ? <CompanyStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
             {step === 2 ? <StoryStep copy={copy} draft={draft} update={update} /> : null}
             {step === 3 ? <ProductsStep addProduct={addProduct} copy={copy} draft={draft} removeProduct={removeProduct} update={update} /> : null}
             {step === 4 ? <AudienceStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 5 ? <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} /> : null}
+            {step === 5 ? (
+              <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} />
+            ) : null}
             {step === 6 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
             {step === 7 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} update={update} /> : null}
             {step === 8 ? (
@@ -810,9 +867,9 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
             ) : null}
 
             {step < 8 ? (
-              <div className="mt-6 flex items-center justify-between sm:mt-8">
+              <div className="mt-8 flex items-center justify-between border-t border-[var(--sunlit-line)] pt-6">
                 <button
-                  className="flex items-center gap-2 rounded-lg bg-white/[.06] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[.09] disabled:bg-transparent disabled:text-white/20"
+                  className="sunlit-secondary flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold disabled:border-transparent disabled:bg-transparent disabled:text-[rgb(98_91_102_/_35%)]"
                   disabled={step === 1 || saving}
                   onClick={back}
                   type="button"
@@ -821,7 +878,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
                   {copy.back}
                 </button>
                 <button
-                  className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_12px_rgba(233,69,96,.3)] transition hover:opacity-90 disabled:opacity-60"
+                  className="sunlit-primary flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-extrabold disabled:opacity-60"
                   disabled={saving}
                   onClick={next}
                   type="button"
@@ -842,20 +899,26 @@ function CompanyStep({ copy, draft, locale, update }: StepProps & { copy: Onboar
   return (
     <div>
       <StepHeading body={copy.company.body} title={copy.company.title} />
-      <div className="grid gap-4">
+      <div className="grid gap-5 md:grid-cols-2">
         <DarkField label={copy.company.name} onChange={(value) => update("companyName", value)} value={draft.companyName} />
-        <DarkSelect label={copy.company.industry} onChange={(value) => update("industry", value)} options={industryOptions(locale)} placeholder={copy.company.industry} value={draft.industry} />
+        <DarkSelect
+          label={copy.company.industry}
+          onChange={(value) => update("industry", value)}
+          options={industryOptions(locale)}
+          placeholder={copy.company.industry}
+          value={draft.industry}
+        />
         <DarkField label={copy.company.location} onChange={(value) => update("location", value)} value={draft.location} />
         <DarkField label={copy.company.website} onChange={(value) => update("website", value)} value={draft.website} />
-        <section>
+        <section className="md:col-span-2">
           <Label>{copy.company.language}</Label>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             {languageOptions(locale).map((language) => (
               <button
                 className={
                   draft.languagePreference === language.value
-                    ? "rounded-lg border border-accent bg-accent/20 px-4 py-2 text-sm font-semibold text-accent"
-                    : "rounded-lg border border-white/10 bg-white/[.05] px-4 py-2 text-sm text-white/55"
+                    ? "rounded-xl border border-[rgb(33_191_174_/_35%)] bg-[var(--sunlit-aqua-soft)] px-4 py-2.5 text-sm font-extrabold text-[var(--sunlit-aqua-dark)]"
+                    : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sunlit-muted)]"
                 }
                 key={language.value}
                 onClick={() => update("languagePreference", language.value)}
@@ -875,7 +938,7 @@ function StoryStep({ copy, draft, update }: StepProps & { copy: OnboardingCopy }
   return (
     <div>
       <StepHeading body={copy.story.body} title={copy.story.title} />
-      <div className="grid gap-4">
+      <div className="grid gap-5 md:grid-cols-2">
         <DarkField area label={copy.story.mission} onChange={(value) => update("mission", value)} value={draft.mission} />
         <DarkField area label={copy.story.usp} onChange={(value) => update("usp", value)} value={draft.usp} />
         <DarkField label={copy.story.values} onChange={(value) => update("values", value)} value={draft.values} />
@@ -907,33 +970,47 @@ function ProductsStep({
       <StepHeading body={copy.products.body} title={copy.products.title} />
       <div className="grid gap-3">
         {draft.products.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-white/15 bg-white/[.03] p-4 text-sm text-white/45">
+          <p className="rounded-xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-4 text-sm font-semibold text-[var(--sunlit-muted)]">
             {copy.products.empty}
           </p>
         ) : null}
         {draft.products.map((product, index) => (
-          <article className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[.07] p-4" key={`${product.name}-${index}`}>
+          <article
+            className="flex items-start gap-3 rounded-xl border border-[var(--sunlit-line)] bg-white p-4 shadow-[0_8px_24px_rgb(75_47_36_/_5%)]"
+            key={`${product.name}-${index}`}
+          >
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-white">{product.name}</p>
-              {product.category ? <p className="mt-1 text-xs text-white/45">{product.category}</p> : null}
-              {product.description ? <p className="mt-2 text-sm leading-6 text-white/60">{product.description}</p> : null}
+              <p className="font-extrabold text-[var(--sunlit-ink)]">{product.name}</p>
+              {product.category ? <p className="mt-1 text-xs font-semibold text-[var(--sunlit-pink)]">{product.category}</p> : null}
+              {product.description ? <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{product.description}</p> : null}
             </div>
-            <button aria-label={`Remove ${product.name}`} className="text-white/40 transition hover:text-accent" onClick={() => removeProduct(index)} type="button">
+            <button
+              aria-label={`Remove ${product.name}`}
+              className="text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-coral-deep)]"
+              onClick={() => removeProduct(index)}
+              type="button"
+            >
               <Trash2 size={15} />
             </button>
           </article>
         ))}
       </div>
-      <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-white/[.03] p-4">
+      <div className="sunlit-panel-soft mt-5 grid gap-4 rounded-2xl p-5 md:grid-cols-2">
         <DarkField label={copy.products.name} onChange={(value) => updateNewProduct("name", value)} value={draft.newProduct.name} />
         <DarkField label={copy.products.category} onChange={(value) => updateNewProduct("category", value)} value={draft.newProduct.category} />
-        <DarkField area label={copy.products.description} onChange={(value) => updateNewProduct("description", value)} value={draft.newProduct.description} />
-        <button className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white" onClick={addProduct} type="button">
+        <div className="md:col-span-2">
+          <DarkField area label={copy.products.description} onChange={(value) => updateNewProduct("description", value)} value={draft.newProduct.description} />
+        </div>
+        <button
+          className="sunlit-primary flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold md:col-span-2 md:justify-self-end"
+          onClick={addProduct}
+          type="button"
+        >
           <Plus size={16} />
           {copy.addProduct}
         </button>
       </div>
-      <div className="mt-4 grid gap-4">
+      <div className="mt-5 grid gap-5 md:grid-cols-3">
         <DarkField label={copy.products.differentiators} onChange={(value) => update("differentiators", value)} value={draft.differentiators} />
         <DarkField label={copy.products.priceRange} onChange={(value) => update("priceRange", value)} value={draft.priceRange} />
         <DarkField label={copy.products.salesChannels} onChange={(value) => update("salesChannels", value)} value={draft.salesChannels} />
@@ -956,8 +1033,8 @@ function BrandStep({ copy, draft, locale, update }: StepProps & { copy: Onboardi
               <button
                 className={
                   active
-                    ? "rounded-lg border border-accent bg-accent/20 p-2.5 text-center text-accent sm:p-3"
-                    : "rounded-lg border border-white/10 bg-white/[.05] p-2.5 text-center text-white/55 transition hover:border-white/20 hover:text-white/75 sm:p-3"
+                    ? "rounded-xl border border-[rgb(217_63_122_/_30%)] bg-[var(--sunlit-paper-deep)] p-3 text-center text-[var(--sunlit-pink)]"
+                    : "rounded-xl border border-[var(--sunlit-line)] bg-white p-3 text-center text-[var(--sunlit-muted)] transition hover:border-[rgb(217_63_122_/_24%)] hover:text-[var(--sunlit-ink)]"
                 }
                 key={tone.id}
                 onClick={() => update("tone", tone.id)}
@@ -977,7 +1054,11 @@ function BrandStep({ copy, draft, locale, update }: StepProps & { copy: Onboardi
           {["#E94560", "#0F3460", "#22C55E", "#F59E0B", "#6366F1", "#EC4899", "#111827"].map((color) => (
             <button
               aria-label={`${copy.brand.color} ${color}`}
-              className={draft.brandColor === color ? "h-8 w-8 rounded-lg border-[3px] border-white sm:h-9 sm:w-9" : "h-8 w-8 rounded-lg border-[3px] border-transparent sm:h-9 sm:w-9"}
+              className={
+                draft.brandColor === color
+                  ? "h-9 w-9 rounded-xl border-[3px] border-[var(--sunlit-ink)] shadow-[0_0_0_2px_white]"
+                  : "h-9 w-9 rounded-xl border-[3px] border-transparent"
+              }
               key={color}
               onClick={() => update("brandColor", color)}
               style={{ background: color }}
@@ -986,10 +1067,12 @@ function BrandStep({ copy, draft, locale, update }: StepProps & { copy: Onboardi
           ))}
         </div>
       </section>
-      <div className="mt-5 grid gap-4 sm:mt-6">
+      <div className="mt-5 grid gap-5 sm:mt-6 md:grid-cols-2">
         <DarkField label={copy.brand.visualWords} onChange={(value) => update("brandVisualWords", value)} value={draft.brandVisualWords} />
         <DarkField label={copy.brand.fonts} onChange={(value) => update("brandFonts", value)} value={draft.brandFonts} />
-        <DarkField area label={copy.brand.voiceNotes} onChange={(value) => update("brandVoiceNotes", value)} value={draft.brandVoiceNotes} />
+        <div className="md:col-span-2">
+          <DarkField area label={copy.brand.voiceNotes} onChange={(value) => update("brandVoiceNotes", value)} value={draft.brandVoiceNotes} />
+        </div>
       </div>
     </div>
   );
@@ -1000,8 +1083,20 @@ function AudienceStep({ copy, draft, locale, update }: StepProps & { copy: Onboa
     <div>
       <StepHeading body={copy.audience.body} title={copy.audience.title} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <DarkSelect label={copy.audience.age} onChange={(value) => update("ageRange", value)} options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))} placeholder={copy.audience.age} value={draft.ageRange} />
-        <DarkSelect label={copy.audience.gender} onChange={(value) => update("genderFocus", value)} options={genderOptions(locale)} placeholder={copy.audience.gender} value={draft.genderFocus} />
+        <DarkSelect
+          label={copy.audience.age}
+          onChange={(value) => update("ageRange", value)}
+          options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))}
+          placeholder={copy.audience.age}
+          value={draft.ageRange}
+        />
+        <DarkSelect
+          label={copy.audience.gender}
+          onChange={(value) => update("genderFocus", value)}
+          options={genderOptions(locale)}
+          placeholder={copy.audience.gender}
+          value={draft.genderFocus}
+        />
         <div className="sm:col-span-2">
           <DarkField area label={copy.audience.demographics} onChange={(value) => update("audienceDescription", value)} value={draft.audienceDescription} />
         </div>
@@ -1034,10 +1129,15 @@ function CompetitorsStep({
       <StepHeading body={copy.competitors.body} title={copy.competitors.title} />
       <div className="grid gap-3">
         {draft.competitors.map((competitor, index) => (
-          <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[.07] px-4 py-3" key={competitor}>
-            <Target className="text-accent" size={16} />
-            <span className="flex-1 text-sm font-semibold text-white">{competitor}</span>
-            <button aria-label={`Remove ${competitor}`} className="text-white/40 transition hover:text-accent" onClick={() => removeCompetitor(index)} type="button">
+          <div className="flex items-center gap-3 rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3" key={competitor}>
+            <Target className="text-[var(--sunlit-pink)]" size={16} />
+            <span className="flex-1 text-sm font-extrabold text-[var(--sunlit-ink)]">{competitor}</span>
+            <button
+              aria-label={`Remove ${competitor}`}
+              className="text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-coral-deep)]"
+              onClick={() => removeCompetitor(index)}
+              type="button"
+            >
               <Trash2 size={14} />
             </button>
           </div>
@@ -1045,7 +1145,7 @@ function CompetitorsStep({
       </div>
       <div className="mt-4 flex gap-2">
         <input
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-accent"
+          className="sunlit-field min-w-0 flex-1 rounded-xl px-4 py-3 text-sm outline-none"
           onChange={(event) => update("newCompetitor", event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") addCompetitor();
@@ -1053,13 +1153,13 @@ function CompetitorsStep({
           placeholder={copy.addCompetitorPlaceholder}
           value={draft.newCompetitor}
         />
-        <button className="flex items-center gap-1 rounded-lg bg-accent px-4 text-sm font-semibold text-white" onClick={addCompetitor} type="button">
+        <button className="sunlit-primary flex items-center gap-1 rounded-xl px-5 text-sm font-extrabold" onClick={addCompetitor} type="button">
           <Plus size={16} />
           {copy.add}
         </button>
       </div>
-      <p className="mt-2 text-xs text-white/30">{copy.competitors.hint}</p>
-      <div className="mt-5 grid gap-4">
+      <p className="mt-2 text-xs font-semibold text-[var(--sunlit-muted)]">{copy.competitors.hint}</p>
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
         <DarkField area label={copy.competitors.advantage} onChange={(value) => update("competitiveAdvantage", value)} value={draft.competitiveAdvantage} />
         <DarkField area label={copy.competitors.difference} onChange={(value) => update("competitorDifference", value)} value={draft.competitorDifference} />
       </div>
@@ -1076,25 +1176,55 @@ function GoalsStep({ copy, draft, locale, toggleGoal, update }: StepProps & { co
           const active = draft.goals.includes(goal.value);
           return (
             <button
-              className={active ? "rounded-xl border border-accent bg-accent/15 p-4 text-start" : "rounded-xl border border-white/10 bg-white/[.05] p-4 text-start transition hover:border-white/20"}
+              className={
+                active
+                  ? "rounded-xl border border-[rgb(33_191_174_/_36%)] bg-[var(--sunlit-aqua-soft)] p-4 text-start"
+                  : "rounded-xl border border-[var(--sunlit-line)] bg-white p-4 text-start transition hover:border-[rgb(217_63_122_/_24%)]"
+              }
               key={goal.value}
               onClick={() => toggleGoal(goal.value)}
               type="button"
             >
               <span className="flex items-center gap-2">
-                <span className={active ? "flex h-[18px] w-[18px] items-center justify-center rounded-full bg-accent" : "h-[18px] w-[18px] rounded-full bg-white/10"}>
+                <span
+                  className={
+                    active
+                      ? "flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--sunlit-aqua)] text-white"
+                      : "h-[18px] w-[18px] rounded-full border border-[var(--sunlit-line-strong)] bg-white"
+                  }
+                >
                   {active ? <CheckCircle2 size={12} /> : null}
                 </span>
-                <span className={active ? "text-sm font-semibold text-white" : "text-sm text-white/55"}>{goal.label}</span>
+                <span className={active ? "text-sm font-extrabold text-[var(--sunlit-aqua-dark)]" : "text-sm font-bold text-[var(--sunlit-muted)]"}>
+                  {goal.label}
+                </span>
               </span>
             </button>
           );
         })}
       </div>
-      <div className="mt-5 grid gap-4">
-        <DarkField label={copy.goals.budget} maxLength={onboardingObjectiveFieldLimits.budgetRange} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
-        <DarkField label={copy.goals.instagramExperience} maxLength={onboardingObjectiveFieldLimits.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
-        <DarkField area label={copy.goals.success90Days} maxLength={onboardingObjectiveFieldLimits.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        <DarkField
+          label={copy.goals.budget}
+          maxLength={onboardingObjectiveFieldLimits.budgetRange}
+          onChange={(value) => update("budgetRange", value)}
+          value={draft.budgetRange}
+        />
+        <DarkField
+          label={copy.goals.instagramExperience}
+          maxLength={onboardingObjectiveFieldLimits.instagramExperience}
+          onChange={(value) => update("instagramExperience", value)}
+          value={draft.instagramExperience}
+        />
+        <div className="md:col-span-2">
+          <DarkField
+            area
+            label={copy.goals.success90Days}
+            maxLength={onboardingObjectiveFieldLimits.success90Days}
+            onChange={(value) => update("success90Days", value)}
+            value={draft.success90Days}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1129,26 +1259,22 @@ function ReviewStep({
     return (
       <div className="py-8 text-center sm:py-14">
         <div className="relative mx-auto mb-8 flex h-24 w-24 items-center justify-center">
-          <span className="absolute inset-0 animate-ping rounded-full bg-accent/15" />
-          <span className="absolute inset-2 animate-pulse rounded-3xl border border-accent/30 bg-accent/10" />
-          <LoaderCircle className="relative animate-spin text-accent" size={38} strokeWidth={1.8} />
+          <span className="absolute inset-0 animate-ping rounded-full bg-[rgb(33_191_174_/_12%)]" />
+          <span className="absolute inset-2 animate-pulse rounded-3xl border border-[rgb(33_191_174_/_28%)] bg-[var(--sunlit-aqua-soft)]" />
+          <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} strokeWidth={1.8} />
         </div>
-        <h2 className="font-display text-2xl font-bold tracking-normal text-white sm:text-3xl">
-          {copy.profile.generatingTitle}
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-white/55 sm:text-base">
-          {copy.profile.generatingBody}
-        </p>
+        <h2 className="font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.generatingTitle}</h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--sunlit-muted)] sm:text-base">{copy.profile.generatingBody}</p>
         <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
           {[copy.story.title, copy.audience.title, copy.brand.title].map((label, index) => (
-            <div className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3" key={label}>
-              <span className="mb-2 block h-1 rounded-full bg-white/10">
+            <div className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-4 py-3" key={label}>
+              <span className="mb-2 block h-1 rounded-full bg-white">
                 <span
-                  className="block h-full animate-pulse rounded-full bg-accent"
+                  className="block h-full animate-pulse rounded-full bg-[var(--sunlit-aqua)]"
                   style={{ animationDelay: `${index * 180}ms`, width: `${70 + index * 10}%` }}
                 />
               </span>
-              <span className="text-xs text-white/45">{label}</span>
+              <span className="text-xs font-semibold text-[var(--sunlit-muted)]">{label}</span>
             </div>
           ))}
         </div>
@@ -1162,14 +1288,14 @@ function ReviewStep({
         <BrandAiMark />
         <StepHeading center body={copy.profile.generateBody} title={copy.profile.generateTitle} />
         <button
-          className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-6 py-3.5 text-base font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.4)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(233,69,96,.35)]"
+          className="sunlit-primary mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-extrabold"
           onClick={generateProfile}
           type="button"
         >
           <WandSparkles size={19} />
           {copy.profile.generate}
         </button>
-        <button className="mt-5 text-sm text-white/45 transition hover:text-white/70" onClick={back} type="button">
+        <button className="mt-5 text-sm font-bold text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-ink)]" onClick={back} type="button">
           {copy.profile.back}
         </button>
       </div>
@@ -1178,27 +1304,33 @@ function ReviewStep({
 
   return (
     <div>
-      <div className="flex flex-col gap-5 border-b border-white/10 pb-6 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-accent">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[rgb(217_63_122_/_24%)] bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-pink)]">
             <Sparkles size={13} />
             {copy.profile.draftEyebrow}
           </span>
-          <h2 className="mt-4 font-display text-2xl font-bold tracking-normal text-white sm:text-3xl">
-            {copy.profile.draftTitle}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-white/50">{copy.profile.draftBody}</p>
+          <h2 className="mt-4 font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.draftTitle}</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.profile.draftBody}</p>
         </div>
-        <div className="inline-flex shrink-0 rounded-xl border border-white/10 bg-black/15 p-1" aria-label="Profile language">
+        <div className="inline-flex shrink-0 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1" aria-label="Profile language">
           <button
-            className={language === "en" ? "rounded-lg bg-white/10 px-4 py-2 text-xs font-bold text-white shadow-sm" : "rounded-lg px-4 py-2 text-xs font-semibold text-white/40"}
+            className={
+              language === "en"
+                ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-xs font-extrabold text-white shadow-sm"
+                : "rounded-lg px-4 py-2 text-xs font-bold text-[var(--sunlit-muted)]"
+            }
             onClick={() => setLanguage("en")}
             type="button"
           >
             {copy.profile.languageEn}
           </button>
           <button
-            className={language === "ar" ? "rounded-lg bg-white/10 px-4 py-2 text-xs font-bold text-white shadow-sm" : "rounded-lg px-4 py-2 text-xs font-semibold text-white/40"}
+            className={
+              language === "ar"
+                ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-xs font-extrabold text-white shadow-sm"
+                : "rounded-lg px-4 py-2 text-xs font-bold text-[var(--sunlit-muted)]"
+            }
             onClick={() => setLanguage("ar")}
             type="button"
           >
@@ -1207,14 +1339,14 @@ function ReviewStep({
         </div>
       </div>
 
-      <div className="mt-6 rounded-xl border border-cyan-300/15 bg-cyan-300/[.05] p-4">
+      <div className="mt-6 rounded-2xl border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-5">
         <label>
-          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.08em] text-cyan-200/70">
+          <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-aqua-dark)]">
             <BriefcaseBusiness size={14} />
             {copy.profile.businessName}
           </span>
           <input
-            className="mt-2 w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-white/25"
+            className="mt-2 w-full bg-transparent font-display text-2xl font-black text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
             dir="auto"
             onChange={(event) => updateBusinessName(event.target.value)}
             value={profile.businessName}
@@ -1225,17 +1357,21 @@ function ReviewStep({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {profileFieldKeys.map((field, index) => (
           <label
-            className={index === 1 ? "rounded-xl border border-white/10 bg-white/[.04] p-4 sm:col-span-2" : "rounded-xl border border-white/10 bg-white/[.04] p-4"}
+            className={
+              index === 1
+                ? "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5 sm:col-span-2"
+                : "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5"
+            }
             key={field}
           >
-            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.07em] text-white/50">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/[.06] text-[10px] text-accent">
+            <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.07em] text-[var(--sunlit-muted)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[10px] text-[var(--sunlit-pink)] shadow-[0_5px_14px_rgb(75_47_36_/_7%)]">
                 {String(index + 1).padStart(2, "0")}
               </span>
               {copy.profile.fields[field]}
             </span>
             <textarea
-              className="mt-3 min-h-24 w-full resize-y bg-transparent text-sm leading-6 text-white outline-none placeholder:text-white/20"
+              className="mt-3 min-h-24 w-full resize-y bg-transparent text-[15px] leading-7 text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
               dir={language === "ar" ? "rtl" : "ltr"}
               onChange={(event) => updateProfileField(field, language, event.target.value)}
               value={profile[field][language]}
@@ -1244,23 +1380,18 @@ function ReviewStep({
         ))}
       </div>
 
-      <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[.05] p-4 text-start">
-        <Languages className="mt-0.5 shrink-0 text-amber-300" size={18} />
-        <p className="text-xs leading-5 text-white/50">{copy.profile.editHint}</p>
+      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[rgb(246_196_83_/_38%)] bg-[rgb(246_196_83_/_16%)] p-4 text-start">
+        <Languages className="mt-0.5 shrink-0 text-[var(--sunlit-warning)]" size={18} />
+        <p className="text-sm leading-6 text-[var(--sunlit-ink-soft)]">{copy.profile.editHint}</p>
       </div>
 
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          <button
-            className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm font-semibold text-white/55 transition hover:bg-white/[.08] hover:text-white"
-            disabled={saving}
-            onClick={back}
-            type="button"
-          >
+          <button className="sunlit-secondary rounded-xl px-5 py-3 text-sm font-bold" disabled={saving} onClick={back} type="button">
             {copy.profile.back}
           </button>
           <button
-            className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm font-semibold text-white/70 transition hover:border-accent/30 hover:text-accent disabled:opacity-50"
+            className="sunlit-secondary flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold disabled:opacity-50"
             disabled={saving}
             onClick={generateProfile}
             type="button"
@@ -1270,7 +1401,7 @@ function ReviewStep({
           </button>
         </div>
         <button
-          className="flex items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-6 py-3.5 text-sm font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.32)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60"
+          className="sunlit-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-extrabold disabled:translate-y-0 disabled:opacity-60"
           disabled={saving}
           onClick={approveProfile}
           type="button"
@@ -1290,9 +1421,9 @@ interface StepProps {
 
 function StepHeading({ body, center = false, title }: { body: string; center?: boolean; title: string }) {
   return (
-    <div className={center ? "mb-5 text-center sm:mb-7" : "mb-5 sm:mb-7"}>
-      <h2 className="font-display text-[22px] font-bold tracking-normal text-white sm:text-2xl">{title}</h2>
-      <p className="mt-1.5 text-sm leading-6 text-white/50 sm:mt-2">{body}</p>
+    <div className={center ? "mb-6 text-center sm:mb-8" : "mb-6 sm:mb-8"}>
+      <h2 className="font-display text-[26px] font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{title}</h2>
+      <p className="mt-2 max-w-3xl text-[15px] leading-7 text-[var(--sunlit-muted)]">{body}</p>
     </div>
   );
 }
@@ -1300,8 +1431,8 @@ function StepHeading({ body, center = false, title }: { body: string; center?: b
 function BrandAiMark() {
   return (
     <div className="mb-6 flex justify-center">
-      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-accent/40 bg-[linear-gradient(135deg,rgba(233,69,96,.3),rgba(15,52,96,.3))]">
-        <Sparkles className="text-accent" size={32} />
+      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-[rgb(217_63_122_/_24%)] bg-[var(--sunlit-paper-deep)] shadow-[0_16px_36px_rgb(255_102_90_/_12%)]">
+        <Sparkles className="text-[var(--sunlit-pink)]" size={32} />
       </div>
     </div>
   );
@@ -1324,11 +1455,25 @@ function DarkField({
     <label>
       <Label>{label}</Label>
       {area ? (
-        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
+        <textarea
+          className="sunlit-field mt-2 min-h-28 w-full resize-y rounded-xl px-4 py-3 text-[15px] leading-6 outline-none"
+          maxLength={maxLength}
+          onChange={(event) => onChange(event.target.value)}
+          value={value}
+        />
       ) : (
-        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
+        <input
+          className="sunlit-field mt-2 min-h-12 rounded-xl px-4 py-3 text-[15px] outline-none"
+          maxLength={maxLength}
+          onChange={(event) => onChange(event.target.value)}
+          value={value}
+        />
       )}
-      {maxLength ? <span className="mt-1 block text-end text-[11px] text-white/35">{value.length}/{maxLength}</span> : null}
+      {maxLength ? (
+        <span className="mt-1.5 block text-end text-[11px] font-semibold text-[var(--sunlit-muted)]">
+          {value.length}/{maxLength}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -1349,7 +1494,11 @@ function DarkSelect({
   return (
     <label>
       <Label>{label}</Label>
-      <select className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#2d2d42] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value}>
+      <select
+        className="sunlit-field mt-2 min-h-12 rounded-xl px-4 py-3 text-[15px] outline-none"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
         <option disabled value="">
           {placeholder}
         </option>
@@ -1364,7 +1513,7 @@ function DarkSelect({
 }
 
 function Label({ children }: { children: ReactNode }) {
-  return <span className="text-xs font-semibold uppercase tracking-[.06em] text-white/60">{children}</span>;
+  return <span className="text-xs font-extrabold uppercase tracking-[.06em] text-[var(--sunlit-ink-soft)]">{children}</span>;
 }
 
 function getInitialStep(): StepId {

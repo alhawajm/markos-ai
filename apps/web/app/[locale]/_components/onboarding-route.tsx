@@ -68,10 +68,10 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
   }
 
   return (
-    <main className="lux-page grid min-h-screen place-items-center px-6 text-white">
-      <section className="lux-card max-w-md rounded-[2rem] p-8 text-center">
-        <span className="lux-ai-core mx-auto" />
-        <h1 className="mt-8 text-3xl font-black">
+    <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
+      <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
+        <span className="mx-auto block h-16 w-16 animate-pulse rounded-2xl bg-[var(--sunlit-aqua-soft)] shadow-[inset_0_0_0_1px_rgb(33_191_174_/_22%)]" />
+        <h1 className="mt-7 text-3xl font-black text-[var(--sunlit-ink)]">
           {status === "failed"
             ? locale === "ar"
               ? "تعذر فتح الإعداد"
@@ -80,7 +80,7 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
               ? "جارٍ التحقق من الإعداد"
               : "Checking onboarding status"}
         </h1>
-        <p className="mt-3 text-base leading-relaxed text-[#9AA7BD]">
+        <p className="mt-3 text-base leading-relaxed text-[var(--sunlit-muted)]">
           {status === "failed"
             ? message
             : locale === "ar"
@@ -88,11 +88,7 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
               : "Checking your workspace before opening the onboarding steps."}
         </p>
         {status === "failed" ? (
-          <button
-            className="mt-6 rounded-full bg-[#D4AF37] px-6 py-3 font-black text-[#0F1419]"
-            onClick={() => setAttempt((current) => current + 1)}
-            type="button"
-          >
+          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-black" onClick={() => setAttempt((current) => current + 1)} type="button">
             {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
           </button>
         ) : null}
