@@ -75,6 +75,34 @@ def test_strategy_generation_contract() -> None:
     assert "COMPANY/profile" in body["strategy"]["summary"]
 
 
+def test_business_profile_generation_contract() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/profile/generate",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "context": [
+                {
+                    "section": "COMPANY",
+                    "key": "profile",
+                    "value": {"name": "Pearl Coffee", "location": "Bahrain"},
+                    "score": 1,
+                }
+            ],
+            "model": "test-profile-model",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model"] == "test-profile-model"
+    assert body["prompt_version"] == "onboarding-business-profile.v1.local"
+    assert body["profile"]["businessName"] == "Pearl Coffee"
+    assert body["profile"]["overview"]["en"]
+    assert body["profile"]["overview"]["ar"]
+
+
 def test_content_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(

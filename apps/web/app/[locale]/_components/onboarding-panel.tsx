@@ -8,14 +8,19 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   Gem,
+  Languages,
+  LoaderCircle,
   Plus,
+  RefreshCw,
   Sparkles,
   Target,
   Trash2,
+  WandSparkles,
   Zap
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { Locale } from "@markos/shared-types";
+import type { BusinessProfile, Locale, OnboardingBusinessProfileState } from "@markos/shared-types";
+import { onboardingObjectiveFieldLimits } from "@markos/validation";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { NotificationToast } from "./notification-toast";
 import {
@@ -32,6 +37,18 @@ import {
 type StepId = OnboardingStepId;
 type Icon = ComponentType<{ className?: string; color?: string; size?: number; strokeWidth?: number }>;
 type SelectOption = { label: string; value: string };
+type ProfileFieldKey = Exclude<keyof BusinessProfile, "businessName">;
+
+const profileFieldKeys: ProfileFieldKey[] = [
+  "tagline",
+  "overview",
+  "uniqueValue",
+  "offerSummary",
+  "idealCustomer",
+  "marketPosition",
+  "brandVoice",
+  "marketingFocus"
+];
 
 const toneMeta: Array<{ icon: Icon; id: string }> = [
   { id: "professional", icon: BriefcaseBusiness },
@@ -91,18 +108,47 @@ function onboardingCopy(locale: Locale) {
       continue: "متابعة",
       dismiss: "إغلاق الإشعار",
       errors: {
+        approve: "تعذر اعتماد ملف النشاط الآن.",
         complete: "تعذر إنهاء الإعداد الآن.",
+        generate: "تعذر إنشاء ملف النشاط الآن. إجاباتك محفوظة ويمكنك المحاولة مجدداً.",
         save: "تعذر حفظ هذه الخطوة الآن.",
         session: "ما زلنا نتحقق من جلستك. حاول مرة أخرى بعد لحظة."
       },
       goals: {
         body: "اختر كل ما ينطبق. سيضبط MARKOS استراتيجية المحتوى وفقاً لذلك.",
         budget: "نطاق الميزانية الاختياري",
-        instagramExperience: "خبرتك الحالية مع إنستغرام",
+        instagramExperience: "خبرتك الحالية مع إنستغرام (120 حرفاً كحد أقصى)",
         success90Days: "كيف يبدو النجاح بعد 90 يوماً؟",
         title: "ما أهدافك من المحتوى؟"
       },
       launch: "إكمال الإعداد",
+      profile: {
+        approve: "اعتماد الملف والمتابعة",
+        back: "مراجعة الإجابات",
+        businessName: "اسم النشاط",
+        draftBody: "راجع الصياغة وعدّلها حتى تمثل نشاطك كما تريد. سيستخدم MARKOS النسخة التي تعتمدها كذاكرة أساسية.",
+        draftEyebrow: "ملف أنشأه MARKOS",
+        draftTitle: "هذه هي هوية نشاطك",
+        editHint: "كل النصوص قابلة للتعديل. راجع اللغتين قبل الاعتماد.",
+        fields: {
+          tagline: "الوصف المختصر",
+          overview: "نبذة عن النشاط",
+          uniqueValue: "القيمة الفريدة",
+          offerSummary: "المنتجات والخدمات",
+          idealCustomer: "العميل المثالي",
+          marketPosition: "الموقع في السوق",
+          brandVoice: "صوت العلامة",
+          marketingFocus: "التركيز التسويقي"
+        },
+        generate: "إنشاء ملف نشاطي",
+        generateBody: "سيحوّل MARKOS إجاباتك إلى ملف ثنائي اللغة يمكنك مراجعته وتعديله قبل اعتماده.",
+        generateTitle: "حوّل معرفتك إلى هوية واضحة",
+        generatingBody: "نلخّص قصتك وعروضك وجمهورك وصوت علامتك باللغتين العربية والإنجليزية.",
+        generatingTitle: "MARKOS يبني ملف نشاطك",
+        languageAr: "العربية",
+        languageEn: "English",
+        regenerate: "إنشاء صياغة جديدة"
+      },
       products: {
         body: "أضف منتجاً أو خدمة واحدة على الأقل حتى يفهم MARKOS ما تبيعه.",
         category: "الفئة",
@@ -158,6 +204,7 @@ function onboardingCopy(locale: Locale) {
         company: "أدخل اسم الشركة والقطاع والموقع ولغة عمل واحدة على الأقل.",
         competitors: "أضف منافساً واحداً على الأقل لإكمال هذا القسم.",
         objectives: "اختر هدف محتوى واحداً على الأقل.",
+        objectivesLength: "اجعل نطاق الميزانية وخبرة إنستغرام ضمن 120 حرفاً، وهدف 90 يوماً ضمن 1000 حرف.",
         products: "أضف منتجاً أو خدمة واحدة على الأقل.",
         story: "أدخل الرسالة وعرض القيمة وقيمة واحدة على الأقل."
       }
@@ -201,19 +248,48 @@ function onboardingCopy(locale: Locale) {
     },
     continue: "Continue",
     dismiss: "Dismiss notification",
-    errors: {
-      complete: "Could not complete onboarding yet.",
-      save: "Could not save this step yet.",
-      session: "We are still checking your session. Try again in a moment."
-    },
+      errors: {
+        approve: "Could not approve the business profile yet.",
+        complete: "Could not complete onboarding yet.",
+        generate: "Could not create the business profile yet. Your answers are safe, so you can try again.",
+        save: "Could not save this step yet.",
+        session: "We are still checking your session. Try again in a moment."
+      },
     goals: {
       body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
       budget: "Optional budget range",
-      instagramExperience: "Current Instagram experience",
+      instagramExperience: "Current Instagram experience (120 characters max)",
       success90Days: "What would success look like in 90 days?",
       title: "What are your content goals?"
     },
     launch: "Complete onboarding",
+    profile: {
+      approve: "Approve profile & continue",
+      back: "Review my answers",
+      businessName: "Business name",
+      draftBody: "Review the wording and make it sound exactly like your business. MARKOS will use the approved version as its core memory.",
+      draftEyebrow: "Resolved by MARKOS",
+      draftTitle: "This is your business identity",
+      editHint: "Everything is editable. Review both languages before you approve.",
+      fields: {
+        tagline: "Short description",
+        overview: "Business overview",
+        uniqueValue: "Unique value",
+        offerSummary: "Products and services",
+        idealCustomer: "Ideal customer",
+        marketPosition: "Market position",
+        brandVoice: "Brand voice",
+        marketingFocus: "Marketing focus"
+      },
+      generate: "Generate my business profile",
+      generateBody: "MARKOS will turn your answers into a bilingual profile you can review and edit before anything is finalized.",
+      generateTitle: "Turn your knowledge into a clear identity",
+      generatingBody: "We are resolving your story, offers, audience, and brand voice in Arabic and English.",
+      generatingTitle: "MARKOS is building your profile",
+      languageAr: "العربية",
+      languageEn: "English",
+      regenerate: "Generate a new version"
+    },
     products: {
       body: "Add at least one product or service so MARKOS understands what you sell.",
       category: "Category",
@@ -269,6 +345,7 @@ function onboardingCopy(locale: Locale) {
       company: "Enter the company name, industry, location, and at least one business language.",
       competitors: "Add at least one competitor to complete this section.",
       objectives: "Choose at least one content goal.",
+      objectivesLength: "Keep the budget and Instagram experience within 120 characters, and the 90-day goal within 1,000 characters.",
       products: "Add at least one product or service.",
       story: "Enter a mission, a unique value proposition, and at least one business value."
     }
@@ -337,6 +414,11 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"error" | "success">("success");
+  const [profileDraft, setProfileDraft] = useState<BusinessProfile | null>(null);
+  const [profileInteractionId, setProfileInteractionId] = useState<string | null>(null);
+  const [profileLanguage, setProfileLanguage] = useState<Locale>(locale);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const session = useMarkosSession();
   const [step, setStep] = useState<StepId>(1);
@@ -345,6 +427,10 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
 
   const client = useMarkosClient(locale);
   const dismissMessage = useCallback(() => setMessage(""), []);
+  const applyBusinessProfileState = useCallback((state: OnboardingBusinessProfileState) => {
+    setProfileDraft(state.profile);
+    setProfileInteractionId(state.interactionId);
+  }, []);
 
   useEffect(() => {
     window.localStorage.removeItem(legacyOnboardingDraftKey);
@@ -364,6 +450,11 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     }
 
     workspaceNameApplied.current = false;
+    setProfileDraft(null);
+    setProfileInteractionId(null);
+    setProfileLanguage(locale);
+    setProfileLoaded(false);
+    setProfileLoading(false);
     setStep(getInitialStep());
     setDraftHydrated(true);
   }, [locale]);
@@ -380,6 +471,39 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
       );
     });
   }, [locale, session]);
+
+  useEffect(() => {
+    if (step !== 8 || !session || profileLoaded) return;
+
+    let active = true;
+    setProfileLoading(true);
+
+    void client
+      .onboarding()
+      .then((state) => {
+        if (!active) return;
+
+        if (state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
+          router.replace(`/${locale}/app`);
+          return;
+        }
+
+        applyBusinessProfileState(state.businessProfile);
+        setProfileLoaded(true);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setMessageTone("error");
+        setMessage(error instanceof Error ? error.message : copy.errors.generate);
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [applyBusinessProfileState, client, copy.errors.generate, locale, profileLoaded, router, session, step]);
 
   useEffect(() => {
     if (!draftHydrated) return;
@@ -405,7 +529,9 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     if (!saved) return;
 
     if (step === 7) {
+      setProfileLoaded(true);
       setStep(8);
+      await generateProfile();
       return;
     }
 
@@ -414,29 +540,90 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  function selectStep(target: StepId) {
+    if (target === 8 && step === 7) {
+      void next();
+      return;
+    }
+
+    if (target !== 8) {
+      setStep(target);
+      setMessage("");
+    }
+  }
+
   function back() {
     setStep((current) => Math.max(1, current - 1) as StepId);
     setMessage("");
   }
 
-  async function launchDashboard() {
+  async function generateProfile() {
     if (!session) {
       setMessageTone("error");
       setMessage(copy.errors.session);
       return;
     }
 
-    setSaving(true);
+    setProfileLoading(true);
     setMessage("");
     try {
-      await client.completeOnboarding();
-      window.localStorage.removeItem(onboardingDraftKey);
-      router.push(`/${locale}`);
+      const state = await client.generateBusinessProfile();
+      applyBusinessProfileState(state.businessProfile);
+      setProfileLoaded(true);
     } catch (error) {
       setMessageTone("error");
-      setMessage(error instanceof Error ? error.message : copy.errors.complete);
+      setMessage(error instanceof Error ? error.message : copy.errors.generate);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function approveProfile() {
+    if (!session) {
+      setMessageTone("error");
+      setMessage(copy.errors.session);
+      return;
+    }
+
+    if (!profileDraft || !profileInteractionId) {
+      setMessageTone("error");
+      setMessage(copy.errors.generate);
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+
+    try {
+      await client.approveBusinessProfile({
+        interactionId: profileInteractionId,
+        profile: profileDraft
+      });
+      window.localStorage.removeItem(onboardingDraftKey);
+      router.push(`/${locale}/app`);
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : copy.errors.approve);
       setSaving(false);
     }
+  }
+
+  function updateBusinessName(value: string) {
+    setProfileDraft((current) => (current ? { ...current, businessName: value } : current));
+  }
+
+  function updateProfileField(field: ProfileFieldKey, language: Locale, value: string) {
+    setProfileDraft((current) =>
+      current
+        ? {
+            ...current,
+            [field]: {
+              ...current[field],
+              [language]: value
+            }
+          }
+        : current
+    );
   }
 
   async function persistStep(stepToSave: StepId): Promise<boolean> {
@@ -547,7 +734,13 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
               const complete = step > item.id;
 
               return (
-                <button className="flex items-center gap-3 py-2.5 text-start" key={item.id} onClick={() => setStep(item.id)} type="button">
+                <button
+                  className="flex items-center gap-3 py-2.5 text-start disabled:cursor-not-allowed"
+                  disabled={saving || (item.id === 8 && step < 7)}
+                  key={item.id}
+                  onClick={() => selectStep(item.id)}
+                  type="button"
+                >
                   <span
                     className={
                       complete
@@ -579,7 +772,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
       </aside>
 
       <main className="flex min-w-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto px-5 py-6 sm:p-8 lg:items-center">
-        <div className="w-full min-w-0 max-w-[310px] sm:max-w-[560px]">
+        <div className={step === 8 ? "w-full min-w-0 max-w-[310px] sm:max-w-[920px]" : "w-full min-w-0 max-w-[310px] sm:max-w-[560px]"}>
           <div className="mb-8">
             <div className="mb-2 flex justify-between text-xs text-white/50">
               <span>{copy.progress(step, steps.length)}</span>
@@ -600,7 +793,21 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
             {step === 5 ? <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} /> : null}
             {step === 6 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
             {step === 7 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} update={update} /> : null}
-            {step === 8 ? <ReviewStep copy={copy} launchDashboard={launchDashboard} saving={saving} /> : null}
+            {step === 8 ? (
+              <ReviewStep
+                approveProfile={approveProfile}
+                back={back}
+                copy={copy}
+                generateProfile={generateProfile}
+                language={profileLanguage}
+                loading={profileLoading}
+                profile={profileDraft}
+                saving={saving}
+                setLanguage={setProfileLanguage}
+                updateBusinessName={updateBusinessName}
+                updateProfileField={updateProfileField}
+              />
+            ) : null}
 
             {step < 8 ? (
               <div className="mt-6 flex items-center justify-between sm:mt-8">
@@ -885,35 +1092,193 @@ function GoalsStep({ copy, draft, locale, toggleGoal, update }: StepProps & { co
         })}
       </div>
       <div className="mt-5 grid gap-4">
-        <DarkField label={copy.goals.budget} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
-        <DarkField label={copy.goals.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
-        <DarkField area label={copy.goals.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
+        <DarkField label={copy.goals.budget} maxLength={onboardingObjectiveFieldLimits.budgetRange} onChange={(value) => update("budgetRange", value)} value={draft.budgetRange} />
+        <DarkField label={copy.goals.instagramExperience} maxLength={onboardingObjectiveFieldLimits.instagramExperience} onChange={(value) => update("instagramExperience", value)} value={draft.instagramExperience} />
+        <DarkField area label={copy.goals.success90Days} maxLength={onboardingObjectiveFieldLimits.success90Days} onChange={(value) => update("success90Days", value)} value={draft.success90Days} />
       </div>
     </div>
   );
 }
 
 function ReviewStep({
+  approveProfile,
+  back,
   copy,
-  launchDashboard,
-  saving
+  generateProfile,
+  language,
+  loading,
+  profile,
+  saving,
+  setLanguage,
+  updateBusinessName,
+  updateProfileField
 }: {
+  approveProfile: () => void;
+  back: () => void;
   copy: OnboardingCopy;
-  launchDashboard: () => void;
+  generateProfile: () => void;
+  language: Locale;
+  loading: boolean;
+  profile: BusinessProfile | null;
   saving: boolean;
+  setLanguage: (language: Locale) => void;
+  updateBusinessName: (value: string) => void;
+  updateProfileField: (field: ProfileFieldKey, language: Locale, value: string) => void;
 }) {
+  if (loading) {
+    return (
+      <div className="py-8 text-center sm:py-14">
+        <div className="relative mx-auto mb-8 flex h-24 w-24 items-center justify-center">
+          <span className="absolute inset-0 animate-ping rounded-full bg-accent/15" />
+          <span className="absolute inset-2 animate-pulse rounded-3xl border border-accent/30 bg-accent/10" />
+          <LoaderCircle className="relative animate-spin text-accent" size={38} strokeWidth={1.8} />
+        </div>
+        <h2 className="font-display text-2xl font-bold tracking-normal text-white sm:text-3xl">
+          {copy.profile.generatingTitle}
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-white/55 sm:text-base">
+          {copy.profile.generatingBody}
+        </p>
+        <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
+          {[copy.story.title, copy.audience.title, copy.brand.title].map((label, index) => (
+            <div className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3" key={label}>
+              <span className="mb-2 block h-1 rounded-full bg-white/10">
+                <span
+                  className="block h-full animate-pulse rounded-full bg-accent"
+                  style={{ animationDelay: `${index * 180}ms`, width: `${70 + index * 10}%` }}
+                />
+              </span>
+              <span className="text-xs text-white/45">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="py-5 text-center sm:px-8 sm:py-12">
+        <BrandAiMark />
+        <StepHeading center body={copy.profile.generateBody} title={copy.profile.generateTitle} />
+        <button
+          className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-6 py-3.5 text-base font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.4)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(233,69,96,.35)]"
+          onClick={generateProfile}
+          type="button"
+        >
+          <WandSparkles size={19} />
+          {copy.profile.generate}
+        </button>
+        <button className="mt-5 text-sm text-white/45 transition hover:text-white/70" onClick={back} type="button">
+          {copy.profile.back}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="py-4 text-center">
-      <BrandAiMark />
-      <StepHeading center body={copy.setup.body} title={copy.setup.readyTitle} />
-      <button
-        className="w-full rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] py-3.5 text-base font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.4)] transition hover:opacity-90 disabled:opacity-60"
-        disabled={saving}
-        onClick={launchDashboard}
-        type="button"
-      >
-        {copy.launch}
-      </button>
+    <div>
+      <div className="flex flex-col gap-5 border-b border-white/10 pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-accent">
+            <Sparkles size={13} />
+            {copy.profile.draftEyebrow}
+          </span>
+          <h2 className="mt-4 font-display text-2xl font-bold tracking-normal text-white sm:text-3xl">
+            {copy.profile.draftTitle}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-white/50">{copy.profile.draftBody}</p>
+        </div>
+        <div className="inline-flex shrink-0 rounded-xl border border-white/10 bg-black/15 p-1" aria-label="Profile language">
+          <button
+            className={language === "en" ? "rounded-lg bg-white/10 px-4 py-2 text-xs font-bold text-white shadow-sm" : "rounded-lg px-4 py-2 text-xs font-semibold text-white/40"}
+            onClick={() => setLanguage("en")}
+            type="button"
+          >
+            {copy.profile.languageEn}
+          </button>
+          <button
+            className={language === "ar" ? "rounded-lg bg-white/10 px-4 py-2 text-xs font-bold text-white shadow-sm" : "rounded-lg px-4 py-2 text-xs font-semibold text-white/40"}
+            onClick={() => setLanguage("ar")}
+            type="button"
+          >
+            {copy.profile.languageAr}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-cyan-300/15 bg-cyan-300/[.05] p-4">
+        <label>
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.08em] text-cyan-200/70">
+            <BriefcaseBusiness size={14} />
+            {copy.profile.businessName}
+          </span>
+          <input
+            className="mt-2 w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-white/25"
+            dir="auto"
+            onChange={(event) => updateBusinessName(event.target.value)}
+            value={profile.businessName}
+          />
+        </label>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {profileFieldKeys.map((field, index) => (
+          <label
+            className={index === 1 ? "rounded-xl border border-white/10 bg-white/[.04] p-4 sm:col-span-2" : "rounded-xl border border-white/10 bg-white/[.04] p-4"}
+            key={field}
+          >
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.07em] text-white/50">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/[.06] text-[10px] text-accent">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              {copy.profile.fields[field]}
+            </span>
+            <textarea
+              className="mt-3 min-h-24 w-full resize-y bg-transparent text-sm leading-6 text-white outline-none placeholder:text-white/20"
+              dir={language === "ar" ? "rtl" : "ltr"}
+              onChange={(event) => updateProfileField(field, language, event.target.value)}
+              value={profile[field][language]}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[.05] p-4 text-start">
+        <Languages className="mt-0.5 shrink-0 text-amber-300" size={18} />
+        <p className="text-xs leading-5 text-white/50">{copy.profile.editHint}</p>
+      </div>
+
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <button
+            className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm font-semibold text-white/55 transition hover:bg-white/[.08] hover:text-white"
+            disabled={saving}
+            onClick={back}
+            type="button"
+          >
+            {copy.profile.back}
+          </button>
+          <button
+            className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm font-semibold text-white/70 transition hover:border-accent/30 hover:text-accent disabled:opacity-50"
+            disabled={saving}
+            onClick={generateProfile}
+            type="button"
+          >
+            <RefreshCw size={15} />
+            {copy.profile.regenerate}
+          </button>
+        </div>
+        <button
+          className="flex items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-6 py-3.5 text-sm font-bold text-white shadow-[0_4px_20px_rgba(233,69,96,.32)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60"
+          disabled={saving}
+          onClick={approveProfile}
+          type="button"
+        >
+          {saving ? <LoaderCircle className="animate-spin" size={17} /> : <CheckCircle2 size={17} />}
+          {copy.profile.approve}
+        </button>
+      </div>
     </div>
   );
 }
@@ -945,11 +1310,13 @@ function BrandAiMark() {
 function DarkField({
   area,
   label,
+  maxLength,
   onChange,
   value
 }: {
   area?: boolean;
   label: string;
+  maxLength?: number;
   onChange: (value: string) => void;
   value: string;
 }) {
@@ -957,10 +1324,11 @@ function DarkField({
     <label>
       <Label>{label}</Label>
       {area ? (
-        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+        <textarea className="mt-1.5 min-h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
       ) : (
-        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" onChange={(event) => onChange(event.target.value)} value={value} />
+        <input className="mt-1.5 w-full rounded-lg border border-white/10 bg-white/[.07] px-4 py-3 text-[15px] text-white outline-none focus:border-accent" maxLength={maxLength} onChange={(event) => onChange(event.target.value)} value={value} />
       )}
+      {maxLength ? <span className="mt-1 block text-end text-[11px] text-white/35">{value.length}/{maxLength}</span> : null}
     </label>
   );
 }

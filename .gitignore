@@ -1,8 +1,10 @@
 node_modules/
+.pnpm-store/
 .next/
 dist/
 build/
 coverage/
+apps/web/evidence/
 .turbo/
 .env
 .env.*

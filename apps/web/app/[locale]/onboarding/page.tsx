@@ -1,5 +1,5 @@
 import type { Locale } from "@markos/shared-types";
-import { OnboardingPanel } from "../_components/onboarding-panel";
+import { OnboardingRoute } from "../_components/onboarding-route";
 
 export function generateStaticParams() {
   return ["ar", "en"].map((locale) => ({ locale }));
@@ -9,5 +9,5 @@ export default async function OnboardingPage({ params }: { params: Promise<{ loc
   const resolvedParams = await params;
   const locale: Locale = resolvedParams.locale === "en" ? "en" : "ar";
 
-  return <OnboardingPanel locale={locale} />;
+  return <OnboardingRoute locale={locale} />;
 }

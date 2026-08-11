@@ -9,6 +9,7 @@ if (!baseUrl)
   );
 let browser: Browser;
 const session = {
+  mfaVerified: true,
   tokens: {
     accessToken: "browser-session-token",
     expiresIn: 900,
@@ -177,6 +178,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         const pathname = new URL(route.request().url()).pathname;
         if (pathname === "/v1/auth/refresh")
           return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding")
+          return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
         return route.fulfill({ status: 404, body: "{}" });
       },
     );
@@ -245,6 +248,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         const pathname = new URL(route.request().url()).pathname;
         if (pathname === "/v1/auth/refresh")
           return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding")
+          return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
         return route.fulfill({ status: 404, body: "{}" });
       },
     );
@@ -262,6 +267,102 @@ describe("active SettingsPanel Instagram interactions", () => {
     }));
     expect(arabicWidths.scroll).toBeLessThanOrEqual(arabicWidths.client);
     await arabic.close();
+  });
+
+  it("renders an editable bilingual resolved profile and approves the reviewed version", async () => {
+    const page = await browserPage();
+    const interactionId = "019fd833-4bf3-7ed5-9db9-6f96ab379054";
+    let approvalPayload: Record<string, unknown> | undefined;
+    const profile = browserBusinessProfile();
+    const onboarding = {
+      status: "IN_PROGRESS",
+      onboardingScore: 100,
+      vaultScore: {
+        score: 100,
+        completedSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+        missingSections: [],
+        requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+        entryCount: 8,
+      },
+      modules: [],
+      businessProfile: {
+        status: "DRAFT",
+        interactionId,
+        profile,
+        updatedAt: "2026-08-06T12:00:00.000Z",
+      },
+    };
+
+    await page.addInitScript(
+      (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
+      storedIdentity,
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\//,
+      async (route) => {
+        const request = route.request();
+        const pathname = new URL(request.url()).pathname;
+        if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+        if (pathname === "/v1/onboarding" && request.method() === "GET")
+          return route.fulfill(json(onboarding));
+        if (pathname === "/v1/onboarding/profile/approve") {
+          approvalPayload = request.postDataJSON() as Record<string, unknown>;
+          return route.fulfill(
+            json({
+              ...onboarding,
+              status: "COMPLETE",
+              businessProfile: {
+                ...onboarding.businessProfile,
+                status: "APPROVED",
+                profile: (approvalPayload.profile as Record<string, unknown>),
+              },
+            }),
+          );
+        }
+        return route.fulfill(json([]));
+      },
+    );
+
+    await page.goto(`${baseUrl}/en/onboarding?step=8`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("heading", { name: "This is your business identity" }).waitFor();
+    await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("Pearl Coffee");
+    await page.getByLabel("Short description").fill("Bahrain coffee, personally crafted.");
+    await page.getByRole("button", { name: "العربية", exact: true }).click();
+    await expect(page.getByLabel("Short description").inputValue()).resolves.toBe(profile.tagline.ar);
+    await page.getByRole("button", { name: "English", exact: true }).click();
+    await page.screenshot({
+      path: "evidence/onboarding-business-profile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ height: 844, width: 390 });
+    const profileWidths = await page.evaluate(() => ({
+      client: document.documentElement.clientWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(profileWidths.scroll).toBeLessThanOrEqual(profileWidths.client);
+    await page.screenshot({
+      path: "evidence/onboarding-business-profile-mobile.png",
+      fullPage: true,
+    });
+
+    await Promise.all([
+      page.waitForURL(/\/en\/app$/),
+      page.getByRole("button", { name: "Approve profile & continue" }).click(),
+    ]);
+
+    expect(approvalPayload).toMatchObject({
+      interactionId,
+      profile: {
+        businessName: "Pearl Coffee",
+        tagline: {
+          en: "Bahrain coffee, personally crafted.",
+          ar: profile.tagline.ar,
+        },
+      },
+    });
+    await page.close();
   });
 
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {
@@ -348,7 +449,11 @@ describe("active SettingsPanel Instagram interactions", () => {
   });
 
   it("renders MFA enrollment as a local QR flow with a readable six-digit field", async () => {
-    const { page } = await settingsPage(disconnected);
+    const { page, setMfaEnabled } = await settingsPage(
+      disconnected,
+      "/en/app/settings",
+      false,
+    );
     const setup = {
       enabled: false,
       otpauthUri:
@@ -364,12 +469,20 @@ describe("active SettingsPanel Instagram interactions", () => {
       /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/enable$/,
       (route) => {
         expect(route.request().postDataJSON()).toEqual({ code: "123456" });
+        setMfaEnabled(true);
         return route.fulfill(json({ enabled: true }));
+      },
+    );
+    await page.route(
+      /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/auth\/mfa\/totp\/verify$/,
+      (route) => {
+        expect(route.request().postDataJSON()).toEqual({ code: "123456" });
+        return route.fulfill(json({ ...session, mfaVerified: true }));
       },
     );
 
     const code = page.getByRole("textbox", { name: "Verification code" });
-    await expect(code.isDisabled()).resolves.toBe(true);
+    await expect(code.count()).resolves.toBe(0);
     await page.getByRole("button", { name: "Set up MFA" }).click();
     await page
       .locator("svg title")
@@ -413,9 +526,12 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       page.getByText("JBSWY3DPEHPK3PXP", { exact: true }).count(),
     ).resolves.toBe(0);
-    await expect(
-      page.getByText("Enabled", { exact: true }).isVisible(),
-    ).resolves.toBe(true);
+    const mfaStatusRow = page
+      .getByText("MFA", { exact: true })
+      .locator("..");
+    expect(await mfaStatusRow.innerText()).toContain(
+      "Verified for this session",
+    );
     await page
       .locator('[data-notification-toast][role="status"]')
       .waitFor({ state: "detached", timeout: 8000 });
@@ -786,9 +902,11 @@ describe("active SettingsPanel Instagram interactions", () => {
 async function settingsPage(
   connection: Record<string, unknown>,
   path = "/en/app/settings",
+  mfaEnabled = true,
 ) {
   const page = await browserPage();
   const requests: string[] = [];
+  let currentMfaEnabled = mfaEnabled;
   await page.addInitScript(
     (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
     storedIdentity,
@@ -810,6 +928,8 @@ async function settingsPage(
       requests.push(request.url());
       const pathname = new URL(request.url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (pathname === "/v1/auth/mfa/totp")
+        return route.fulfill(json({ enabled: currentMfaEnabled }));
       if (pathname === "/v1/workspace/instagram" && request.method() === "GET")
         return route.fulfill(json(connection));
       if (pathname === "/v1/billing/summary")
@@ -831,7 +951,13 @@ async function settingsPage(
       name: path.startsWith("/ar/") ? "الإعدادات" : "Settings",
     })
     .waitFor();
-  return { page, requests };
+  return {
+    page,
+    requests,
+    setMfaEnabled: (enabled: boolean) => {
+      currentMfaEnabled = enabled;
+    },
+  };
 }
 
 async function browserPage(): Promise<Page> {
@@ -846,5 +972,24 @@ function json(data: unknown) {
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({ data }),
+  };
+}
+
+function browserBusinessProfile() {
+  const localized = {
+    en: "Grounded English business profile.",
+    ar: "ملف نشاط عربي موثوق.",
+  };
+
+  return {
+    businessName: "Pearl Coffee",
+    tagline: localized,
+    overview: localized,
+    uniqueValue: localized,
+    offerSummary: localized,
+    idealCustomer: localized,
+    marketPosition: localized,
+    brandVoice: localized,
+    marketingFocus: localized,
   };
 }

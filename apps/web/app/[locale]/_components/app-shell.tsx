@@ -12,6 +12,7 @@ import {
   Palette,
   Settings,
   Sparkles,
+  Target,
   Zap
 } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
@@ -25,6 +26,7 @@ import {
   OpportunitiesPanel
 } from "./final-command-panels";
 import { SettingsPanel } from "./settings-panel";
+import { StrategyPanel } from "./strategy-panel";
 import { initializeBrowserSession, watchBrowserSession } from "./browser-session";
 
 export type SectionSlug =
@@ -35,7 +37,8 @@ export type SectionSlug =
   | "dashboard"
   | "knowledge"
   | "opportunities"
-  | "settings";
+  | "settings"
+  | "strategy";
 
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
 
@@ -47,6 +50,7 @@ const navItems: Array<{
 }> = [
   { icon: Home, label: "Command Center", slug: "dashboard" },
   { icon: Calendar, label: "Daily Briefing", slug: "briefing" },
+  { icon: Target, label: "Strategy", slug: "strategy" },
   { icon: Lightbulb, label: "Opportunities", slug: "opportunities" },
   { icon: Zap, label: "Campaign Builder", notify: true, slug: "campaign-builder" },
   { icon: Palette, label: "Content Studio", notify: true, slug: "content-studio" },
@@ -159,11 +163,12 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           <LocaleSwitch activeSection={activeSection} locale={locale} />
           {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
           {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
+          {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
           {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
           {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
           {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
           {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
-          {activeSection === "knowledge" ? <FinalVaultPanel /> : null}
+          {activeSection === "knowledge" ? <FinalVaultPanel locale={locale} /> : null}
           {activeSection === "settings" ? <SettingsPanel locale={locale} /> : null}
         </div>
       </section>

@@ -13,13 +13,15 @@ from app.contracts.strategy import (
     StrategyWeek,
 )
 from app.core.errors import AiServiceError
+from app.providers.openai_structured import (
+    OpenAIClient,
+    RawStructuredResponse,
+    ResponsesApi,
+    ResponseUsage,
+)
 from app.providers.strategy import (
     LocalStrategyProvider,
-    OpenAIClient,
     OpenAIStrategyProvider,
-    ParsedResponse,
-    ParsedUsage,
-    ResponsesApi,
 )
 
 
@@ -34,14 +36,14 @@ class FakeResponse:
         self,
         *,
         dump: dict[str, object] | None = None,
-        output_parsed: object,
+        output_text: str,
         status: str = "completed",
         usage: FakeUsage | None = None,
     ) -> None:
         self.model = "gpt-test-returned-model"
-        self.output_parsed = output_parsed
+        self.output_text = output_text
         self.status = status
-        self.usage: ParsedUsage | None = usage if usage is not None else FakeUsage()
+        self.usage: ResponseUsage | None = usage if usage is not None else FakeUsage()
         self._dump = dump or {"output": []}
 
     def model_dump(self) -> dict[str, object]:
@@ -49,17 +51,17 @@ class FakeResponse:
 
 
 class FakeResponses:
-    def __init__(self, response: ParsedResponse) -> None:
+    def __init__(self, response: RawStructuredResponse) -> None:
         self.response = response
         self.last_kwargs: dict[str, object] | None = None
 
-    async def parse(self, **kwargs: object) -> ParsedResponse:
+    async def create(self, **kwargs: object) -> RawStructuredResponse:
         self.last_kwargs = kwargs
         return self.response
 
 
 class FakeClient:
-    def __init__(self, response: ParsedResponse) -> None:
+    def __init__(self, response: RawStructuredResponse) -> None:
         self.fake_responses = FakeResponses(response)
         self.responses: ResponsesApi = self.fake_responses
 
@@ -114,7 +116,7 @@ def strategy_request(*, locale: Literal["ar", "en"] = "en") -> StrategyGenerateR
 
 
 def test_openai_provider_uses_stateless_structured_request_and_real_usage() -> None:
-    response = FakeResponse(output_parsed=generated_content())
+    response = FakeResponse(output_text=generated_content().model_dump_json(by_alias=True))
     client = FakeClient(response)
     provider = OpenAIStrategyProvider(client=client)
 
@@ -124,7 +126,13 @@ def test_openai_provider_uses_stateless_structured_request_and_real_usage() -> N
     assert kwargs is not None
     assert kwargs["model"] == "gpt-test-configured-model"
     assert kwargs["store"] is False
-    assert kwargs["text_format"] is GeneratedStrategyContent
+    text = kwargs["text"]
+    assert isinstance(text, dict)
+    output_format = text["format"]
+    assert isinstance(output_format, dict)
+    assert output_format["type"] == "json_schema"
+    assert output_format["name"] == "markos_strategy"
+    assert output_format["strict"] is True
     assert kwargs["reasoning"] == {"effort": "low"}
     assert "workspace-secret-id" not in str(kwargs["instructions"])
     assert "workspace-secret-id" not in str(kwargs["input"])
@@ -137,10 +145,12 @@ def test_openai_provider_uses_stateless_structured_request_and_real_usage() -> N
     assert result.strategy.horizon_days == 90
 
 
-def test_openai_provider_surfaces_refusal_without_raw_provider_content() -> None:
+def test_openai_provider_surfaces_refusal_without_raw_provider_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     response = FakeResponse(
         dump={"output": [{"content": [{"type": "refusal", "refusal": "raw refusal"}]}]},
-        output_parsed=None,
+        output_text="{}",
     )
     provider = OpenAIStrategyProvider(client=FakeClient(response))
 
@@ -150,6 +160,18 @@ def test_openai_provider_surfaces_refusal_without_raw_provider_content() -> None
     assert raised.value.code == "AI_OUTPUT_REFUSED"
     assert "raw refusal" not in raised.value.message
     assert raised.value.retryable is False
+    assert "terminal_category=refusal" in caplog.text
+    assert "raw refusal" not in caplog.text
+
+
+def test_openai_provider_rejects_invalid_structured_output() -> None:
+    provider = OpenAIStrategyProvider(client=FakeClient(FakeResponse(output_text='{"summary":true}')))
+
+    with pytest.raises(AiServiceError) as raised:
+        asyncio.run(provider.generate_strategy(strategy_request()))
+
+    assert raised.value.code == "AI_OUTPUT_INVALID"
+    assert raised.value.retryable is True
 
 
 def test_local_provider_generates_natural_arabic_without_a_key() -> None:
@@ -180,4 +202,6 @@ def assert_openai_client(_client: OpenAIClient) -> None:
     """Compile-time assertion for the fake client's provider protocol."""
 
 
-assert_openai_client(FakeClient(FakeResponse(output_parsed=generated_content())))
+assert_openai_client(
+    FakeClient(FakeResponse(output_text=generated_content().model_dump_json(by_alias=True)))
+)

@@ -3,6 +3,7 @@ import type { Role } from "@markos/shared-types";
 
 export interface WorkspaceContext {
   isVerified: boolean;
+  mfaVerified: boolean;
   workspaceId: string;
   userId: string;
   roles: Role[];
@@ -30,6 +31,7 @@ export function getWorkspaceContext(): WorkspaceContext | undefined {
 
   if (
     store?.isVerified === undefined ||
+    store.mfaVerified === undefined ||
     store.workspaceId === undefined ||
     store.userId === undefined ||
     store.roles === undefined

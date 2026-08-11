@@ -30,7 +30,8 @@ export const enableMfaTotpSchema = z.object({
 });
 
 export const requestEmailVerificationSchema = z.object({
-  email: z.string().email()
+  email: z.string().email(),
+  locale: localeSchema.default("ar")
 });
 
 export const verifyEmailSchema = z.object({
@@ -109,6 +110,12 @@ export const onboardingModuleSchema = z.enum([
   "objectives"
 ]);
 
+export const onboardingObjectiveFieldLimits = {
+  budgetRange: 120,
+  instagramExperience: 120,
+  success90Days: 1000
+} as const;
+
 const nonEmptyStringArraySchema = z.array(z.string().min(1).max(80)).min(1).max(30);
 
 export const companyOnboardingSchema = z.object({
@@ -186,10 +193,10 @@ export const brandOnboardingSchema = z.object({
 
 export const objectivesOnboardingSchema = z.object({
   goals: nonEmptyStringArraySchema,
-  budgetRange: z.string().max(120).optional(),
-  instagramExperience: z.string().max(120).optional(),
+  budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
+  instagramExperience: z.string().max(onboardingObjectiveFieldLimits.instagramExperience).optional(),
   kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-  success90Days: z.string().max(1000).optional()
+  success90Days: z.string().max(onboardingObjectiveFieldLimits.success90Days).optional()
 });
 
 export const generateStrategySchema = z.object({
@@ -197,6 +204,34 @@ export const generateStrategySchema = z.object({
   horizonDays: z.number().int().min(30).max(180).default(90),
   locale: localeSchema.default("en")
 });
+
+const localizedBusinessProfileTextSchema = z
+  .object({
+    en: z.string().trim().min(1).max(2000),
+    ar: z.string().trim().min(1).max(2000)
+  })
+  .strict();
+
+export const businessProfileSchema = z
+  .object({
+    businessName: z.string().trim().min(1).max(200),
+    tagline: localizedBusinessProfileTextSchema,
+    overview: localizedBusinessProfileTextSchema,
+    uniqueValue: localizedBusinessProfileTextSchema,
+    offerSummary: localizedBusinessProfileTextSchema,
+    idealCustomer: localizedBusinessProfileTextSchema,
+    marketPosition: localizedBusinessProfileTextSchema,
+    brandVoice: localizedBusinessProfileTextSchema,
+    marketingFocus: localizedBusinessProfileTextSchema
+  })
+  .strict();
+
+export const approveBusinessProfileSchema = z
+  .object({
+    interactionId: z.string().uuid(),
+    profile: businessProfileSchema
+  })
+  .strict();
 
 export const generateContentSchema = z.object({
   topic: z.string().min(3).max(500),
@@ -391,6 +426,8 @@ export type VaultSectionInput = z.infer<typeof vaultSectionSchema>;
 export type UpsertVaultSectionInput = z.infer<typeof upsertVaultSectionSchema>;
 export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
+export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
+export type ApproveBusinessProfileInput = z.infer<typeof approveBusinessProfileSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;

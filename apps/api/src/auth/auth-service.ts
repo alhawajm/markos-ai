@@ -2,25 +2,15 @@ import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import argon2 from "argon2";
 import type { AuthSession, EmailVerificationChallenge, EmailVerificationResult, Locale, MfaStatus, MfaTotpSetup, Role } from "@markos/shared-types";
-import type {
-  EnableMfaTotpInput,
-  GoogleLoginInput,
-  LoginInput,
-  RegisterInput,
-  RequestEmailVerificationInput,
-  VerifyEmailInput
-} from "@markos/validation";
+import type { EnableMfaTotpInput, GoogleLoginInput, LoginInput, RegisterInput, RequestEmailVerificationInput, VerifyEmailInput } from "@markos/validation";
 import { createRedisClient } from "../cache/redis";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
-import {
-  type GoogleTokenVerifier,
-  GoogleOAuthTokenError,
-  verifyGoogleIdToken
-} from "./google-oauth";
+import { type GoogleTokenVerifier, GoogleOAuthTokenError, verifyGoogleIdToken } from "./google-oauth";
 import { slugifyWorkspaceName } from "./slug";
 import { buildTotpUri, generateTotpSecret, verifyTotpCode } from "./totp";
 import { consumeRefreshToken, issueAuthTokens } from "./tokens";
+import { createVerificationEmailProvider } from "./verification-email";
 
 let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
 
@@ -80,6 +70,12 @@ export class MfaInvalidError extends Error {
 export class MfaSetupMissingError extends Error {
   constructor() {
     super("TOTP MFA setup has not been started");
+  }
+}
+
+export class MfaAlreadyEnabledError extends Error {
+  constructor() {
+    super("TOTP MFA is already enabled");
   }
 }
 
@@ -148,10 +144,7 @@ export async function register(input: RegisterInput): Promise<AuthSessionGrant> 
   }
 }
 
-export async function loginWithGoogle(
-  input: GoogleLoginInput,
-  verifier: GoogleTokenVerifier = googleTokenVerifier
-): Promise<AuthSessionGrant> {
+export async function loginWithGoogle(input: GoogleLoginInput, verifier: GoogleTokenVerifier = googleTokenVerifier): Promise<AuthSessionGrant> {
   const identity = await verifier(input.idToken);
 
   if (!identity.emailVerified) {
@@ -164,13 +157,15 @@ export async function loginWithGoogle(
       googleId: identity.googleId
     }
   });
-  const user = existingByGoogleId ?? await upsertGoogleUserByEmail({
-    email,
-    fullName: identity.fullName,
-    googleId: identity.googleId,
-    locale: input.locale,
-    ...(input.workspaceName === undefined ? {} : { workspaceName: input.workspaceName })
-  });
+  const user =
+    existingByGoogleId ??
+    (await upsertGoogleUserByEmail({
+      email,
+      fullName: identity.fullName,
+      googleId: identity.googleId,
+      locale: input.locale,
+      ...(input.workspaceName === undefined ? {} : { workspaceName: input.workspaceName })
+    }));
 
   if (user.deletedAt !== null) {
     throw new GoogleOAuthTokenError("Google account is not active");
@@ -312,6 +307,16 @@ export async function login(input: LoginInput): Promise<AuthSessionGrant> {
 }
 
 export async function setupMfaTotp(userId: string): Promise<MfaTotpSetup> {
+  const existing = await prisma.user.findUniqueOrThrow({
+    where: {
+      id: userId
+    }
+  });
+
+  if (existing.mfaEnabled) {
+    throw new MfaAlreadyEnabledError();
+  }
+
   const secret = generateTotpSecret();
   const user = await prisma.user.update({
     data: {
@@ -331,6 +336,21 @@ export async function setupMfaTotp(userId: string): Promise<MfaTotpSetup> {
       secret
     }),
     secret
+  };
+}
+
+export async function getMfaTotpStatus(userId: string): Promise<MfaStatus> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: {
+      id: userId
+    },
+    select: {
+      mfaEnabled: true
+    }
+  });
+
+  return {
+    enabled: user.mfaEnabled
   };
 }
 
@@ -363,13 +383,58 @@ export async function enableMfaTotp(userId: string, input: EnableMfaTotpInput): 
   };
 }
 
-async function upsertGoogleUserByEmail(input: {
-  email: string;
-  fullName: string;
-  googleId: string;
-  locale: Locale;
-  workspaceName?: string;
-}) {
+export async function verifyMfaTotpSession(input: { code: string; userId: string; workspaceId: string }): Promise<AuthSessionGrant> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: {
+      id: input.userId
+    }
+  });
+
+  if (!user.mfaEnabled || user.mfaSecret === null) {
+    throw new MfaSetupRequiredError();
+  }
+
+  if (!verifyTotpCode(user.mfaSecret, input.code)) {
+    throw new MfaInvalidError();
+  }
+
+  const membership = await prisma.workspaceMember.findFirst({
+    where: {
+      deletedAt: null,
+      userId: input.userId,
+      workspaceId: input.workspaceId
+    },
+    select: {
+      role: true
+    }
+  });
+
+  if (membership === null) {
+    throw new InvalidCredentialsError();
+  }
+
+  const workspace = await prisma.workspace.findFirstOrThrow({
+    where: {
+      deletedAt: null,
+      id: input.workspaceId
+    }
+  });
+
+  return sessionFor({
+    mfaVerified: true,
+    roles: [membership.role as Role],
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: fromPrismaLocale(user.locale),
+      isVerified: user.isVerified
+    },
+    workspace
+  });
+}
+
+async function upsertGoogleUserByEmail(input: { email: string; fullName: string; googleId: string; locale: Locale; workspaceName?: string }) {
   const existingByEmail = await prisma.user.findUnique({
     where: {
       email: input.email
@@ -459,12 +524,18 @@ export async function requestEmailVerification(input: RequestEmailVerificationIn
   }
 
   const token = await storeEmailVerificationToken(user.id, expiresAt);
+  const provider = createVerificationEmailProvider();
+  await provider.send({
+    email,
+    locale: input.locale,
+    token
+  });
 
   return {
     alreadyVerified: false,
     email,
     expiresAt: expiresAt.toISOString(),
-    ...(env.NODE_ENV === "production" ? {} : { verificationToken: token })
+    ...(provider.mode === "local" && env.NODE_ENV !== "production" ? { verificationToken: token } : {})
   };
 }
 
@@ -543,6 +614,11 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
     }
   });
 
+  // Optional Instagram step-up is intentionally bounded by the access-token
+  // lifetime. A refresh requires the owner to prove possession again, while
+  // roles that require MFA for every authenticated session retain the claim.
+  const mfaVerified = isMfaRequiredForRoles(roles) ? tokenInput.mfaVerified === true : false;
+
   return sessionFor({
     user: {
       id: user.id,
@@ -553,7 +629,7 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
     },
     workspace,
     roles,
-    ...(tokenInput.mfaVerified === undefined ? {} : { mfaVerified: tokenInput.mfaVerified })
+    mfaVerified
   });
 }
 
@@ -610,6 +686,7 @@ async function sessionFor(input: {
   return {
     refreshToken: tokens.refreshToken,
     session: {
+      mfaVerified: input.mfaVerified ?? false,
       user: input.user,
       workspace: input.workspace,
       roles: input.roles,
@@ -622,16 +699,22 @@ async function sessionFor(input: {
 }
 
 function verifyRoleMfa(input: { roles: Role[]; totpCode?: string; user: { mfaEnabled: boolean; mfaSecret: string | null } }): boolean {
-  if (!isMfaRequiredForRoles(input.roles)) {
+  const requiredForRole = isMfaRequiredForRoles(input.roles);
+
+  if (!input.user.mfaEnabled || input.user.mfaSecret === null) {
+    if (requiredForRole) {
+      throw new MfaSetupRequiredError();
+    }
+
     return false;
   }
 
-  if (!input.user.mfaEnabled || input.user.mfaSecret === null) {
-    throw new MfaSetupRequiredError();
-  }
-
   if (input.totpCode === undefined) {
-    throw new MfaRequiredError();
+    if (requiredForRole) {
+      throw new MfaRequiredError();
+    }
+
+    return false;
   }
 
   if (!verifyTotpCode(input.user.mfaSecret, input.totpCode)) {
@@ -642,13 +725,14 @@ function verifyRoleMfa(input: { roles: Role[]; totpCode?: string; user: { mfaEna
 }
 
 function isMfaRequiredForRoles(roles: Role[]): boolean {
-  return roles.some((role) =>
-    role === "WORKSPACE_ADMIN" ||
-    role === "SUPER_ADMIN" ||
-    role === "PRODUCT_ADMIN" ||
-    role === "SUPPORT_ADMIN" ||
-    role === "FINANCE_ADMIN" ||
-    role === "READONLY_ADMIN"
+  return roles.some(
+    (role) =>
+      role === "WORKSPACE_ADMIN" ||
+      role === "SUPER_ADMIN" ||
+      role === "PRODUCT_ADMIN" ||
+      role === "SUPPORT_ADMIN" ||
+      role === "FINANCE_ADMIN" ||
+      role === "READONLY_ADMIN"
   );
 }
 

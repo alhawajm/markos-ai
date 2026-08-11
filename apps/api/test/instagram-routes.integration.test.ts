@@ -78,6 +78,35 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(authorization.toString()).not.toContain("unrequested_scope");
   });
 
+  it("requires verified email and a current MFA step-up before Instagram connection", async () => {
+    const owner = await principal("OWNER");
+    const withoutMfa = await token(owner.userId, owner.workspaceId, false);
+    const mfaBlocked = await app.inject({
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
+      headers: auth(withoutMfa),
+      payload: { returnTo: "/en/app/settings" },
+    });
+
+    expect(mfaBlocked.statusCode).toBe(403);
+    expect(mfaBlocked.json().error.code).toBe("MFA_REQUIRED");
+
+    await prisma.user.update({
+      where: { id: owner.userId },
+      data: { isVerified: false },
+    });
+
+    const emailBlocked = await app.inject({
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
+      headers: auth(owner.token),
+      payload: { returnTo: "/en/app/settings" },
+    });
+
+    expect(emailBlocked.statusCode).toBe(403);
+    expect(emailBlocked.json().error.code).toBe("EMAIL_VERIFICATION_REQUIRED");
+  });
+
   it("completes, transaction-binds, redirects safely, and rejects duplicate delivery", async () => {
     const info = vi.spyOn(app.log, "info");
     const initiator = await principal("OWNER");
@@ -212,7 +241,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const workspaceId = randomUUID();
     userIds.push(userId);
     workspaceIds.push(workspaceId);
-    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route User", locale: "EN", isVerified: true } });
+    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route User", locale: "EN", isVerified: true, mfaEnabled: true, mfaSecret: "ROUTEOWNERTESTSECRET" } });
     await prisma.workspace.create({ data: { id: workspaceId, ownerUserId: userId, name: `Route ${workspaceId}`, slug: `route-${workspaceId}` } });
     await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
     return { userId, workspaceId, token: await token(userId, workspaceId), role };
@@ -220,7 +249,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
   async function member(workspaceId: string, role: "EDITOR"): Promise<Principal> {
     const userId = randomUUID();
     userIds.push(userId);
-    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route Member", locale: "EN", isVerified: true } });
+    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route Member", locale: "EN", isVerified: true, mfaEnabled: true, mfaSecret: "ROUTEMEMBERTESTSECRET" } });
     await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
     return { userId, workspaceId, token: await token(userId, workspaceId), role };
   }
@@ -228,8 +257,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
 
 type Principal = { userId: string; workspaceId: string; token: string; role: "OWNER" | "EDITOR" };
 function auth(value: string) { return { authorization: `Bearer ${value}` }; }
-async function token(userId: string, workspaceId: string) {
-  return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified: false })
+async function token(userId: string, workspaceId: string, mfaVerified = true) {
+  return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(userId).setIssuedAt().setExpirationTime("15m")
     .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));

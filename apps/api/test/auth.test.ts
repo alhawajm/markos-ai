@@ -33,6 +33,7 @@ describe("auth routes", () => {
     expect(registerResponse.statusCode).toBe(201);
     const registerBody = registerResponse.json();
     expect(registerBody.data).toMatchObject({
+      mfaVerified: false,
       user: {
         email,
         fullName: "Mariam Founder",
@@ -434,6 +435,42 @@ describe("auth routes", () => {
       }
     });
 
+    const statusResponse = await app.inject({
+      method: "GET",
+      url: "/v1/auth/mfa/totp",
+      headers: authHeaders(session.tokens.accessToken)
+    });
+    const stepUpResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/mfa/totp/verify",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {
+        code: generateTotpCode(setup.secret)
+      }
+    });
+    const repeatedSetupResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/mfa/totp/setup",
+      headers: authHeaders(session.tokens.accessToken)
+    });
+
+    expect(statusResponse.statusCode).toBe(200);
+    expect(statusResponse.json().data).toEqual({ enabled: true });
+    expect(stepUpResponse.statusCode).toBe(200);
+    expect(stepUpResponse.json().data.mfaVerified).toBe(true);
+    expect(stepUpResponse.headers["set-cookie"]).toContain("markos_refresh=");
+    expect(repeatedSetupResponse.statusCode).toBe(409);
+    expect(repeatedSetupResponse.json().error.code).toBe("MFA_ALREADY_ENABLED");
+
+    const ownerRefreshResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      headers: browserSessionHeaders(cookiePair(stepUpResponse))
+    });
+
+    expect(ownerRefreshResponse.statusCode).toBe(200);
+    expect(ownerRefreshResponse.json().data.mfaVerified).toBe(false);
+
     await prisma.workspaceMember.updateMany({
       data: {
         role: "FINANCE_ADMIN"
@@ -478,6 +515,7 @@ describe("auth routes", () => {
     expect(validLoginResponse.statusCode).toBe(200);
     expect(validLoginResponse.json()).toMatchObject({
       data: {
+        mfaVerified: true,
         roles: ["FINANCE_ADMIN"],
         user: {
           email

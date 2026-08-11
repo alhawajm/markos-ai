@@ -69,6 +69,10 @@ export async function initializeBrowserSession(locale: Locale): Promise<AuthSess
   }
 }
 
+export function refreshBrowserSession(): Promise<AuthSession> {
+  return renewBrowserSession();
+}
+
 export function setBrowserSession(session: AuthSession): void {
   const identity: StoredIdentity = {
     roles: session.roles,

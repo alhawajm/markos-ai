@@ -1,3 +1,5 @@
+import { onboardingObjectiveFieldLimits } from "@markos/validation";
+
 export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export interface OnboardingProductDraft {
@@ -51,6 +53,7 @@ export type OnboardingValidationIssue =
   | "company"
   | "competitors"
   | "objectives"
+  | "objectivesLength"
   | "products"
   | "story";
 
@@ -153,8 +156,19 @@ export function validateOnboardingStep(
     return "brand";
   }
 
-  if (step === 7 && draft.goals.length === 0) {
-    return "objectives";
+  if (step === 7) {
+    if (draft.goals.length === 0) {
+      return "objectives";
+    }
+
+    if (
+      draft.budgetRange.trim().length > onboardingObjectiveFieldLimits.budgetRange ||
+      draft.instagramExperience.trim().length >
+        onboardingObjectiveFieldLimits.instagramExperience ||
+      draft.success90Days.trim().length > onboardingObjectiveFieldLimits.success90Days
+    ) {
+      return "objectivesLength";
+    }
   }
 
   return null;
@@ -273,8 +287,8 @@ export function payloadForOnboardingStep(
           ? { budgetRange: draft.budgetRange.trim() }
           : {}),
         goals: draft.goals,
-        ...(draft.instagramExperience
-          ? { instagramExperience: draft.instagramExperience }
+        ...(draft.instagramExperience.trim()
+          ? { instagramExperience: draft.instagramExperience.trim() }
           : {}),
         ...(draft.success90Days.trim()
           ? { success90Days: draft.success90Days.trim() }

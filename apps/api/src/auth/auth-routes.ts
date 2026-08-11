@@ -6,11 +6,13 @@ import {
   EmailVerificationInvalidError,
   GoogleAccountConflictError,
   GoogleEmailNotVerifiedError,
+  MfaAlreadyEnabledError,
   MfaInvalidError,
   MfaRequiredError,
   MfaSetupMissingError,
   MfaSetupRequiredError,
   enableMfaTotp,
+  getMfaTotpStatus,
   InvalidCredentialsError,
   login,
   loginWithGoogle,
@@ -18,11 +20,13 @@ import {
   register,
   requestEmailVerification,
   setupMfaTotp,
-  verifyEmail
+  verifyEmail,
+  verifyMfaTotpSession
 } from "./auth-service";
 import { GoogleOAuthConfigurationError, GoogleOAuthTokenError, getGoogleOAuthConfigurationStatus } from "./google-oauth";
 import { clearRefreshCookieHeader, readRefreshCookie, refreshCookieHeader } from "./refresh-cookie";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError, revokeRefreshToken } from "./tokens";
+import { VerificationEmailConfigurationError, VerificationEmailDeliveryError } from "./verification-email";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 
 const BROWSER_SESSION_HEADER = "x-markos-session";
@@ -126,17 +130,42 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post(
-    "/v1/auth/mfa/totp/setup",
+  app.get(
+    "/v1/auth/mfa/totp",
     {
       config: {
         permissions: ["workspace:read"],
+        verifiedUserRequired: true,
         workspaceRequired: true
       }
     },
     async () => {
       const { userId } = requireWorkspaceContext();
-      return ok(await setupMfaTotp(userId));
+      return ok(await getMfaTotpStatus(userId));
+    }
+  );
+
+  app.post(
+    "/v1/auth/mfa/totp/setup",
+    {
+      config: {
+        permissions: ["workspace:read"],
+        verifiedUserRequired: true,
+        workspaceRequired: true
+      }
+    },
+    async (_request, reply) => {
+      const { userId } = requireWorkspaceContext();
+
+      try {
+        return ok(await setupMfaTotp(userId));
+      } catch (error) {
+        if (error instanceof MfaAlreadyEnabledError) {
+          return reply.status(409).send(errorEnvelope("MFA_ALREADY_ENABLED", error.message));
+        }
+
+        throw error;
+      }
     }
   );
 
@@ -145,6 +174,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         permissions: ["workspace:read"],
+        verifiedUserRequired: true,
         workspaceRequired: true
       }
     },
@@ -173,6 +203,47 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  app.post(
+    "/v1/auth/mfa/totp/verify",
+    {
+      config: {
+        permissions: ["workspace:read"],
+        verifiedUserRequired: true,
+        workspaceRequired: true
+      }
+    },
+    async (request, reply) => {
+      const parsed = enableMfaTotpSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid TOTP MFA request", parsed.error.issues));
+      }
+
+      const { userId, workspaceId } = requireWorkspaceContext();
+
+      try {
+        return sendSession(
+          reply,
+          await verifyMfaTotpSession({
+            code: parsed.data.code,
+            userId,
+            workspaceId
+          })
+        );
+      } catch (error) {
+        if (error instanceof MfaSetupRequiredError) {
+          return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
+        }
+
+        if (error instanceof MfaInvalidError) {
+          return reply.status(401).send(errorEnvelope("MFA_INVALID", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
   app.post("/v1/auth/verification/request", async (request, reply) => {
     const parsed = requestEmailVerificationSchema.safeParse(request.body);
 
@@ -180,7 +251,19 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid email verification request", parsed.error.issues));
     }
 
-    return ok(await requestEmailVerification(parsed.data));
+    try {
+      return ok(await requestEmailVerification(parsed.data));
+    } catch (error) {
+      if (error instanceof VerificationEmailConfigurationError) {
+        return reply.status(503).send(errorEnvelope("EMAIL_DELIVERY_NOT_CONFIGURED", error.message));
+      }
+
+      if (error instanceof VerificationEmailDeliveryError) {
+        return reply.status(503).send(errorEnvelope("EMAIL_DELIVERY_UNAVAILABLE", error.message));
+      }
+
+      throw error;
+    }
   });
 
   app.post("/v1/auth/verify-email", async (request, reply) => {

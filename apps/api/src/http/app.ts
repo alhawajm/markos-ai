@@ -6,6 +6,7 @@ import { registerAdminRoutes } from "../admin/admin-routes";
 import { registerAgentRoutes } from "../agents/agent-routes";
 import { registerAnalyticsRoutes } from "../analytics/analytics-routes";
 import { registerAuthRoutes } from "../auth/auth-routes";
+import { assertVerificationEmailConfiguration } from "../auth/verification-email";
 import { registerBillingRoutes } from "../billing/billing-routes";
 import { env } from "../config/env";
 import { registerContentRoutes } from "../content/content-routes";
@@ -52,6 +53,7 @@ function getErrorDetails(error: unknown): { code?: string; message: string; stat
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
+  assertVerificationEmailConfiguration();
   initObservability();
 
   const app = Fastify({

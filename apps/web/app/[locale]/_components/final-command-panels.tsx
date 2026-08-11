@@ -35,7 +35,7 @@ import {
   Zap
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AnalyticsSummary, ContentRecord, ContentStatus, ContentType, Locale, VaultCompletenessScore } from "@markos/shared-types";
+import type { AnalyticsSummary, ContentRecord, ContentStatus, ContentType, KnowledgeVaultEntry, Locale, VaultCompletenessScore, VaultSection } from "@markos/shared-types";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 
 type Accent = "amber" | "gold" | "teal";
@@ -1218,8 +1218,65 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   );
 }
 
-export function FinalVaultPanel() {
-  const modules = ["Company Info", "Your Story", "Products & Services", "Target Audience", "Competitors", "Brand Identity", "Marketing Objectives"];
+interface FinalVaultState {
+  score: VaultCompletenessScore;
+  vault: Record<VaultSection, KnowledgeVaultEntry[]>;
+}
+
+const finalVaultModules: Array<{ description: string; sections: VaultSection[]; title: string }> = [
+  { description: "Updated business memory and brand context", sections: ["COMPANY"], title: "Company Info" },
+  { description: "Updated business memory and brand context", sections: ["STORY"], title: "Your Story" },
+  { description: "Updated business memory and brand context", sections: ["PRODUCTS"], title: "Products & Services" },
+  { description: "Updated business memory and brand context", sections: ["AUDIENCE"], title: "Target Audience" },
+  { description: "Competitive landscape analysis", sections: ["COMPETITORS"], title: "Competitors" },
+  { description: "Updated business memory and brand context", sections: ["BRAND", "TONE"], title: "Brand Identity" },
+  { description: "Updated business memory and brand context", sections: ["OBJECTIVES"], title: "Marketing Objectives" }
+];
+
+export function FinalVaultPanel({ locale }: { locale: Locale }) {
+  const session = useMarkosSession();
+  const client = useMarkosClient(locale);
+  const [data, setData] = useState<FinalVaultState | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    setLoading(true);
+    setError("");
+
+    void Promise.all([client.vaultScore(), client.vault()])
+      .then(([score, vault]) => {
+        if (active) setData({ score, vault });
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError instanceof Error ? requestError.message : "Could not load the workspace Vault.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [client, refreshVersion, session]);
+
+  const modules = useMemo(() => {
+    const completedSections = new Set(data?.score.completedSections ?? []);
+
+    return finalVaultModules.map((module) => ({
+      ...module,
+      completed: module.sections.every((section) => completedSections.has(section)),
+      updatedAt: latestVaultUpdate(data?.vault, module.sections)
+    }));
+  }, [data]);
+
+  const completedCount = modules.filter((module) => module.completed).length;
+  const score = data?.score.score ?? 0;
+
   return (
     <section className="space-y-6 xl:space-y-8">
       <div>
@@ -1230,26 +1287,32 @@ export function FinalVaultPanel() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white">Vault Completion</h2>
-            <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">6 of 7 modules complete</p>
+            <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">{loading && !data ? "Loading workspace Vault..." : `${completedCount} of ${modules.length} modules complete`}</p>
           </div>
-          <p className="text-3xl font-bold text-[#F4A460] xl:text-4xl">86%</p>
+          <div className="text-end">
+            <p className={score === 100 ? "text-3xl font-bold text-[#81D8D0] xl:text-4xl" : "text-3xl font-bold text-[#F4A460] xl:text-4xl"}>{score}%</p>
+            <button className="mt-2 text-sm font-bold text-[#81D8D0] disabled:opacity-50" disabled={loading} onClick={() => setRefreshVersion((current) => current + 1)} type="button">
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-        <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/12 xl:mt-7 xl:h-4"><div className="h-full w-[86%] rounded-full bg-gradient-to-r from-[#F4A460] to-[#D4AF37]" /></div>
-        <p className="mt-5 text-base text-[#D6DEEA] xl:text-lg">Complete all modules to unlock advanced AI features and more accurate content recommendations.</p>
+        <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/12 xl:mt-7 xl:h-4"><div className="h-full rounded-full bg-gradient-to-r from-[#F4A460] to-[#D4AF37] transition-[width]" style={{ width: `${score}%` }} /></div>
+        <p className="mt-5 text-base text-[#D6DEEA] xl:text-lg">{score === 100 ? "Your workspace Vault is complete and ready to ground AI generation." : "Complete all modules to unlock advanced AI features and more accurate content recommendations."}</p>
+        {error ? <p className="mt-3 text-sm font-semibold text-[#F4A460]">{error}</p> : null}
       </article>
       <section className="grid gap-5 lg:grid-cols-2">
         {modules.map((module, index) => (
-          <article className={module === "Competitors" ? "lux-card rounded-[1.75rem] border-[#F4A460]/35 p-5 xl:p-7" : "lux-card-muted rounded-[1.75rem] p-5 xl:p-7"} key={module}>
+          <article className={module.completed ? "lux-card-muted rounded-[1.75rem] p-5 xl:p-7" : "lux-card rounded-[1.75rem] border-[#F4A460]/35 p-5 xl:p-7"} key={module.title}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4 xl:gap-5">
-                <IconTile accentName={module === "Competitors" ? "amber" : "teal"} icon={index % 2 === 0 ? Brain : Sparkles} />
+                <IconTile accentName={module.completed ? "teal" : "amber"} icon={index % 2 === 0 ? Brain : Sparkles} />
                 <div>
-                  <h3 className="text-xl font-bold text-white">{module}</h3>
-                  <p className="mt-2 text-base text-[#9AA7BD] xl:text-lg">{module === "Competitors" ? "Competitive landscape analysis" : "Updated business memory and brand context"}</p>
-                  <p className="mt-5 text-[#6F7B8F]">Last updated: {module === "Competitors" ? "Never" : "May 15, 2026"}</p>
+                  <h3 className="text-xl font-bold text-white">{module.title}</h3>
+                  <p className="mt-2 text-base text-[#9AA7BD] xl:text-lg">{module.description}</p>
+                  <p className="mt-5 text-[#6F7B8F]">Last updated: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}</p>
                 </div>
               </div>
-              <span className={module === "Competitors" ? "text-[#F4A460]" : "text-[#00C9A7]"}>{module === "Competitors" ? "Complete" : <CheckCircle2 size={26} />}</span>
+              <span className={module.completed ? "text-[#00C9A7]" : "text-[#F4A460]"}>{module.completed ? <CheckCircle2 aria-label={`${module.title} complete`} size={26} /> : "Incomplete"}</span>
             </div>
           </article>
         ))}
@@ -1268,6 +1331,20 @@ export function FinalVaultPanel() {
       </article>
     </section>
   );
+}
+
+function latestVaultUpdate(vault: Record<VaultSection, KnowledgeVaultEntry[]> | undefined, sections: VaultSection[]): string | null {
+  if (!vault) return null;
+
+  const timestamps = sections.flatMap((section) => vault[section] ?? []).map((entry) => entry.updatedAt).filter(Boolean).sort();
+  return timestamps.at(-1) ?? null;
+}
+
+function formatVaultUpdatedAt(value: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 export function FinalSettingsPanel() {
