@@ -359,7 +359,7 @@ export function AuthPreview({
   }
 
   return (
-    <main className={styles.authPage} data-auth-preview={mode} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.authPage}`} data-auth-preview={mode} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">

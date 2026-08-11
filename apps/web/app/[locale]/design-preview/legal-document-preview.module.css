@@ -1,14 +1,4 @@
 .legalPage {
-  --ink: #20212b;
-  --ink-soft: #4d4853;
-  --muted: #625b66;
-  --paper: #fffaf5;
-  --white: #ffffff;
-  --coral: #ff665a;
-  --pink: #d93f7a;
-  --aqua: #21bfae;
-  --aqua-soft: #dff8f2;
-  --yellow: #f6c453;
   min-height: 100vh;
   overflow-x: clip;
   background: radial-gradient(circle at 8% 5%, rgb(246 196 83 / 19%), transparent 24rem), linear-gradient(180deg, var(--paper), #fff 42%);

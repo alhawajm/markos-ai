@@ -1,3 +1,10 @@
+/**
+ * Legacy production UI tokens.
+ *
+ * Keep these exports until the currently mounted production surfaces have
+ * migrated. New Sunlit work must use the scoped variables in
+ * `apps/web/app/sunlit-theme.css` instead of extending this palette.
+ */
 export const colors = {
   navy: "#1A1A2E",
   midnavy: "#0F3460",

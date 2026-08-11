@@ -306,7 +306,7 @@ export function LegalDocumentPreview({ kind, locale }: { kind: LegalDocumentKind
   const privacyHref = `/${locale}/design-preview/privacy`;
 
   return (
-    <main className={styles.legalPage} data-legal-preview={kind} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.legalPage}`} data-legal-preview={kind} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">

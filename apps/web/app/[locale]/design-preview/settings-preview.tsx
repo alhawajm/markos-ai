@@ -361,7 +361,7 @@ export function SettingsPreview({ locale }: { locale: Locale }) {
   }
 
   return (
-    <main className={styles.settingsPage} data-settings-preview dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.settingsPage}`} data-settings-preview dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <header className={styles.header}>
         <a className={styles.brand} href={`/${locale}/design-preview`} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">

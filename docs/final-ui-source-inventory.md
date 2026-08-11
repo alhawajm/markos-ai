@@ -2,18 +2,18 @@
 
 > **Historical reference:** This inventory describes the previous dark "AI Marketing Command Center" direction. It was superseded on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). Retain this document as implementation history; do not use its export or luxury token system as the visual source for new migration work.
 
-Final design export:
+Historical design export:
 `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
 
 Original Figma file noted by the export:
 `https://www.figma.com/design/1DXeHscKXuAcKfp5VLJ5vs/AI-Powered-Marketing-OS-MVP`
 
-Target app:
+Target app at the time of the audit:
 `apps/web/app/[locale]`
 
 ## Export Summary
 
-The final export is a Vite React bundle using React Router, Tailwind CSS v4, Lucide icons, Radix primitives, Motion, and Recharts. The wired application is not the older white/red dashboard. It is the darker "AI Marketing Command Center" direction with:
+The historical export is a Vite React bundle using React Router, Tailwind CSS v4, Lucide icons, Radix primitives, Motion, and Recharts. The wired application is not the older white/red dashboard. It is the darker "AI Marketing Command Center" direction with:
 
 - 80px icon-only glass sidebar
 - dark charcoal/midnight canvas

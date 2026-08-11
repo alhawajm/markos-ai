@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const authPath = fileURLToPath(new URL("../app/[locale]/design-preview/auth-preview.tsx", import.meta.url));
 const authStylesPath = fileURLToPath(new URL("../app/[locale]/design-preview/auth-preview.module.css", import.meta.url));
+const sunlitThemePath = fileURLToPath(new URL("../app/sunlit-theme.css", import.meta.url));
 const legalPath = fileURLToPath(new URL("../app/[locale]/design-preview/legal-document-preview.tsx", import.meta.url));
 const termsPagePath = fileURLToPath(new URL("../app/[locale]/design-preview/terms/page.tsx", import.meta.url));
 const privacyPagePath = fileURLToPath(new URL("../app/[locale]/design-preview/privacy/page.tsx", import.meta.url));
 
 const authSource = readFileSync(authPath, "utf8");
 const authStyles = readFileSync(authStylesPath, "utf8");
+const sunlitTheme = readFileSync(sunlitThemePath, "utf8");
 const legalSource = readFileSync(legalPath, "utf8");
 const termsPageSource = readFileSync(termsPagePath, "utf8");
 const privacyPageSource = readFileSync(privacyPagePath, "utf8");
@@ -48,7 +50,8 @@ describe("Sunlit authentication design preview", () => {
   });
 
   it("keeps browser autofill and text selection within the bright field theme", () => {
-    expect(authStyles).toContain("color-scheme: light");
+    expect(authSource).toContain("sunlit-theme");
+    expect(sunlitTheme).toContain("color-scheme: light");
     expect(authStyles).toContain("input:-webkit-autofill");
     expect(authStyles).toContain("-webkit-text-fill-color: var(--ink)");
     expect(authStyles).toContain("input::selection");

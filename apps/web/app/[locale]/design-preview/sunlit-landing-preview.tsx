@@ -408,7 +408,7 @@ export function SunlitLandingPreview({ locale }: { locale: Locale }) {
   }
 
   return (
-    <main className={styles.previewPage} data-design-preview="sunlit-social-studio" dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.previewPage}`} data-design-preview="sunlit-social-studio" dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <a className={styles.skipLink} href="#preview-content">
         {isArabic ? "انتقل إلى المحتوى" : "Skip to content"}
       </a>

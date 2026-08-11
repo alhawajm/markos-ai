@@ -1,18 +1,5 @@
 .authPage {
-  --ink: #20212b;
-  --ink-soft: #4d4853;
-  --muted: #625b66;
-  --paper: #fffaf5;
-  --paper-deep: #fff0e5;
-  --white: #ffffff;
-  --coral: #ff665a;
-  --coral-deep: #dc3f64;
-  --pink: #d93f7a;
-  --aqua: #21bfae;
-  --aqua-soft: #dff8f2;
-  --yellow: #f6c453;
   position: relative;
-  color-scheme: light;
   min-height: 100vh;
   overflow-x: clip;
   background:

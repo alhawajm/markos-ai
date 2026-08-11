@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const settingsPath = fileURLToPath(new URL("../app/[locale]/design-preview/settings-preview.tsx", import.meta.url));
 const settingsStylesPath = fileURLToPath(new URL("../app/[locale]/design-preview/settings-preview.module.css", import.meta.url));
+const sunlitThemePath = fileURLToPath(new URL("../app/sunlit-theme.css", import.meta.url));
 const navigationPath = fileURLToPath(new URL("../app/[locale]/design-preview/section-navigation.tsx", import.meta.url));
 const navigationStylesPath = fileURLToPath(new URL("../app/[locale]/design-preview/section-navigation.module.css", import.meta.url));
 const legalPath = fileURLToPath(new URL("../app/[locale]/design-preview/legal-document-preview.tsx", import.meta.url));
 
 const settingsSource = readFileSync(settingsPath, "utf8");
 const settingsStyles = readFileSync(settingsStylesPath, "utf8");
+const sunlitTheme = readFileSync(sunlitThemePath, "utf8");
 const navigationSource = readFileSync(navigationPath, "utf8");
 const navigationStyles = readFileSync(navigationStylesPath, "utf8");
 const legalSource = readFileSync(legalPath, "utf8");
@@ -50,9 +52,10 @@ describe("Sunlit Settings design preview", () => {
   });
 
   it("keeps muted and locked content readable in the bright theme", () => {
-    expect(settingsStyles).toContain("--ink-soft: #4d4853");
+    expect(settingsSource).toContain("sunlit-theme");
+    expect(sunlitTheme).toContain("--sunlit-ink-soft: #4d4853");
     expect(settingsStyles).toContain(".lockedConnection");
     expect(settingsStyles).toContain(".disabledButton");
-    expect(settingsStyles).toContain("color-scheme: light");
+    expect(sunlitTheme).toContain("color-scheme: light");
   });
 });

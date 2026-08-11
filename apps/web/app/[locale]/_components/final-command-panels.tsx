@@ -1347,25 +1347,6 @@ function formatVaultUpdatedAt(value: string, locale: Locale): string {
   }).format(new Date(value));
 }
 
-export function FinalSettingsPanel() {
-  const [managed, setManaged] = useState<string | null>(null);
-  return (
-    <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Settings} subtitle="Workspace, billing, language, channels, and security controls." title="Settings" />
-      <section className="grid gap-5 lg:grid-cols-2 xl:gap-6">
-        {["Workspace Profile", "Language & Region", "Instagram Connection", "Billing & Usage", "Team Access", "Security"].map((title, index) => (
-          <article className="lux-card-muted rounded-[1.75rem] p-5 xl:p-7" key={title}>
-            <IconTile accentName={index % 3 === 0 ? "teal" : index % 3 === 1 ? "gold" : "amber"} icon={index % 2 === 0 ? Settings : Users} />
-            <h2 className="mt-5 text-xl font-bold text-white">{title}</h2>
-            <p className="mt-3 text-base leading-relaxed text-[#9AA7BD] xl:text-lg">Production controls stay visible without breaking the command-center visual system.</p>
-            <button className="mt-6 inline-flex items-center gap-2 text-base font-bold text-[#81D8D0] xl:text-lg" onClick={() => setManaged(title)} type="button">{managed === title ? "Opened" : "Manage"} <ArrowRight size={18} /></button>
-          </article>
-        ))}
-      </section>
-    </section>
-  );
-}
-
 function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
   const [open, setOpen] = useState(false);
   const [logoutQueued, setLogoutQueued] = useState(false);

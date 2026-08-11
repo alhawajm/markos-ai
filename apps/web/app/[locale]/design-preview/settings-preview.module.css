@@ -1,23 +1,10 @@
 .settingsPage {
-  --ink: #20212b;
-  --ink-soft: #4d4853;
-  --muted: #625b66;
-  --paper: #fffaf5;
-  --white: #ffffff;
-  --coral: #ff665a;
-  --pink: #d93f7a;
-  --aqua: #21bfae;
-  --aqua-dark: #087d71;
-  --aqua-soft: #dff8f2;
-  --yellow: #f6c453;
-  --line: rgb(32 33 43 / 11%);
   min-height: 100vh;
   overflow-x: clip;
   background:
     radial-gradient(circle at 8% 4%, rgb(246 196 83 / 22%), transparent 27rem), radial-gradient(circle at 94% 82%, rgb(33 191 174 / 12%), transparent 30rem),
     linear-gradient(180deg, var(--paper), #fff 44%, #fffaf7);
   color: var(--ink);
-  color-scheme: light;
   font-family: inherit;
 }
 

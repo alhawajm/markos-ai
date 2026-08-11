@@ -76,6 +76,10 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 
 Use semantic roles in shared production tokens instead of copying these raw values into every component. Warning, error, disabled, border, focus, and overlay roles must also be centralized during migration.
 
+### Runtime token scope
+
+The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the `.sunlit-theme` class. Every preview root opts into that class. Keep Sunlit variables scoped while the old and new interfaces coexist; do not move them onto `:root` or reuse the legacy `luxury-*` names. This prevents the current production theme from changing before a surface is deliberately migrated.
+
 ### Gradients and surfaces
 
 - Primary actions use coral-to-yellow or coral-to-pink gradients with dark readable text where appropriate.
@@ -178,6 +182,14 @@ Each route is available in English and Arabic beneath `/{locale}/design-preview`
 | Privacy | `/design-preview/privacy` |
 
 These routes are isolated design references. They must not be mistaken for proof that the corresponding production route or backend integration has been replaced.
+
+## Current coexistence boundary
+
+- `apps/web/app/sunlit-theme.css` and `apps/web/app/[locale]/design-preview` are the new visual reference.
+- `apps/web/app/globals.css`, `packages/ui-tokens`, and the mounted components under `apps/web/app/[locale]/_components` still support production and must remain until their consumers are migrated.
+- The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
+- Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
+- Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
 
 ## Production migration rules
 
