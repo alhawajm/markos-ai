@@ -1,0 +1,180 @@
+.navigation {
+  z-index: 20;
+  align-self: start;
+  min-width: 0;
+}
+
+.navigationSurface {
+  position: sticky;
+  z-index: 20;
+  inset-block-start: var(--section-menu-top, 24px);
+}
+
+.desktopMenu {
+  padding: 18px;
+  border: 1px solid var(--section-menu-border, rgb(32 33 43 / 11%));
+  border-radius: 20px;
+  background: var(--section-menu-background, rgb(255 255 255 / 82%));
+  box-shadow: var(--section-menu-shadow, 0 18px 50px rgb(60 41 29 / 7%));
+  backdrop-filter: blur(18px);
+}
+
+.heading {
+  margin: 0 8px 11px;
+  color: var(--section-menu-heading, #20212b);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.desktopMenu nav {
+  display: grid;
+  gap: 5px;
+}
+
+.navigationLink {
+  display: grid;
+  min-height: 44px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: var(--section-menu-text, #4d4853);
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 1.25;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.navigationLink:hover {
+  border-color: var(--section-menu-hover-border, rgb(255 102 90 / 18%));
+  background: var(--section-menu-hover, #fff5ef);
+  color: var(--section-menu-active-text, #a62960);
+  transform: translateX(2px);
+}
+
+.navigationLink[data-active="true"] {
+  border-color: var(--section-menu-active-border, rgb(255 102 90 / 24%));
+  background: var(--section-menu-active, linear-gradient(135deg, #fff0e9, #fff8df));
+  color: var(--section-menu-active-text, #a62960);
+  box-shadow: inset 3px 0 0 var(--section-menu-accent, #ff665a);
+}
+
+.icon {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--section-menu-icon-background, rgb(32 33 43 / 5%));
+  color: var(--section-menu-icon, #625b66);
+}
+
+.navigationLink[data-active="true"] .icon {
+  background: var(--section-menu-active-icon-background, #ffffff);
+  color: var(--section-menu-accent, #ff665a);
+}
+
+.label {
+  min-width: 0;
+}
+
+.lockIcon {
+  color: var(--section-menu-warning, #9a6610);
+}
+
+.status {
+  grid-column: 2 / -1;
+  width: fit-content;
+  margin-block-start: -3px;
+  color: var(--section-menu-muted, #625b66);
+  font-size: 0.69rem;
+  font-weight: 760;
+}
+
+.status[data-tone="success"] {
+  color: var(--section-menu-success, #087d71);
+}
+
+.status[data-tone="warning"],
+.status[data-tone="locked"] {
+  color: var(--section-menu-warning, #8a5a08);
+}
+
+.mobileMenu {
+  display: none;
+}
+
+.navigation :is(a, select):focus-visible {
+  outline: 3px solid var(--section-menu-focus, rgb(33 191 174 / 48%));
+  outline-offset: 3px;
+}
+
+[dir="rtl"] .heading {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[dir="rtl"] .navigationLink:hover {
+  transform: translateX(-2px);
+}
+
+[dir="rtl"] .navigationLink[data-active="true"] {
+  box-shadow: inset -3px 0 0 var(--section-menu-accent, #ff665a);
+}
+
+@media (max-width: 860px) {
+  .navigation {
+    z-index: 40;
+  }
+
+  .navigationSurface {
+    inset-block-start: 10px;
+  }
+
+  .desktopMenu {
+    display: none;
+  }
+
+  .mobileMenu {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--section-menu-border, rgb(32 33 43 / 12%));
+    border-radius: 16px;
+    background: var(--section-menu-mobile-background, rgb(255 255 255 / 92%));
+    box-shadow: 0 14px 38px rgb(60 41 29 / 12%);
+    color: var(--section-menu-heading, #20212b);
+    font-size: 0.75rem;
+    font-weight: 850;
+    backdrop-filter: blur(20px);
+  }
+
+  .mobileMenu select {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--section-menu-heading, #20212b);
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 760;
+    outline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigationLink {
+    transition: none;
+  }
+}
