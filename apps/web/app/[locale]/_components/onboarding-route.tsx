@@ -35,7 +35,7 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
 
         if (state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
           window.localStorage.removeItem("markos.onboarding.draft.v2");
-          router.replace(`/${locale}/app`);
+          router.replace(`/${locale}/app/strategy`);
           return;
         }
 

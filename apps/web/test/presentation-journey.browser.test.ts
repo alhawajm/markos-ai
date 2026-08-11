@@ -50,7 +50,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app`);
+    await page.waitForURL(`${baseUrl}/en/app/strategy`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();
@@ -109,6 +109,11 @@ describe("presentation journey", () => {
 
     await page.getByRole("button", { name: "Generate with AI" }).click();
     await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Strategy" }).waitFor();
+    await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
+    await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("heading", { name: "Your weekly plan" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
     expect(generationPayload).toEqual({
       horizonDays: 30,
       locale: "en",

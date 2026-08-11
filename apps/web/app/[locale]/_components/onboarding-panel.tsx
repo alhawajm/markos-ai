@@ -484,7 +484,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
         if (!active) return;
 
         if (state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
-          router.replace(`/${locale}/app`);
+          router.replace(`/${locale}/app/strategy`);
           return;
         }
 
@@ -600,7 +600,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
         profile: profileDraft
       });
       window.localStorage.removeItem(onboardingDraftKey);
-      router.push(`/${locale}/app`);
+      router.push(`/${locale}/app/strategy`);
     } catch (error) {
       setMessageTone("error");
       setMessage(error instanceof Error ? error.message : copy.errors.approve);
