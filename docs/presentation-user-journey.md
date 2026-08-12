@@ -6,12 +6,7 @@ This runbook keeps the management presentation focused on the first clear MARKOS
 
 ## Presentation boundary
 
-The presentation uses two clearly described layers:
-
-- **Adopted design direction:** the isolated Sunlit landing, authentication, and Settings previews.
-- **Functioning product journey:** the current authenticated onboarding, Business Profile approval, and Strategy generation flow.
-
-Do not imply that preview-only authentication controls or Settings actions are connected to production services.
+The presentation uses the adopted Sunlit UI on canonical routes. Email signup, login, verification, onboarding, Business Profile approval, Strategy, and authenticated Settings are connected to their application contracts. Do not imply that deferred Google, Apple, password-recovery, or external-provider capabilities are live.
 
 ## Tab and route order
 
@@ -19,19 +14,19 @@ Prepare the tabs before the meeting and keep them in this order.
 
 | Stop | Route | State | Purpose | Target time |
 | --- | --- | --- | --- | --- |
-| 1 | `/en/design-preview` | Public preview | Explain MARKOS as a dedicated, adaptable marketing partner | 1 minute |
-| 2 | `/en/design-preview/signup` | Public preview | Show the intended account-entry experience and legal consent | 45 seconds |
-| 3 | `/en/design-preview/verify?email=owner%40snacklab.test` | Public preview | Show verification guidance and recovery paths | 30 seconds |
+| 1 | `/en` | Public | Explain MARKOS as a dedicated, adaptable marketing partner | 1 minute |
+| 2 | `/en/signup` | Connected auth | Create the presentation account and show explicit legal consent | 45 seconds |
+| 3 | `/en/verify?email=owner%40snacklab.test` | Connected verification | Show verification delivery, guidance, and resend behavior | 30 seconds |
 | 4 | `/en/onboarding` | Verified, incomplete demo workspace | Show how MARKOS learns the business | 2 minutes |
 | 5 | Onboarding Business Profile review | Generated, editable profile | Confirm what MARKOS understood before approval | 90 seconds |
 | 6 | `/en/app/strategy` | Approved workspace | Show the first business-specific 30-day Strategy | 2–3 minutes |
-| 7 | `/en/design-preview/settings` | Public preview | Close with user control, security, and MFA-gated Instagram access | 1 minute |
+| 7 | `/en/app/settings` | Authenticated workspace | Close with user control, security, and MFA-gated Instagram access | 1 minute |
 
 Login and password recovery remain available as supporting tabs but are not required stops unless management asks about them:
 
-- `/en/design-preview/login`
-- `/en/design-preview/forgot-password`
-- `/en/design-preview/reset-password`
+- `/en/login`
+- `/en/forgot-password`
+- `/en/reset-password`
 
 Terms and Privacy are supporting infrastructure, not part of the main presentation path.
 
@@ -66,18 +61,17 @@ The journey is ready only when:
 - the Strategy leads with its summary, three priority actions, and the four-week plan;
 - English completes the full journey and the chosen Arabic/RTL proof point renders correctly;
 - the presenter can switch to the fallback Strategy without searching or typing URLs;
-- preview-only and functioning surfaces are described accurately;
+- connected, deferred, and externally dependent capabilities are described accurately;
 - the complete section stays within ten minutes.
 
 Run one technical rehearsal and one uninterrupted timed rehearsal. After the first successful rehearsal, change only presentation-blocking defects.
 
 ## Deferred until after the presentation
 
-- New onboarding visual design.
-- Production-route migration to Sunlit.
+- Further onboarding visual refinement.
 - Pomelli, Buffer, and Canva reference study.
 - Navigation redesign.
 - Content-plan redesign.
 - Google and Apple authentication integration.
-- Production Settings and Instagram wiring.
+- Controlled production Settings and Instagram verification.
 - Legal-page navigation tuning.

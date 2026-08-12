@@ -6,20 +6,20 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
 
   return {
-    title: locale === "ar" ? "تحقق من بريدك الإلكتروني | MARKOS AI" : "Check your email | MARKOS AI",
+    title: locale === "ar" ? "اختيار كلمة مرور جديدة | MARKOS AI" : "Choose a new password | MARKOS AI",
     robots: { follow: false, index: false }
   };
 }
 
-export default async function VerifyEmailPage({
+export default async function ResetPasswordPage({
   params,
   searchParams
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ email?: string; token?: string }>;
+  searchParams: Promise<{ expired?: string }>;
 }) {
   const [resolvedParams, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const locale: Locale = resolvedParams.locale === "en" ? "en" : "ar";
+  const locale: Locale = resolvedParams.locale === "ar" ? "ar" : "en";
 
-  return <AuthPage initialEmail={resolvedSearchParams.email ?? ""} initialToken={resolvedSearchParams.token ?? ""} locale={locale} mode="verify" />;
+  return <AuthPage locale={locale} mode="reset-password" resetLinkExpired={resolvedSearchParams.expired === "1"} />;
 }

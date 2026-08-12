@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -22,17 +22,23 @@ import {
   Wand2,
   type LucideIcon
 } from "lucide-react";
-import type { Locale } from "@markos/shared-types";
-import styles from "./auth-preview.module.css";
+import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
+import type { AuthSession, Locale } from "@markos/shared-types";
+import { loginSchema, registerSchema } from "@markos/validation";
+import { getBrowserApiBaseUrl } from "./api-base-url";
+import { refreshBrowserSession, setBrowserSession, useMarkosSession } from "./browser-session";
+import styles from "./auth-page.module.css";
 
-export type AuthPreviewMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
+export type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
+
+const pendingVerificationEmailKey = "markos.pending-verification-email";
 
 type Notice = {
   tone: "error" | "info" | "success";
   text: string;
 };
 
-const pathByMode: Record<AuthPreviewMode, string> = {
+const pathByMode: Record<AuthPageMode, string> = {
   signup: "signup",
   login: "login",
   "forgot-password": "forgot-password",
@@ -58,7 +64,7 @@ const copyByLocale = {
       google: "Continue with Google",
       apple: "Continue with Apple",
       divider: "or continue with email",
-      mock: (name: string) => `${name} sign-in will open here in the final system.`
+      unavailable: (name: string) => `${name} sign-in is not available yet. Use email for now.`
     },
     fields: {
       fullName: "Full name",
@@ -69,6 +75,8 @@ const copyByLocale = {
       newPassword: "New password",
       confirmPassword: "Confirm new password",
       passwordRequirement: "At least 12 characters",
+      mfaCode: "MFA code",
+      mfaPlaceholder: "6-digit code",
       showPassword: "Show password",
       hidePassword: "Hide password"
     },
@@ -97,13 +105,14 @@ const copyByLocale = {
       switchPrefix: "New to MARKOS?",
       switchAction: "Create an account",
       fieldsRequired: "Enter your email and password.",
-      mockSuccess: "The login UI is ready. Live authentication remains unchanged outside this preview."
+      mfaRequired: "Enter the 6-digit code from your authenticator app."
     },
     forgot: {
       title: "Reset your password",
       body: "Enter the email you use for MARKOS.",
       action: "Send reset link",
       emailRequired: "Enter a valid email address.",
+      unavailable: "Password recovery is not connected yet. Please use an existing password for this presentation.",
       sentTitle: "Check your email",
       sentBody: "If an account exists for this address, a password reset link will be sent.",
       sendAgain: "Send again",
@@ -115,6 +124,7 @@ const copyByLocale = {
       action: "Update password",
       mismatch: "The passwords do not match.",
       passwordRequired: "Use a password with at least 12 characters.",
+      unavailable: "Password reset is not connected yet. Request support before changing a password.",
       successTitle: "Password updated",
       successBody: "You can now log in with your new password.",
       login: "Continue to login",
@@ -129,7 +139,9 @@ const copyByLocale = {
       instructions: "Open the link to confirm your account. Check your spam folder if it does not arrive.",
       resend: "Resend verification email",
       resendIn: (seconds: number) => `Resend in ${seconds}s`,
-      resent: "A new verification email would be sent now.",
+      sent: "We sent a verification link to your email.",
+      localReady: "A local verification link is ready below.",
+      verified: "Your email is verified. Opening onboarding…",
       changeEmail: "Change email",
       back: "Back to login"
     },
@@ -152,7 +164,7 @@ const copyByLocale = {
       google: "المتابعة باستخدام Google",
       apple: "المتابعة باستخدام Apple",
       divider: "أو تابع بالبريد الإلكتروني",
-      mock: (name: string) => `سيتم فتح تسجيل الدخول باستخدام ${name} هنا في النظام النهائي.`
+      unavailable: (name: string) => `تسجيل الدخول باستخدام ${name} غير متاح بعد. استخدم البريد الإلكتروني حالياً.`
     },
     fields: {
       fullName: "الاسم الكامل",
@@ -163,6 +175,8 @@ const copyByLocale = {
       newPassword: "كلمة المرور الجديدة",
       confirmPassword: "تأكيد كلمة المرور الجديدة",
       passwordRequirement: "12 حرفًا على الأقل",
+      mfaCode: "رمز التحقق بخطوتين",
+      mfaPlaceholder: "رمز من 6 أرقام",
       showPassword: "إظهار كلمة المرور",
       hidePassword: "إخفاء كلمة المرور"
     },
@@ -191,13 +205,14 @@ const copyByLocale = {
       switchPrefix: "جديد في MARKOS؟",
       switchAction: "إنشاء حساب",
       fieldsRequired: "أدخل بريدك الإلكتروني وكلمة المرور.",
-      mockSuccess: "واجهة تسجيل الدخول جاهزة. لم تتغير المصادقة الفعلية خارج هذه المعاينة."
+      mfaRequired: "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة."
     },
     forgot: {
       title: "استعد كلمة المرور",
       body: "أدخل البريد الإلكتروني الذي تستخدمه مع MARKOS.",
       action: "إرسال رابط الاستعادة",
       emailRequired: "أدخل بريدًا إلكترونيًا صالحًا.",
+      unavailable: "استعادة كلمة المرور غير متصلة بعد. استخدم كلمة مرور حالية لهذا العرض.",
       sentTitle: "تحقق من بريدك الإلكتروني",
       sentBody: "إذا كان هناك حساب مرتبط بهذا العنوان، فسيتم إرسال رابط استعادة كلمة المرور.",
       sendAgain: "إرسال مرة أخرى",
@@ -209,6 +224,7 @@ const copyByLocale = {
       action: "تحديث كلمة المرور",
       mismatch: "كلمتا المرور غير متطابقتين.",
       passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل.",
+      unavailable: "إعادة تعيين كلمة المرور غير متصلة بعد. تواصل مع الدعم قبل تغيير كلمة المرور.",
       successTitle: "تم تحديث كلمة المرور",
       successBody: "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.",
       login: "المتابعة إلى تسجيل الدخول",
@@ -223,7 +239,9 @@ const copyByLocale = {
       instructions: "افتح الرابط لتأكيد حسابك. تحقق من مجلد الرسائل غير المرغوب فيها إذا لم يصلك.",
       resend: "إعادة إرسال رسالة التحقق",
       resendIn: (seconds: number) => `إعادة الإرسال خلال ${seconds} ث`,
-      resent: "سيتم الآن إرسال رسالة تحقق جديدة.",
+      sent: "أرسلنا رابط تحقق إلى بريدك الإلكتروني.",
+      localReady: "رابط التحقق المحلي جاهز أدناه.",
+      verified: "تم تأكيد بريدك الإلكتروني. جارٍ فتح الإعداد…",
       changeEmail: "تغيير البريد الإلكتروني",
       back: "العودة إلى تسجيل الدخول"
     },
@@ -238,43 +256,101 @@ const asideIcons = {
   insights: BarChart3
 } as const;
 
-export function AuthPreview({
+export function AuthPage({
   initialEmail = "",
+  initialToken = "",
   locale,
   mode,
   resetLinkExpired = false
 }: {
   initialEmail?: string;
+  initialToken?: string;
   locale: Locale;
-  mode: AuthPreviewMode;
+  mode: AuthPageMode;
   resetLinkExpired?: boolean;
 }) {
   const router = useRouter();
+  const existingSession = useMarkosSession();
+  const client = useMemo(() => new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }), []);
   const copy = copyByLocale[locale];
   const isArabic = locale === "ar";
   const otherLocale = isArabic ? "en" : "ar";
   const currentPath = pathByMode[mode];
-  const landingHref = `/${locale}/design-preview`;
-  const loginHref = `/${locale}/design-preview/login`;
-  const signupHref = `/${locale}/design-preview/signup`;
-  const forgotHref = `/${locale}/design-preview/forgot-password`;
-  const termsHref = `/${locale}/design-preview/terms`;
-  const privacyHref = `/${locale}/design-preview/privacy`;
+  const landingHref = `/${locale}`;
+  const loginHref = `/${locale}/login`;
+  const signupHref = `/${locale}/signup`;
+  const forgotHref = `/${locale}/forgot-password`;
+  const termsHref = `/${locale}/terms`;
+  const privacyHref = `/${locale}/privacy`;
   const languageQuery =
-    mode === "verify" && initialEmail ? `?email=${encodeURIComponent(initialEmail)}` : mode === "reset-password" && resetLinkExpired ? "?expired=1" : "";
-  const languageHref = `/${otherLocale}/design-preview/${currentPath}${languageQuery}`;
+    mode === "verify" && initialEmail
+      ? `?email=${encodeURIComponent(initialEmail)}`
+      : mode === "reset-password" && resetLinkExpired
+        ? "?expired=1"
+        : "";
+  const languageHref = `/${otherLocale}/${currentPath}${languageQuery}`;
   const legalCheckboxRef = useRef<HTMLInputElement>(null);
+  const verificationStartedRef = useRef(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [email, setEmail] = useState(initialEmail);
   const [forgotSent, setForgotSent] = useState(false);
   const [fullName, setFullName] = useState("");
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [localVerificationToken, setLocalVerificationToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [password, setPassword] = useState("");
   const [resendSeconds, setResendSeconds] = useState(30);
-  const [resetComplete, setResetComplete] = useState(false);
+  const [resetComplete] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "login") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reason") === "session-expired") {
+      setSessionExpired(true);
+      setNotice({
+        tone: "info",
+        text: isArabic
+          ? "انتهت جلستك. سجّل الدخول مرة أخرى للمتابعة إلى ملفك الشخصي."
+          : "Your session expired. Sign in again to continue to your profile."
+      });
+    } else if (params.get("verified") === "1") {
+      setNotice({
+        tone: "success",
+        text: isArabic ? "تم تأكيد بريدك الإلكتروني. يمكنك تسجيل الدخول الآن." : "Your email is verified. You can log in now."
+      });
+    }
+  }, [isArabic, mode]);
+
+  useEffect(() => {
+    if (mode !== "verify" || verificationStartedRef.current) return;
+
+    const pendingEmail = initialEmail || existingSession?.user.email || window.sessionStorage.getItem(pendingVerificationEmailKey) || "";
+    if (pendingEmail) setEmail(pendingEmail);
+    verificationStartedRef.current = true;
+
+    if (initialToken) {
+      window.history.replaceState({}, "", `/${locale}/verify`);
+      void verifyEmailToken(initialToken);
+      return;
+    }
+
+    if (pendingEmail) {
+      void requestVerification(pendingEmail);
+      return;
+    }
+
+    setResendSeconds(0);
+    setNotice({ tone: "error", text: isArabic ? "أدخل من صفحة إنشاء الحساب لإرسال رابط التحقق." : "Start from sign up to send a verification link." });
+    // The first verification handoff is intentionally processed once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   useEffect(() => {
     if (mode !== "verify" || resendSeconds <= 0) return;
@@ -291,10 +367,10 @@ export function AuthPreview({
 
   function handleProvider(provider: "Apple" | "Google") {
     if (!requireLegalAcceptance()) return;
-    setNotice({ tone: "info", text: copy.provider.mock(provider) });
+    setNotice({ tone: "info", text: copy.provider.unavailable(provider) });
   }
 
-  function submitSignup(event: FormEvent<HTMLFormElement>) {
+  async function submitSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(null);
 
@@ -314,19 +390,77 @@ export function AuthPreview({
     }
 
     if (!requireLegalAcceptance()) return;
-    router.push(`/${locale}/design-preview/verify?email=${encodeURIComponent(email.trim())}`);
+
+    const parsed = registerSchema.safeParse({ email: email.trim(), fullName: fullName.trim(), locale, password });
+    if (!parsed.success) {
+      setNotice({ tone: "error", text: isArabic ? "تحقق من معلومات الحساب وحاول مرة أخرى." : "Check your account details and try again." });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const session = await client.register({
+        email: parsed.data.email,
+        fullName: parsed.data.fullName,
+        locale: parsed.data.locale,
+        password: parsed.data.password,
+        ...(parsed.data.workspaceName === undefined ? {} : { workspaceName: parsed.data.workspaceName })
+      });
+      setBrowserSession(session);
+      window.sessionStorage.setItem(pendingVerificationEmailKey, session.user.email);
+      router.push(`/${locale}/verify?email=${encodeURIComponent(session.user.email)}`);
+    } catch (error) {
+      setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function submitLogin(event: FormEvent<HTMLFormElement>) {
+  async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(null);
 
-    if (!isValidEmail(email) || password.length === 0) {
+    if (!isValidEmail(email) || password.length === 0 || (mfaRequired && !/^\d{6}$/.test(mfaCode))) {
+      setNotice({ tone: "error", text: mfaRequired ? copy.login.mfaRequired : copy.login.fieldsRequired });
+      return;
+    }
+
+    const parsed = loginSchema.safeParse({
+      email: email.trim(),
+      password,
+      ...(mfaCode ? { totpCode: mfaCode } : {})
+    });
+    if (!parsed.success) {
       setNotice({ tone: "error", text: copy.login.fieldsRequired });
       return;
     }
 
-    setNotice({ tone: "success", text: copy.login.mockSuccess });
+    setSubmitting(true);
+    try {
+      const session = await client.login({
+        email: parsed.data.email,
+        password: parsed.data.password,
+        ...(parsed.data.totpCode === undefined ? {} : { totpCode: parsed.data.totpCode })
+      });
+      setBrowserSession(session);
+
+      if (!session.user.isVerified) {
+        window.sessionStorage.setItem(pendingVerificationEmailKey, session.user.email);
+        router.push(`/${locale}/verify?email=${encodeURIComponent(session.user.email)}`);
+        return;
+      }
+
+      router.push(sessionExpired ? `/${locale}/app/settings#profile` : `/${locale}/app`);
+    } catch (error) {
+      if (error instanceof MarkosApiError && error.code === "MFA_REQUIRED") {
+        setMfaRequired(true);
+        setNotice({ tone: "info", text: copy.login.mfaRequired });
+      } else {
+        setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function submitForgot(event: FormEvent<HTMLFormElement>) {
@@ -338,7 +472,7 @@ export function AuthPreview({
       return;
     }
 
-    setForgotSent(true);
+    setNotice({ tone: "info", text: copy.forgot.unavailable });
   }
 
   function submitReset(event: FormEvent<HTMLFormElement>) {
@@ -355,11 +489,69 @@ export function AuthPreview({
       return;
     }
 
-    setResetComplete(true);
+    setNotice({ tone: "info", text: copy.reset.unavailable });
+  }
+
+  async function requestVerification(requestedEmail = email) {
+    const normalizedEmail = requestedEmail.trim();
+    if (!isValidEmail(normalizedEmail)) {
+      setResendSeconds(0);
+      setNotice({ tone: "error", text: copy.signup.emailRequired });
+      return;
+    }
+
+    setSubmitting(true);
+    setLocalVerificationToken(null);
+    setNotice(null);
+    try {
+      const challenge = await client.requestEmailVerification({ email: normalizedEmail, locale });
+      window.sessionStorage.setItem(pendingVerificationEmailKey, normalizedEmail);
+      setEmail(normalizedEmail);
+
+      if (challenge.alreadyVerified) {
+        await finishVerifiedSession();
+        return;
+      }
+
+      setLocalVerificationToken(challenge.verificationToken ?? null);
+      setResendSeconds(30);
+      setNotice({ tone: "success", text: challenge.verificationToken ? copy.verify.localReady : copy.verify.sent });
+    } catch (error) {
+      setResendSeconds(0);
+      setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function verifyEmailToken(token: string) {
+    setSubmitting(true);
+    setNotice(null);
+    try {
+      await client.verifyEmail({ token });
+      await finishVerifiedSession();
+    } catch (error) {
+      setResendSeconds(0);
+      setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function finishVerifiedSession() {
+    window.sessionStorage.removeItem(pendingVerificationEmailKey);
+    setNotice({ tone: "success", text: copy.verify.verified });
+
+    try {
+      const refreshedSession = await refreshBrowserSession();
+      router.replace(nextRouteAfterVerification(refreshedSession, locale));
+    } catch {
+      router.replace(`/${locale}/login?verified=1`);
+    }
   }
 
   return (
-    <main className={`sunlit-theme ${styles.authPage}`} data-auth-preview={mode} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.authPage}`} data-auth-page={mode} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">
@@ -417,7 +609,7 @@ export function AuthPreview({
                 termsHref={termsHref}
               />
               <Divider label={copy.provider.divider} />
-              <form noValidate onSubmit={submitSignup}>
+              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
                 <div className={styles.formStack}>
                   <Field id="full-name" label={copy.fields.fullName}>
                     <input
@@ -440,8 +632,8 @@ export function AuthPreview({
                   />
                 </div>
                 <NoticeMessage notice={notice} />
-                <button className={styles.primaryButton} type="submit">
-                  {copy.signup.action}
+                <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                  {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
                   <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                 </button>
               </form>
@@ -454,7 +646,7 @@ export function AuthPreview({
               <AuthHeading body={copy.login.body} title={copy.login.title} />
               <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
               <Divider label={copy.provider.divider} />
-              <form noValidate onSubmit={submitLogin}>
+              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitLogin(event)}>
                 <div className={styles.formStack}>
                   <EmailField copy={copy.fields} email={email} onChange={setEmail} />
                   <PasswordField
@@ -466,10 +658,26 @@ export function AuthPreview({
                     show={showPassword}
                     toggle={() => setShowPassword((current) => !current)}
                   />
+                  {mfaRequired ? (
+                    <Field id="mfa-code" label={copy.fields.mfaCode}>
+                      <span className={styles.inputWrap}>
+                        <ShieldCheck aria-hidden="true" size={19} />
+                        <input
+                          autoComplete="one-time-code"
+                          id="mfa-code"
+                          inputMode="numeric"
+                          maxLength={6}
+                          onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                          placeholder={copy.fields.mfaPlaceholder}
+                          value={mfaCode}
+                        />
+                      </span>
+                    </Field>
+                  ) : null}
                 </div>
                 <NoticeMessage notice={notice} />
-                <button className={styles.primaryButton} type="submit">
-                  {copy.login.action}
+                <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                  {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
                   <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                 </button>
               </form>
@@ -567,22 +775,25 @@ export function AuthPreview({
             <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
               <p>{copy.verify.body}</p>
               <strong className={styles.statusEmail} dir="ltr">
-                {initialEmail || copy.verify.fallbackEmail}
+                {email || copy.verify.fallbackEmail}
               </strong>
               <p>{copy.verify.instructions}</p>
               <NoticeMessage notice={notice} />
               <button
                 className={styles.secondaryButton}
-                disabled={resendSeconds > 0}
-                onClick={() => {
-                  setResendSeconds(30);
-                  setNotice({ tone: "success", text: copy.verify.resent });
-                }}
+                disabled={isSubmitting || resendSeconds > 0 || !email}
+                onClick={() => void requestVerification()}
                 type="button"
               >
                 <Mail aria-hidden="true" size={17} />
                 {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
               </button>
+              {localVerificationToken ? (
+                <button className={styles.primaryButton} disabled={isSubmitting} onClick={() => void verifyEmailToken(localVerificationToken)} type="button">
+                  {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
+                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                </button>
+              ) : null}
               <div className={styles.statusLinks}>
                 <a className={styles.textLink} href={signupHref}>
                   {copy.verify.changeEmail}
@@ -626,12 +837,12 @@ function ProviderButtons({ copy, onProvider }: { copy: (typeof copyByLocale)[Loc
   return (
     <div className={styles.providerStack}>
       <button className={styles.providerButton} onClick={() => onProvider("Google")} type="button">
-        <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/design-preview/providers/google-signin.svg" unoptimized width={32} />
+        <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/auth/providers/google-signin.svg" unoptimized width={32} />
         {copy.google}
       </button>
       <button className={styles.providerButton} onClick={() => onProvider("Apple")} type="button">
         <span className={styles.appleLogoFrame} aria-hidden="true">
-          <Image alt="" className={styles.appleLogo} height={23} src="/design-preview/providers/apple-signin.png" unoptimized width={18} />
+          <Image alt="" className={styles.appleLogo} height={23} src="/auth/providers/apple-signin.png" unoptimized width={18} />
         </span>
         {copy.apple}
       </button>
@@ -798,4 +1009,34 @@ function StatusPanel({ children, icon: Icon, title, tone }: { children: ReactNod
 
 function isValidEmail(value: string) {
   return /^\S+@\S+\.\S+$/.test(value.trim());
+}
+
+function nextRouteAfterVerification(session: AuthSession, locale: Locale) {
+  return session.user.isVerified ? `/${locale}/onboarding` : `/${locale}/verify`;
+}
+
+function friendlyAuthError(error: unknown, locale: Locale) {
+  const isArabic = locale === "ar";
+
+  if (!(error instanceof MarkosApiError)) {
+    return isArabic ? "تعذر إكمال الطلب. تحقق من الاتصال وحاول مرة أخرى." : "Could not complete the request. Check your connection and try again.";
+  }
+
+  switch (error.code) {
+    case "EMAIL_ALREADY_EXISTS":
+      return isArabic ? "هذا البريد مستخدم بالفعل. جرّب تسجيل الدخول." : "This email already has an account. Try logging in.";
+    case "INVALID_CREDENTIALS":
+      return isArabic ? "البريد الإلكتروني أو كلمة المرور غير صحيحة." : "Email or password is incorrect.";
+    case "MFA_INVALID":
+      return isArabic ? "رمز التحقق غير صحيح. جرّب رمزاً جديداً." : "That MFA code is invalid. Try a new code.";
+    case "MFA_REQUIRED":
+      return isArabic ? "أدخل رمز التحقق المكوّن من 6 أرقام." : "Enter the 6-digit MFA code.";
+    case "EMAIL_VERIFICATION_INVALID":
+      return isArabic ? "رابط التحقق غير صالح أو منتهي. اطلب رابطاً جديداً." : "The verification link is invalid or expired. Request a new one.";
+    case "EMAIL_DELIVERY_UNAVAILABLE":
+    case "EMAIL_DELIVERY_NOT_CONFIGURED":
+      return isArabic ? "تعذر إرسال رابط التحقق الآن. حاول مرة أخرى بعد قليل." : "We could not send the verification link. Try again shortly.";
+    default:
+      return error.message;
+  }
 }

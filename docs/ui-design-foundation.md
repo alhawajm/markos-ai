@@ -1,17 +1,17 @@
 # MARKOS AI UI Design Foundation
 
-- Status: approved visual direction for future MARKOS UI work
+- Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-11
+- Last updated: 2026-08-12
 
-This document is the active visual and interaction reference for the MARKOS redesign. It replaces the dark "AI Marketing Command Center" export as the direction for new UI work. The public preview remains the reference for marketing and authentication surfaces; the mounted application shell and presentation journey now provide the most accurate reference for authenticated product surfaces.
+This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
 
 Product behavior still comes from:
 
 - `docs/source/MARKOS_BUILD_SPEC. 2.pdf` for structure and requirements.
 - `docs/source/MARKOS_EXPERIENCE_FLOWS.md` for journeys, state transitions, and failure behavior.
 
-If this visual document conflicts with either source on product behavior, follow those sources. The coded preview under `apps/web/app/[locale]/design-preview` is the most accurate reference for the approved visual direction.
+If this visual document conflicts with either source on product behavior, follow those sources. The mounted components under `apps/web/app/[locale]/_components` are the most accurate coded reference for the adopted visual direction.
 
 ## Product idea
 
@@ -174,23 +174,22 @@ The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-them
 - Legal company attribution: `Ra'edat Software L.L.C.`.
 - Do not replace the apostrophe or silently vary the legal company name.
 
-## Coded reference routes
+## Canonical routes
 
-Each route is available in English and Arabic beneath `/{locale}/design-preview`.
+Each route is available in English and Arabic beneath `/{locale}`.
 
 | Surface | Route |
 | --- | --- |
-| Landing | `/design-preview` |
-| Login | `/design-preview/login` |
-| Signup | `/design-preview/signup` |
-| Email verification | `/design-preview/verify` |
-| Forgot password | `/design-preview/forgot-password` |
-| Reset password | `/design-preview/reset-password` |
-| Settings | `/design-preview/settings` |
-| Terms | `/design-preview/terms` |
-| Privacy | `/design-preview/privacy` |
+| Landing | `/` |
+| Login | `/login` |
+| Signup | `/signup` |
+| Email verification | `/verify` |
+| Forgot password | `/forgot-password` |
+| Reset password | `/reset-password` |
+| Terms | `/terms` |
+| Privacy | `/privacy` |
 
-These routes are isolated design references. They must not be mistaken for proof that the corresponding production route or backend integration has been replaced.
+Email/password signup, login, session handoff, verification delivery, token verification, and the verified onboarding handoff use the application API. Google and Apple controls remain visibly deferred, and password recovery remains an honest unavailable state until its API contract is implemented. Terms and Privacy remain draft legal content and are excluded from search indexing.
 
 The authenticated Sunlit journey is mounted at the real application routes:
 
@@ -206,11 +205,12 @@ The authenticated Sunlit journey is mounted at the real application routes:
 
 These routes preserve their existing session, workspace, API, approval, and failure behavior. A mounted screen proves that its UI is connected to the application contract; it does not by itself prove that an external provider or undeveloped feature is live.
 
-## Current coexistence boundary
+## Current implementation boundary
 
-- `apps/web/app/sunlit-theme.css` and `apps/web/app/[locale]/design-preview` are the new visual reference.
-- The application shell, onboarding, Overview, Strategy, Create, Insights, and Business Profile now use the scoped Sunlit foundation on the redesign branch.
-- `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy components still support unmigrated routes and states. Keep them until every consumer is identified and deliberately replaced.
+- `apps/web/app/sunlit-theme.css` and the canonical localized routes are the active visual reference.
+- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Insights, Business Profile, and Settings use the adopted UI.
+- The former `/design-preview` routes and duplicate dark public/authentication components were removed rather than retained as fallbacks.
+- `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
 - Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
@@ -218,16 +218,16 @@ These routes preserve their existing session, workspace, API, approval, and fail
 ## Production migration rules
 
 1. Preserve product behavior, API contracts, session handling, workspace isolation, approval gates, metering, and failure recovery.
-2. Extract shared semantic tokens and components before copying preview CSS into multiple production surfaces.
+2. Extract shared semantic tokens and components before copying page-specific CSS into multiple product surfaces.
 3. Migrate one coherent surface at a time and keep each pull request reviewable.
-4. Replace fixtures with API-backed data or explicit empty/preview states.
+4. Replace fixtures with API-backed data or explicit empty/demo states.
 5. Preserve English and Arabic behavior in the same change.
 6. Verify source tests, browser interaction, typecheck, lint, responsive layouts, keyboard operation, and RTL before retiring the old surface.
-7. Do not remove an old route until its replacement covers the real journey and recovery states.
+7. Remove an old route only after its replacement covers the real journey and recovery states; do not retain a duplicate route family by default.
 
 Migration sequence:
 
-1. Shared scoped tokens, public preview, authentication, legal placeholders, and Settings reference — complete.
+1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
 2. App shell, onboarding, Overview, Business Profile, and first Strategy handoff — complete on the redesign branch.
 3. Create and Insights presentation surfaces — complete on the redesign branch, using real APIs or explicit empty states.
 4. Replace remaining legacy production modules in small, behavior-preserving slices.

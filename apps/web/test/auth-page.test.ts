@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const authPath = fileURLToPath(new URL("../app/[locale]/design-preview/auth-preview.tsx", import.meta.url));
-const authStylesPath = fileURLToPath(new URL("../app/[locale]/design-preview/auth-preview.module.css", import.meta.url));
+const authPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.tsx", import.meta.url));
+const authStylesPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.module.css", import.meta.url));
 const sunlitThemePath = fileURLToPath(new URL("../app/sunlit-theme.css", import.meta.url));
-const legalPath = fileURLToPath(new URL("../app/[locale]/design-preview/legal-document-preview.tsx", import.meta.url));
-const termsPagePath = fileURLToPath(new URL("../app/[locale]/design-preview/terms/page.tsx", import.meta.url));
-const privacyPagePath = fileURLToPath(new URL("../app/[locale]/design-preview/privacy/page.tsx", import.meta.url));
+const legalPath = fileURLToPath(new URL("../app/[locale]/_components/legal-document.tsx", import.meta.url));
+const termsPagePath = fileURLToPath(new URL("../app/[locale]/terms/page.tsx", import.meta.url));
+const privacyPagePath = fileURLToPath(new URL("../app/[locale]/privacy/page.tsx", import.meta.url));
 
 const authSource = readFileSync(authPath, "utf8");
 const authStyles = readFileSync(authStylesPath, "utf8");
@@ -16,20 +16,24 @@ const legalSource = readFileSync(legalPath, "utf8");
 const termsPageSource = readFileSync(termsPagePath, "utf8");
 const privacyPageSource = readFileSync(privacyPagePath, "utf8");
 
-describe("Sunlit authentication design preview", () => {
-  it("keeps provider controls presentation-only and leaves production authentication untouched", () => {
+describe("Sunlit authentication pages", () => {
+  it("connects email authentication while keeping deferred provider controls honest", () => {
     expect(authSource).toContain("Continue with Google");
     expect(authSource).toContain("Continue with Apple");
-    expect(authSource).toContain("/design-preview/providers/google-signin.svg");
-    expect(authSource).toContain("/design-preview/providers/apple-signin.png");
-    expect(authSource).toContain("will open here in the final system");
-    expect(authSource).not.toContain("@markos/api-client");
+    expect(authSource).toContain("/auth/providers/google-signin.svg");
+    expect(authSource).toContain("/auth/providers/apple-signin.png");
+    expect(authSource).toContain("sign-in is not available yet");
+    expect(authSource).toContain("@markos/api-client");
+    expect(authSource).toContain("client.register");
+    expect(authSource).toContain("client.login");
+    expect(authSource).toContain("client.requestEmailVerification");
+    expect(authSource).toContain("client.verifyEmail");
     expect(authSource).not.toContain("fetch(");
     expect(authSource).not.toContain("googleTokenExchange");
   });
 
   it("covers account creation, recovery, verification, and explicit legal consent", () => {
-    expect(authSource).toContain('type AuthPreviewMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify"');
+    expect(authSource).toContain('type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify"');
     expect(authSource).toContain("At least 12 characters");
     expect(authSource).toContain("Terms of Service");
     expect(authSource).toContain("Privacy Policy");
@@ -59,7 +63,7 @@ describe("Sunlit authentication design preview", () => {
   });
 });
 
-describe("draft legal design preview", () => {
+describe("draft legal pages", () => {
   it("marks both documents as unapproved drafts and attributes the operator", () => {
     expect(legalSource).toContain("Working draft");
     expect(legalSource).toContain("Final wording requires legal review before launch");
@@ -68,7 +72,7 @@ describe("draft legal design preview", () => {
     expect(legalSource).toContain("مراجعة قانونية قبل الإطلاق");
   });
 
-  it("keeps both preview routes out of search indexes", () => {
+  it("keeps both draft documents out of search indexes", () => {
     for (const pageSource of [termsPageSource, privacyPageSource]) {
       expect(pageSource).toContain("follow: false");
       expect(pageSource).toContain("index: false");

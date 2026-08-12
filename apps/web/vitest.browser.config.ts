@@ -7,9 +7,9 @@ export default defineConfig({
     include: [
       "test/settings-panel.browser.test.ts",
       "test/presentation-journey.browser.test.ts",
-      "test/design-preview.browser.test.ts",
-      "test/auth-preview.browser.test.ts",
-      "test/settings-preview.browser.test.ts",
+      "test/marketing-landing.browser.test.ts",
+      "test/auth-page.browser.test.ts",
+      "test/legal-document.browser.test.ts",
     ],
     testTimeout: 30_000,
   },

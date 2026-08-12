@@ -826,7 +826,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page
       .locator('input[autocomplete="current-password"]')
       .fill("CorrectHorseBattery99!");
-    await page.getByRole("button", { name: "Log in to MARKOS" }).click();
+    await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL(/\/en\/app\/settings#profile$/);
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await expect(

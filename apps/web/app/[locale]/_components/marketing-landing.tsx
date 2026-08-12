@@ -20,7 +20,7 @@ import {
   Wand2
 } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
-import styles from "./sunlit-landing-preview.module.css";
+import styles from "./marketing-landing.module.css";
 
 type WorkspaceKey = "plan" | "create" | "publish" | "insights";
 type FooterLinkKey = "capabilities" | "how" | "insights" | "plans" | "faq" | "contact" | "terms" | "privacy";
@@ -362,13 +362,13 @@ const copyByLocale = {
   }
 } as const;
 
-export function SunlitLandingPreview({ locale }: { locale: Locale }) {
+export function MarketingLanding({ locale }: { locale: Locale }) {
   const copy = copyByLocale[locale];
   const isArabic = locale === "ar";
-  const localeHref = isArabic ? "/en/design-preview" : "/ar/design-preview";
+  const localeHref = isArabic ? "/en" : "/ar";
   const localeLabel = isArabic ? "English" : "العربية";
-  const signupHref = `/${locale}/design-preview/signup`;
-  const loginHref = `/${locale}/design-preview/login`;
+  const signupHref = `/${locale}/signup`;
+  const loginHref = `/${locale}/login`;
   const plansHref = `/${locale}/plans`;
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceKey>("plan");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -381,8 +381,8 @@ export function SunlitLandingPreview({ locale }: { locale: Locale }) {
     plans: plansHref,
     faq: `/${locale}/faq`,
     contact: `/${locale}/contact`,
-    terms: `/${locale}/design-preview/terms`,
-    privacy: `/${locale}/design-preview/privacy`
+    terms: `/${locale}/terms`,
+    privacy: `/${locale}/privacy`
   };
 
   function activateWorkspaceTab(index: number) {
@@ -408,14 +408,14 @@ export function SunlitLandingPreview({ locale }: { locale: Locale }) {
   }
 
   return (
-    <main className={`sunlit-theme ${styles.previewPage}`} data-design-preview="sunlit-social-studio" dir={isArabic ? "rtl" : "ltr"} lang={locale}>
-      <a className={styles.skipLink} href="#preview-content">
+    <main className={`sunlit-theme ${styles.marketingPage}`} data-marketing-page="sunlit-social-studio" dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+      <a className={styles.skipLink} href="#marketing-content">
         {isArabic ? "انتقل إلى المحتوى" : "Skip to content"}
       </a>
 
-      <div className={styles.siteShell} id="preview-content">
+      <div className={styles.siteShell} id="marketing-content">
         <header className={`${styles.container} ${styles.header}`}>
-          <a className={styles.brand} href={`/${locale}/design-preview`} aria-label={copy.brand}>
+          <a className={styles.brand} href={`/${locale}`} aria-label={copy.brand}>
             <span className={styles.brandMark} aria-hidden="true">
               <Sparkles size={21} strokeWidth={2.4} />
             </span>
@@ -729,7 +729,7 @@ export function SunlitLandingPreview({ locale }: { locale: Locale }) {
         <footer className={styles.footer} id="footer">
           <div className={`${styles.container} ${styles.footerMain}`}>
             <div className={styles.footerBrand}>
-              <a className={styles.brand} href={`/${locale}/design-preview`} aria-label={copy.brand}>
+              <a className={styles.brand} href={`/${locale}`} aria-label={copy.brand}>
                 <span className={styles.brandMark} aria-hidden="true">
                   <Sparkles size={21} strokeWidth={2.4} />
                 </span>

@@ -6,14 +6,14 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
 
   return {
-    title: locale === "ar" ? "إنشاء حساب | MARKOS AI" : "Create your account | MARKOS AI",
+    title: locale === "ar" ? "استعادة كلمة المرور | MARKOS AI" : "Reset your password | MARKOS AI",
     robots: { follow: false, index: false }
   };
 }
 
-export default async function SignupPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function ForgotPasswordPage({ params }: { params: Promise<{ locale: string }> }) {
   const resolvedParams = await params;
-  const locale: Locale = resolvedParams.locale === "en" ? "en" : "ar";
+  const locale: Locale = resolvedParams.locale === "ar" ? "ar" : "en";
 
-  return <AuthPage locale={locale} mode="signup" />;
+  return <AuthPage locale={locale} mode="forgot-password" />;
 }

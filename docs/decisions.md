@@ -305,4 +305,10 @@ Use the configured long-form model through the protected API-to-AI boundary, str
 
 ## 2026-08-11: Sunlit Social Studio Is The Active UI Direction
 
-Adopt the bright, warm "Sunlit Social Studio" direction in `docs/ui-design-foundation.md` for future MARKOS UI work. It replaces the dark "AI Marketing Command Center" export as the active visual reference, but does not replace the authoritative product behavior in the build spec or experience flows. Keep the current production UI until each surface is migrated and verified; treat `apps/web/app/[locale]/design-preview` as an isolated design reference rather than live-feature evidence.
+Adopt the bright, warm "Sunlit Social Studio" direction in `docs/ui-design-foundation.md` for future MARKOS UI work. It replaces the dark "AI Marketing Command Center" export as the active visual reference, but does not replace the authoritative product behavior in the build spec or experience flows.
+
+## 2026-08-12: Sunlit UI Uses Only Canonical Product Routes
+
+Mount the adopted Sunlit marketing, authentication, verification, and legal surfaces directly at the localized canonical routes. Remove the `/design-preview` route family, duplicate dark public/authentication components, preview-only Settings surface, and preview terminology rather than maintaining a fallback UI or compatibility redirects.
+
+Preserve application behavior during the cutover: email/password signup and login call the typed API client, refresh tokens remain in the existing HTTP-only cookie flow, unverified users are sent to verification, successful token verification renews the session and resumes onboarding, and MFA login reveals the six-digit challenge when required. Keep Google, Apple, forgot-password, and reset-password controls honest and unavailable until their complete provider or API contracts are implemented; visual presence is not evidence that those capabilities are live.

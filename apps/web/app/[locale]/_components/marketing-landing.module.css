@@ -1,4 +1,4 @@
-.previewPage {
+.marketingPage {
   min-height: 100vh;
   overflow-x: clip;
   background: var(--paper);
@@ -6,18 +6,18 @@
   font-family: inherit;
 }
 
-.previewPage *,
-.previewPage *::before,
-.previewPage *::after {
+.marketingPage *,
+.marketingPage *::before,
+.marketingPage *::after {
   box-sizing: border-box;
 }
 
-.previewPage a {
+.marketingPage a {
   color: inherit;
   text-decoration: none;
 }
 
-.previewPage button {
+.marketingPage button {
   color: inherit;
   font: inherit;
 }
@@ -1146,16 +1146,16 @@
   font-weight: 750;
 }
 
-.previewPage :is(a, button, [tabindex]):focus-visible {
+.marketingPage :is(a, button, [tabindex]):focus-visible {
   outline: 3px solid var(--yellow);
   outline-offset: 3px;
 }
 
-.previewPage[dir="rtl"] .directionalIcon {
+.marketingPage[dir="rtl"] .directionalIcon {
   transform: scaleX(-1);
 }
 
-.previewPage[dir="rtl"] .lineChart {
+.marketingPage[dir="rtl"] .lineChart {
   transform: scaleX(-1);
 }
 
@@ -1571,9 +1571,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .previewPage *,
-  .previewPage *::before,
-  .previewPage *::after {
+  .marketingPage *,
+  .marketingPage *::before,
+  .marketingPage *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

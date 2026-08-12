@@ -1,7 +1,7 @@
 import { ArrowLeft, FileText, Globe2, ShieldCheck, Sparkles } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import { SectionNavigation } from "./section-navigation";
-import styles from "./legal-document-preview.module.css";
+import styles from "./legal-document.module.css";
 
 export type LegalDocumentKind = "privacy" | "terms";
 
@@ -68,7 +68,7 @@ const legalCopy = {
           id: "plans",
           title: "6. Plans and billing",
           paragraphs: [
-            "Pricing, trial, quota, renewal, cancellation, refund, and tax terms will be added when the commercial plans are confirmed. No placeholder on this preview creates a payment obligation."
+            "Pricing, trial, quota, renewal, cancellation, refund, and tax terms will be added when the commercial plans are confirmed. No placeholder on this draft page creates a payment obligation."
           ]
         },
         {
@@ -295,18 +295,18 @@ const legalCopy = {
   }
 } as const;
 
-export function LegalDocumentPreview({ kind, locale }: { kind: LegalDocumentKind; locale: Locale }) {
+export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; locale: Locale }) {
   const copy = legalCopy[locale];
   const document = copy[kind];
   const isArabic = locale === "ar";
   const otherLocale = isArabic ? "en" : "ar";
-  const landingHref = `/${locale}/design-preview`;
-  const signupHref = `/${locale}/design-preview/signup`;
-  const termsHref = `/${locale}/design-preview/terms`;
-  const privacyHref = `/${locale}/design-preview/privacy`;
+  const landingHref = `/${locale}`;
+  const signupHref = `/${locale}/signup`;
+  const termsHref = `/${locale}/terms`;
+  const privacyHref = `/${locale}/privacy`;
 
   return (
-    <main className={`sunlit-theme ${styles.legalPage}`} data-legal-preview={kind} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
+    <main className={`sunlit-theme ${styles.legalPage}`} data-legal-document={kind} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">
@@ -319,7 +319,7 @@ export function LegalDocumentPreview({ kind, locale }: { kind: LegalDocumentKind
             <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
             {copy.back}
           </a>
-          <a className={styles.languageLink} href={`/${otherLocale}/design-preview/${kind}`}>
+          <a className={styles.languageLink} href={`/${otherLocale}/${kind}`}>
             <Globe2 aria-hidden="true" size={17} />
             {copy.language}
           </a>

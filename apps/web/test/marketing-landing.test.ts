@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const componentPath = fileURLToPath(new URL("../app/[locale]/design-preview/sunlit-landing-preview.tsx", import.meta.url));
-const stylesPath = fileURLToPath(new URL("../app/[locale]/design-preview/sunlit-landing-preview.module.css", import.meta.url));
+const componentPath = fileURLToPath(new URL("../app/[locale]/_components/marketing-landing.tsx", import.meta.url));
+const stylesPath = fileURLToPath(new URL("../app/[locale]/_components/marketing-landing.module.css", import.meta.url));
 const componentSource = readFileSync(componentPath, "utf8");
 const stylesSource = readFileSync(stylesPath, "utf8");
 
-describe("Sunlit Social Studio landing preview", () => {
+describe("Sunlit Social Studio marketing landing", () => {
   it("presents an adaptable workflow without a working-mode setup or embedded pricing", () => {
     expect(componentSource).toContain("Get the help you need with");
     expect(componentSource).toContain("planning, content, publishing, and insights");
@@ -20,7 +20,7 @@ describe("Sunlit Social Studio landing preview", () => {
     expect(componentSource).not.toContain("Manage it for me");
     expect(componentSource).not.toContain("BHD 18");
     expect(componentSource).not.toContain("Design preview");
-    expect(componentSource).toContain("const signupHref = `/${locale}/design-preview/signup`");
+    expect(componentSource).toContain("const signupHref = `/${locale}/signup`");
   });
 
   it("labels illustrative insights and provides the agreed footer information", () => {
@@ -41,8 +41,8 @@ describe("Sunlit Social Studio landing preview", () => {
     expect(componentSource).toContain("الرؤى");
     expect(componentSource).toContain("بيانات توضيحية");
     expect(componentSource).toContain("مثال توضيحي");
-    expect(componentSource).toContain('isArabic ? "/en/design-preview" : "/ar/design-preview"');
-    expect(stylesSource).toContain('.previewPage[dir="rtl"] .directionalIcon');
+    expect(componentSource).toContain('isArabic ? "/en" : "/ar"');
+    expect(stylesSource).toContain('.marketingPage[dir="rtl"] .directionalIcon');
     expect(stylesSource).toContain("transform: scaleX(-1)");
   });
 });
