@@ -7,6 +7,7 @@ if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendere
 let browser: Browser;
 const session = {
   mfaVerified: true,
+  mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
   tokens: { accessToken: "presentation-session-token", expiresIn: 900 },
   user: {
     id: "user-presentation",

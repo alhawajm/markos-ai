@@ -312,3 +312,15 @@ Adopt the bright, warm "Sunlit Social Studio" direction in `docs/ui-design-found
 Mount the adopted Sunlit marketing, authentication, verification, and legal surfaces directly at the localized canonical routes. Remove the `/design-preview` route family, duplicate dark public/authentication components, preview-only Settings surface, and preview terminology rather than maintaining a fallback UI or compatibility redirects.
 
 Preserve application behavior during the cutover: email/password signup and login call the typed API client, refresh tokens remain in the existing HTTP-only cookie flow, unverified users are sent to verification, successful token verification renews the session and resumes onboarding, and MFA login reveals the six-digit challenge when required. Keep Google, Apple, forgot-password, and reset-password controls honest and unavailable until their complete provider or API contracts are implemented; visual presence is not evidence that those capabilities are live.
+
+## 2026-08-12: Sensitive settings use a fixed 15-minute MFA step-up
+
+Represent recent MFA assurance with an absolute `mfaVerifiedUntil` Unix timestamp in the access token, refresh token, and browser session contract. A successful TOTP challenge creates a 15-minute window. Refresh-token rotation carries the original deadline without changing it, so returning from Instagram OAuth does not force a second challenge and repeated refreshes cannot turn the window into a sliding session.
+
+Keep role-required login assurance separate from recent-action assurance. Roles that require MFA may continue refreshing an authenticated session after the action window expires, but endpoints marked `mfaRequired` check the unexpired absolute deadline and require a new TOTP step-up for sensitive Instagram changes.
+
+## 2026-08-12: Settings is standalone and app pages are task-first
+
+Render `/{locale}/app/settings` outside the main application shell. Use one internal settings menu, keep the locale control in the page header, and return to the last recorded main application route or Overview. Group account and workspace identity, connected accounts, security, billing, and data/activity by user task; show one compact Instagram account preview instead of reproducing its media feed.
+
+Use compact page introductions throughout the primary app and prioritize live state, decisions, and controls in the first viewport. Oversized static hero panels are a marketing pattern and should not consume the working area of Overview, Strategy, Create, Insights, or Business Profile.

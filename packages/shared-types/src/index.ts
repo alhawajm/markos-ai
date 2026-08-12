@@ -123,6 +123,8 @@ export interface AuthTokens {
 
 export interface AuthSession {
   mfaVerified: boolean;
+  /** Absolute Unix timestamp for the current sensitive-action MFA window. */
+  mfaVerifiedUntil: number | null;
   user: {
     id: string;
     email: string;

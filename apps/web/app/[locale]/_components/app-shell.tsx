@@ -13,7 +13,6 @@ import {
   FinalVaultPanel,
   OpportunitiesPanel
 } from "./final-command-panels";
-import { SettingsPanel } from "./settings-panel";
 import { StrategyPanel } from "./strategy-panel";
 import { initializeBrowserSession, useMarkosSession, watchBrowserSession } from "./browser-session";
 
@@ -28,7 +27,11 @@ export type SectionSlug =
   | "settings"
   | "strategy";
 
-type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+type Icon = ComponentType<{
+  className?: string;
+  size?: number;
+  strokeWidth?: number;
+}>;
 
 const navItems: Array<{
   icon: Icon;
@@ -58,6 +61,11 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
     checkSession();
     return watchBrowserSession(locale);
   }, [checkSession, locale]);
+
+  useEffect(() => {
+    if (activeSection === "settings") return;
+    window.sessionStorage.setItem("markos.settings.returnTo", localizedHref(locale, activeSection));
+  }, [activeSection, locale]);
 
   if (!sessionChecked) {
     return (
@@ -94,7 +102,10 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
       <div className="grid min-h-screen lg:grid-cols-[17.5rem_minmax(0,1fr)]">
-        <aside className="hidden border-e border-[var(--sunlit-line)] bg-white/80 px-5 py-6 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-y-auto" data-app-sidebar>
+        <aside
+          className="hidden border-e border-[var(--sunlit-line)] bg-white/80 px-5 py-6 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-y-auto"
+          data-app-sidebar
+        >
           <Link className="flex items-center gap-3 rounded-2xl px-2 py-2 text-[var(--sunlit-ink)]" href={`/${locale}/app`}>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_12px_28px_rgb(32_33_43_/_18%)]">
               <Sparkles size={21} strokeWidth={2.2} />
@@ -138,7 +149,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               );
             })}
           </nav>
-
         </aside>
 
         <section className="min-w-0">
@@ -203,7 +213,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
             {activeSection === "knowledge" ? <FinalVaultPanel locale={locale} /> : null}
-            {activeSection === "settings" ? <SettingsPanel locale={locale} /> : null}
           </div>
         </section>
       </div>

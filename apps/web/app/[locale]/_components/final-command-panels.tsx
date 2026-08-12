@@ -348,9 +348,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   const copy =
     locale === "ar"
       ? {
-          atAGlance: "نظرة سريعة",
           businessProfile: "ملف النشاط",
-          content: "المحتوى",
           contentEmpty: "لا توجد مسودات بعد. عندما تنشئ محتوى، سيظهر هنا للمراجعة.",
           contentReady: "المحتوى الجاري",
           create: "إنشاء محتوى",
@@ -370,9 +368,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           workspaceContent: "عناصر مساحة العمل"
         }
       : {
-          atAGlance: "At a glance",
           businessProfile: "Business profile",
-          content: "Content",
           contentEmpty: "No drafts yet. Once you create content, it will appear here for review.",
           contentReady: "Work in progress",
           create: "Create content",
@@ -433,33 +429,22 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
 
   return (
     <section className="min-w-0 space-y-6 xl:space-y-7">
-      <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 sm:p-8 xl:p-10">
-        <div className="relative grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-end">
-          <div className="max-w-4xl">
-            <p className="text-sm font-extrabold text-[var(--sunlit-yellow)]">
+      <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-coral)] p-5 sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">
               {copy.today} {workspaceName} · {now}
             </p>
-            <h2 className="mt-4 font-display text-4xl font-black tracking-[-.04em] text-white sm:text-5xl xl:text-[3.5rem]">{copy.greeting}</h2>
-            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/[.72]">{copy.subtitle}</p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <a className="sunlit-primary inline-flex min-h-12 items-center gap-2 rounded-xl px-6 font-extrabold" href={missionHref}>
-                {missionCta} <ArrowRight size={18} />
-              </a>
-              <a
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-white/20 bg-white/[.08] px-6 font-extrabold text-white transition hover:bg-white/[.14]"
-                href={`/${locale}/app/strategy`}
-              >
-                {copy.strategy}
-              </a>
-            </div>
+            <h2 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
-          <div className="rounded-2xl border border-white/[.12] bg-white/[.08] p-5 backdrop-blur">
-            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-white/55">{copy.atAGlance}</p>
-            <div className="mt-4 grid gap-3">
-              <DashboardSnapshot icon={Brain} label={copy.businessProfile} value={liveState.vaultScore ? `${liveState.vaultScore.score}%` : copy.noData} />
-              <DashboardSnapshot icon={Palette} label={copy.content} value={String(liveState.contentItems.length)} />
-              <DashboardSnapshot icon={Calendar} label={copy.scheduled} value={String(liveState.publishingQueue.length)} />
-            </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
+              {missionCta} <ArrowRight size={17} />
+            </a>
+            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/strategy`}>
+              {copy.strategy}
+            </a>
           </div>
         </div>
       </section>
@@ -589,19 +574,6 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
         </article>
       )}
     </section>
-  );
-}
-
-function DashboardSnapshot({ icon, label, value }: { icon: IconType; label: string; value: string }) {
-  const Icon = icon;
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[.07] px-3.5 py-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-[var(--sunlit-yellow)]">
-        <Icon size={16} />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-sm font-bold text-white/[.68]">{label}</span>
-      <span className="shrink-0 text-sm font-black text-white">{value}</span>
-    </div>
   );
 }
 
@@ -1246,14 +1218,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   return (
     <section className="grid min-h-[calc(100vh-8rem)] min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-7">
       <div className="min-w-0 space-y-6">
-        <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 sm:p-8">
-          <div className="relative max-w-3xl">
-            <p className="text-sm font-extrabold text-[var(--sunlit-yellow)]">Create</p>
-            <h1 className="mt-3 font-display text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">Turn an idea into your next post.</h1>
-            <p className="mt-4 max-w-2xl text-lg leading-8 text-white/[.72]">
-              Start with a clear direction. MARKOS uses your Business Profile and saves every draft to this workspace.
-            </p>
-          </div>
+        <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-pink)] p-5 sm:p-6">
+          <p className="sunlit-eyebrow">Create</p>
+          <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">Turn an idea into your next post.</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">
+            MARKOS uses your Business Profile and saves every draft to this workspace.
+          </p>
         </section>
         {message ? (
           <article className="sunlit-panel-soft rounded-2xl p-5">
@@ -1534,16 +1504,16 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-7">
-      <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 sm:p-8 xl:p-10">
-        <div className="relative flex flex-wrap items-end justify-between gap-7">
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="max-w-3xl">
-            <p className="text-sm font-extrabold text-[var(--sunlit-yellow)]">Instagram performance</p>
-            <h1 className="mt-3 font-display text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">{copy.heading}</h1>
-            <p className="mt-4 text-lg leading-8 text-white/[.72]">{copy.subtitle}</p>
+            <p className="sunlit-eyebrow">Instagram performance</p>
+            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
-              className="inline-flex min-h-11 items-center rounded-xl border border-white/20 bg-white/[.08] px-5 text-sm font-extrabold text-white transition hover:bg-white/[.14]"
+              className="sunlit-secondary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold"
               onClick={() => setDays(days === 7 ? 30 : 7)}
               type="button"
             >
@@ -1734,31 +1704,31 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-7">
-      <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 sm:p-8 xl:p-10">
-        <div className="relative grid gap-8 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-end">
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-center">
           <div className="max-w-3xl">
-            <p className="text-sm font-extrabold text-[var(--sunlit-yellow)]">{copy.modules}</p>
-            <h1 className="mt-3 font-display text-4xl font-black tracking-[-.04em] text-white sm:text-5xl">{copy.heading}</h1>
-            <p className="mt-4 text-lg leading-8 text-white/[.72]">{copy.subtitle}</p>
-            <a className="sunlit-primary mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl px-6 font-extrabold" href={`/${locale}/onboarding`}>
-              {copy.edit} <ArrowRight size={18} />
+            <p className="sunlit-eyebrow">{copy.modules}</p>
+            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <a className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/onboarding`}>
+              {copy.edit} <ArrowRight size={17} />
             </a>
           </div>
-          <div className="rounded-2xl border border-white/[.12] bg-white/[.08] p-5">
+          <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-extrabold uppercase tracking-[.14em] text-white/55">Profile readiness</p>
-                <p className="mt-2 text-sm font-bold text-white/[.68]">
+                <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-muted)]">Profile readiness</p>
+                <p className="mt-2 text-sm font-bold text-[var(--sunlit-ink-soft)]">
                   {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
                 </p>
               </div>
-              <p className="text-4xl font-black text-[var(--sunlit-yellow)]">{score}%</p>
+              <p className="text-3xl font-black text-[var(--sunlit-pink)]">{score}%</p>
             </div>
-            <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/[.12]">
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
               <div className="h-full rounded-full bg-[var(--sunlit-aqua)] transition-[width]" style={{ width: `${score}%` }} />
             </div>
             <button
-              className="mt-4 text-sm font-extrabold text-white disabled:opacity-50"
+              className="mt-4 text-sm font-extrabold text-[var(--sunlit-aqua-dark)] disabled:opacity-50"
               disabled={loading}
               onClick={() => setRefreshVersion((current) => current + 1)}
               type="button"

@@ -150,6 +150,7 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
 function authSession(isVerified: boolean) {
   return {
     mfaVerified: true,
+    mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
     roles: ["OWNER"],
     tokens: { accessToken: isVerified ? "verified-access-token" : "unverified-access-token", expiresIn: 900 },
     user: { email: "mariam@example.com", fullName: "Mariam Ali", id: "user-mariam", isVerified, locale: "en" },

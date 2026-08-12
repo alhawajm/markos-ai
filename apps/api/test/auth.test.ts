@@ -458,6 +458,9 @@ describe("auth routes", () => {
     expect(statusResponse.json().data).toEqual({ enabled: true });
     expect(stepUpResponse.statusCode).toBe(200);
     expect(stepUpResponse.json().data.mfaVerified).toBe(true);
+    const ownerStepUpDeadline = stepUpResponse.json().data.mfaVerifiedUntil;
+    expect(ownerStepUpDeadline).toEqual(expect.any(Number));
+    expect(ownerStepUpDeadline).toBeGreaterThan(Math.floor(Date.now() / 1000));
     expect(stepUpResponse.headers["set-cookie"]).toContain("markos_refresh=");
     expect(repeatedSetupResponse.statusCode).toBe(409);
     expect(repeatedSetupResponse.json().error.code).toBe("MFA_ALREADY_ENABLED");
@@ -469,7 +472,8 @@ describe("auth routes", () => {
     });
 
     expect(ownerRefreshResponse.statusCode).toBe(200);
-    expect(ownerRefreshResponse.json().data.mfaVerified).toBe(false);
+    expect(ownerRefreshResponse.json().data.mfaVerified).toBe(true);
+    expect(ownerRefreshResponse.json().data.mfaVerifiedUntil).toBe(ownerStepUpDeadline);
 
     await prisma.workspaceMember.updateMany({
       data: {
@@ -516,6 +520,7 @@ describe("auth routes", () => {
     expect(validLoginResponse.json()).toMatchObject({
       data: {
         mfaVerified: true,
+        mfaVerifiedUntil: expect.any(Number),
         roles: ["FINANCE_ADMIN"],
         user: {
           email

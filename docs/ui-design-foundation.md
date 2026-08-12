@@ -78,7 +78,7 @@ Use semantic roles in shared production tokens instead of copying these raw valu
 
 ### Runtime token scope
 
-The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the `.sunlit-theme` class. Every preview root opts into that class. Keep Sunlit variables scoped while the old and new interfaces coexist; do not move them onto `:root` or reuse the legacy `luxury-*` names. This prevents the current production theme from changing before a surface is deliberately migrated.
+The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the `.sunlit-theme` class. Every migrated Sunlit surface opts into that class. Keep the variables scoped and do not reuse the legacy `luxury-*` names, because admin and any still-unmigrated surfaces may retain independent presentation until deliberately updated.
 
 ### Gradients and surfaces
 
@@ -126,17 +126,23 @@ The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-them
 
 ### Settings
 
+- Settings is a standalone workspace-management route, not a child canvas inside the primary application shell. Its header provides a back action to the last main application page, with Overview as the safe fallback.
 - Use one persistent section menu as the top-level navigation on desktop and a select control on narrow screens.
 - Render one selected section at a time; do not combine this menu with top-level accordions.
+- Keep locale switching in the shared header; language does not need its own settings section.
+- Order sections by the user's likely job: Account, Connected accounts, Security, Plan and billing, then Data and activity.
 - Keep nested disclosures only for local details such as MFA setup steps or advanced data controls.
 - Show gated sections, such as Instagram connection before MFA, in a visible but clearly locked state.
 - Explain the requirement and route the user to the action that unlocks it.
+- Represent Instagram as one connected business account with compact status details and, when available, one latest-post preview. The connection screen is not a replacement Instagram feed.
 - Treat the current settings contents as a foundation, not a final inventory of configurable features.
 
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
 - At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls, with a restrained sticky workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
+- Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Strategy should put generation controls beside the current strategy; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
+- Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
 - Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.
@@ -156,6 +162,7 @@ The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-them
 - Do not hide critical controls behind hover-only behavior.
 - Keep the active section or tab obvious without relying on color alone.
 - Disabled controls should remain legible and should explain the unmet condition nearby.
+- A successful MFA step-up opens sensitive Instagram settings for one fixed, non-sliding 15-minute window. Session refresh and the external OAuth round trip preserve the original deadline; they never extend it.
 
 ## Accessibility and localization
 

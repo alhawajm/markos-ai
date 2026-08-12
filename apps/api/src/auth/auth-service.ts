@@ -9,7 +9,7 @@ import { prisma } from "../db/prisma";
 import { type GoogleTokenVerifier, GoogleOAuthTokenError, verifyGoogleIdToken } from "./google-oauth";
 import { slugifyWorkspaceName } from "./slug";
 import { buildTotpUri, generateTotpSecret, verifyTotpCode } from "./totp";
-import { consumeRefreshToken, issueAuthTokens } from "./tokens";
+import { consumeRefreshToken, isMfaStepUpActive, issueAuthTokens } from "./tokens";
 import { createVerificationEmailProvider } from "./verification-email";
 
 let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
@@ -614,10 +614,10 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
     }
   });
 
-  // Optional Instagram step-up is intentionally bounded by the access-token
-  // lifetime. A refresh requires the owner to prove possession again, while
-  // roles that require MFA for every authenticated session retain the claim.
-  const mfaVerified = isMfaRequiredForRoles(roles) ? tokenInput.mfaVerified === true : false;
+  // Sensitive-action MFA is a fixed window. Refresh rotation carries the
+  // original deadline without extending it, including across external OAuth.
+  const mfaStepUpActive = tokenInput.mfaVerified === true && isMfaStepUpActive(tokenInput.mfaVerifiedUntil);
+  const mfaVerified = isMfaRequiredForRoles(roles) ? tokenInput.mfaVerified === true : mfaStepUpActive;
 
   return sessionFor({
     user: {
@@ -629,7 +629,8 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
     },
     workspace,
     roles,
-    mfaVerified
+    mfaVerified,
+    mfaVerifiedUntil: mfaStepUpActive ? (tokenInput.mfaVerifiedUntil ?? null) : null
   });
 }
 
@@ -672,6 +673,7 @@ function emailVerificationUserKey(userId: string): string {
 
 async function sessionFor(input: {
   mfaVerified?: boolean;
+  mfaVerifiedUntil?: number | null;
   user: AuthSession["user"];
   workspace: AuthSession["workspace"];
   roles: Role[];
@@ -680,13 +682,15 @@ async function sessionFor(input: {
     userId: input.user.id,
     workspaceId: input.workspace.id,
     roles: input.roles,
-    ...(input.mfaVerified === undefined ? {} : { mfaVerified: input.mfaVerified })
+    ...(input.mfaVerified === undefined ? {} : { mfaVerified: input.mfaVerified }),
+    ...(input.mfaVerifiedUntil === undefined ? {} : { mfaVerifiedUntil: input.mfaVerifiedUntil })
   });
 
   return {
     refreshToken: tokens.refreshToken,
     session: {
       mfaVerified: input.mfaVerified ?? false,
+      mfaVerifiedUntil: tokens.mfaVerifiedUntil,
       user: input.user,
       workspace: input.workspace,
       roles: input.roles,

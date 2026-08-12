@@ -97,20 +97,19 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="grid gap-6">
-      <section className="sunlit-panel-dark relative overflow-hidden rounded-[2rem] p-7 text-white sm:p-8 xl:p-10">
-        <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,.07)_1px,transparent_1px)] [background-size:30px_30px]" />
-        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-display text-4xl font-black leading-tight tracking-[-.04em] sm:text-5xl">{text(locale, "title")}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_28%)] bg-[rgb(33_191_174_/_16%)] px-3 py-1.5 text-sm font-extrabold text-[#77e0d4]">
+              <h2 className="font-display text-2xl font-black leading-tight tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{text(locale, "title")}</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]">
                 <Target size={14} />
                 {session ? text(locale, "businessInformed") : text(locale, "previewMode")}
               </span>
             </div>
-            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/[.72]">{text(locale, "subtitle")}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{text(locale, "subtitle")}</p>
             {strategies.length > 0 ? (
-              <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
                 <HeroStat color="#21BFAE" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
                 <HeroStat color="#F6C453" label={text(locale, "weeks")} value={active.content.weeklyCadence.length.toString()} />
                 <HeroStat color="#FF665A" label={text(locale, "priorityActions")} value={Math.min(active.content.nextActions.length, 3).toString()} />
@@ -118,7 +117,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
             ) : null}
           </div>
           <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 text-sm font-extrabold text-white hover:bg-white/[.16] disabled:opacity-50"
+            className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
             disabled={isBusy}
             onClick={refreshStrategies}
             type="button"
@@ -296,8 +295,8 @@ function HeroStat({ color, label, value }: { color: string; label: string; value
   return (
     <div className="flex items-center gap-2">
       <span className="h-2 w-2 rounded-full shadow-[0_0_7px_currentColor]" style={{ backgroundColor: color, color }} />
-      <span className="text-[13px] text-white/50">{label}:</span>
-      <span className="text-[13px] font-bold text-white">{value}</span>
+      <span className="text-[13px] text-[var(--sunlit-muted)]">{label}:</span>
+      <span className="text-[13px] font-bold text-[var(--sunlit-ink)]">{value}</span>
     </div>
   );
 }

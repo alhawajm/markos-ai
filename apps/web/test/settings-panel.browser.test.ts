@@ -10,6 +10,7 @@ if (!baseUrl)
 let browser: Browser;
 const session = {
   mfaVerified: true,
+  mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
   tokens: {
     accessToken: "browser-session-token",
     expiresIn: 900,
@@ -76,7 +77,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       page.locator(".bg-card, .bg-canvas, .text-navy").count(),
     ).resolves.toBe(0);
     await expect(
-      page.getByText("Not set", { exact: true }).isVisible(),
+      page.getByText("No account connected", { exact: true }).isVisible(),
     ).resolves.toBe(true);
     await expect(
       page.getByText("Dry run", { exact: true }).isVisible(),
@@ -374,15 +375,15 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
       true,
     );
-    await expect(page.getByText("Bahrain launch").isVisible()).resolves.toBe(
-      true,
-    );
-    await expect(
-      page.getByText("VIDEO", { exact: true }).isVisible(),
-    ).resolves.toBe(true);
     await expect(
       page.getByRole("img", { name: "Bahrain launch" }).isVisible(),
     ).resolves.toBe(true);
+    await expect(
+      page.getByText("Latest post", { exact: true }).isVisible(),
+    ).resolves.toBe(true);
+    await expect(
+      page.getByText("VIDEO", { exact: true }).count(),
+    ).resolves.toBe(0);
     await expect(
       page.getByText(/7\/29\/2026|29\/07\/2026/).count(),
     ).resolves.toBeGreaterThan(0);
@@ -419,13 +420,11 @@ describe("active SettingsPanel Instagram interactions", () => {
 
   it("renders empty and reauthorization states without claiming normal connection or revocation", async () => {
     const empty = await settingsPage({ ...connected, recentMedia: [] });
-    await empty.page
-      .getByText("No recent media was returned for this account.")
-      .waitFor();
     await expect(
-      empty.page
-        .getByText("No recent media was returned for this account.")
-        .isVisible(),
+      empty.page.getByText("Latest post", { exact: true }).count(),
+    ).resolves.toBe(0);
+    await expect(
+      empty.page.getByText("@markos_business").isVisible(),
     ).resolves.toBe(true);
     await empty.page.close();
 
