@@ -17,9 +17,9 @@ import {
   LockKeyhole,
   RefreshCcw,
   ScrollText,
-  Save,
   ShieldCheck,
   UserRound,
+  type LucideIcon,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { MarkosApiClient } from "@markos/api-client";
@@ -33,6 +33,7 @@ import type {
 } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
 import { NotificationToast } from "./notification-toast";
+import { SectionNavigation, type SectionNavigationItem } from "./section-navigation";
 import {
   setBrowserSession,
   useMarkosClient,
@@ -45,6 +46,9 @@ import {
 
 type AuditState = "loading" | "error" | "success" | "limit";
 type NotificationTone = "error" | "info" | "success" | "warning";
+type SettingsSectionId = "profile" | "language" | "billing" | "connections" | "security" | "audit" | "data";
+
+const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "language", "billing", "connections", "security", "audit", "data"];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -65,11 +69,17 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   >(null);
   const [isBusy, setIsBusy] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
+  const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
 
   const client = useMarkosClient(locale);
   const dismissNotification = useCallback(() => {
     setMessage("");
     setDisconnectWarningUrl(null);
+  }, []);
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (isSettingsSectionId(hash)) setSelectedSection(hash);
   }, []);
 
   useEffect(() => {
@@ -436,9 +446,62 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const userName = session?.user.fullName ?? copy(locale, "accountUnavailable");
   const userEmail = session?.user.email ?? "—";
   const subscription = billing?.subscription;
+  const instagramReady = Boolean(session?.user.isVerified && mfaStatus?.enabled && session?.mfaVerified);
+  const navigationItems: SectionNavigationItem[] = [
+    {
+      id: "profile",
+      icon: UserRound,
+      label: copy(locale, "account"),
+      status: session?.user.isVerified ? copy(locale, "verified") : copy(locale, "pending"),
+      statusTone: session?.user.isVerified ? "success" : "warning",
+    },
+    {
+      id: "language",
+      icon: Globe2,
+      label: copy(locale, "language"),
+    },
+    {
+      id: "billing",
+      icon: CreditCard,
+      label: copy(locale, "billing"),
+      status: subscription?.planCode ?? "STARTER",
+    },
+    {
+      id: "connections",
+      icon: Instagram,
+      label: copy(locale, "channels"),
+      locked: !instagramReady,
+      status: activeConnection.connected ? copy(locale, "connectedStatus") : copy(locale, "disconnectedStatus"),
+      statusTone: instagramReady ? (activeConnection.connected ? "success" : "neutral") : "locked",
+    },
+    {
+      id: "security",
+      icon: ShieldCheck,
+      label: copy(locale, "security"),
+      status: mfaStatus?.enabled ? (session?.mfaVerified ? copy(locale, "mfaSessionVerified") : copy(locale, "enabled")) : copy(locale, "notEnabled"),
+      statusTone: mfaStatus?.enabled && session?.mfaVerified ? "success" : "warning",
+    },
+    {
+      id: "audit",
+      icon: ScrollText,
+      label: copy(locale, "audit"),
+    },
+    {
+      id: "data",
+      icon: Database,
+      label: copy(locale, "dataControls"),
+    },
+  ];
+
+  function selectSettingsSection(id: string) {
+    if (!isSettingsSectionId(id)) return;
+    setSelectedSection(id);
+    window.history.replaceState(null, "", `#${id}`);
+    window.requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
   return (
-    <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+    <section className="min-w-0" data-settings-page="sunlit">
       <NotificationToast
         action={
           disconnectWarningUrl ? (
@@ -464,47 +527,46 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         )}
         tone={notificationTone}
       />
-      <div className="lux-card rounded-[1.5rem] p-5 text-white sm:p-6 xl:col-span-2 xl:p-8">
+      <header className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-7 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#A3E5DE]">
+            <div className="sunlit-eyebrow inline-flex items-center gap-2">
               <ShieldCheck size={13} />
               {copy(locale, "eyebrow")}
             </div>
-            <h1 className="mt-4 font-display text-3xl font-bold leading-tight tracking-normal text-white sm:text-4xl">
+            <h1 className="mt-3 text-4xl font-black leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">
               {copy(locale, "title")}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#C7CDD8] sm:text-base">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)] sm:text-base">
               {copy(locale, "subtitle")}
             </p>
           </div>
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/8 px-5 py-3 text-sm font-bold text-[#A3E5DE] transition hover:border-[#81D8D0]/45 hover:bg-[#81D8D0]/12 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isBusy || !session}
-            onClick={refreshAllSettings}
-            type="button"
-          >
-            <RefreshCcw size={16} />
-            {copy(locale, "refresh")}
-          </button>
         </div>
-      </div>
+        <button
+          className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-extrabold disabled:opacity-50"
+          disabled={isBusy || !session}
+          onClick={refreshAllSettings}
+          type="button"
+        >
+          <RefreshCcw size={16} />
+          {copy(locale, "refresh")}
+        </button>
+      </header>
 
       {isBusy || auditState ? (
-        <div className="xl:col-span-2">
+        <div className="mt-5">
           <SurfaceState
-            appearance="luxury"
             action={
               auditState === "limit" ? (
                 <a
-                  className="lux-button-gold inline-flex h-10 items-center rounded-full px-4 text-sm font-bold"
+                  className="sunlit-primary inline-flex h-10 items-center rounded-xl px-4 text-sm font-extrabold"
                   href={`/${locale}/admin`}
                 >
                   {copy(locale, "openAdmin")}
                 </a>
               ) : (
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-[#81D8D0]/25 bg-[#81D8D0]/8 px-4 text-sm font-bold text-[#A3E5DE] disabled:opacity-50"
+                  className="sunlit-secondary inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
                   disabled={isBusy || !session}
                   onClick={refreshAllSettings}
                   type="button"
@@ -531,8 +593,20 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         </div>
       ) : null}
 
-      <aside className="grid gap-4">
+      <div className="mt-7 grid items-start gap-6 xl:grid-cols-[15rem_minmax(0,1fr)]">
+        <SectionNavigation
+          activeId={selectedSection}
+          className="[--section-menu-top:6.5rem]"
+          heading={copy(locale, "menuHeading")}
+          items={navigationItems}
+          mobileLabel={copy(locale, "mobileMenu")}
+          onSelect={selectSettingsSection}
+        />
+
+        <div className="grid min-w-0 gap-5">
+      <div className="grid gap-5">
         <Panel
+          active={selectedSection === "profile"}
           id="profile"
           icon={UserRound}
           kicker={copy(locale, "account")}
@@ -560,6 +634,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         </Panel>
 
         <Panel
+          active={selectedSection === "language"}
+          id="language"
           icon={Globe2}
           kicker={copy(locale, "language")}
           title={copy(locale, "languageTitle")}
@@ -582,6 +658,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         </Panel>
 
         <Panel
+          active={selectedSection === "billing"}
+          id="billing"
           icon={CreditCard}
           kicker={copy(locale, "billing")}
           title={subscription?.planCode ?? "STARTER"}
@@ -599,11 +677,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             />
           </div>
         </Panel>
-      </aside>
+      </div>
 
-      <div className="grid gap-4">
-        <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5">
+        <div className="grid gap-5">
           <Panel
+            active={selectedSection === "connections"}
+            id="connections"
             icon={Instagram}
             kicker={copy(locale, "channels")}
             title={copy(locale, "instagram")}
@@ -614,7 +694,28 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 : "disconnectedStatus",
             )}
           >
-            <div className="lux-card-quiet mt-4 grid gap-3 rounded-[1.25rem] p-4">
+            {!instagramReady ? (
+              <div className="mt-5 flex flex-col gap-4 rounded-[1.25rem] border border-[rgb(155_91_0_/_22%)] bg-[#fff8df] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-warning)]">
+                    <LockKeyhole size={18} />
+                  </span>
+                  <div>
+                    <p className="font-extrabold text-[var(--sunlit-ink)]">{copy(locale, "securityRequired")}</p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "securityRequiredBody")}</p>
+                  </div>
+                </div>
+                <button
+                  className="sunlit-secondary inline-flex shrink-0 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-extrabold"
+                  onClick={() => selectSettingsSection("security")}
+                  type="button"
+                >
+                  {copy(locale, "goToSecurity")}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="sunlit-panel-soft mt-4 grid gap-3 rounded-[1.25rem] p-4">
               <SettingRow
                 label={copy(locale, "accountId")}
                 value={
@@ -659,7 +760,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             >
               {(activeConnection.recentMedia ?? []).map((media) => (
                 <a
-                  className="lux-card-quiet rounded-[1.25rem] p-3 transition hover:border-[#81D8D0]/30"
+                  className="sunlit-panel-soft rounded-[1.25rem] p-3 transition hover:border-[rgb(33_191_174_/_35%)]"
                   href={media.permalink ?? "#"}
                   key={media.id}
                   rel="noreferrer"
@@ -680,14 +781,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               ))}
               {activeConnection.connected &&
               (activeConnection.recentMedia?.length ?? 0) === 0 ? (
-                <p className="text-sm text-[#9AA7BD]">
+                <p className="text-sm text-[var(--sunlit-muted)]">
                   {copy(locale, "emptyMedia")}
                 </p>
               ) : null}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <ActionButton
-                disabled={isBusy}
+                disabled={isBusy || !instagramReady}
                 icon={ExternalLink}
                 label={copy(
                   locale,
@@ -697,13 +798,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 tone="primary"
               />
               <ActionButton
-                disabled={isBusy || !activeConnection.connected}
+                disabled={isBusy || !instagramReady || !activeConnection.connected}
                 icon={RefreshCcw}
                 label={copy(locale, "refreshToken")}
                 onClick={refreshToken}
               />
               <ActionButton
-                disabled={isBusy || !activeConnection.connected}
+                disabled={isBusy || !instagramReady || !activeConnection.connected}
                 icon={Link2Off}
                 label={copy(locale, "disconnect")}
                 onClick={disconnect}
@@ -712,12 +813,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           </Panel>
 
           <Panel
+            active={selectedSection === "security"}
+            id="security"
             icon={LockKeyhole}
             kicker={copy(locale, "security")}
             title={copy(locale, "securityTitle")}
             body={copy(locale, "securityBody")}
           >
-            <div className="lux-card-quiet mt-4 rounded-[1.25rem] p-4">
+            <div className="sunlit-panel-soft mt-4 rounded-[1.25rem] p-4">
               <SettingRow
                 label={copy(locale, "mfa")}
                 value={
@@ -730,14 +833,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                         : copy(locale, "enabled")
                 }
               />
-              <p className="mt-3 text-sm leading-6 text-[#9AA7BD]">
+              <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">
                 {copy(locale, "mfaInstagramBody")}
               </p>
             </div>
 
             {mfaSetup && !mfaSetup.enabled ? (
-              <div className="mt-4 grid gap-4 rounded-[1.25rem] border border-[#D4AF37]/25 bg-[#D4AF37]/7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-                <div className="mx-auto rounded-2xl bg-white p-2 shadow-[0_14px_35px_rgba(0,0,0,.28)] sm:mx-0">
+              <div className="mt-4 grid gap-4 rounded-[1.25rem] border border-[rgb(246_196_83_/_36%)] bg-[#fff8df] p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                <div className="mx-auto rounded-2xl bg-white p-2 shadow-[var(--sunlit-shadow-sm)] sm:mx-0">
                   <QRCodeSVG
                     bgColor="#FFFFFF"
                     fgColor="#0F1419"
@@ -749,25 +852,25 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-display text-lg font-bold text-white">
+                  <p className="text-lg font-black text-[var(--sunlit-ink)]">
                     {copy(locale, "mfaScanTitle")}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-[#C7CDD8]">
+                  <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
                     {copy(locale, "mfaScanBody")}
                   </p>
-                  <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9AA7BD]">
+                  <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">
                     {copy(locale, "manualKey")}
                   </p>
-                  <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[#81D8D0]/18 bg-black/20 p-2">
+                  <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2">
                     <code
-                      className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[#A3E5DE]"
+                      className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[var(--sunlit-aqua-dark)]"
                       dir="ltr"
                     >
                       {mfaSetup.secret}
                     </code>
                     <button
                       aria-label={copy(locale, "copyKey")}
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#81D8D0]/20 bg-[#81D8D0]/8 text-[#81D8D0] transition hover:bg-[#81D8D0]/15 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)] transition hover:brightness-95"
                       onClick={() => void copyMfaSecret()}
                       title={copy(locale, "copyKey")}
                       type="button"
@@ -780,7 +883,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                     </button>
                   </div>
                   {mfaSecretCopied ? (
-                    <p className="mt-2 text-xs font-semibold text-[#00C9A7]">
+                    <p className="mt-2 text-xs font-semibold text-[var(--sunlit-aqua-dark)]">
                       {copy(locale, "keyCopied")}
                     </p>
                   ) : null}
@@ -793,7 +896,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 <input
                   aria-label={copy(locale, "mfaCode")}
                   autoComplete="one-time-code"
-                  className="rounded-xl border border-[#81D8D0]/20 bg-[#0F1419]/75 px-4 py-3 text-sm font-semibold text-white caret-[#81D8D0] outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/55 focus:ring-2 focus:ring-[#81D8D0]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none disabled:opacity-50"
                   disabled={!mfaSetup || isBusy}
                   inputMode="numeric"
                   onChange={(event) =>
@@ -818,11 +921,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             ) : null}
 
             {mfaStatus?.enabled && !session?.mfaVerified ? (
-              <div className="mt-4 grid gap-3 rounded-[1.25rem] border border-[#81D8D0]/20 bg-[#81D8D0]/7 p-4 md:grid-cols-[1fr_auto]">
+              <div className="mt-4 grid gap-3 rounded-[1.25rem] border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-4 md:grid-cols-[1fr_auto]">
                 <input
                   aria-label={copy(locale, "mfaCode")}
                   autoComplete="one-time-code"
-                  className="rounded-xl border border-[#81D8D0]/20 bg-[#0F1419]/75 px-4 py-3 text-sm font-semibold text-white caret-[#81D8D0] outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/55 focus:ring-2 focus:ring-[#81D8D0]/20"
+                  className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none"
                   disabled={isBusy}
                   inputMode="numeric"
                   onChange={(event) =>
@@ -850,38 +953,34 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 label={copy(locale, "setupMfa")}
                 onClick={setupMfa}
               />
-              <ActionButton
-                disabled={isBusy}
-                icon={Download}
-                label={copy(locale, "exportData")}
-                onClick={exportData}
-              />
             </div>
           </Panel>
         </div>
 
         <Panel
+          active={selectedSection === "audit"}
+          id="audit"
           icon={ScrollText}
           kicker={copy(locale, "audit")}
           title={copy(locale, "auditTitle")}
           body={copy(locale, "auditBody")}
         >
           {auditLogs.length === 0 ? (
-            <div className="mt-4 rounded-[1.25rem] border border-dashed border-[#81D8D0]/20 bg-[#81D8D0]/5 p-6 text-sm text-[#9AA7BD]">
+            <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-sm text-[var(--sunlit-muted)]">
               {copy(locale, "auditEmpty")}
             </div>
           ) : (
-            <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-[#81D8D0]/15 bg-black/10">
+            <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
               {auditLogs.slice(0, 8).map((log) => (
                 <div
-                  className="grid gap-1 border-b border-[#81D8D0]/10 px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
+                  className="grid gap-1 border-b border-[var(--sunlit-line)] px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
                   key={log.id}
                 >
-                  <span className="font-bold text-[#F5F5F7]">
+                  <span className="font-extrabold text-[var(--sunlit-ink)]">
                     {formatAction(log.action)}
                   </span>
-                  <span className="text-[#9AA7BD]">{log.targetType}</span>
-                  <span className="text-[#9AA7BD]">
+                  <span className="text-[var(--sunlit-muted)]">{log.targetType}</span>
+                  <span className="text-[var(--sunlit-muted)]">
                     {new Date(log.createdAt).toLocaleString(locale)}
                   </span>
                 </div>
@@ -890,29 +989,34 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           )}
         </Panel>
 
-        <div className="lux-card-muted rounded-[1.5rem] p-5">
+        <div className={`${selectedSection === "data" ? "" : "hidden"} sunlit-panel-soft scroll-mt-28 rounded-[1.5rem] p-5`} id="data">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-[rgb(246_196_83_/_38%)] bg-[#fff8df] text-[var(--sunlit-warning)]">
                 <Database size={20} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white">
+                <h2 className="text-base font-black text-[var(--sunlit-ink)]">
                   {copy(locale, "dataControls")}
                 </h2>
-                <p className="text-xs text-[#9AA7BD]">
+                <p className="text-xs text-[var(--sunlit-muted)]">
                   {copy(locale, "dataControlsBody")}
                 </p>
               </div>
             </div>
-            <a
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/8 px-4 py-3 text-sm font-bold text-[#E8C968] transition hover:border-[#D4AF37]/45 hover:bg-[#D4AF37]/12 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/30"
-              href={`/${locale}/vault`}
-            >
-              {copy(locale, "openVault")}
-              <ArrowRight size={16} />
-            </a>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton disabled={isBusy} icon={Download} label={copy(locale, "exportData")} onClick={exportData} />
+              <a
+                className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold"
+                href={`/${locale}/app/knowledge`}
+              >
+                {copy(locale, "openVault")}
+                <ArrowRight size={16} />
+              </a>
+            </div>
           </div>
+        </div>
+      </div>
         </div>
       </div>
     </section>
@@ -920,6 +1024,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 }
 
 function Panel({
+  active,
   body,
   children,
   id,
@@ -927,31 +1032,32 @@ function Panel({
   kicker,
   title,
 }: {
+  active: boolean;
   body: string;
   children?: React.ReactNode;
   id?: string;
-  icon: typeof ShieldCheck;
+  icon: LucideIcon;
   kicker: string;
   title: string;
 }) {
   return (
     <article
-      className="lux-card scroll-mt-6 rounded-[1.5rem] p-5 sm:p-6"
+      className={`${active ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`}
       id={id}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#81D8D0]">
+          <p className="sunlit-eyebrow">
             {kicker}
           </p>
-          <h2 className="mt-2 break-words text-lg font-bold text-white">
+          <h2 className="mt-2 break-words text-xl font-black text-[var(--sunlit-ink)]">
             {title}
           </h2>
-          <p className="mt-1 break-words text-sm leading-6 text-[#9AA7BD]">
+          <p className="mt-1 break-words text-sm leading-6 text-[var(--sunlit-muted)]">
             {body}
           </p>
         </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[#81D8D0]/25 bg-[#81D8D0]/10 text-[#81D8D0] shadow-[0_0_24px_rgba(129,216,208,.12)]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[rgb(33_191_174_/_20%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
           <Icon size={21} strokeWidth={1.8} />
         </div>
       </div>
@@ -963,8 +1069,8 @@ function Panel({
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-[#9AA7BD]">{label}</span>
-      <span className="min-w-0 break-words text-end font-bold text-[#F5F5F7]">
+      <span className="text-[var(--sunlit-muted)]">{label}</span>
+      <span className="min-w-0 break-words text-end font-extrabold text-[var(--sunlit-ink)]">
         {value}
       </span>
     </div>
@@ -979,7 +1085,7 @@ function ActionButton({
   tone = "secondary",
 }: {
   disabled: boolean;
-  icon: typeof Save;
+  icon: LucideIcon;
   label: string;
   onClick: () => void;
   tone?: "primary" | "secondary";
@@ -988,8 +1094,8 @@ function ActionButton({
     <button
       className={
         tone === "primary"
-          ? "lux-button-primary inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35 disabled:cursor-not-allowed disabled:opacity-45"
-          : "inline-flex items-center justify-center gap-2 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/7 px-4 py-2.5 text-sm font-bold text-[#C7CDD8] transition hover:border-[#81D8D0]/40 hover:bg-[#81D8D0]/12 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/25 disabled:cursor-not-allowed disabled:opacity-40"
+          ? "sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold disabled:opacity-45"
+          : "sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold disabled:opacity-40"
       }
       disabled={disabled}
       onClick={onClick}
@@ -1039,8 +1145,12 @@ function formatAction(action: string): string {
 
 function languageClass(active: boolean): string {
   return active
-    ? "lux-button-primary rounded-full px-3 py-2 text-center text-sm font-bold"
-    : "rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/6 px-3 py-2 text-center text-sm font-bold text-[#C7CDD8] transition hover:border-[#81D8D0]/40 hover:text-white";
+    ? "sunlit-primary rounded-xl px-3 py-2 text-center text-sm font-extrabold"
+    : "sunlit-secondary rounded-xl px-3 py-2 text-center text-sm font-extrabold";
+}
+
+function isSettingsSectionId(value: string): value is SettingsSectionId {
+  return settingsSectionIds.includes(value as SettingsSectionId);
 }
 
 function isAuditState(value: string | null): value is AuditState {
@@ -1149,6 +1259,8 @@ function copy(locale: Locale, key: string): string {
       language: "اللغة",
       languageBody: "التبديل يحافظ على نفس مسار الإعدادات.",
       languageTitle: "العربية والإنجليزية",
+      menuHeading: "أقسام الإعدادات",
+      mobileMenu: "انتقل إلى",
       lastSync: "آخر مزامنة",
       liveWorkspace: "مساحة عمل مباشرة",
       mfa: "MFA",
@@ -1189,6 +1301,9 @@ function copy(locale: Locale, key: string): string {
       securityTitle: "ضوابط الوصول",
       setupMfa: "إعداد MFA",
       securityLoading: "يتم تحميل حالة الأمان. حاول بعد لحظة.",
+      securityRequired: "أكمل إعدادات الأمان أولاً",
+      securityRequiredBody: "يجب تأكيد البريد الإلكتروني وتفعيل MFA والتحقق من الجلسة قبل إدارة اتصال Instagram.",
+      goToSecurity: "فتح قسم الأمان",
       status: "الحالة",
       subtitle:
         "إدارة الحساب، مساحة العمل، اللغة، الفوترة، القنوات، والأمان من شاشة واحدة.",
@@ -1251,6 +1366,8 @@ function copy(locale: Locale, key: string): string {
       language: "Language",
       languageBody: "Switching keeps you on the same settings route.",
       languageTitle: "Arabic and English",
+      menuHeading: "Settings sections",
+      mobileMenu: "Jump to",
       lastSync: "Last synchronized",
       liveWorkspace: "Live workspace",
       mfa: "MFA",
@@ -1293,6 +1410,10 @@ function copy(locale: Locale, key: string): string {
       setupMfa: "Set up MFA",
       securityLoading:
         "Security status is still loading. Try again in a moment.",
+      securityRequired: "Complete security first",
+      securityRequiredBody:
+        "Verify your email, enable MFA, and verify this session before managing Instagram.",
+      goToSecurity: "Open security",
       status: "Status",
       subtitle:
         "Manage account, workspace, language, billing, channels, and security from one screen.",

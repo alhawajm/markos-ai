@@ -92,9 +92,9 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const workspaceName = session?.workspace.name || (locale === "ar" ? "مساحة العمل" : "Workspace");
 
   return (
-    <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-hidden" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
       <div className="grid min-h-screen lg:grid-cols-[17.5rem_minmax(0,1fr)]">
-        <aside className="hidden border-e border-[var(--sunlit-line)] bg-white/80 px-5 py-6 backdrop-blur-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+        <aside className="hidden border-e border-[var(--sunlit-line)] bg-white/80 px-5 py-6 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-y-auto" data-app-sidebar>
           <Link className="flex items-center gap-3 rounded-2xl px-2 py-2 text-[var(--sunlit-ink)]" href={`/${locale}/app`}>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_12px_28px_rgb(32_33_43_/_18%)]">
               <Sparkles size={21} strokeWidth={2.2} />
@@ -139,15 +139,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             })}
           </nav>
 
-          <section className="sunlit-panel-dark mt-auto overflow-hidden rounded-2xl p-5">
-            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-yellow)]">
-              {locale === "ar" ? "دورة MARKOS" : "The MARKOS loop"}
-            </p>
-            <p className="mt-3 text-sm font-bold leading-6 text-white">{locale === "ar" ? "خطط · أنشئ · انشر · تعلّم" : "Plan · Create · Publish · Learn"}</p>
-            <p className="mt-2 text-xs leading-5 text-white/65">
-              {locale === "ar" ? "تتحسن الخطوة التالية مع كل معلومة جديدة." : "Each new insight makes the next step sharper."}
-            </p>
-          </section>
         </aside>
 
         <section className="min-w-0">

@@ -136,7 +136,7 @@ The coded preview's canonical runtime palette lives in `apps/web/app/sunlit-them
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
-- At large breakpoints, use a persistent labeled sidebar and a restrained workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
+- At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls, with a restrained sticky workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
 - Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.

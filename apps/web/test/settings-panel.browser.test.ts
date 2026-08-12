@@ -135,8 +135,8 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
-  it("keeps the luxury Settings surface usable in Arabic RTL on mobile", async () => {
-    const { page } = await settingsPage(disconnected, "/ar/app/settings");
+  it("keeps the Sunlit Settings surface usable in Arabic RTL on mobile", async () => {
+    const { page } = await settingsPage(disconnected, "/ar/app/settings#connections");
     await page.setViewportSize({ height: 844, width: 390 });
 
     await expect(
@@ -368,7 +368,7 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {
     const { page } = await settingsPage(
       connected,
-      "/en/app/settings?instagram=connected&code=provider-code&state=provider-state&tab=accounts&error_reason=none",
+      "/en/app/settings?instagram=connected&code=provider-code&state=provider-state&tab=accounts&error_reason=none#connections",
     );
     await page.getByText("@markos_business").waitFor();
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
@@ -386,7 +386,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(
       page.getByText(/7\/29\/2026|29\/07\/2026/).count(),
     ).resolves.toBeGreaterThan(0);
-    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts`);
+    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts#connections`);
     const content = await page.locator("body").innerText();
     for (const secret of [
       "provider-code",
@@ -403,10 +403,10 @@ describe("active SettingsPanel Instagram interactions", () => {
 
     const malformed = await settingsPage(
       connected,
-      "/en/app/settings?instagram=unsupported&code=provider-code&state=provider-state&safe=retained",
+      "/en/app/settings?instagram=unsupported&code=provider-code&state=provider-state&safe=retained#connections",
     );
     expect(malformed.page.url()).toBe(
-      `${baseUrl}/en/app/settings?safe=retained`,
+      `${baseUrl}/en/app/settings?safe=retained#connections`,
     );
     await expect(malformed.page.getByRole("status").count()).resolves.toBe(0);
     await malformed.page.close();
@@ -451,7 +451,7 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("renders MFA enrollment as a local QR flow with a readable six-digit field", async () => {
     const { page, setMfaEnabled } = await settingsPage(
       disconnected,
-      "/en/app/settings",
+      "/en/app/settings#security",
       false,
     );
     const setup = {
@@ -601,7 +601,7 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("preserves connection on reconnect failure and cancellation", async () => {
     const { page } = await settingsPage(
       connected,
-      "/en/app/settings?instagram=error&tab=accounts",
+      "/en/app/settings?instagram=error&tab=accounts#connections",
     );
     await page.getByText("@markos_business").waitFor();
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
@@ -615,7 +615,7 @@ describe("active SettingsPanel Instagram interactions", () => {
         )
         .isVisible(),
     ).resolves.toBe(true);
-    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts`);
+    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts#connections`);
     await page.route(
       /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/workspace\/instagram\/oauth\/start$/,
       (route) =>
@@ -901,7 +901,7 @@ describe("active SettingsPanel Instagram interactions", () => {
 
 async function settingsPage(
   connection: Record<string, unknown>,
-  path = "/en/app/settings",
+  path = "/en/app/settings#connections",
   mfaEnabled = true,
 ) {
   const page = await browserPage();
