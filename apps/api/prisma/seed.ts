@@ -20,8 +20,8 @@ const plans = [
       strategies: 1,
       posts: 30,
       seats: 1,
-      storageBytes: 1_000_000_000,
-    },
+      storageBytes: 1_000_000_000
+    }
   },
   {
     code: "GROWTH",
@@ -36,8 +36,8 @@ const plans = [
       strategies: 3,
       posts: 90,
       seats: 2,
-      storageBytes: 5_000_000_000,
-    },
+      storageBytes: 5_000_000_000
+    }
   },
   {
     code: "PREMIUM",
@@ -52,8 +52,8 @@ const plans = [
       strategies: 12,
       posts: 200,
       seats: 5,
-      storageBytes: 20_000_000_000,
-    },
+      storageBytes: 20_000_000_000
+    }
   },
   {
     code: "ENTERPRISE",
@@ -68,9 +68,9 @@ const plans = [
       strategies: 20,
       posts: 500,
       seats: 15,
-      storageBytes: 100_000_000_000,
-    },
-  },
+      storageBytes: 100_000_000_000
+    }
+  }
 ] as const;
 
 async function main(): Promise<void> {
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
         priceMinor: plan.priceMinor,
         currency: "BHD",
         limits: plan.limits,
-        active: true,
+        active: true
       },
       create: {
         code: plan.code,
@@ -90,8 +90,8 @@ async function main(): Promise<void> {
         priceMinor: plan.priceMinor,
         currency: "BHD",
         limits: plan.limits,
-        active: true,
-      },
+        active: true
+      }
     });
   }
 }

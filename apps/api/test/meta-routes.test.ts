@@ -144,9 +144,7 @@ describe("Meta callback routes", () => {
 
     expect(validResponse.statusCode).toBe(200);
     expect(validResponse.json().data).toMatchObject({ disconnected: 1, received: true });
-    expect(
-      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
-    ).toBeNull();
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
     await persistTestInstagramConnection({
       workspaceId: session.workspace.id,
@@ -164,9 +162,7 @@ describe("Meta callback routes", () => {
 
     expect(tamperedResponse.statusCode).toBe(403);
     expect(tamperedResponse.json().error.code).toBe("META_CALLBACK_FORBIDDEN");
-    expect(
-      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
-    ).not.toBeNull();
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).not.toBeNull();
 
     await app.close();
   });
@@ -194,9 +190,7 @@ describe("Meta callback routes", () => {
 
     expect(validResponse.statusCode).toBe(200);
     expect(validResponse.json().data).toMatchObject({ disconnected: 1, received: true });
-    expect(
-      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
-    ).toBeNull();
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).toBeNull();
 
     await persistTestInstagramConnection({
       workspaceId: session.workspace.id,
@@ -213,9 +207,7 @@ describe("Meta callback routes", () => {
 
     expect(tamperedResponse.statusCode).toBe(403);
     expect(tamperedResponse.json().error.code).toBe("META_CALLBACK_FORBIDDEN");
-    expect(
-      await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })
-    ).not.toBeNull();
+    expect(await prisma.instagramConnectionCredential.findUnique({ where: { workspaceId: session.workspace.id } })).not.toBeNull();
 
     await app.close();
   });
@@ -290,14 +282,7 @@ function tamperSignature(value: string): string {
 }
 
 function multipartSignedRequest(boundary: string, value: string): string {
-  return [
-    `--${boundary}`,
-    'Content-Disposition: form-data; name="signed_request"',
-    "",
-    value,
-    `--${boundary}--`,
-    ""
-  ].join("\r\n");
+  return [`--${boundary}`, 'Content-Disposition: form-data; name="signed_request"', "", value, `--${boundary}--`, ""].join("\r\n");
 }
 
 function webhookSignature(payload: string): string {

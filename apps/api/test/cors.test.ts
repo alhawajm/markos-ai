@@ -18,25 +18,16 @@ describe("browser CORS", () => {
       url: "/v1/workspace/instagram",
       headers: {
         origin: env.WEB_BASE_URL,
-        "access-control-request-headers":
-          "authorization,content-type,x-workspace-id",
-        "access-control-request-method": "DELETE",
-      },
+        "access-control-request-headers": "authorization,content-type,x-workspace-id",
+        "access-control-request-method": "DELETE"
+      }
     });
 
     expect(response.statusCode).toBe(204);
-    expect(response.headers["access-control-allow-origin"]).toBe(
-      env.WEB_BASE_URL,
-    );
+    expect(response.headers["access-control-allow-origin"]).toBe(env.WEB_BASE_URL);
     expect(response.headers["access-control-allow-credentials"]).toBe("true");
 
-    const allowedMethods = new Set(
-      response.headers["access-control-allow-methods"]
-        ?.split(",")
-        .map((method) => method.trim()),
-    );
-    expect(allowedMethods).toEqual(
-      new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]),
-    );
+    const allowedMethods = new Set(response.headers["access-control-allow-methods"]?.split(",").map((method) => method.trim()));
+    expect(allowedMethods).toEqual(new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]));
   });
 });

@@ -62,8 +62,12 @@ describe("rendered Sunlit authentication", () => {
     await expect(page.locator('[data-auth-page="signup"]').getAttribute("dir")).resolves.toBe("ltr");
     await expect(page.locator('[data-auth-page="signup"]').evaluate((element) => getComputedStyle(element).colorScheme)).resolves.toBe("light");
     await expect(page.getByRole("link", { name: "Terms of Service" }).first().getAttribute("href")).resolves.toBe("/en/terms");
-    await expect(page.locator('img[src="/auth/providers/google-signin.svg"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)).resolves.toBeGreaterThan(0);
-    await expect(page.locator('img[src="/auth/providers/apple-signin.png"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)).resolves.toBeGreaterThan(0);
+    await expect(
+      page.locator('img[src="/auth/providers/google-signin.svg"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)
+    ).resolves.toBeGreaterThan(0);
+    await expect(
+      page.locator('img[src="/auth/providers/apple-signin.png"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)
+    ).resolves.toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await expect(page.locator('[data-tone="error"][role="alert"]').textContent()).resolves.toContain("Agree to the Terms of Service");

@@ -128,11 +128,7 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
   };
 }
 
-export async function rescheduleFailedPublish(
-  workspaceId: string,
-  contentItemId: string,
-  input: { scheduledAt: string }
-): Promise<ContentItem> {
+export async function rescheduleFailedPublish(workspaceId: string, contentItemId: string, input: { scheduledAt: string }): Promise<ContentItem> {
   const contentItem = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
@@ -163,10 +159,7 @@ export async function rescheduleFailedPublish(
   });
 }
 
-export async function publishDueContent(
-  workspaceId: string,
-  options: { now?: Date; publisher?: InstagramPublisher } = {}
-): Promise<PublishDueContentResult> {
+export async function publishDueContent(workspaceId: string, options: { now?: Date; publisher?: InstagramPublisher } = {}): Promise<PublishDueContentResult> {
   const now = options.now ?? new Date();
   const rows = await prisma.contentItem.findMany({
     where: {
@@ -405,12 +398,7 @@ export async function publishContentItem(
   };
 }
 
-function validatePublishAttempt(input: {
-  contentItem: ContentItem;
-  mediaAssets: MediaAsset[];
-  now: Date;
-  workspace: Workspace;
-}): string[] {
+function validatePublishAttempt(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; now: Date; workspace: Workspace }): string[] {
   const reasons: string[] = [];
 
   if (!input.workspace.instagramAccountId || !input.workspace.instagramAccessToken || !input.workspace.instagramTokenExpiresAt) {
@@ -431,9 +419,7 @@ function validatePublishAttempt(input: {
     reasons.push("CONTENT_TYPE_NOT_PUBLISHABLE");
   }
 
-  const validPublicMediaIds = new Set(
-    input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id)
-  );
+  const validPublicMediaIds = new Set(input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
 
   if (input.contentItem.mediaIds.length === 0 || input.contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
     reasons.push("PUBLIC_MEDIA_REQUIRED");

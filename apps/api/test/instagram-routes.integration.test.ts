@@ -20,10 +20,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
     globalThis.fetch = async (input) => {
       providerCalls += 1;
       const url = String(input);
-      if (url === "https://api.instagram.com/oauth/access_token")
-        return response({ access_token: "fake-short-token", user_id: "route-scoped-user" });
-      if (url.startsWith("https://graph.instagram.com/access_token?"))
-        return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
+      if (url === "https://api.instagram.com/oauth/access_token") return response({ access_token: "fake-short-token", user_id: "route-scoped-user" });
+      if (url.startsWith("https://graph.instagram.com/access_token?")) return response({ access_token: "fake-long-token", expires_in: 5_184_000 });
       if (url.startsWith("https://graph.instagram.com/v25.0/me?"))
         return response({ user_id: "route-professional-account", username: "route_business", media: { data: [] } });
       throw new Error("Unexpected provider request");
@@ -52,7 +50,11 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(unauthenticated.statusCode).toBe(401);
     const forbidden = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(editor.token) });
     expect(forbidden.statusCode).toBe(403);
-    const nonmember = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(await token(outsider.userId, owner.workspaceId)) });
+    const nonmember = await app.inject({
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
+      headers: auth(await token(outsider.userId, owner.workspaceId))
+    });
     expect(nonmember.statusCode).toBe(403);
 
     const started = await app.inject({
@@ -64,8 +66,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
         returnTo: "/en/app/settings",
         providerHost: "https://untrusted.invalid",
         redirectUri: "https://untrusted.invalid/callback",
-        scope: "unrequested_scope",
-      },
+        scope: "unrequested_scope"
+      }
     });
     expect(started.statusCode).toBe(200);
     const authorization = new URL(started.json().data.authorizationUrl);
@@ -85,7 +87,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
       method: "POST",
       url: "/v1/workspace/instagram/oauth/start",
       headers: auth(withoutMfa),
-      payload: { returnTo: "/en/app/settings" },
+      payload: { returnTo: "/en/app/settings" }
     });
 
     expect(mfaBlocked.statusCode).toBe(403);
@@ -93,14 +95,14 @@ describeInstagramDatabase("registered Instagram routes", () => {
 
     await prisma.user.update({
       where: { id: owner.userId },
-      data: { isVerified: false },
+      data: { isVerified: false }
     });
 
     const emailBlocked = await app.inject({
       method: "POST",
       url: "/v1/workspace/instagram/oauth/start",
       headers: auth(owner.token),
-      payload: { returnTo: "/en/app/settings" },
+      payload: { returnTo: "/en/app/settings" }
     });
 
     expect(emailBlocked.statusCode).toBe(403);
@@ -116,19 +118,23 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const completed = await app.inject({
       method: "GET",
       url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-      headers: auth(other.token),
+      headers: auth(other.token)
     });
     expect(completed.statusCode).toBe(302);
     expect(completed.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=connected");
     expect(completed.headers.location).not.toContain("fake-code");
     expect(providerCalls - before).toBe(3);
-    expect(info.mock.calls.filter(([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_success")).toHaveLength(1);
+    expect(
+      info.mock.calls.filter(
+        ([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_success"
+      )
+    ).toHaveLength(1);
     expect((await status(initiator)).json().data).toMatchObject({ connected: true, accountId: "route-professional-account" });
     expect((await status(other)).json().data).toMatchObject({ connected: false });
 
     const replay = await app.inject({
       method: "GET",
-      url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+      url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}`
     });
     expect(replay.statusCode).toBe(302);
     expect(replay.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
@@ -149,7 +155,10 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(providerCalls).toBe(before);
 
     const deniedState = await start(owner);
-    const denied = await app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?error=access_denied&state=${encodeURIComponent(deniedState)}` });
+    const denied = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/instagram/oauth/callback?error=access_denied&state=${encodeURIComponent(deniedState)}`
+    });
     expect(denied.statusCode).toBe(302);
     expect(denied.headers.location).toBe("http://localhost:3000/en/app/settings?instagram=error");
     const replay = await app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(deniedState)}` });
@@ -166,15 +175,17 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const failed = await app.inject({
       method: "GET",
       url: `/v1/workspace/instagram/oauth/callback?code=recognizable-callback-code&state=${encodeURIComponent(state)}&error_description=recognizable-provider-error`,
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json" }
     });
     expect(failed.statusCode).toBe(400);
     expect(failed.json()).toMatchObject({
-      error: { code: "INSTAGRAM_OAUTH_FAILED", message: "Instagram authorization could not be completed" },
+      error: { code: "INSTAGRAM_OAUTH_FAILED", message: "Instagram authorization could not be completed" }
     });
     expect(failed.body).not.toContain("recognizable-callback-code");
     expect(failed.body).not.toContain("recognizable-provider-error");
-    const terminal = warn.mock.calls.filter(([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_failure");
+    const terminal = warn.mock.calls.filter(
+      ([fields]) => typeof fields === "object" && fields !== null && "event" in fields && fields.event === "instagram_oauth_callback_failure"
+    );
     expect(terminal).toHaveLength(1);
     expect(terminal[0]?.[0]).toMatchObject({ stage: "connection_upsert", category: "database_unique_constraint", databaseCode: "P2002" });
     await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(currentOwner.token) });
@@ -190,7 +201,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     for (const [method, url] of [
       ["GET", "/v1/workspace/instagram"],
       ["POST", "/v1/workspace/instagram/refresh"],
-      ["DELETE", "/v1/workspace/instagram"],
+      ["DELETE", "/v1/workspace/instagram"]
     ] as const) {
       expect((await app.inject({ method, url })).statusCode).toBe(401);
       expect((await app.inject({ method, url, headers: auth(await token(outsider.userId, owner.workspaceId)) })).statusCode).toBe(403);
@@ -198,7 +209,10 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect((await app.inject({ method: "GET", url: "/v1/workspace/instagram", headers: auth(editor.token) })).statusCode).toBe(200);
     expect((await app.inject({ method: "POST", url: "/v1/workspace/instagram/refresh", headers: auth(editor.token) })).statusCode).toBe(403);
     expect((await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(editor.token) })).statusCode).toBe(403);
-    expect((await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(owner.token), payload: { returnTo: "/en/app/settings" } })).statusCode).toBe(200);
+    expect(
+      (await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(owner.token), payload: { returnTo: "/en/app/settings" } }))
+        .statusCode
+    ).toBe(200);
     const refreshed = await app.inject({ method: "POST", url: "/v1/workspace/instagram/refresh", headers: auth(owner.token) });
     expect(refreshed.statusCode).toBe(200);
     expect(refreshed.json().data.reason).toBe("INSTAGRAM_TOKEN_TOO_NEW");
@@ -208,8 +222,8 @@ describeInstagramDatabase("registered Instagram routes", () => {
       connection: { connected: false, status: "DISCONNECTED" },
       providerRevocation: {
         status: "ACTION_REQUIRED",
-        manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/",
-      },
+        manualRevocationUrl: "https://www.instagram.com/accounts/manage_access/"
+      }
     });
   });
 
@@ -218,7 +232,12 @@ describeInstagramDatabase("registered Instagram routes", () => {
     return app.inject({ method: "GET", url: `/v1/workspace/instagram/oauth/callback?code=fake-code&state=${encodeURIComponent(state)}` });
   }
   async function start(input: Principal): Promise<string> {
-    const result = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(input.token), payload: { returnTo: "/en/app/settings" } });
+    const result = await app.inject({
+      method: "POST",
+      url: "/v1/workspace/instagram/oauth/start",
+      headers: auth(input.token),
+      payload: { returnTo: "/en/app/settings" }
+    });
     expect(result.statusCode).toBe(200);
     return new URL(result.json().data.authorizationUrl).searchParams.get("state")!;
   }
@@ -233,7 +252,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
       secret: env.INSTAGRAM_OAUTH_STATE_SECRET!,
       store: createPrismaOAuthStateStore(input.userId, input.workspaceId),
       now: new Date(Date.now() - 120_000),
-      ttlSeconds: 1,
+      ttlSeconds: 1
     });
   }
   async function principal(role: "OWNER" | "EDITOR"): Promise<Principal> {
@@ -241,7 +260,17 @@ describeInstagramDatabase("registered Instagram routes", () => {
     const workspaceId = randomUUID();
     userIds.push(userId);
     workspaceIds.push(workspaceId);
-    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route User", locale: "EN", isVerified: true, mfaEnabled: true, mfaSecret: "ROUTEOWNERTESTSECRET" } });
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email: `${userId}@markos.test`,
+        fullName: "Route User",
+        locale: "EN",
+        isVerified: true,
+        mfaEnabled: true,
+        mfaSecret: "ROUTEOWNERTESTSECRET"
+      }
+    });
     await prisma.workspace.create({ data: { id: workspaceId, ownerUserId: userId, name: `Route ${workspaceId}`, slug: `route-${workspaceId}` } });
     await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
     return { userId, workspaceId, token: await token(userId, workspaceId), role };
@@ -249,18 +278,34 @@ describeInstagramDatabase("registered Instagram routes", () => {
   async function member(workspaceId: string, role: "EDITOR"): Promise<Principal> {
     const userId = randomUUID();
     userIds.push(userId);
-    await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Route Member", locale: "EN", isVerified: true, mfaEnabled: true, mfaSecret: "ROUTEMEMBERTESTSECRET" } });
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email: `${userId}@markos.test`,
+        fullName: "Route Member",
+        locale: "EN",
+        isVerified: true,
+        mfaEnabled: true,
+        mfaSecret: "ROUTEMEMBERTESTSECRET"
+      }
+    });
     await prisma.workspaceMember.create({ data: { workspaceId, userId, role } });
     return { userId, workspaceId, token: await token(userId, workspaceId), role };
   }
 });
 
 type Principal = { userId: string; workspaceId: string; token: string; role: "OWNER" | "EDITOR" };
-function auth(value: string) { return { authorization: `Bearer ${value}` }; }
+function auth(value: string) {
+  return { authorization: `Bearer ${value}` };
+}
 async function token(userId: string, workspaceId: string, mfaVerified = true) {
   return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified, mfaVerifiedUntil: mfaVerified ? Math.floor(Date.now() / 1000) + 900 : null })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-    .setSubject(userId).setIssuedAt().setExpirationTime("15m")
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime("15m")
     .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));
 }
-function response(value: unknown) { return new Response(JSON.stringify(value), { status: 200 }); }
+function response(value: unknown) {
+  return new Response(JSON.stringify(value), { status: 200 });
+}

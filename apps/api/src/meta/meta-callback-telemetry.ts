@@ -14,30 +14,12 @@ export type MetaCallbackVerificationFailureCategory =
   | "account_id_missing";
 
 export type MetaCallbackStageUpdate = {
-  stage:
-    | "callback_request"
-    | "payload_parse"
-    | "signature_verification"
-    | "credential_lookup"
-    | "local_cleanup"
-    | "audit_persistence"
-    | "callback_complete";
+  stage: "callback_request" | "payload_parse" | "signature_verification" | "credential_lookup" | "local_cleanup" | "audit_persistence" | "callback_complete";
   outcome: "received" | "started" | "completed" | "rejected" | "failed";
-  contentTypeCategory?:
-    | "form"
-    | "json"
-    | "text"
-    | "multipart"
-    | "octet_stream"
-    | "missing"
-    | "other";
+  contentTypeCategory?: "form" | "json" | "text" | "multipart" | "octet_stream" | "missing" | "other";
   credentialMatched?: boolean;
   verificationFailureCategory?: MetaCallbackVerificationFailureCategory;
-  failureCategory?:
-    | "unsupported_media_type"
-    | "payload_parse_failed"
-    | "signature_verification_failed"
-    | "database_failure";
+  failureCategory?: "unsupported_media_type" | "payload_parse_failed" | "signature_verification_failed" | "database_failure";
 };
 
 type MetaCallbackLogger = Pick<FastifyBaseLogger, "info" | "warn">;
@@ -55,38 +37,22 @@ export function reportMetaCallbackStage(input: {
     requestId: input.requestId,
     stage: input.update.stage,
     outcome: input.update.outcome,
-    ...(input.update.contentTypeCategory
-      ? { contentTypeCategory: input.update.contentTypeCategory }
-      : {}),
-    ...(typeof input.update.credentialMatched === "boolean"
-      ? { credentialMatched: input.update.credentialMatched }
-      : {}),
-    ...(input.update.failureCategory
-      ? { failureCategory: input.update.failureCategory }
-      : {}),
-    ...(input.update.verificationFailureCategory
-      ? { verificationFailureCategory: input.update.verificationFailureCategory }
-      : {}),
+    ...(input.update.contentTypeCategory ? { contentTypeCategory: input.update.contentTypeCategory } : {}),
+    ...(typeof input.update.credentialMatched === "boolean" ? { credentialMatched: input.update.credentialMatched } : {}),
+    ...(input.update.failureCategory ? { failureCategory: input.update.failureCategory } : {}),
+    ...(input.update.verificationFailureCategory ? { verificationFailureCategory: input.update.verificationFailureCategory } : {})
   };
 
   try {
-    const level =
-      input.update.outcome === "failed" || input.update.outcome === "rejected"
-        ? "warn"
-        : "info";
+    const level = input.update.outcome === "failed" || input.update.outcome === "rejected" ? "warn" : "info";
     input.logger[level](fields, META_CALLBACK_STAGE_EVENT);
   } catch {
     /* telemetry cannot change callback behavior */
   }
 }
 
-export function classifyMetaCallbackContentType(
-  value: string | string[] | undefined,
-): NonNullable<MetaCallbackStageUpdate["contentTypeCategory"]> {
-  const normalized = (Array.isArray(value) ? value[0] : value)
-    ?.split(";", 1)[0]
-    ?.trim()
-    .toLowerCase();
+export function classifyMetaCallbackContentType(value: string | string[] | undefined): NonNullable<MetaCallbackStageUpdate["contentTypeCategory"]> {
+  const normalized = (Array.isArray(value) ? value[0] : value)?.split(";", 1)[0]?.trim().toLowerCase();
 
   if (!normalized) return "missing";
   if (normalized === "application/x-www-form-urlencoded") return "form";

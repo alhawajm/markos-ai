@@ -11,7 +11,7 @@
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "test": "turbo test",
-    "verify": "pnpm rtl:qa && turbo typecheck lint test",
+    "verify": "pnpm format:check && pnpm rtl:qa && turbo typecheck lint test",
     "perf:baseline": "node scripts/performance-baseline.mjs",
     "load:test": "node scripts/load-test.mjs",
     "rtl:qa": "node scripts/rtl-qa.mjs",
@@ -22,16 +22,13 @@
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
-    "format": "node scripts/prettier-changed.mjs --write",
-    "format:check": "node scripts/prettier-changed.mjs --check",
-    "format:list": "node scripts/prettier-changed.mjs --list",
-    "format:all": "prettier --write --ignore-unknown .",
-    "format:all:check": "prettier --check --ignore-unknown ."
+    "format": "prettier --write --ignore-unknown .",
+    "format:check": "prettier --check --ignore-unknown ."
   },
   "devDependencies": {
     "playwright-core": "^1.61.1",
     "pnpm": "11.5.2",
-    "prettier": "^3.7.4",
+    "prettier": "3.8.3",
     "turbo": "^2.9.17",
     "typescript": "^6.0.3"
   }

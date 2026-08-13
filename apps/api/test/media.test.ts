@@ -338,9 +338,11 @@ describe("media routes", () => {
     expect(response.json()).toMatchObject({
       error: {
         code: "QUOTA_EXCEEDED",
-        details: [{
-          metric: "STORAGE_BYTES"
-        }]
+        details: [
+          {
+            metric: "STORAGE_BYTES"
+          }
+        ]
       }
     });
 
@@ -389,9 +391,11 @@ describe("media routes", () => {
     expect(response.json()).toMatchObject({
       error: {
         code: "QUOTA_EXCEEDED",
-        details: [{
-          metric: "AI_IMAGE"
-        }]
+        details: [
+          {
+            metric: "AI_IMAGE"
+          }
+        ]
       }
     });
     expect(storageCounter?.used ?? 0).toBe(0);
@@ -474,7 +478,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   };
 }
-
 
 async function createDraftContent(workspaceId: string) {
   return prisma.contentItem.create({

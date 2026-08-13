@@ -10,12 +10,7 @@ export interface InstagramAnalyticsSnapshot {
 
 export interface InstagramAnalyticsProvider {
   readonly mode: "dry_run" | "live";
-  syncWorkspace(input: {
-    contentItems: ContentItem[];
-    from: Date;
-    to: Date;
-    workspace: Workspace;
-  }): Promise<InstagramAnalyticsSnapshot[]>;
+  syncWorkspace(input: { contentItems: ContentItem[]; from: Date; to: Date; workspace: Workspace }): Promise<InstagramAnalyticsSnapshot[]>;
 }
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -23,12 +18,7 @@ type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 export class DryRunInstagramAnalyticsProvider implements InstagramAnalyticsProvider {
   readonly mode = "dry_run" as const;
 
-  async syncWorkspace(input: {
-    contentItems: ContentItem[];
-    from: Date;
-    to: Date;
-    workspace: Workspace;
-  }): Promise<InstagramAnalyticsSnapshot[]> {
+  async syncWorkspace(input: { contentItems: ContentItem[]; from: Date; to: Date; workspace: Workspace }): Promise<InstagramAnalyticsSnapshot[]> {
     const snapshots: InstagramAnalyticsSnapshot[] = [
       {
         dataDate: dayStart(input.to),
@@ -77,12 +67,7 @@ export class MetaGraphInstagramAnalyticsProvider implements InstagramAnalyticsPr
     this.graphVersion = options.graphVersion ?? env.META_GRAPH_VERSION;
   }
 
-  async syncWorkspace(input: {
-    contentItems: ContentItem[];
-    from: Date;
-    to: Date;
-    workspace: Workspace;
-  }): Promise<InstagramAnalyticsSnapshot[]> {
+  async syncWorkspace(input: { contentItems: ContentItem[]; from: Date; to: Date; workspace: Workspace }): Promise<InstagramAnalyticsSnapshot[]> {
     const accessToken = input.workspace.instagramAccessToken;
     const accountId = input.workspace.instagramAccountId;
 
@@ -146,9 +131,7 @@ export class InstagramAnalyticsProviderError extends Error {
 }
 
 export function createInstagramAnalyticsProvider(): InstagramAnalyticsProvider {
-  return env.INSTAGRAM_ANALYTICS_SYNC_MODE === "live"
-    ? new MetaGraphInstagramAnalyticsProvider()
-    : new DryRunInstagramAnalyticsProvider();
+  return env.INSTAGRAM_ANALYTICS_SYNC_MODE === "live" ? new MetaGraphInstagramAnalyticsProvider() : new DryRunInstagramAnalyticsProvider();
 }
 
 function normalizeInsights(data: Array<{ name?: string; values?: Array<{ value?: number }> }>): Record<string, number> {

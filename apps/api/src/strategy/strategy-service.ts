@@ -39,10 +39,7 @@ export async function listStrategies(workspaceId: string): Promise<StrategyRecor
   return rows.map(toStrategyRecord);
 }
 
-export async function exportStrategyPdf(
-  workspaceId: string,
-  strategyId: string
-): Promise<{ bytes: Buffer; filename: string }> {
+export async function exportStrategyPdf(workspaceId: string, strategyId: string): Promise<{ bytes: Buffer; filename: string }> {
   const row = await prisma.strategy.findFirst({
     where: {
       id: strategyId,
@@ -63,10 +60,7 @@ export async function exportStrategyPdf(
   };
 }
 
-export async function generateWorkspaceStrategy(
-  workspaceId: string,
-  input: GenerateStrategyInput
-): Promise<StrategyRecord> {
+export async function generateWorkspaceStrategy(workspaceId: string, input: GenerateStrategyInput): Promise<StrategyRecord> {
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
@@ -75,18 +69,12 @@ export async function generateWorkspaceStrategy(
 
   const query =
     input.objective ??
-    (input.locale === "ar"
-      ? "استراتيجية إنستغرام وركائز المحتوى للشركات الصغيرة في البحرين"
-      : "Instagram strategy content pillars Bahrain SMB");
+    (input.locale === "ar" ? "استراتيجية إنستغرام وركائز المحتوى للشركات الصغيرة في البحرين" : "Instagram strategy content pillars Bahrain SMB");
   const context = await searchVaultContext(workspaceId, {
     query,
     topK: 10
   });
-  const promptTemplate = await selectPromptTemplateForRun(
-    workspaceId,
-    strategyAgentName,
-    `${workspaceId}:${query}:${input.horizonDays}:${input.locale}`
-  );
+  const promptTemplate = await selectPromptTemplateForRun(workspaceId, strategyAgentName, `${workspaceId}:${query}:${input.horizonDays}:${input.locale}`);
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
@@ -185,9 +173,7 @@ export async function generateWorkspaceStrategy(
 
 function titleForStrategy(horizonDays: number, objective: string | undefined, locale: "ar" | "en"): string {
   if (locale === "ar") {
-    return objective === undefined
-      ? `استراتيجية إنستغرام لمدة ${horizonDays} يومًا`
-      : `استراتيجية لمدة ${horizonDays} يومًا: ${objective}`;
+    return objective === undefined ? `استراتيجية إنستغرام لمدة ${horizonDays} يومًا` : `استراتيجية لمدة ${horizonDays} يومًا: ${objective}`;
   }
 
   return objective === undefined ? `${horizonDays}-day Instagram strategy` : `${horizonDays}-day strategy: ${objective}`;
@@ -230,16 +216,10 @@ function buildStrategyPdf(strategy: StrategyRecord): Buffer {
     ...content.objectives.map((item) => `- ${item}`),
     "",
     "Content Pillars",
-    ...content.pillars.flatMap((pillar) => [
-      `- ${pillar.name}: ${pillar.rationale}`,
-      ...pillar.contentAngles.map((angle) => `  * ${angle}`)
-    ]),
+    ...content.pillars.flatMap((pillar) => [`- ${pillar.name}: ${pillar.rationale}`, ...pillar.contentAngles.map((angle) => `  * ${angle}`)]),
     "",
     "Weekly Cadence",
-    ...content.weeklyCadence.flatMap((week) => [
-      `- Week ${week.week}: ${week.focus}`,
-      ...week.actions.map((action) => `  * ${action}`)
-    ]),
+    ...content.weeklyCadence.flatMap((week) => [`- Week ${week.week}: ${week.focus}`, ...week.actions.map((action) => `  * ${action}`)]),
     "",
     "KPIs",
     ...content.kpis.map((kpi) => `- ${kpi.name}: ${kpi.target}`),
@@ -267,7 +247,9 @@ function buildStrategyPdf(strategy: StrategyRecord): Buffer {
   for (const pageLines of pages) {
     const stream = buildPdfContentStream(pageLines);
     const contentId = addObject(`<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`);
-    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    const pageId = addObject(
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`
+    );
     pageIds.push(pageId);
   }
 

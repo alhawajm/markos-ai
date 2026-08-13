@@ -8,15 +8,13 @@ export function generateStaticParams() {
   return supportedLocales.map((locale) => ({ locale }));
 }
 
-export default async function LocaleLayout({
-  children,
-  params
-}: {
-  children: ReactNode;
-  params: Promise<{ locale: string }>;
-}) {
+export default async function LocaleLayout({ children, params }: { children: ReactNode; params: Promise<{ locale: string }> }) {
   const resolvedParams = await params;
   const locale = supportedLocales.includes(resolvedParams.locale as Locale) ? (resolvedParams.locale as Locale) : "ar";
 
-  return <div className="max-w-full overflow-x-hidden" lang={locale} dir={directionForLocale(locale)}>{children}</div>;
+  return (
+    <div className="max-w-full overflow-x-hidden" lang={locale} dir={directionForLocale(locale)}>
+      {children}
+    </div>
+  );
 }

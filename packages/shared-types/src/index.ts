@@ -1,12 +1,7 @@
 export const locales = ["ar", "en"] as const;
 export type Locale = (typeof locales)[number];
 
-export const planCodes = [
-  "STARTER",
-  "GROWTH",
-  "PREMIUM",
-  "ENTERPRISE",
-] as const;
+export const planCodes = ["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"] as const;
 export type PlanCode = (typeof planCodes)[number];
 
 export const roles = [
@@ -18,7 +13,7 @@ export const roles = [
   "PRODUCT_ADMIN",
   "SUPPORT_ADMIN",
   "FINANCE_ADMIN",
-  "READONLY_ADMIN",
+  "READONLY_ADMIN"
 ] as const;
 export type Role = (typeof roles)[number];
 
@@ -48,53 +43,26 @@ export const permissions = [
   "analytics:sync",
   "publishing:run",
   "prompt:read",
-  "prompt:manage",
+  "prompt:manage"
 ] as const;
 export type Permission = (typeof permissions)[number];
 
 export const paymentGatewayCodes = ["CREDIMAX", "BENEFIT", "STRIPE"] as const;
 export type PaymentGatewayCode = (typeof paymentGatewayCodes)[number];
 
-export const vaultSections = [
-  "COMPANY",
-  "STORY",
-  "PRODUCTS",
-  "AUDIENCE",
-  "COMPETITORS",
-  "BRAND",
-  "TONE",
-  "OBJECTIVES",
-] as const;
+export const vaultSections = ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"] as const;
 export type VaultSection = (typeof vaultSections)[number];
 
 export const contentTypes = ["POST", "CAROUSEL", "STORY", "REEL"] as const;
 export type ContentType = (typeof contentTypes)[number];
 
-export const contentStatuses = [
-  "DRAFT",
-  "IN_REVIEW",
-  "APPROVED",
-  "SCHEDULED",
-  "PUBLISHED",
-  "FAILED",
-] as const;
+export const contentStatuses = ["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
 
-export const mediaTypes = [
-  "IMAGE",
-  "VIDEO",
-  "BRAND_ASSET",
-  "AI_GENERATED",
-] as const;
+export const mediaTypes = ["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"] as const;
 export type MediaType = (typeof mediaTypes)[number];
 
-export const instagramMetricTypes = [
-  "ACCOUNT",
-  "AUDIENCE",
-  "POST",
-  "REEL",
-  "STORY",
-] as const;
+export const instagramMetricTypes = ["ACCOUNT", "AUDIENCE", "POST", "REEL", "STORY"] as const;
 export type InstagramMetricType = (typeof instagramMetricTypes)[number];
 
 export interface ApiEnvelope<TData> {
@@ -215,7 +183,7 @@ export const agentNames = [
   "IMAGE_PROMPT",
   "ANALYTICS_CONSULTANT",
   "RECOMMENDATION_ENGINE",
-  "BUSINESS_GROWTH_ADVISOR",
+  "BUSINESS_GROWTH_ADVISOR"
 ] as const;
 export type AgentName = (typeof agentNames)[number];
 
@@ -396,13 +364,7 @@ export interface PromptVariantSelection {
 
 export interface InstagramConnection {
   connected: boolean;
-  status?:
-    | "DISCONNECTED"
-    | "CONNECTING"
-    | "CONNECTED"
-    | "REAUTHORIZE_REQUIRED"
-    | "AUTHORIZATION_FAILED"
-    | "REFRESH_FAILED";
+  status?: "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "REAUTHORIZE_REQUIRED" | "AUTHORIZATION_FAILED" | "REFRESH_FAILED";
   accountId?: string;
   username?: string;
   accountType?: string;
@@ -626,15 +588,7 @@ export interface BillingInvoiceRecord extends BillingVatBreakdown {
 }
 
 export interface BillingVatComplianceCheck {
-  code:
-    | "BHD_CURRENCY"
-    | "INTEGER_MINOR_UNITS"
-    | "NON_NEGATIVE_AMOUNTS"
-    | "VAT_RATE"
-    | "VAT_BREAKDOWN"
-    | "GROSS_TOTAL"
-    | "ISSUED_AT"
-    | "PAYMENT_RECONCILIATION";
+  code: "BHD_CURRENCY" | "INTEGER_MINOR_UNITS" | "NON_NEGATIVE_AMOUNTS" | "VAT_RATE" | "VAT_BREAKDOWN" | "GROSS_TOTAL" | "ISSUED_AT" | "PAYMENT_RECONCILIATION";
   details: string;
   passed: boolean;
 }

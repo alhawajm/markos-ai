@@ -173,10 +173,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
           ...(parsed.data.month === undefined ? {} : { month: parsed.data.month })
         });
 
-        return reply
-          .header("content-type", "application/pdf")
-          .header("content-disposition", `attachment; filename="${pdf.filename}"`)
-          .send(pdf.bytes);
+        return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${pdf.filename}"`).send(pdf.bytes);
       } catch (error) {
         if (error instanceof AnalyticsWorkspaceNotFoundError) {
           return reply.status(404).send(errorEnvelope("WORKSPACE_NOT_FOUND", error.message));

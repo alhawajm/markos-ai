@@ -904,7 +904,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 async function assignTokenLimitedPlan(userId: string): Promise<void> {
   const plan = await prisma.plan.create({
     data: {

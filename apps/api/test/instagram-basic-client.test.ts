@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  InstagramBasicClient,
-  InstagramProviderError,
-  RECENT_MEDIA_LIMIT,
-} from "../src/workspace/instagram-basic-client";
+import { InstagramBasicClient, InstagramProviderError, RECENT_MEDIA_LIMIT } from "../src/workspace/instagram-basic-client";
 
 describe("Instagram basic provider boundary", () => {
   it("uses the documented exchanges and bounded versioned profile request", async () => {
@@ -12,12 +8,10 @@ describe("Instagram basic provider boundary", () => {
       calls.push({
         url: String(input),
         ...(init?.method ? { method: init.method } : {}),
-        ...(init?.body ? { body: String(init.body) } : {}),
+        ...(init?.body ? { body: String(init.body) } : {})
       });
-      if (String(input).includes("api.instagram.com"))
-        return response({ access_token: "short-secret", user_id: "account-1" });
-      if (String(input).includes("/access_token"))
-        return response({ access_token: "long-secret", expires_in: 5000 });
+      if (String(input).includes("api.instagram.com")) return response({ access_token: "short-secret", user_id: "account-1" });
+      if (String(input).includes("/access_token")) return response({ access_token: "long-secret", expires_in: 5000 });
       return response({
         user_id: "professional-account-1",
         username: "markos_business",
@@ -27,9 +21,9 @@ describe("Instagram basic provider boundary", () => {
             id: `media-${index}`,
             media_type: index % 2 ? "VIDEO" : "IMAGE",
             ...(index === 0 ? {} : { caption: `caption ${index}` }),
-            media_url: `https://media.test/${index}`,
-          })),
-        },
+            media_url: `https://media.test/${index}`
+          }))
+        }
       });
     };
     const client = new InstagramBasicClient(fetcher);
@@ -37,7 +31,7 @@ describe("Instagram basic provider boundary", () => {
       appId: "app",
       appSecret: "secret",
       code: "code",
-      redirectUri: "https://api.test/callback",
+      redirectUri: "https://api.test/callback"
     });
     const long = await client.exchangeLongLived(short.accessToken, "secret");
     const profile = await client.profile(long.accessToken);
@@ -47,18 +41,14 @@ describe("Instagram basic provider boundary", () => {
     expect(profile.media[0]).toEqual({
       id: "media-0",
       mediaType: "IMAGE",
-      mediaUrl: "https://media.test/0",
+      mediaUrl: "https://media.test/0"
     });
     expect(calls[0]).toMatchObject({
       url: "https://api.instagram.com/oauth/access_token",
-      method: "POST",
+      method: "POST"
     });
-    expect(calls[0]?.body).toContain(
-      "redirect_uri=https%3A%2F%2Fapi.test%2Fcallback",
-    );
-    expect(calls[1]?.url).toContain(
-      "https://graph.instagram.com/access_token?",
-    );
+    expect(calls[0]?.body).toContain("redirect_uri=https%3A%2F%2Fapi.test%2Fcallback");
+    expect(calls[1]?.url).toContain("https://graph.instagram.com/access_token?");
     expect(calls[2]?.url).toContain("https://graph.instagram.com/v25.0/me?");
     expect(calls[2]?.url).toContain("fields=user_id%2Cusername");
     expect(calls[2]?.url).not.toContain("fields=id%2C");
@@ -66,22 +56,14 @@ describe("Instagram basic provider boundary", () => {
   });
 
   it("supports an empty media response and sanitizes provider failures", async () => {
-    const empty = new InstagramBasicClient(async () =>
-      response({ user_id: "1", username: "empty", media: { data: [] } }),
-    );
+    const empty = new InstagramBasicClient(async () => response({ user_id: "1", username: "empty", media: { data: [] } }));
     await expect(empty.profile("secret-token")).resolves.toMatchObject({
-      media: [],
+      media: []
     });
-    const failed = new InstagramBasicClient(
-      async () =>
-        new Response(
-          JSON.stringify({ error: { message: "token secret-token invalid" } }),
-          { status: 401 },
-        ),
-    );
+    const failed = new InstagramBasicClient(async () => new Response(JSON.stringify({ error: { message: "token secret-token invalid" } }), { status: 401 }));
     await expect(failed.profile("secret-token")).rejects.toMatchObject({
       authorizationInvalid: true,
-      diagnostic: { httpStatus: 401, retryable: false },
+      diagnostic: { httpStatus: 401, retryable: false }
     });
     try {
       await failed.profile("secret-token");
@@ -97,16 +79,16 @@ describe("Instagram basic provider boundary", () => {
           {
             user_id: "documented-professional-id",
             username: "documented_username",
-            media: { data: [] },
-          },
-        ],
-      }),
+            media: { data: [] }
+          }
+        ]
+      })
     );
 
     await expect(client.profile("secret-token")).resolves.toMatchObject({
       professionalAccountId: "documented-professional-id",
       username: "documented_username",
-      media: [],
+      media: []
     });
   });
 
@@ -118,55 +100,32 @@ describe("Instagram basic provider boundary", () => {
     });
     await expect(client.refresh("long-secret")).resolves.toEqual({
       accessToken: "replacement",
-      expiresIn: 3600,
+      expiresIn: 3600
     });
-    expect(request).toContain(
-      "GET https://graph.instagram.com/refresh_access_token?",
-    );
+    expect(request).toContain("GET https://graph.instagram.com/refresh_access_token?");
     expect(request).toContain("grant_type=ig_refresh_token");
     expect(request).toContain("access_token=long-secret");
     expect(request).not.toContain("/v25.0/");
   });
 
   it.each([
-    [
-      "malformed",
-      new InstagramBasicClient(async () => new Response("not-json")),
-      "response_not_json",
-      false,
-    ],
-    [
-      "oversized",
-      new InstagramBasicClient(
-        async () => response({ user_id: "1", username: "x" }),
-        { maxResponseBytes: 2 },
-      ),
-      "response_too_large",
-      false,
-    ],
+    ["malformed", new InstagramBasicClient(async () => new Response("not-json")), "response_not_json", false],
+    ["oversized", new InstagramBasicClient(async () => response({ user_id: "1", username: "x" }), { maxResponseBytes: 2 }), "response_too_large", false],
     [
       "timeout",
       new InstagramBasicClient(
-        async (_input, init) =>
-          new Promise((_resolve, reject) =>
-            init?.signal?.addEventListener("abort", () =>
-              reject(new Error("aborted")),
-            ),
-          ),
-        { timeoutMs: 1 },
+        async (_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted")))),
+        { timeoutMs: 1 }
       ),
       "timeout",
-      true,
-    ],
-  ] as const)(
-    "sanitizes %s provider responses",
-    async (_name, client, kind, retryable) => {
-      await expect(client.profile("never-exposed")).rejects.toMatchObject({
-        kind,
-        diagnostic: { retryable },
-      });
-    },
-  );
+      true
+    ]
+  ] as const)("sanitizes %s provider responses", async (_name, client, kind, retryable) => {
+    await expect(client.profile("never-exposed")).rejects.toMatchObject({
+      kind,
+      diagnostic: { retryable }
+    });
+  });
 });
 
 function response(value: unknown): Response {

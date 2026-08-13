@@ -79,11 +79,7 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
   };
 }
 
-export async function saveOnboardingModule(
-  workspaceId: string,
-  module: OnboardingModuleInput,
-  payload: OnboardingPayload
-): Promise<OnboardingState> {
+export async function saveOnboardingModule(workspaceId: string, module: OnboardingModuleInput, payload: OnboardingPayload): Promise<OnboardingState> {
   for (const write of toVaultWrites(module, payload)) {
     await upsertVaultSection(workspaceId, write.section, write.input);
   }

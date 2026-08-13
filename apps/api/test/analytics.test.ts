@@ -711,7 +711,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   await app.inject({
     method: "PUT",
@@ -731,10 +730,7 @@ async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Rec
   });
 }
 
-async function createPublishedContent(
-  workspaceId: string,
-  input: { captionEn?: string; publishedAt?: Date } = {}
-) {
+async function createPublishedContent(workspaceId: string, input: { captionEn?: string; publishedAt?: Date } = {}) {
   return prisma.contentItem.create({
     data: {
       captionEn: input.captionEn ?? "Analytics post",

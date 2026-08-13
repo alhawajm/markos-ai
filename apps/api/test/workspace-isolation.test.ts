@@ -163,8 +163,11 @@ const isolationCases: IsolationCase[] = [
           providerAccountId: `media-account-${randomUUID()}`,
           username: `media-user-${randomUUID()}`,
           encryptedAccessToken: encryptCredential(`token-${randomUUID()}`, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY!),
-          tokenIssuedAt: new Date(), tokenExpiresAt: new Date(Date.now() + 86_400_000), status: "CONNECTED",
-          requestedScopes: ["instagram_business_basic"], providerConfirmedScopes: []
+          tokenIssuedAt: new Date(),
+          tokenExpiresAt: new Date(Date.now() + 86_400_000),
+          status: "CONNECTED",
+          requestedScopes: ["instagram_business_basic"],
+          providerConfirmedScopes: []
         }
       });
       return prisma.instagramRecentMedia.create({
@@ -176,10 +179,11 @@ const isolationCases: IsolationCase[] = [
   },
   {
     model: "OAuthStateNonce",
-    create: (fixture) => prisma.oAuthStateNonce.create({
-      data: { nonceHash: `nonce-${randomUUID()}`, workspaceId: fixture.workspaceId, userId: fixture.userId, expiresAt: new Date(Date.now() + 60_000) },
-      select: { id: true, workspaceId: true }
-    }),
+    create: (fixture) =>
+      prisma.oAuthStateNonce.create({
+        data: { nonceHash: `nonce-${randomUUID()}`, workspaceId: fixture.workspaceId, userId: fixture.userId, expiresAt: new Date(Date.now() + 60_000) },
+        select: { id: true, workspaceId: true }
+      }),
     list: (workspaceId) => prisma.oAuthStateNonce.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {

@@ -316,7 +316,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`

@@ -1,12 +1,6 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
 import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
-import type {
-  GenerateContentForSlotInput,
-  GenerateContentInput,
-  ScheduleContentInput,
-  UpdateContentInput,
-  UpdateContentStatusInput
-} from "@markos/validation";
+import type { GenerateContentForSlotInput, GenerateContentInput, ScheduleContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -62,10 +56,7 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
   return rows.map(toContentRecord);
 }
 
-export async function generateWorkspaceContent(
-  workspaceId: string,
-  input: GenerateContentInput
-): Promise<ContentRecord[]> {
+export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
@@ -168,10 +159,7 @@ export async function generateWorkspaceContent(
   }
 }
 
-export async function generateWorkspaceContentForSlot(
-  workspaceId: string,
-  input: GenerateContentForSlotInput
-): Promise<ContentRecord> {
+export async function generateWorkspaceContentForSlot(workspaceId: string, input: GenerateContentForSlotInput): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const score = await getVaultScore(workspaceId);
 
@@ -277,11 +265,7 @@ export async function generateWorkspaceContentForSlot(
   }
 }
 
-export async function updateContentItem(
-  workspaceId: string,
-  contentItemId: string,
-  input: UpdateContentInput
-): Promise<ContentRecord> {
+export async function updateContentItem(workspaceId: string, contentItemId: string, input: UpdateContentInput): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
@@ -316,11 +300,7 @@ export async function updateContentItem(
   return toContentRecord(row);
 }
 
-export async function updateContentItemStatus(
-  workspaceId: string,
-  contentItemId: string,
-  input: UpdateContentStatusInput
-): Promise<ContentRecord> {
+export async function updateContentItemStatus(workspaceId: string, contentItemId: string, input: UpdateContentStatusInput): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
@@ -349,11 +329,7 @@ export async function updateContentItemStatus(
   return toContentRecord(row);
 }
 
-export async function scheduleContentItem(
-  workspaceId: string,
-  contentItemId: string,
-  input: ScheduleContentInput
-): Promise<ContentRecord> {
+export async function scheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,
@@ -429,12 +405,7 @@ export async function unscheduleContentItem(workspaceId: string, contentItemId: 
   return toContentRecord(row);
 }
 
-async function addToContentCalendar(
-  tx: Prisma.TransactionClient,
-  workspaceId: string,
-  contentItemId: string,
-  scheduledAt: Date
-): Promise<void> {
+async function addToContentCalendar(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string, scheduledAt: Date): Promise<void> {
   const month = monthStart(scheduledAt);
   const current = await tx.contentCalendar.findFirst({
     where: {
@@ -466,12 +437,7 @@ async function addToContentCalendar(
   });
 }
 
-async function removeFromContentCalendar(
-  tx: Prisma.TransactionClient,
-  workspaceId: string,
-  contentItemId: string,
-  scheduledAt: Date
-): Promise<void> {
+async function removeFromContentCalendar(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string, scheduledAt: Date): Promise<void> {
   const current = await tx.contentCalendar.findFirst({
     where: {
       workspaceId,
@@ -496,11 +462,7 @@ async function removeFromContentCalendar(
   });
 }
 
-function mergeCalendarPlan(
-  value: Prisma.JsonValue | undefined,
-  contentItemId: string,
-  mode: "add" | "remove" = "add"
-): { scheduledContentIds: string[] } {
+function mergeCalendarPlan(value: Prisma.JsonValue | undefined, contentItemId: string, mode: "add" | "remove" = "add"): { scheduledContentIds: string[] } {
   const current =
     typeof value === "object" && value !== null && !Array.isArray(value) && Array.isArray(value.scheduledContentIds)
       ? value.scheduledContentIds.filter((id): id is string => typeof id === "string")
@@ -527,10 +489,7 @@ function parseFutureScheduleTime(value: string): Date {
 }
 
 async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
-  const [brandEntries, toneEntries] = await Promise.all([
-    listVaultSection(workspaceId, "BRAND"),
-    listVaultSection(workspaceId, "TONE")
-  ]);
+  const [brandEntries, toneEntries] = await Promise.all([listVaultSection(workspaceId, "BRAND"), listVaultSection(workspaceId, "TONE")]);
   const toneWords = uniqueStrings(
     toneEntries.flatMap((entry) => {
       const value = entry.value.toneWords;

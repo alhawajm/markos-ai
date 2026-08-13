@@ -117,10 +117,7 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
   };
 }
 
-export async function eraseWorkspaceData(input: {
-  actorId: string;
-  workspaceId: string;
-}): Promise<WorkspaceDataErasureResult> {
+export async function eraseWorkspaceData(input: { actorId: string; workspaceId: string }): Promise<WorkspaceDataErasureResult> {
   const erasedAt = new Date();
 
   return prisma.$transaction(async (tx) => {
@@ -147,7 +144,9 @@ export async function eraseWorkspaceData(input: {
     counts.campaigns = (await tx.campaign.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentItems = (await tx.contentItem.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.mediaAssets = (await tx.mediaAsset.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
-    counts.instagramAnalytics = (await tx.instagramAnalytics.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
+    counts.instagramAnalytics = (
+      await tx.instagramAnalytics.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })
+    ).count;
     counts.instagramRecentMedia = (await tx.instagramRecentMedia.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.instagramConnectionCredentials = (await tx.instagramConnectionCredential.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.oauthStateNonces = (await tx.oAuthStateNonce.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
@@ -159,18 +158,20 @@ export async function eraseWorkspaceData(input: {
     counts.promptTemplates = (await tx.promptTemplate.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.notifications = (await tx.notification.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.workspaceMembers = (await tx.workspaceMember.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
-    counts.workspaces = (await tx.workspace.updateMany({
-      data: {
-        deletedAt: erasedAt,
-        instagramAccessToken: null,
-        instagramAccountId: null,
-        instagramTokenExpiresAt: null
-      },
-      where: {
-        deletedAt: null,
-        id: input.workspaceId
-      }
-    })).count;
+    counts.workspaces = (
+      await tx.workspace.updateMany({
+        data: {
+          deletedAt: erasedAt,
+          instagramAccessToken: null,
+          instagramAccountId: null,
+          instagramTokenExpiresAt: null
+        },
+        where: {
+          deletedAt: null,
+          id: input.workspaceId
+        }
+      })
+    ).count;
 
     const remainingMemberships = await tx.workspaceMember.count({
       where: {

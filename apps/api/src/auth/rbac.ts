@@ -35,17 +35,9 @@ const adminPermissions = [
   "instagram:manage"
 ] as const satisfies Permission[];
 
-const platformReadPermissions = [
-  ...readPermissions,
-  "workspace:audit:read",
-  "admin:read"
-] as const satisfies Permission[];
+const platformReadPermissions = [...readPermissions, "workspace:audit:read", "admin:read"] as const satisfies Permission[];
 
-const platformManagePermissions = [
-  ...adminPermissions,
-  "admin:read",
-  "admin:manage"
-] as const satisfies Permission[];
+const platformManagePermissions = [...adminPermissions, "admin:read", "admin:manage"] as const satisfies Permission[];
 
 export const rolePermissions: Record<Role, readonly Permission[]> = {
   OWNER: adminPermissions,

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  reportUnexpectedRequestError,
-  safeRequestPath,
-} from "../src/http/error-telemetry";
+import { reportUnexpectedRequestError, safeRequestPath } from "../src/http/error-telemetry";
 
 describe("error telemetry URL redaction", () => {
   it("retains only the path for unexpected OAuth callback failures", () => {
@@ -16,27 +13,19 @@ describe("error telemetry URL redaction", () => {
       logger,
       method: "GET",
       url,
-      capture,
+      capture
     });
 
-    expect(safeRequestPath(url)).toBe(
-      "/v1/workspace/instagram/oauth/callback",
-    );
+    expect(safeRequestPath(url)).toBe("/v1/workspace/instagram/oauth/callback");
     const logged = JSON.stringify(logger.error.mock.calls);
     const captured = JSON.stringify(capture.mock.calls);
-    for (const value of [
-      "recognizable-code",
-      "recognizable-state",
-      "recognizable-provider-error",
-      "recognizable-token",
-      "recognizable-secret",
-    ]) {
+    for (const value of ["recognizable-code", "recognizable-state", "recognizable-provider-error", "recognizable-token", "recognizable-secret"]) {
       expect(logged).not.toContain(value);
       expect(captured).not.toContain(value);
     }
     expect(capture).toHaveBeenCalledWith(expect.any(Error), {
       method: "GET",
-      url: "/v1/workspace/instagram/oauth/callback",
+      url: "/v1/workspace/instagram/oauth/callback"
     });
   });
 });

@@ -2,12 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Readable } from "node:stream";
 import { env } from "../config/env";
 import { errorEnvelope, ok } from "../http/envelope";
-import {
-  classifyMetaCallbackContentType,
-  type MetaCallbackStageUpdate,
-  type MetaCallbackType,
-  reportMetaCallbackStage
-} from "./meta-callback-telemetry";
+import { classifyMetaCallbackContentType, type MetaCallbackStageUpdate, type MetaCallbackType, reportMetaCallbackStage } from "./meta-callback-telemetry";
 import {
   createDataDeletionConfirmationCode,
   disconnectInstagramFromMetaCallback,
@@ -51,16 +46,10 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
     };
 
     if (!env.META_WEBHOOK_VERIFY_TOKEN) {
-      return reply
-        .status(409)
-        .send(errorEnvelope("META_WEBHOOK_NOT_CONFIGURED", "Meta webhook verify token is not configured"));
+      return reply.status(409).send(errorEnvelope("META_WEBHOOK_NOT_CONFIGURED", "Meta webhook verify token is not configured"));
     }
 
-    if (
-      query["hub.mode"] !== "subscribe" ||
-      query["hub.verify_token"] !== env.META_WEBHOOK_VERIFY_TOKEN ||
-      !query["hub.challenge"]
-    ) {
+    if (query["hub.mode"] !== "subscribe" || query["hub.verify_token"] !== env.META_WEBHOOK_VERIFY_TOKEN || !query["hub.challenge"]) {
       return reply.status(403).send(errorEnvelope("META_WEBHOOK_FORBIDDEN", "Meta webhook verification failed"));
     }
 
@@ -68,9 +57,7 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/v1/meta/webhooks/instagram", async (request, reply) => {
-    const signature = typeof request.headers["x-hub-signature-256"] === "string"
-      ? request.headers["x-hub-signature-256"]
-      : undefined;
+    const signature = typeof request.headers["x-hub-signature-256"] === "string" ? request.headers["x-hub-signature-256"] : undefined;
     const rawBody = rawWebhookBodies.get(request);
     if (!rawBody || !verifyInstagramWebhookSignature(rawBody, signature)) {
       return reply.status(403).send(errorEnvelope("META_WEBHOOK_FORBIDDEN", "Meta webhook signature verification failed"));
@@ -108,9 +95,7 @@ async function registerMetaCallbackRoutes(app: FastifyInstance): Promise<void> {
     callbackApp.addHook("onError", async (request, _reply, error) => {
       const callbackType = metaCallbackType(request.url);
       if (!callbackType) return;
-      const code = typeof error === "object" && error !== null && "code" in error
-        ? (error as { code?: unknown }).code
-        : undefined;
+      const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
       if (typeof code !== "string" || !code.startsWith("FST_ERR_CTP_")) return;
       reportMetaCallbackStage({
         callbackType,
@@ -198,10 +183,7 @@ function isRawSignedRequest(value: string): boolean {
   return parts.length === 2 && parts.every((part) => /^[A-Za-z0-9_-]+={0,2}$/.test(part));
 }
 
-function extractMultipartSignedRequest(
-  body: string,
-  contentType: string | string[] | undefined
-): string | undefined {
+function extractMultipartSignedRequest(body: string, contentType: string | string[] | undefined): string | undefined {
   if (classifyMetaCallbackContentType(contentType) !== "multipart") return undefined;
 
   const boundary = multipartBoundary(contentType);
@@ -216,12 +198,13 @@ function extractMultipartSignedRequest(
     if (!separator) continue;
 
     const headers = part.slice(0, separator.index);
-    const disposition = headers
-      .split(/\r?\n/)
-      .find((line) => /^content-disposition\s*:/i.test(line));
+    const disposition = headers.split(/\r?\n/).find((line) => /^content-disposition\s*:/i.test(line));
     if (!disposition || multipartPartName(disposition) !== "signed_request") continue;
 
-    const value = part.slice(separator.index + separator[0].length).replace(/\r?\n$/, "").trim();
+    const value = part
+      .slice(separator.index + separator[0].length)
+      .replace(/\r?\n$/, "")
+      .trim();
     if (!value || signedRequest !== undefined) return undefined;
     signedRequest = value;
   }

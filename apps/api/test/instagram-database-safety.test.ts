@@ -10,42 +10,37 @@ describe("Instagram database integration safety", () => {
     expect(
       validateInstagramDatabaseTarget({
         CI: "true",
-        DATABASE_URL:
-          "postgresql://user:actual-password@127.0.0.1:5432/markos_ci_test",
-        INSTAGRAM_DATABASE_TEST_URL:
-          "postgresql://user:different-password@localhost:5432/markos_ci_test",
-      }),
+        DATABASE_URL: "postgresql://user:actual-password@127.0.0.1:5432/markos_ci_test",
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://user:different-password@localhost:5432/markos_ci_test"
+      })
     ).toBe(true);
   });
 
   it.each([
-    [
-      "missing CI opt-in",
-      { CI: "true", DATABASE_URL: "postgresql://localhost/markos_ci_test" },
-    ],
+    ["missing CI opt-in", { CI: "true", DATABASE_URL: "postgresql://localhost/markos_ci_test" }],
     [
       "missing actual Prisma target",
       {
         CI: "true",
-        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/markos_ci_test",
-      },
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/markos_ci_test"
+      }
     ],
     [
       "unsafe actual target",
       {
         CI: "true",
         DATABASE_URL: "postgresql://database.internal/markos",
-        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/markos_ci_test",
-      },
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/markos_ci_test"
+      }
     ],
     [
       "mismatched declared target",
       {
         CI: "true",
         DATABASE_URL: "postgresql://localhost/markos_ci_test",
-        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/other_ci_test",
-      },
-    ],
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/other_ci_test"
+      }
+    ]
   ])("rejects %s without exposing connection values", (_label, environment) => {
     let message = "";
     try {

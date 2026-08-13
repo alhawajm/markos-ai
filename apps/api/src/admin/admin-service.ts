@@ -196,10 +196,7 @@ export async function getBahrainLaunchReadiness(): Promise<AdminBahrainLaunchRea
   const gateways = getAdminGatewayReadiness().filter((gateway) => gateway.code === "CREDIMAX" || gateway.code === "BENEFIT");
   const gatewayReady = gateways.some((gateway) => gateway.ready);
   const planCatalogReady = planReadiness.every((plan) => plan.checkoutReady);
-  const reasons = [
-    ...(planCatalogReady ? [] : ["STARTER_GROWTH_PLAN_CATALOG_NOT_READY"]),
-    ...(gatewayReady ? [] : ["BAHRAIN_PAYMENT_GATEWAY_NOT_READY"])
-  ];
+  const reasons = [...(planCatalogReady ? [] : ["STARTER_GROWTH_PLAN_CATALOG_NOT_READY"]), ...(gatewayReady ? [] : ["BAHRAIN_PAYMENT_GATEWAY_NOT_READY"])];
 
   return {
     gatewayReady,
@@ -241,9 +238,7 @@ function normalizeLimits(value: Prisma.JsonValue): Record<string, number> {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]))
-  );
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])));
 }
 
 function buildBahrainLaunchPlanReadiness(
@@ -318,17 +313,10 @@ function buildBahrainLaunchPlanReadiness(
   };
 }
 
-function gatewayReadiness(
-  code: PaymentGatewayCode,
-  credentialKeys: string[],
-  callbackSecretKey: string
-): AdminGatewayReadiness {
+function gatewayReadiness(code: PaymentGatewayCode, credentialKeys: string[], callbackSecretKey: string): AdminGatewayReadiness {
   const missingCredentials = credentialKeys.filter((key) => process.env[key] === undefined || process.env[key] === "");
   const callbackConfigured = process.env[callbackSecretKey] !== undefined && process.env[callbackSecretKey] !== "";
-  const reasons = [
-    ...missingCredentials.map((key) => `${key}_MISSING`),
-    ...(callbackConfigured ? [] : [`${callbackSecretKey}_MISSING`])
-  ];
+  const reasons = [...missingCredentials.map((key) => `${key}_MISSING`), ...(callbackConfigured ? [] : [`${callbackSecretKey}_MISSING`])];
 
   return {
     callbackConfigured,

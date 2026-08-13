@@ -102,19 +102,16 @@ export async function buildApp(): Promise<FastifyInstance> {
         {
           err: error,
           method: request.method,
-          url: request.url.split("?", 1)[0],
+          url: request.url.split("?", 1)[0]
         },
-        "Request failed",
+        "Request failed"
       );
     }
 
     void reply
       .status(statusCode)
       .send(
-        errorEnvelope(
-          details.code ?? (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"),
-          statusCode >= 500 ? "Unexpected server error" : details.message
-        )
+        errorEnvelope(details.code ?? (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"), statusCode >= 500 ? "Unexpected server error" : details.message)
       );
   });
 

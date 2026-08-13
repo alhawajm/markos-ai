@@ -13,7 +13,10 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  totpCode: z.string().regex(/^\d{6}$/).optional()
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional()
 });
 
 export const refreshSessionSchema = z.object({});
@@ -22,7 +25,10 @@ export const googleLoginSchema = z.object({
   idToken: z.string().min(1),
   workspaceName: z.string().min(2).max(120).optional(),
   locale: localeSchema.default("ar"),
-  totpCode: z.string().regex(/^\d{6}$/).optional()
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional()
 });
 
 export const enableMfaTotpSchema = z.object({
@@ -42,16 +48,7 @@ export const workspaceIdSchema = z.string().uuid();
 export const planCodeSchema = z.enum(["STARTER", "GROWTH", "PREMIUM", "ENTERPRISE"]);
 export const paymentGatewayCodeSchema = z.enum(["CREDIMAX", "BENEFIT", "STRIPE"]);
 
-export const vaultSectionSchema = z.enum([
-  "COMPANY",
-  "STORY",
-  "PRODUCTS",
-  "AUDIENCE",
-  "COMPETITORS",
-  "BRAND",
-  "TONE",
-  "OBJECTIVES"
-]);
+export const vaultSectionSchema = z.enum(["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"]);
 
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
 export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
@@ -100,15 +97,7 @@ export const vaultRagSearchSchema = z.object({
   section: vaultSectionSchema.optional()
 });
 
-export const onboardingModuleSchema = z.enum([
-  "company",
-  "story",
-  "products",
-  "audience",
-  "competitors",
-  "brand",
-  "objectives"
-]);
+export const onboardingModuleSchema = z.enum(["company", "story", "products", "audience", "competitors", "brand", "objectives"]);
 
 export const onboardingObjectiveFieldLimits = {
   budgetRange: 120,
@@ -302,19 +291,12 @@ export const billingInvoiceParamsSchema = z.object({
 });
 
 export const adminUpdatePlanLimitsSchema = z.object({
-  limits: z
-    .record(z.string().min(1), z.number().int().nonnegative())
-    .refine((value) => Object.keys(value).length > 0, {
-      message: "At least one plan limit is required"
-    })
+  limits: z.record(z.string().min(1), z.number().int().nonnegative()).refine((value) => Object.keys(value).length > 0, {
+    message: "At least one plan limit is required"
+  })
 });
 
-export const adminModelSettingKeySchema = z.enum([
-  "LLM_PRIMARY_MODEL",
-  "LLM_LONGFORM_MODEL",
-  "IMAGE_MODEL_PRIMARY",
-  "IMAGE_MODEL_FALLBACK"
-]);
+export const adminModelSettingKeySchema = z.enum(["LLM_PRIMARY_MODEL", "LLM_LONGFORM_MODEL", "IMAGE_MODEL_PRIMARY", "IMAGE_MODEL_FALLBACK"]);
 
 export const adminUpdateModelSettingSchema = z.object({
   value: z.string().min(1).max(200)
@@ -355,9 +337,12 @@ export const eraseWorkspaceDataSchema = z.object({
 export const registerPublicMediaSchema = z.object({
   type: mediaTypeSchema.default("IMAGE"),
   filename: z.string().min(1).max(240),
-  publicUrl: z.string().url().refine((value) => value.startsWith("https://"), {
-    message: "Public media URL must use HTTPS"
-  }),
+  publicUrl: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("https://"), {
+      message: "Public media URL must use HTTPS"
+    }),
   mimeType: z.string().min(3).max(120),
   sizeBytes: z.number().int().positive().max(50_000_000).default(1),
   width: z.number().int().positive().max(10000).optional(),

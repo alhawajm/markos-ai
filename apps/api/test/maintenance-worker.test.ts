@@ -73,7 +73,12 @@ describe("maintenance worker", () => {
   it("refreshes due Instagram tokens", async () => {
     const workspace = await createWorkspace("worker-refresh");
     const oldToken = `old-token-${randomUUID()}`;
-    await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, accessToken: oldToken, expiresAt: new Date(Date.now() + 86_400_000) });
+    await persistTestInstagramConnection({
+      workspaceId: workspace.id,
+      actorId: workspace.ownerUserId,
+      accessToken: oldToken,
+      expiresAt: new Date(Date.now() + 86_400_000)
+    });
     const fetchImpl: typeof fetch = async (_input, _init): Promise<Response> =>
       new Response(
         JSON.stringify({
@@ -244,7 +249,12 @@ describe("maintenance worker", () => {
 
 async function createPublishableWorkspace(label: string, now = new Date()) {
   const workspace = await createWorkspace(label);
-  await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, issuedAt: new Date(now.getTime() - 2 * 86_400_000), expiresAt: new Date(now.getTime() + 86_400_000) });
+  await persistTestInstagramConnection({
+    workspaceId: workspace.id,
+    actorId: workspace.ownerUserId,
+    issuedAt: new Date(now.getTime() - 2 * 86_400_000),
+    expiresAt: new Date(now.getTime() + 86_400_000)
+  });
   const media = await prisma.mediaAsset.create({
     data: {
       cdnUrl: `https://cdn.example.com/${randomUUID()}.jpg`,

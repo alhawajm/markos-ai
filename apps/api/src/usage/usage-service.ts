@@ -13,14 +13,7 @@ const limitKeys: Record<SupportedUsageMetric, string> = {
   STRATEGY: "strategies"
 };
 
-const monthlyUsageMetrics: SupportedUsageMetric[] = [
-  "AI_GENERATION",
-  "AI_IMAGE",
-  "AI_TOKENS_IN",
-  "AI_TOKENS_OUT",
-  "POST_PUBLISH",
-  "STRATEGY"
-];
+const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "STRATEGY"];
 
 export class UsageQuotaExceededError extends Error {
   readonly metric: SupportedUsageMetric;
@@ -40,12 +33,7 @@ export class UsagePlanInactiveError extends Error {
   }
 }
 
-export async function reserveWorkspaceUsage(input: {
-  amount?: number;
-  metric: SupportedUsageMetric;
-  now?: Date;
-  workspaceId: string;
-}): Promise<void> {
+export async function reserveWorkspaceUsage(input: { amount?: number; metric: SupportedUsageMetric; now?: Date; workspaceId: string }): Promise<void> {
   const amount = input.amount ?? 1;
 
   if (amount <= 0 || !Number.isInteger(amount)) {
@@ -101,12 +89,7 @@ export async function reserveWorkspaceUsage(input: {
   });
 }
 
-export async function refundWorkspaceUsage(input: {
-  amount?: number;
-  metric: SupportedUsageMetric;
-  now?: Date;
-  workspaceId: string;
-}): Promise<void> {
+export async function refundWorkspaceUsage(input: { amount?: number; metric: SupportedUsageMetric; now?: Date; workspaceId: string }): Promise<void> {
   const amount = input.amount ?? 1;
 
   if (amount <= 0 || !Number.isInteger(amount)) {

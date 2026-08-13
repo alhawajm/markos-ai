@@ -76,13 +76,7 @@ export class BillingUpgradePlanInvalidError extends Error {
 
 export interface PaymentGatewayAdapter {
   readonly code: PaymentGatewayCode;
-  createCheckout(input: {
-    amountMinor: number;
-    currency: "BHD";
-    invoiceId: string;
-    planCode: PlanCode;
-    workspaceId: string;
-  }): Promise<{
+  createCheckout(input: { amountMinor: number; currency: "BHD"; invoiceId: string; planCode: PlanCode; workspaceId: string }): Promise<{
     gatewayRef: string;
     redirectUrl: string;
   }>;
@@ -162,9 +156,7 @@ export async function getBillingSummary(workspaceId: string): Promise<BillingSum
     invoices: invoices.map((invoice) => mapInvoice(invoice, workspace.vatPricingMode)),
     payments: payments.map(mapPayment),
     plans,
-    ...(subscription === null || subscriptionPlan === null
-      ? {}
-      : { subscription: mapSubscription(subscription, subscriptionPlan.code as PlanCode) }),
+    ...(subscription === null || subscriptionPlan === null ? {} : { subscription: mapSubscription(subscription, subscriptionPlan.code as PlanCode) }),
     workspaceId
   };
 }
@@ -285,11 +277,7 @@ export async function verifyBillingVatCompliance(workspaceId: string, invoiceId:
     {
       code: "NON_NEGATIVE_AMOUNTS",
       details: "Net, VAT, gross, and payment amounts must not be negative.",
-      passed:
-        invoice.netMinor >= 0 &&
-        invoice.vatMinor >= 0 &&
-        invoice.grossMinor >= 0 &&
-        (payment === null || payment.amountMinor >= 0)
+      passed: invoice.netMinor >= 0 && invoice.vatMinor >= 0 && invoice.grossMinor >= 0 && (payment === null || payment.amountMinor >= 0)
     },
     {
       code: "VAT_RATE",
@@ -299,10 +287,7 @@ export async function verifyBillingVatCompliance(workspaceId: string, invoiceId:
     {
       code: "VAT_BREAKDOWN",
       details: `Expected net ${expectedVat.netMinor}, VAT ${expectedVat.vatMinor}, gross ${expectedVat.grossMinor} for ${workspace.vatPricingMode} pricing.`,
-      passed:
-        invoice.netMinor === expectedVat.netMinor &&
-        invoice.vatMinor === expectedVat.vatMinor &&
-        invoice.grossMinor === expectedVat.grossMinor
+      passed: invoice.netMinor === expectedVat.netMinor && invoice.vatMinor === expectedVat.vatMinor && invoice.grossMinor === expectedVat.grossMinor
     },
     {
       code: "GROSS_TOTAL",
@@ -593,11 +578,7 @@ export async function startProratedUpgrade(input: {
   };
 }
 
-export async function captureDryRunPayment(input: {
-  paymentId: string;
-  userId: string;
-  workspaceId: string;
-}): Promise<BillingPaymentCaptureResult> {
+export async function captureDryRunPayment(input: { paymentId: string; userId: string; workspaceId: string }): Promise<BillingPaymentCaptureResult> {
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: input.workspaceId,
@@ -759,11 +740,7 @@ export async function captureDryRunPayment(input: {
   };
 }
 
-export function calculateVat(input: {
-  priceMinor: number;
-  vatPricingMode: "EXCLUSIVE" | "INCLUSIVE";
-  vatRateBps?: number;
-}): BillingVatBreakdown {
+export function calculateVat(input: { priceMinor: number; vatPricingMode: "EXCLUSIVE" | "INCLUSIVE"; vatRateBps?: number }): BillingVatBreakdown {
   assertBhdMinorUnits(input.priceMinor);
 
   const vatRateBps = input.vatRateBps ?? VAT_RATE_BPS;
@@ -853,18 +830,21 @@ function mapPlan(plan: {
   };
 }
 
-function mapInvoice(invoice: {
-  currency: string;
-  grossMinor: number;
-  id: string;
-  issuedAt: Date | null;
-  netMinor: number;
-  paidAt: Date | null;
-  status: "DRAFT" | "PAID" | "FAILED" | "VOID";
-  vatMinor: number;
-  vatRateBps: number;
-  workspaceId: string;
-}, vatPricingMode: "EXCLUSIVE" | "INCLUSIVE"): BillingInvoiceRecord {
+function mapInvoice(
+  invoice: {
+    currency: string;
+    grossMinor: number;
+    id: string;
+    issuedAt: Date | null;
+    netMinor: number;
+    paidAt: Date | null;
+    status: "DRAFT" | "PAID" | "FAILED" | "VOID";
+    vatMinor: number;
+    vatRateBps: number;
+    workspaceId: string;
+  },
+  vatPricingMode: "EXCLUSIVE" | "INCLUSIVE"
+): BillingInvoiceRecord {
   if (invoice.currency !== BHD) {
     throw new BillingCurrencyError(invoice.currency);
   }
@@ -910,14 +890,17 @@ function mapPayment(payment: {
   };
 }
 
-function mapSubscription(subscription: {
-  cancelAtPeriodEnd: boolean;
-  currentPeriodEnd: Date;
-  currentPeriodStart: Date;
-  gateway: string;
-  id: string;
-  status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELLED";
-}, planCode: PlanCode): BillingSubscriptionRecord {
+function mapSubscription(
+  subscription: {
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: Date;
+    currentPeriodStart: Date;
+    gateway: string;
+    id: string;
+    status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELLED";
+  },
+  planCode: PlanCode
+): BillingSubscriptionRecord {
   return {
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
     currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
@@ -964,11 +947,7 @@ function calculateProration(input: {
   };
 }
 
-function buildVatInvoicePdf(input: {
-  invoice: BillingInvoiceRecord;
-  payment?: BillingPaymentRecord;
-  workspaceName: string;
-}): Buffer {
+function buildVatInvoicePdf(input: { invoice: BillingInvoiceRecord; payment?: BillingPaymentRecord; workspaceName: string }): Buffer {
   const lines = [
     "MARKOS AI VAT Invoice",
     `Invoice ID: ${input.invoice.id}`,
@@ -1015,9 +994,7 @@ function buildVatInvoicePdf(input: {
     const stream = buildPdfContentStream(pageLines);
 
     pageIds.push(pageId);
-    objects.push(
-      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`
-    );
+    objects.push(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`);
   }
 

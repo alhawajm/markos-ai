@@ -813,7 +813,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 async function createWorkspaceTokenForUser(userId: string, workspaceId: string): Promise<string> {
   await prisma.workspaceMember.create({
     data: {

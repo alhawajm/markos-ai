@@ -14,7 +14,13 @@ describe("Instagram token refresh", () => {
     const session = await registerTestUser(app);
     const accountId = `refresh-${randomUUID()}`;
     const oldToken = `old-token-${randomUUID()}`;
-    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: oldToken, expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+    await persistTestInstagramConnection({
+      workspaceId: session.workspace.id,
+      actorId: session.user.id,
+      accountId,
+      accessToken: oldToken,
+      expiresAt: new Date(Date.now() + 7 * 86_400_000)
+    });
     const calls: string[] = [];
     const fetchImpl = async (input: string | URL | Request) => {
       calls.push(String(input));
@@ -58,7 +64,13 @@ describe("Instagram token refresh", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const accountId = `refresh-route-${randomUUID()}`;
-    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accountId, accessToken: "old-token-route", expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+    await persistTestInstagramConnection({
+      workspaceId: session.workspace.id,
+      actorId: session.user.id,
+      accountId,
+      accessToken: "old-token-route",
+      expiresAt: new Date(Date.now() + 7 * 86_400_000)
+    });
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
       jsonResponse({
@@ -151,7 +163,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   };
 }
-
 
 function jsonResponse(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {

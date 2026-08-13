@@ -1,30 +1,14 @@
 import { PassThrough } from "node:stream";
 import pino from "pino";
 import { describe, expect, it } from "vitest";
-import {
-  classifyMetaCallbackContentType,
-  META_CALLBACK_STAGE_EVENT,
-  reportMetaCallbackStage,
-} from "../src/meta/meta-callback-telemetry";
+import { classifyMetaCallbackContentType, META_CALLBACK_STAGE_EVENT, reportMetaCallbackStage } from "../src/meta/meta-callback-telemetry";
 
 describe("Meta callback telemetry", () => {
   it("classifies callback media types without logging raw headers or payloads", async () => {
-    expect(
-      classifyMetaCallbackContentType(
-        "application/x-www-form-urlencoded; charset=UTF-8",
-      ),
-    ).toBe("form");
+    expect(classifyMetaCallbackContentType("application/x-www-form-urlencoded; charset=UTF-8")).toBe("form");
     expect(classifyMetaCallbackContentType(undefined)).toBe("missing");
-    expect(classifyMetaCallbackContentType("application/octet-stream")).toBe(
-      "octet_stream",
-    );
-    expect(
-      classifyMetaCallbackContentType(
-        'multipart/form-data; boundary="safe-test-boundary"',
-      ),
-    ).toBe(
-      "multipart",
-    );
+    expect(classifyMetaCallbackContentType("application/octet-stream")).toBe("octet_stream");
+    expect(classifyMetaCallbackContentType('multipart/form-data; boundary="safe-test-boundary"')).toBe("multipart");
 
     const stream = new PassThrough();
     let serialized = "";
@@ -40,8 +24,8 @@ describe("Meta callback telemetry", () => {
         stage: "signature_verification",
         outcome: "rejected",
         failureCategory: "signature_verification_failed",
-        verificationFailureCategory: "signature_mismatch",
-      },
+        verificationFailureCategory: "signature_mismatch"
+      }
     });
     await new Promise<void>((resolve) => stream.end(resolve));
 

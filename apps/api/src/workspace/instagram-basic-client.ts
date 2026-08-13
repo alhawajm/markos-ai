@@ -1,8 +1,4 @@
-import {
-  INSTAGRAM_GRAPH_BASE_URL,
-  INSTAGRAM_LONG_LIVED_TOKEN_URL,
-  INSTAGRAM_SHORT_LIVED_TOKEN_URL,
-} from "./instagram-provider";
+import { INSTAGRAM_GRAPH_BASE_URL, INSTAGRAM_LONG_LIVED_TOKEN_URL, INSTAGRAM_SHORT_LIVED_TOKEN_URL } from "./instagram-provider";
 
 const TIMEOUT_MS = 8_000;
 const MAX_RESPONSE_BYTES = 256_000;
@@ -28,13 +24,7 @@ export interface InstagramBasicMedia {
 
 export class InstagramProviderError extends Error {
   constructor(
-    readonly kind:
-      | "http"
-      | "network"
-      | "timeout"
-      | "response_not_json"
-      | "response_too_large"
-      | "schema" = "schema",
+    readonly kind: "http" | "network" | "timeout" | "response_not_json" | "response_too_large" | "schema" = "schema",
     readonly authorizationInvalid = false,
     readonly diagnostic: {
       httpStatus?: number;
@@ -42,7 +32,7 @@ export class InstagramProviderError extends Error {
       errorCode?: string | number;
       errorSubcode?: string | number;
       retryable: boolean;
-    } = { retryable: false },
+    } = { retryable: false }
   ) {
     super("Instagram could not complete the request");
   }
@@ -54,34 +44,25 @@ export class InstagramBasicClient {
     private readonly limits: {
       timeoutMs?: number;
       maxResponseBytes?: number;
-    } = {},
+    } = {}
   ) {}
 
-  async exchangeCode(input: {
-    appId: string;
-    appSecret: string;
-    code: string;
-    redirectUri: string;
-  }) {
+  async exchangeCode(input: { appId: string; appSecret: string; code: string; redirectUri: string }) {
     const body = new URLSearchParams({
       client_id: input.appId,
       client_secret: input.appSecret,
       code: input.code,
       grant_type: "authorization_code",
-      redirect_uri: input.redirectUri,
+      redirect_uri: input.redirectUri
     });
     const value = await this.json(INSTAGRAM_SHORT_LIVED_TOKEN_URL, {
       method: "POST",
-      body,
+      body
     });
-    if (
-      typeof value.access_token !== "string" ||
-      !["string", "number"].includes(typeof value.user_id)
-    )
-      throw new InstagramProviderError("schema");
+    if (typeof value.access_token !== "string" || !["string", "number"].includes(typeof value.user_id)) throw new InstagramProviderError("schema");
     return {
       accessToken: value.access_token,
-      exchangeUserId: String(value.user_id),
+      exchangeUserId: String(value.user_id)
     };
   }
 
@@ -91,11 +72,10 @@ export class InstagramBasicClient {
     url.searchParams.set("client_secret", appSecret);
     url.searchParams.set("access_token", shortToken);
     const value = await this.json(url, { method: "GET" });
-    if (typeof value.access_token !== "string")
-      throw new InstagramProviderError("schema");
+    if (typeof value.access_token !== "string") throw new InstagramProviderError("schema");
     return {
       accessToken: value.access_token,
-      expiresIn: numberOr(value.expires_in, 5_184_000),
+      expiresIn: numberOr(value.expires_in, 5_184_000)
     };
   }
 
@@ -103,33 +83,19 @@ export class InstagramBasicClient {
     const url = new URL(`${INSTAGRAM_GRAPH_BASE_URL}/me`);
     url.searchParams.set(
       "fields",
-      "user_id,username,account_type,profile_picture_url,media.limit(6){id,media_type,caption,media_url,thumbnail_url,permalink,timestamp}",
+      "user_id,username,account_type,profile_picture_url,media.limit(6){id,media_type,caption,media_url,thumbnail_url,permalink,timestamp}"
     );
     url.searchParams.set("access_token", accessToken);
     const response = await this.json(url, { method: "GET" });
-    const value =
-      Array.isArray(response.data) && isRecord(response.data[0])
-        ? response.data[0]
-        : response;
-    if (
-      !["string", "number"].includes(typeof value.user_id) ||
-      typeof value.username !== "string"
-    )
-      throw new InstagramProviderError("schema");
-    const data =
-      isRecord(value.media) && Array.isArray(value.media.data)
-        ? value.media.data.slice(0, RECENT_MEDIA_LIMIT)
-        : [];
+    const value = Array.isArray(response.data) && isRecord(response.data[0]) ? response.data[0] : response;
+    if (!["string", "number"].includes(typeof value.user_id) || typeof value.username !== "string") throw new InstagramProviderError("schema");
+    const data = isRecord(value.media) && Array.isArray(value.media.data) ? value.media.data.slice(0, RECENT_MEDIA_LIMIT) : [];
     return {
       professionalAccountId: String(value.user_id),
       username: value.username,
-      ...(typeof value.account_type === "string"
-        ? { accountType: value.account_type }
-        : {}),
-      ...(typeof value.profile_picture_url === "string"
-        ? { profilePictureUrl: value.profile_picture_url }
-        : {}),
-      media: data.flatMap(mapMedia),
+      ...(typeof value.account_type === "string" ? { accountType: value.account_type } : {}),
+      ...(typeof value.profile_picture_url === "string" ? { profilePictureUrl: value.profile_picture_url } : {}),
+      media: data.flatMap(mapMedia)
     };
   }
 
@@ -138,32 +104,24 @@ export class InstagramBasicClient {
     url.searchParams.set("grant_type", "ig_refresh_token");
     url.searchParams.set("access_token", accessToken);
     const value = await this.json(url, { method: "GET" });
-    if (typeof value.access_token !== "string")
-      throw new InstagramProviderError();
+    if (typeof value.access_token !== "string") throw new InstagramProviderError();
     return {
       accessToken: value.access_token,
-      expiresIn: numberOr(value.expires_in, 5_184_000),
+      expiresIn: numberOr(value.expires_in, 5_184_000)
     };
   }
 
-  private async json(
-    input: string | URL,
-    init: RequestInit,
-  ): Promise<Record<string, unknown>> {
+  private async json(input: string | URL, init: RequestInit): Promise<Record<string, unknown>> {
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.limits.timeoutMs ?? TIMEOUT_MS,
-    );
+    const timeout = setTimeout(() => controller.abort(), this.limits.timeoutMs ?? TIMEOUT_MS);
     try {
       const response = await this.fetcher(input, {
         ...init,
-        signal: controller.signal,
+        signal: controller.signal
       });
       const maxBytes = this.limits.maxResponseBytes ?? MAX_RESPONSE_BYTES;
       const declaredLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(declaredLength) && declaredLength > maxBytes)
-        throw new InstagramProviderError("response_too_large");
+      if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new InstagramProviderError("response_too_large");
       if (!response.body) throw new InstagramProviderError("schema");
 
       const reader = response.body.getReader();
@@ -187,64 +145,37 @@ export class InstagramBasicClient {
         throw new InstagramProviderError("response_not_json");
       }
       if (!response.ok || !isRecord(value)) {
-        const providerError =
-          isRecord(value) && isRecord(value.error) ? value.error : undefined;
-        throw new InstagramProviderError(
-          "http",
-          response.status === 400 || response.status === 401,
-          {
-            httpStatus: response.status,
-            retryable: response.status === 429 || response.status >= 500,
-            ...safeString(providerError, "type", "errorType"),
-            ...safeIdentifier(providerError, "code", "errorCode"),
-            ...safeIdentifier(providerError, "error_subcode", "errorSubcode"),
-          },
-        );
+        const providerError = isRecord(value) && isRecord(value.error) ? value.error : undefined;
+        throw new InstagramProviderError("http", response.status === 400 || response.status === 401, {
+          httpStatus: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+          ...safeString(providerError, "type", "errorType"),
+          ...safeIdentifier(providerError, "code", "errorCode"),
+          ...safeIdentifier(providerError, "error_subcode", "errorSubcode")
+        });
       }
       return value;
     } catch (error) {
       if (error instanceof InstagramProviderError) throw error;
-      throw new InstagramProviderError(
-        controller.signal.aborted ? "timeout" : "network",
-        false,
-        { retryable: true },
-      );
+      throw new InstagramProviderError(controller.signal.aborted ? "timeout" : "network", false, { retryable: true });
     } finally {
       clearTimeout(timeout);
     }
   }
 }
 
-function safeString(
-  value: Record<string, unknown> | undefined,
-  source: string,
-  target: string,
-): Record<string, string> {
+function safeString(value: Record<string, unknown> | undefined, source: string, target: string): Record<string, string> {
   const item = value?.[source];
-  return typeof item === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(item)
-    ? { [target]: item }
-    : {};
+  return typeof item === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(item) ? { [target]: item } : {};
 }
 
-function safeIdentifier(
-  value: Record<string, unknown> | undefined,
-  source: string,
-  target: string,
-): Record<string, string | number> {
+function safeIdentifier(value: Record<string, unknown> | undefined, source: string, target: string): Record<string, string | number> {
   const item = value?.[source];
-  return (typeof item === "number" && Number.isFinite(item)) ||
-    (typeof item === "string" && /^\d{1,20}$/.test(item))
-    ? { [target]: item }
-    : {};
+  return (typeof item === "number" && Number.isFinite(item)) || (typeof item === "string" && /^\d{1,20}$/.test(item)) ? { [target]: item } : {};
 }
 
 function mapMedia(value: unknown): InstagramBasicMedia[] {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    typeof value.media_type !== "string"
-  )
-    return [];
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.media_type !== "string") return [];
   return [
     {
       id: value.id,
@@ -253,15 +184,11 @@ function mapMedia(value: unknown): InstagramBasicMedia[] {
       ...optional(value, "media_url", "mediaUrl"),
       ...optional(value, "thumbnail_url", "thumbnailUrl"),
       ...optional(value, "permalink", "permalink"),
-      ...optional(value, "timestamp", "timestamp"),
-    },
+      ...optional(value, "timestamp", "timestamp")
+    }
   ];
 }
-function optional(
-  value: Record<string, unknown>,
-  source: string,
-  target: string,
-): Record<string, string> {
+function optional(value: Record<string, unknown>, source: string, target: string): Record<string, string> {
   return typeof value[source] === "string" ? { [target]: value[source] } : {};
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
