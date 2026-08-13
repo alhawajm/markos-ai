@@ -13,6 +13,7 @@ import {
   KeyRound,
   Link2Off,
   LockKeyhole,
+  LogOut,
   RefreshCcw,
   ShieldCheck,
   UserRound,
@@ -36,6 +37,7 @@ import {
   type SectionNavigationItem,
 } from "./section-navigation";
 import {
+  logoutBrowserSession,
   setBrowserSession,
   useMarkosClient,
   useMarkosSession,
@@ -80,6 +82,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     string | null
   >(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
   const [selectedSection, setSelectedSection] =
     useState<SettingsSectionId>("profile");
@@ -176,6 +179,17 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     if (!loaded) setNotificationTone("error");
     setAuditState(loaded ? "success" : "error");
     setIsBusy(false);
+  }
+
+  async function logOut() {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    try {
+      await logoutBrowserSession(locale);
+    } catch {
+      setIsLoggingOut(false);
+    }
   }
 
   function instagramSecurityReady(): boolean {
@@ -667,6 +681,20 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       : copy(locale, "pending")
                   }
                 />
+              </div>
+              <div className="mt-5 flex flex-col gap-3 border-t border-[var(--sunlit-line)] pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-[var(--sunlit-muted)]">
+                  {copy(locale, "logoutBody")}
+                </p>
+                <button
+                  className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold text-[var(--sunlit-coral-deep)] disabled:opacity-50"
+                  disabled={isLoggingOut || !session}
+                  onClick={() => void logOut()}
+                  type="button"
+                >
+                  <LogOut size={15} />
+                  {copy(locale, isLoggingOut ? "loggingOut" : "logout")}
+                </button>
               </div>
             </Panel>
 
@@ -1330,6 +1358,9 @@ function copy(locale: Locale, key: string): string {
       oauth: "اتصال OAuth",
       latestPost: "أحدث منشور",
       latestPostPreview: "معاينة أحدث منشور في Instagram",
+      loggingOut: "جارٍ تسجيل الخروج...",
+      logout: "تسجيل الخروج",
+      logoutBody: "إنهاء جلسة MARKOS على هذا الجهاز.",
       noAccountConnected: "لا يوجد حساب متصل",
       openAdmin: "فتح الإدارة",
       openInstagramAccess: "إكمال الفصل على Instagram",
@@ -1436,6 +1467,9 @@ function copy(locale: Locale, key: string): string {
       oauth: "Connect OAuth",
       latestPost: "Latest post",
       latestPostPreview: "Preview the latest Instagram post",
+      loggingOut: "Logging out...",
+      logout: "Log out",
+      logoutBody: "End your MARKOS session on this device.",
       noAccountConnected: "No account connected",
       openAdmin: "Open admin",
       openInstagramAccess: "Finish on Instagram",
