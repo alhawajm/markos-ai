@@ -146,9 +146,7 @@ describe("onboarding routes", () => {
           score: 100,
           missingSections: []
         },
-        modules: expect.arrayContaining([
-          expect.objectContaining({ module: "brand", completed: true })
-        ]),
+        modules: expect.arrayContaining([expect.objectContaining({ module: "brand", completed: true })]),
         businessProfile: {
           status: "APPROVED",
           profile: approvedProfile
@@ -292,10 +290,7 @@ describe("onboarding routes", () => {
     const second = await registerTestUser(app);
     const firstHeaders = authHeaders(first.tokens.accessToken);
     const secondHeaders = authHeaders(second.tokens.accessToken);
-    await Promise.all([
-      saveCompanyAndRemainingModules(app, firstHeaders),
-      saveCompanyAndRemainingModules(app, secondHeaders)
-    ]);
+    await Promise.all([saveCompanyAndRemainingModules(app, firstHeaders), saveCompanyAndRemainingModules(app, secondHeaders)]);
 
     const generated = await app.inject({
       method: "POST",
@@ -324,10 +319,7 @@ describe("onboarding routes", () => {
   });
 });
 
-async function saveCompanyAndRemainingModules(
-  app: Awaited<ReturnType<typeof buildApp>>,
-  headers: Record<string, string>
-): Promise<void> {
+async function saveCompanyAndRemainingModules(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>): Promise<void> {
   const company = await app.inject({
     method: "PUT",
     url: "/v1/onboarding/company",
@@ -506,7 +498,6 @@ function testBusinessProfile() {
     marketingFocus: localized
   };
 }
-
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {

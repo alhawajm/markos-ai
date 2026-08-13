@@ -17,58 +17,26 @@ import {
   RefreshCcw,
   ShieldCheck,
   UserRound,
-  type LucideIcon,
+  type LucideIcon
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { MarkosApiClient } from "@markos/api-client";
-import type {
-  AuditLogRecord,
-  AuthSession,
-  BillingSummary,
-  InstagramConnection,
-  Locale,
-  MfaStatus,
-  MfaTotpSetup,
-} from "@markos/shared-types";
+import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, Locale, MfaStatus, MfaTotpSetup } from "@markos/shared-types";
 import { SurfaceState } from "./surface-state";
 import { NotificationToast } from "./notification-toast";
-import {
-  SectionNavigation,
-  type SectionNavigationItem,
-} from "./section-navigation";
-import {
-  logoutBrowserSession,
-  setBrowserSession,
-  useMarkosClient,
-  useMarkosSession,
-} from "./browser-session";
-import {
-  instagramStatusLabel,
-  sanitizedCallbackUrl,
-} from "./instagram-settings-state";
+import { SectionNavigation, type SectionNavigationItem } from "./section-navigation";
+import { logoutBrowserSession, setBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { instagramStatusLabel, sanitizedCallbackUrl } from "./instagram-settings-state";
 
 type AuditState = "loading" | "error" | "success" | "limit";
 type NotificationTone = "error" | "info" | "success" | "warning";
-type SettingsSectionId =
-  | "profile"
-  | "connections"
-  | "security"
-  | "billing"
-  | "data";
+type SettingsSectionId = "profile" | "connections" | "security" | "billing" | "data";
 
-const settingsSectionIds: readonly SettingsSectionId[] = [
-  "profile",
-  "connections",
-  "security",
-  "billing",
-  "data",
-];
+const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "connections", "security", "billing", "data"];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
-  const [connection, setConnection] = useState<InstagramConnection | null>(
-    null,
-  );
+  const [connection, setConnection] = useState<InstagramConnection | null>(null);
   const [billing, setBilling] = useState<BillingSummary | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
@@ -76,16 +44,12 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [mfaCode, setMfaCode] = useState("");
   const [mfaSecretCopied, setMfaSecretCopied] = useState(false);
   const [message, setMessage] = useState("");
-  const [notificationTone, setNotificationTone] =
-    useState<NotificationTone>("info");
-  const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<
-    string | null
-  >(null);
+  const [notificationTone, setNotificationTone] = useState<NotificationTone>("info");
+  const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [auditState, setAuditState] = useState<AuditState | null>(null);
-  const [selectedSection, setSelectedSection] =
-    useState<SettingsSectionId>("profile");
+  const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
   const [, setMfaWindowTick] = useState(0);
 
   const client = useMarkosClient(locale);
@@ -115,31 +79,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setNotificationTone("error");
       setMessage(copy(locale, "authorizationFailed"));
     }
-    if (
-      instagramResult === "connected" ||
-      instagramResult === "error" ||
-      params.has("code") ||
-      params.has("state") ||
-      params.has("error")
-    ) {
-      window.history.replaceState(
-        {},
-        "",
-        sanitizedCallbackUrl(window.location.href),
-      );
+    if (instagramResult === "connected" || instagramResult === "error" || params.has("code") || params.has("state") || params.has("error")) {
+      window.history.replaceState({}, "", sanitizedCallbackUrl(window.location.href));
     }
   }, [locale]);
 
   useEffect(() => {
     if (!session) return;
-    void refreshSettings(
-      client,
-      setConnection,
-      setBilling,
-      setAuditLogs,
-      setMfaStatus,
-      setMessage,
-    ).then((loaded) => {
+    void refreshSettings(client, setConnection, setBilling, setAuditLogs, setMfaStatus, setMessage).then((loaded) => {
       if (!loaded) setNotificationTone("error");
     });
   }, [client, session]);
@@ -148,10 +95,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     if (!session?.mfaVerifiedUntil) return;
     const delay = session.mfaVerifiedUntil * 1000 - Date.now() + 100;
     if (delay <= 0) return;
-    const timer = window.setTimeout(
-      () => setMfaWindowTick((current) => current + 1),
-      delay,
-    );
+    const timer = window.setTimeout(() => setMfaWindowTick((current) => current + 1), delay);
     return () => window.clearTimeout(timer);
   }, [session?.mfaVerifiedUntil]);
 
@@ -168,14 +112,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     setMessage("");
     setDisconnectWarningUrl(null);
 
-    const loaded = await refreshSettings(
-      client,
-      setConnection,
-      setBilling,
-      setAuditLogs,
-      setMfaStatus,
-      setMessage,
-    );
+    const loaded = await refreshSettings(client, setConnection, setBilling, setAuditLogs, setMfaStatus, setMessage);
     if (!loaded) setNotificationTone("error");
     setAuditState(loaded ? "success" : "error");
     setIsBusy(false);
@@ -236,14 +173,12 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     try {
       const start = await client.instagramOAuthStart({
         locale,
-        returnTo: `/${locale}/app/settings`,
+        returnTo: `/${locale}/app/settings`
       });
       window.location.href = start.authorizationUrl;
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -267,31 +202,17 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     try {
       const result = await client.disconnectInstagram();
       setConnection(result.connection);
-      if (
-        result.providerRevocation.status === "ACTION_REQUIRED" ||
-        result.providerRevocation.status === "UNCONFIRMED"
-      ) {
+      if (result.providerRevocation.status === "ACTION_REQUIRED" || result.providerRevocation.status === "UNCONFIRMED") {
         setNotificationTone("warning");
-        setDisconnectWarningUrl(
-          result.providerRevocation.manualRevocationUrl ?? null,
-        );
+        setDisconnectWarningUrl(result.providerRevocation.manualRevocationUrl ?? null);
         setMessage(copy(locale, "disconnectUnconfirmed"));
       } else {
         setNotificationTone("success");
-        setMessage(
-          copy(
-            locale,
-            result.providerRevocation.status === "CONFIRMED"
-              ? "disconnectedRevoked"
-              : "disconnected",
-          ),
-        );
+        setMessage(copy(locale, result.providerRevocation.status === "CONFIRMED" ? "disconnectedRevoked" : "disconnected"));
       }
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -316,16 +237,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         setConnection(result.connection);
       }
       setNotificationTone(result.refreshed ? "success" : "warning");
-      setMessage(
-        result.refreshed
-          ? copy(locale, "tokenRefreshed")
-          : (result.reason ?? copy(locale, "failed")),
-      );
+      setMessage(result.refreshed ? copy(locale, "tokenRefreshed") : (result.reason ?? copy(locale, "failed")));
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -349,9 +264,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMessage(copy(locale, "mfaReady"));
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -371,24 +284,18 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     try {
       const status = await client.enableMfaTotp({ code: mfaCode.trim() });
       const verifiedSession = await client.verifyMfaTotp({
-        code: mfaCode.trim(),
+        code: mfaCode.trim()
       });
       setBrowserSession(verifiedSession);
       setMfaStatus(status);
       setNotificationTone(status.enabled ? "success" : "error");
-      setMessage(
-        status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"),
-      );
-      setMfaSetup((current) =>
-        current ? { ...current, enabled: status.enabled } : current,
-      );
+      setMessage(status.enabled ? copy(locale, "mfaEnabled") : copy(locale, "failed"));
+      setMfaSetup((current) => (current ? { ...current, enabled: status.enabled } : current));
       setMfaCode("");
       setMfaSecretCopied(false);
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -413,7 +320,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
     try {
       const verifiedSession = await client.verifyMfaTotp({
-        code: mfaCode.trim(),
+        code: mfaCode.trim()
       });
       setBrowserSession(verifiedSession);
       setNotificationTone("success");
@@ -421,9 +328,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMfaCode("");
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -455,7 +360,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     try {
       const data = await client.exportWorkspaceData();
       const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
+        type: "application/json"
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -467,9 +372,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       setMessage(copy(locale, "exportReady"));
     } catch (error) {
       setNotificationTone("error");
-      setMessage(
-        error instanceof Error ? error.message : copy(locale, "failed"),
-      );
+      setMessage(error instanceof Error ? error.message : copy(locale, "failed"));
     } finally {
       setIsBusy(false);
     }
@@ -478,77 +381,56 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const activeConnection = connection ?? {
     connected: false,
     status: "DISCONNECTED" as const,
-    recentMedia: [],
+    recentMedia: []
   };
-  const workspaceName =
-    session?.workspace.name ?? copy(locale, "workspaceUnavailable");
+  const workspaceName = session?.workspace.name ?? copy(locale, "workspaceUnavailable");
   const userName = session?.user.fullName ?? copy(locale, "accountUnavailable");
   const userEmail = session?.user.email ?? "—";
   const subscription = billing?.subscription;
   const mfaStepUpActive = hasActiveMfaStepUp(session);
-  const instagramReady = Boolean(
-    session?.user.isVerified && mfaStatus?.enabled && mfaStepUpActive,
-  );
-  const latestMedia = activeConnection.connected
-    ? activeConnection.recentMedia?.[0]
-    : undefined;
+  const instagramReady = Boolean(session?.user.isVerified && mfaStatus?.enabled && mfaStepUpActive);
+  const latestMedia = activeConnection.connected ? activeConnection.recentMedia?.[0] : undefined;
   const navigationItems: SectionNavigationItem[] = [
     {
       id: "profile",
       icon: UserRound,
       label: copy(locale, "account"),
-      status: session?.user.isVerified
-        ? copy(locale, "verified")
-        : copy(locale, "pending"),
-      statusTone: session?.user.isVerified ? "success" : "warning",
+      status: session?.user.isVerified ? copy(locale, "verified") : copy(locale, "pending"),
+      statusTone: session?.user.isVerified ? "success" : "warning"
     },
     {
       id: "connections",
       icon: Instagram,
       label: copy(locale, "channels"),
       locked: !instagramReady,
-      status: activeConnection.connected
-        ? copy(locale, "connectedStatus")
-        : copy(locale, "disconnectedStatus"),
-      statusTone: instagramReady
-        ? activeConnection.connected
-          ? "success"
-          : "neutral"
-        : "locked",
+      status: activeConnection.connected ? copy(locale, "connectedStatus") : copy(locale, "disconnectedStatus"),
+      statusTone: instagramReady ? (activeConnection.connected ? "success" : "neutral") : "locked"
     },
     {
       id: "security",
       icon: ShieldCheck,
       label: copy(locale, "security"),
-      status: mfaStatus?.enabled
-        ? mfaStepUpActive
-          ? copy(locale, "mfaSessionVerified")
-          : copy(locale, "enabled")
-        : copy(locale, "notEnabled"),
-      statusTone: mfaStatus?.enabled && mfaStepUpActive ? "success" : "warning",
+      status: mfaStatus?.enabled ? (mfaStepUpActive ? copy(locale, "mfaSessionVerified") : copy(locale, "enabled")) : copy(locale, "notEnabled"),
+      statusTone: mfaStatus?.enabled && mfaStepUpActive ? "success" : "warning"
     },
     {
       id: "billing",
       icon: CreditCard,
       label: copy(locale, "billing"),
-      status: subscription?.planCode ?? "STARTER",
+      status: subscription?.planCode ?? "STARTER"
     },
     {
       id: "data",
       icon: Database,
-      label: copy(locale, "dataControls"),
-    },
+      label: copy(locale, "dataControls")
+    }
   ];
 
   function selectSettingsSection(id: string) {
     if (!isSettingsSectionId(id)) return;
     setSelectedSection(id);
     window.history.replaceState(null, "", `#${id}`);
-    window.requestAnimationFrame(() =>
-      document
-        .getElementById(id)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    window.requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   return (
@@ -570,12 +452,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         body={message}
         dismissLabel={copy(locale, "dismissNotification")}
         onDismiss={dismissNotification}
-        title={copy(
-          locale,
-          notificationTone === "error" || notificationTone === "warning"
-            ? "attention"
-            : "status",
-        )}
+        title={copy(locale, notificationTone === "error" || notificationTone === "warning" ? "attention" : "status")}
         tone={notificationTone}
       />
       <header className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-7 sm:flex-row sm:items-end sm:justify-between">
@@ -585,12 +462,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               <ShieldCheck size={13} />
               {copy(locale, "eyebrow")}
             </div>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">
-              {copy(locale, "title")}
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)] sm:text-base">
-              {copy(locale, "subtitle")}
-            </p>
+            <h1 className="mt-3 text-4xl font-black leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">{copy(locale, "title")}</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)] sm:text-base">{copy(locale, "subtitle")}</p>
           </div>
         </div>
         <button
@@ -609,10 +482,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           <SurfaceState
             action={
               auditState === "limit" ? (
-                <a
-                  className="sunlit-primary inline-flex h-10 items-center rounded-xl px-4 text-sm font-extrabold"
-                  href={`/${locale}/admin`}
-                >
+                <a className="sunlit-primary inline-flex h-10 items-center rounded-xl px-4 text-sm font-extrabold" href={`/${locale}/admin`}>
                   {copy(locale, "openAdmin")}
                 </a>
               ) : (
@@ -628,18 +498,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               )
             }
             body={auditStateText(locale, isBusy ? "loading" : auditState).body}
-            title={
-              auditStateText(locale, isBusy ? "loading" : auditState).title
-            }
-            tone={
-              auditState === "error"
-                ? "error"
-                : auditState === "success"
-                  ? "success"
-                  : auditState === "limit"
-                    ? "limit"
-                    : "loading"
-            }
+            title={auditStateText(locale, isBusy ? "loading" : auditState).title}
+            tone={auditState === "error" ? "error" : auditState === "success" ? "success" : auditState === "limit" ? "limit" : "loading"}
           />
         </div>
       ) : null}
@@ -656,36 +516,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
         <div className="grid min-w-0 gap-5">
           <div className="grid gap-5">
-            <Panel
-              active={selectedSection === "profile"}
-              id="profile"
-              icon={UserRound}
-              kicker={copy(locale, "account")}
-              title={userName}
-              body={userEmail}
-            >
+            <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} kicker={copy(locale, "account")} title={userName} body={userEmail}>
               <div className="mt-4 grid gap-2">
-                <SettingRow
-                  label={copy(locale, "workspace")}
-                  value={workspaceName}
-                />
-                <SettingRow
-                  label={copy(locale, "role")}
-                  value={(session?.roles ?? ["OWNER"]).join(", ")}
-                />
-                <SettingRow
-                  label={copy(locale, "verified")}
-                  value={
-                    session?.user.isVerified
-                      ? copy(locale, "yes")
-                      : copy(locale, "pending")
-                  }
-                />
+                <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
+                <SettingRow label={copy(locale, "role")} value={(session?.roles ?? ["OWNER"]).join(", ")} />
+                <SettingRow label={copy(locale, "verified")} value={session?.user.isVerified ? copy(locale, "yes") : copy(locale, "pending")} />
               </div>
               <div className="mt-5 flex flex-col gap-3 border-t border-[var(--sunlit-line)] pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-[var(--sunlit-muted)]">
-                  {copy(locale, "logoutBody")}
-                </p>
+                <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "logoutBody")}</p>
                 <button
                   className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold text-[var(--sunlit-coral-deep)] disabled:opacity-50"
                   disabled={isLoggingOut || !session}
@@ -708,14 +546,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
             >
               <div className="mt-4 grid gap-2">
                 <SettingRow label={copy(locale, "currency")} value="BHD" />
-                <SettingRow
-                  label={copy(locale, "invoices")}
-                  value={String(billing?.invoices.length ?? 0)}
-                />
-                <SettingRow
-                  label={copy(locale, "payments")}
-                  value={String(billing?.payments.length ?? 0)}
-                />
+                <SettingRow label={copy(locale, "invoices")} value={String(billing?.invoices.length ?? 0)} />
+                <SettingRow label={copy(locale, "payments")} value={String(billing?.payments.length ?? 0)} />
               </div>
             </Panel>
           </div>
@@ -728,12 +560,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 icon={Instagram}
                 kicker={copy(locale, "channels")}
                 title={copy(locale, "instagram")}
-                body={copy(
-                  locale,
-                  activeConnection.connected
-                    ? "connectedStatus"
-                    : "disconnectedStatus",
-                )}
+                body={copy(locale, activeConnection.connected ? "connectedStatus" : "disconnectedStatus")}
               >
                 {!instagramReady ? (
                   <div className="mt-5 flex flex-col gap-4 rounded-[1.25rem] border border-[rgb(155_91_0_/_22%)] bg-[#fff8df] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -742,12 +569,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                         <LockKeyhole size={18} />
                       </span>
                       <div>
-                        <p className="font-extrabold text-[var(--sunlit-ink)]">
-                          {copy(locale, "securityRequired")}
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                          {copy(locale, "securityRequiredBody")}
-                        </p>
+                        <p className="font-extrabold text-[var(--sunlit-ink)]">{copy(locale, "securityRequired")}</p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "securityRequiredBody")}</p>
                       </div>
                     </div>
                     <button
@@ -761,18 +584,12 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 ) : null}
 
                 <div className="sunlit-panel-soft mt-4 overflow-hidden rounded-[1.25rem]">
-                  <div
-                    className={`grid ${latestMedia && (latestMedia.thumbnailUrl ?? latestMedia.mediaUrl) ? "md:grid-cols-[minmax(0,1fr)_11rem]" : ""}`}
-                  >
+                  <div className={`grid ${latestMedia && (latestMedia.thumbnailUrl ?? latestMedia.mediaUrl) ? "md:grid-cols-[minmax(0,1fr)_11rem]" : ""}`}>
                     <div className="min-w-0 p-5">
                       <div className="flex items-center gap-3">
                         {activeConnection.profilePictureUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element -- Instagram profile image hosts are dynamic.
-                          <img
-                            alt=""
-                            className="h-14 w-14 shrink-0 rounded-2xl object-cover"
-                            src={activeConnection.profilePictureUrl}
-                          />
+                          <img alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover" src={activeConnection.profilePictureUrl} />
                         ) : (
                           <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[linear-gradient(135deg,#f6c453,#ff665a_48%,#d93f7a)] text-white">
                             <Instagram size={24} />
@@ -780,14 +597,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-lg font-black text-[var(--sunlit-ink)]">
-                            {activeConnection.username
-                              ? `@${activeConnection.username}`
-                              : (activeConnection.accountId ??
-                                copy(locale, "noAccountConnected"))}
+                            {activeConnection.username ? `@${activeConnection.username}` : (activeConnection.accountId ?? copy(locale, "noAccountConnected"))}
                           </p>
                           <p className="mt-0.5 text-sm font-semibold text-[var(--sunlit-muted)]">
-                            {activeConnection.accountType ??
-                              copy(locale, "instagramBusiness")}
+                            {activeConnection.accountType ?? copy(locale, "instagramBusiness")}
                           </p>
                         </div>
                         <span
@@ -804,33 +617,19 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       <div className="mt-5 grid gap-x-6 gap-y-3 border-t border-[var(--sunlit-line)] pt-4 sm:grid-cols-2">
                         <SettingRow
                           label={copy(locale, "lastSync")}
-                          value={
-                            activeConnection.lastSyncedAt
-                              ? new Date(
-                                  activeConnection.lastSyncedAt,
-                                ).toLocaleString(locale)
-                              : copy(locale, "pending")
-                          }
+                          value={activeConnection.lastSyncedAt ? new Date(activeConnection.lastSyncedAt).toLocaleString(locale) : copy(locale, "pending")}
                         />
-                        <SettingRow
-                          label={copy(locale, "publishMode")}
-                          value={copy(locale, "dryRun")}
-                        />
+                        <SettingRow label={copy(locale, "publishMode")} value={copy(locale, "dryRun")} />
                         <SettingRow
                           label={copy(locale, "expires")}
                           value={
-                            activeConnection.tokenExpiresAt
-                              ? new Date(
-                                  activeConnection.tokenExpiresAt,
-                                ).toLocaleDateString(locale)
-                              : copy(locale, "pending")
+                            activeConnection.tokenExpiresAt ? new Date(activeConnection.tokenExpiresAt).toLocaleDateString(locale) : copy(locale, "pending")
                           }
                         />
                       </div>
                     </div>
 
-                    {latestMedia &&
-                    (latestMedia.thumbnailUrl ?? latestMedia.mediaUrl) ? (
+                    {latestMedia && (latestMedia.thumbnailUrl ?? latestMedia.mediaUrl) ? (
                       <a
                         aria-label={copy(locale, "latestPostPreview")}
                         className="relative min-h-44 overflow-hidden border-t border-[var(--sunlit-line)] md:border-s md:border-t-0"
@@ -855,25 +654,18 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                   <ActionButton
                     disabled={isBusy || !instagramReady}
                     icon={ExternalLink}
-                    label={copy(
-                      locale,
-                      activeConnection.connected ? "reconnect" : "oauth",
-                    )}
+                    label={copy(locale, activeConnection.connected ? "reconnect" : "oauth")}
                     onClick={startOAuth}
                     tone="primary"
                   />
                   <ActionButton
-                    disabled={
-                      isBusy || !instagramReady || !activeConnection.connected
-                    }
+                    disabled={isBusy || !instagramReady || !activeConnection.connected}
                     icon={RefreshCcw}
                     label={copy(locale, "refreshToken")}
                     onClick={refreshToken}
                   />
                   <ActionButton
-                    disabled={
-                      isBusy || !instagramReady || !activeConnection.connected
-                    }
+                    disabled={isBusy || !instagramReady || !activeConnection.connected}
                     icon={Link2Off}
                     label={copy(locale, "disconnect")}
                     onClick={disconnect}
@@ -905,17 +697,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                   {mfaStepUpActive && session?.mfaVerifiedUntil ? (
                     <SettingRow
                       label={copy(locale, "mfaWindowEnds")}
-                      value={new Date(
-                        session.mfaVerifiedUntil * 1000,
-                      ).toLocaleTimeString(locale, {
+                      value={new Date(session.mfaVerifiedUntil * 1000).toLocaleTimeString(locale, {
                         hour: "numeric",
-                        minute: "2-digit",
+                        minute: "2-digit"
                       })}
                     />
                   ) : null}
-                  <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">
-                    {copy(locale, "mfaInstagramBody")}
-                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaInstagramBody")}</p>
                 </div>
 
                 {mfaSetup && !mfaSetup.enabled ? (
@@ -932,20 +720,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-lg font-black text-[var(--sunlit-ink)]">
-                        {copy(locale, "mfaScanTitle")}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
-                        {copy(locale, "mfaScanBody")}
-                      </p>
-                      <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">
-                        {copy(locale, "manualKey")}
-                      </p>
+                      <p className="text-lg font-black text-[var(--sunlit-ink)]">{copy(locale, "mfaScanTitle")}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaScanBody")}</p>
+                      <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">{copy(locale, "manualKey")}</p>
                       <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2">
-                        <code
-                          className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[var(--sunlit-aqua-dark)]"
-                          dir="ltr"
-                        >
+                        <code className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[var(--sunlit-aqua-dark)]" dir="ltr">
                           {mfaSetup.secret}
                         </code>
                         <button
@@ -955,18 +734,10 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           title={copy(locale, "copyKey")}
                           type="button"
                         >
-                          {mfaSecretCopied ? (
-                            <Check size={16} />
-                          ) : (
-                            <CopyIcon size={16} />
-                          )}
+                          {mfaSecretCopied ? <Check size={16} /> : <CopyIcon size={16} />}
                         </button>
                       </div>
-                      {mfaSecretCopied ? (
-                        <p className="mt-2 text-xs font-semibold text-[var(--sunlit-aqua-dark)]">
-                          {copy(locale, "keyCopied")}
-                        </p>
-                      ) : null}
+                      {mfaSecretCopied ? <p className="mt-2 text-xs font-semibold text-[var(--sunlit-aqua-dark)]">{copy(locale, "keyCopied")}</p> : null}
                     </div>
                   </div>
                 ) : null}
@@ -979,19 +750,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none disabled:opacity-50"
                       disabled={!mfaSetup || isBusy}
                       inputMode="numeric"
-                      onChange={(event) =>
-                        setMfaCode(
-                          event.target.value.replace(/\D/g, "").slice(0, 6),
-                        )
-                      }
+                      onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                       pattern="[0-9]*"
                       placeholder={copy(locale, "mfaCode")}
                       value={mfaCode}
                     />
                     <ActionButton
-                      disabled={
-                        isBusy || !mfaSetup || !/^\d{6}$/.test(mfaCode.trim())
-                      }
+                      disabled={isBusy || !mfaSetup || !/^\d{6}$/.test(mfaCode.trim())}
                       icon={KeyRound}
                       label={copy(locale, "enableMfa")}
                       onClick={enableMfa}
@@ -1008,11 +773,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none"
                       disabled={isBusy}
                       inputMode="numeric"
-                      onChange={(event) =>
-                        setMfaCode(
-                          event.target.value.replace(/\D/g, "").slice(0, 6),
-                        )
-                      }
+                      onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                       pattern="[0-9]*"
                       placeholder={copy(locale, "mfaCode")}
                       value={mfaCode}
@@ -1046,12 +807,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               body={copy(locale, "dataControlsBody")}
             >
               <div className="mt-5 flex flex-wrap gap-2">
-                <ActionButton
-                  disabled={isBusy}
-                  icon={Download}
-                  label={copy(locale, "exportData")}
-                  onClick={exportData}
-                />
+                <ActionButton disabled={isBusy} icon={Download} label={copy(locale, "exportData")} onClick={exportData} />
                 <a
                   className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold"
                   href={`/${locale}/app/knowledge`}
@@ -1062,12 +818,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               </div>
 
               <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
-                <h3 className="text-base font-black text-[var(--sunlit-ink)]">
-                  {copy(locale, "auditTitle")}
-                </h3>
-                <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                  {copy(locale, "auditBody")}
-                </p>
+                <h3 className="text-base font-black text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
+                <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{copy(locale, "auditBody")}</p>
                 {auditLogs.length === 0 ? (
                   <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-sm text-[var(--sunlit-muted)]">
                     {copy(locale, "auditEmpty")}
@@ -1079,15 +831,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                         className="grid gap-1 border-b border-[var(--sunlit-line)] px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
                         key={log.id}
                       >
-                        <span className="font-extrabold text-[var(--sunlit-ink)]">
-                          {formatAction(log.action)}
-                        </span>
-                        <span className="text-[var(--sunlit-muted)]">
-                          {log.targetType}
-                        </span>
-                        <span className="text-[var(--sunlit-muted)]">
-                          {new Date(log.createdAt).toLocaleString(locale)}
-                        </span>
+                        <span className="font-extrabold text-[var(--sunlit-ink)]">{formatAction(log.action)}</span>
+                        <span className="text-[var(--sunlit-muted)]">{log.targetType}</span>
+                        <span className="text-[var(--sunlit-muted)]">{new Date(log.createdAt).toLocaleString(locale)}</span>
                       </div>
                     ))}
                   </div>
@@ -1108,7 +854,7 @@ function Panel({
   id,
   icon: Icon,
   kicker,
-  title,
+  title
 }: {
   active: boolean;
   body: string;
@@ -1119,19 +865,12 @@ function Panel({
   title: string;
 }) {
   return (
-    <article
-      className={`${active ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`}
-      id={id}
-    >
+    <article className={`${active ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`} id={id}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="sunlit-eyebrow">{kicker}</p>
-          <h2 className="mt-2 break-words text-xl font-black text-[var(--sunlit-ink)]">
-            {title}
-          </h2>
-          <p className="mt-1 break-words text-sm leading-6 text-[var(--sunlit-muted)]">
-            {body}
-          </p>
+          <h2 className="mt-2 break-words text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
+          <p className="mt-1 break-words text-sm leading-6 text-[var(--sunlit-muted)]">{body}</p>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[rgb(33_191_174_/_20%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
           <Icon size={21} strokeWidth={1.8} />
@@ -1146,9 +885,7 @@ function SettingRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
       <span className="text-[var(--sunlit-muted)]">{label}</span>
-      <span className="min-w-0 break-words text-end font-extrabold text-[var(--sunlit-ink)]">
-        {value}
-      </span>
+      <span className="min-w-0 break-words text-end font-extrabold text-[var(--sunlit-ink)]">{value}</span>
     </div>
   );
 }
@@ -1158,7 +895,7 @@ function ActionButton({
   icon: Icon,
   label,
   onClick,
-  tone = "secondary",
+  tone = "secondary"
 }: {
   disabled: boolean;
   icon: LucideIcon;
@@ -1189,14 +926,14 @@ async function refreshSettings(
   setBilling: (billing: BillingSummary) => void,
   setAuditLogs: (auditLogs: AuditLogRecord[]) => void,
   setMfaStatus: (status: MfaStatus) => void,
-  setMessage: (message: string) => void,
+  setMessage: (message: string) => void
 ): Promise<boolean> {
   try {
     const [connection, billing, auditLogs, mfaStatus] = await Promise.all([
       client.instagramConnection(),
       client.billingSummary(),
       client.auditLogs({ limit: 10 }),
-      client.mfaStatus(),
+      client.mfaStatus()
     ]);
     setConnection(connection);
     setBilling(billing);
@@ -1204,9 +941,7 @@ async function refreshSettings(
     setMfaStatus(mfaStatus);
     return true;
   } catch (error) {
-    setMessage(
-      error instanceof Error ? error.message : "Settings could not be loaded.",
-    );
+    setMessage(error instanceof Error ? error.message : "Settings could not be loaded.");
     return false;
   }
 }
@@ -1220,11 +955,7 @@ function formatAction(action: string): string {
 }
 
 function hasActiveMfaStepUp(session: AuthSession | null): boolean {
-  return Boolean(
-    session?.mfaVerified &&
-    session.mfaVerifiedUntil !== null &&
-    session.mfaVerifiedUntil > Math.floor(Date.now() / 1000),
-  );
+  return Boolean(session?.mfaVerified && session.mfaVerifiedUntil !== null && session.mfaVerifiedUntil > Math.floor(Date.now() / 1000));
 }
 
 function isSettingsSectionId(value: string): value is SettingsSectionId {
@@ -1232,59 +963,48 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
 }
 
 function isAuditState(value: string | null): value is AuditState {
-  return (
-    value === "loading" ||
-    value === "error" ||
-    value === "success" ||
-    value === "limit"
-  );
+  return value === "loading" || value === "error" || value === "success" || value === "limit";
 }
 
-function auditStateText(
-  locale: Locale,
-  state: AuditState | null,
-): { body: string; title: string } {
+function auditStateText(locale: Locale, state: AuditState | null): { body: string; title: string } {
   const resolved = state ?? "success";
-  const dictionary: Record<
-    Locale,
-    Record<AuditState, { body: string; title: string }>
-  > = {
+  const dictionary: Record<Locale, Record<AuditState, { body: string; title: string }>> = {
     ar: {
       error: {
         body: "تعذر تحميل إعدادات مساحة العمل. لن يتم تنفيذ التغييرات الحساسة حتى تعود بيانات الحساب والفوترة والقنوات.",
-        title: "تعذر تحميل الإعدادات",
+        title: "تعذر تحميل الإعدادات"
       },
       limit: {
         body: "بعض تغييرات الخطة أو القنوات تحتاج ترقية أو مراجعة حدود الاشتراك قبل المتابعة.",
-        title: "تحتاج مراجعة الخطة",
+        title: "تحتاج مراجعة الخطة"
       },
       loading: {
         body: "يتم تحميل الحساب، الفوترة، اتصال Instagram، وسجل التدقيق لمساحة العمل الحالية.",
-        title: "جار تحديث الإعدادات",
+        title: "جار تحديث الإعدادات"
       },
       success: {
         body: "الإعدادات جاهزة. يمكنك إدارة القنوات، الأمان، الفوترة، والبيانات مع بقاء كل شيء مرتبطاً بمساحة العمل.",
-        title: "الإعدادات جاهزة",
-      },
+        title: "الإعدادات جاهزة"
+      }
     },
     en: {
       error: {
         body: "Workspace settings could not be loaded. Sensitive changes stay blocked until account, billing, and channel data return.",
-        title: "Settings load failed",
+        title: "Settings load failed"
       },
       limit: {
         body: "Some plan or channel changes need a subscription upgrade or quota review before they can continue.",
-        title: "Plan review needed",
+        title: "Plan review needed"
       },
       loading: {
         body: "Loading account, billing, Instagram connection, and audit history for the current workspace.",
-        title: "Refreshing settings",
+        title: "Refreshing settings"
       },
       success: {
         body: "Settings are ready. Manage channels, security, billing, and data controls while everything remains workspace-scoped.",
-        title: "Settings ready",
-      },
-    },
+        title: "Settings ready"
+      }
+    }
   };
 
   return dictionary[locale][resolved];
@@ -1310,8 +1030,7 @@ function copy(locale: Locale, key: string): string {
       currency: "العملة",
       dataControls: "البيانات والذاكرة",
       dataActivityTitle: "البيانات والنشاط",
-      dataControlsBody:
-        "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
+      dataControlsBody: "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
       disconnect: "فصل",
       disconnected: "تم فصل إنستغرام.",
       disconnectedRevoked: "تم فصل إنستغرام وإلغاء وصول MARKOS لدى Meta.",
@@ -1340,18 +1059,15 @@ function copy(locale: Locale, key: string): string {
       mfaCode: "رمز التحقق",
       mfaCodeRequired: "أدخل رمز المصادقة المكون من ستة أرقام.",
       mfaEnabled: "تم تفعيل MFA.",
-      mfaInstagramBody:
-        "يفتح تحقق MFA إعدادات Instagram الحساسة لمدة 15 دقيقة، ويستمر خلال تحديث الجلسة والعودة من Instagram.",
+      mfaInstagramBody: "يفتح تحقق MFA إعدادات Instagram الحساسة لمدة 15 دقيقة، ويستمر خلال تحديث الجلسة والعودة من Instagram.",
       mfaInstagramRequired: "أكمل إعداد MFA أدناه قبل ربط Instagram.",
       mfaReady: "امسح الرمز في تطبيق المصادقة ثم أدخل الكود.",
       mfaQrTitle: "رمز QR لإعداد المصادقة متعددة العوامل في MARKOS",
-      mfaScanBody:
-        "امسح رمز QR باستخدام تطبيق المصادقة، أو أدخل المفتاح اليدوي. ثم أدخل الرمز المكون من ستة أرقام.",
+      mfaScanBody: "امسح رمز QR باستخدام تطبيق المصادقة، أو أدخل المفتاح اليدوي. ثم أدخل الرمز المكون من ستة أرقام.",
       mfaScanTitle: "اربط تطبيق المصادقة",
       mfaSessionVerified: "تم التحقق لمدة 15 دقيقة",
       mfaWindowEnds: "نافذة التحقق حتى",
-      mfaStepUpRequired:
-        "أدخل رمز MFA مرة واحدة لفتح إعدادات Instagram الحساسة لمدة 15 دقيقة.",
+      mfaStepUpRequired: "أدخل رمز MFA مرة واحدة لفتح إعدادات Instagram الحساسة لمدة 15 دقيقة.",
       manualKey: "المفتاح اليدوي",
       keyCopied: "تم نسخ المفتاح.",
       notEnabled: "غير مفعّل",
@@ -1382,8 +1098,7 @@ function copy(locale: Locale, key: string): string {
       setupMfa: "إعداد MFA",
       securityLoading: "يتم تحميل حالة الأمان. حاول بعد لحظة.",
       securityRequired: "أكمل إعدادات الأمان أولاً",
-      securityRequiredBody:
-        "يجب تأكيد البريد الإلكتروني وتفعيل MFA وفتح نافذة التحقق لمدة 15 دقيقة قبل إدارة اتصال Instagram.",
+      securityRequiredBody: "يجب تأكيد البريد الإلكتروني وتفعيل MFA وفتح نافذة التحقق لمدة 15 دقيقة قبل إدارة اتصال Instagram.",
       goToSecurity: "فتح قسم الأمان",
       status: "الحالة",
       subtitle: "إدارة الحسابات المتصلة، الأمان، الفوترة، وبيانات مساحة العمل.",
@@ -1397,15 +1112,14 @@ function copy(locale: Locale, key: string): string {
       loading: "جار التحميل",
       workspace: "مساحة العمل",
       workspaceUnavailable: "مساحة العمل غير متاحة",
-      yes: "نعم",
+      yes: "نعم"
     },
     en: {
       account: "Account",
       accountUnavailable: "Account unavailable",
       attention: "Attention",
       dismissNotification: "Dismiss notification",
-      authorizationFailed:
-        "Instagram authorization could not be completed. Try connecting again.",
+      authorizationFailed: "Instagram authorization could not be completed. Try connecting again.",
       auditBody: "Recent workspace and sensitive settings events.",
       auditEmpty: "No audit events yet.",
       auditTitle: "Audit trail",
@@ -1418,12 +1132,10 @@ function copy(locale: Locale, key: string): string {
       currency: "Currency",
       dataControls: "Data and memory",
       dataActivityTitle: "Data and activity",
-      dataControlsBody:
-        "Export, audit, and business memory stay workspace-scoped.",
+      dataControlsBody: "Export, audit, and business memory stay workspace-scoped.",
       disconnect: "Disconnect",
       disconnected: "Instagram disconnected.",
-      disconnectedRevoked:
-        "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
+      disconnectedRevoked: "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
       disconnectConfirm:
         "Disconnect Instagram from MARKOS and remove its stored credential? To finish revoking MARKOS access, open Instagram permissions and select Remove next to MarkOS AI-IG. Existing workspace content and analytics will remain.",
       disconnectUnconfirmed:
@@ -1449,18 +1161,15 @@ function copy(locale: Locale, key: string): string {
       mfaCode: "Verification code",
       mfaCodeRequired: "Enter the six-digit authenticator code.",
       mfaEnabled: "MFA enabled.",
-      mfaInstagramBody:
-        "One MFA check opens sensitive Instagram settings for 15 minutes, including through session refresh and the return from Instagram.",
+      mfaInstagramBody: "One MFA check opens sensitive Instagram settings for 15 minutes, including through session refresh and the return from Instagram.",
       mfaInstagramRequired: "Set up MFA below before connecting Instagram.",
       mfaReady: "Scan the QR code in your authenticator, then enter the code.",
       mfaQrTitle: "QR code for setting up MARKOS multi-factor authentication",
-      mfaScanBody:
-        "Scan this QR code with your authenticator app, or enter the manual key. Then enter the six-digit code.",
+      mfaScanBody: "Scan this QR code with your authenticator app, or enter the manual key. Then enter the six-digit code.",
       mfaScanTitle: "Link your authenticator app",
       mfaSessionVerified: "Verified for 15 minutes",
       mfaWindowEnds: "Verification window ends",
-      mfaStepUpRequired:
-        "Enter your MFA code once to open sensitive Instagram settings for 15 minutes.",
+      mfaStepUpRequired: "Enter your MFA code once to open sensitive Instagram settings for 15 minutes.",
       manualKey: "Manual setup key",
       keyCopied: "Key copied.",
       notEnabled: "Not enabled",
@@ -1486,32 +1195,27 @@ function copy(locale: Locale, key: string): string {
       save: "Save",
       secret: "Secret",
       security: "Security",
-      securityBody:
-        "MFA, access permissions, and sensitive data export controls.",
+      securityBody: "MFA, access permissions, and sensitive data export controls.",
       securityTitle: "Access controls",
       setupMfa: "Set up MFA",
-      securityLoading:
-        "Security status is still loading. Try again in a moment.",
+      securityLoading: "Security status is still loading. Try again in a moment.",
       securityRequired: "Complete security first",
-      securityRequiredBody:
-        "Verify your email, enable MFA, and open a 15-minute verification window before managing Instagram.",
+      securityRequiredBody: "Verify your email, enable MFA, and open a 15-minute verification window before managing Instagram.",
       goToSecurity: "Open security",
       status: "Status",
-      subtitle:
-        "Manage connected accounts, security, billing, and workspace data.",
+      subtitle: "Manage connected accounts, security, billing, and workspace data.",
       title: "Settings",
       token: "Access token",
       tokenRefreshed: "Instagram token refreshed.",
       trial: "Trial",
       verified: "Verified",
-      verifyEmailFirst:
-        "Verify your email before managing the Instagram connection.",
+      verifyEmailFirst: "Verify your email before managing the Instagram connection.",
       verifyMfaSession: "Verify this session",
       loading: "Loading",
       workspace: "Workspace",
       workspaceUnavailable: "Workspace unavailable",
-      yes: "Yes",
-    },
+      yes: "Yes"
+    }
   } as const;
 
   return dictionary[locale][key as keyof (typeof dictionary)["en"]] ?? key;

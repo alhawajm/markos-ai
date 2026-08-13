@@ -20,27 +20,27 @@ export async function refreshInstagramTokenForWorkspace(input: {
     workspaceId: input.workspaceId,
     ...(input.actorId ? { actorId: input.actorId } : {}),
     ...(input.now ? { now: input.now } : {}),
-    ...(input.fetchImpl ? { client: new InstagramBasicClient(input.fetchImpl) } : {}),
+    ...(input.fetchImpl ? { client: new InstagramBasicClient(input.fetchImpl) } : {})
   });
 }
 
-export async function refreshDueInstagramTokens(input: {
-  fetchImpl?: typeof fetch;
-  now?: Date;
-} = {}): Promise<InstagramTokenRefreshResult[]> {
+export async function refreshDueInstagramTokens(
+  input: {
+    fetchImpl?: typeof fetch;
+    now?: Date;
+  } = {}
+): Promise<InstagramTokenRefreshResult[]> {
   const now = input.now ?? new Date();
-  const refreshBefore = new Date(
-    now.getTime() + env.INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS * 86_400_000,
-  );
+  const refreshBefore = new Date(now.getTime() + env.INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS * 86_400_000);
   const oldestEligibleIssue = new Date(now.getTime() - 86_400_000);
   const connections = await prisma.instagramConnectionCredential.findMany({
     where: {
       deletedAt: null,
       status: "CONNECTED",
       tokenIssuedAt: { lte: oldestEligibleIssue },
-      tokenExpiresAt: { gt: now, lte: refreshBefore },
+      tokenExpiresAt: { gt: now, lte: refreshBefore }
     },
-    select: { workspaceId: true },
+    select: { workspaceId: true }
   });
 
   return Promise.all(
@@ -48,9 +48,9 @@ export async function refreshDueInstagramTokens(input: {
       ...(await refreshInstagramTokenForWorkspace({
         workspaceId,
         now,
-        ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
+        ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {})
       })),
-      workspaceId,
-    })),
+      workspaceId
+    }))
   );
 }

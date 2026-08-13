@@ -1,11 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import {
-  generateContentForSlotSchema,
-  generateContentSchema,
-  scheduleContentSchema,
-  updateContentSchema,
-  updateContentStatusSchema
-} from "@markos/validation";
+import { generateContentForSlotSchema, generateContentSchema, scheduleContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";

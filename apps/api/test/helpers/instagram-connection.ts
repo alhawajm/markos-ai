@@ -19,7 +19,7 @@ export async function persistTestInstagramConnection(input: {
     profile: {
       professionalAccountId: input.accountId ?? `test-account-${randomUUID()}`,
       username: `test-user-${randomUUID()}`,
-      media: [],
-    },
+      media: []
+    }
   });
 }

@@ -1,9 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import type {
-  BusinessProfile,
-  OnboardingBusinessProfileState,
-  VaultRagChunk
-} from "@markos/shared-types";
+import type { BusinessProfile, OnboardingBusinessProfileState, VaultRagChunk } from "@markos/shared-types";
 import { businessProfileSchema, type ApproveBusinessProfileInput } from "@markos/validation";
 import { generateBusinessProfile as requestBusinessProfile } from "../ai/business-profile-client";
 import { env } from "../config/env";
@@ -32,9 +28,7 @@ export class BusinessProfileAlreadyApprovedError extends Error {
   }
 }
 
-export async function getBusinessProfileState(
-  workspaceId: string
-): Promise<OnboardingBusinessProfileState> {
+export async function getBusinessProfileState(workspaceId: string): Promise<OnboardingBusinessProfileState> {
   const row = await prisma.aiInteraction.findFirst({
     where: {
       workspaceId,
@@ -52,9 +46,7 @@ export async function getBusinessProfileState(
   }
 
   const response = readRecord(row.response);
-  const profile = businessProfileSchema.safeParse(
-    row.accepted === true ? response?.approvedProfile : response?.generatedProfile
-  );
+  const profile = businessProfileSchema.safeParse(row.accepted === true ? response?.approvedProfile : response?.generatedProfile);
 
   if (!profile.success) {
     return emptyBusinessProfileState();
@@ -133,10 +125,7 @@ export async function generateWorkspaceBusinessProfile(workspaceId: string): Pro
   }
 }
 
-export async function approveWorkspaceBusinessProfile(
-  workspaceId: string,
-  input: ApproveBusinessProfileInput
-): Promise<void> {
+export async function approveWorkspaceBusinessProfile(workspaceId: string, input: ApproveBusinessProfileInput): Promise<void> {
   const interaction = await prisma.aiInteraction.findFirst({
     where: {
       id: input.interactionId,
@@ -245,7 +234,5 @@ function emptyBusinessProfileState(): OnboardingBusinessProfileState {
 }
 
 function readRecord(value: Prisma.JsonValue): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }

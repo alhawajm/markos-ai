@@ -1,15 +1,10 @@
 import type { FastifyBaseLogger } from "fastify";
 
-export const INSTAGRAM_OAUTH_START_FAILURE_EVENT =
-  "instagram_oauth_start_failure";
-export const INSTAGRAM_OAUTH_START_SUCCESS_EVENT =
-  "instagram_oauth_start_success";
-export const INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT =
-  "instagram_oauth_callback_failure";
-export const INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT =
-  "instagram_oauth_callback_success";
-export const INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT =
-  "instagram_connection_status_failure";
+export const INSTAGRAM_OAUTH_START_FAILURE_EVENT = "instagram_oauth_start_failure";
+export const INSTAGRAM_OAUTH_START_SUCCESS_EVENT = "instagram_oauth_start_success";
+export const INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT = "instagram_oauth_callback_failure";
+export const INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT = "instagram_oauth_callback_success";
+export const INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT = "instagram_connection_status_failure";
 export const INSTAGRAM_DISCONNECT_STAGE_EVENT = "instagram_disconnect_stage";
 
 export const INSTAGRAM_OAUTH_FAILURE_STAGES = [
@@ -49,11 +44,10 @@ export const INSTAGRAM_OAUTH_FAILURE_STAGES = [
   "connection_status_authorization",
   "connection_status_read",
   "disconnect_credential_read",
-  "disconnect_local_cleanup",
+  "disconnect_local_cleanup"
 ] as const;
 
-export type InstagramOAuthFailureStage =
-  (typeof INSTAGRAM_OAUTH_FAILURE_STAGES)[number];
+export type InstagramOAuthFailureStage = (typeof INSTAGRAM_OAUTH_FAILURE_STAGES)[number];
 export type InstagramOAuthFailureDiagnostic = {
   stage: InstagramOAuthFailureStage;
   category: string;
@@ -69,7 +63,7 @@ export type InstagramOAuthFailureDiagnostic = {
 export class InstagramOAuthDiagnosticError extends Error {
   constructor(
     readonly diagnostic: InstagramOAuthFailureDiagnostic,
-    cause?: unknown,
+    cause?: unknown
   ) {
     super("Instagram authorization could not be completed", { cause });
   }
@@ -93,7 +87,7 @@ export function reportInstagramOAuthFailure(input: {
   const fields = {
     event: input.event,
     requestId: input.requestId,
-    ...failureDiagnosticFields(input.diagnostic),
+    ...failureDiagnosticFields(input.diagnostic)
   };
   try {
     input.logger.warn(fields, input.event);
@@ -107,122 +101,62 @@ export const INSTAGRAM_DISCONNECT_STAGES = [
   "credential_lookup",
   "provider_removal_action",
   "local_cleanup",
-  "disconnect_complete",
+  "disconnect_complete"
 ] as const;
 
-export type InstagramDisconnectStage =
-  (typeof INSTAGRAM_DISCONNECT_STAGES)[number];
+export type InstagramDisconnectStage = (typeof INSTAGRAM_DISCONNECT_STAGES)[number];
 export type InstagramDisconnectStageUpdate = {
   stage: InstagramDisconnectStage;
-  outcome:
-    | "started"
-    | "completed"
-    | "skipped"
-    | "confirmed"
-    | "unconfirmed"
-    | "action_required"
-    | "failed";
+  outcome: "started" | "completed" | "skipped" | "confirmed" | "unconfirmed" | "action_required" | "failed";
   credentialFound?: boolean;
-  providerRevocationStatus?:
-    | "ACTION_REQUIRED"
-    | "CONFIRMED"
-    | "UNCONFIRMED"
-    | "NOT_APPLICABLE";
+  providerRevocationStatus?: "ACTION_REQUIRED" | "CONFIRMED" | "UNCONFIRMED" | "NOT_APPLICABLE";
   diagnostic?: InstagramOAuthFailureDiagnostic;
 };
 
 /** Emits a low-cardinality disconnect stage without tokens, identities, URLs, or raw errors. */
-export function reportInstagramDisconnectStage(input: {
-  logger: DisconnectLogger;
-  requestId: string;
-  update: InstagramDisconnectStageUpdate;
-}): void {
+export function reportInstagramDisconnectStage(input: { logger: DisconnectLogger; requestId: string; update: InstagramDisconnectStageUpdate }): void {
   const fields = {
     event: INSTAGRAM_DISCONNECT_STAGE_EVENT,
     stage: input.update.stage,
     outcome: input.update.outcome,
     requestId: input.requestId,
-    ...(typeof input.update.credentialFound === "boolean"
-      ? { credentialFound: input.update.credentialFound }
-      : {}),
-    ...(input.update.providerRevocationStatus
-      ? { providerRevocationStatus: input.update.providerRevocationStatus }
-      : {}),
-    ...(input.update.diagnostic
-      ? failureDiagnosticFields(input.update.diagnostic, false)
-      : {}),
+    ...(typeof input.update.credentialFound === "boolean" ? { credentialFound: input.update.credentialFound } : {}),
+    ...(input.update.providerRevocationStatus ? { providerRevocationStatus: input.update.providerRevocationStatus } : {}),
+    ...(input.update.diagnostic ? failureDiagnosticFields(input.update.diagnostic, false) : {})
   };
   try {
-    const level =
-      input.update.outcome === "failed" ||
-      input.update.outcome === "unconfirmed"
-        ? "warn"
-        : "info";
+    const level = input.update.outcome === "failed" || input.update.outcome === "unconfirmed" ? "warn" : "info";
     input.logger[level](fields, INSTAGRAM_DISCONNECT_STAGE_EVENT);
   } catch {
     /* telemetry cannot change behavior */
   }
 }
 
-export function reportInstagramOAuthCallbackFailure(
-  input: Omit<Parameters<typeof reportInstagramOAuthFailure>[0], "event">,
-): void {
+export function reportInstagramOAuthCallbackFailure(input: Omit<Parameters<typeof reportInstagramOAuthFailure>[0], "event">): void {
   reportInstagramOAuthFailure({
     ...input,
-    event: INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT,
+    event: INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT
   });
 }
 
 export function reportInstagramOAuthLifecycleSuccess(input: {
-  event:
-    | typeof INSTAGRAM_OAUTH_START_SUCCESS_EVENT
-    | typeof INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT;
+  event: typeof INSTAGRAM_OAUTH_START_SUCCESS_EVENT | typeof INSTAGRAM_OAUTH_CALLBACK_SUCCESS_EVENT;
   logger: SuccessLogger;
   requestId: string;
 }): void {
   try {
-    input.logger.info(
-      { event: input.event, requestId: input.requestId },
-      input.event,
-    );
+    input.logger.info({ event: input.event, requestId: input.requestId }, input.event);
   } catch {
     /* telemetry cannot change behavior */
   }
 }
 
-const RETRYABLE_DATABASE_CODES = new Set([
-  "P1001",
-  "P1002",
-  "P1008",
-  "P1017",
-  "P2034",
-]);
-const SAFE_DATABASE_CODES = new Set([
-  "P1000",
-  "P1001",
-  "P1002",
-  "P1008",
-  "P1017",
-  "P2002",
-  "P2003",
-  "P2025",
-  "P2034",
-]);
+const RETRYABLE_DATABASE_CODES = new Set(["P1001", "P1002", "P1008", "P1017", "P2034"]);
+const SAFE_DATABASE_CODES = new Set(["P1000", "P1001", "P1002", "P1008", "P1017", "P2002", "P2003", "P2025", "P2034"]);
 
-export function classifyDatabaseFailure(
-  error: unknown,
-): Pick<
-  InstagramOAuthFailureDiagnostic,
-  "category" | "retryable" | "databaseCode"
-> {
-  const candidate =
-    typeof error === "object" && error !== null && "code" in error
-      ? (error as { code?: unknown }).code
-      : undefined;
-  const code =
-    typeof candidate === "string" && SAFE_DATABASE_CODES.has(candidate)
-      ? candidate
-      : undefined;
+export function classifyDatabaseFailure(error: unknown): Pick<InstagramOAuthFailureDiagnostic, "category" | "retryable" | "databaseCode"> {
+  const candidate = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : undefined;
+  const code = typeof candidate === "string" && SAFE_DATABASE_CODES.has(candidate) ? candidate : undefined;
   const category =
     code === "P2002"
       ? "database_unique_constraint"
@@ -238,47 +172,27 @@ export function classifyDatabaseFailure(
   return {
     category,
     retryable: code !== undefined && RETRYABLE_DATABASE_CODES.has(code),
-    ...(code ? { databaseCode: code } : {}),
+    ...(code ? { databaseCode: code } : {})
   };
 }
 
 function safeHttpStatus(value: unknown) {
-  return typeof value === "number" &&
-    Number.isInteger(value) &&
-    value >= 100 &&
-    value <= 599
-    ? { providerHttpStatus: value }
-    : {};
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599 ? { providerHttpStatus: value } : {};
 }
 function safeProviderType(value: unknown) {
-  return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(value)
-    ? { providerErrorType: value }
-    : {};
+  return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(value) ? { providerErrorType: value } : {};
 }
-function safeNumericIdentifier(
-  key: "providerErrorCode" | "providerErrorSubcode",
-  value: unknown,
-): Record<string, string | number> {
-  return (typeof value === "number" && Number.isFinite(value)) ||
-    (typeof value === "string" && /^\d{1,20}$/.test(value))
-    ? { [key]: value }
-    : {};
+function safeNumericIdentifier(key: "providerErrorCode" | "providerErrorSubcode", value: unknown): Record<string, string | number> {
+  return (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && /^\d{1,20}$/.test(value)) ? { [key]: value } : {};
 }
 function safeDatabaseCode(value: unknown) {
-  return typeof value === "string" && SAFE_DATABASE_CODES.has(value)
-    ? { databaseCode: value }
-    : {};
+  return typeof value === "string" && SAFE_DATABASE_CODES.has(value) ? { databaseCode: value } : {};
 }
 function safeValidationCode(value: unknown) {
-  return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value)
-    ? { validationCode: value }
-    : {};
+  return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? { validationCode: value } : {};
 }
 
-function failureDiagnosticFields(
-  diagnostic: InstagramOAuthFailureDiagnostic,
-  includeStage = true,
-) {
+function failureDiagnosticFields(diagnostic: InstagramOAuthFailureDiagnostic, includeStage = true) {
   return {
     ...(includeStage ? { stage: diagnostic.stage } : {}),
     category: safeCategory(diagnostic.category),
@@ -286,17 +200,12 @@ function failureDiagnosticFields(
     ...safeHttpStatus(diagnostic.providerHttpStatus),
     ...safeProviderType(diagnostic.providerErrorType),
     ...safeNumericIdentifier("providerErrorCode", diagnostic.providerErrorCode),
-    ...safeNumericIdentifier(
-      "providerErrorSubcode",
-      diagnostic.providerErrorSubcode,
-    ),
+    ...safeNumericIdentifier("providerErrorSubcode", diagnostic.providerErrorSubcode),
     ...safeDatabaseCode(diagnostic.databaseCode),
-    ...safeValidationCode(diagnostic.validationCode),
+    ...safeValidationCode(diagnostic.validationCode)
   };
 }
 
 function safeCategory(value: unknown) {
-  return typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value)
-    ? value
-    : "unknown_failure";
+  return typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : "unknown_failure";
 }

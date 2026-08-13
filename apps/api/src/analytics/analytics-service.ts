@@ -12,11 +12,7 @@ import type {
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
 import { upsertVaultSection } from "../vault/vault-service";
-import {
-  createInstagramAnalyticsProvider,
-  InstagramAnalyticsProviderError,
-  type InstagramAnalyticsProvider
-} from "./instagram-analytics-provider";
+import { createInstagramAnalyticsProvider, InstagramAnalyticsProviderError, type InstagramAnalyticsProvider } from "./instagram-analytics-provider";
 import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
 
 export class AnalyticsWorkspaceNotFoundError extends Error {
@@ -33,10 +29,7 @@ export interface AnalyticsSyncForAllWorkspacesResult {
 const analyticsRequiredEnv = ["INSTAGRAM_ANALYTICS_SYNC_MODE", "META_APP_ID", "META_APP_SECRET"];
 const analyticsRequiredScopes = ["instagram_business_basic", "instagram_business_manage_insights"];
 
-export async function getAnalyticsSummary(
-  workspaceId: string,
-  input: { days?: number; from?: Date; to?: Date } = {}
-): Promise<AnalyticsSummary> {
+export async function getAnalyticsSummary(workspaceId: string, input: { days?: number; from?: Date; to?: Date } = {}): Promise<AnalyticsSummary> {
   const range = analyticsRange(input);
   const rows = await prisma.instagramAnalytics.findMany({
     orderBy: [{ dataDate: "desc" }, { updatedAt: "desc" }],
@@ -97,7 +90,11 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     }
   }
 
-  const configuredScopes = new Set(env.INSTAGRAM_OAUTH_SCOPES.split(",").map((scope) => scope.trim()).filter(Boolean));
+  const configuredScopes = new Set(
+    env.INSTAGRAM_OAUTH_SCOPES.split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean)
+  );
 
   for (const scope of analyticsRequiredScopes) {
     if (!configuredScopes.has(scope)) {
@@ -249,10 +246,7 @@ export async function syncInstagramAnalytics(
   };
 }
 
-export async function writeAnalyticsLearningToVault(
-  workspaceId: string,
-  input: { days?: number; now?: Date } = {}
-): Promise<AnalyticsLearningResult> {
+export async function writeAnalyticsLearningToVault(workspaceId: string, input: { days?: number; now?: Date } = {}): Promise<AnalyticsLearningResult> {
   const days = clampDays(input.days ?? 30);
   const summary = await getAnalyticsSummary(workspaceId, { days, to: input.now ?? new Date() });
   const key = analyticsLearningKey(summary);
@@ -426,10 +420,7 @@ function summarizeDaily(records: InstagramAnalyticsRecord[]): AnalyticsSummary["
     .sort((left, right) => left.dataDate.localeCompare(right.dataDate));
 }
 
-function summarizeTopContent(
-  records: InstagramAnalyticsRecord[],
-  contentById: Map<string, ContentItem>
-): AnalyticsSummary["topContent"] {
+function summarizeTopContent(records: InstagramAnalyticsRecord[], contentById: Map<string, ContentItem>): AnalyticsSummary["topContent"] {
   return records
     .filter((record) => record.contentItemId !== undefined)
     .map((record) => {
@@ -477,9 +468,7 @@ function buildAnalyticsObservations(summary: AnalyticsSummary): string[] {
   }
 
   if (strongestBucket !== undefined) {
-    observations.push(
-      `${strongestBucket.metricType} metrics were the strongest engagement bucket at ${strongestBucket.totals.engagement}.`
-    );
+    observations.push(`${strongestBucket.metricType} metrics were the strongest engagement bucket at ${strongestBucket.totals.engagement}.`);
   }
 
   if (previousDaily !== undefined && latestDaily !== undefined) {
@@ -582,16 +571,14 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
     "",
     labels.metricBuckets,
     ...input.summary.byMetricType.map(
-      (bucket) =>
-        `- ${bucket.metricType}: ${labels.reach} ${bucket.totals.reach}, ${labels.engagement} ${bucket.totals.engagement}`
+      (bucket) => `- ${bucket.metricType}: ${labels.reach} ${bucket.totals.reach}, ${labels.engagement} ${bucket.totals.engagement}`
     ),
     "",
     labels.topContent,
     ...(input.summary.topContent.length === 0
       ? [`- ${labels.noTopContent}`]
       : input.summary.topContent.map(
-          (item) =>
-            `- ${item.caption ?? item.contentType}: ${labels.engagement} ${item.engagement}, ${labels.reach} ${item.metrics.reach}`
+          (item) => `- ${item.caption ?? item.contentType}: ${labels.engagement} ${item.engagement}, ${labels.reach} ${item.metrics.reach}`
         )),
     "",
     labels.dailyReach,
@@ -599,7 +586,10 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
       ? [`- ${labels.noDailyData}`]
       : input.summary.daily.map((row) => `- ${row.dataDate.slice(0, 10)}: ${row.totals.reach}`))
   ];
-  const pages = paginatePdfLines(lines.map((line) => sanitizePdfText(line ?? "")), 42);
+  const pages = paginatePdfLines(
+    lines.map((line) => sanitizePdfText(line ?? "")),
+    42
+  );
   const objects: string[] = [];
   const addObject = (body: string): number => {
     objects.push(body);

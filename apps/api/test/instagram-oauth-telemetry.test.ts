@@ -10,7 +10,7 @@ import {
   INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT,
   INSTAGRAM_OAUTH_FAILURE_STAGES,
   reportInstagramDisconnectStage,
-  reportInstagramOAuthCallbackFailure,
+  reportInstagramOAuthCallbackFailure
 } from "../src/workspace/instagram-oauth-telemetry";
 
 describe("Instagram OAuth safe diagnostics", () => {
@@ -18,78 +18,36 @@ describe("Instagram OAuth safe diagnostics", () => {
     ["timeout", "short_lived_token_exchange", "provider_timeout", true],
     ["network", "short_lived_token_exchange", "provider_network_error", true],
     ["http", "short_lived_token_exchange", "provider_http_error", true],
-    [
-      "response_not_json",
+    ["response_not_json", "short_lived_token_response_validation", "provider_response_not_json", false],
+    ["response_too_large", "short_lived_token_response_validation", "provider_response_too_large", false],
+    ["schema", "short_lived_token_response_validation", "provider_response_schema_invalid", false]
+  ] as const)("classifies %s provider failures", (kind, stage, category, retryable) => {
+    const failure = classifyInstagramOAuthProviderFailure(
+      "short_lived_token_exchange",
       "short_lived_token_response_validation",
-      "provider_response_not_json",
-      false,
-    ],
-    [
-      "response_too_large",
-      "short_lived_token_response_validation",
-      "provider_response_too_large",
-      false,
-    ],
-    [
-      "schema",
-      "short_lived_token_response_validation",
-      "provider_response_schema_invalid",
-      false,
-    ],
-  ] as const)(
-    "classifies %s provider failures",
-    (kind, stage, category, retryable) => {
-      const failure = classifyInstagramOAuthProviderFailure(
-        "short_lived_token_exchange",
-        "short_lived_token_response_validation",
-        new InstagramProviderError(kind, false, { retryable }),
-      );
-      expect(failure.diagnostic).toMatchObject({ stage, category, retryable });
-    },
-  );
+      new InstagramProviderError(kind, false, { retryable })
+    );
+    expect(failure.diagnostic).toMatchObject({ stage, category, retryable });
+  });
 
   it.each([
-    [
-      { code: "P2002", message: "CANARY" },
-      "database_unique_constraint",
-      false,
-      "P2002",
-    ],
-    [
-      { code: "P2003", meta: { CANARY: true } },
-      "database_foreign_key_constraint",
-      false,
-      "P2003",
-    ],
+    [{ code: "P2002", message: "CANARY" }, "database_unique_constraint", false, "P2002"],
+    [{ code: "P2003", meta: { CANARY: true } }, "database_foreign_key_constraint", false, "P2003"],
     [{ code: "P2034" }, "database_transaction_conflict", true, "P2034"],
-    [
-      { code: "EVIL", message: "CANARY" },
-      "database_unknown_failure",
-      false,
-      undefined,
-    ],
-  ] as const)(
-    "safely classifies database failures",
-    (error, category, retryable, databaseCode) => {
-      expect(classifyDatabaseFailure(error)).toEqual({
-        category,
-        retryable,
-        ...(databaseCode ? { databaseCode } : {}),
-      });
-    },
-  );
+    [{ code: "EVIL", message: "CANARY" }, "database_unknown_failure", false, undefined]
+  ] as const)("safely classifies database failures", (error, category, retryable, databaseCode) => {
+    expect(classifyDatabaseFailure(error)).toEqual({
+      category,
+      retryable,
+      ...(databaseCode ? { databaseCode } : {})
+    });
+  });
 
   it("declares a unique low-cardinality stage taxonomy", () => {
-    expect(new Set(INSTAGRAM_OAUTH_FAILURE_STAGES).size).toBe(
-      INSTAGRAM_OAUTH_FAILURE_STAGES.length,
-    );
+    expect(new Set(INSTAGRAM_OAUTH_FAILURE_STAGES).size).toBe(INSTAGRAM_OAUTH_FAILURE_STAGES.length);
     expect(INSTAGRAM_OAUTH_FAILURE_STAGES).toContain("connection_upsert");
-    expect(INSTAGRAM_OAUTH_FAILURE_STAGES).not.toContain(
-      "credential_persistence" as never,
-    );
-    expect(new Set(INSTAGRAM_DISCONNECT_STAGES).size).toBe(
-      INSTAGRAM_DISCONNECT_STAGES.length,
-    );
+    expect(INSTAGRAM_OAUTH_FAILURE_STAGES).not.toContain("credential_persistence" as never);
+    expect(new Set(INSTAGRAM_DISCONNECT_STAGES).size).toBe(INSTAGRAM_DISCONNECT_STAGES.length);
     expect(INSTAGRAM_DISCONNECT_STAGES).toContain("provider_removal_action");
   });
 
@@ -106,16 +64,14 @@ describe("Instagram OAuth safe diagnostics", () => {
       update: {
         stage: "provider_removal_action",
         outcome: "action_required",
-        providerRevocationStatus: "ACTION_REQUIRED",
-      },
+        providerRevocationStatus: "ACTION_REQUIRED"
+      }
     });
     await new Promise<void>((resolve) => stream.end(resolve));
     expect(serialized).toContain(INSTAGRAM_DISCONNECT_STAGE_EVENT);
     expect(serialized).toContain('"stage":"provider_removal_action"');
     expect(serialized).toContain('"outcome":"action_required"');
-    expect(serialized).toContain(
-      '"providerRevocationStatus":"ACTION_REQUIRED"',
-    );
+    expect(serialized).toContain('"providerRevocationStatus":"ACTION_REQUIRED"');
     expect(serialized).not.toContain("access_token");
   });
 
@@ -139,7 +95,7 @@ describe("Instagram OAuth safe diagnostics", () => {
       "CANARY_USER",
       "CANARY_WORKSPACE",
       "CANARY_ACCOUNT",
-      "CANARY_USERNAME",
+      "CANARY_USERNAME"
     ];
     reportInstagramOAuthCallbackFailure({
       logger,
@@ -149,11 +105,9 @@ describe("Instagram OAuth safe diagnostics", () => {
         category: "database_unique_constraint",
         retryable: false,
         databaseCode: "P2002",
-        providerErrorType: canaries.join(""),
+        providerErrorType: canaries.join("")
       },
-      ...Object.fromEntries(
-        canaries.map((value, index) => [`unsafe${index}`, value]),
-      ),
+      ...Object.fromEntries(canaries.map((value, index) => [`unsafe${index}`, value]))
     });
     await new Promise<void>((resolve) => stream.end(resolve));
     expect(serialized).toContain(INSTAGRAM_OAUTH_CALLBACK_FAILURE_EVENT);
@@ -167,15 +121,15 @@ describe("Instagram OAuth safe diagnostics", () => {
         logger: {
           warn: vi.fn(() => {
             throw new Error("down");
-          }),
+          })
         },
         requestId: "safe",
         diagnostic: {
           stage: "audit_insert",
           category: "database_unknown_failure",
-          retryable: false,
-        },
-      }),
+          retryable: false
+        }
+      })
     ).not.toThrow();
   });
 });

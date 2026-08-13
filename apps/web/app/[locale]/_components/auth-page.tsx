@@ -283,11 +283,7 @@ export function AuthPage({
   const termsHref = `/${locale}/terms`;
   const privacyHref = `/${locale}/privacy`;
   const languageQuery =
-    mode === "verify" && initialEmail
-      ? `?email=${encodeURIComponent(initialEmail)}`
-      : mode === "reset-password" && resetLinkExpired
-        ? "?expired=1"
-        : "";
+    mode === "verify" && initialEmail ? `?email=${encodeURIComponent(initialEmail)}` : mode === "reset-password" && resetLinkExpired ? "?expired=1" : "";
   const languageHref = `/${otherLocale}/${currentPath}${languageQuery}`;
   const legalCheckboxRef = useRef<HTMLInputElement>(null);
   const verificationStartedRef = useRef(false);
@@ -316,9 +312,7 @@ export function AuthPage({
       setSessionExpired(true);
       setNotice({
         tone: "info",
-        text: isArabic
-          ? "انتهت جلستك. سجّل الدخول مرة أخرى للمتابعة إلى ملفك الشخصي."
-          : "Your session expired. Sign in again to continue to your profile."
+        text: isArabic ? "انتهت جلستك. سجّل الدخول مرة أخرى للمتابعة إلى ملفك الشخصي." : "Your session expired. Sign in again to continue to your profile."
       });
     } else if (params.get("verified") === "1") {
       setNotice({

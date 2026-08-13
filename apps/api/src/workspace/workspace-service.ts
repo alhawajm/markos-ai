@@ -30,7 +30,6 @@ export async function getInstagramConnection(workspaceId: string): Promise<Insta
   return getSecureInstagramConnection(workspaceId);
 }
 
-
 export async function listWorkspaceAuditLogs(workspaceId: string, input: { limit?: number } = {}): Promise<AuditLogRecord[]> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
   const rows = await prisma.auditLog.findMany({
@@ -93,9 +92,7 @@ export async function getPublishReadiness(workspaceId: string, contentItemId: st
           cdnUrl: true
         }
       });
-      const validPublicMediaIds = new Set(
-        mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id)
-      );
+      const validPublicMediaIds = new Set(mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
 
       if (contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
         reasons.push("PUBLIC_MEDIA_REQUIRED");

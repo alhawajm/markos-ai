@@ -110,10 +110,7 @@ export async function registerBillingRoutes(app: FastifyInstance): Promise<void>
       try {
         const pdf = await exportBillingInvoicePdf(workspaceId, params.invoiceId);
 
-        return reply
-          .header("content-type", "application/pdf")
-          .header("content-disposition", `attachment; filename="${pdf.filename}"`)
-          .send(pdf.bytes);
+        return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${pdf.filename}"`).send(pdf.bytes);
       } catch (error) {
         if (error instanceof BillingInvoiceNotFoundError) {
           return reply.status(404).send(errorEnvelope("BILLING_INVOICE_NOT_FOUND", error.message));

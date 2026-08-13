@@ -55,7 +55,7 @@ export async function getModelConfiguration(): Promise<AdminModelConfiguration> 
   return {
     editable: true,
     models,
-    source: uniqueSources.size === 1 ? models[0]?.source ?? "environment" : "mixed"
+    source: uniqueSources.size === 1 ? (models[0]?.source ?? "environment") : "mixed"
   };
 }
 

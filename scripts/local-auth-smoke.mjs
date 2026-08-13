@@ -5,16 +5,9 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { chromium } from "playwright-core";
 
-const webBaseUrl = trimTrailingSlash(
-  process.env.WEB_BASE_URL ?? "http://localhost:3000",
-);
-const apiBaseUrl = trimTrailingSlash(
-  process.env.API_BASE_URL ?? "http://localhost:4000",
-);
-const timeoutMs = Number.parseInt(
-  process.env.LOCAL_AUTH_SMOKE_TIMEOUT_MS ?? "30000",
-  10,
-);
+const webBaseUrl = trimTrailingSlash(process.env.WEB_BASE_URL ?? "http://localhost:3000");
+const apiBaseUrl = trimTrailingSlash(process.env.API_BASE_URL ?? "http://localhost:4000");
+const timeoutMs = Number.parseInt(process.env.LOCAL_AUTH_SMOKE_TIMEOUT_MS ?? "30000", 10);
 const sessionKey = "markos.session";
 
 if (process.argv.includes("--help")) {
@@ -30,7 +23,7 @@ const started = performance.now();
 try {
   await runStep("api-health", async () => {
     const response = await fetch(`${apiBaseUrl}/v1/health`, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json" }
     });
 
     assert(response.ok, `Expected API health 2xx, got ${response.status}`);
@@ -38,7 +31,7 @@ try {
 
   const context = await browser.newContext({
     locale: "en-US",
-    viewport: { width: 1440, height: 900 },
+    viewport: { width: 1440, height: 900 }
   });
   const page = await context.newPage();
   page.setDefaultTimeout(timeoutMs);
@@ -50,21 +43,16 @@ try {
     await page.goto(`${webBaseUrl}/en/signup`, { waitUntil: "domcontentloaded" });
     await page.locator('button[type="submit"]:not([disabled])').waitFor();
     await page.locator('input[autocomplete="name"]').fill("Local Smoke User");
-    await page
-      .locator('input[placeholder="e.g. Maryam Jewelry"]')
-      .fill("Local Smoke Workspace");
+    await page.locator('input[placeholder="e.g. Maryam Jewelry"]').fill("Local Smoke Workspace");
     await page.locator('input[autocomplete="email"]').fill(email);
     await page.locator('input[autocomplete="new-password"]').fill(password);
     await page.locator('input[type="checkbox"]').check();
 
-    await Promise.all([
-      page.waitForURL(/\/en\/verify(?:$|[/?#])/, { timeout: timeoutMs }),
-      page.getByRole("button", { name: /create account/i }).click(),
-    ]);
+    await Promise.all([page.waitForURL(/\/en\/verify(?:$|[/?#])/, { timeout: timeoutMs }), page.getByRole("button", { name: /create account/i }).click()]);
 
     await Promise.all([
       page.waitForURL(/\/en\/onboarding(?:$|[/?#])/, { timeout: timeoutMs }),
-      page.getByRole("button", { name: /verify locally and continue/i }).click(),
+      page.getByRole("button", { name: /verify locally and continue/i }).click()
     ]);
 
     const identity = await readStoredIdentity(page);
@@ -73,7 +61,7 @@ try {
 
   await runStep("browser-login", async () => {
     await page.request.post(`${apiBaseUrl}/v1/auth/logout`, {
-      headers: { "X-Markos-Session": "browser" },
+      headers: { "X-Markos-Session": "browser" }
     });
     await page.evaluate((key) => window.localStorage.removeItem(key), sessionKey);
     await page.goto(`${webBaseUrl}/en/login`, { waitUntil: "domcontentloaded" });
@@ -82,10 +70,7 @@ try {
     await page.locator('input[autocomplete="current-password"]').fill(password);
 
     try {
-      await Promise.all([
-        page.waitForURL(/\/en\/app(?:$|[/?#])/, { timeout: timeoutMs }),
-        page.getByRole("button", { name: /log in to markos/i }).click(),
-      ]);
+      await Promise.all([page.waitForURL(/\/en\/app(?:$|[/?#])/, { timeout: timeoutMs }), page.getByRole("button", { name: /log in to markos/i }).click()]);
     } catch (error) {
       const bodyText = await page.locator("body").innerText({ timeout: 1000 });
       const identity = await readStoredIdentity(page).catch(() => null);
@@ -94,8 +79,8 @@ try {
           error instanceof Error ? error.message : "Login did not route",
           `Current URL: ${page.url()}`,
           `Stored identity: ${identity ? "present" : "missing"}`,
-          `Page text: ${bodyText.replace(/\s+/g, " ").slice(0, 700)}`,
-        ].join("\n"),
+          `Page text: ${bodyText.replace(/\s+/g, " ").slice(0, 700)}`
+        ].join("\n")
       );
     }
 
@@ -117,7 +102,7 @@ const report = {
   startedAt,
   finishedAt: new Date().toISOString(),
   durationMs: Math.round(performance.now() - started),
-  results,
+  results
 };
 
 console.log(JSON.stringify(report, null, 2));
@@ -134,22 +119,20 @@ async function runStep(name, action) {
     results.push({
       name,
       passed: true,
-      durationMs: Math.round(performance.now() - stepStarted),
+      durationMs: Math.round(performance.now() - stepStarted)
     });
   } catch (error) {
     results.push({
       name,
       passed: false,
       durationMs: Math.round(performance.now() - stepStarted),
-      error: error instanceof Error ? error.message : "Unknown failure",
+      error: error instanceof Error ? error.message : "Unknown failure"
     });
   }
 }
 
 async function launchBrowser() {
-  const executablePath =
-    process.env.LOCAL_AUTH_SMOKE_BROWSER ??
-    findInstalledBrowserExecutable();
+  const executablePath = process.env.LOCAL_AUTH_SMOKE_BROWSER ?? findInstalledBrowserExecutable();
 
   if (executablePath) {
     return chromium.launch({ executablePath, headless: true });
@@ -157,7 +140,7 @@ async function launchBrowser() {
 
   return chromium.launch({
     channel: process.platform === "win32" ? "msedge" : "chrome",
-    headless: true,
+    headless: true
   });
 }
 
@@ -168,19 +151,11 @@ function findInstalledBrowserExecutable() {
           "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
           "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
           "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-          "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+          "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
         ]
       : process.platform === "darwin"
-        ? [
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-          ]
-        : [
-            "/usr/bin/microsoft-edge",
-            "/usr/bin/google-chrome",
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-          ];
+        ? ["/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+        : ["/usr/bin/microsoft-edge", "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
 
   return candidates.find((candidate) => existsSync(candidate));
 }
@@ -196,11 +171,7 @@ function assertValidStoredIdentity(identity, expectedEmail) {
   assert(identity && typeof identity === "object", "Missing stored auth identity");
   assert(identity.user?.email === expectedEmail, "Stored identity email mismatch");
   assert(!("tokens" in identity), "Stored identity must not contain auth tokens");
-  assert(
-    typeof identity.workspace?.id === "string" &&
-      identity.workspace.id.length > 0,
-    "Stored identity has no workspace id",
-  );
+  assert(typeof identity.workspace?.id === "string" && identity.workspace.id.length > 0, "Stored identity has no workspace id");
 }
 
 function assert(condition, message) {

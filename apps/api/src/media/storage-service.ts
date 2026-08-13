@@ -11,11 +11,7 @@ export interface StoredMediaObject {
 
 const storageRoot = resolve(process.cwd(), env.MEDIA_STORAGE_DIR);
 
-export async function storeWorkspaceMedia(input: {
-  workspaceId: string;
-  filename: string;
-  bytes: Buffer;
-}): Promise<StoredMediaObject> {
+export async function storeWorkspaceMedia(input: { workspaceId: string; filename: string; bytes: Buffer }): Promise<StoredMediaObject> {
   const workspaceDir = resolve(storageRoot, input.workspaceId);
 
   if (!workspaceDir.startsWith(storageRoot)) {

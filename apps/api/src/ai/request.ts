@@ -10,7 +10,7 @@ const safeAiMessages: Record<string, string> = {
   AI_PROVIDER_TIMEOUT: "The AI provider timed out",
   AI_PROVIDER_UNAVAILABLE: "The AI provider is temporarily unavailable",
   AI_PROVIDER_USAGE_MISSING: "The AI provider did not return usage data",
-  AI_SERVICE_UNAUTHORIZED: "The AI service is not configured correctly",
+  AI_SERVICE_UNAUTHORIZED: "The AI service is not configured correctly"
 };
 
 export class AiServiceRequestError extends Error {
@@ -18,12 +18,7 @@ export class AiServiceRequestError extends Error {
   readonly retryable: boolean;
   readonly statusCode: number;
 
-  constructor(input: {
-    code: string;
-    message: string;
-    retryable: boolean;
-    statusCode: number;
-  }) {
+  constructor(input: { code: string; message: string; retryable: boolean; statusCode: number }) {
     super(input.message);
     this.name = "AiServiceRequestError";
     this.code = input.code;
@@ -37,7 +32,7 @@ export async function requestAi<T>(
   options: {
     body: unknown;
     parse?: (value: unknown) => T;
-  },
+  }
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.AI_HTTP_TIMEOUT_MS);
@@ -47,10 +42,10 @@ export async function requestAi<T>(
       body: JSON.stringify(options.body),
       headers: {
         authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
-        "content-type": "application/json",
+        "content-type": "application/json"
       },
       method: "POST",
-      signal: controller.signal,
+      signal: controller.signal
     });
     const value: unknown = await response.json().catch(() => undefined);
 
@@ -69,7 +64,7 @@ export async function requestAi<T>(
         code: "AI_SERVICE_RESPONSE_INVALID",
         message: "The AI service returned an invalid response",
         retryable: true,
-        statusCode: 502,
+        statusCode: 502
       });
     }
   } catch (error) {
@@ -82,7 +77,7 @@ export async function requestAi<T>(
         code: "AI_SERVICE_TIMEOUT",
         message: "The AI service timed out",
         retryable: true,
-        statusCode: 504,
+        statusCode: 504
       });
     }
 
@@ -90,37 +85,26 @@ export async function requestAi<T>(
       code: "AI_SERVICE_UNAVAILABLE",
       message: "The AI service is temporarily unavailable",
       retryable: true,
-      statusCode: 503,
+      statusCode: 503
     });
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function toAiServiceError(
-  status: number,
-  value: unknown,
-): AiServiceRequestError {
+function toAiServiceError(status: number, value: unknown): AiServiceRequestError {
   const error = readRecord(value)?.error;
   const errorRecord = readRecord(error);
-  const rawCode =
-    typeof errorRecord?.code === "string"
-      ? errorRecord.code
-      : "AI_SERVICE_ERROR";
+  const rawCode = typeof errorRecord?.code === "string" ? errorRecord.code : "AI_SERVICE_ERROR";
   const code = /^AI_[A-Z0-9_]+$/.test(rawCode) ? rawCode : "AI_SERVICE_ERROR";
   const retryable = readRetryable(errorRecord?.details) ?? status >= 500;
-  const statusCode =
-    status === 422 ? 422 : status === 502 ? 502 : status === 504 ? 504 : 503;
+  const statusCode = status === 422 ? 422 : status === 502 ? 502 : status === 504 ? 504 : 503;
 
   return new AiServiceRequestError({
     code: status === 401 ? "AI_SERVICE_AUTHENTICATION_FAILED" : code,
-    message:
-      status === 401
-        ? "The AI service is not configured correctly"
-        : (safeAiMessages[code] ??
-          "The AI service could not complete the request"),
+    message: status === 401 ? "The AI service is not configured correctly" : (safeAiMessages[code] ?? "The AI service could not complete the request"),
     retryable: status === 401 ? false : retryable,
-    statusCode,
+    statusCode
   });
 }
 
@@ -134,7 +118,5 @@ function readRetryable(value: unknown): boolean | undefined {
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }

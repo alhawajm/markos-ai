@@ -7,20 +7,32 @@ const strategyPlanSchema = z.object({
   summary: z.string().min(1),
   horizonDays: z.number().int().min(30).max(180),
   objectives: z.array(z.string().min(1)).min(1),
-  pillars: z.array(z.object({
-    name: z.string().min(1),
-    rationale: z.string().min(1),
-    contentAngles: z.array(z.string().min(1)).min(1)
-  })).min(1),
-  weeklyCadence: z.array(z.object({
-    week: z.number().int().positive(),
-    focus: z.string().min(1),
-    actions: z.array(z.string().min(1)).min(1)
-  })).min(1),
-  kpis: z.array(z.object({
-    name: z.string().min(1),
-    target: z.string().min(1)
-  })).min(1),
+  pillars: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        rationale: z.string().min(1),
+        contentAngles: z.array(z.string().min(1)).min(1)
+      })
+    )
+    .min(1),
+  weeklyCadence: z
+    .array(
+      z.object({
+        week: z.number().int().positive(),
+        focus: z.string().min(1),
+        actions: z.array(z.string().min(1)).min(1)
+      })
+    )
+    .min(1),
+  kpis: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        target: z.string().min(1)
+      })
+    )
+    .min(1),
   risks: z.array(z.string().min(1)).min(1),
   nextActions: z.array(z.string().min(1)).min(1)
 });

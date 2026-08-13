@@ -1,11 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type {
-  KnowledgeVaultEntry,
-  KnowledgeVaultHistoryEntry,
-  VaultCompletenessScore,
-  VaultRagChunk,
-  VaultSection
-} from "@markos/shared-types";
+import type { KnowledgeVaultEntry, KnowledgeVaultHistoryEntry, VaultCompletenessScore, VaultRagChunk, VaultSection } from "@markos/shared-types";
 import type { UpsertVaultSectionInput, VaultRagSearchInput } from "@markos/validation";
 import { vaultSections } from "@markos/shared-types";
 import { embedVaultTexts } from "../ai/embeddings-client";
@@ -22,10 +16,13 @@ export async function listVault(workspaceId: string): Promise<Record<VaultSectio
     orderBy: [{ section: "asc" }, { key: "asc" }]
   });
 
-  return requiredSections.reduce<Record<VaultSection, KnowledgeVaultEntry[]>>((grouped, section) => {
-    grouped[section] = entries.filter((entry) => entry.section === section).map(toVaultEntry);
-    return grouped;
-  }, {} as Record<VaultSection, KnowledgeVaultEntry[]>);
+  return requiredSections.reduce<Record<VaultSection, KnowledgeVaultEntry[]>>(
+    (grouped, section) => {
+      grouped[section] = entries.filter((entry) => entry.section === section).map(toVaultEntry);
+      return grouped;
+    },
+    {} as Record<VaultSection, KnowledgeVaultEntry[]>
+  );
 }
 
 export async function listVaultSection(workspaceId: string, section: VaultSection): Promise<KnowledgeVaultEntry[]> {
@@ -43,11 +40,7 @@ export async function listVaultSection(workspaceId: string, section: VaultSectio
   return entries.map(toVaultEntry);
 }
 
-export async function listVaultEntryHistory(
-  workspaceId: string,
-  section: VaultSection,
-  key: string
-): Promise<KnowledgeVaultHistoryEntry[]> {
+export async function listVaultEntryHistory(workspaceId: string, section: VaultSection, key: string): Promise<KnowledgeVaultHistoryEntry[]> {
   const entries = await prisma.knowledgeVaultHistory.findMany({
     where: {
       workspaceId,
@@ -62,11 +55,7 @@ export async function listVaultEntryHistory(
   return entries.map(toVaultHistoryEntry);
 }
 
-export async function upsertVaultSection(
-  workspaceId: string,
-  section: VaultSection,
-  input: UpsertVaultSectionInput
-): Promise<KnowledgeVaultEntry[]> {
+export async function upsertVaultSection(workspaceId: string, section: VaultSection, input: UpsertVaultSectionInput): Promise<KnowledgeVaultEntry[]> {
   const texts = input.entries.map((entry) => vaultEntryToEmbeddingText(section, entry.key, entry.value));
   const { embeddings } = await embedVaultTexts(texts);
   const saved: KnowledgeVaultEntry[] = [];
@@ -169,10 +158,7 @@ export async function searchVaultContext(workspaceId: string, input: VaultRagSea
   }
 
   const vector = toVectorLiteral(embedding);
-  const sectionFilter =
-    input.section === undefined
-      ? Prisma.empty
-      : Prisma.sql`AND section::text = ${input.section}`;
+  const sectionFilter = input.section === undefined ? Prisma.empty : Prisma.sql`AND section::text = ${input.section}`;
 
   const rows = await prisma.$queryRaw<
     Array<{

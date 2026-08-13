@@ -2,10 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
-import type {
-  MetaCallbackStageUpdate,
-  MetaCallbackVerificationFailureCategory
-} from "./meta-callback-telemetry";
+import type { MetaCallbackStageUpdate, MetaCallbackVerificationFailureCategory } from "./meta-callback-telemetry";
 
 export interface MetaCallbackResult {
   accountId?: string;
@@ -79,9 +76,7 @@ export async function disconnectInstagramFromMetaCallback(
       stage: "signature_verification",
       outcome: "rejected",
       failureCategory: "signature_verification_failed",
-      ...(error instanceof MetaCallbackVerificationError
-        ? { verificationFailureCategory: error.category }
-        : {})
+      ...(error instanceof MetaCallbackVerificationError ? { verificationFailureCategory: error.category } : {})
     });
     throw error;
   }
@@ -193,11 +188,7 @@ async function recordMetaCallbackAudit(input: {
   });
 }
 
-function callbackMetadata(input: {
-  accountId?: string;
-  body: unknown;
-  disconnected: number;
-}): Prisma.InputJsonObject {
+function callbackMetadata(input: { accountId?: string; body: unknown; disconnected: number }): Prisma.InputJsonObject {
   return {
     ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
     disconnected: input.disconnected,
@@ -235,11 +226,12 @@ function sanitizeMetaPayload(body: unknown): Prisma.InputJsonObject {
 }
 
 function getVerifiedAccountId(body: unknown): string | undefined {
-  const signedRequest = typeof body === "string"
-    ? body
-    : typeof body === "object" && body !== null && !Array.isArray(body)
-      ? (body as Record<string, unknown>).signed_request
-      : undefined;
+  const signedRequest =
+    typeof body === "string"
+      ? body
+      : typeof body === "object" && body !== null && !Array.isArray(body)
+        ? (body as Record<string, unknown>).signed_request
+        : undefined;
 
   if (typeof body !== "string" && (typeof body !== "object" || body === null || Array.isArray(body))) {
     throw new MetaCallbackVerificationError("callback_body_invalid");
@@ -263,13 +255,7 @@ function parseSignedRequest(signedRequest: string): SignedRequestPayload {
   }
 
   const parts = signedRequest.split(".");
-  if (
-    parts.length !== 2 ||
-    !parts[0] ||
-    !parts[1] ||
-    !isBase64UrlSegment(parts[0]) ||
-    !isBase64UrlSegment(parts[1])
-  ) {
+  if (parts.length !== 2 || !parts[0] || !parts[1] || !isBase64UrlSegment(parts[0]) || !isBase64UrlSegment(parts[1])) {
     throw new MetaCallbackVerificationError("signed_request_malformed");
   }
   const [encodedSignature, encodedPayload] = parts as [string, string];

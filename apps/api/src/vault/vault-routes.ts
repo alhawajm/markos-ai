@@ -2,14 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
-import {
-  getVaultScore,
-  listVault,
-  listVaultEntryHistory,
-  listVaultSection,
-  searchVaultContext,
-  upsertVaultSection
-} from "./vault-service";
+import { getVaultScore, listVault, listVaultEntryHistory, listVaultSection, searchVaultContext, upsertVaultSection } from "./vault-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -133,7 +126,5 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
 }
 
 function parseSection(section: string | undefined) {
-  return vaultSectionSchema.safeParse(section?.toUpperCase()).success
-    ? vaultSectionSchema.parse(section?.toUpperCase())
-    : undefined;
+  return vaultSectionSchema.safeParse(section?.toUpperCase()).success ? vaultSectionSchema.parse(section?.toUpperCase()) : undefined;
 }

@@ -1,8 +1,4 @@
-import type {
-  AnalyticsEmailDeliveryForAllWorkspacesResult,
-  AnalyticsEmailDeliveryResult,
-  Locale
-} from "@markos/shared-types";
+import type { AnalyticsEmailDeliveryForAllWorkspacesResult, AnalyticsEmailDeliveryResult, Locale } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { exportMonthlyAnalyticsPdf } from "./analytics-service";
 
@@ -10,14 +6,7 @@ const monthlyAnalyticsTemplateKey = "MONTHLY_ANALYTICS_PDF";
 
 export interface AnalyticsEmailProvider {
   mode: "dry_run";
-  send(input: {
-    attachment: Buffer;
-    filename: string;
-    html: string;
-    subject: string;
-    text: string;
-    to: string[];
-  }): Promise<{ messageId: string }>;
+  send(input: { attachment: Buffer; filename: string; html: string; subject: string; text: string; to: string[] }): Promise<{ messageId: string }>;
 }
 
 export class DryRunAnalyticsEmailProvider implements AnalyticsEmailProvider {

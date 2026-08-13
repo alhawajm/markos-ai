@@ -21,10 +21,7 @@ export function isObservabilityEnabled(): boolean {
   return initialized;
 }
 
-export function captureException(
-  error: unknown,
-  context: { method?: string; url?: string; workspaceId?: string } = {}
-): void {
+export function captureException(error: unknown, context: { method?: string; url?: string; workspaceId?: string } = {}): void {
   if (!initialized) {
     return;
   }

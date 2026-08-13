@@ -3,10 +3,7 @@ import { prisma } from "./prisma";
 
 export type WorkspaceTransactionClient = Prisma.TransactionClient;
 
-export async function withWorkspaceDbContext<T>(
-  workspaceId: string,
-  callback: (tx: WorkspaceTransactionClient) => Promise<T>
-): Promise<T> {
+export async function withWorkspaceDbContext<T>(workspaceId: string, callback: (tx: WorkspaceTransactionClient) => Promise<T>): Promise<T> {
   return prisma.$transaction(async (tx) => {
     await setWorkspaceDbContext(tx, workspaceId);
     return callback(tx);

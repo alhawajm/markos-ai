@@ -2,11 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { InstagramBasicClient } from "../src/workspace/instagram-basic-client";
-import {
-  completeInstagramOAuth,
-  createInstagramOAuthStart,
-  type InstagramOAuthConfig
-} from "../src/workspace/instagram-oauth-service";
+import { completeInstagramOAuth, createInstagramOAuthStart, type InstagramOAuthConfig } from "../src/workspace/instagram-oauth-service";
 
 const oauthConfig: InstagramOAuthConfig = {
   appId: "instagram-app-id",
@@ -42,7 +38,9 @@ describe("Instagram OAuth", () => {
     const userId = randomUUID();
     const workspaceId = randomUUID();
     await prisma.user.create({ data: { id: userId, email: `${userId}@markos.test`, fullName: "Instagram OAuth User", locale: "EN", isVerified: true } });
-    await prisma.workspace.create({ data: { id: workspaceId, ownerUserId: userId, name: `Instagram OAuth ${workspaceId}`, slug: `instagram-oauth-${workspaceId}` } });
+    await prisma.workspace.create({
+      data: { id: workspaceId, ownerUserId: userId, name: `Instagram OAuth ${workspaceId}`, slug: `instagram-oauth-${workspaceId}` }
+    });
     const start = await createInstagramOAuthStart({
       config: oauthConfig,
       userId,

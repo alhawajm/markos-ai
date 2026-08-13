@@ -34,13 +34,7 @@ export function useVaultGroundingState(input: VaultGroundingInput): VaultGroundi
   return state;
 }
 
-export function VaultGroundingNotice({
-  locale,
-  state
-}: {
-  locale: Locale;
-  state: VaultGroundingState;
-}) {
+export function VaultGroundingNotice({ locale, state }: { locale: Locale; state: VaultGroundingState }) {
   if (state.blocked) {
     return (
       <div className="rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5 text-xs text-accent">

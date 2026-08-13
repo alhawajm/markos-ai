@@ -5,15 +5,7 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { recordWorkspaceMeteredUsage, reserveWorkspaceUsage, UsageQuotaExceededError } from "../src/usage/usage-service";
 
-const billableMetrics: UsageMetric[] = [
-  "AI_GENERATION",
-  "AI_IMAGE",
-  "AI_TOKENS_IN",
-  "AI_TOKENS_OUT",
-  "POST_PUBLISH",
-  "STRATEGY",
-  "STORAGE_BYTES"
-];
+const billableMetrics: UsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "STRATEGY", "STORAGE_BYTES"];
 
 describe("usage quota enforcement", () => {
   it.each(billableMetrics)("enforces the active plan limit for %s", async (metric) => {
@@ -102,7 +94,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   };
 }
-
 
 async function assignOneUnitPlan(userId: string): Promise<void> {
   const plan = await prisma.plan.create({

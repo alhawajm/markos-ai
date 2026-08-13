@@ -74,10 +74,7 @@ describe("MetaGraphInstagramPublisher", () => {
 
     const result = await publisher.publish({
       contentItem: contentItem({ contentType: "CAROUSEL" }),
-      mediaAssets: [
-        mediaAsset({ cdnUrl: "https://cdn.example.com/one.jpg" }),
-        mediaAsset({ cdnUrl: "https://cdn.example.com/two.jpg" })
-      ],
+      mediaAssets: [mediaAsset({ cdnUrl: "https://cdn.example.com/one.jpg" }), mediaAsset({ cdnUrl: "https://cdn.example.com/two.jpg" })],
       workspace: workspace()
     });
 
@@ -140,9 +137,7 @@ describe("MetaGraphInstagramPublisher", () => {
       quotaTotal: 50,
       quotaUsage: 12
     });
-    expect(calls).toEqual([
-      "https://graph.test/v24.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"
-    ]);
+    expect(calls).toEqual(["https://graph.test/v24.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"]);
   });
 });
 

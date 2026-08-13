@@ -24,7 +24,7 @@ export function reportUnexpectedRequestError(input: {
   const context = {
     method: input.method,
     url: path,
-    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
   };
   input.logger.error({ err: input.error, ...context }, "Request failed");
   (input.capture ?? captureException)(input.error, context);

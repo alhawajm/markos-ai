@@ -1,8 +1,5 @@
 import { env } from "../config/env";
-import {
-  sendMonthlyAnalyticsPdfEmailForAllWorkspaces,
-  type AnalyticsEmailProvider
-} from "../analytics/analytics-email-service";
+import { sendMonthlyAnalyticsPdfEmailForAllWorkspaces, type AnalyticsEmailProvider } from "../analytics/analytics-email-service";
 import { syncInstagramAnalyticsForAllWorkspaces, type AnalyticsSyncForAllWorkspacesResult } from "../analytics/analytics-service";
 import { publishDueContentForAllWorkspaces, type PublishDueContentForAllWorkspacesResult } from "../publishing/publishing-service";
 import type { AnalyticsEmailDeliveryForAllWorkspacesResult } from "@markos/shared-types";
@@ -43,19 +40,21 @@ const consoleLogger: MaintenanceWorkerLogger = {
   }
 };
 
-export async function runMaintenanceWorkerTick(input: {
-  analyticsEmailProvider?: AnalyticsEmailProvider;
-  analyticsEmailWorkspaceIds?: string[];
-  analyticsProvider?: InstagramAnalyticsProvider;
-  fetchImpl?: typeof fetch;
-  now?: Date;
-  publisher?: InstagramPublisher;
-  runAnalyticsEmail?: boolean;
-  runAnalyticsSync?: boolean;
-  runPublishing?: boolean;
-  runTokenRefresh?: boolean;
-  runUsageReset?: boolean;
-} = {}): Promise<MaintenanceWorkerTickResult> {
+export async function runMaintenanceWorkerTick(
+  input: {
+    analyticsEmailProvider?: AnalyticsEmailProvider;
+    analyticsEmailWorkspaceIds?: string[];
+    analyticsProvider?: InstagramAnalyticsProvider;
+    fetchImpl?: typeof fetch;
+    now?: Date;
+    publisher?: InstagramPublisher;
+    runAnalyticsEmail?: boolean;
+    runAnalyticsSync?: boolean;
+    runPublishing?: boolean;
+    runTokenRefresh?: boolean;
+    runUsageReset?: boolean;
+  } = {}
+): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
   const analyticsEmail =
     input.runAnalyticsEmail === false
@@ -97,18 +96,20 @@ export async function runMaintenanceWorkerTick(input: {
   };
 }
 
-export function startMaintenanceWorker(input: {
-  analyticsEmailIntervalMs?: number;
-  analyticsEmailProvider?: AnalyticsEmailProvider;
-  analyticsProvider?: InstagramAnalyticsProvider;
-  fetchImpl?: typeof fetch;
-  logger?: MaintenanceWorkerLogger;
-  publisher?: InstagramPublisher;
-  publishingIntervalMs?: number;
-  runImmediately?: boolean;
-  tokenRefreshIntervalMs?: number;
-  usageResetIntervalMs?: number;
-} = {}): MaintenanceWorkerHandle {
+export function startMaintenanceWorker(
+  input: {
+    analyticsEmailIntervalMs?: number;
+    analyticsEmailProvider?: AnalyticsEmailProvider;
+    analyticsProvider?: InstagramAnalyticsProvider;
+    fetchImpl?: typeof fetch;
+    logger?: MaintenanceWorkerLogger;
+    publisher?: InstagramPublisher;
+    publishingIntervalMs?: number;
+    runImmediately?: boolean;
+    tokenRefreshIntervalMs?: number;
+    usageResetIntervalMs?: number;
+  } = {}
+): MaintenanceWorkerHandle {
   const logger = input.logger ?? consoleLogger;
   const publishingIntervalMs = input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
   const analyticsEmailIntervalMs = input.analyticsEmailIntervalMs ?? env.WORKER_ANALYTICS_EMAIL_INTERVAL_MS;

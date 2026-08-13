@@ -1,36 +1,18 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 
 const strict = process.argv.includes("--strict");
 const runId = readArg("--run-id");
 const requestedSha = readArg("--sha") ?? process.env.RELEASE_SHA;
-const evidenceDate =
-  process.env.M6_EVIDENCE_DATE ?? new Date().toISOString().slice(0, 10);
+const evidenceDate = process.env.M6_EVIDENCE_DATE ?? new Date().toISOString().slice(0, 10);
 const repository = process.env.GITHUB_REPOSITORY ?? readRepositoryFromGit();
-const outputDir = join(
-  process.cwd(),
-  "evidence",
-  "m6",
-  evidenceDate,
-  "staging",
-);
+const outputDir = join(process.cwd(), "evidence", "m6", evidenceDate, "staging");
 const tempDir = join(process.cwd(), ".tmp", "staging-evidence-artifacts");
 const outputPath = join(outputDir, "github-staging-artifact-download.json");
-const requiredArtifactPrefixes = [
-  "m6-staging-image-evidence-",
-  "m6-staging-smoke-evidence-",
-];
+const requiredArtifactPrefixes = ["m6-staging-image-evidence-", "m6-staging-smoke-evidence-"];
 const optionalArtifactPrefixes = ["m6-staging-ecs-rollout-evidence-"];
 
 if (process.argv.includes("--help")) {
@@ -46,9 +28,7 @@ console.log(JSON.stringify(report, null, 2));
 console.log(`Saved GitHub staging artifact report to ${outputPath}`);
 
 if (strict && report.status !== "ready") {
-  console.error(
-    `GitHub staging evidence download failed: ${report.blockers.join("; ")}`,
-  );
+  console.error(`GitHub staging evidence download failed: ${report.blockers.join("; ")}`);
   process.exit(1);
 }
 
@@ -58,11 +38,7 @@ function buildAndDownloadReport() {
   const blockers = [];
 
   if (!run) {
-    blockers.push(
-      requestedSha
-        ? `No successful Deploy Staging run found for ${requestedSha}`
-        : "No successful Deploy Staging run found",
-    );
+    blockers.push(requestedSha ? `No successful Deploy Staging run found for ${requestedSha}` : "No successful Deploy Staging run found");
 
     return baseReport(startedAt, undefined, [], [], blockers);
   }
@@ -80,8 +56,8 @@ function buildAndDownloadReport() {
     ...baseReport(startedAt, run, artifacts, downloads, blockers),
     checks: {
       requiredArtifacts: required,
-      optionalArtifacts: optional,
-    },
+      optionalArtifacts: optional
+    }
   };
 }
 
@@ -101,7 +77,7 @@ function baseReport(startedAt, run, artifacts, downloads, blockers) {
           conclusion: run.conclusion,
           url: run.url,
           createdAt: run.createdAt,
-          updatedAt: run.updatedAt,
+          updatedAt: run.updatedAt
         }
       : undefined,
     startedAt,
@@ -111,10 +87,10 @@ function baseReport(startedAt, run, artifacts, downloads, blockers) {
       expired: artifact.expired,
       sizeInBytes: artifact.size_in_bytes,
       createdAt: artifact.created_at,
-      updatedAt: artifact.updated_at,
+      updatedAt: artifact.updated_at
     })),
     downloads,
-    blockers,
+    blockers
   };
 }
 
@@ -131,27 +107,14 @@ function findLatestSuccessfulRun() {
     "--limit",
     "30",
     "--json",
-    "databaseId,headSha,headBranch,status,conclusion,createdAt,updatedAt,url",
+    "databaseId,headSha,headBranch,status,conclusion,createdAt,updatedAt,url"
   ]);
 
-  return runs.find(
-    (run) =>
-      run.status === "completed" &&
-      run.conclusion === "success" &&
-      (!requestedSha || run.headSha === requestedSha),
-  );
+  return runs.find((run) => run.status === "completed" && run.conclusion === "success" && (!requestedSha || run.headSha === requestedSha));
 }
 
 function readRun(id) {
-  const run = ghJson([
-    "run",
-    "view",
-    id,
-    "--repo",
-    repository,
-    "--json",
-    "databaseId,headSha,headBranch,status,conclusion,createdAt,updatedAt,url",
-  ]);
+  const run = ghJson(["run", "view", id, "--repo", repository, "--json", "databaseId,headSha,headBranch,status,conclusion,createdAt,updatedAt,url"]);
 
   if (requestedSha && run.headSha !== requestedSha) {
     return undefined;
@@ -161,11 +124,7 @@ function readRun(id) {
 }
 
 function readRunArtifacts(id) {
-  const response = ghJson([
-    "api",
-    `/repos/${repository}/actions/runs/${id}/artifacts`,
-    "--paginate",
-  ]);
+  const response = ghJson(["api", `/repos/${repository}/actions/runs/${id}/artifacts`, "--paginate"]);
 
   return Array.isArray(response.artifacts) ? response.artifacts : [];
 }
@@ -176,9 +135,7 @@ function downloadArtifacts(id, artifacts) {
   mkdirSync(outputDir, { recursive: true });
 
   const selectedArtifacts = artifacts.filter((artifact) =>
-    [...requiredArtifactPrefixes, ...optionalArtifactPrefixes].some((prefix) =>
-      artifact.name.startsWith(prefix),
-    ),
+    [...requiredArtifactPrefixes, ...optionalArtifactPrefixes].some((prefix) => artifact.name.startsWith(prefix))
   );
 
   const downloads = [];
@@ -187,24 +144,10 @@ function downloadArtifacts(id, artifacts) {
     const artifactDir = join(tempDir, artifact.name);
     mkdirSync(artifactDir, { recursive: true });
 
-    execFileSync(
-      "gh",
-      [
-        "run",
-        "download",
-        String(id),
-        "--repo",
-        repository,
-        "--name",
-        artifact.name,
-        "--dir",
-        artifactDir,
-      ],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+    execFileSync("gh", ["run", "download", String(id), "--repo", repository, "--name", artifact.name, "--dir", artifactDir], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
     const files = listFiles(artifactDir);
     for (const file of files) {
@@ -213,7 +156,7 @@ function downloadArtifacts(id, artifacts) {
       downloads.push({
         artifact: artifact.name,
         source: relative(process.cwd(), file),
-        target: relative(process.cwd(), target),
+        target: relative(process.cwd(), target)
       });
     }
   }
@@ -222,15 +165,13 @@ function downloadArtifacts(id, artifacts) {
 }
 
 function summarizeArtifacts(prefixes, artifacts) {
-  const present = prefixes.filter((prefix) =>
-    artifacts.some((artifact) => artifact.name.startsWith(prefix)),
-  );
+  const present = prefixes.filter((prefix) => artifacts.some((artifact) => artifact.name.startsWith(prefix)));
   const missing = prefixes.filter((prefix) => !present.includes(prefix));
 
   return {
     ready: missing.length === 0,
     present,
-    missing,
+    missing
   };
 }
 
@@ -262,16 +203,12 @@ function readArg(name) {
 
 function readRepositoryFromGit() {
   const remote = execFileSync("git", ["remote", "get-url", "origin"], {
-    encoding: "utf8",
+    encoding: "utf8"
   }).trim();
-  const match = remote.match(
-    /github\.com[:/](?<owner>[^/]+)\/(?<repo>[^/.]+)(?:\.git)?$/i,
-  );
+  const match = remote.match(/github\.com[:/](?<owner>[^/]+)\/(?<repo>[^/.]+)(?:\.git)?$/i);
 
   if (!match?.groups) {
-    console.error(
-      "Could not determine GitHub repository. Set GITHUB_REPOSITORY=owner/repo.",
-    );
+    console.error("Could not determine GitHub repository. Set GITHUB_REPOSITORY=owner/repo.");
     process.exit(1);
   }
 
@@ -281,7 +218,7 @@ function readRepositoryFromGit() {
 function ghJson(args) {
   const output = execFileSync("gh", [...args, "--jq", "."], {
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"]
   });
   return JSON.parse(output);
 }

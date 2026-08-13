@@ -581,7 +581,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 async function createPublishableDueContent(workspaceId: string) {
   return createPublishableContent(workspaceId, new Date(Date.now() - 60 * 1000));
 }

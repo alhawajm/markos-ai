@@ -12,7 +12,7 @@ export function NotificationToast({
   dismissLabel,
   onDismiss,
   title,
-  tone = "info",
+  tone = "info"
 }: {
   action?: React.ReactNode;
   body: string;
@@ -40,10 +40,7 @@ export function NotificationToast({
       data-notification-toast=""
       role={urgent ? "alert" : "status"}
     >
-      <div
-        className="pointer-events-auto w-full max-w-xl shadow-[0_24px_70px_rgba(0,0,0,.45)]"
-        data-notification-tone={tone}
-      >
+      <div className="pointer-events-auto w-full max-w-xl shadow-[0_24px_70px_rgba(0,0,0,.45)]" data-notification-tone={tone}>
         <SurfaceState
           action={
             <div className="flex items-center gap-2">

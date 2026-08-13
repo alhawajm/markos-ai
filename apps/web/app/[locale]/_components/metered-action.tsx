@@ -48,7 +48,9 @@ export function MeteredActionNotice({ locale, usage }: { locale: Locale; usage: 
             <Sparkles size={13} className="text-accent" />
             {usage.label}
           </span>
-          <span className="font-bold text-muted">{usage.used.toLocaleString()} / {usage.total.toLocaleString()}</span>
+          <span className="font-bold text-muted">
+            {usage.used.toLocaleString()} / {usage.total.toLocaleString()}
+          </span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
           <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(usage.percent, 100)}%` }} />
@@ -61,7 +63,13 @@ export function MeteredActionNotice({ locale, usage }: { locale: Locale; usage: 
   const Icon = blocked ? Lock : AlertTriangle;
 
   return (
-    <div className={blocked ? "rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5 text-xs text-accent" : "rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"}>
+    <div
+      className={
+        blocked
+          ? "rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5 text-xs text-accent"
+          : "rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"
+      }
+    >
       <div className="flex items-start gap-2">
         <Icon size={15} className="mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">

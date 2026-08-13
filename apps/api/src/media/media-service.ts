@@ -57,10 +57,7 @@ export async function listMediaAssets(workspaceId: string): Promise<MediaAssetRe
   return rows.map(toMediaAssetRecord);
 }
 
-export async function registerPublicMedia(
-  workspaceId: string,
-  input: RegisterPublicMediaInput
-): Promise<MediaAssetRecord> {
+export async function registerPublicMedia(workspaceId: string, input: RegisterPublicMediaInput): Promise<MediaAssetRecord> {
   const usagePeriodDate = new Date();
   await reserveMediaUsage(workspaceId, input.type, input.sizeBytes, usagePeriodDate);
 
@@ -145,11 +142,7 @@ export async function generateImageForContent(
   assertMediaEditable(contentItem.status);
 
   const prompt = input.prompt?.trim() || promptFromContent(contentItem);
-  const promptTemplate = await selectPromptTemplateForRun(
-    workspaceId,
-    imageAgentName,
-    `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`
-  );
+  const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`);
   const generated = await generateImageAsset({
     aspectRatio: input.aspectRatio,
     prompt,
@@ -266,11 +259,7 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
   };
 }
 
-export async function attachMediaToContent(
-  workspaceId: string,
-  contentItemId: string,
-  mediaAssetId: string
-): Promise<ContentRecord> {
+export async function attachMediaToContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
   const [contentItem, mediaAsset] = await Promise.all([
     prisma.contentItem.findFirst({
       where: {
@@ -311,11 +300,7 @@ export async function attachMediaToContent(
   return toContentRecord(row);
 }
 
-export async function detachMediaFromContent(
-  workspaceId: string,
-  contentItemId: string,
-  mediaAssetId: string
-): Promise<ContentRecord> {
+export async function detachMediaFromContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
   const contentItem = await prisma.contentItem.findFirst({
     where: {
       id: contentItemId,

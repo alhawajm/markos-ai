@@ -9,11 +9,13 @@ const execFileAsync = promisify(execFile);
 const baseUrl = process.env.UI_BASE_URL ?? "http://127.0.0.1:3000";
 const stamp = new Date().toISOString().slice(0, 10);
 const outputRoot = process.env.UI_SCREENSHOT_DIR ?? path.join("evidence", "ui", stamp);
-const browserPath =
-  process.env.UI_BROWSER_PATH ??
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const routeFilter = process.env.UI_SCREENSHOT_ROUTES?.split(",").map((item) => item.trim()).filter(Boolean);
-const viewportFilter = process.env.UI_SCREENSHOT_VIEWPORTS?.split(",").map((item) => item.trim()).filter(Boolean);
+const browserPath = process.env.UI_BROWSER_PATH ?? "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+const routeFilter = process.env.UI_SCREENSHOT_ROUTES?.split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+const viewportFilter = process.env.UI_SCREENSHOT_VIEWPORTS?.split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
 
 const routes = [
   { name: "dashboard-en", path: "/en" },
@@ -121,19 +123,23 @@ for (const route of routes) {
     const url = `${baseUrl}${route.path}`;
     const userDataDir = path.join(os.tmpdir(), `markos-ui-shot-${process.pid}-${route.name}-${viewport.name}`);
 
-    await execFileAsync(browserPath, [
-      "--headless",
-      "--disable-gpu",
-      "--hide-scrollbars",
-      "--force-device-scale-factor=1",
-      "--no-first-run",
-      "--disable-extensions",
-      "--virtual-time-budget=2500",
-      `--user-data-dir=${userDataDir}`,
-      `--window-size=${viewport.size}`,
-      `--screenshot=${filePath}`,
-      url
-    ], { timeout: 45_000 });
+    await execFileAsync(
+      browserPath,
+      [
+        "--headless",
+        "--disable-gpu",
+        "--hide-scrollbars",
+        "--force-device-scale-factor=1",
+        "--no-first-run",
+        "--disable-extensions",
+        "--virtual-time-budget=2500",
+        `--user-data-dir=${userDataDir}`,
+        `--window-size=${viewport.size}`,
+        `--screenshot=${filePath}`,
+        url
+      ],
+      { timeout: 45_000 }
+    );
 
     console.log(`Captured ${url} at ${viewport.size} -> ${filePath}`);
   }

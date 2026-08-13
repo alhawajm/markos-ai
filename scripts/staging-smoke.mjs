@@ -4,23 +4,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
-const timeoutMs = Number.parseInt(
-  process.env.STAGING_SMOKE_TIMEOUT_MS ?? "10000",
-  10,
-);
+const timeoutMs = Number.parseInt(process.env.STAGING_SMOKE_TIMEOUT_MS ?? "10000", 10);
 const apiBaseUrl = readRequiredUrl("API_BASE_URL");
 const webBaseUrl = readRequiredUrl("WEB_BASE_URL");
-const evidenceDate =
-  process.env.M6_EVIDENCE_DATE ?? new Date().toISOString().slice(0, 10);
+const evidenceDate = process.env.M6_EVIDENCE_DATE ?? new Date().toISOString().slice(0, 10);
 const releaseSha = process.env.GITHUB_SHA ?? process.env.RELEASE_SHA ?? "local";
 const allowLocalSmoke = process.env.ALLOW_LOCAL_STAGING_SMOKE === "true";
-const outputDir = join(
-  process.cwd(),
-  "evidence",
-  "m6",
-  evidenceDate,
-  "staging",
-);
+const outputDir = join(process.cwd(), "evidence", "m6", evidenceDate, "staging");
 const outputPath = join(outputDir, "staging-smoke-report.json");
 
 if (process.argv.includes("--help")) {
@@ -35,23 +25,23 @@ const checks = [
   {
     name: "api-health",
     url: `${apiBaseUrl}/v1/health`,
-    expectBodyIncludes: ["ok"],
+    expectBodyIncludes: ["ok"]
   },
   {
     name: "api-deep-health",
     url: `${apiBaseUrl}/v1/health/deep`,
-    expectBodyIncludes: ["status"],
+    expectBodyIncludes: ["status"]
   },
   {
     name: "web-arabic-shell",
     url: `${webBaseUrl}/ar`,
-    expectBodyIncludes: ["MARKOS"],
+    expectBodyIncludes: ["MARKOS"]
   },
   {
     name: "web-english-shell",
     url: `${webBaseUrl}/en`,
-    expectBodyIncludes: ["MARKOS"],
-  },
+    expectBodyIncludes: ["MARKOS"]
+  }
 ];
 
 const startedAt = new Date().toISOString();
@@ -72,7 +62,7 @@ const report = {
   startedAt,
   finishedAt,
   timeoutMs,
-  results,
+  results
 };
 
 mkdirSync(outputDir, { recursive: true });
@@ -82,9 +72,7 @@ console.log(JSON.stringify(report, null, 2));
 console.log(`Saved staging smoke evidence to ${outputPath}`);
 
 if (failed.length > 0) {
-  console.error(
-    `Staging smoke failed for ${failed.map((result) => result.name).join(", ")}`,
-  );
+  console.error(`Staging smoke failed for ${failed.map((result) => result.name).join(", ")}`);
   process.exit(1);
 }
 
@@ -128,9 +116,7 @@ function assertStagingUrl(name, value) {
   const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
   if (!allowLocalSmoke && localHosts.has(hostname)) {
-    console.error(
-      `${name} points to ${hostname}. Set ALLOW_LOCAL_STAGING_SMOKE=true only for local script validation.`,
-    );
+    console.error(`${name} points to ${hostname}. Set ALLOW_LOCAL_STAGING_SMOKE=true only for local script validation.`);
     process.exit(1);
   }
 }
@@ -144,20 +130,17 @@ async function runCheck(check) {
     const response = await fetch(check.url, {
       cache: "no-store",
       headers: {
-        accept: "application/json,text/html;q=0.9,*/*;q=0.8",
+        accept: "application/json,text/html;q=0.9,*/*;q=0.8"
       },
-      signal: controller.signal,
+      signal: controller.signal
     });
     const body = await response.text();
     const bodySample = body.slice(0, 500);
     const expectedBodyHits = check.expectBodyIncludes.map((expected) => ({
       expected,
-      present: body.includes(expected),
+      present: body.includes(expected)
     }));
-    const passed =
-      response.status >= 200 &&
-      response.status < 400 &&
-      expectedBodyHits.every((item) => item.present);
+    const passed = response.status >= 200 && response.status < 400 && expectedBodyHits.every((item) => item.present);
 
     return {
       name: check.name,
@@ -166,7 +149,7 @@ async function runCheck(check) {
       durationMs: Math.round(performance.now() - started),
       passed,
       expectedBodyHits,
-      bodySample: redactText(bodySample),
+      bodySample: redactText(bodySample)
     };
   } catch (error) {
     return {
@@ -175,7 +158,7 @@ async function runCheck(check) {
       status: 0,
       durationMs: Math.round(performance.now() - started),
       passed: false,
-      error: error instanceof Error ? error.message : "Unknown request failure",
+      error: error instanceof Error ? error.message : "Unknown request failure"
     };
   } finally {
     clearTimeout(timeout);
@@ -187,10 +170,7 @@ function trimTrailingSlash(value) {
 }
 
 function redactUrl(value) {
-  return value.replace(
-    /([?&](?:access_token|token|code|secret|key)=)[^&]+/gi,
-    "$1[REDACTED]",
-  );
+  return value.replace(/([?&](?:access_token|token|code|secret|key)=)[^&]+/gi, "$1[REDACTED]");
 }
 
 function redactText(value) {

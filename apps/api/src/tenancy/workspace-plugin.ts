@@ -4,14 +4,11 @@ import { prisma } from "../db/prisma";
 import { isMfaStepUpActive, verifyAccessToken } from "../auth/tokens";
 import { hasPermissions } from "../auth/rbac";
 import { errorEnvelope } from "../http/envelope";
-import {
-  runWorkspaceContextScope,
-  setWorkspaceContext,
-} from "./workspace-context";
+import { runWorkspaceContextScope, setWorkspaceContext } from "./workspace-context";
 import {
   INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT,
   INSTAGRAM_OAUTH_START_FAILURE_EVENT,
-  reportInstagramOAuthFailure,
+  reportInstagramOAuthFailure
 } from "../workspace/instagram-oauth-telemetry";
 
 declare module "fastify" {
@@ -35,9 +32,7 @@ declare module "fastify" {
   }
 }
 
-export async function registerWorkspaceContext(
-  app: FastifyInstance,
-): Promise<void> {
+export async function registerWorkspaceContext(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", (_request, _reply, done) => {
     runWorkspaceContextScope(done);
   });
@@ -49,16 +44,10 @@ export async function registerWorkspaceContext(
 
     const token = getBearerToken(request.headers.authorization);
     const boundary = request.routeOptions.config.instagramOAuthBoundary;
-    const reportBoundaryFailure = (
-      authentication: boolean,
-      category: string,
-    ) => {
+    const reportBoundaryFailure = (authentication: boolean, category: string) => {
       if (!boundary) return;
       reportInstagramOAuthFailure({
-        event:
-          boundary === "start"
-            ? INSTAGRAM_OAUTH_START_FAILURE_EVENT
-            : INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT,
+        event: boundary === "start" ? INSTAGRAM_OAUTH_START_FAILURE_EVENT : INSTAGRAM_CONNECTION_STATUS_FAILURE_EVENT,
         logger: app.log,
         requestId: request.id,
         diagnostic: {
@@ -71,18 +60,14 @@ export async function registerWorkspaceContext(
                 ? "connection_status_authentication"
                 : "connection_status_authorization",
           category,
-          retryable: false,
-        },
+          retryable: false
+        }
       });
     };
 
     if (token === undefined) {
       reportBoundaryFailure(true, "authentication_required");
-      await reply
-        .status(401)
-        .send(
-          errorEnvelope("AUTH_REQUIRED", "A valid bearer token is required"),
-        );
+      await reply.status(401).send(errorEnvelope("AUTH_REQUIRED", "A valid bearer token is required"));
       return;
     }
 
@@ -92,41 +77,32 @@ export async function registerWorkspaceContext(
         where: {
           workspaceId: principal.workspaceId,
           userId: principal.userId,
-          deletedAt: null,
+          deletedAt: null
         },
         select: {
-          role: true,
-        },
+          role: true
+        }
       });
       const user = await prisma.user.findUnique({
         where: {
-          id: principal.userId,
+          id: principal.userId
         },
         select: {
           deletedAt: true,
           isVerified: true,
-          mfaEnabled: true,
-        },
+          mfaEnabled: true
+        }
       });
 
       if (membership === null) {
         reportBoundaryFailure(false, "workspace_forbidden");
-        await reply
-          .status(403)
-          .send(
-            errorEnvelope(
-              "WORKSPACE_FORBIDDEN",
-              "User is not a member of this workspace",
-            ),
-          );
+        await reply.status(403).send(errorEnvelope("WORKSPACE_FORBIDDEN", "User is not a member of this workspace"));
         return;
       }
 
       if (user === null || user.deletedAt !== null) {
         reportBoundaryFailure(true, "authentication_invalid");
-        await reply
-          .status(401)
-          .send(errorEnvelope("USER_NOT_ACTIVE", "User is not active"));
+        await reply.status(401).send(errorEnvelope("USER_NOT_ACTIVE", "User is not active"));
         return;
       }
 
@@ -136,7 +112,7 @@ export async function registerWorkspaceContext(
         mfaVerifiedUntil: principal.mfaVerifiedUntil ?? null,
         userId: principal.userId,
         workspaceId: principal.workspaceId,
-        roles: [membership.role as Role],
+        roles: [membership.role as Role]
       };
 
       request.auth = auth;
@@ -147,62 +123,36 @@ export async function registerWorkspaceContext(
       if (permissions.length > 0 && !hasPermissions(auth.roles, permissions)) {
         reportBoundaryFailure(false, "workspace_forbidden");
         await reply.status(403).send(
-          errorEnvelope(
-            "RBAC_FORBIDDEN",
-            "This role does not have permission to perform this action",
-            [
-              {
-                requiredPermissions: permissions,
-                roles: auth.roles,
-              },
-            ],
-          ),
+          errorEnvelope("RBAC_FORBIDDEN", "This role does not have permission to perform this action", [
+            {
+              requiredPermissions: permissions,
+              roles: auth.roles
+            }
+          ])
         );
         return;
       }
 
-      if (
-        request.routeOptions.config.verifiedUserRequired === true &&
-        !auth.isVerified
-      ) {
-        await reply
-          .status(403)
-          .send(
-            errorEnvelope(
-              "EMAIL_VERIFICATION_REQUIRED",
-              "Email verification is required before this action",
-            ),
-          );
+      if (request.routeOptions.config.verifiedUserRequired === true && !auth.isVerified) {
+        await reply.status(403).send(errorEnvelope("EMAIL_VERIFICATION_REQUIRED", "Email verification is required before this action"));
         return;
       }
 
-      if (
-        request.routeOptions.config.mfaRequired === true &&
-        !(auth.mfaVerified && isMfaStepUpActive(auth.mfaVerifiedUntil))
-      ) {
-        reportBoundaryFailure(
-          true,
-          user.mfaEnabled ? "mfa_required" : "mfa_setup_required",
-        );
+      if (request.routeOptions.config.mfaRequired === true && !(auth.mfaVerified && isMfaStepUpActive(auth.mfaVerifiedUntil))) {
+        reportBoundaryFailure(true, user.mfaEnabled ? "mfa_required" : "mfa_setup_required");
         await reply
           .status(403)
           .send(
             errorEnvelope(
               user.mfaEnabled ? "MFA_REQUIRED" : "MFA_SETUP_REQUIRED",
-              user.mfaEnabled
-                ? "MFA verification is required before this action"
-                : "TOTP MFA must be enabled before this action",
-            ),
+              user.mfaEnabled ? "MFA verification is required before this action" : "TOTP MFA must be enabled before this action"
+            )
           );
         return;
       }
     } catch {
       reportBoundaryFailure(true, "authentication_invalid");
-      await reply
-        .status(401)
-        .send(
-          errorEnvelope("INVALID_TOKEN", "Bearer token is invalid or expired"),
-        );
+      await reply.status(401).send(errorEnvelope("INVALID_TOKEN", "Bearer token is invalid or expired"));
     }
   });
 }
@@ -214,11 +164,7 @@ function getBearerToken(authorization: string | undefined): string | undefined {
 
   const [scheme, token] = authorization.split(" ");
 
-  if (
-    scheme?.toLowerCase() !== "bearer" ||
-    token === undefined ||
-    token.length === 0
-  ) {
+  if (scheme?.toLowerCase() !== "bearer" || token === undefined || token.length === 0) {
     return undefined;
   }
 

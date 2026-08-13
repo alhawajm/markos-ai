@@ -129,16 +129,7 @@ describe("M1 acceptance", () => {
       vaultScore: {
         score: 100,
         missingSections: [],
-        completedSections: expect.arrayContaining([
-          "COMPANY",
-          "STORY",
-          "PRODUCTS",
-          "AUDIENCE",
-          "COMPETITORS",
-          "BRAND",
-          "TONE",
-          "OBJECTIVES"
-        ])
+        completedSections: expect.arrayContaining(["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"])
       },
       modules: expect.arrayContaining([
         expect.objectContaining({ module: "company", completed: true }),
@@ -401,7 +392,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
     }
   };
 }
-
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {

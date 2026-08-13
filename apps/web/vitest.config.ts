@@ -5,6 +5,6 @@ export default defineConfig({
     exclude: ["test/**/*.browser.test.ts"],
     include: ["test/**/*.test.ts"],
     hookTimeout: 30_000,
-    testTimeout: 30_000,
-  },
+    testTimeout: 30_000
+  }
 });

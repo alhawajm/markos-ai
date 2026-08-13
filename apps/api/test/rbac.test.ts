@@ -122,7 +122,6 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   };
 }
 
-
 async function updateMemberRole(userId: string, workspaceId: string, role: "EDITOR" | "VIEWER"): Promise<void> {
   await prisma.workspaceMember.updateMany({
     data: {

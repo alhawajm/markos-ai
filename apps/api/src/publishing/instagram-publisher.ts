@@ -24,11 +24,7 @@ export interface InstagramPublishingLimit {
 
 export interface InstagramPublisher {
   getPublishingLimit?(input: { workspace: Workspace }): Promise<InstagramPublishingLimit>;
-  publish(input: {
-    contentItem: ContentItem;
-    mediaAssets: MediaAsset[];
-    workspace: Workspace;
-  }): Promise<InstagramPublishResult>;
+  publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult>;
 }
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -64,13 +60,15 @@ export class MetaGraphInstagramPublisher implements InstagramPublisher {
   private readonly pollAttempts: number;
   private readonly pollDelayMs: number;
 
-  constructor(options: {
-    fetchImpl?: FetchLike;
-    graphBaseUrl?: string;
-    graphVersion?: string;
-    pollAttempts?: number;
-    pollDelayMs?: number;
-  } = {}) {
+  constructor(
+    options: {
+      fetchImpl?: FetchLike;
+      graphBaseUrl?: string;
+      graphVersion?: string;
+      pollAttempts?: number;
+      pollDelayMs?: number;
+    } = {}
+  ) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.graphBaseUrl = (options.graphBaseUrl ?? env.META_GRAPH_BASE_URL).replace(/\/$/, "");
     this.graphVersion = options.graphVersion ?? env.META_GRAPH_VERSION;
@@ -142,11 +140,7 @@ export class MetaGraphInstagramPublisher implements InstagramPublisher {
     };
   }
 
-  private async createSingleMediaContainer(
-    payload: InstagramPublishPayload,
-    mediaAsset: MediaAsset | undefined,
-    accessToken: string
-  ): Promise<string> {
+  private async createSingleMediaContainer(payload: InstagramPublishPayload, mediaAsset: MediaAsset | undefined, accessToken: string): Promise<string> {
     if (!mediaAsset) {
       throw new MetaGraphPublishError("At least one media asset is required");
     }
@@ -166,11 +160,7 @@ export class MetaGraphInstagramPublisher implements InstagramPublisher {
     return response.id;
   }
 
-  private async createCarouselContainer(
-    payload: InstagramPublishPayload,
-    mediaAssets: MediaAsset[],
-    accessToken: string
-  ): Promise<string> {
+  private async createCarouselContainer(payload: InstagramPublishPayload, mediaAssets: MediaAsset[], accessToken: string): Promise<string> {
     const childIds = [];
 
     for (const mediaAsset of mediaAssets) {

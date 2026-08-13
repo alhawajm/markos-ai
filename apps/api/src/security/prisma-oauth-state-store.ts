@@ -2,16 +2,13 @@ import { createHash } from "node:crypto";
 import { withWorkspaceDbContext } from "../db/workspace-transaction";
 import type { OAuthStateStore } from "./oauth-state";
 
-export function createPrismaOAuthStateStore(
-  userId: string,
-  workspaceId: string,
-): OAuthStateStore {
+export function createPrismaOAuthStateStore(userId: string, workspaceId: string): OAuthStateStore {
   return {
     async put(nonce, expiresAt) {
       await withWorkspaceDbContext(workspaceId, (tx) =>
         tx.oAuthStateNonce.create({
-          data: { expiresAt, nonceHash: hashNonce(nonce), userId, workspaceId },
-        }),
+          data: { expiresAt, nonceHash: hashNonce(nonce), userId, workspaceId }
+        })
       );
     },
     async consume(nonce) {
@@ -23,19 +20,19 @@ export function createPrismaOAuthStateStore(
             expiresAt: { gt: new Date() },
             nonceHash: hashNonce(nonce),
             userId,
-            workspaceId,
-          },
-        }),
+            workspaceId
+          }
+        })
       );
       if (result.count === 1) return "consumed";
       const record = await withWorkspaceDbContext(workspaceId, (tx) =>
         tx.oAuthStateNonce.findUnique({
           where: { nonceHash: hashNonce(nonce) },
-          select: { consumedAt: true, expiresAt: true },
-        }),
+          select: { consumedAt: true, expiresAt: true }
+        })
       );
       return record?.consumedAt ? "already_consumed" : "not_found_or_expired";
-    },
+    }
   };
 }
 

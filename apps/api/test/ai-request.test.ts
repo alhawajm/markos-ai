@@ -11,20 +11,18 @@ describe("AI service request boundary", () => {
     const fetchMock = vi.fn(async (_url: URL, init: RequestInit) => {
       const headers = init.headers as Record<string, string>;
 
-      expect(headers.authorization).toBe(
-        `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
-      );
+      expect(headers.authorization).toBe(`Bearer ${env.INTERNAL_SERVICE_TOKEN}`);
       expect(init.signal).toBeInstanceOf(AbortSignal);
       return new Response(JSON.stringify({ value: 42 }), {
         headers: { "content-type": "application/json" },
-        status: 200,
+        status: 200
       });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await requestAi("/ai/test", {
       body: { hello: "world" },
-      parse: (value) => (value as { value: number }).value,
+      parse: (value) => (value as { value: number }).value
     });
 
     expect(result).toBe(42);
@@ -41,29 +39,26 @@ describe("AI service request boundary", () => {
               error: {
                 code: "AI_PROVIDER_RATE_LIMITED",
                 details: [{ retryable: true }],
-                message: "raw upstream message must not escape",
-              },
+                message: "raw upstream message must not escape"
+              }
             }),
-            { headers: { "content-type": "application/json" }, status: 503 },
-          ),
-      ),
+            { headers: { "content-type": "application/json" }, status: 503 }
+          )
+      )
     );
 
     await expect(requestAi("/ai/test", { body: {} })).rejects.toMatchObject({
       code: "AI_PROVIDER_RATE_LIMITED",
       message: "The AI provider is temporarily rate limited",
       retryable: true,
-      statusCode: 503,
+      statusCode: 503
     } satisfies Partial<AiServiceRequestError>);
   });
 
   it("rejects a successful response that violates its runtime contract", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ invalid: true }), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ invalid: true }), { status: 200 }))
     );
 
     await expect(
@@ -71,11 +66,11 @@ describe("AI service request boundary", () => {
         body: {},
         parse: () => {
           throw new Error("invalid schema");
-        },
-      }),
+        }
+      })
     ).rejects.toMatchObject({
       code: "AI_SERVICE_RESPONSE_INVALID",
-      statusCode: 502,
+      statusCode: 502
     });
   });
 
@@ -89,18 +84,18 @@ describe("AI service request boundary", () => {
               error: {
                 code: "AI_OUTPUT_INVALID",
                 details: [{ retryable: true }],
-                message: "raw validation content",
-              },
+                message: "raw validation content"
+              }
             }),
-            { status: 502 },
-          ),
-      ),
+            { status: 502 }
+          )
+      )
     );
 
     await expect(requestAi("/ai/test", { body: {} })).rejects.toMatchObject({
       code: "AI_OUTPUT_INVALID",
       message: "The AI provider returned an invalid result",
-      statusCode: 502,
+      statusCode: 502
     });
   });
 });
