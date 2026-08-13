@@ -1,25 +1,27 @@
 # MARKOS AI Final UI Implementation Checklist
 
+> **Historical implementation record:** This checklist tracks the previous dark "AI Marketing Command Center" pass. It was superseded as future design guidance on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). Completed items still describe existing implementation evidence, but new redesign work must not extend the old luxury visual system.
+
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`
 - Experience and behavioral flows: `docs/source/MARKOS_EXPERIENCE_FLOWS.md`
-- Final design export: `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
-- Target implementation: `apps/web/app/[locale]`
+- Historical design export: `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
+- Recorded implementation: `apps/web/app/[locale]`
 
-This checklist supersedes the previous Figma parity tracker for frontend design execution. Use the exported Figma code as visual reference, but port it into the existing Next.js app deliberately: preserve workspace isolation, bilingual/RTL behavior, API contracts, metering, and production states.
+This checklist once superseded the previous Figma parity tracker. Retain it as evidence of the dark command-center implementation pass; do not use it to direct new visual work.
 
 Legend:
 - `[x]` Done and verified
 - `[ ]` Not done, partial, or not yet proven
 
-## Current Snapshot
+## Historical Snapshot
 
-- Active UI direction: final "AI Marketing Command Center" look from `AI-Powered Marketing OS MVP`
-- Primary visual system: luxury dark command center, glass panels, 80px icon sidebar, turquoise/gold/amber accents, Inter typography
+- Historical UI direction: "AI Marketing Command Center" look from `AI-Powered Marketing OS MVP`
+- Historical visual system: luxury dark command center, glass panels, 80px icon sidebar, turquoise/gold/amber accents, Inter typography
 - Superseded visual references: previous white/red dashboard and the older `Design AI Marketing Platform` export
 - Key implementation risk: final export mixes `luxury-*` and older `quantum-*` token names; normalize before porting screens
 - Source inventory: `docs/final-ui-source-inventory.md`
-- Execution rule: implement by milestone, verify each milestone, then tick items here
+- Historical execution rule: implement by milestone, verify each milestone, then tick items here
 - Latest evidence: `evidence/ui/2026-06-18`
 - Latest responsive evidence: desktop/tablet harness screenshots plus true 390px mobile CDP capture at `evidence/ui/2026-06-18/dashboard-en-mobile-cdp.png`
 - Latest verification: `corepack pnpm --filter web typecheck`, `corepack pnpm --filter web lint`, `corepack pnpm --filter web build`

@@ -258,7 +258,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
 type Principal = { userId: string; workspaceId: string; token: string; role: "OWNER" | "EDITOR" };
 function auth(value: string) { return { authorization: `Bearer ${value}` }; }
 async function token(userId: string, workspaceId: string, mfaVerified = true) {
-  return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified })
+  return new SignJWT({ workspaceId, roles: ["OWNER"], mfaVerified, mfaVerifiedUntil: mfaVerified ? Math.floor(Date.now() / 1000) + 900 : null })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(userId).setIssuedAt().setExpirationTime("15m")
     .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));

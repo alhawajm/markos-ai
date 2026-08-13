@@ -1,5 +1,7 @@
 # MARKOS UI Figma Manual Review
 
+> **Historical evidence:** This review covers the superseded `Design AI Marketing Platform` export. Use [the Sunlit Social Studio UI foundation](./ui-design-foundation.md) for new visual work.
+
 Date: 2026-06-17
 
 Reference export: `C:\Users\mohamed.yusuf\Downloads\Design AI Marketing Platform`

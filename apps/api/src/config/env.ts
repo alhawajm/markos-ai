@@ -27,6 +27,7 @@ export const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(12).default("dev-refresh-secret-change-me"),
   JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
+  MFA_STEP_UP_TTL: z.coerce.number().int().positive().default(900),
   EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
   EMAIL_PROVIDER: z.enum(["local", "sendgrid"]).default("local"),
   SENDGRID_API_KEY: optionalString,

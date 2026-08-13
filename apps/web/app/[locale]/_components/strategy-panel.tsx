@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, Download, FileText, RefreshCcw, Sparkles, Target, Zap } from "lucide-react";
+import { CalendarDays, FileText, RefreshCcw, Sparkles, Target, Zap } from "lucide-react";
 import type { Locale, StrategyRecord } from "@markos/shared-types";
-import { MeteredActionNotice, quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
-import { VaultGroundingNotice, useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
+import { quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
+import { useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
-
 
 export function StrategyPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -19,7 +18,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
   const strategyUsage = useMeteredActionState({
     fallbackTotal: 3,
     fallbackUsed: 1,
-    label: locale === "ar" ? "استراتيجيات الذكاء" : "AI strategies",
+    label: locale === "ar" ? "الاستراتيجيات" : "Strategies",
     metric: "STRATEGY"
   });
 
@@ -97,57 +96,63 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
   const active = strategies[0] ?? emptyStrategy(locale, horizonDays);
 
   return (
-    <section className="grid gap-5">
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#1A1A2E_0%,#0F3460_58%,#162447_100%)] p-6 text-white shadow-[0_8px_32px_rgba(15,52,96,.24)]">
-        <div className="absolute inset-0 opacity-60 [background-image:radial-gradient(rgba(255,255,255,.06)_1px,transparent_1px)] [background-size:28px_28px]" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+    <section className="grid gap-6">
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-display text-[26px] font-bold leading-tight tracking-normal">{text(locale, "title")}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/15 px-3 py-1 text-sm font-bold text-accent">
+              <h2 className="font-display text-2xl font-black leading-tight tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{text(locale, "title")}</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]">
                 <Target size={14} />
-                {session ? text(locale, "vaultGrounded") : text(locale, "previewMode")}
+                {session ? text(locale, "businessInformed") : text(locale, "previewMode")}
               </span>
             </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">{text(locale, "subtitle")}</p>
-            <div className="mt-5 flex flex-wrap gap-4">
-              <HeroStat color="#22C55E" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
-              <HeroStat color="#F59E0B" label={text(locale, "pillars")} value={active.content.pillars.length.toString()} />
-              <HeroStat color="#E94560" label={text(locale, "nextActions")} value={active.content.nextActions.length.toString()} />
-            </div>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{text(locale, "subtitle")}</p>
+            {strategies.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
+                <HeroStat color="#21BFAE" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
+                <HeroStat color="#F6C453" label={text(locale, "weeks")} value={active.content.weeklyCadence.length.toString()} />
+                <HeroStat color="#FF665A" label={text(locale, "priorityActions")} value={Math.min(active.content.nextActions.length, 3).toString()} />
+              </div>
+            ) : null}
           </div>
-          <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50" disabled={isBusy} onClick={refreshStrategies} type="button">
+          <button
+            className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+            disabled={isBusy}
+            onClick={refreshStrategies}
+            type="button"
+          >
             <RefreshCcw size={15} />
             {text(locale, "refresh")}
           </button>
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[360px_1fr]">
-        <aside className="rounded-2xl border border-[#E8ECF2] bg-card p-5 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
+      <section className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <aside className="sunlit-panel rounded-[1.75rem] p-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
               <Sparkles size={22} />
             </div>
             <div>
-              <h3 className="font-extrabold text-navy">{text(locale, "generate")}</h3>
-              <p className="text-sm text-muted">{text(locale, "generateSub")}</p>
+              <h3 className="font-extrabold text-[var(--sunlit-ink)]">{text(locale, "generate")}</h3>
+              <p className="text-sm text-[var(--sunlit-muted)]">{text(locale, "generateSub")}</p>
             </div>
           </div>
 
           <label className="mt-5 block">
-            <span className="text-xs font-bold uppercase tracking-[.08em] text-muted">{text(locale, "objective")}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "objective")}</span>
             <textarea
-              className="mt-2 min-h-32 w-full resize-y rounded-xl border border-[#E8ECF2] bg-canvas px-4 py-3 text-sm leading-6 text-navy outline-none focus:border-accent"
+              className="sunlit-field mt-2 min-h-36 resize-y rounded-xl px-4 py-3 text-[15px] leading-7 outline-none"
               onChange={(event) => setObjective(event.target.value)}
               value={objective}
             />
           </label>
 
           <label className="mt-4 block">
-            <span className="text-xs font-bold uppercase tracking-[.08em] text-muted">{text(locale, "horizon")}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "horizon")}</span>
             <select
-              className="mt-2 h-11 w-full rounded-xl border border-[#E8ECF2] bg-canvas px-3 text-sm font-bold text-navy outline-none focus:border-accent"
+              className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-extrabold outline-none"
               onChange={(event) => setHorizonDays(Number(event.target.value))}
               value={horizonDays}
             >
@@ -157,38 +162,46 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
             </select>
           </label>
 
-          <div className="mt-4">
-            <MeteredActionNotice locale={locale} usage={strategyUsage} />
-          </div>
-          <div className="mt-3">
-            <VaultGroundingNotice locale={locale} state={vaultGrounding} />
-          </div>
-
-          <button className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#E94560,#c9314e)] px-4 text-sm font-extrabold text-white shadow-[0_3px_12px_rgba(233,69,96,.3)] disabled:opacity-50" disabled={isBusy || strategyUsage.blocked || vaultGrounding.blocked} onClick={generate} type="button">
+          <button
+            className="sunlit-primary mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
+            disabled={isBusy}
+            onClick={generate}
+            type="button"
+          >
             <Zap size={16} />
             {text(locale, "generateCta")}
           </button>
-          <p className="mt-3 min-h-5 text-sm leading-6 text-muted">{message}</p>
+          <p className="mt-3 min-h-5 text-sm leading-6 text-[var(--sunlit-muted)]">{message}</p>
         </aside>
 
-        <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-extrabold uppercase tracking-[.14em] text-accent">{text(locale, "latest")}</p>
-              <h3 className="mt-1 font-display text-2xl font-extrabold tracking-normal text-navy">{active.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted">{active.content.summary}</p>
-            </div>
-            <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#E8ECF2] bg-canvas px-3 text-sm font-bold text-muted disabled:opacity-50" disabled={strategies.length === 0} type="button">
-              <Download size={15} />
-              {text(locale, "export")}
-            </button>
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div>
+            <p className="sunlit-eyebrow">{text(locale, "latest")}</p>
+            <h3 className="mt-2 font-display text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{active.title}</h3>
+            <p className="mt-4 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">{active.content.summary}</p>
           </div>
 
-          {strategies.length > 0 ? (
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <PlanWindow label="30" text={active.content.objectives[0] ?? text(locale, "stabilize")} />
-              <PlanWindow label="60" text={active.content.objectives[1] ?? text(locale, "scale")} />
-              <PlanWindow label="90" text={active.content.objectives[2] ?? text(locale, "optimize")} />
+          {strategies.length > 0 && active.content.nextActions.length > 0 ? (
+            <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+                  <FileText size={18} />
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-[var(--sunlit-ink)]">{text(locale, "nextActions")}</h4>
+                  <p className="text-sm text-[var(--sunlit-muted)]">{text(locale, "nextActionsSub")}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {active.content.nextActions.slice(0, 3).map((action, index) => (
+                  <div className="flex items-start gap-3 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={`${index}-${action}`}>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-ink)] text-xs font-extrabold text-white">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm font-bold leading-6 text-[var(--sunlit-ink)]">{action}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </article>
@@ -196,92 +209,82 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
 
       {strategies.length > 0 ? (
         <>
-      <section className="grid gap-4 xl:grid-cols-[1fr_340px]">
-        <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-[15px] font-bold text-navy">{text(locale, "contentPillars")}</h3>
-              <p className="mt-1 text-xs text-[#9CA3AF]">{text(locale, "pillarsSub")}</p>
+          <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+            <h3 className="text-xl font-black text-[var(--sunlit-ink)]">{text(locale, "cadence")}</h3>
+            <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{text(locale, "cadenceSub")}</p>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {active.content.weeklyCadence.slice(0, 4).map((week) => (
+                <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5" key={week.week}>
+                  <div className="flex items-center gap-2">
+                    <CalendarDays size={17} className="text-[var(--sunlit-pink)]" />
+                    <h4 className="font-extrabold text-[var(--sunlit-ink)]">
+                      {text(locale, "week")} {week.week}: {week.focus}
+                    </h4>
+                  </div>
+                  <ul className="mt-3 grid gap-2 text-sm leading-6 text-[var(--sunlit-muted)]">
+                    {week.actions.map((action) => (
+                      <li key={action}>{action}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-extrabold text-emerald-600">{text(locale, "ready")}</span>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {active.content.pillars.map((pillar, index) => (
-              <div className="rounded-xl border border-[#E8ECF2] bg-canvas p-4" key={pillar.name}>
-                <div className="flex items-start gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-midnavy text-xs font-extrabold text-white">{index + 1}</span>
-                  <div>
-                    <h4 className="font-extrabold text-navy">{pillar.name}</h4>
-                    <p className="mt-1 text-sm leading-6 text-muted">{pillar.rationale}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {pillar.contentAngles.map((angle) => (
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-muted" key={angle}>
-                          {angle}
-                        </span>
-                      ))}
+          </article>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <details className="sunlit-panel group rounded-[1.75rem] p-6">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-[var(--sunlit-ink)]">
+                <span>{text(locale, "contentPillars")}</span>
+                <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-xs text-[var(--sunlit-pink)]">
+                  {text(locale, "viewDetails")} · {active.content.pillars.length}
+                </span>
+              </summary>
+              <p className="mt-2 text-sm text-[var(--sunlit-muted)]">{text(locale, "pillarsSub")}</p>
+              <div className="mt-5 grid gap-3">
+                {active.content.pillars.map((pillar, index) => (
+                  <div className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={pillar.name}>
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-ink)] text-xs font-extrabold text-white">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <h4 className="font-extrabold text-[var(--sunlit-ink)]">{pillar.name}</h4>
+                        <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{pillar.rationale}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {pillar.contentAngles.map((angle) => (
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[var(--sunlit-muted)]" key={angle}>
+                              {angle}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </article>
+            </details>
 
-        <article className="rounded-2xl border-2 border-midnavy bg-card p-5 shadow-[0_4px_24px_rgba(233,69,96,.18)]">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#E94560,#6366F1)] text-white">
-              <FileText size={22} />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-navy">{text(locale, "nextActions")}</h3>
-              <p className="text-sm text-muted">{text(locale, "nextActionsSub")}</p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-2">
-            {active.content.nextActions.map((action) => (
-              <a className="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-3 text-sm font-bold text-navy" href={`/${locale}/content`} key={action}>
-                <span>{action}</span>
-                <ArrowRight size={15} className="text-accent" />
-              </a>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_340px]">
-        <article className="rounded-2xl border border-[#E8ECF2] bg-card p-6 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-          <h3 className="text-[15px] font-bold text-navy">{text(locale, "cadence")}</h3>
-          <div className="mt-5 grid gap-3">
-            {active.content.weeklyCadence.map((week) => (
-              <div className="rounded-xl border border-[#E8ECF2] bg-canvas p-4" key={week.week}>
-                <div className="flex items-center gap-2">
-                  <CalendarDays size={16} className="text-accent" />
-                  <h4 className="font-extrabold text-navy">
-                    {text(locale, "week")} {week.week}: {week.focus}
-                  </h4>
-                </div>
-                <ul className="mt-3 grid gap-2 text-sm leading-6 text-muted">
-                  {week.actions.map((action) => (
-                    <li key={action}>{action}</li>
-                  ))}
-                </ul>
+            <details className="sunlit-panel group rounded-[1.75rem] p-6">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-extrabold text-[var(--sunlit-ink)]">
+                <span>{text(locale, "whyTitle")}</span>
+                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs text-[var(--sunlit-aqua-dark)]">
+                  {text(locale, "viewDetails")}
+                </span>
+              </summary>
+              <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">{text(locale, "whyBody")}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "profileSource")}
+                </span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "audienceSource")}
+                </span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5 text-xs font-bold text-[var(--sunlit-muted)]">
+                  {text(locale, "brandSource")}
+                </span>
               </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-[#E8ECF2] bg-card p-5 shadow-[0_2px_8px_rgba(0,0,0,.05)]">
-          <h3 className="text-[15px] font-bold text-navy">{text(locale, "grounding")}</h3>
-          <p className="mt-1 text-xs text-[#9CA3AF]">{text(locale, "groundingSub")}</p>
-          <div className="mt-5 grid gap-2">
-            {active.content.retrievedContext.map((chunk) => (
-              <span className="rounded-xl border border-[#E8ECF2] bg-canvas px-3 py-2 text-sm font-bold text-muted" key={chunk.id}>
-                {chunk.section} / {chunk.key}
-              </span>
-            ))}
-          </div>
-        </article>
-      </section>
+            </details>
+          </section>
         </>
       ) : null}
     </section>
@@ -292,17 +295,8 @@ function HeroStat({ color, label, value }: { color: string; label: string; value
   return (
     <div className="flex items-center gap-2">
       <span className="h-2 w-2 rounded-full shadow-[0_0_7px_currentColor]" style={{ backgroundColor: color, color }} />
-      <span className="text-[13px] text-white/50">{label}:</span>
-      <span className="text-[13px] font-bold text-white">{value}</span>
-    </div>
-  );
-}
-
-function PlanWindow({ label, text: body }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl border border-[#E8ECF2] bg-canvas p-4">
-      <p className="font-display text-2xl font-extrabold tracking-normal text-accent">{label}</p>
-      <p className="mt-2 text-sm font-bold leading-6 text-navy">{body}</p>
+      <span className="text-[13px] text-[var(--sunlit-muted)]">{label}:</span>
+      <span className="text-[13px] font-bold text-[var(--sunlit-ink)]">{value}</span>
     </div>
   );
 }
@@ -334,74 +328,74 @@ function emptyStrategy(locale: Locale, horizonDays: number): StrategyRecord {
 function text(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
-      cadence: "الإيقاع الأسبوعي",
+      audienceSource: "الجمهور والسوق",
+      brandSource: "صوت العلامة والأهداف",
+      businessInformed: "مبنية على ملف النشاط",
+      cadence: "خطتك الأسبوعية",
+      cadenceSub: "خطة عملية توضح ما يجب التركيز عليه كل أسبوع.",
       contentPillars: "ركائز المحتوى",
       days: "يوم",
       defaultObjective: "زيادة الاستفسارات المؤهلة من إنستغرام خلال 30 يوماً",
-      emptyBody: "حدد هدفاً واختر مدة الخطة، ثم ولّد أول استراتيجية حقيقية مبنية على خزنة مساحة العمل.",
+      emptyBody: "حدد هدفاً واختر مدة الخطة، ثم ولّد أول استراتيجية لنشاطك.",
       emptyTitle: "لم يتم توليد استراتيجية بعد",
-      export: "تصدير",
       failed: "فشل الطلب",
       generate: "توليد استراتيجية",
-      generateCta: "توليد بالذكاء",
-      generateSub: "مبنية على الخزنة والتحليلات",
+      generateCta: "إنشاء الاستراتيجية",
+      generateSub: "مبنية على ملف النشاط المعتمد",
       generated: "تم توليد الاستراتيجية",
-      grounding: "السياق المسترجع",
-      groundingSub: "مصادر الخزنة التي توجه الخطة",
       horizon: "الأفق",
       latest: "أحدث استراتيجية",
-      nextActions: "الخطوات التالية",
-      nextActionsSub: "حوّل الخطة إلى تنفيذ",
-      pillars: "الركائز",
+      nextActions: "أهم الخطوات",
+      nextActionsSub: "ابدأ بهذه الخطوات الثلاث",
       pillarsSub: "رسائل قابلة للتنفيذ",
-      previewGenerated: "تم تحديث استراتيجية المعاينة.",
       previewMode: "معاينة",
-      ready: "جاهز",
+      priorityActions: "الخطوات الرئيسية",
+      profileSource: "ملف النشاط المعتمد",
       refresh: "تحديث",
       sessionRequired: "سجّل الدخول قبل توليد الاستراتيجية.",
-      scale: "توسيع الاستفسارات المؤهلة",
-      stabilize: "تثبيت إيقاع النشر",
-      subtitle: "حوّل ذاكرة الأعمال إلى خطة 30/60/90 واضحة، ركائز محتوى، وخطوات تنفيذ.",
+      subtitle: "حوّل ما يعرفه MARKOS عن نشاطك إلى خطة عمل واضحة.",
       title: "الاستراتيجية",
-      vaultGrounded: "مبنية على الخزنة",
       week: "الأسبوع",
-      objective: "الهدف",
-      optimize: "تحسين الأداء من التحليلات"
+      weeks: "الأسابيع",
+      whyBody: "استخدم MARKOS ملف نشاطك المعتمد، وجمهورك، وعروضك، وصوت علامتك، والهدف الذي حددته لبناء هذه الخطة.",
+      whyTitle: "لماذا أوصى MARKOS بهذه الخطة؟",
+      viewDetails: "عرض التفاصيل",
+      objective: "الهدف"
     },
     en: {
-      cadence: "Weekly Cadence",
+      audienceSource: "Audience and market",
+      brandSource: "Brand voice and goals",
+      businessInformed: "Business-informed",
+      cadence: "Your weekly plan",
+      cadenceSub: "A practical sequence showing what to focus on each week.",
       contentPillars: "Content Pillars",
       days: "days",
       defaultObjective: "Increase qualified Instagram inquiries over the next 30 days",
-      emptyBody: "Set an objective and horizon, then generate the first real strategy grounded in this workspace's Vault.",
+      emptyBody: "Set an objective and horizon, then generate the first Strategy for your business.",
       emptyTitle: "No strategy generated yet",
-      export: "Export",
       failed: "Request failed",
       generate: "Generate Strategy",
-      generateCta: "Generate with AI",
-      generateSub: "Grounded in Vault and analytics",
+      generateCta: "Create Strategy",
+      generateSub: "Based on your approved Business Profile",
       generated: "Strategy generated",
-      grounding: "Retrieved Context",
-      groundingSub: "Vault sources guiding this plan",
       horizon: "Horizon",
       latest: "Latest Strategy",
-      nextActions: "Next Actions",
-      nextActionsSub: "Turn the plan into work",
-      pillars: "Pillars",
+      nextActions: "Priority actions",
+      nextActionsSub: "Start with these three moves",
       pillarsSub: "Actionable message territories",
-      previewGenerated: "Preview strategy updated.",
       previewMode: "Preview mode",
-      ready: "Ready",
+      priorityActions: "Priority actions",
+      profileSource: "Approved Business Profile",
       refresh: "Refresh",
       sessionRequired: "Sign in before generating a strategy.",
-      scale: "Scale qualified inquiries",
-      stabilize: "Stabilize publishing cadence",
-      subtitle: "Turn business memory into a clear 30/60/90 plan, content pillars, and execution steps.",
+      subtitle: "Turn what MARKOS knows about your business into a clear action plan.",
       title: "Strategy",
-      vaultGrounded: "Vault grounded",
       week: "Week",
-      objective: "Objective",
-      optimize: "Optimize from analytics"
+      weeks: "Weeks",
+      whyBody: "MARKOS used your approved Business Profile, audience, offers, brand voice, and stated goal to build this plan.",
+      whyTitle: "Why MARKOS recommended this",
+      viewDetails: "View details",
+      objective: "Objective"
     }
   };
 

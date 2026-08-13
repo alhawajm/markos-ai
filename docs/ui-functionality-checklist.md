@@ -1,28 +1,28 @@
 # MARKOS AI UI + Functionality Checklist
 
-> Active final-design tracker: `docs/final-ui-implementation-checklist.md`
+> Active redesign foundation: `docs/ui-design-foundation.md`
 >
-> This file records the completed parity pass for the earlier `Design AI Marketing Platform` export. The product UI direction has moved to `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`, so new design implementation work should be tracked in the final checklist.
+> This file records historical implementation and behavioral coverage for the older UI passes. The previous dark command-center tracker is also historical. Preserve its verified behavior during migration, but use the Sunlit Social Studio foundation for new visual work.
 
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`
 - Experience and behavioral flows: `docs/source/MARKOS_EXPERIENCE_FLOWS.md`
-- Superseded Figma export: `C:\Users\mohamed.yusuf\Downloads\Design AI Marketing Platform`
-- Active final design export: `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
-- Active implementation: `apps/web/app/[locale]/_components`
+- Earlier superseded Figma export: `C:\Users\mohamed.yusuf\Downloads\Design AI Marketing Platform`
+- Later superseded Figma export: `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
+- Recorded production implementation: `apps/web/app/[locale]/_components`
 
-Use this file as the working tracker for design parity, user journey, and frontend functionality. Only tick an item when the implementation is present, routes work, and the relevant verification gate passes. If a screen is visually close but missing an expected interaction, leave it unchecked and add a note.
+Retain this file as a record of prior design parity, user-journey, and frontend-functionality work. New visual decisions belong in `docs/ui-design-foundation.md`; behavioral coverage recorded here must still be preserved during migration.
 
 Legend:
 - `[x]` Done and verified
 - `[ ]` Not done, partial, or not yet proven
 
-## Current Snapshot
+## Historical Snapshot
 
-- Active UI parity phase: superseded by final command-center design plan
+- Historical UI parity phase: superseded by the command-center design plan and then by Sunlit Social Studio
 - Completed parity passes: Global UI Rules, App Shell desktop shell, Dashboard, Content Creator, Publishing Queue, Analytics, Audience, Channels, Vault, Strategy, AI Assistant, Settings, Admin, quota/limit states, Vault grounding/gap states, publishing readiness/recovery states, analytics learning loop, manual Figma export review, full behavioral state audit
-- Current next UI focus: execute `docs/final-ui-implementation-checklist.md` from UI-M0 onward
-- Current functional pass: final command-center dashboard, Campaign Builder, and final Content Studio now read/write through the workspace API for content loading, generation, edit, approval, and scheduling; public landing, login/signup portal, app-route session guard, and register/verify/login smoke are now tracked in the final checklist.
+- Superseded next focus: do not execute `docs/final-ui-implementation-checklist.md` as a new visual plan
+- Recorded functional pass: command-center dashboard, Campaign Builder, and Content Studio read/write through the workspace API for content loading, generation, edit, approval, and scheduling; public landing, login/signup portal, app-route session guard, and register/verify/login smoke were tracked in the historical final checklist.
 - Remaining major UI journey: continue feature-depth passes from the milestone checklist
 - Last confirmed gates after latest UI work: `corepack pnpm verify` and `corepack pnpm build`
 

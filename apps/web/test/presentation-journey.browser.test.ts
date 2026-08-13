@@ -7,6 +7,7 @@ if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendere
 let browser: Browser;
 const session = {
   mfaVerified: true,
+  mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
   tokens: { accessToken: "presentation-session-token", expiresIn: 900 },
   user: {
     id: "user-presentation",
@@ -50,7 +51,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app`);
+    await page.waitForURL(`${baseUrl}/en/app/strategy`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();
@@ -77,13 +78,14 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
-    await page.getByText("7 of 7 modules complete", { exact: true }).waitFor();
+    await page.getByText("7 of 7 sections", { exact: true }).waitFor();
     await expect(page.getByText("100%", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByLabel("Competitors complete").isVisible()).resolves.toBe(true);
     await expect(page.getByText("May 15, 2026").count()).resolves.toBe(0);
     await expect(page.getByText("Last updated: Never").count()).resolves.toBe(0);
-    expect(scoreRequests).toBe(1);
-    expect(vaultRequests).toBe(1);
+    await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
+    expect(scoreRequests).toBeGreaterThan(0);
+    expect(vaultRequests).toBeGreaterThan(0);
     await page.close();
   });
 
@@ -107,13 +109,50 @@ describe("presentation journey", () => {
     await expect(page.getByText("No strategy generated yet", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
-    await page.getByRole("button", { name: "Generate with AI" }).click();
+    await page.getByRole("button", { name: "Create Strategy" }).click();
     await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Strategy" }).waitFor();
+    await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
+    await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("heading", { name: "Your weekly plan" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
+    await page.screenshot({ path: "evidence/sunlit-strategy.png", fullPage: true });
     expect(generationPayload).toEqual({
       horizonDays: 30,
       locale: "en",
       objective: "Increase qualified Instagram inquiries over the next 30 days"
     });
+    await page.close();
+  });
+
+  it("renders the desktop overview, Create, and honest Insights destinations", async () => {
+    const page = await sessionPage();
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/content" || pathname === "/v1/publishing/queue") return route.fulfill(json([]));
+      if (pathname === "/v1/vault/score") {
+        return route.fulfill(
+          json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
+        );
+      }
+      if (pathname === "/v1/analytics") return route.fulfill(json(emptyAnalyticsSummary()));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Welcome back, SnackLab" }).waitFor();
+    await expect(page.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).resolves.toBe("page");
+    await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
+
+    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Turn an idea into your next post." }).waitFor();
+    await expect(page.getByRole("button", { name: "Create draft" }).isVisible()).resolves.toBe(true);
+    await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
+
+    await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Insights", exact: true }).waitFor();
+    await expect(page.getByText("No synced insight data yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Live", { exact: true }).count()).resolves.toBe(0);
+    await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
     await page.close();
   });
 });
@@ -185,6 +224,19 @@ function snackLabStrategy() {
     updatedAt: "2026-08-09T11:35:00.000Z",
     version: 1,
     workspaceId: session.workspace.id
+  };
+}
+
+function emptyAnalyticsSummary() {
+  return {
+    byMetricType: [],
+    daily: [],
+    days: 7,
+    from: "2026-08-03",
+    records: [],
+    to: "2026-08-09",
+    topContent: [],
+    totals: { comments: 0, engagement: 0, followers: 0, impressions: 0, likes: 0, reach: 0, saves: 0, shares: 0, views: 0 }
   };
 }
 

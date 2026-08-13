@@ -9,6 +9,7 @@ const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 const accessClaimsSchema = z.object({
   mfaVerified: z.boolean().default(false),
+  mfaVerifiedUntil: z.number().int().positive().nullable().default(null),
   sub: z.string().uuid(),
   workspaceId: z.string().uuid(),
   roles: z.array(z.string()).min(1)
@@ -22,18 +23,22 @@ export interface TokenInput {
   workspaceId: string;
   roles: Role[];
   mfaVerified?: boolean;
+  mfaVerifiedUntil?: number | null;
 }
 
 export async function issueAuthTokens(input: TokenInput): Promise<{
   accessToken: string;
   refreshToken: string;
   refreshJti: string;
+  mfaVerifiedUntil: number | null;
 }> {
   const refreshJti = randomUUID();
   const now = Math.floor(Date.now() / 1000);
+  const mfaVerifiedUntil = input.mfaVerifiedUntil === undefined ? (input.mfaVerified ? now + env.MFA_STEP_UP_TTL : null) : input.mfaVerifiedUntil;
 
   const accessToken = await new SignJWT({
     mfaVerified: input.mfaVerified ?? false,
+    mfaVerifiedUntil,
     workspaceId: input.workspaceId,
     roles: input.roles
   })
@@ -45,6 +50,7 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
 
   const refreshToken = await new SignJWT({
     mfaVerified: input.mfaVerified ?? false,
+    mfaVerifiedUntil,
     workspaceId: input.workspaceId,
     roles: input.roles,
     jti: refreshJti
@@ -60,7 +66,8 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
   return {
     accessToken,
     refreshToken,
-    refreshJti
+    refreshJti,
+    mfaVerifiedUntil
   };
 }
 
@@ -72,6 +79,7 @@ export async function verifyAccessToken(token: string): Promise<TokenInput> {
     userId: claims.sub,
     workspaceId: claims.workspaceId,
     mfaVerified: claims.mfaVerified,
+    mfaVerifiedUntil: claims.mfaVerifiedUntil,
     roles: claims.roles as Role[]
   };
 }
@@ -117,8 +125,13 @@ export async function consumeRefreshToken(token: string): Promise<TokenInput> {
     userId: claims.sub,
     workspaceId: claims.workspaceId,
     mfaVerified: claims.mfaVerified,
+    mfaVerifiedUntil: claims.mfaVerifiedUntil,
     roles: claims.roles as Role[]
   };
+}
+
+export function isMfaStepUpActive(mfaVerifiedUntil: number | null | undefined, now = Math.floor(Date.now() / 1000)): boolean {
+  return mfaVerifiedUntil !== null && mfaVerifiedUntil !== undefined && mfaVerifiedUntil > now;
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {

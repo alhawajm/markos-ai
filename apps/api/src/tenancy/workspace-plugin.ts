@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Permission, Role } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
-import { verifyAccessToken } from "../auth/tokens";
+import { isMfaStepUpActive, verifyAccessToken } from "../auth/tokens";
 import { hasPermissions } from "../auth/rbac";
 import { errorEnvelope } from "../http/envelope";
 import {
@@ -27,6 +27,7 @@ declare module "fastify" {
     auth?: {
       isVerified: boolean;
       mfaVerified: boolean;
+      mfaVerifiedUntil: number | null;
       userId: string;
       workspaceId: string;
       roles: Role[];
@@ -132,6 +133,7 @@ export async function registerWorkspaceContext(
       const auth = {
         isVerified: user.isVerified,
         mfaVerified: principal.mfaVerified ?? false,
+        mfaVerifiedUntil: principal.mfaVerifiedUntil ?? null,
         userId: principal.userId,
         workspaceId: principal.workspaceId,
         roles: [membership.role as Role],
@@ -176,7 +178,7 @@ export async function registerWorkspaceContext(
 
       if (
         request.routeOptions.config.mfaRequired === true &&
-        !auth.mfaVerified
+        !(auth.mfaVerified && isMfaStepUpActive(auth.mfaVerifiedUntil))
       ) {
         reportBoundaryFailure(
           true,

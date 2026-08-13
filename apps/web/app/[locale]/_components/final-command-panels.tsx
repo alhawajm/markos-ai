@@ -35,7 +35,16 @@ import {
   Zap
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
-import type { AnalyticsSummary, ContentRecord, ContentStatus, ContentType, KnowledgeVaultEntry, Locale, VaultCompletenessScore, VaultSection } from "@markos/shared-types";
+import type {
+  AnalyticsSummary,
+  ContentRecord,
+  ContentStatus,
+  ContentType,
+  KnowledgeVaultEntry,
+  Locale,
+  VaultCompletenessScore,
+  VaultSection
+} from "@markos/shared-types";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 
 type Accent = "amber" | "gold" | "teal";
@@ -131,11 +140,7 @@ function contentCardFromRecord(record: ContentRecord, locale: Locale, index: num
   const accentNames: Accent[] = ["teal", "gold", "amber", "teal"];
   const status = record.scheduledAt ? formatShortTime(record.scheduledAt) : statusLabel(record.status);
   const cta =
-    record.status === "SCHEDULED" || record.status === "PUBLISHED"
-      ? "View Details"
-      : record.status === "APPROVED"
-        ? "Schedule Post"
-        : "Review & Approve";
+    record.status === "SCHEDULED" || record.status === "PUBLISHED" ? "View Details" : record.status === "APPROVED" ? "Schedule Post" : "Review & Approve";
 
   return {
     accent: accentNames[index % accentNames.length] ?? "teal",
@@ -190,7 +195,7 @@ function contentStudioError(error: unknown): string {
   const lower = message.toLowerCase();
 
   if (lower.includes("vault") || lower.includes("context")) {
-    return "The Knowledge Vault needs business memory before MARKOS can generate grounded content. Complete at least one Vault section, then generate again.";
+    return "Your Business Profile needs more context before MARKOS can create grounded content. Complete at least one profile section, then try again.";
   }
 
   if (lower.includes("quota") || lower.includes("limit")) {
@@ -312,7 +317,6 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   const now = useMemo(() => new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(new Date()), [locale]);
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [liveState, setLiveState] = useState<DashboardLiveState>({
     analytics: null,
     contentItems: [],
@@ -321,19 +325,68 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
     publishingQueue: [],
     vaultScore: null
   });
-  const aiPrompts = ["What should I post today?", "Create a reel about my product.", "Explain this opportunity.", "Show revenue opportunities."];
   const firstName = session?.user.fullName.split(/\s+/)[0] || "there";
   const workspaceName = session?.workspace.name || "your workspace";
-  const readyItems = liveState.contentItems.filter((item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED" || item.status === "SCHEDULED");
-  const dynamicCards = readyItems.slice(0, 4).map((item, index) => contentCardFromRecord(item, locale, index));
+  const readyItems = liveState.contentItems.filter(
+    (item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED" || item.status === "SCHEDULED"
+  );
   const topContent = liveState.contentItems[0];
   const analyticsTotals = liveState.analytics?.totals;
-  const growthValue = analyticsTotals?.followers ? `+${formatCompactNumber(analyticsTotals.followers)}` : liveState.contentItems.length ? `${liveState.contentItems.length}` : "Needs data";
-  const reachValue = analyticsTotals?.reach ? formatCompactNumber(analyticsTotals.reach) : liveState.analytics ? "0" : "Needs data";
-  const bestTimeValue = liveState.publishingQueue[0]?.scheduledAt ? formatShortTime(liveState.publishingQueue[0].scheduledAt) : "Set schedule";
-  const missionTitle = topContent ? recordTitle(topContent) : "Create your first workspace-backed content draft";
-  const missionCta = topContent ? (topContent.status === "APPROVED" ? "Schedule Content" : "Review Content") : "Open Content Studio";
+  const missionTitle = topContent ? recordTitle(topContent) : locale === "ar" ? "أنشئ أول مسودة محتوى" : "Create your first content draft";
+  const missionCta = topContent
+    ? topContent.status === "APPROVED"
+      ? locale === "ar"
+        ? "جدولة المحتوى"
+        : "Schedule content"
+      : locale === "ar"
+        ? "مراجعة المحتوى"
+        : "Review content"
+    : locale === "ar"
+      ? "فتح إنشاء المحتوى"
+      : "Open Create";
   const missionHref = topContent ? `/${locale}/app/content-studio?item=${topContent.id}` : `/${locale}/app/content-studio`;
+  const copy =
+    locale === "ar"
+      ? {
+          businessProfile: "ملف النشاط",
+          contentEmpty: "لا توجد مسودات بعد. عندما تنشئ محتوى، سيظهر هنا للمراجعة.",
+          contentReady: "المحتوى الجاري",
+          create: "إنشاء محتوى",
+        greeting: `مرحباً بعودتك، ${firstName}`,
+          insight: "الوصول",
+          latest: "آخر 7 أيام",
+          next: "الخطوة التالية",
+          noData: "بانتظار البيانات",
+          openAll: "عرض الكل",
+          profileReady: "جاهزية الملف",
+          scheduled: "المجدول",
+          strategy: "فتح الاستراتيجية",
+          subtitle: topContent
+            ? `لديك محتوى ${statusLabel(topContent.status)} جاهز للخطوة التالية.`
+            : "ابدأ من الاستراتيجية أو أنشئ أول مسودة عندما تكون جاهزاً.",
+          today: "اليوم في",
+          workspaceContent: "عناصر مساحة العمل"
+        }
+      : {
+          businessProfile: "Business profile",
+          contentEmpty: "No drafts yet. Once you create content, it will appear here for review.",
+          contentReady: "Work in progress",
+          create: "Create content",
+        greeting: `Welcome back, ${firstName}`,
+          insight: "Reach",
+          latest: "Last 7 days",
+          next: "Next up",
+          noData: "Waiting for data",
+          openAll: "View all",
+          profileReady: "Profile readiness",
+          scheduled: "Scheduled",
+          strategy: "Open Strategy",
+          subtitle: topContent
+            ? `${recordTitle(topContent)} is ${statusLabel(topContent.status).toLowerCase()} and ready for its next step.`
+            : "Start with your Strategy, or create the first draft when you are ready.",
+          today: "Today in",
+          workspaceContent: "Workspace items"
+        };
 
   useEffect(() => {
     if (!session) {
@@ -375,132 +428,186 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   }, [client, session]);
 
   return (
-    <section className="min-w-0 space-y-5 xl:space-y-6">
-      <ProfileRow locale={locale} name={firstName === "there" ? "MARKOS" : firstName} />
-      <section className="lux-card relative w-full min-w-0 overflow-hidden rounded-[1.5rem] p-5 sm:p-6 xl:p-8">
-        <div className="absolute -left-20 top-0 h-64 w-64 rounded-full bg-[#81D8D0]/10 blur-3xl xl:h-80 xl:w-80" />
-        <div className="absolute -right-20 bottom-0 h-64 w-64 rounded-full bg-[#D4AF37]/10 blur-3xl xl:h-80 xl:w-80" />
-        <div className="relative min-w-0 max-w-6xl">
-          <div className="mb-5 flex items-center gap-4 xl:mb-6">
-            <div className="lux-ai-core shrink-0" aria-hidden="true" />
-            <div>
-              <p className="text-base text-[#9AA7BD]">{now}</p>
-              <p className="text-sm font-bold uppercase tracking-[.12em] text-[#81D8D0]">Your AI Chief Marketing Officer</p>
-            </div>
+    <section className="min-w-0 space-y-6 xl:space-y-7">
+      <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-coral)] p-5 sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">
+              {copy.today} {workspaceName} · {now}
+            </p>
+            <h2 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
-          <h1 className="min-w-0 break-words font-display text-3xl font-bold tracking-normal text-white sm:text-4xl 2xl:text-5xl">Good Morning, {firstName}</h1>
-          <p className="mt-4 min-w-0 max-w-5xl break-words text-lg leading-relaxed text-[#D6DEEA] sm:text-xl 2xl:text-2xl">
-            {topContent ? (
-              <>
-                MARKOS found <span className="font-bold text-[#81D8D0]">{statusLabel(topContent.status).toLowerCase()} content</span> in <span className="font-bold text-[#D4AF37]">{workspaceName}</span> ready for the next workflow step.
-              </>
-            ) : (
-              <>
-                MARKOS is ready to generate real, workspace-backed marketing work once your session and Knowledge Vault are connected.
-              </>
-            )}
-          </p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
+              {missionCta} <ArrowRight size={17} />
+            </a>
+            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/strategy`}>
+              {copy.strategy}
+            </a>
+          </div>
         </div>
       </section>
 
       {!session ? (
-        <article className="lux-card-muted rounded-[1.25rem] border-[#D4AF37]/24 p-5">
-          <p className="font-bold text-white">Live work needs a workspace session.</p>
-          <p className="mt-2 text-[#B8C4D8]">Sign in or complete onboarding first so generated content can be stored, reviewed, approved, and scheduled against the correct workspace.</p>
+        <article className="sunlit-panel-soft rounded-2xl p-5">
+          <p className="font-extrabold text-[var(--sunlit-ink)]">Live work needs a workspace session.</p>
+          <p className="mt-2 text-[var(--sunlit-muted)]">Sign in or complete onboarding first so work can be saved to the correct workspace.</p>
         </article>
       ) : liveState.loading ? (
-        <article className="lux-card-muted rounded-[1.25rem] p-5">
-          <p className="font-bold text-white">Loading live workspace data...</p>
-          <p className="mt-2 text-[#B8C4D8]">MARKOS is checking content, queue, analytics, and Vault grounding.</p>
+        <article className="sunlit-panel rounded-2xl p-5">
+          <p className="font-extrabold text-[var(--sunlit-ink)]">Loading workspace...</p>
+          <p className="mt-2 text-[var(--sunlit-muted)]">Checking content, schedule, insights, and your Business Profile.</p>
         </article>
       ) : liveState.error ? (
-        <article className="lux-card-muted rounded-[1.25rem] border-[#F4A460]/24 p-5">
-          <p className="font-bold text-white">The API could not load dashboard work.</p>
-          <p className="mt-2 text-[#F4A460]">{liveState.error}</p>
+        <article className="rounded-2xl border border-[rgb(199_53_80_/_24%)] bg-[rgb(199_53_80_/_7%)] p-5">
+          <p className="font-extrabold text-[var(--sunlit-danger)]">The workspace could not be loaded.</p>
+          <p className="mt-2 text-[var(--sunlit-ink-soft)]">{liveState.error}</p>
         </article>
       ) : liveState.vaultScore?.entryCount === 0 ? (
-        <article className="lux-card-muted rounded-[1.25rem] border-[#D4AF37]/24 p-5">
-          <p className="font-bold text-white">Knowledge Vault is empty.</p>
-          <p className="mt-2 text-[#B8C4D8]">Complete at least one Vault section before asking MARKOS to generate grounded content.</p>
+        <article className="sunlit-panel-soft rounded-2xl p-5">
+          <p className="font-extrabold text-[var(--sunlit-ink)]">Your Business Profile needs more detail.</p>
+          <p className="mt-2 text-[var(--sunlit-muted)]">Add business context before generating grounded work.</p>
         </article>
       ) : null}
 
-      <section className="grid min-w-0 gap-4 sm:grid-cols-3 xl:gap-5">
-        <MetricRingCard accentName="teal" icon={TrendingUp} label="Content/Followers" sub={liveState.contentItems.length ? `${liveState.contentItems.length} workspace items` : "Generate first draft"} value={growthValue} />
-        <MetricRingCard accentName="gold" icon={Clock} label="Best Posting Time" sub={liveState.publishingQueue.length ? "Next scheduled item" : "Approve then schedule"} value={bestTimeValue} />
-        <MetricRingCard accentName="amber" icon={Eye} label="Reach" sub={liveState.analytics ? "Last 7 days" : "Connect analytics"} value={reachValue} />
+      <section className="grid min-w-0 gap-4 md:grid-cols-3">
+        <SunlitMetricCard
+          icon={Palette}
+          label={copy.workspaceContent}
+          note={liveState.contentItems.length ? copy.contentReady : copy.contentEmpty}
+          tone="coral"
+          value={String(liveState.contentItems.length)}
+        />
+        <SunlitMetricCard
+          icon={Calendar}
+          label={copy.scheduled}
+          note={liveState.publishingQueue[0]?.scheduledAt ? formatShortTime(liveState.publishingQueue[0].scheduledAt) : copy.noData}
+          tone="yellow"
+          value={String(liveState.publishingQueue.length)}
+        />
+        <SunlitMetricCard
+          icon={Eye}
+          label={copy.insight}
+          note={copy.latest}
+          tone="aqua"
+          value={analyticsTotals?.reach ? formatCompactNumber(analyticsTotals.reach) : "—"}
+        />
       </section>
 
-      <SectionLabel accentName="teal" label="Today's Mission" />
-      <section className="lux-card rounded-[1.5rem] p-5 sm:p-6 xl:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center xl:gap-6">
-          <IconTile accentName="teal" icon={Target} size="lg" />
-          <div className="flex-1">
-            <h2 className="font-display text-2xl font-bold text-white xl:text-3xl">{missionTitle}</h2>
-            <div className="mt-5 flex flex-wrap gap-5 xl:gap-7">
-              <MiniStat accentName="teal" icon={Eye} label="Reach" value={analyticsTotals?.reach ? formatCompactNumber(analyticsTotals.reach) : "Needs data"} />
-              <MiniStat accentName="gold" icon={TrendingUp} label="Queue" value={String(liveState.publishingQueue.length)} />
-              <MiniStat accentName="amber" icon={CheckCircle2} label="Vault" value={liveState.vaultScore ? `${liveState.vaultScore.score}%` : "N/A"} />
-            </div>
-            <div className="mt-7 flex flex-wrap gap-4">
-              <a className="lux-button-primary inline-flex items-center gap-3 rounded-full px-6 py-3 text-base font-bold xl:px-8 xl:py-4 xl:text-lg" href={missionHref}>
-                {missionCta} <ArrowRight size={21} />
-              </a>
-              <a className="rounded-full border border-[#81D8D0]/20 px-6 py-3 text-base font-bold text-[#D6DEEA] transition hover:border-[#81D8D0]/45 hover:bg-[#81D8D0]/10 xl:px-8 xl:py-4 xl:text-lg" href={`/${locale}/app/opportunities`}>
-                View Other Opportunities
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(19rem,.75fr)]">
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div className="flex items-start gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+              <Target size={22} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="sunlit-eyebrow">{copy.next}</p>
+              <h2 className="mt-2 font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
+              <a className="sunlit-primary mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
+                {missionCta} <ArrowRight size={17} />
               </a>
             </div>
           </div>
-        </div>
+        </article>
+
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div className="flex items-center justify-between gap-4">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
+              <Brain size={22} />
+            </span>
+            <span className="text-3xl font-black text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
+          </div>
+          <h2 className="mt-5 text-lg font-black text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
+            <div className="h-full rounded-full bg-[var(--sunlit-aqua)]" style={{ width: `${liveState.vaultScore?.score ?? 0}%` }} />
+          </div>
+          <a className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-aqua-dark)]" href={`/${locale}/app/knowledge`}>
+            {copy.businessProfile} <ArrowRight size={16} />
+          </a>
+        </article>
       </section>
 
       <div className="flex items-center justify-between gap-4">
-        <SectionLabel accentName="gold" label="Content Ready" />
-        <a className="inline-flex items-center gap-2 text-lg font-bold text-[#81D8D0]" href={`/${locale}/app/content-studio`}>View All <ArrowRight size={19} /></a>
+        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
+        <a className="inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/content-studio`}>
+          {copy.openAll} <ArrowRight size={17} />
+        </a>
       </div>
-      {dynamicCards.length > 0 ? (
-        <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {dynamicCards.map((card) => <ContentReadyCard key={`${card.label}-${card.title}-${card.status}`} locale={locale} {...card} />)}
+      {readyItems.length > 0 ? (
+        <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {readyItems.slice(0, 4).map((item, index) => (
+            <a
+              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[rgb(217_63_122_/_24%)]"
+              href={`/${locale}/app/content-studio?item=${item.id}`}
+              key={item.id}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={
+                    index % 2 === 0
+                      ? "grid h-10 w-10 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]"
+                      : "grid h-10 w-10 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+                  }
+                >
+                  <Palette size={18} />
+                </span>
+                <span className="rounded-full bg-[var(--sunlit-paper)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--sunlit-muted)]">
+                  {statusLabel(item.status)}
+                </span>
+              </div>
+              <h3 className="mt-5 line-clamp-2 font-black leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
+              <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--sunlit-muted)]">{recordSubtitle(item)}</p>
+            </a>
+          ))}
         </section>
       ) : (
-        <article className="lux-card-muted rounded-[1.5rem] p-5 xl:p-7">
-          <p className="text-xl font-bold text-white">No generated workspace content yet.</p>
-          <p className="mt-3 max-w-3xl text-[#B8C4D8]">Use Content Studio to generate the first real draft. It will appear here after MARKOS saves it to your workspace.</p>
-          <a className="mt-5 inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/24 bg-[#81D8D0]/10 px-6 py-3 font-bold text-[#81D8D0]" href={`/${locale}/app/content-studio`}>
-            Generate content <ArrowRight size={18} />
+        <article className="sunlit-panel-soft rounded-[1.75rem] p-6 xl:p-7">
+          <p className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentEmpty}</p>
+          <a
+            className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
+            href={`/${locale}/app/content-studio`}
+          >
+            {copy.create} <ArrowRight size={17} />
           </a>
         </article>
       )}
-
-      <div className="fixed bottom-24 right-5 z-50 sm:bottom-8 sm:right-8">
-        {assistantOpen ? (
-          <div className="mb-4 w-[min(20rem,calc(100vw-2.5rem))] rounded-[1.35rem] border border-[#81D8D0]/22 bg-[#111920] p-4 shadow-[0_24px_70px_rgba(0,0,0,.5)]">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <p className="font-bold text-white">Ask Your AI CMO</p>
-              <button className="text-[#9AA7BD] transition hover:text-white" onClick={() => setAssistantOpen(false)} type="button">
-                Close
-              </button>
-            </div>
-            <div className="grid gap-2">
-              {aiPrompts.map((prompt) => (
-                <a className="rounded-xl border border-[#81D8D0]/12 bg-[#81D8D0]/6 px-4 py-2.5 text-sm font-semibold text-[#D6DEEA] transition hover:border-[#81D8D0]/30 hover:bg-[#81D8D0]/10 hover:text-white" href={`/${locale}/app/content-studio`} key={prompt}>
-                  {prompt}
-                </a>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <button
-          aria-expanded={assistantOpen}
-          aria-label="Ask MARKOS"
-          className="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-[#81D8D0] via-[#D4AF37] to-[#F4A460] text-[#0F1419] shadow-[0_18px_48px_rgba(212,175,55,.32)] transition hover:scale-105 xl:h-16 xl:w-16"
-          onClick={() => setAssistantOpen((current) => !current)}
-          type="button"
-        >
-          <Sparkles size={30} strokeWidth={2.2} />
-        </button>
-      </div>
     </section>
+  );
+}
+
+function SunlitMetricCard({
+  icon,
+  label,
+  note,
+  tone,
+  value
+}: {
+  icon: IconType;
+  label: string;
+  note: string;
+  tone: "aqua" | "coral" | "yellow";
+  value: string;
+}) {
+  const Icon = icon;
+  const toneClass =
+    tone === "aqua"
+      ? "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+      : tone === "yellow"
+        ? "bg-[rgb(246_196_83_/_20%)] text-[var(--sunlit-warning)]"
+        : "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]";
+  return (
+    <article className="sunlit-panel rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-4">
+        <span className={`grid h-11 w-11 place-items-center rounded-xl ${toneClass}`}>
+          <Icon size={20} />
+        </span>
+        <strong className="text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
+      </div>
+      <p className="mt-5 font-extrabold text-[var(--sunlit-ink)]">{label}</p>
+      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--sunlit-muted)]">{note}</p>
+    </article>
   );
 }
 
@@ -511,15 +618,26 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
       <article className="lux-card rounded-[1.5rem] p-5 sm:p-6 xl:p-8">
         <h2 className="font-display text-2xl font-bold text-white xl:text-3xl">Executive Summary</h2>
         <div className="mt-5 space-y-4 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">
-          <p><span className="font-bold text-[#81D8D0]">Strong momentum continues.</span> Your luxury jewelry content is resonating exceptionally well with your target audience, driving 3.2x higher engagement than your baseline.</p>
-          <p>I have identified a <span className="font-bold text-[#D4AF37]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your audience will be most receptive.</p>
-          <p><span className="font-bold text-[#00C9A7]">24-hour growth: +847 followers</span> with engagement rate at 92%, significantly above your industry benchmark of 4.2%.</p>
+          <p>
+            <span className="font-bold text-[#81D8D0]">Strong momentum continues.</span> Your luxury jewelry content is resonating exceptionally well with your
+            target audience, driving 3.2x higher engagement than your baseline.
+          </p>
+          <p>
+            I have identified a <span className="font-bold text-[#D4AF37]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your audience will
+            be most receptive.
+          </p>
+          <p>
+            <span className="font-bold text-[#00C9A7]">24-hour growth: +847 followers</span> with engagement rate at 92%, significantly above your industry
+            benchmark of 4.2%.
+          </p>
         </div>
       </article>
 
       <SectionHeading title="Performance Highlights" />
       <section className="grid min-w-0 gap-5 lg:grid-cols-2">
-        {performanceHighlights.map((item) => <PerformanceCard key={item.label} {...item} />)}
+        {performanceHighlights.map((item) => (
+          <PerformanceCard key={item.label} {...item} />
+        ))}
       </section>
 
       <SectionHeading title="Strategic Insights" />
@@ -531,7 +649,9 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
               <div>
                 <h3 className="text-xl font-bold text-white">{item.title}</h3>
                 <p className="mt-3 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">{item.body}</p>
-                <a className="mt-5 inline-flex items-center gap-2 text-base font-bold text-[#81D8D0] xl:text-lg" href={`/${locale}/app/campaign-builder`}>{item.cta} <ArrowRight size={19} /></a>
+                <a className="mt-5 inline-flex items-center gap-2 text-base font-bold text-[#81D8D0] xl:text-lg" href={`/${locale}/app/campaign-builder`}>
+                  {item.cta} <ArrowRight size={19} />
+                </a>
               </div>
             </div>
           </article>
@@ -546,13 +666,25 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
           ["7:30 PM", "Launch prepared campaign in the optimal engagement window", "5 min"],
           ["9:00 PM", "Monitor campaign performance and engagement", "10 min"]
         ].map(([time, title, duration], index) => (
-          <div className={index === 0 ? "grid gap-4 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]" : "grid gap-4 border-t border-[#81D8D0]/10 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"} key={time}>
+          <div
+            className={
+              index === 0
+                ? "grid gap-4 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"
+                : "grid gap-4 border-t border-[#81D8D0]/10 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"
+            }
+            key={time}
+          >
             <p className="font-mono text-base font-bold text-[#81D8D0] xl:text-lg">{time}</p>
             <div>
               <p className="text-lg font-bold text-white xl:text-xl">{title}</p>
               <p className="mt-1 text-base text-[#9AA7BD] xl:text-lg">{duration}</p>
             </div>
-            <a className="rounded-full bg-[#C7CDD8]/18 px-5 py-2.5 text-center font-bold text-white transition hover:bg-[#81D8D0]/20 xl:px-7 xl:py-3" href={`/${locale}/app/campaign-builder`}>Schedule</a>
+            <a
+              className="rounded-full bg-[#C7CDD8]/18 px-5 py-2.5 text-center font-bold text-white transition hover:bg-[#81D8D0]/20 xl:px-7 xl:py-3"
+              href={`/${locale}/app/campaign-builder`}
+            >
+              Schedule
+            </a>
           </div>
         ))}
       </article>
@@ -563,9 +695,15 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
 export function OpportunitiesPanel({ locale }: { locale: Locale }) {
   return (
     <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Sparkles} subtitle="I've discovered 3 high-impact opportunities by analyzing your audience behavior, industry trends, and competitor strategies." title="Content Opportunities" />
+      <HeroTitle
+        icon={Sparkles}
+        subtitle="I've discovered 3 high-impact opportunities by analyzing your audience behavior, industry trends, and competitor strategies."
+        title="Content Opportunities"
+      />
       <div className="grid gap-6">
-        {opportunityCards.map((card) => <OpportunityCard key={card.title} locale={locale} {...card} />)}
+        {opportunityCards.map((card) => (
+          <OpportunityCard key={card.title} locale={locale} {...card} />
+        ))}
       </div>
     </section>
   );
@@ -576,7 +714,9 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
   const client = useMarkosClient(locale);
   const [step, setStep] = useState(1);
   const [saved, setSaved] = useState(false);
-  const [campaignPrompt, setCampaignPrompt] = useState("Launch a high-performing campaign for our most important offer. Use the Knowledge Vault for audience, positioning, language, and brand voice.");
+  const [campaignPrompt, setCampaignPrompt] = useState(
+    "Launch a high-performing campaign for our most important offer. Use the Knowledge Vault for audience, positioning, language, and brand voice."
+  );
   const [campaignRecords, setCampaignRecords] = useState<ContentRecord[]>([]);
   const [campaignMessage, setCampaignMessage] = useState("");
   const [generatingCampaign, setGeneratingCampaign] = useState(false);
@@ -663,7 +803,15 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                 onClick={() => setStep(index + 1)}
                 type="button"
               >
-                <span className={step === index + 1 ? "grid h-12 w-12 place-items-center rounded-full bg-[#81D8D0] font-bold text-[#0F1419]" : "grid h-12 w-12 place-items-center rounded-full bg-white/14 font-bold"}>{index + 1}</span>
+                <span
+                  className={
+                    step === index + 1
+                      ? "grid h-12 w-12 place-items-center rounded-full bg-[#81D8D0] font-bold text-[#0F1419]"
+                      : "grid h-12 w-12 place-items-center rounded-full bg-white/14 font-bold"
+                  }
+                >
+                  {index + 1}
+                </span>
                 <span className="font-bold">{label}</span>
               </button>
               {index < 2 ? <span className="hidden h-px bg-white/20 md:block" /> : null}
@@ -687,7 +835,12 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               onChange={(event) => setCampaignPrompt(event.target.value)}
               value={campaignPrompt}
             />
-            <button className="mt-5 inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg" disabled={generatingCampaign} onClick={generateCampaignDrafts} type="button">
+            <button
+              className="mt-5 inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
+              disabled={generatingCampaign}
+              onClick={generateCampaignDrafts}
+              type="button"
+            >
               {generatingCampaign ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Sparkles size={20} />}
               {generatingCampaign ? "Generating campaign..." : "Generate Campaign Drafts"}
             </button>
@@ -699,7 +852,9 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                 className="lux-card-muted rounded-[1.5rem] p-5 text-left transition hover:border-[#81D8D0]/45 hover:bg-[#81D8D0]/8 xl:p-6"
                 key={title}
                 onClick={() => {
-                  setCampaignPrompt(`${title}: ${body}. Build a ${days.toLowerCase()} plan with ${posts.toLowerCase()} for our active workspace audience and offer.`);
+                  setCampaignPrompt(
+                    `${title}: ${body}. Build a ${days.toLowerCase()} plan with ${posts.toLowerCase()} for our active workspace audience and offer.`
+                  );
                 }}
                 type="button"
               >
@@ -710,7 +865,9 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                   <span>{posts}</span>
                   <span>{days}</span>
                 </div>
-                <span className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-[#81D8D0]">Select Template <ArrowRight size={18} /></span>
+                <span className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-[#81D8D0]">
+                  Select Template <ArrowRight size={18} />
+                </span>
               </button>
             ))}
           </section>
@@ -721,30 +878,45 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
         <section className="space-y-6 xl:space-y-8">
           <div className="flex items-center justify-between">
             <SectionHeading title="AI-Generated Campaign Preview" />
-            <button className="rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={generatingCampaign} onClick={generateCampaignDrafts} type="button">{generatingCampaign ? "Regenerating..." : "Regenerate"}</button>
+            <button
+              className="rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={generatingCampaign}
+              onClick={generateCampaignDrafts}
+              type="button"
+            >
+              {generatingCampaign ? "Regenerating..." : "Regenerate"}
+            </button>
           </div>
           <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
             <div className="mb-6 flex items-center gap-4 xl:mb-8 xl:gap-5">
               <IconTile accentName="teal" icon={Sparkles} />
               <div>
                 <h3 className="text-xl font-bold text-white xl:text-2xl">Workspace Campaign Drafts</h3>
-                <p className="mt-2 text-base text-[#D6DEEA] xl:text-lg">{timelineRecords.length || 0} saved content pieces - approval required before scheduling</p>
+                <p className="mt-2 text-base text-[#D6DEEA] xl:text-lg">
+                  {timelineRecords.length || 0} saved content pieces - approval required before scheduling
+                </p>
               </div>
             </div>
             {timelineRecords.length > 0 ? (
               <div className="grid gap-4">
                 {timelineRecords.map((record, index) => (
-                  <a className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5" href={`/${locale}/app/content-studio?item=${record.id}`} key={record.id}>
-                  <div className="border-r border-white/10 pr-5">
-                    <p className="text-2xl font-bold text-white xl:text-3xl">{index + 1}</p>
-                    <p className="text-[#9AA7BD]">Day</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-white">{recordTitle(record)}</p>
-                    <p className="mt-2 text-lg text-[#9AA7BD]">{record.scheduledAt ? formatShortTime(record.scheduledAt) : "7:30 PM"} - {contentTypeLabel(record.contentType)}</p>
-                  </div>
-                  <span className="self-center rounded-full bg-[#81D8D0]/12 px-4 py-2 font-bold text-[#81D8D0]">{statusLabel(record.status)}</span>
-                </a>
+                  <a
+                    className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
+                    href={`/${locale}/app/content-studio?item=${record.id}`}
+                    key={record.id}
+                  >
+                    <div className="border-r border-white/10 pr-5">
+                      <p className="text-2xl font-bold text-white xl:text-3xl">{index + 1}</p>
+                      <p className="text-[#9AA7BD]">Day</p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-white">{recordTitle(record)}</p>
+                      <p className="mt-2 text-lg text-[#9AA7BD]">
+                        {record.scheduledAt ? formatShortTime(record.scheduledAt) : "7:30 PM"} - {contentTypeLabel(record.contentType)}
+                      </p>
+                    </div>
+                    <span className="self-center rounded-full bg-[#81D8D0]/12 px-4 py-2 font-bold text-[#81D8D0]">{statusLabel(record.status)}</span>
+                  </a>
                 ))}
               </div>
             ) : (
@@ -762,8 +934,21 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
             <ObjectiveCard icon={TrendingUp} label="Conversion" sub="Estimated rate" value="8.2%" />
           </section>
           <div className="flex flex-wrap items-center justify-between gap-5">
-            <button className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl" disabled={schedulingCampaign || campaignRecords.length === 0} onClick={scheduleCampaign} type="button"><Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : "Schedule Campaign"} <ArrowRight size={24} /></button>
-            <button className="rounded-[1.5rem] bg-white/16 px-8 py-4 text-lg font-bold text-white transition hover:bg-[#81D8D0]/16 xl:px-10 xl:py-5 xl:text-xl" onClick={() => setSaved(true)} type="button">{saved ? "Draft Saved" : "Save as Draft"}</button>
+            <button
+              className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl"
+              disabled={schedulingCampaign || campaignRecords.length === 0}
+              onClick={scheduleCampaign}
+              type="button"
+            >
+              <Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : "Schedule Campaign"} <ArrowRight size={24} />
+            </button>
+            <button
+              className="rounded-[1.5rem] bg-white/16 px-8 py-4 text-lg font-bold text-white transition hover:bg-[#81D8D0]/16 xl:px-10 xl:py-5 xl:text-xl"
+              onClick={() => setSaved(true)}
+              type="button"
+            >
+              {saved ? "Draft Saved" : "Save as Draft"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -791,7 +976,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [scheduling, setScheduling] = useState(false);
   const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
   const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
-  const canSchedule = currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED" && currentRecord.status !== "FAILED";
+  const canSchedule =
+    currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED" && currentRecord.status !== "FAILED";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -819,7 +1005,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         setRecords(nextRecords);
         const requestedItemId = params.get("item");
         const requestedRecord = requestedItemId ? nextRecords.find((item) => item.id === requestedItemId) : null;
-        const latestEditable = nextRecords.find((item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED") ?? nextRecords[0] ?? null;
+        const latestEditable =
+          nextRecords.find((item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED") ?? nextRecords[0] ?? null;
 
         if (requestedRecord ?? latestEditable) {
           applyRecord(requestedRecord ?? latestEditable);
@@ -1029,66 +1216,113 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   }
 
   return (
-    <section className="grid min-h-[calc(100vh-72px)] min-w-0 gap-6 xl:grid-cols-[minmax(320px,500px)_1fr] xl:gap-8">
-      <div className="min-w-0 space-y-5 xl:space-y-7">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">AI Content Studio</h1>
-          <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">Generate, edit, approve, and schedule workspace-backed content.</p>
-        </div>
+    <section className="grid min-h-[calc(100vh-8rem)] min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-7">
+      <div className="min-w-0 space-y-6">
+        <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-pink)] p-5 sm:p-6">
+          <p className="sunlit-eyebrow">Create</p>
+          <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">Turn an idea into your next post.</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">
+            MARKOS uses your Business Profile and saves every draft to this workspace.
+          </p>
+        </section>
         {message ? (
-          <article className="lux-card-muted rounded-[1.25rem] border-[#81D8D0]/20 p-5">
-            <p className="text-base font-semibold text-[#D6DEEA]">{message}</p>
+          <article className="sunlit-panel-soft rounded-2xl p-5">
+            <p className="text-sm font-bold leading-6 text-[var(--sunlit-ink-soft)]">{message}</p>
           </article>
         ) : null}
-        <section>
-          <h2 className="mb-4 text-xl font-bold text-white">Content Type</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+              <Wand2 size={22} />
+            </span>
+            <div>
+              <h2 className="text-xl font-black text-[var(--sunlit-ink)]">What are we creating?</h2>
+              <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Choose a format, then describe the job this content needs to do.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {studioTypes.map(([value, label, Icon]) => (
-              <button className={contentType === value ? "rounded-full border border-[#81D8D0] bg-[#81D8D0]/10 px-5 py-4 text-left font-bold text-white xl:px-6 xl:py-5" : "rounded-full border border-[#81D8D0]/16 bg-[#81D8D0]/6 px-5 py-4 text-left font-bold text-[#D6DEEA] transition hover:border-[#81D8D0]/35 xl:px-6 xl:py-5"} key={value} onClick={() => setContentType(value)} type="button">
-                <span className="inline-flex items-center gap-4"><Icon size={22} />{label}</span>
+              <button
+                className={
+                  contentType === value
+                    ? "rounded-xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] px-4 py-3 text-left font-extrabold text-[var(--sunlit-pink)]"
+                    : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3 text-left font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
+                }
+                key={value}
+                onClick={() => setContentType(value)}
+                type="button"
+              >
+                <span className="inline-flex items-center gap-3">
+                  <Icon size={19} />
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            className="sunlit-field mt-5 min-h-36 resize-y rounded-xl p-4 text-base leading-7 outline-none"
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="Describe the content you want MARKOS to create, including offer, audience, language, and objective."
+            value={prompt}
+          />
+          <button
+            className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={generating}
+            onClick={generate}
+            type="button"
+          >
+            {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
+            {generating ? "Creating your draft..." : "Create draft"}
+          </button>
+        </article>
+
+        <section className="sunlit-panel-soft rounded-2xl p-5">
+          <h2 className="sunlit-eyebrow">Starting points</h2>
+          <div className="flex flex-wrap gap-3">
+            {["Behind the scenes", "Product showcase", "Customer testimonial", "Limited offer", "Story time"].map((prompt) => (
+              <button
+                className="rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)] hover:text-[var(--sunlit-ink)]"
+                key={prompt}
+                onClick={() =>
+                  setPrompt(
+                    `Create a ${selectedTypeLabel.toLowerCase()} about ${prompt.toLowerCase()} for our current campaign. Use the Business Profile for brand voice and audience context.`
+                  )
+                }
+                type="button"
+              >
+                {prompt}
               </button>
             ))}
           </div>
         </section>
 
-        <article className="lux-card rounded-[1.75rem] p-5 xl:p-7">
-          <h2 className="flex items-center gap-3 text-xl font-bold text-white"><Sparkles className="text-[#81D8D0]" /> AI Content Generator</h2>
-          <textarea
-            className="mt-5 min-h-32 w-full resize-none rounded-[1.25rem] border border-[#81D8D0]/10 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45 xl:min-h-36 xl:p-5 xl:text-lg"
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Describe the content you want MARKOS to create, including offer, audience, language, and objective."
-            value={prompt}
-          />
-          <button className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg" disabled={generating} onClick={generate} type="button">
-            {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
-            {generating ? "MARKOS is generating..." : "Generate with AI"}
-          </button>
-        </article>
-
-        <section>
-          <h2 className="mb-4 text-sm font-bold uppercase tracking-[.16em] text-[#9AA7BD]">Quick Prompts</h2>
-          <div className="flex flex-wrap gap-3">
-            {["Behind the scenes", "Product showcase", "Customer testimonial", "Limited offer", "Story time"].map((prompt) => (
-              <button className="rounded-full border border-[#81D8D0]/14 bg-[#81D8D0]/7 px-5 py-3 font-semibold text-[#D6DEEA] transition hover:border-[#81D8D0]/36 hover:text-white" key={prompt} onClick={() => setPrompt(`Create a ${selectedTypeLabel.toLowerCase()} about ${prompt.toLowerCase()} for our current campaign. Use the Knowledge Vault for brand voice and audience context.`)} type="button">{prompt}</button>
-            ))}
-          </div>
-        </section>
-
         {loadingRecords ? (
-          <article className="lux-card-muted rounded-[1.75rem] p-6 text-[#D6DEEA]">Loading workspace drafts...</article>
+          <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">Loading workspace drafts...</article>
         ) : records.length > 0 ? (
           <section>
-            <h2 className="mb-4 text-xl font-bold text-white">Workspace Drafts</h2>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Workspace drafts</h2>
+              <span className="text-sm font-bold text-[var(--sunlit-muted)]">{records.length} saved</span>
+            </div>
             <div className="grid gap-3">
               {records.slice(0, 4).map((record) => (
                 <button
-                  className={currentRecord?.id === record.id ? "rounded-2xl border border-[#81D8D0]/40 bg-[#81D8D0]/10 px-5 py-4 text-left" : "rounded-2xl border border-[#81D8D0]/12 bg-[#81D8D0]/5 px-5 py-4 text-left transition hover:border-[#81D8D0]/30"}
+                  className={
+                    currentRecord?.id === record.id
+                      ? "rounded-2xl border border-[rgb(33_191_174_/_32%)] bg-[var(--sunlit-aqua-soft)] px-5 py-4 text-left"
+                      : "sunlit-panel rounded-2xl px-5 py-4 text-left transition hover:border-[var(--sunlit-line-strong)]"
+                  }
                   key={record.id}
                   onClick={() => applyRecord(record, "Loaded workspace draft.")}
                   type="button"
                 >
-                  <span className="block font-bold text-white">{recordTitle(record)}</span>
-                  <span className="mt-1 block text-sm text-[#9AA7BD]">{contentTypeLabel(record.contentType)} - {statusLabel(record.status)}</span>
+                  <span className="block font-extrabold text-[var(--sunlit-ink)]">{recordTitle(record)}</span>
+                  <span className="mt-1 block text-sm text-[var(--sunlit-muted)]">
+                    {contentTypeLabel(record.contentType)} · {statusLabel(record.status)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -1097,18 +1331,18 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
         <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
           <textarea
-            className="min-h-56 w-full resize-none border-0 bg-transparent text-lg leading-relaxed text-white outline-none placeholder:text-[#8B95A8] xl:min-h-72 xl:text-xl"
+            className="min-h-56 w-full resize-y border-0 bg-transparent text-lg leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)] xl:min-h-64"
             disabled={!canEdit}
             onChange={(event) => setCaption(event.target.value)}
             placeholder="Generated caption will appear here after MARKOS creates a draft."
             value={caption}
           />
-          <div className="mt-8 border-t border-white/10 pt-5 text-[#9AA7BD]">{caption.length} / 2,200 characters</div>
+          <div className="mt-8 border-t border-[var(--sunlit-line)] pt-5 text-sm text-[var(--sunlit-muted)]">{caption.length} / 2,200 characters</div>
         </EditorBlock>
 
         <EditorBlock action="Save tags" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Hashtags">
           <textarea
-            className="min-h-24 w-full resize-none border-0 bg-transparent text-base leading-relaxed text-white outline-none placeholder:text-[#8B95A8] xl:min-h-28 xl:text-lg"
+            className="min-h-24 w-full resize-y border-0 bg-transparent text-base leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
             disabled={!canEdit}
             onChange={(event) => setHashtagsText(event.target.value)}
             placeholder="#Generated #Hashtags"
@@ -1118,24 +1352,68 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
         <EditorBlock action="Schedule" busy={scheduling} disabled={!currentRecord || !canSchedule} onAction={() => void scheduleDraft()} title="Schedule">
           <div className="grid gap-4 sm:grid-cols-2">
-            <input className="rounded-full border border-[#81D8D0]/12 bg-white/[.055] px-4 py-3 text-lg text-white outline-none focus:border-[#81D8D0]/40 xl:px-5 xl:py-4 xl:text-xl" onChange={(event) => setScheduleDate(event.target.value)} type="date" value={scheduleDate} />
-            <input className="rounded-full border border-[#81D8D0]/12 bg-white/[.055] px-4 py-3 text-lg text-white outline-none focus:border-[#81D8D0]/40 xl:px-5 xl:py-4 xl:text-xl" onChange={(event) => setScheduleTime(event.target.value)} type="time" value={scheduleTime} />
+            <input
+              className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
+              onChange={(event) => setScheduleDate(event.target.value)}
+              type="date"
+              value={scheduleDate}
+            />
+            <input
+              className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
+              onChange={(event) => setScheduleTime(event.target.value)}
+              type="time"
+              value={scheduleTime}
+            />
           </div>
-          <p className="mt-4 text-[#9AA7BD]">Scheduling will save edits, approve the draft if needed, then create a scheduled content item.</p>
+          <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]">
+            Scheduling saves your edits, approves the draft if needed, then adds it to the publishing queue.
+          </p>
         </EditorBlock>
 
         <EditorBlock action="Copy" disabled={!currentRecord} onAction={() => void copyCaption()} title="Actions">
           <div className="flex flex-wrap gap-3">
-            <button className="rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3 font-bold text-[#81D8D0] disabled:cursor-not-allowed disabled:opacity-50" disabled={!currentRecord || approving} onClick={acceptDraft} type="button">{approving ? "Approving..." : "Accept & Approve"}</button>
-            <button className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-6 py-3 font-bold text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50" disabled={generating || !prompt.trim()} onClick={generate} type="button">Regenerate</button>
-            <button className="rounded-full border border-[#F4A460]/20 bg-[#F4A460]/10 px-6 py-3 font-bold text-[#F4A460] disabled:cursor-not-allowed disabled:opacity-50" disabled={!currentRecord} onClick={() => void shareCaption()} type="button">Share</button>
+            <button
+              className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!currentRecord || approving}
+              onClick={acceptDraft}
+              type="button"
+            >
+              {approving ? "Approving..." : "Approve draft"}
+            </button>
+            <button
+              className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={generating || !prompt.trim()}
+              onClick={generate}
+              type="button"
+            >
+              Create another
+            </button>
+            <button
+              className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!currentRecord}
+              onClick={() => void shareCaption()}
+              type="button"
+            >
+              Share
+            </button>
           </div>
         </EditorBlock>
       </div>
 
-      <aside className="sticky top-6 hidden h-[calc(100vh-72px)] flex-col items-center justify-center xl:flex">
-        <InstagramPreview brandName={session?.workspace.name ?? "yourbrand"} caption={caption} hashtags={parseHashtags(hashtagsText)} type={selectedTypeLabel} />
-        <button className="mt-6 inline-flex items-center gap-3 text-xl font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!currentRecord || scheduling} onClick={scheduleDraft} type="button">
+      <aside className="sticky top-6 hidden h-[calc(100vh-7.5rem)] flex-col items-center justify-center rounded-[2rem] bg-[var(--sunlit-paper-deep)] p-6 xl:flex">
+        <p className="sunlit-eyebrow mb-5 self-start">Instagram preview</p>
+        <InstagramPreview
+          brandName={session?.workspace.name ?? "yourbrand"}
+          caption={caption}
+          hashtags={parseHashtags(hashtagsText)}
+          type={selectedTypeLabel}
+        />
+        <button
+          className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!currentRecord || scheduling}
+          onClick={scheduleDraft}
+          type="button"
+        >
           {scheduling ? "Scheduling..." : "Schedule Post"} <ArrowRight size={24} />
         </button>
       </aside>
@@ -1144,76 +1422,199 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 }
 
 export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
-  const [range, setRange] = useState("Last 7 days");
-  const [exported, setExported] = useState(false);
+  const session = useMarkosSession();
+  const client = useMarkosClient(locale);
+  const [days, setDays] = useState(7);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!session) {
+      setSummary(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setMessage("");
+
+    void client
+      .analytics({ days })
+      .then((nextSummary) => {
+        if (!cancelled) setSummary(nextSummary);
+      })
+      .catch((error) => {
+        if (!cancelled) setMessage(contentStudioError(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, days, session]);
+
+  async function exportReport() {
+    if (!session) {
+      setMessage("Sign in before exporting workspace insights.");
+      return;
+    }
+
+    setExporting(true);
+    setMessage("");
+
+    try {
+      const report = await client.exportMonthlyAnalyticsPdf({ locale });
+      const url = URL.createObjectURL(new Blob([report], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `markos-insights-${new Date().toISOString().slice(0, 7)}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage("Monthly report downloaded.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const totals = summary?.totals;
+  const daily = summary?.daily.slice(-14) ?? [];
+  const maximumReach = Math.max(...daily.map((item) => item.totals.reach), 1);
+  const copy =
+    locale === "ar"
+      ? {
+          empty: "ستظهر بيانات الأداء هنا بعد ربط إنستغرام ومزامنة أول مجموعة من الإحصاءات.",
+          export: "تصدير التقرير الشهري",
+          heading: "الإحصاءات",
+          range: days === 7 ? "آخر 7 أيام" : "آخر 30 يوماً",
+          subtitle: "افهم ما ينجح، ثم حوّل ذلك إلى خطوة واضحة للمحتوى التالي."
+        }
+      : {
+          empty: "Performance data will appear here after Instagram is connected and the first insights are synced.",
+          export: "Export monthly report",
+          heading: "Insights",
+          range: days === 7 ? "Last 7 days" : "Last 30 days",
+          subtitle: "See what is working, then turn it into a clear next move for your content."
+        };
+
   return (
-    <section className="space-y-6 xl:space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-5">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Analytics Command Center <span className="rounded-full border border-[#81D8D0]/22 px-3 py-1.5 text-base text-[#81D8D0]">Live</span></h1>
-          <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">AI-powered intelligence dashboard</p>
+    <section className="space-y-6 xl:space-y-7">
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-5">
+          <div className="max-w-3xl">
+            <p className="sunlit-eyebrow">Instagram performance</p>
+            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="sunlit-secondary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold"
+              onClick={() => setDays(days === 7 ? 30 : 7)}
+              type="button"
+            >
+              {copy.range}
+            </button>
+            <button
+              className="sunlit-primary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+              disabled={exporting || !session}
+              onClick={() => void exportReport()}
+              type="button"
+            >
+              {exporting ? "Preparing..." : copy.export}
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3 xl:gap-4">
-          <button className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-white xl:px-8 xl:py-4 xl:text-lg" onClick={() => setRange(range === "Last 7 days" ? "Last 30 days" : "Last 7 days")} type="button">{range}</button>
-          <button className="lux-button-primary rounded-full px-6 py-3 text-base font-bold xl:px-8 xl:py-4 xl:text-lg" onClick={() => setExported(true)} type="button">{exported ? "Report Ready" : "Export Report"}</button>
-        </div>
-      </div>
+      </section>
+
+      {message ? <article className="sunlit-panel-soft rounded-2xl p-5 text-sm font-bold text-[var(--sunlit-ink-soft)]">{message}</article> : null}
 
       <section className="grid gap-4 sm:grid-cols-3 xl:gap-6">
-        <MetricRingCard accentName="teal" icon={Users} label="Followers" sub="+12.5%" value="12,847" />
-        <MetricRingCard accentName="gold" icon={Eye} label="Reach" sub="+18%" value="156K" />
-        <MetricRingCard accentName="amber" icon={Heart} label="Engagement" sub="+0.3%" value="4.8%" />
+        <SunlitMetricCard
+          icon={Users}
+          label="Followers"
+          note={copy.range}
+          tone="aqua"
+          value={loading ? "…" : totals ? formatCompactNumber(totals.followers) : "—"}
+        />
+        <SunlitMetricCard icon={Eye} label="Reach" note={copy.range} tone="yellow" value={loading ? "…" : totals ? formatCompactNumber(totals.reach) : "—"} />
+        <SunlitMetricCard
+          icon={Heart}
+          label="Engagements"
+          note={copy.range}
+          tone="coral"
+          value={loading ? "…" : totals ? formatCompactNumber(totals.engagement) : "—"}
+        />
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_340px] xl:gap-6 xl:grid-cols-[1fr_380px]">
-        <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-          <SectionLabel accentName="teal" label="Growth Intelligence" />
-          <p className="mt-2 text-lg text-[#9AA7BD] xl:text-xl">Follower trajectory and engagement correlation</p>
-          <div className="mt-7 h-[300px] rounded-[1.5rem] border border-[#81D8D0]/10 bg-[#81D8D0]/5 p-5 xl:mt-9 xl:h-[360px] xl:p-6">
-            <svg className="h-full w-full" viewBox="0 0 760 300" preserveAspectRatio="none">
-              {[0, 1, 2, 3].map((i) => <line key={i} x1="0" x2="760" y1={48 + i * 68} y2={48 + i * 68} stroke="rgba(129,216,208,.08)" strokeDasharray="5 8" />)}
-              <path d="M0 220 C160 215 260 214 380 205 C520 195 620 170 760 145" fill="none" stroke="#81D8D0" strokeWidth="4" />
-              <path d="M0 300 L0 220 C160 215 260 214 380 205 C520 195 620 170 760 145 L760 300 Z" fill="rgba(129,216,208,.15)" />
-              <path d="M0 292 L760 292" stroke="#D4AF37" strokeWidth="4" />
-            </svg>
-          </div>
-        </article>
-        <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-          <SectionLabel accentName="gold" label="Audience Orbit" />
-          <p className="mt-2 text-lg text-[#9AA7BD] xl:text-xl">Demographic distribution</p>
-          <div className="mt-7 grid place-items-center xl:mt-9">
-            <div className="grid h-48 w-48 place-items-center rounded-full xl:h-56 xl:w-56" style={{ background: "conic-gradient(#81D8D0 0 28%, #D4AF37 28% 70%, #F4A460 70% 90%, #5FC4BA 90% 100%)" }}>
-              <div className="grid h-24 w-24 place-items-center rounded-full bg-[#0F1419] text-center text-[#D4AF37] xl:h-28 xl:w-28">
-                <Users size={34} />
-                <span className="text-sm text-[#9AA7BD]">Total</span>
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <p className="sunlit-eyebrow">Reach over time</p>
+          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Daily Instagram reach</h2>
+          {daily.length > 0 ? (
+            <div className="mt-7 flex h-72 items-end gap-2 rounded-2xl bg-[var(--sunlit-paper)] px-5 pb-5 pt-8">
+              {daily.map((item) => (
+                <div className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
+                  <span className="invisible rounded-md bg-[var(--sunlit-ink)] px-2 py-1 text-[10px] font-bold text-white group-hover:visible">
+                    {formatCompactNumber(item.totals.reach)}
+                  </span>
+                  <div
+                    className="w-full min-w-2 rounded-t-lg bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
+                    style={{ height: `${Math.max(8, (item.totals.reach / maximumReach) * 190)}px` }}
+                  />
+                  <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{new Date(item.dataDate).getDate()}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-7 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-8 text-center">
+              <div className="max-w-md">
+                <BarChart3 className="mx-auto text-[var(--sunlit-aqua)]" size={38} />
+                <p className="mt-4 font-extrabold text-[var(--sunlit-ink)]">No synced insight data yet</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.empty}</p>
               </div>
             </div>
-          </div>
-          <div className="mt-6 space-y-3 xl:mt-8 xl:space-y-4">
-            {["18-24 28%", "25-34 42%", "35-44 20%", "45+ 10%"].map((row) => <p className="text-lg font-bold text-white xl:text-xl" key={row}>{row}</p>)}
+          )}
+        </article>
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <p className="sunlit-eyebrow">Content signals</p>
+          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Top content</h2>
+          <div className="mt-6 grid gap-3">
+            {summary?.topContent.length ? (
+              summary.topContent.slice(0, 4).map((item, index) => (
+                <a
+                  className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--sunlit-line-strong)]"
+                  href={`/${locale}/app/content-studio?item=${item.contentItemId}`}
+                  key={item.contentItemId}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-black text-[var(--sunlit-pink)]">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 font-extrabold leading-6 text-[var(--sunlit-ink)]">{item.caption || contentTypeLabel(item.contentType)}</p>
+                      <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
+                        {formatCompactNumber(item.metrics.reach)} reach · {formatCompactNumber(item.engagement)} engagements
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))
+            ) : (
+              <div className="rounded-2xl bg-[var(--sunlit-paper)] p-5">
+                <p className="font-extrabold text-[var(--sunlit-ink)]">Nothing to rank yet</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
+                  Once content has synced performance data, the strongest posts will appear here.
+                </p>
+              </div>
+            )}
           </div>
         </article>
       </section>
-
-      <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-        <div className="flex items-center justify-between">
-          <SectionLabel accentName="amber" label="Performance Instruments" />
-          <a className="inline-flex items-center gap-2 text-lg font-bold text-[#81D8D0] xl:text-xl" href={`/${locale}/app/content-studio`}>View All <ArrowRight size={22} /></a>
-        </div>
-        <div className="mt-6 grid gap-4 xl:mt-8 xl:gap-5">
-          {performanceRows.map(({ comments, likes, roi, score, title, views }) => (
-            <div className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 md:grid-cols-[100px_1fr_auto] xl:grid-cols-[120px_1fr_auto] xl:gap-5 xl:p-6" key={title}>
-              <ScoreBadge score={score} />
-              <div>
-              <p className="text-lg font-bold text-white xl:text-xl">{title}</p>
-              <p className="mt-3 text-base text-[#D6DEEA] xl:text-lg">{views} views - {likes} likes - {comments} comments</p>
-                <div className="mt-5 h-2 rounded-full bg-[#182436]"><div className="h-full w-[78%] rounded-full bg-gradient-to-r from-[#81D8D0] to-[#D4AF37]" /></div>
-              </div>
-              <p className="self-center text-center text-2xl font-bold text-[#81D8D0] xl:text-3xl">{roi}<span className="block text-xs text-[#9AA7BD]">ROI</span></p>
-            </div>
-          ))}
-        </div>
-      </article>
     </section>
   );
 }
@@ -1224,13 +1625,13 @@ interface FinalVaultState {
 }
 
 const finalVaultModules: Array<{ description: string; sections: VaultSection[]; title: string }> = [
-  { description: "Updated business memory and brand context", sections: ["COMPANY"], title: "Company Info" },
-  { description: "Updated business memory and brand context", sections: ["STORY"], title: "Your Story" },
-  { description: "Updated business memory and brand context", sections: ["PRODUCTS"], title: "Products & Services" },
-  { description: "Updated business memory and brand context", sections: ["AUDIENCE"], title: "Target Audience" },
-  { description: "Competitive landscape analysis", sections: ["COMPETITORS"], title: "Competitors" },
-  { description: "Updated business memory and brand context", sections: ["BRAND", "TONE"], title: "Brand Identity" },
-  { description: "Updated business memory and brand context", sections: ["OBJECTIVES"], title: "Marketing Objectives" }
+  { description: "Core business details, category, and location", sections: ["COMPANY"], title: "Company Info" },
+  { description: "Background, purpose, and positioning", sections: ["STORY"], title: "Your Story" },
+  { description: "Offers, services, and customer value", sections: ["PRODUCTS"], title: "Products & Services" },
+  { description: "Who you want to reach and what matters to them", sections: ["AUDIENCE"], title: "Target Audience" },
+  { description: "The alternatives your customers may consider", sections: ["COMPETITORS"], title: "Competitors" },
+  { description: "Voice, personality, and visual direction", sections: ["BRAND", "TONE"], title: "Brand Identity" },
+  { description: "The outcomes your marketing should support", sections: ["OBJECTIVES"], title: "Marketing Objectives" }
 ];
 
 export function FinalVaultPanel({ locale }: { locale: Locale }) {
@@ -1276,57 +1677,133 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
 
   const completedCount = modules.filter((module) => module.completed).length;
   const score = data?.score.score ?? 0;
+  const copy =
+    locale === "ar"
+      ? {
+          complete: "مكتمل",
+          edit: "مراجعة الملف وتعديله",
+          heading: "ملف النشاط",
+          incomplete: "يحتاج إلى معلومات",
+          modules: "أقسام الملف",
+          refresh: "تحديث",
+          refreshing: "جارٍ التحديث...",
+          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لفهم نشاطك وتوجيه الاستراتيجية والمحتوى.",
+          updated: "آخر تحديث"
+        }
+      : {
+          complete: "Complete",
+          edit: "Review and edit profile",
+          heading: "Business Profile",
+          incomplete: "Needs information",
+          modules: "Profile sections",
+          refresh: "Refresh",
+          refreshing: "Refreshing...",
+          subtitle: "The approved business context MARKOS uses to guide Strategy and content.",
+          updated: "Last updated"
+        };
 
   return (
-    <section className="space-y-6 xl:space-y-8">
-      <div>
-        <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Knowledge Vault</h1>
-        <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">The foundation of your AI-powered marketing strategy</p>
-      </div>
-      <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">Vault Completion</h2>
-            <p className="mt-3 text-lg text-[#D6DEEA] xl:text-xl">{loading && !data ? "Loading workspace Vault..." : `${completedCount} of ${modules.length} modules complete`}</p>
+    <section className="space-y-6 xl:space-y-7">
+      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-center">
+          <div className="max-w-3xl">
+            <p className="sunlit-eyebrow">{copy.modules}</p>
+            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <a className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/onboarding`}>
+              {copy.edit} <ArrowRight size={17} />
+            </a>
           </div>
-          <div className="text-end">
-            <p className={score === 100 ? "text-3xl font-bold text-[#81D8D0] xl:text-4xl" : "text-3xl font-bold text-[#F4A460] xl:text-4xl"}>{score}%</p>
-            <button className="mt-2 text-sm font-bold text-[#81D8D0] disabled:opacity-50" disabled={loading} onClick={() => setRefreshVersion((current) => current + 1)} type="button">
-              {loading ? "Refreshing..." : "Refresh"}
+          <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-muted)]">Profile readiness</p>
+                <p className="mt-2 text-sm font-bold text-[var(--sunlit-ink-soft)]">
+                  {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
+                </p>
+              </div>
+              <p className="text-3xl font-black text-[var(--sunlit-pink)]">{score}%</p>
+            </div>
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
+              <div className="h-full rounded-full bg-[var(--sunlit-aqua)] transition-[width]" style={{ width: `${score}%` }} />
+            </div>
+            <button
+              className="mt-4 text-sm font-extrabold text-[var(--sunlit-aqua-dark)] disabled:opacity-50"
+              disabled={loading}
+              onClick={() => setRefreshVersion((current) => current + 1)}
+              type="button"
+            >
+              {loading ? copy.refreshing : copy.refresh}
             </button>
           </div>
         </div>
-        <div className="mt-6 h-3 overflow-hidden rounded-full bg-white/12 xl:mt-7 xl:h-4"><div className="h-full rounded-full bg-gradient-to-r from-[#F4A460] to-[#D4AF37] transition-[width]" style={{ width: `${score}%` }} /></div>
-        <p className="mt-5 text-base text-[#D6DEEA] xl:text-lg">{score === 100 ? "Your workspace Vault is complete and ready to ground AI generation." : "Complete all modules to unlock advanced AI features and more accurate content recommendations."}</p>
-        {error ? <p className="mt-3 text-sm font-semibold text-[#F4A460]">{error}</p> : null}
-      </article>
+      </section>
+
+      {error ? (
+        <p className="rounded-2xl border border-[rgb(199_53_80_/_22%)] bg-[rgb(199_53_80_/_7%)] p-5 text-sm font-semibold text-[var(--sunlit-danger)]">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.modules}</h2>
+        <span className="text-sm font-bold text-[var(--sunlit-muted)]">
+          {completedCount}/{modules.length}
+        </span>
+      </div>
       <section className="grid gap-5 lg:grid-cols-2">
         {modules.map((module, index) => (
-          <article className={module.completed ? "lux-card-muted rounded-[1.75rem] p-5 xl:p-7" : "lux-card rounded-[1.75rem] border-[#F4A460]/35 p-5 xl:p-7"} key={module.title}>
+          <article
+            className={
+              module.completed
+                ? "sunlit-panel rounded-[1.75rem] p-5 xl:p-6"
+                : "rounded-[1.75rem] border border-[var(--sunlit-line)] bg-[rgb(245_242_239_/_72%)] p-5 opacity-75 xl:p-6"
+            }
+            key={module.title}
+          >
             <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4 xl:gap-5">
-                <IconTile accentName={module.completed ? "teal" : "amber"} icon={index % 2 === 0 ? Brain : Sparkles} />
+              <div className="flex items-start gap-4">
+                <span
+                  className={
+                    module.completed
+                      ? "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+                      : "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-muted)]"
+                  }
+                >
+                  {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
+                </span>
                 <div>
-                  <h3 className="text-xl font-bold text-white">{module.title}</h3>
-                  <p className="mt-2 text-base text-[#9AA7BD] xl:text-lg">{module.description}</p>
-                  <p className="mt-5 text-[#6F7B8F]">Last updated: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}</p>
+                  <h3 className="text-lg font-black text-[var(--sunlit-ink)]">{module.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
+                  <p className="mt-4 text-xs font-bold text-[var(--sunlit-muted)]">
+                    {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}
+                  </p>
                 </div>
               </div>
-              <span className={module.completed ? "text-[#00C9A7]" : "text-[#F4A460]"}>{module.completed ? <CheckCircle2 aria-label={`${module.title} complete`} size={26} /> : "Incomplete"}</span>
+              <span
+                className={
+                  module.completed
+                    ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]"
+                    : "inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-muted)]"
+                }
+              >
+                {module.completed ? <CheckCircle2 aria-label={`${module.title} complete`} size={15} /> : null}
+                {module.completed ? copy.complete : copy.incomplete}
+              </span>
             </div>
           </article>
         ))}
       </section>
-      <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-        <h2 className="text-2xl font-bold text-white">How the Knowledge Vault Works</h2>
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:mt-8 xl:grid-cols-3 xl:gap-6">
-          {["You provide context", "AI learns your brand", "Personalized content"].map((title, index) => (
-            <div className="lux-card-muted rounded-[1.5rem] p-5 xl:p-6" key={title}>
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[#F4A460]/13 text-xl font-bold text-[#F4A460]">{index + 1}</span>
-              <h3 className="mt-5 text-xl font-bold text-white">{title}</h3>
-              <p className="mt-3 text-base leading-relaxed text-[#9AA7BD] xl:text-lg">MARKOS turns structured context into retrievable business memory for every agent.</p>
-            </div>
-          ))}
+      <article className="sunlit-panel-soft flex items-start gap-4 rounded-[1.75rem] p-6">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
+          <Lightbulb size={20} />
+        </span>
+        <div>
+          <h2 className="font-black text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--sunlit-muted)]">
+            Changes to approved business context can influence future Strategy and content. Existing saved work remains unchanged until you create a new
+            version.
+          </p>
         </div>
       </article>
     </section>
@@ -1336,7 +1813,11 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
 function latestVaultUpdate(vault: Record<VaultSection, KnowledgeVaultEntry[]> | undefined, sections: VaultSection[]): string | null {
   if (!vault) return null;
 
-  const timestamps = sections.flatMap((section) => vault[section] ?? []).map((entry) => entry.updatedAt).filter(Boolean).sort();
+  const timestamps = sections
+    .flatMap((section) => vault[section] ?? [])
+    .map((entry) => entry.updatedAt)
+    .filter(Boolean)
+    .sort();
   return timestamps.at(-1) ?? null;
 }
 
@@ -1345,25 +1826,6 @@ function formatVaultUpdatedAt(value: string, locale: Locale): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
-}
-
-export function FinalSettingsPanel() {
-  const [managed, setManaged] = useState<string | null>(null);
-  return (
-    <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Settings} subtitle="Workspace, billing, language, channels, and security controls." title="Settings" />
-      <section className="grid gap-5 lg:grid-cols-2 xl:gap-6">
-        {["Workspace Profile", "Language & Region", "Instagram Connection", "Billing & Usage", "Team Access", "Security"].map((title, index) => (
-          <article className="lux-card-muted rounded-[1.75rem] p-5 xl:p-7" key={title}>
-            <IconTile accentName={index % 3 === 0 ? "teal" : index % 3 === 1 ? "gold" : "amber"} icon={index % 2 === 0 ? Settings : Users} />
-            <h2 className="mt-5 text-xl font-bold text-white">{title}</h2>
-            <p className="mt-3 text-base leading-relaxed text-[#9AA7BD] xl:text-lg">Production controls stay visible without breaking the command-center visual system.</p>
-            <button className="mt-6 inline-flex items-center gap-2 text-base font-bold text-[#81D8D0] xl:text-lg" onClick={() => setManaged(title)} type="button">{managed === title ? "Opened" : "Manage"} <ArrowRight size={18} /></button>
-          </article>
-        ))}
-      </section>
-    </section>
-  );
 }
 
 function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
@@ -1392,7 +1854,9 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
         }}
         type="button"
       >
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[#81D8D0] to-[#D4AF37] text-base font-bold text-[#0F1419]">M</span>
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[#81D8D0] to-[#D4AF37] text-base font-bold text-[#0F1419]">
+          M
+        </span>
         <span className="text-lg font-bold">{name}</span>
         <Settings size={18} className="text-[#9AA7BD]" />
         {open ? <ChevronUp size={18} className="text-[#9AA7BD]" /> : <ChevronDown size={18} className="text-[#9AA7BD]" />}
@@ -1471,7 +1935,9 @@ function IconTile({ accentName, icon, size = "md" }: { accentName: Accent; icon:
   const Icon = icon;
   return (
     <div
-      className={size === "lg" ? "grid h-16 w-16 shrink-0 place-items-center rounded-full border" : "grid h-12 w-12 shrink-0 place-items-center rounded-xl border"}
+      className={
+        size === "lg" ? "grid h-16 w-16 shrink-0 place-items-center rounded-full border" : "grid h-12 w-12 shrink-0 place-items-center rounded-xl border"
+      }
       style={{ background: accent[accentName].bg, borderColor: accent[accentName].border }}
     >
       <Icon className={accent[accentName].className} size={size === "lg" ? 30 : 22} strokeWidth={1.8} />
@@ -1484,14 +1950,19 @@ function MetricRingCard({ accentName, icon, label, sub, value }: { accentName: A
   const Icon = icon;
   return (
     <article className="lux-card-muted rounded-[1.5rem] p-5 text-center xl:p-6">
-      <div className="mx-auto grid h-28 w-28 place-items-center rounded-full xl:h-32 xl:w-32" style={{ background: `conic-gradient(${color} 0 82%, rgba(255,255,255,.08) 82% 100%)`, filter: `drop-shadow(0 0 16px ${color}44)` }}>
+      <div
+        className="mx-auto grid h-28 w-28 place-items-center rounded-full xl:h-32 xl:w-32"
+        style={{ background: `conic-gradient(${color} 0 82%, rgba(255,255,255,.08) 82% 100%)`, filter: `drop-shadow(0 0 16px ${color}44)` }}
+      >
         <div className="grid h-20 w-20 place-items-center rounded-full bg-[#111920] xl:h-24 xl:w-24">
           <Icon className={accent[accentName].className} size={32} />
         </div>
       </div>
       <p className="mt-4 text-sm text-[#9AA7BD] xl:mt-5 xl:text-base">{label}</p>
       <p className="mt-2 font-display text-3xl font-bold text-white xl:text-4xl">{value}</p>
-      <p className={`mt-3 text-sm font-bold xl:mt-4 xl:text-base ${accent[accentName].className}`}>{sub} <ArrowRight className="inline" size={15} /></p>
+      <p className={`mt-3 text-sm font-bold xl:mt-4 xl:text-base ${accent[accentName].className}`}>
+        {sub} <ArrowRight className="inline" size={15} />
+      </p>
     </article>
   );
 }
@@ -1536,7 +2007,9 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
             <p className="font-display text-2xl font-bold text-white">{title}</p>
             <p className="mt-2 text-sm font-semibold text-[#81D8D0]">{subtitle}</p>
           </div>
-          <p className="text-center text-xs text-[#9AA7BD]">Swipe for details <ArrowRight className="inline" size={12} /></p>
+          <p className="text-center text-xs text-[#9AA7BD]">
+            Swipe for details <ArrowRight className="inline" size={12} />
+          </p>
         </div>
       );
     }
@@ -1604,7 +2077,11 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
             {status}
           </span>
         </div>
-        <a className="block w-full rounded-full border px-4 py-2 text-center text-sm font-bold transition hover:brightness-125" href={cardHref} style={{ borderColor, background: accent[accentName].bg, color }}>
+        <a
+          className="block w-full rounded-full border px-4 py-2 text-center text-sm font-bold transition hover:brightness-125"
+          href={cardHref}
+          style={{ borderColor, background: accent[accentName].bg, color }}
+        >
           {cta}
         </a>
       </div>
@@ -1651,7 +2128,9 @@ function OpportunityCard({
         <div>
           <p className="text-base font-bold text-[#D6DEEA] xl:text-lg">{theme}</p>
           <h2 className="mt-4 font-display text-2xl font-bold text-white xl:text-3xl">{title}</h2>
-          <p className="mt-4 max-w-5xl text-base leading-relaxed text-[#B8C4D8] xl:text-lg">Your audience is showing strong interest in this content angle. MARKOS can convert it into a campaign or a content batch immediately.</p>
+          <p className="mt-4 max-w-5xl text-base leading-relaxed text-[#B8C4D8] xl:text-lg">
+            Your audience is showing strong interest in this content angle. MARKOS can convert it into a campaign or a content batch immediately.
+          </p>
         </div>
         <div className="text-right">
           <p className="font-display text-3xl font-bold text-white xl:text-4xl">{confidence}</p>
@@ -1667,22 +2146,38 @@ function OpportunityCard({
         <div>
           <h3 className="text-lg font-bold text-white">Why This Will Work</h3>
           <ul className="mt-4 space-y-3 text-base text-[#B8C4D8]">
-            {why.map((item) => <li key={item}>{item}</li>)}
+            {why.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
         <div>
           <h3 className="text-lg font-bold text-white">Suggested Content Pieces</h3>
           <div className="mt-4 flex flex-wrap gap-3">
-            {pieces.map((piece) => <span className="rounded-full bg-white/10 px-4 py-2 font-semibold text-[#D6DEEA]" key={piece}>{piece}</span>)}
+            {pieces.map((piece) => (
+              <span className="rounded-full bg-white/10 px-4 py-2 font-semibold text-[#D6DEEA]" key={piece}>
+                {piece}
+              </span>
+            ))}
           </div>
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-3 xl:mt-8 xl:gap-4">
-        <a className="lux-button-primary inline-flex items-center gap-3 rounded-full px-6 py-3 text-base font-bold xl:px-7 xl:py-3.5" href={`/${locale}/app/content-studio`}>
+        <a
+          className="lux-button-primary inline-flex items-center gap-3 rounded-full px-6 py-3 text-base font-bold xl:px-7 xl:py-3.5"
+          href={`/${locale}/app/content-studio`}
+        >
           <Sparkles size={20} /> Generate Content <ArrowRight size={20} />
         </a>
-        <a className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-white xl:px-7 xl:py-3.5" href={`/${locale}/app/analytics`}>View Analysis</a>
-        <a className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-[#D6DEEA] xl:px-7 xl:py-3.5" href={`/${locale}/app/campaign-builder`}>Schedule Later</a>
+        <a className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-white xl:px-7 xl:py-3.5" href={`/${locale}/app/analytics`}>
+          View Analysis
+        </a>
+        <a
+          className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-[#D6DEEA] xl:px-7 xl:py-3.5"
+          href={`/${locale}/app/campaign-builder`}
+        >
+          Schedule Later
+        </a>
       </div>
     </article>
   );
@@ -1692,7 +2187,10 @@ function GlassStat({ icon, label, value }: { icon: IconType; label: string; valu
   const Icon = icon;
   return (
     <div className="lux-card-quiet rounded-[1.35rem] p-4 xl:p-5">
-      <p className="flex items-center gap-3 text-[#9AA7BD]"><Icon size={18} />{label}</p>
+      <p className="flex items-center gap-3 text-[#9AA7BD]">
+        <Icon size={18} />
+        {label}
+      </p>
       <p className="mt-4 font-display text-2xl font-bold text-white xl:text-3xl">{value}</p>
     </div>
   );
@@ -1702,7 +2200,9 @@ function ObjectiveCard({ icon, label, sub, value }: { icon: IconType; label: str
   const Icon = icon;
   return (
     <article className="lux-card-muted rounded-[1.5rem] p-5 xl:p-7">
-      <p className="flex items-center gap-3 text-lg font-bold text-white xl:gap-4 xl:text-xl"><Icon size={24} /> {label}</p>
+      <p className="flex items-center gap-3 text-lg font-bold text-white xl:gap-4 xl:text-xl">
+        <Icon size={24} /> {label}
+      </p>
       <p className="mt-5 font-display text-3xl font-bold text-white xl:mt-6 xl:text-4xl">{value}</p>
       <p className="mt-3 text-base text-[#9AA7BD] xl:text-lg">{sub}</p>
     </article>
@@ -1734,36 +2234,49 @@ function EditorBlock({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        <button className="font-bold text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={disabled || busy} onClick={handleAction} type="button">{busy ? "Working..." : applied ? "Applied" : action}</button>
+        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
+        <button
+          className="text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={disabled || busy}
+          onClick={handleAction}
+          type="button"
+        >
+          {busy ? "Working..." : applied ? "Applied" : action}
+        </button>
       </div>
-      <article className="lux-card-muted rounded-[1.75rem] p-5 xl:p-6">{children}</article>
+      <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">{children}</article>
     </section>
   );
 }
 
 function InstagramPreview({ brandName, caption, hashtags, type }: { brandName: string; caption: string; hashtags: string[]; type: string }) {
-  const cleanBrand = brandName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "") || "yourbrand";
+  const cleanBrand =
+    brandName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "") || "yourbrand";
   const previewCaption = caption.trim() || "Generated caption preview will appear here after MARKOS creates a workspace draft.";
   const previewTags = hashtags.slice(0, 4).join(" ");
   return (
-    <div className="mx-auto max-w-full rounded-[3rem] bg-black p-3 shadow-[0_30px_90px_rgba(0,0,0,.45)] sm:p-4">
-      <div className="h-[min(590px,calc(100vh-12rem))] min-h-[440px] w-[min(360px,calc(100vw-4rem))] overflow-hidden rounded-[2.5rem] bg-white text-black sm:w-[min(390px,calc(100vw-4rem))] xl:h-[min(640px,calc(100vh-11rem))]">
+    <div className="mx-auto max-w-full rounded-[3rem] bg-[var(--sunlit-ink)] p-3 shadow-[0_24px_70px_rgba(32,33,43,.22)] sm:p-4">
+      <div className="h-[min(590px,calc(100vh-12rem))] min-h-[440px] w-[min(330px,calc(100vw-4rem))] overflow-hidden rounded-[2.5rem] bg-white text-black xl:h-[min(620px,calc(100vh-11rem))]">
         <div className="flex items-center justify-between border-b border-black/5 px-5 py-4">
           <span className="font-bold">{cleanBrand}</span>
           <span className="text-2xl">...</span>
         </div>
-        <div className="grid h-[min(340px,45vh)] place-items-center bg-gradient-to-br from-[#101820] via-[#15232B] to-[#2B2415] text-center xl:h-[min(380px,48vh)]">
-          <Sparkles className="mx-auto text-[#81D8D0]" size={60} />
+        <div className="grid h-[min(320px,42vh)] place-items-center bg-gradient-to-br from-[var(--sunlit-coral)] via-[var(--sunlit-pink)] to-[var(--sunlit-yellow)] text-center xl:h-[min(350px,45vh)]">
+          <Sparkles className="mx-auto text-white" size={60} />
           <p className="mt-4 text-lg font-bold text-white xl:mt-5 xl:text-xl">{type} preview</p>
         </div>
         <div className="space-y-3 p-4 xl:p-5">
           <div className="flex justify-between text-xl xl:text-2xl">
-            <span>Like  Comment  Share</span>
+            <span>Like Comment Share</span>
             <span>Save</span>
           </div>
           <p className="font-bold">2,847 likes</p>
-          <p><span className="font-bold">{cleanBrand}</span> {previewCaption}</p>
+          <p>
+            <span className="font-bold">{cleanBrand}</span> {previewCaption}
+          </p>
           {previewTags ? <p className="text-sm text-black/65">{previewTags}</p> : null}
         </div>
       </div>

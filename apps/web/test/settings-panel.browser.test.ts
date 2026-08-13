@@ -10,6 +10,7 @@ if (!baseUrl)
 let browser: Browser;
 const session = {
   mfaVerified: true,
+  mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
   tokens: {
     accessToken: "browser-session-token",
     expiresIn: 900,
@@ -70,13 +71,15 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("is the active route, renders a truthful disconnected state, and prevents duplicate connect requests", async () => {
     const { page, requests } = await settingsPage(disconnected);
     await expect(
-      page.getByRole("heading", { name: "Settings" }).isVisible(),
+      page
+        .getByRole("heading", { name: "Settings", exact: true })
+        .isVisible(),
     ).resolves.toBe(true);
     await expect(
       page.locator(".bg-card, .bg-canvas, .text-navy").count(),
     ).resolves.toBe(0);
     await expect(
-      page.getByText("Not set", { exact: true }).isVisible(),
+      page.getByText("No account connected", { exact: true }).isVisible(),
     ).resolves.toBe(true);
     await expect(
       page.getByText("Dry run", { exact: true }).isVisible(),
@@ -135,15 +138,39 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
-  it("keeps the luxury Settings surface usable in Arabic RTL on mobile", async () => {
-    const { page } = await settingsPage(disconnected, "/ar/app/settings");
+  it("logs out from profile settings", async () => {
+    const { page, requests } = await settingsPage(
+      disconnected,
+      "/en/app/settings#profile",
+    );
+    const logout = page.getByRole("button", { name: "Log out", exact: true });
+    await logout.waitFor();
+
+    await Promise.all([
+      page.waitForURL(`${baseUrl}/en/login`),
+      logout.click(),
+    ]);
+
+    expect(
+      requests.filter((url) => url.endsWith("/v1/auth/logout")),
+    ).toHaveLength(1);
+    await expect(
+      page.evaluate(() => localStorage.getItem("markos.session")),
+    ).resolves.toBeNull();
+    await page.close();
+  });
+
+  it("keeps the Sunlit Settings surface usable in Arabic RTL on mobile", async () => {
+    const { page } = await settingsPage(disconnected, "/ar/app/settings#connections");
     await page.setViewportSize({ height: 844, width: 390 });
 
     await expect(
       page.locator('[lang="ar"][dir="rtl"]').count(),
     ).resolves.toBeGreaterThan(0);
     await expect(
-      page.getByRole("heading", { name: "الإعدادات" }).isVisible(),
+      page
+        .getByRole("heading", { name: "الإعدادات", exact: true })
+        .isVisible(),
     ).resolves.toBe(true);
     await expect(
       page.locator(".bg-card, .bg-canvas, .text-navy").count(),
@@ -348,7 +375,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     });
 
     await Promise.all([
-      page.waitForURL(/\/en\/app$/),
+      page.waitForURL(/\/en\/app\/strategy$/),
       page.getByRole("button", { name: "Approve profile & continue" }).click(),
     ]);
 
@@ -368,25 +395,25 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {
     const { page } = await settingsPage(
       connected,
-      "/en/app/settings?instagram=connected&code=provider-code&state=provider-state&tab=accounts&error_reason=none",
+      "/en/app/settings?instagram=connected&code=provider-code&state=provider-state&tab=accounts&error_reason=none#connections",
     );
     await page.getByText("@markos_business").waitFor();
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
       true,
     );
-    await expect(page.getByText("Bahrain launch").isVisible()).resolves.toBe(
-      true,
-    );
-    await expect(
-      page.getByText("VIDEO", { exact: true }).isVisible(),
-    ).resolves.toBe(true);
     await expect(
       page.getByRole("img", { name: "Bahrain launch" }).isVisible(),
     ).resolves.toBe(true);
     await expect(
+      page.getByText("Latest post", { exact: true }).isVisible(),
+    ).resolves.toBe(true);
+    await expect(
+      page.getByText("VIDEO", { exact: true }).count(),
+    ).resolves.toBe(0);
+    await expect(
       page.getByText(/7\/29\/2026|29\/07\/2026/).count(),
     ).resolves.toBeGreaterThan(0);
-    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts`);
+    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts#connections`);
     const content = await page.locator("body").innerText();
     for (const secret of [
       "provider-code",
@@ -403,10 +430,13 @@ describe("active SettingsPanel Instagram interactions", () => {
 
     const malformed = await settingsPage(
       connected,
-      "/en/app/settings?instagram=unsupported&code=provider-code&state=provider-state&safe=retained",
+      "/en/app/settings?instagram=unsupported&code=provider-code&state=provider-state&safe=retained#connections",
+    );
+    await malformed.page.waitForURL(
+      `${baseUrl}/en/app/settings?safe=retained#connections`,
     );
     expect(malformed.page.url()).toBe(
-      `${baseUrl}/en/app/settings?safe=retained`,
+      `${baseUrl}/en/app/settings?safe=retained#connections`,
     );
     await expect(malformed.page.getByRole("status").count()).resolves.toBe(0);
     await malformed.page.close();
@@ -419,13 +449,12 @@ describe("active SettingsPanel Instagram interactions", () => {
 
   it("renders empty and reauthorization states without claiming normal connection or revocation", async () => {
     const empty = await settingsPage({ ...connected, recentMedia: [] });
-    await empty.page
-      .getByText("No recent media was returned for this account.")
-      .waitFor();
+    await empty.page.getByText("@markos_business").waitFor();
     await expect(
-      empty.page
-        .getByText("No recent media was returned for this account.")
-        .isVisible(),
+      empty.page.getByText("Latest post", { exact: true }).count(),
+    ).resolves.toBe(0);
+    await expect(
+      empty.page.getByText("@markos_business").isVisible(),
     ).resolves.toBe(true);
     await empty.page.close();
 
@@ -451,7 +480,7 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("renders MFA enrollment as a local QR flow with a readable six-digit field", async () => {
     const { page, setMfaEnabled } = await settingsPage(
       disconnected,
-      "/en/app/settings",
+      "/en/app/settings#security",
       false,
     );
     const setup = {
@@ -504,8 +533,8 @@ describe("active SettingsPanel Instagram interactions", () => {
         color: styles.color,
       };
     });
-    expect(fieldColors.color).toBe("rgb(255, 255, 255)");
-    expect(fieldColors.backgroundColor).not.toBe("rgb(255, 255, 255)");
+    expect(fieldColors.color).toBe("rgb(32, 33, 43)");
+    expect(fieldColors.backgroundColor).toBe("rgb(255, 255, 255)");
     await page.screenshot({
       path: "evidence/settings-mfa-setup.png",
       fullPage: true,
@@ -529,9 +558,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     const mfaStatusRow = page
       .getByText("MFA", { exact: true })
       .locator("..");
-    expect(await mfaStatusRow.innerText()).toContain(
-      "Verified for this session",
-    );
+    expect(await mfaStatusRow.innerText()).toContain("Verified for 15 minutes");
     await page
       .locator('[data-notification-toast][role="status"]')
       .waitFor({ state: "detached", timeout: 8000 });
@@ -601,7 +628,7 @@ describe("active SettingsPanel Instagram interactions", () => {
   it("preserves connection on reconnect failure and cancellation", async () => {
     const { page } = await settingsPage(
       connected,
-      "/en/app/settings?instagram=error&tab=accounts",
+      "/en/app/settings?instagram=error&tab=accounts#connections",
     );
     await page.getByText("@markos_business").waitFor();
     await expect(page.getByText("@markos_business").isVisible()).resolves.toBe(
@@ -615,7 +642,7 @@ describe("active SettingsPanel Instagram interactions", () => {
         )
         .isVisible(),
     ).resolves.toBe(true);
-    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts`);
+    expect(page.url()).toBe(`${baseUrl}/en/app/settings?tab=accounts#connections`);
     await page.route(
       /^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/workspace\/instagram\/oauth\/start$/,
       (route) =>
@@ -690,9 +717,13 @@ describe("active SettingsPanel Instagram interactions", () => {
         },
       }),
     );
-    await confirmed.page.getByText("Not set", { exact: true }).waitFor();
+    await confirmed.page
+      .getByText("No account connected", { exact: true })
+      .waitFor();
     await expect(
-      confirmed.page.getByText("Not set", { exact: true }).isVisible(),
+      confirmed.page
+        .getByText("No account connected", { exact: true })
+        .isVisible(),
     ).resolves.toBe(true);
     await expect(
       confirmed.page
@@ -740,7 +771,9 @@ describe("active SettingsPanel Instagram interactions", () => {
     await unconfirmed.page.getByRole("button", { name: "Disconnect" }).click();
     await unconfirmed.page.getByText(/To finish on Instagram/).waitFor();
     await expect(
-      unconfirmed.page.getByText("Not set", { exact: true }).isVisible(),
+      unconfirmed.page
+        .getByText("No account connected", { exact: true })
+        .isVisible(),
     ).resolves.toBe(true);
     const manualAction = unconfirmed.page.getByRole("link", {
       name: "Finish on Instagram",
@@ -826,9 +859,11 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page
       .locator('input[autocomplete="current-password"]')
       .fill("CorrectHorseBattery99!");
-    await page.getByRole("button", { name: "Log in to MARKOS" }).click();
+    await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL(/\/en\/app\/settings#profile$/);
-    await page.getByRole("heading", { name: "Settings" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Settings", exact: true })
+      .waitFor();
     await expect(
       page.locator("#profile").getByText("owner@markos.test").isVisible(),
     ).resolves.toBe(true);
@@ -889,8 +924,12 @@ describe("active SettingsPanel Instagram interactions", () => {
       }),
     ]);
     await Promise.all([
-      first.getByRole("heading", { name: "Settings" }).waitFor(),
-      second.getByRole("heading", { name: "Settings" }).waitFor(),
+      first
+        .getByRole("heading", { name: "Settings", exact: true })
+        .waitFor(),
+      second
+        .getByRole("heading", { name: "Settings", exact: true })
+        .waitFor(),
     ]);
 
     expect(refreshCalls).toBe(2);
@@ -901,16 +940,19 @@ describe("active SettingsPanel Instagram interactions", () => {
 
 async function settingsPage(
   connection: Record<string, unknown>,
-  path = "/en/app/settings",
+  path = "/en/app/settings#connections",
   mfaEnabled = true,
 ) {
   const page = await browserPage();
   const requests: string[] = [];
   let currentMfaEnabled = mfaEnabled;
-  await page.addInitScript(
-    (value) => localStorage.setItem("markos.session", JSON.stringify(value)),
-    storedIdentity,
-  );
+  await page.addInitScript((value) => {
+    const seededKey = "markos.browser-test.session-seeded";
+    if (sessionStorage.getItem(seededKey)) return;
+
+    localStorage.setItem("markos.session", JSON.stringify(value));
+    sessionStorage.setItem(seededKey, "true");
+  }, storedIdentity);
   await page.route("https://media.markos.test/**", (route) =>
     route.fulfill({
       status: 200,
@@ -928,6 +970,8 @@ async function settingsPage(
       requests.push(request.url());
       const pathname = new URL(request.url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (pathname === "/v1/auth/logout")
+        return route.fulfill(json({ loggedOut: true }));
       if (pathname === "/v1/auth/mfa/totp")
         return route.fulfill(json({ enabled: currentMfaEnabled }));
       if (pathname === "/v1/workspace/instagram" && request.method() === "GET")
@@ -949,6 +993,7 @@ async function settingsPage(
   await page
     .getByRole("heading", {
       name: path.startsWith("/ar/") ? "الإعدادات" : "Settings",
+      exact: true,
     })
     .waitFor();
   return {
