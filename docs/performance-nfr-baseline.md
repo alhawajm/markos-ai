@@ -1,6 +1,8 @@
 # Performance NFR Baseline
 
-This runbook closes the first M6 performance-work gate by creating a repeatable baseline check for release candidates. It does not close the load-test gate; concurrency, soak, and stress testing remain separate work.
+Status date: 2026-08-16.
+
+This runbook defines the first repeatable M6 performance baseline for release candidates. A previous passing run does not close the gate for a new candidate, and this check does not replace concurrency, soak, or stress testing.
 
 ## Baseline Command
 

@@ -1,6 +1,6 @@
 # Management Presentation User Journey
 
-Date: August 12, 2026
+Status date: August 16, 2026.
 
 This runbook keeps the management presentation focused on the first clear MARKOS value loop: understand the business, confirm that understanding, and produce a useful Strategy. It is not a production-readiness checklist or a complete redesign plan.
 
@@ -22,11 +22,11 @@ Prepare the tabs before the meeting and keep them in this order.
 | 6 | `/en/app/strategy` | Approved workspace | Show the first business-specific 30-day Strategy | 2–3 minutes |
 | 7 | `/en/app/settings` | Authenticated workspace | Close with user control, security, and MFA-gated Instagram access | 1 minute |
 
-Login and password recovery remain available as supporting tabs but are not required stops unless management asks about them:
+Login is available as a supporting tab but is not a required stop unless management asks about it:
 
 - `/en/login`
-- `/en/forgot-password`
-- `/en/reset-password`
+
+The `/en/forgot-password` and `/en/reset-password` routes currently present an unavailable/deferred state; do not describe them as working recovery flows.
 
 Terms and Privacy are supporting infrastructure, not part of the main presentation path.
 

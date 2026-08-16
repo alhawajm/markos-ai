@@ -19,7 +19,7 @@ describe("MetaGraphInstagramPublisher", () => {
     const publisher = new MetaGraphInstagramPublisher({
       fetchImpl,
       graphBaseUrl: "https://graph.test",
-      graphVersion: "v24.0",
+      graphVersion: "v25.0",
       pollAttempts: 1,
       pollDelayMs: 0
     });
@@ -38,14 +38,14 @@ describe("MetaGraphInstagramPublisher", () => {
     expect(calls).toHaveLength(3);
     expect(calls[0]).toMatchObject({
       method: "POST",
-      url: "https://graph.test/v24.0/17841400000000000/media"
+      url: "https://graph.test/v25.0/17841400000000000/media"
     });
     expect(calls[0]?.body).toContain("image_url=https%3A%2F%2Fcdn.example.com%2Fpost.jpg");
     expect(calls[0]?.body).toContain("caption=English+caption");
-    expect(calls[1]?.url).toBe("https://graph.test/v24.0/creation-1?fields=status_code&access_token=test-token");
+    expect(calls[1]?.url).toBe("https://graph.test/v25.0/creation-1?fields=status_code&access_token=test-token");
     expect(calls[2]).toMatchObject({
       method: "POST",
-      url: "https://graph.test/v24.0/17841400000000000/media_publish"
+      url: "https://graph.test/v25.0/17841400000000000/media_publish"
     });
     expect(calls[2]?.body).toContain("creation_id=creation-1");
   });
@@ -67,7 +67,7 @@ describe("MetaGraphInstagramPublisher", () => {
     const publisher = new MetaGraphInstagramPublisher({
       fetchImpl,
       graphBaseUrl: "https://graph.test",
-      graphVersion: "v24.0",
+      graphVersion: "v25.0",
       pollAttempts: 1,
       pollDelayMs: 0
     });
@@ -94,7 +94,7 @@ describe("MetaGraphInstagramPublisher", () => {
     const publisher = new MetaGraphInstagramPublisher({
       fetchImpl,
       graphBaseUrl: "https://graph.test",
-      graphVersion: "v24.0",
+      graphVersion: "v25.0",
       pollAttempts: 1,
       pollDelayMs: 0
     });
@@ -127,7 +127,7 @@ describe("MetaGraphInstagramPublisher", () => {
     const publisher = new MetaGraphInstagramPublisher({
       fetchImpl,
       graphBaseUrl: "https://graph.test",
-      graphVersion: "v24.0"
+      graphVersion: "v25.0"
     });
 
     const limit = await publisher.getPublishingLimit({ workspace: workspace() });
@@ -137,7 +137,7 @@ describe("MetaGraphInstagramPublisher", () => {
       quotaTotal: 50,
       quotaUsage: 12
     });
-    expect(calls).toEqual(["https://graph.test/v24.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"]);
+    expect(calls).toEqual(["https://graph.test/v25.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"]);
   });
 });
 

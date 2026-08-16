@@ -1,6 +1,8 @@
 # Load Test
 
-This runbook closes the M6 load-test gate for a repeatable public-readiness scenario. It is designed to be safe against local and staging environments because it only exercises read-only API and localized web shell endpoints.
+Status date: 2026-08-16.
+
+This runbook defines the M6 repeatable public-readiness load scenario. A previous passing run does not close the gate for a new release candidate. The scenario is designed to be safe against local and staging environments because it only exercises read-only API and localized public routes.
 
 ## Command
 

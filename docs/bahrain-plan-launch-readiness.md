@@ -1,5 +1,7 @@
 # Bahrain Plan Launch Readiness
 
+Status date: 2026-08-16.
+
 This runbook tracks the M6 gate for launching Starter and Growth plans in Bahrain.
 
 ## Readiness Endpoint

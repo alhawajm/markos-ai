@@ -2,7 +2,9 @@
 
 ## 2026-06-10: Canonical Documents
 
-Use `MARKOS_BUILD_SPEC. 2.pdf` and `MARKOS_AGENTS. 2.0.pdf` as canonical over older PDFs and over older implementation-plan assumptions.
+At that time, the project treated `MARKOS_BUILD_SPEC. 2.pdf` and `MARKOS_AGENTS. 2.0.pdf` as canonical over the other planning files. The agent PDF is now retired; this text records the historical rule rather than the current source contract.
+
+> Superseded on 2026-08-16. The historical decision is retained for chronology; the current source contract is recorded below.
 
 ## 2026-06-10: Payments Precedence
 
@@ -324,3 +326,27 @@ Keep role-required login assurance separate from recent-action assurance. Roles 
 Render `/{locale}/app/settings` outside the main application shell. Use one internal settings menu, keep the locale control in the page header, and return to the last recorded main application route or Overview. Group account and workspace identity, connected accounts, security, billing, and data/activity by user task; show one compact Instagram account preview instead of reproducing its media feed.
 
 Use compact page introductions throughout the primary app and prioritize live state, decisions, and controls in the first viewport. Oversized static hero panels are a marketing pattern and should not consume the working area of Overview, Strategy, Create, Insights, or Business Profile.
+
+## 2026-08-16: Active sources replace the original planning set
+
+Use the root `AGENTS.md`, `docs/source/MARKOS_BUILD_SPEC. 2.pdf`, and `docs/source/MARKOS_EXPERIENCE_FLOWS.md` as the active instruction, structural, and behavioral source set. Use `docs/project-status.md` as the dated implementation/evidence overlay; it does not change target behavior by itself.
+
+The original PRD, implementation plan, cost model, Figma design document, and PDF copy of the old agent instructions were compared with the active sources before retirement. Preserve them under `docs/archive/source/` as non-normative history. Do not copy their time-sensitive pricing, model, AWS, Facebook-Page, permission, or provider-limit assumptions into current work without renewed research. The build specification's PRD reference map, the active experience flows, the Sunlit product-surface inventory, and the Bahrain operational runbooks retain the requirements that still govern the final system.
+
+## 2026-08-16: Sunlit cutover does not reduce final product scope
+
+PR #19 intentionally replaced the previous public and authenticated presentation with Sunlit Social Studio and retired the temporary `/design-preview` route family. Deleting the old dark panels during that cutover did not remove their underlying capabilities from the build-spec target.
+
+Treat the missing full operational surfaces recorded in `docs/ui-design-foundation.md` as deferred Sunlit restoration or reimplementation work, not as intentionally removed product scope. Do not blindly restore deleted components from Git history: use their behavior only as evidence, then implement the current API, session, workspace, accessibility, and Sunlit contracts. A redirect from an old route to a smaller current surface is compatibility behavior, not proof that the original capability has been replaced.
+
+## 2026-08-16: Strategy horizons distinguish target from current validation
+
+The intended final product offers 30-, 60-, and 90-day Strategy generation. Which horizons belong to which plans remains a product decision. A 7-day Strategy is a possible future option, not an accepted contract yet.
+
+Current source exposes 30/60/90 choices in the Sunlit Strategy UI, defaults that UI to 30 days, and validates any integer horizon from 30 through 180 days at the shared API boundary. Do not describe 7-day generation as implemented; adding it requires an explicit validation, provider-contract, quota, plan, UI, and test change.
+
+## 2026-08-16: Graph v25.0 is provisional configuration
+
+MARKOS has one Instagram product integration, but current source separates the Instagram Login/account client settings from the publishing/analytics adapter settings. This is a transport/configuration split, not a claim that the product uses two unrelated integrations.
+
+Use v25.0 provisionally for both version defaults because it is the only visible version in the supplied Railway snapshots and is the current working choice. This is not an API-research conclusion. Before enabling either remaining permission, verify the correct hosts, version placement, endpoints, fields, media requirements, metrics, review contract, and migration implications against current authoritative Meta documentation and the real dashboard.

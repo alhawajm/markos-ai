@@ -1,8 +1,16 @@
 # Private Beta Readiness
 
+Status date: 2026-08-16.
+
 This runbook closes the M6 private beta readiness planning gate. It does not close live external gates by itself; staging proof, Meta App Review, live Instagram publishing, live analytics, and payment certification remain open until verified with real provider accounts.
 
-Status update, 2026-08-03: one real professional account completed the production business-basic connection and loaded recent media. Keep the broader external gates open. The AI service still returns deterministic local scaffolding and is not OpenAI-backed; do not invite users on the promise of production AI behavior until the phased AI gate in `docs/project-status.md` is satisfied.
+Current evidence is narrower than beta readiness:
+
+- On 2026-08-03, one real professional account completed the production `instagram_business_basic` connection and loaded recent media.
+- On 2026-08-06, a direct request from the Railway AI service reached OpenAI successfully, but the then-deployed Strategy application path returned `503`. The current shared Strategy/profile provider adapter has not yet been verified in the deployed application path.
+- PR #19 mounted the Sunlit UI and intentionally removed the temporary design-preview URLs, but it also removed several browser surfaces that remain in final product scope. See `docs/ui-design-foundation.md` and `docs/decisions.md`.
+
+Do not invite users on the promise of provider-backed AI, complete publishing operations, full analytics, or full administration until the corresponding deployed and browser-visible paths are verified.
 
 ## Beta Scope
 
@@ -10,17 +18,19 @@ Private beta is for a small Bahrain SMB cohort using MARKOS as an Instagram-firs
 
 Allowed beta surfaces:
 
-- Register, verify email, login, Google login, and MFA for sensitive roles.
+- Register, verify email, log in with email/password, refresh the browser session, and use MFA for sensitive roles. The Google-auth API exists, but the current Sunlit Google button is intentionally unavailable; password recovery is also not mounted as a working flow.
 - Arabic and English app shell with RTL behavior.
-- Seven-module onboarding and Knowledge Vault completeness.
-- Vault-grounded local strategy/content scaffolding and the current deterministic image/agent-shaped paths, with their limitation explained to testers.
-- Content approval, scheduling, failed-publish queue, and rescheduling.
-- Instagram connection, live-readiness checks, and dry-run publishing by default.
-- Analytics screens, analytics consultant, monthly PDF generation, and Vault learning loop.
-- Billing checkout, subscription lifecycle, VAT invoices, quotas, prorated upgrade, and admin controls.
+- Seven-module onboarding, generated/edited/approved bilingual business profile, and the current Business Profile summary.
+- Vault-grounded Strategy generation only after the selected `AI_TEXT_PROVIDER` path is verified in the deployed application. The 30/60/90-day choices are current; a 7-day option is a possible future addition.
+- Current Create flow for content generation, editing, approval, and scheduling, with deterministic/provider limitations explained to testers.
+- Instagram connection with `instagram_business_basic`, recent-media loading, readiness checks, and dry-run publishing through the API or worker by default.
+- Current Insights summary for 7/30-day metrics, top content, and monthly PDF generation in the configured mode.
+- Billing and administration APIs only when the beta script explicitly covers them and the operator can support the workflow safely.
 
 Excluded from unattended beta until separately approved:
 
+- Google sign-in and password recovery through the current browser UI.
+- Full Vault editor/history, content calendar, media library, failed-publish queue/retry UI, AI consultant, the AN-01 through AN-06 analytics suite, and admin console until their Sunlit surfaces are restored and verified. These remain final-system scope rather than retired requirements.
 - `INSTAGRAM_PUBLISH_MODE=live` outside a controlled verification window.
 - `INSTAGRAM_ANALYTICS_SYNC_MODE=live` outside a controlled verification window.
 - Live CrediMax, BENEFIT, or Stripe payment capture before merchant certification evidence is attached.
@@ -35,12 +45,13 @@ All items below must be true before inviting external beta users.
 | Build health      | `corepack pnpm verify` and `corepack pnpm build` pass on the release candidate.                                                                                                                    |
 | Staging           | GitHub Actions publishes images and the staging environment is reachable over HTTPS.                                                                                                               |
 | Tenant isolation  | Workspace isolation test suite passes, including every Prisma model with `workspaceId`.                                                                                                            |
-| Auth              | Register, verify, login, Google login, refresh rotation, and MFA sensitive-role checks pass.                                                                                                       |
+| Auth              | Register, verify, email/password login, browser-session refresh, and MFA sensitive-role checks pass. Google login and password recovery are required only if included in the declared beta scope.   |
 | Arabic/RTL        | Arabic routes render with RTL direction and no blocking layout regressions.                                                                                                                        |
 | Vault/RAG         | A grounded Strategy Agent call returns workspace-specific Vault context.                                                                                                                           |
 | AI provider       | The deployed AI service is reachable through a protected backend boundary and the beta scope explicitly states whether responses are deterministic scaffolding or verified provider-backed output. |
 | Billing           | BHD fils, 10 percent VAT, invoice PDF, quotas, and prorated upgrade flows pass in dry-run mode.                                                                                                    |
-| Admin             | Admin roles can edit plan limits, prompt templates, and approved model settings without deploy.                                                                                                    |
+| Product surfaces  | Every browser surface promised to beta users is mounted in Sunlit and passes the declared user script; missing final-system surfaces are listed explicitly.                                        |
+| Admin             | If administration is in beta scope, roles can edit plan limits, prompt templates, and approved model settings through a verified API or restored Sunlit admin surface.                             |
 | Observability     | Web, API, worker, and AI services have Sentry or equivalent DSNs configured in staging.                                                                                                            |
 | External blockers | Open provider gates are listed for the beta owner and are not hidden as product-complete.                                                                                                          |
 
@@ -76,21 +87,22 @@ Each beta workspace should complete this path once.
 1. Register, verify email, and log in.
 2. Switch between English and Arabic and confirm navigation remains usable.
 3. Complete onboarding.
-4. Review Vault completeness and resolve at least one surfaced gap.
-5. Generate one strategy from Vault context.
-6. Generate one bilingual content item from a calendar slot.
-7. Generate or attach one media asset.
-8. Approve the item and schedule it.
-9. Run publishing in dry-run mode and verify the queue result.
-10. Trigger one blocked quota path or confirm the quota state in Billing.
-11. Download one VAT invoice PDF.
-12. Open Analytics and confirm the current available metrics and AI explanation.
+4. Review the Business Profile summary and resolve at least one onboarding/profile gap if the current UI exposes it.
+5. Generate one 30/60/90-day strategy from Vault context and confirm the response is from the declared provider mode.
+6. Generate and edit one bilingual content item in Create.
+7. Attach or generate one media asset through the currently supported path and verify publish readiness.
+8. Approve and schedule the item.
+9. Run publishing in dry-run mode through the API or worker and verify the persisted result. Do not describe this as a complete queue/recovery UI.
+10. Open Insights and confirm the current 7/30-day summary and monthly PDF behavior in the configured analytics mode.
+11. If billing is included in the beta scope, trigger one quota state and complete the dry-run invoice/VAT script.
 
 ## Evidence To Save
 
-For every beta workspace, save:
+Keep the participant registry outside Git in an access-controlled location. In committed or shared repository evidence, use a pseudonymous beta reference and redact account or provider identifiers.
 
-- Workspace id and owner email.
+For every beta workspace, save in the controlled evidence store:
+
+- Pseudonymous beta reference, with the workspace ID and owner contact kept only in the separate secure registry.
 - Date invited and current plan.
 - Onboarding completion screenshot or API response.
 - Vault completeness score after onboarding.
@@ -118,6 +130,7 @@ Private beta can move toward launch only when:
 - VAT compliance verification passes.
 - Arabic/RTL QA passes.
 - Load test and OWASP audit gates pass.
+- Every customer-facing surface included in launch scope is restored in Sunlit and passes its browser journey.
 
 ## Rollback
 

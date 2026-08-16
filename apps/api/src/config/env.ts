@@ -48,7 +48,7 @@ export const envSchema = z.object({
   META_APP_SECRET: optionalString,
   META_WEBHOOK_VERIFY_TOKEN: optionalString,
   META_GRAPH_BASE_URL: z.string().url().default("https://graph.facebook.com"),
-  META_GRAPH_VERSION: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).default("v24.0")),
+  META_GRAPH_VERSION: z.preprocess((value) => (value === "" ? undefined : value), z.string().min(1).default("v25.0")),
   INSTAGRAM_OAUTH_AUTHORIZE_URL: z.string().url().default("https://www.instagram.com/oauth/authorize"),
   INSTAGRAM_OAUTH_TOKEN_URL: z.string().url().default("https://api.instagram.com/oauth/access_token"),
   INSTAGRAM_LONG_LIVED_TOKEN_URL: z.string().url().default("https://graph.instagram.com/access_token"),

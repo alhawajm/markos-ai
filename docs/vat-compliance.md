@@ -1,6 +1,8 @@
 # Bahrain VAT Compliance Verification
 
-This runbook closes the M6 VAT compliance verification gate for the billing behavior MARKOS supports today. It verifies generated invoices in code and records the launch caveats that still require operational input.
+Status date: 2026-08-16.
+
+This runbook defines the M6 VAT compliance verification gate for the billing behavior MARKOS supports today. It verifies generated invoices in code and records the launch caveats that still require release-candidate, payment-provider, and legal evidence.
 
 ## Supported Rules
 

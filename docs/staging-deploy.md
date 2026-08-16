@@ -1,6 +1,6 @@
 # Railway Deployment and Staging Runbook
 
-Status date: 2026-08-09.
+Status date: 2026-08-16.
 
 Railway is the current early-stage operating direction for MARKOS AI. The working planning horizon is approximately the first 50 users while capacity, reliability, cost, and security are observed. AWS may be considered later; no migration is approved or scheduled.
 
@@ -10,20 +10,20 @@ This is the A-to-Z repository runbook for reconstructing and auditing the deploy
 
 The repository proves Dockerfiles, commands, health endpoints, environment parsing, database initialization, CI behavior, and application contracts. It cannot prove the current Railway dashboard.
 
-The handoff reports one repository, one Railway project, one Railway environment, a deployed Next.js web service, a deployed API service, and Railway PostgreSQL. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. The exact project/environment layout, deployment source, domains, Redis/OpenSearch topology, variables, health checks, and service counts still require a Railway dashboard inventory.
+The handoff reports one repository and an early-stage Railway deployment. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. User-supplied Railway variable screenshots captured on 2026-08-16 show service panels for `web`, `api`, `ai`, `pgvector`, and `redis`; they do not prove deployment health, networking, domains, worker/OpenSearch existence, or the complete project/environment topology.
 
-Railway status contexts on draft PR #18 report successful web, API, and AI deployments for the current committed branch head. That proves deployment completion signals only; the shared provider-backed Strategy and onboarding-profile application paths still require a controlled live request and persisted-result review.
+PRs #18, #19, and #20 are merged into the current repository `main`. The supplied screenshots do not expose the deployed commit SHA, so repository merge state must not be described as current Railway deployment proof. The shared provider-backed Strategy/onboarding-profile application path still requires a controlled live request and persisted-result review.
 
 ## Current service contract
 
 | Service/dependency | Repository source                                      | Start/listen contract                                                                                 | Health/readiness                                            | Current external status                                                                                                                                            |
 | ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web                | `apps/web/Dockerfile`                                  | `pnpm --filter web start`; Next.js default port 3000                                                  | `/ar`, `/en`, and `/en/app/settings` for rendered Settings  | Reported deployed; production Settings participated in the 2026-08-03 connection. Verify Railway source, domain, build variable, and health check.                 |
-| API                | `apps/api/Dockerfile`                                  | `pnpm --filter api start`; listens on injected `PORT` or `API_PORT`                                   | `/v1/health`, `/v1/health/deep`                             | Reported deployed; callback and persistence completed on 2026-08-03. Verify current deployment and dependencies.                                                   |
+| Web                | `apps/web/Dockerfile`                                  | `pnpm --filter web start`; Next.js default port 3000                                                  | `/ar`, `/en`, and `/en/app/settings` for rendered Settings  | A 2026-08-16 screenshot shows its variable panel; production Settings participated in the 2026-08-03 connection. Verify source, deployed SHA, domain, build variable, and health check. |
+| API                | `apps/api/Dockerfile`                                  | `pnpm --filter api start`; listens on injected `PORT` or `API_PORT`                                   | `/v1/health`, `/v1/health/deep`                             | A 2026-08-16 screenshot shows its variable panel; callback and persistence completed on 2026-08-03. Verify current deployment, SHA, and dependencies. |
 | Worker             | `apps/api/worker.Dockerfile`                           | `pnpm --filter api worker`; no HTTP port                                                              | Worker lifecycle logs and resulting database/audit state    | Repository implementation only; verify whether a Railway worker service exists and is healthy.                                                                     |
-| AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | Railway reports a successful deployment for the current committed PR head. Provider-backed application responses remain pending controlled live verification.       |
-| PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | Persistence worked for the production connection, but version, extensions, roles, backups, connection limits, and migration history require operator verification. |
-| Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | Verify Railway deployment, private networking, persistence expectations, and availability.                                                                         |
+| AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | A 2026-08-16 screenshot shows its variable panel. A prior direct provider request succeeded, but the current application adapter remains pending deployed verification. |
+| PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | A `pgvector` variable panel is externally evidenced and persistence worked for the production connection; version, extensions, roles, backups, limits, and migration history still require operator verification. |
+| Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | A `redis` variable panel is externally evidenced; deployment status, private networking, persistence expectations, and availability remain unverified. |
 | OpenSearch         | `docker-compose.yml`, API deep health/search code      | Reachable HTTP service                                                                                | API deep health checks `/_cluster/health`                   | Verify whether it is deployed. Loopback is invalid from a separate Railway API service.                                                                            |
 | Media storage      | `apps/api/src/media/storage-service.ts`                | Local filesystem under `MEDIA_STORAGE_DIR`; public URL from `MEDIA_PUBLIC_BASE_URL` or `API_BASE_URL` | Upload/read smoke plus Meta fetchability when publishing    | Not durable CDN infrastructure. Acceptable only for current connection work; not approved for live publishing.                                                     |
 
@@ -50,7 +50,7 @@ Environment sources are deliberately separate:
 - Docker build contexts exclude `.env` files. The images do not copy local environment files.
 - Railway injects runtime variables per service. `NEXT_PUBLIC_API_BASE_URL` must also be available during the web image build because Next.js embeds public variables at `next build` time.
 
-The active branch is connected to Railway deployment status checks. Configure the production email variables before pushing the email-verification candidate: with `NODE_ENV=production`, the API now refuses to start unless SendGrid delivery is complete. This ordering prevents a successful deployment that cannot complete signup.
+With `NODE_ENV=production`, the API refuses to start unless SendGrid delivery is complete. Keep the production email variables coherent before any deployment so a nominally successful release cannot leave signup without verification delivery.
 
 ## Variable inventory by service
 
@@ -73,6 +73,8 @@ Core and dependencies:
 - `API_BASE_URL`
 - `WEB_BASE_URL`
 - `AI_BASE_URL`
+- `INTERNAL_SERVICE_TOKEN`
+- `AI_HTTP_TIMEOUT_MS`
 - `DATABASE_URL`
 - `REDIS_URL`
 - `OPENSEARCH_URL`
@@ -87,6 +89,7 @@ Authentication and application security:
 - `JWT_REFRESH_SECRET`
 - `JWT_ACCESS_TTL`
 - `JWT_REFRESH_TTL`
+- `MFA_STEP_UP_TTL`
 - `EMAIL_VERIFICATION_TTL`
 - `EMAIL_PROVIDER` — must be `sendgrid` in production.
 - `SENDGRID_API_KEY` — API-only secret with transactional mail access.
@@ -101,6 +104,7 @@ Media and models:
 - `MEDIA_STORAGE_DIR`
 - `MEDIA_PUBLIC_BASE_URL` (optional for connection; not durable storage by itself)
 - `LLM_PRIMARY_MODEL`
+- `LLM_LONGFORM_MODEL`
 - `IMAGE_MODEL_PRIMARY`
 - `IMAGE_MODEL_FALLBACK`
 
@@ -112,9 +116,12 @@ Instagram Login and callbacks:
 - `INSTAGRAM_OAUTH_STATE_SECRET`
 - `INSTAGRAM_TOKEN_ENCRYPTION_KEY`
 - `INSTAGRAM_GRAPH_VERSION`
+- `INSTAGRAM_OAUTH_SCOPES` — validated as exactly `instagram_business_basic`; it is a readiness/compatibility input, not the active authorization source.
 - `INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS`
 - `META_APP_SECRET`
 - `META_WEBHOOK_VERIFY_TOKEN`
+
+The schema also parses `INSTAGRAM_GRAPH_BASE_URL`, `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, and `INSTAGRAM_REFRESH_TOKEN_URL` as compatibility inputs. The active business-basic client constrains those provider hosts in code; setting the compatibility names does not redirect or expand the live client.
 
 Publishing and analytics foundations:
 
@@ -128,7 +135,7 @@ Publishing and analytics foundations:
 - `META_GRAPH_BASE_URL`
 - `META_GRAPH_VERSION`
 
-The active OAuth request is fixed in code to `instagram_business_basic`. Compatibility/readiness variables do not grant additional permissions.
+The active OAuth request is fixed in code to `instagram_business_basic`. Compatibility/readiness variables do not grant additional permissions. `INSTAGRAM_GRAPH_*` supports the Instagram Login/account client, while `META_GRAPH_*` currently supports publishing/analytics adapters. Those are two transports inside one Instagram integration; the host/version contract must be confirmed during permission research. Use v25.0 provisionally in current configuration.
 
 Observability:
 
@@ -178,6 +185,27 @@ Current code consumes:
 - `SENTRY_TRACES_SAMPLE_RATE`
 
 Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request.
+
+### 2026-08-16 Railway variable-name snapshot
+
+The user supplied screenshots of the Railway variable panels. Values were hidden except the explicitly visible `INSTAGRAM_GRAPH_VERSION=v25.0`. This is name-level external evidence only; it does not prove validity, service health, sharing, deployment SHA, or runtime consumption.
+
+| Service | Visible service-level names |
+| --- | --- |
+| Web | `RAILWAY_DOCKERFILE_PATH`, `NEXT_PUBLIC_API_BASE_URL` |
+| API | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `WEB_BASE_URL`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `NODE_ENV`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, `INSTAGRAM_OAUTH_STATE_SECRET`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_OAUTH_SCOPES`, `INSTAGRAM_PUBLISH_MODE`, `INSTAGRAM_ANALYTICS_SYNC_MODE`, `META_WEBHOOK_VERIFY_TOKEN`, `AI_BASE_URL`, `AI_HTTP_TIMEOUT_MS`, `EMAIL_PROVIDER`, `EMAIL_VERIFICATION_TTL`, `INTERNAL_SERVICE_TOKEN`, `LLM_LONGFORM_MODEL`, `MFA_ISSUER`, `SENDGRID_API_KEY`, `FROM_EMAIL` |
+| AI | `INTERNAL_SERVICE_TOKEN`, `AI_TEXT_PROVIDER`, `LLM_LONGFORM_MODEL`, `OPENAI_REASONING_EFFORT`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_RETRIES`, `OPENAI_MAX_OUTPUT_TOKENS`, `AI_STRATEGY_TIMEOUT_SECONDS`, `PORT`, `AI_PROFILE_TIMEOUT_SECONDS`, `OPENAI_API_KEY` |
+| pgvector | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, `PGPORT`, `DATABASE_URL`, `PGDATA` |
+| Redis | `REDIS_PASSWORD`, `REDIS_URL` |
+
+Railway-added platform variables were collapsed in the screenshots and are not enumerated here. No worker or OpenSearch variable panel was supplied.
+
+Repository/snapshot gaps to resolve deliberately:
+
+- The visible API list does not show `OPENSEARCH_URL`, health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or the publishing/analytics adapter's `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION`. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone.
+- The visible AI `PORT` name is ignored by the current fixed-port Docker command. Current code consumes `AI_PORT`, which is not visible in the supplied service-level list.
+- The AI screenshot does not show `DATABASE_URL`, embedding/image model settings, alternate model slots, or Sentry settings. Some are not used by current handlers, but the code/default relationship must remain explicit.
+- Reserved future variables that are not part of current work should remain untouched until their feature is reviewed. Do not rename or delete them merely because the current service does not consume them.
 
 ## Secret handling
 
@@ -290,7 +318,7 @@ Interpret results narrowly:
 - API shallow health proves the API process responds.
 - API deep health reports database, Redis, OpenSearch, and AI reachability; a degraded dependency remains an acceptance gap.
 - Web 200 responses prove rendered routes, not authentication or business behavior.
-- AI shallow health proves only the FastAPI process. Current deep health is always degraded and provider inference remains absent.
+- AI shallow health proves only the FastAPI process. Current deep health is always degraded. A prior direct provider request succeeded, but the current shared application adapter still requires deployed end-to-end verification.
 
 ### 9. Run application smoke tests
 
@@ -310,16 +338,16 @@ Record commit/ref, service names, Dockerfile mapping, variable-name inventory, h
 
 ## AI service deployment review
 
-Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify these known gaps:
+Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify the current contract:
 
-- outputs and embeddings are deterministic local scaffolding;
-- no OpenAI provider call exists;
-- `OPENAI_API_KEY` is unused;
-- `INTERNAL_SERVICE_TOKEN` is not enforced and the API does not send it;
-- `/ai/health/deep` does not check dependencies;
-- Docker listens on fixed port 8000.
+- Strategy and onboarding-profile resolution can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; content, images, embeddings, and generic agents remain deterministic.
+- `OPENAI_API_KEY` is consumed only by the AI service in OpenAI mode.
+- `INTERNAL_SERVICE_TOKEN` is enforced on non-health AI routes and sent by the API.
+- `/ai/health/deep` still reports dependencies as `not_checked`/`degraded`.
+- Docker listens on fixed port 8000 even if Railway supplies `PORT`.
+- The 2026-08-06 direct provider request proves only that request. The then-deployed Strategy adapter failed; deploy and verify the current shared strict-output adapter before claiming application success.
 
-The immediate infrastructure goal is process health and protected backend connectivity, followed by one real provider response only after application code and an authorized OpenAI project credential exist. Do not claim the onboarding agent, RAG, or eight agents are production-ready from a successful shallow health check.
+The immediate infrastructure gate is a healthy protected deployment followed by one synthetic browser/API/AI Strategy request whose validated result, persistence, and usage are confirmed without exposing prompts, provider bodies, credentials, or workspace identities. Do not claim the broader RAG or eight-agent platform production-ready from a successful shallow health or direct provider call.
 
 ## Instagram OAuth operations
 
@@ -429,7 +457,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 - Confirm web/API/worker/AI domains, ports, health checks, and restart behavior.
 - Confirm variable names by consumer without inspecting or copying values into documentation.
 - Confirm Meta dashboard URLs, mode, roles, permissions, Graph version, webhooks, and App Review status.
-- Confirm whether the AI service is still absent; if deployed, verify the exact commit and known security/health gaps.
+- Confirm the AI service's current deployed SHA, fixed-port routing, health checks, internal-token pairing, provider mode, and one current application response.
 - Decide durable image storage/CDN and upload flow before live publishing.
 
 See `project-status.md` for roadmap/ownership and `instagram-app-review.md` for the Meta boundary.

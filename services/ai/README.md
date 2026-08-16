@@ -1,8 +1,10 @@
 # MARKOS AI Service
 
-Status date: 2026-08-05.
+Status date: 2026-08-16.
 
-This Python 3.11 FastAPI service now contains the first provider-capable vertical slice. Strategy generation can use the OpenAI Responses API when explicitly configured; deterministic local generation remains the default for development. The OpenAI path is locally tested with a fake client, but it has not yet been exercised with a real credential or verified in Railway.
+This Python 3.11 FastAPI service contains the first provider-capable vertical slices. Strategy and onboarding-profile resolution can use the OpenAI Responses API when explicitly configured; deterministic local behavior remains the default for development and for the other AI routes.
+
+External evidence is narrower than the source capability: on 2026-08-06 a controlled direct Responses request from the Railway AI container succeeded and appeared in the OpenAI project logs, proving that request's credential, model access, billing, and outbound connectivity. The then-deployed application Strategy adapter still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaced that adapter path with shared strict JSON Schema handling, but the replacement has not yet been deployed and verified through the browser-to-API-to-AI journey.
 
 ## Current behavior
 
@@ -21,13 +23,13 @@ The API gateway retrieves workspace-scoped Vault context, sends the requested lo
 
 Important current gaps:
 
-- No live OpenAI call, billing observation, or deployed gateway smoke test has been recorded yet.
+- The current shared provider adapter has no completed deployed browser-to-API-to-AI response and persisted-result evidence yet.
 - Content, images, embeddings, and the generic eight-agent route remain deterministic scaffolding.
-- API interaction rows record real provider token counts for Strategy, but `costMinor` remains zero until a reviewed pricing calculation exists.
-- The Docker image listens on fixed port 8000; Railway port/routing behavior must be verified during deployment.
+- Strategy/profile interaction rows can record provider token counts, but `costMinor` remains zero until a reviewed pricing calculation exists.
+- The Docker image listens on fixed port 8000. A 2026-08-16 Railway screenshot shows a service-level `PORT` variable, but the current Docker command and Python settings do not consume that name; routing must therefore be verified rather than inferred from variable presence.
 - Deep health cannot support a production-ready claim while every dependency remains `not_checked`.
 
-Do not describe backend connectivity or provider inference as production-verified until the deployed path is tested with independently configured secrets.
+Describe only the direct 2026-08-06 provider request as externally verified. Do not extend that evidence to Strategy, onboarding approval, RAG, or the eight-agent platform until the current deployed application path is tested.
 
 ## Delivery phases
 
@@ -35,17 +37,15 @@ Do not describe backend connectivity or provider inference as production-verifie
 
 Sarah owns the Railway service, networking, health, availability, and secret configuration for this phase. The smallest acceptable result is:
 
-1. Review the current Dockerfile and Railway port contract.
-2. Deploy the current service without claiming provider inference.
-3. Configure a health check for `/ai/health`.
-4. Give the API a reachable `AI_BASE_URL`, preferably through the reviewed Railway network path.
-5. Configure the same non-default `INTERNAL_SERVICE_TOKEN` in both services and verify unauthorized requests fail.
-6. Send one simple API-to-AI request and receive a response.
-7. Document deployment and troubleshooting.
+1. Verify the fixed-port Docker/Railway routing contract and `/ai/health` check.
+2. Confirm the API reaches the intended deployment through `AI_BASE_URL`.
+3. Keep the same non-default `INTERNAL_SERVICE_TOKEN` in API and AI and verify unauthorized requests fail.
+4. Deploy the current shared structured-output adapter.
+5. Send one synthetic Strategy request through API to AI, confirm a validated persisted result and usage, and retain sanitized evidence.
 
 ### Phase 1B: add one real provider-backed response
 
-OpenAI is the initial Strategy provider, behind a narrow adapter so other providers remain possible later. The implementation and local fake-client tests now exist. The remaining phase evidence requires an authorized OpenAI API Platform project credential and one controlled live response. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
+OpenAI is the initial Strategy/profile provider behind a narrow adapter so other providers remain possible later. The authorized project credential and direct container call are externally evidenced; the remaining phase evidence is one controlled response through the current protected application path. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
 
 Prefer a project-owned service-account credential over a personal shared key. Inject the credential only into the AI service through the deployment secret manager. Never commit, print, return, or place it in build arguments, client-side variables, logs, screenshots, or evidence artifacts.
 
@@ -54,7 +54,7 @@ Official references:
 - [OpenAI API and ChatGPT billing are separate](https://help.openai.com/en/articles/8156019-i-want-to-move-my-chatgpt-subscription-to-the-api)
 - [OpenAI project API keys and service-account ownership](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/projects/subresources/api_keys)
 
-Completion requires one real provider response through the deployed service and gateway. Set `AI_TEXT_PROVIDER=openai`, configure a model slot, and provide `OPENAI_API_KEY` only to the AI service; merely creating a key does not prove the path.
+Completion requires one real provider response through the deployed service and gateway. Set `AI_TEXT_PROVIDER=openai`, configure a model slot, and provide `OPENAI_API_KEY` only to the AI service; the prior direct request does not by itself prove this path.
 
 ### Phase 2: generate the first onboarding draft
 
@@ -118,6 +118,8 @@ Current FastAPI settings consume these names:
 - `SENTRY_TRACES_SAMPLE_RATE`
 
 `OPENAI_API_KEY` is required only when `AI_TEXT_PROVIDER=openai`. Never place it in the API service, web environment, repository, command output, logs, screenshots, or test fixtures.
+
+Railway's platform-level `PORT` may exist, but current FastAPI settings use `AI_PORT` and the Docker command is fixed to 8000. Treat `PORT` as an externally supplied but currently unconsumed name for this service until the runtime contract is deliberately changed.
 
 ## Verification
 

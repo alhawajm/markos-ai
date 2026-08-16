@@ -1,6 +1,8 @@
 # Bahrain PDPL Data Export And Erasure
 
-This runbook closes the M6 Bahrain PDPL data export and erasure verification gate for workspace-level data rights.
+Status date: 2026-08-16.
+
+This runbook defines the M6 Bahrain PDPL data export and erasure verification gate for workspace-level data rights. Implementation and tests do not replace staging erasure evidence for a release candidate.
 
 ## Scope
 
@@ -58,8 +60,8 @@ curl -X POST \
 Erasure behavior:
 
 - Soft-deletes workspace-owned operational tables that have `deletedAt`.
-- Hard-deletes `usage_counters` and `knowledge_vault_history`, because those tables do not have `deletedAt`.
-- Clears Instagram account id, token, and token expiry from the workspace.
+- Hard-deletes `usage_counters`, `knowledge_vault_history`, `instagram_recent_media`, `instagram_connection_credentials`, and `oauth_state_nonces`, because those records are not retained through the workspace soft-delete path.
+- Clears the legacy Instagram account ID, access token, and token expiry fields from the workspace in addition to deleting the encrypted credential row.
 - Soft-deletes workspace membership rows.
 - Anonymizes the owner user only when the owner has no remaining active workspace memberships.
 - Preserves audit logs as compliance evidence and writes `WORKSPACE_DATA_ERASED`.
@@ -86,6 +88,8 @@ Save:
 - Erasure soft-deletes/hard-deletes expected workspace data.
 - Sole-owner erasure anonymizes the user.
 - Erasure writes audit evidence.
+
+Current coverage does not explicitly assert deletion counts and post-erasure absence for all three Instagram-specific tables. Keep the implementation claim source-backed, and add focused assertions before treating the Instagram erasure path as release evidence.
 
 Run:
 

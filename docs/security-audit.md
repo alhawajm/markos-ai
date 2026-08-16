@@ -1,6 +1,8 @@
 # OWASP Security Audit
 
-This runbook closes the M6 internal OWASP security audit gate for the current codebase. It records the controls, commands, evidence, and residual launch checks that must stay visible.
+Status date: 2026-08-16.
+
+This runbook defines the M6 internal OWASP security audit gate. It records the controls, commands, evidence, and residual launch checks that must stay visible; a prior result does not close the gate for a new release candidate.
 
 ## Audit Command
 
@@ -14,7 +16,7 @@ This runs `pnpm audit --audit-level moderate` across the workspace. The audit mu
 
 ## Latest Result
 
-Result on the current release candidate:
+Last recorded repository result (rerun for every release candidate):
 
 - Initial audit found vulnerable transitive `esbuild@0.28.0` and `postcss@8.4.31`.
 - `pnpm-workspace.yaml` now overrides:
@@ -32,10 +34,10 @@ Result on the current release candidate:
 | A04 Insecure Design                            | Milestone gates require tenant isolation, billing state enforcement, quota enforcement, provider live-readiness checks, and external-provider live mode flags before launch.                                                                                                                                                                                                                              |
 | A05 Security Misconfiguration                  | Fastify registers Helmet; CORS is restricted to `WEB_BASE_URL`; staging/runtime secrets are documented; production observability is environment-gated.                                                                                                                                                                                                                                                    |
 | A06 Vulnerable Components                      | `corepack pnpm security:audit` must pass at `moderate` or higher; current overrides pin patched `esbuild` and `postcss` versions.                                                                                                                                                                                                                                                                         |
-| A07 Identification And Authentication Failures | Email/password login, email verification, Google login, JWT TTLs, refresh rotation, and TOTP MFA for sensitive roles are implemented and tested.                                                                                                                                                                                                                                                          |
+| A07 Identification And Authentication Failures | Email/password login, email verification, the backend Google ID-token exchange, JWT TTLs, refresh rotation, and TOTP MFA for sensitive roles are implemented and tested. The current Sunlit Google button remains unavailable, so backend coverage is not browser or provider proof.                                                                                                               |
 | A08 Software And Data Integrity Failures       | GitHub Actions runs full verification; deploy workflow publishes immutable image tags; dependency overrides are explicit in workspace settings.                                                                                                                                                                                                                                                           |
 | A09 Security Logging And Monitoring Failures   | Sensitive admin, billing, prompt, model, Instagram callback, and workspace actions write audit logs; Sentry hooks exist for web, API, worker, and AI services. Instagram OAuth route boundaries emit one terminal allowlisted event per failure and minimal lifecycle success events; raw errors, identities, callback data, credentials, provider bodies, Prisma metadata, SQL, and stacks are excluded. |
-| A10 Server-Side Request Forgery                | Current external provider calls use constrained Meta endpoints or reviewed dependency base URLs; Instagram publish and analytics live modes remain behind explicit environment flags and readiness checks. The FastAPI service does not currently call OpenAI.                                                                                                                                            |
+| A10 Server-Side Request Forgery                | Instagram Login hosts are constrained in the active client; publishing/analytics live modes remain behind explicit flags and readiness checks. The AI service calls OpenAI only through the explicit provider adapter when `AI_TEXT_PROVIDER=openai`; other dependency URLs come from server-side configuration and must be reviewed before deployment. |
 
 ## Evidence To Save
 
@@ -56,8 +58,9 @@ The 2026-08-03 production Instagram connection is narrow provider evidence, not 
 
 - Verify the encryption-key contract without printing or copying the value; a variable can exist and still be invalid.
 - Verify token refresh, deauthorization, data-deletion delivery, and disconnect across a real provider lifecycle.
-- Do not deploy the FastAPI AI service as a publicly trusted internal dependency yet: `INTERNAL_SERVICE_TOKEN` is configured but not enforced, and API clients do not send it.
-- Production verification-email delivery and the complete bearer-token browser lifecycle remain unproven even though their API foundations have automated coverage.
+- Keep the FastAPI service behind the intended backend boundary. Current source enforces `INTERNAL_SERVICE_TOKEN` on non-health routes and the API sends it, but deployment configuration, network exposure, and unauthorized-request rejection still require current environment evidence.
+- Production verification-email delivery and the deployed bearer-token/browser-session journey remain unproven even though their current `main` implementation has focused automated coverage.
+- Treat the direct 2026-08-06 provider request as narrow connectivity evidence; the current Strategy/profile application path still needs a deployed security and data-handling review.
 - Continue to treat publishing, analytics, payment, storage/CDN, and App Review as separate external security/acceptance gates.
 
 See `project-status.md`, `staging-deploy.md`, and `../services/ai/README.md` for current scope and ownership.

@@ -30,6 +30,10 @@ describe("environment configuration", () => {
     expect(parseEnvironment(input).MEDIA_PUBLIC_BASE_URL).toBe(expected);
   });
 
+  it("uses the provisional v25.0 publishing and analytics Graph version by default", () => {
+    expect(parseEnvironment({}).META_GRAPH_VERSION).toBe("v25.0");
+  });
+
   it("loads an explicit environment file without overwriting existing process values", () => {
     const directory = mkdtempSync(join(tmpdir(), "markos-env-test-"));
     temporaryDirectories.push(directory);

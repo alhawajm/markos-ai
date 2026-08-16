@@ -2,13 +2,13 @@
 
 This runbook closes the M4 analytics sync worker gate after Meta App Review grants insights access for a test Instagram Business account.
 
-Status on 2026-08-03: **not externally verified and not activatable by configuration alone**. The active OAuth client requests exactly `instagram_business_basic`, and environment validation accepts that exact value. The analytics provider, worker, UI, PDF, Vault-learning path, and readiness endpoint exist, but a production business-basic connection does not grant or prove insights access.
+Status on 2026-08-16: **not externally verified and not activatable by configuration alone**. The active OAuth client requests exactly `instagram_business_basic`, and environment validation accepts that exact value. The analytics provider, worker, summary UI, PDF, Vault-learning path, and readiness endpoint exist, but a production business-basic connection does not grant or prove `instagram_business_manage_insights` access.
 
 Keep `INSTAGRAM_ANALYTICS_SYNC_MODE=dry_run` until every prerequisite below is complete. Switch to `live` only for a controlled verification window or production-like environment.
 
 ## Prerequisites
 
-- Meta app has Instagram Business Login configured.
+- Meta app has Instagram Login configured.
 - Meta app has these permissions available to the test user:
   - `instagram_business_basic`
   - `instagram_business_manage_insights`
@@ -29,7 +29,8 @@ INSTAGRAM_ANALYTICS_SYNC_MODE=live
 META_APP_ID=<secret-manager-reference>
 META_APP_SECRET=<secret-manager-reference>
 META_GRAPH_BASE_URL=https://graph.facebook.com
-META_GRAPH_VERSION=<reviewed-version>
+# Provisional; confirm during the permission/API research phase before live activation.
+META_GRAPH_VERSION=v25.0
 WORKER_ANALYTICS_SYNC_INTERVAL_MS=21600000
 ```
 
@@ -85,15 +86,15 @@ curl -X POST \
 ```
 
 4. Confirm the response has `mode: "live"` and includes `ACCOUNT` plus media-level `POST` or `REEL` records.
-5. Open Analytics and confirm AN-01 through AN-06 render real metrics.
+5. Open the current Insights summary and confirm it renders the real synced range. Keep the full `AN-01` through `AN-06` UI gate open until those Sunlit views exist.
 6. Confirm the sync writes an `ANALYTICS_PERFORMANCE_LEARNING` entry into the Vault.
 
 Evidence to save:
 
 - `/v1/analytics/live-readiness` response with `ready: true`.
 - `/v1/analytics/sync` response with `mode: "live"` and non-zero records.
-- Screenshot of AN-01 overview showing real metrics.
-- Screenshot of AN-06 Vault learning evidence.
+- Screenshot of the mounted Insights summary showing real metrics.
+- API/database evidence of the workspace-scoped Vault learning entry.
 - Database row or API response showing the workspace-scoped `instagram_analytics` records.
 
 Redact provider-account IDs, user/workspace IDs, access tokens, callback data, raw provider responses, headers, and customer data before sharing evidence.

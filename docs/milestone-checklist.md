@@ -15,11 +15,11 @@ Legend:
 
 ## Current Snapshot
 
-- Status date: 2026-08-03.
+- Status date: 2026-08-16.
 - Current milestone ledger: implementation spans M0 through M6, but M0, M3, M4, M5, and M6 external gates remain open. Do not infer launch readiness from the active M6 label.
 - Latest production-verified step: one real Instagram professional account completed the business-basic OAuth connection, appeared Connected in production Settings, and loaded recent media on 2026-08-03.
 - That production result closes the first connection milestone only. Publishing, insights/analytics, Meta App Review, a full token lifecycle, provider-side revocation, production AI, durable media delivery, and broad launch readiness remain unverified.
-- The current near-term focus is the complete user journey, verification email delivery, bearer-token lifecycle, UI work with Mohamed, continued security/API hardening, first AI-service deployment and provider connectivity, Railway/database operations, and an image storage/CDN decision.
+- The current near-term focus is the complete user journey, deferred Sunlit operational surfaces, production verification of auth/AI paths, Railway/database operations, durable media, and the remaining `instagram_business_content_publish` and `instagram_business_manage_insights` permission work.
 - Required external evidence remains live staging/production inventory, Meta App Review, real image/reel publishing, real analytics, and Bahrain live payments. See `docs/m6-acceptance-evidence.md`.
 
 ## M0 Foundation
@@ -41,7 +41,9 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] Email/password registration and login.
 - [x] Email verification token/request/confirmation flow implemented and tested.
 - [ ] Production transactional verification-email delivery verified.
-- [x] Google OAuth login.
+- [x] Backend Google ID-token exchange and configuration endpoint.
+- [ ] Google sign-in is mounted in the active Sunlit authentication UI and live-verified.
+  - Note: the current Google and Apple buttons show honest unavailable feedback; Apple has no matching backend contract.
 - [x] JWT access token and refresh token issuance.
 - [x] Refresh token rotation and reuse detection.
 - [x] Cookie-backed browser refresh, in-memory access-token renewal, cross-tab serialization, and terminal-expiry reauthentication to Profile.
@@ -50,8 +52,10 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] RBAC permission catalog with role and permission guards.
 - [x] Shared packages: shared types, validation, API client, i18n, UI tokens.
 - [x] AI HTTP client boundaries and configurable model slots.
-- [ ] A real AI provider interface is implemented and verified end to end.
-  - Note: the current FastAPI service returns deterministic local embeddings and fixed outputs; it does not call OpenAI or another provider.
+- [x] A real provider interface is implemented for Strategy and onboarding-profile resolution.
+  - Note: current source uses the OpenAI Responses API with strict structured output when `AI_TEXT_PROVIDER=openai`; local mode remains the safe default and other AI routes remain deterministic.
+- [ ] A current provider-backed application response is verified end to end through browser, API, deployed AI service, persistence, and metering.
+  - Note: a direct Responses call from the Railway AI container succeeded on 2026-08-06, while the previously deployed Strategy adapter returned 503. The replacement shared adapter is locally/fake-client verified but not yet live-verified.
 - [x] AI interaction token metering skeleton.
 - [x] Usage counters and plan quota enforcement for strategy/content AI generation.
 - [x] Usage enforcement covers AI image generation, MARKOS post publish caps, storage, and reset rules.
@@ -84,8 +88,10 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] RAG search exists and is used by strategy/content calls.
 - [x] One locally grounded Strategy path returns workspace Vault context.
 - [x] Seven-module onboarding wizard is complete against the spec.
-- [x] Vault versioning UX and history are complete.
-- [x] Brand upload flow is complete.
+- [ ] Vault versioning UX and history are complete in the mounted Sunlit Business Profile.
+  - Note: history APIs exist, but the current Sunlit panel is a summary and does not mount the full editor/history workflow.
+- [ ] Brand upload flow is complete in the active onboarding/Vault UI.
+  - Note: media upload APIs exist, but onboarding currently collects brand values and explicitly defers files to a later Vault flow.
 - [x] Completeness gaps are surfaced in the expected UX.
 - [ ] M1 acceptance gate fully passed with a live provider interface.
   - Note: local deterministic grounding is covered, but provider-backed embeddings/generation and deployed cross-service behavior remain unverified.
@@ -100,15 +106,17 @@ Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, m
 - [x] Schedule/calendar foundation exists.
 - [ ] All eight agents are provider-backed and satisfy their production contracts.
   - Note: one endpoint returns fixed local output shapes for all eight agent names; that is scaffolding, not mature provider-backed agent implementation.
-- [x] Strategy PDF export.
+- [x] Strategy PDF export API.
+- [ ] Strategy PDF export is mounted in the active Sunlit Strategy page.
 - [x] Calendar slot to content generation workflow.
 - [x] Bilingual tone-locked content workflow.
-- [x] TipTap/editorial workflow.
+- [ ] Rich-text/editorial workflow is complete in the active Sunlit Create surface.
+  - Note: core caption/hashtag/CTA editing is mounted, but the prior rich editor was removed during the Sunlit cutover.
 - [ ] Provider-backed AI image pipeline.
   - Note: the current FastAPI path creates deterministic SVGs locally.
 - [x] Prompt A/B tooling.
-- [ ] Provider-reported token and image metering is verified.
-  - Note: current local responses estimate token counts; real provider usage is absent.
+- [ ] Provider-reported token and image metering is verified end to end.
+  - Note: provider-capable Strategy/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
 - [ ] M2 acceptance gate fully passed.
 
 ## M3 Instagram
@@ -128,9 +136,10 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 - [x] Callback audit logging.
 - [ ] Real image post publish verified against a test IG Business account.
 - [ ] Real reel publish verified against a test IG Business account.
-- [x] Queue UI.
-- [x] Failure alert UX.
-- [x] Reschedule UX for failed publishing.
+- [ ] Dedicated publishing queue UI is mounted in Sunlit.
+- [ ] Failed-publish explanation and alert UX are mounted in Sunlit.
+- [ ] Reschedule/recovery UX for failed publishing is mounted in Sunlit.
+  - Note: queue/readiness/dry-run/reschedule API foundations and the scheduling control in Create remain, but PR #19 deleted the complete operational Schedule panel before a Sunlit replacement existed.
 - [ ] M3 acceptance gate fully passed.
 
 ## M4 Analytics
@@ -139,10 +148,12 @@ Gate: Real metrics render; AI interprets 30 days; monthly PDF emails; performanc
 
 - [ ] Instagram analytics sync workers.
   - Note: foundation exists with workspace-scoped API sync, maintenance worker hook, provider boundary, live-readiness endpoint, tests, UI, and live verification runbook. The active OAuth client still requests only `instagram_business_basic`; permission expansion and live Instagram metrics remain unverified.
-- [x] Analytics screens AN-01 through AN-06.
+- [ ] Complete analytics screens `AN-01` through `AN-06` are mounted in Sunlit.
+  - Note: the current Insights page provides an API-backed 7/30-day aggregate, top content, empty/loading/error states, and monthly PDF export; posts/detail/audience/Stories/Reels pages and 28/90 comparisons are not complete.
 - [ ] Provider-backed Analytics Consultant agent.
   - Note: a fixed local agent-shaped response exists; real interpretation is not implemented.
-- [x] Digest and analytics chat application surfaces and API foundations.
+- [ ] Digest and analytics chat application surfaces are mounted and provider-backed.
+  - Note: API foundations exist, but the complete Sunlit surfaces were not retained and current agent behavior is deterministic.
 - [x] Monthly analytics PDF.
 - [x] Email delivery for monthly PDF.
 - [x] Learning loop writes performance data back to the Vault.
@@ -164,11 +175,11 @@ Gate: Subscribe in BHD plus VAT, hit limit, prorated upgrade, admin edits plan l
 - [x] Downloadable VAT invoice PDFs.
 - [x] Metering and quota enforcement across all billable metrics.
 - [x] Prorated upgrade flow.
-- [x] Admin portal screens ADMIN-01 through ADMIN-10.
-  - Note: `/[locale]/admin` renders ADMIN-01 through ADMIN-10 bands with live plan-limit, subscription, invoice, gateway-readiness, prompt, audit, security, and model-config visibility.
+- [ ] Admin portal screens `ADMIN-01` through `ADMIN-10` are mounted in Sunlit.
+  - Note: PR #19 deleted the old admin panel and the legacy `/[locale]/admin` route now redirects to Settings. Admin APIs and permissions remain implemented; a redirect is not replacement evidence.
 - [x] Admin RBAC and sensitive action audit.
-- [x] Prompt/model management without deploy.
-  - Note: prompt version create/update and model setting updates are live, audited, and editable from the admin portal.
+- [x] Prompt/model management APIs without deploy.
+- [ ] Prompt/model management is editable from an active admin UI.
 - [ ] M5 acceptance gate fully passed.
 
 ## M6 Beta + Launch
@@ -177,18 +188,24 @@ Gate: NFR met; security audit passed; Starter and Growth live in Bahrain.
 
 - [x] Private beta readiness plan.
   - Note: `docs/private-beta-readiness.md` defines beta scope, entry criteria, cohort rules, user test script, evidence capture, exit criteria, and rollback while keeping external live-provider gates open.
-- [x] Performance work toward NFR targets.
-  - Note: `corepack pnpm perf:baseline` and `docs/performance-nfr-baseline.md` define repeatable p50/p95/max/error-rate checks for API health, deep health, and localized web shells. Latest production-web local evidence passed with API deep health p50 22ms, English shell p50 11ms, and Arabic shell p50 10ms.
-- [x] Load test.
-  - Note: `corepack pnpm load:test` and `docs/load-test.md` define a configurable concurrent public-readiness scenario over API health, deep health, and localized web shells with throughput, p95, max-latency, and error-rate thresholds. Latest local production-web evidence passed with 1,248 requests, 41.58 RPS, zero errors, p95 559ms, and max 1,267ms.
-- [x] OWASP security audit.
-  - Note: `corepack pnpm security:audit` passes with no known vulnerabilities after patched `esbuild`/`postcss` overrides and `@opentelemetry/core@2.8.0` workspace override; `docs/security-audit.md` maps current controls to OWASP Top 10 evidence.
-- [x] Bahrain PDPL data export and erasure verification.
-  - Note: `GET /v1/workspace/data-export`, `POST /v1/workspace/data-erasure`, and `docs/pdpl-data-rights.md` verify scoped export, owner/admin-only erasure, workspace-owned data deletion/anonymization, and audit evidence.
-- [x] VAT compliance verification.
-  - Note: `GET /v1/billing/invoices/:invoiceId/vat-compliance` and `docs/vat-compliance.md` verify workspace-scoped BHD fils, 10 percent VAT, exclusive/inclusive arithmetic, invoice issue evidence, and payment reconciliation; seller VAT number/customer VAT ID/legal wording remain launch caveats.
-- [x] Arabic/RTL QA pass.
-  - Note: `corepack pnpm rtl:qa`, `docs/arabic-rtl-qa.md`, localized `lang/dir`, Arabic default route, language-switch preservation, and mojibake scanning are verified; screenshot-based visual regression remains recommended before public launch.
+- [x] Performance baseline harness and prior internal run.
+  - Note: `corepack pnpm perf:baseline` and `docs/performance-nfr-baseline.md` define repeatable p50/p95/max/error-rate checks for API health, deep health, and localized public routes. Prior local production-web evidence passed, but the release candidate must be rerun and saved separately.
+- [x] Load-test harness and prior internal run.
+  - Note: `corepack pnpm load:test` and `docs/load-test.md` define a configurable concurrent public-readiness scenario over API health, deep health, and localized public routes. Prior local production-web evidence passed, but the release candidate must be rerun and saved separately.
+- [x] OWASP audit procedure and prior internal result.
+  - Note: the last recorded `corepack pnpm security:audit` result found no known vulnerabilities after the documented overrides. Rerun it for the release candidate and keep current deployment/security review separate from dependency output.
+- [x] Bahrain PDPL export/erasure implementation and core automated coverage.
+  - Note: `GET /v1/workspace/data-export`, `POST /v1/workspace/data-erasure`, and `docs/pdpl-data-rights.md` cover scoped export, owner/admin-only erasure, workspace-owned deletion/anonymization, and audit evidence.
+- [ ] Bahrain PDPL release-candidate staging evidence is complete.
+  - Note: verify actual erasure/audit state and add focused assertions for `instagram_recent_media`, `instagram_connection_credentials`, and `oauth_state_nonces` before closing this gate.
+- [x] VAT compliance implementation and automated verification.
+  - Note: `GET /v1/billing/invoices/:invoiceId/vat-compliance` and `docs/vat-compliance.md` verify workspace-scoped BHD fils, 10 percent VAT, exclusive/inclusive arithmetic, invoice issue evidence, and payment reconciliation.
+- [ ] VAT release evidence and final legal inputs are complete.
+  - Note: a paid invoice, gateway evidence, seller VAT number, customer VAT handling decision, and final wording review remain open.
+- [x] Arabic/RTL source QA gate.
+  - Note: `corepack pnpm rtl:qa`, localized `lang/dir`, Arabic default routing, language-switch preservation, and mojibake scanning are implemented.
+- [ ] Arabic/RTL visual QA covers every current and restored in-scope Sunlit surface.
+  - Note: capture desktop/mobile Arabic and English evidence after the final-system operational pages are restored; legacy redirects do not prove those screens exist.
 - [ ] Starter and Growth plans live in Bahrain.
   - Note: `GET /v1/admin/bahrain-launch-readiness` and `docs/bahrain-plan-launch-readiness.md` verify Starter/Growth catalog readiness, BHD fils, 10 percent VAT, required limits, and local gateway readiness checks. Remains open until CrediMax or BENEFIT live credentials, webhook secret, certification, and one live paid checkout are proven.
 - [x] Launch runbook.
@@ -198,4 +215,4 @@ Gate: NFR met; security audit passed; Starter and Growth live in Bahrain.
 - [x] Staging smoke evidence capture.
   - Note: `corepack pnpm staging:smoke` checks staging API health, deep health, Arabic shell, and English shell, then writes ignored local proof to `evidence/m6/<date>/staging/staging-smoke-report.json`; the script refuses localhost unless `ALLOW_LOCAL_STAGING_SMOKE=true` is set for local validation. This does not close the live staging gate until real staging URLs, release SHA, and cloud deploy evidence are used.
 - [ ] M6 acceptance gate fully passed.
-  - Note: `docs/m6-acceptance-evidence.md` tracks verified internal evidence, the narrow 2026-08-03 production connection milestone, and the remaining external provider blockers. Keep M6 open until live staging inventory, Meta App Review, Instagram publish/analytics, and Bahrain live payment evidence are attached.
+  - Note: `docs/m6-acceptance-evidence.md` tracks prior internal evidence, the narrow 2026-08-03 production connection milestone, application-owned AI/browser/email/media blockers, and external provider blockers. Keep M6 open until the release-candidate evidence and every included application/external gate are complete.

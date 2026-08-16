@@ -2,7 +2,7 @@
 
 > Active redesign foundation: `docs/ui-design-foundation.md`
 >
-> This file records historical implementation and behavioral coverage for the older UI passes. The previous dark command-center tracker is also historical. Preserve its verified behavior during migration, but use the Sunlit Social Studio foundation for new visual work.
+> This file records historical implementation and behavioral coverage for the older UI passes. PR #19 later removed or redirected several of these pages while mounting Sunlit. A checked item proves only the dated pre-Sunlit pass; it does not prove that the surface is mounted now. Preserve the requirement during restoration, but use the Sunlit Social Studio foundation for new visual work.
 
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`
@@ -11,7 +11,7 @@ Source of truth:
 - Later superseded Figma export: `C:\Users\mohamed.yusuf\Downloads\AI-Powered Marketing OS MVP`
 - Recorded production implementation: `apps/web/app/[locale]/_components`
 
-Retain this file as a record of prior design parity, user-journey, and frontend-functionality work. New visual decisions belong in `docs/ui-design-foundation.md`; behavioral coverage recorded here must still be preserved during migration.
+Retain this file as a record of prior design parity, user-journey, and frontend-functionality work. New visual decisions belong in `docs/ui-design-foundation.md`; use its restoration register and current source before claiming present coverage.
 
 Legend:
 - `[x]` Done and verified

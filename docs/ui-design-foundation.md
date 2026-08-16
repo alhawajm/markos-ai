@@ -2,7 +2,7 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-12
+- Last updated: 2026-08-16
 
 This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
 
@@ -222,6 +222,26 @@ These routes preserve their existing session, workspace, API, approval, and fail
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
 - Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
 
+### Deferred Sunlit product-surface restoration
+
+PR #19 deliberately removed the preview route family and replaced the old visual direction, but it also deleted several mounted operational panels before equivalent Sunlit pages existed. Their deletion is not a product-scope decision. The final-system inventory below comes from the build specification and the reviewed original PRD/design sources; the current column records what is actually mounted now.
+
+| Final-system area | Current Sunlit implementation | Required restoration or completion |
+| --- | --- | --- |
+| Authentication (`AUTH-01`–`AUTH-05`) | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable. | Complete and mount approved provider login and password-recovery contracts before calling those paths live. |
+| Onboarding (`OB-01`–`OB-10`) | Seven real workspace modules, completeness, bilingual resolved-profile generation/edit/approval, and Strategy handoff are mounted. | Restore plan/trial placement if still required; add real brand-file upload and any approved competitor verification or recovery refinements. |
+| Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view. | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen. |
+| Strategy (`STRAT-01`–`STRAT-03`) | Strategy list/generation is API-backed, defaults to 30 days, and offers 30/60/90-day choices. | Complete version/detail navigation, parameter refinement, and mount the existing PDF export contract. A possible 7-day option remains undecided and unimplemented. |
+| Content and calendar (`CONT-01`–`CONT-06`) | Create and Campaign Builder can generate workspace drafts, edit core fields, approve, and schedule. | Restore the full month/week/list calendar, content library/detail workflow, rich editor, item history/comments, section regeneration, carousel builder, reel editor, Instagram preview, and explicit recovery states. |
+| Media (`MEDIA-01`–`MEDIA-04`) | Media upload/generation/attachment APIs exist; AI images remain deterministic locally. | Build the mounted media library, upload and asset-detail flows, brand-asset management, storage meter, and provider-backed image workflow. |
+| Instagram scheduling (`SCHED-01`–`SCHED-04`) | Settings mounts the secure Instagram connection. Create can schedule approved content; publishing/readiness/queue/reschedule APIs exist. | Restore the dedicated publishing queue, post preview, date/best-time/cap controls, failed-publish explanation, retry/reschedule workflow, and complete per-format live-publish behavior. |
+| Analytics (`AN-01`–`AN-06`) | Insights mounts an API-backed 7/30-day summary, top-content list, empty/loading/error states, and monthly PDF download. | Restore the full overview, posts, post detail, audience, stories, and reels views; add the intended 28/90-day comparisons and real provider-backed interpretation once permission evidence exists. |
+| AI consultant (`AI-01`–`AI-04`) | Digest/chat/report API foundations and deterministic agent-shaped responses exist; no complete consultant surface is mounted. | Restore weekly digest, proactive recommendations, conversational consultant, monthly-report preview, and approved competitor analysis with provider-backed behavior. |
+| Settings and team (`SET-01`–`SET-06`) | Account/workspace summary, Instagram connection, MFA, billing summary, export, and audit history are mounted. | Complete editable account/workspace controls, team membership/roles, notification preferences, billing actions/invoices, and any approved password/provider settings. |
+| Admin (`ADMIN-01`–`ADMIN-10`) | Admin APIs, permissions, audit, plans, gateways, model config, and prompt foundations exist. The old admin UI was deleted; the legacy `/admin` route currently redirects to Settings. | Build a Sunlit admin portal for business metrics, users, workspaces, moderation, AI usage, prompts, plans, system health, Instagram status, and revenue. A redirect is not replacement evidence. |
+
+Universal obligations from the retired design source still apply to every restored surface: explicit empty/loading/error/success/limit states, a useful next action, WCAG AA intent, keyboard operation, reduced motion, Arabic/RTL parity, and responsive behavior. Historical components may be inspected for behavior, but they must not be restored wholesale or used as the active visual source.
+
 ## Production migration rules
 
 1. Preserve product behavior, API contracts, session handling, workspace isolation, approval gates, metering, and failure recovery.
@@ -235,9 +255,9 @@ These routes preserve their existing session, workspace, API, approval, and fail
 Migration sequence:
 
 1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
-2. App shell, onboarding, Overview, Business Profile, and first Strategy handoff — complete on the redesign branch.
-3. Create and Insights presentation surfaces — complete on the redesign branch, using real APIs or explicit empty states.
-4. Replace remaining legacy production modules in small, behavior-preserving slices.
+2. App shell, onboarding, Overview, Business Profile summary, and first Strategy handoff — mounted on current `main`.
+3. Create and the current Insights summary — mounted on current `main`, using real APIs or explicit empty states.
+4. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
 5. Revisit each migrated page individually as product features and configuration needs become final.
 6. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
 

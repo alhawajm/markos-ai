@@ -1,6 +1,6 @@
 # MARKOS AI Final UI Implementation Checklist
 
-> **Historical implementation record:** This checklist tracks the previous dark "AI Marketing Command Center" pass. It was superseded as future design guidance on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). Completed items still describe existing implementation evidence, but new redesign work must not extend the old luxury visual system.
+> **Historical implementation record:** This checklist tracks the previous dark "AI Marketing Command Center" pass. It was superseded as future design guidance on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). PR #19 subsequently removed or redirected several recorded surfaces. Completed items describe dated pre-Sunlit evidence, not current browser-visible implementation; use the active foundation's restoration register for present status.
 
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`

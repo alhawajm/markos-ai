@@ -1,12 +1,16 @@
 # MARKOS UI State Audit
 
-Date: 2026-06-17
+Historical evidence date: 2026-06-17.
 
-Purpose: verify that every primary MARKOS surface avoids blank canvases and exposes empty, loading, error, success, and limit states with a next action.
+Status: archived pre-Sunlit evidence inventory. It is not proof of current browser-visible coverage.
+
+Purpose at capture time: verify that every then-mounted MARKOS surface avoided blank canvases and exposed empty, loading, error, success, and limit states with a next action.
 
 Evidence folder: `evidence/ui/2026-06-17`
 
-## State Coverage Matrix
+PR #19 later replaced the previous UI with Sunlit and retired the temporary design-preview URLs. Several pages represented below were removed or redirected even though the underlying capabilities remain part of the final system. Do not use this matrix to claim that the current Sunlit UI includes the full publishing queue, analytics suite, Vault editor/history, AI assistant, audience/channels surfaces, or admin console. The restoration register is in `docs/ui-design-foundation.md`, and the scope decision is in `docs/decisions.md`.
+
+## Historical State Coverage Matrix
 
 | Screen | Empty or starting state | Loading state | Error state | Success state | Limit or blocked state | Next action |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -23,7 +27,7 @@ Evidence folder: `evidence/ui/2026-06-17`
 | Admin | Preview operational console | Admin refresh state | `admin-state-error-*` screenshots | Admin ready state | `admin-state-limit-*` screenshots | Refresh, review plans, inspect audit |
 | Onboarding | Step 1 starts immediately with company info | Step transitions remain in wizard shell | Required fields and connection errors stay in-step | Step completion and final launch state | Future gated features route to setup completion | Continue, back, launch dashboard |
 
-## New Evidence Routes
+## Historical Evidence Routes
 
 - `/en/audience?state=loading`, `/en/audience?state=error`, `/en/audience?state=limit`
 - `/en/channels?state=loading`, `/en/channels?state=error`, `/en/channels?state=limit`
@@ -31,4 +35,6 @@ Evidence folder: `evidence/ui/2026-06-17`
 - `/en/admin?state=error`, `/en/admin?state=limit`
 - Arabic equivalents under `/ar/...`
 
-All new routes were captured at desktop `1440x1000` and mobile `390x844`.
+These routes were captured at desktop `1440x1000` and mobile `390x844` on 2026-06-17. Current legacy routes redirect to Sunlit equivalents; for example, `/admin` redirects to Settings and therefore does not validate a current admin console.
+
+Create a new dated evidence set after the missing final-system Sunlit surfaces are restored. The new matrix must cover current routes, both locales, desktop/mobile layouts, and empty/loading/error/success/limit or blocked states.

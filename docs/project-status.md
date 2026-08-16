@@ -1,6 +1,6 @@
 # MARKOS AI Current Status, Roadmap, and Ownership
 
-Status date: 2026-08-09.
+Status date: 2026-08-16.
 
 This document is the current implementation and operating overlay for MARKOS AI. It does not replace the structural source of truth in `source/MARKOS_BUILD_SPEC. 2.pdf` or the behavioral source of truth in `source/MARKOS_EXPERIENCE_FLOWS.md`. Use it to avoid treating target architecture, implemented code, automated tests, and external production evidence as the same thing.
 
@@ -28,11 +28,13 @@ The confirmed first-release Instagram outcomes are:
 
 Messaging and comment management are not confirmed first-release requirements. A Meta use-case selection that exposes those capabilities does not add them to MARKOS scope by itself.
 
+The intended final Strategy choices are 30, 60, and 90 days. Which choices belong to which plans is unresolved, and a possible 7-day option is not yet an accepted contract. Current `main` offers 30/60/90 in the Sunlit UI, defaults that UI to 30, and accepts any integer from 30 through 180 at the shared API boundary.
+
 ## Current architecture overlay
 
 | Area           | Current repository evidence                                                                                                                                           | Target or open work                                                                                                                        |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web            | Next.js 16 and React 19 in `apps/web`; browser calls the Fastify API through `NEXT_PUBLIC_API_BASE_URL`.                                                              | Complete the end-to-end journey and UI review with Mohamed.                                                                                |
+| Web            | Next.js 16 and React 19 in `apps/web`; the adopted Sunlit landing, auth, onboarding, Overview, Strategy, Create, Insights, Business Profile, and Settings routes call the Fastify API through `NEXT_PUBLIC_API_BASE_URL`. | Restore the complete final-system operational surface recorded in `ui-design-foundation.md` and continue consequential UI review with Mohamed. |
 | API            | Fastify, Prisma 6, PostgreSQL/pgvector, workspace middleware, application-role RLS, and provider orchestration in `apps/api`.                                         | Continue auth lifecycle, email delivery, API, and security hardening.                                                                      |
 | Worker         | A separate API-owned interval worker runs publishing, analytics, token-refresh, usage-reset, and email tasks.                                                         | Review production deployment, retries, availability, and future queue needs.                                                               |
 | AI service     | Python 3.11 FastAPI service with OpenAI-capable Strategy and onboarding-profile adapters plus deterministic local embeddings, content, image, and generic agent responses. | Deploy and live-verify the shared structured-output path and completed onboarding-profile journey.                                          |
@@ -53,14 +55,15 @@ Repository runtime requirements are Node.js `>=20.16.0 <21 || >=22.3.0`, pnpm 11
 | Instagram publishing                                                                             | **Implemented behind `dry_run`/`live`; not production-verified** | Container creation, polling, publish, readiness, limits, and failure handling have mocked/local tests. No real image or reel publish evidence is recorded.                                                                               |
 | Instagram insights/analytics                                                                     | **Partially implemented; not production-verified**               | Provider, sync, worker, UI, PDF, and Vault-learning paths exist. The active OAuth client requests only `instagram_business_basic`; insights permission work and live evidence remain open.                                               |
 | Meta App Review                                                                                  | **Externally managed; not repository-proven**                    | Preparation documentation exists. Submission or approval must be verified in the Meta dashboard.                                                                                                                                         |
-| Account-verification email                                                                       | **Implemented in the deployment candidate; full validation and production delivery pending** | The candidate adds bilingual verification UI, Redis-backed expiring single-use tokens, local and SendGrid providers, production fail-fast configuration, and verified-user gates for onboarding, AI generation, and Instagram credential actions. Focused provider tests exist; the disposable-database journey, real delivery, and production link are not yet verified. |
-| MFA and browser bearer-token lifecycle                                                           | **Implemented in the deployment candidate; full validation and production deployment pending** | TOTP, access/refresh issuance, rotation, and reuse detection have tests. Enrollment renders the API-provided `otpauth://` value as a local QR code with a manual-key fallback. Instagram connect, reconnect, refresh, and disconnect require a fixed, non-sliding 15-minute MFA step-up whose original deadline survives refresh and the OAuth round trip; the complete disposable-database and live authenticator journeys remain pending. |
+| Account-verification email                                                                       | **Implemented on current `main`; production delivery pending** | Current source has bilingual verification UI, Redis-backed expiring single-use tokens, local and SendGrid providers, production fail-fast configuration, and verified-user gates for onboarding, AI generation, and Instagram credential actions. Focused tests are recorded; real delivery and the deployed link remain unverified. |
+| MFA and browser bearer-token lifecycle                                                           | **Implemented on current `main`; production journey pending** | TOTP, access/refresh issuance, rotation, and reuse detection have focused tests. Enrollment renders the API-provided `otpauth://` value locally with a manual-key fallback. Instagram credential changes require a fixed, non-sliding 15-minute MFA step-up that survives refresh and the OAuth round trip; a deployed authenticator journey remains pending. |
 | Seven-module onboarding and resolved business profile                                            | **Implemented and locally verified; deployment and live journey review pending** | The active wizard collects Company, Story, Products, Audience, Competitors, Brand, and Objectives, persists only disclosed answers, and blocks advancement on validation/API failure. At 100% completeness, a verified user can generate, edit in English and Arabic, regenerate, and approve a workspace-scoped business profile before onboarding becomes complete. Focused API, browser, isolation, and responsive-layout tests pass; the provider-backed deployed journey is not yet verified. |
 | AI provider inference                                                                            | **Provider connectivity verified; application paths require renewed live verification** | A controlled direct Responses API request from the deployed AI container completed on 2026-08-06 and appeared in the OpenAI project logs, proving the project key, model access, billing, and outbound connectivity for that request. The then-deployed Strategy adapter still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaces its parsed-response dependency with a shared strict JSON Schema `responses.create` path used by Strategy and onboarding profile resolution, with bounded timeouts/retries, sanitized diagnostics, and provider token metering. Local and fake-client tests pass; the new application path is not yet deployed or live-verified. Other AI routes remain deterministic. |
-| Railway production topology                                                                      | **Partly externally evidenced**                                  | The 2026-08-03 production connection proves a reachable web/API/database path for that attempt. The exact Railway project, environment, service inventory, networking, and dependency health still require a dashboard audit.            |
+| Railway production topology                                                                      | **Partly externally evidenced**                                  | The 2026-08-03 connection proves a reachable web/API/database path for that attempt. User-supplied 2026-08-16 Railway screenshots additionally show variable panels for web, API, AI, pgvector, and Redis services, but not values, deployments, networking, worker/OpenSearch existence, or health. The exact topology still requires an operator audit. |
 | AI service on Railway                                                                            | **Deployed and reachable; provider-backed application response pending** | On 2026-08-06, API deep health reported the Railway AI dependency `ok`, and the protected Strategy request reached the AI provider layer. A direct provider request from the same container succeeded, but the application Strategy request returned 503 under the prior adapter. Deploy and verify the current shared adapter before calling the path complete. |
 | Durable media storage/CDN                                                                        | **Proposed**                                                     | No S3/CloudFront or alternative durable adapter exists on `main`. Do not enable live publishing on Railway container storage.                                                                                                            |
 | Launch readiness                                                                                 | **Not complete**                                                 | Production connection is one completed milestone, not proof of publishing, analytics, payments, AI, App Review, or the complete M6 gate.                                                                                                 |
+| Sunlit browser journey                                                                           | **Partially implemented and locally/browser tested**             | The canonical public/auth/onboarding/primary-app routes are mounted. PR #19 also removed old queue, full analytics, full Vault, AI consultant, and admin panels before complete Sunlit replacements existed; their final-system capabilities remain deferred restoration work.                              |
 
 ## Production Instagram connection record
 
@@ -97,7 +100,7 @@ This production result does **not** establish:
 
 These are current priorities, not claims that each item is already in progress:
 
-1. Perfect the complete user journey.
+1. Perfect the complete user journey and restore the final-system operational surfaces that did not receive Sunlit replacements in PR #19.
 2. Validate, deploy, and production-verify account-verification email delivery.
 3. Deploy and production-verify the completed browser session renewal journey, including one required login for sessions created before the cookie contract.
 4. Fix UI issues with Mohamed involved in UI review and consequential direction.
@@ -105,9 +108,9 @@ These are current priorities, not claims that each item is already in progress:
 6. Deploy and live-verify the shared provider-backed Strategy and onboarding-profile response path.
 7. Strengthen Railway, database, networking, environment-variable, secret, and deployment operations.
 8. Choose and prepare durable image storage and delivery for future publishing.
-9. Move toward `instagram_business_content_publish` only after the current foundation is ready.
+9. Map, implement, review, and live-verify the remaining first-release permissions: `instagram_business_content_publish` and `instagram_business_manage_insights`.
 
-Publishing and analytics permission expansion must be a coordinated code, Meta dashboard, environment, test, and evidence change. Editing `INSTAGRAM_OAUTH_SCOPES` cannot expand the active client: current code fixes the requested permission to `instagram_business_basic`.
+Each permission keeps its own application, Meta dashboard/App Review, environment, reconnect, test, and external-evidence gate. Neither is active today. Editing `INSTAGRAM_OAUTH_SCOPES` cannot expand the active client: current code fixes the requested permission to `instagram_business_basic`.
 
 ## AI delivery phases
 
@@ -137,15 +140,15 @@ Connect provider-backed embeddings, pgvector storage, workspace-scoped retrieval
 
 Do not move Sarah-owned cloud work to Khalid merely because it affects application behavior. Conversely, onboarding behavior and product integration do not become cloud work merely because they call a deployed service.
 
-## Sarah's immediate assignment batch
+## Railway and cloud follow-ups
 
-Target date: Thursday, 2026-08-06. These are short current assignments, not permanent architecture decisions or a month-long rigid plan.
+The old 2026-08-06 assignment list is no longer presented as a current deadline. Sarah retains ownership of Railway, deployed PostgreSQL, service networking, secrets, AI availability, and storage/CDN decisions. The current externally managed follow-ups are:
 
-1. **Railway review and runbook:** compare actual services with repository Dockerfiles and documentation; cover web, API, PostgreSQL, Redis/OpenSearch where applicable, networking, domains, build/start behavior, health checks, dependencies, and AI-service status; update the A-to-Z runbook and correct only clear low-risk mismatches through focused PRs.
-2. **Environment variables and secrets:** inventory names and purposes by service without values; recommend service-local versus shared organization; identify missing, duplicate, obsolete, or weakly validated settings; prepare safe future handling for the OpenAI project credential. Startup validation is Sarah's decision after inspection; credential-rotation procedures may be deferred from this batch.
-3. **AI service deployment:** assess the current FastAPI service and provider-capable Strategy path, deploy the smallest healthy service, establish protected backend connectivity, demonstrate one simple request/response, and document blockers. This assignment does not make the broader AI platform production-ready.
-4. **Database review:** inspect Prisma schema, the clean baseline, migration reliability, relationships, constraints, RLS/isolation, indexes, connection handling, and deployed PostgreSQL; rank the three most important improvements; implement only the first clearly justified safe improvement with migration/tests when appropriate. Coordinate with Khalid before application-affecting or potentially destructive work; do not make undocumented manual production-schema changes.
-5. **Image storage/CDN decision:** compare the build specification's S3 + CloudFront target with a simpler Railway MVP; decide storage/CDN, browser-direct versus API-mediated upload, workspace isolation, file-type/size validation, Meta-fetchable URL behavior, services, and variable names; record deferred hardening and an implementation-ready first step. This does not include a complete publishing pipeline or immediate Meta permission change.
+1. Inventory the actual Railway project/environment, deployment sources, web/API/AI/worker/dependency services, networking, domains, build/start settings, health checks, and deploy triggers.
+2. Reconcile service variable names against `staging-deploy.md` without copying values; preserve reserved future variables until their owning feature is reviewed.
+3. Deploy and live-verify the current shared Strategy/onboarding-profile structured-output path through the browser-to-API-to-AI journey.
+4. Inspect deployed PostgreSQL extensions, roles, migration history, backups, connection limits, and RLS without applying the clean baseline to valuable existing data.
+5. Decide the durable media/storage contract required before live Instagram publishing.
 
 ## Open decisions and deferred work
 
@@ -157,8 +160,11 @@ Target date: Thursday, 2026-08-06. These are short current assignments, not perm
 | Browser-direct versus API-mediated image upload | Proposed; Sarah's storage decision should resolve the first implementation step.                                                                 |
 | Additional Railway environments                 | Proposed; the repository cannot prove the current dashboard topology, and no new environment is mandated by this document.                       |
 | Full AI retry/cost/governance system            | Broader build-spec target; defer non-critical complexity until the first provider connection, while retaining current quota/metering invariants. |
-| Publishing and insights permission timing       | Planned after foundation stabilization and explicit review; no automatic date.                                                                   |
+| Publishing and insights permissions             | Accepted remaining first-release scope; both are currently unimplemented in active OAuth and retain independent review/evidence gates.           |
 | Messaging/comments                              | Deferred unless separately approved as product scope.                                                                                            |
+| Graph transport/version                         | Current code separates an Instagram Login/account client from publishing/analytics adapter settings. Use v25.0 provisionally; verify the correct hosts, versioning, fields, and permission contracts in the API research phase before live activation. |
+| Strategy plan entitlement                       | 30/60/90 are the final target choices; plan mapping is undecided and 7 days remains a possible future option.                                      |
+| Missing Sunlit operational pages                | Deferred restoration/reimplementation, not removed product scope; see `ui-design-foundation.md`.                                                  |
 
 ## External state to verify manually
 
@@ -182,3 +188,4 @@ Before describing any of these as current, verify them in the owning dashboard w
 - Publishing and analytics external verification: `instagram-live-publish-verification.md` and `instagram-analytics-live-verification.md`
 - AI service current state and phases: `../services/ai/README.md`
 - Launch evidence: `m6-acceptance-evidence.md`
+- Active source index and retired-source history: `source/README.md` and `archive/source/README.md`

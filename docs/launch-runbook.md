@@ -1,8 +1,16 @@
 # MARKOS AI Launch Runbook
 
+Status date: 2026-08-16.
+
 This runbook closes the M6 launch-runbook planning gate. It does not close the external launch gates by itself; live staging, Meta App Review, real Instagram publishing, real analytics, and Bahrain payment certification still require provider evidence.
 
-Status update, 2026-08-03: the production business-basic Instagram connection succeeded once and is recorded in `docs/project-status.md`. Publishing, analytics, App Review, a full token lifecycle, production AI, durable media storage, and broad launch readiness remain open. Railway is the current early-stage platform; AWS is only a possible later direction.
+Current narrow evidence:
+
+- The production `instagram_business_basic` connection succeeded once on 2026-08-03 and is recorded in `docs/project-status.md`.
+- A direct OpenAI request from the Railway AI service succeeded on 2026-08-06, but the then-deployed Strategy application path returned `503`; the current shared provider adapter still needs deployed end-to-end proof.
+- Railway is the current early-stage platform. The 2026-08-16 screenshots prove only selected service-variable names and one visible provisional Graph version, not deployments, values, networking, or health.
+
+Publishing, insights access, Meta App Review, a full token lifecycle, provider-backed application behavior, durable public media storage, restored final-system Sunlit surfaces, and broad launch readiness remain open. AWS is only a possible later direction.
 
 ## Launch Principle
 
@@ -35,6 +43,8 @@ Save this evidence before marking M6 acceptance complete:
 - `corepack pnpm rtl:qa` output.
 - Staging deployment URL and commit SHA.
 - `/v1/health` and `/v1/health/deep` responses from staging.
+- One authenticated, Vault-grounded Strategy/profile response through the deployed API-to-AI path, plus proof that an unauthorized direct AI request is rejected.
+- Browser-journey evidence for every customer/operator surface included in launch scope, including any final-system surface restored after the Sunlit cutover.
 - Sentry or equivalent project links for web, API, worker, and AI services.
 - `GET /v1/admin/bahrain-launch-readiness` response.
 - PDPL data export and erasure test evidence.
@@ -50,7 +60,8 @@ Save this evidence before marking M6 acceptance complete:
 | -------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Build health         | Verify and build pass on the release commit.                                                                  | Any failing typecheck, lint, unit, integration, build, or RTL QA check.                                           |
 | Infrastructure       | Staging deploy is proven and health checks pass.                                                              | Staging cannot deploy from `main` or deep health is degraded.                                                     |
-| AI service           | Protected API-to-AI connectivity and the intended provider-backed behavior are verified for the launch scope. | Only shallow health or deterministic local scaffolding is available, or the internal boundary is unauthenticated. |
+| AI service           | Protected API-to-AI connectivity and the intended provider-backed behavior are verified for the launch scope. | Only shallow health, a direct provider probe, or deterministic local scaffolding is available, or the internal boundary is unauthenticated. |
+| Product surfaces     | Every final-system surface included in launch scope is mounted in Sunlit and its browser journey passes.       | A required surface exists only as an API, legacy evidence, redirect, or removed pre-Sunlit page.                   |
 | Security             | OWASP audit is clean for known moderate+ dependency issues.                                                   | Critical/high app issue or unresolved dependency vulnerability.                                                   |
 | Tenant isolation     | Workspace isolation and RLS tests pass.                                                                       | Any workspace-owned table can leak or cross-write data.                                                           |
 | Instagram publishing | Meta App Review and real image/reel publish evidence exist.                                                   | Live publish mode is enabled without provider evidence.                                                           |
@@ -75,7 +86,8 @@ corepack pnpm security:audit
 
 4. Confirm database migrations are present and reviewed.
 5. Confirm production/staging environment variables are set for the intended launch mode.
-6. Confirm provider modes:
+6. Confirm the exact Instagram Login permissions approved for the release. `instagram_business_basic` is the only currently requested scope; `instagram_business_content_publish` and `instagram_business_manage_insights` remain open until phase-2 API research, implementation, App Review, and live verification are complete.
+7. Confirm provider modes:
 
 | Provider            | Launch-safe default                     | Live only when                                                       |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------- |
@@ -83,8 +95,8 @@ corepack pnpm security:audit
 | Instagram analytics | `INSTAGRAM_ANALYTICS_SYNC_MODE=dry_run` | Live insights sync evidence is complete.                             |
 | Payments            | Dry-run/local adapter mode              | CrediMax or BENEFIT is certified and webhook secrets are configured. |
 
-7. Confirm support and incident channels are staffed.
-8. Confirm rollback target is known: previous image tag, previous commit SHA, and database rollback strategy.
+8. Confirm support and incident channels are staffed.
+9. Confirm rollback target is known: previous image tag, previous commit SHA, and database rollback strategy.
 
 ## Deployment Sequence
 
@@ -112,15 +124,16 @@ Complete this path on staging:
 1. Register, verify email, and log in.
 2. Switch Arabic and English routes.
 3. Complete onboarding and confirm Vault completeness.
-4. Generate one strategy.
+4. Generate one 30/60/90-day Strategy through the deployed provider mode and confirm its Vault grounding.
 5. Generate one bilingual content item.
 6. Attach media and check publish readiness.
-7. Schedule content and run dry-run publishing.
-8. Sync or view analytics in the configured mode.
+7. Schedule content and run dry-run publishing through the API or worker; verify the persisted result.
+8. View the current Insights summary in the configured mode and complete live sync only after the insights permission is approved and verified.
 9. Start Starter checkout, capture payment in the allowed mode, and download invoice PDF.
 10. Run VAT compliance for the invoice.
 11. Run workspace data export for PDPL evidence.
-12. Confirm admin can view plan, gateway, prompt, model, audit, and billing status.
+12. Confirm every in-scope Sunlit surface is mounted and usable. The full Vault editor/history, calendar/media library, publishing recovery queue, AI consultant, AN-01 through AN-06 analytics suite, and admin console remain launch blockers when included in the final release scope.
+13. Confirm administration through the restored Sunlit admin console; authenticated API checks alone are acceptable only if administration is explicitly excluded from the launch UI scope in writing.
 
 ## Rollback
 
@@ -176,4 +189,4 @@ For the first 48 hours:
 
 ## Current Launch Status
 
-M6 launch operations are documented. M6 acceptance remains open until the external provider gates are complete and the evidence pack is attached.
+M6 launch operations are documented. M6 acceptance remains open until application-owned browser/AI/media blockers and external provider gates are complete and the evidence pack is attached.

@@ -1,6 +1,6 @@
 # MARKOS UI Figma Manual Review
 
-> **Historical evidence:** This review covers the superseded `Design AI Marketing Platform` export. Use [the Sunlit Social Studio UI foundation](./ui-design-foundation.md) for new visual work.
+> **Archived pre-Sunlit evidence:** This review covers the superseded `Design AI Marketing Platform` export and the 2026-06-17 implementation snapshot. PR #19 later removed or redirected several recorded pages. Every pass result below is historical, not proof of the current Sunlit UI. Use [the Sunlit Social Studio UI foundation](./ui-design-foundation.md) and its restoration register for current work.
 
 Date: 2026-06-17
 
@@ -17,14 +17,14 @@ Reviewed source files:
 
 ## Result
 
-The implemented shell and core journey now match the Figma export's visual system and product journey closely enough to treat the Figma parity pass as complete for:
+At the time of capture, the implemented shell and core journey matched the Figma export closely enough to close that historical parity pass for:
 - App shell
 - Dashboard
 - Content Creator
 - Publishing Queue
 - Onboarding Wizard
 
-Additional product routes not present as full Figma screens, such as Analytics, Audience, Channels, Vault, Strategy, AI Assistant, Settings, and Admin, intentionally reuse the same shell, card density, color system, and compact typography.
+Additional product routes not present as full Figma screens, such as Analytics, Audience, Channels, Vault, Strategy, AI Assistant, Settings, and Admin, then reused the same shell, card density, color system, and compact typography. Their current existence and completeness must be established from current source, not this review.
 
 ## Screen Review
 
@@ -64,7 +64,7 @@ Added beyond Figma: Arabic/RTL parity and Vault persistence because they are req
 
 ## Intentional Extensions
 
-The Figma export focuses on the core journey. The implemented product extends the same design language into additional required product modules from the MARKOS build spec:
+The Figma export focused on the core journey. The captured implementation extended the same design language into additional required product modules from the MARKOS build spec:
 - Vault
 - Strategy
 - Analytics
@@ -74,8 +74,8 @@ The Figma export focuses on the core journey. The implemented product extends th
 - Settings
 - Admin
 
-These are not treated as visual mismatches; they are product-complete extensions of the Figma system.
+At capture time these were treated as extensions rather than visual mismatches. "Product-complete" in this historical review is not a current readiness claim.
 
 ## Evidence
 
-Latest screenshots are stored under `evidence/ui/2026-06-17/`, including desktop, wide, tablet, mobile, Arabic/RTL, quota states, generated content variants, onboarding steps, and Vault-gap states.
+Historical screenshots are stored under `evidence/ui/2026-06-17/`, including desktop, wide, tablet, mobile, Arabic/RTL, quota states, generated content variants, onboarding steps, and Vault-gap states.

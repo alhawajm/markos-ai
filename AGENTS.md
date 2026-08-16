@@ -23,6 +23,12 @@ MARKOS AI is an Instagram-first AI marketing OS for Bahrain SMBs. It learns a bu
 
 When the spec is silent, choose the smallest conventional option and record it in `docs/decisions.md`.
 
+## Local Git and GitHub CLI
+
+In local Codex or IDE sessions, run every `git` and `gh` command with elevated, unsandboxed access. Do not first attempt these commands inside the sandbox, because sandboxed credential and repository access can produce misleading failures.
+
+This execution rule does not authorize destructive Git operations, force pushes, history rewrites, merges, commits, pushes, or other publication unless the current task already authorizes them. Continue to verify exact targets and preserve unrelated work.
+
 ## Codex Cloud task completion reports
 
 This section applies only to agents running in Codex Cloud. It does not apply to local Codex sessions, IDE-based agents, human contributors, or other automation unless a task explicitly opts into this reporting convention.

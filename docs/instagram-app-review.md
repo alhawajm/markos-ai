@@ -1,8 +1,8 @@
 # Instagram Integration and App Review Status
 
-Status date: 2026-08-03.
+Status date: 2026-08-16.
 
-The current connection milestone uses Instagram Login and requests exactly `instagram_business_basic`. Publishing and insights are confirmed first-release goals, but their permissions, App Review evidence, and live behavior remain separate milestones. Comments and messaging are not confirmed first-release requirements.
+The current connection milestone uses Instagram Login and requests exactly `instagram_business_basic`. The two remaining confirmed first-release permissions are `instagram_business_content_publish` and `instagram_business_manage_insights`; neither is active in the OAuth request today. Each retains its own application, App Review, reconnect, test, and external-evidence gate. Comments and messaging are not confirmed first-release requirements.
 
 ## Evidence classification
 
@@ -43,11 +43,13 @@ instagram_business_basic
 
 `INSTAGRAM_OAUTH_SCOPES` does not change the active authorization request. Current environment validation also accepts only the business-basic value. Do not claim that publishing or insights can be enabled by changing that variable.
 
-The intended permission progression is:
+The accepted permission scope is:
 
 1. Keep the production-verified business-basic connection stable.
-2. When the application, storage, deployment, and review evidence are ready, implement and request `instagram_business_content_publish`.
-3. Add the applicable insights permission only with the matching analytics implementation, review evidence, and controlled live verification.
+2. Implement and request `instagram_business_content_publish` with the required durable-media, publishing, review, and recovery evidence.
+3. Implement and request `instagram_business_manage_insights` with the required metrics, retention, interpretation, review, and controlled live-sync evidence.
+
+This document does not yet define the current official API fields, hosts, media requirements, metrics, permission dependencies, App Review artifacts, or account/test-user restrictions for the two new permissions. That mapping belongs to the next API research phase. Do not implement from the retired Facebook-Page flow or from old permission names.
 
 Permission names and dashboard availability are provider-managed and must be checked in current Meta documentation and the real dashboard immediately before a review submission. Additional messaging or comment permissions require a separate approved product scope.
 
@@ -60,10 +62,10 @@ The following is historical handoff context, not repository-proven current dashb
 | App/portfolio             | Business app under the Ra'edat Business Portfolio, intended for multiple external client accounts.                                                    |
 | Login/product             | Instagram Login.                                                                                                                                      |
 | Selected use case         | `Manage messaging & content on Instagram`; this selection does not make messaging/comments MARKOS requirements.                                       |
-| Graph version at creation | v25.0. The repository's Instagram Login client currently defaults to v25.0; dashboard/runtime state may change independently.                         |
+| Graph version at creation | v25.0. The repository provisionally aligns both Graph transport defaults to v25.0; dashboard/runtime state and the publishing/analytics host contract must be rechecked during API research. |
 | App mode at creation      | Development.                                                                                                                                          |
 | Initial permission        | `instagram_business_basic`.                                                                                                                           |
-| Next intended permission  | `instagram_business_content_publish`, after foundation stabilization.                                                                                 |
+| Remaining permissions     | `instagram_business_content_publish` and `instagram_business_manage_insights`; neither is active in the current OAuth request.                                    |
 | Access model              | Least privilege. Khalid had scoped app/technical access rather than portfolio-wide administration.                                                    |
 | Custody                   | Yahya Alawadhi retained portfolio control; Maryam Buzaboon and Mohamed Al-Hawaj received longer-term app/business custody appropriate to their roles. |
 | Cloud owner access        | Sarah does not require Meta access solely because she owns cloud work; grant only a concrete least-privilege need.                                    |
@@ -90,7 +92,7 @@ INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS=14
 META_WEBHOOK_VERIFY_TOKEN=<local-fake-value>
 ```
 
-## App Review evidence script
+## Business-basic evidence script
 
 1. Sign in to MARKOS and open Settings.
 2. Click **Connect Instagram**.
@@ -102,6 +104,8 @@ META_WEBHOOK_VERIFY_TOKEN=<local-fake-value>
 8. Disconnect and show that MARKOS removes the active encrypted credential and presents the manual Instagram-permissions action without treating the required provider step as a local failure.
 
 Do not record a real authorization code, token, state, callback URL with a query string, provider identifier, email, username, header, cookie, or raw provider response in the screencast or evidence pack.
+
+The publishing and insights submissions need separate evidence scripts after phase-two research confirms Meta's current review requirements. Reuse only the connection/security portion above; add permission-specific user action, provider result, data-use explanation, failure/recovery, and deletion/privacy evidence rather than claiming the basic connection demonstrates either permission.
 
 ## Operational gates
 
@@ -116,6 +120,7 @@ Do not record a real authorization code, token, state, callback URL with a query
 - Webhook POSTs require a valid `X-Hub-Signature-256`; invalid or unsigned payloads are rejected before audit processing.
 - Callback audit persistence redacts signed requests and secrets.
 - `INSTAGRAM_PUBLISH_MODE` and `INSTAGRAM_ANALYTICS_SYNC_MODE` remain `dry_run` until their separate gates close.
+- `INSTAGRAM_GRAPH_VERSION` and the publishing/analytics adapter version are provisionally v25.0. Version presence is not provider-contract validation.
 
 ## Webhook and provider limitations
 

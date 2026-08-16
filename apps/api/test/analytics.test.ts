@@ -633,7 +633,7 @@ describe("analytics routes", () => {
         return jsonResponse({ error: { message: "Unexpected URL" } }, 404);
       },
       graphBaseUrl: "https://graph.facebook.test",
-      graphVersion: "v24.0"
+      graphVersion: "v25.0"
     });
 
     const snapshots = await provider.syncWorkspace({
