@@ -86,7 +86,7 @@ corepack pnpm security:audit
 
 4. Confirm database migrations are present and reviewed.
 5. Confirm production/staging environment variables are set for the intended launch mode.
-6. Confirm the exact Instagram Login permissions approved for the release. `instagram_business_basic` is the only currently requested scope; `instagram_business_content_publish` and `instagram_business_manage_insights` remain open until phase-2 API research, implementation, App Review, and live verification are complete.
+6. Confirm the exact Instagram Login permissions approved for the release. The Milestone A working source requests `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_insights`; deployment, a fresh connection, controlled live calls, and App Review/Advanced Access remain separate gates before external-client use.
 7. Confirm provider modes:
 
 | Provider            | Launch-safe default                     | Live only when                                                       |

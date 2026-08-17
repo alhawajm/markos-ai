@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
-import { MetaGraphPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
+import { InstagramGraphPublisher, InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { publishContentItem } from "../src/publishing/publishing-service";
 
 describe("publishing routes", () => {
-  it("reports live publishing readiness blockers before Meta credentials are configured", async () => {
+  it("reports live publishing readiness blockers before Instagram Login is configured", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -24,33 +25,72 @@ describe("publishing routes", () => {
       data: {
         mode: "dry_run",
         ready: false,
-        reasons: expect.arrayContaining([
-          "INSTAGRAM_PUBLISH_MODE_NOT_LIVE",
-          "MISSING_META_APP_ID",
-          "MISSING_META_APP_SECRET",
-          "MISSING_META_REDIRECT_URI",
-          "INSTAGRAM_NOT_CONNECTED"
-        ]),
-        requiredEnv: ["INSTAGRAM_PUBLISH_MODE", "META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"]
+        reasons: expect.arrayContaining(["INSTAGRAM_PUBLISH_MODE_NOT_LIVE", "INSTAGRAM_NOT_CONNECTED"]),
+        requiredEnv: [
+          "INSTAGRAM_PUBLISH_MODE",
+          "INSTAGRAM_APP_ID",
+          "INSTAGRAM_APP_SECRET",
+          "INSTAGRAM_OAUTH_REDIRECT_URI",
+          "INSTAGRAM_OAUTH_STATE_SECRET",
+          "INSTAGRAM_TOKEN_ENCRYPTION_KEY",
+          "INSTAGRAM_GRAPH_VERSION",
+          "INSTAGRAM_OAUTH_SCOPES",
+          "MEDIA_STORAGE_DRIVER",
+          "AWS_ENDPOINT_URL",
+          "AWS_ACCESS_KEY_ID",
+          "AWS_SECRET_ACCESS_KEY",
+          "AWS_S3_BUCKET_NAME",
+          "AWS_DEFAULT_REGION",
+          "AWS_S3_URL_STYLE",
+          "SIGNED_URL_TTL"
+        ],
+        requiredScopes: ["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"],
+        graphVersion: "v25.0"
       }
     });
 
     await app.close();
   });
 
-  it("reports live publishing ready when live mode, Meta credentials, and Instagram connection are configured", async () => {
+  it("reports live publishing ready when live mode, Instagram Login, and the expanded connection are configured", async () => {
     const previousMode = env.INSTAGRAM_PUBLISH_MODE;
+    const previousStorageDriver = env.MEDIA_STORAGE_DRIVER;
     const previousProcessEnv = {
       INSTAGRAM_PUBLISH_MODE: process.env.INSTAGRAM_PUBLISH_MODE,
-      META_APP_ID: process.env.META_APP_ID,
-      META_APP_SECRET: process.env.META_APP_SECRET,
-      META_REDIRECT_URI: process.env.META_REDIRECT_URI
+      INSTAGRAM_APP_ID: process.env.INSTAGRAM_APP_ID,
+      INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET,
+      INSTAGRAM_OAUTH_REDIRECT_URI: process.env.INSTAGRAM_OAUTH_REDIRECT_URI,
+      INSTAGRAM_OAUTH_STATE_SECRET: process.env.INSTAGRAM_OAUTH_STATE_SECRET,
+      INSTAGRAM_TOKEN_ENCRYPTION_KEY: process.env.INSTAGRAM_TOKEN_ENCRYPTION_KEY,
+      INSTAGRAM_GRAPH_VERSION: process.env.INSTAGRAM_GRAPH_VERSION,
+      INSTAGRAM_OAUTH_SCOPES: process.env.INSTAGRAM_OAUTH_SCOPES,
+      MEDIA_STORAGE_DRIVER: process.env.MEDIA_STORAGE_DRIVER,
+      AWS_ENDPOINT_URL: process.env.AWS_ENDPOINT_URL,
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+      AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME,
+      AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
+      AWS_S3_URL_STYLE: process.env.AWS_S3_URL_STYLE,
+      SIGNED_URL_TTL: process.env.SIGNED_URL_TTL
     };
     env.INSTAGRAM_PUBLISH_MODE = "live";
+    env.MEDIA_STORAGE_DRIVER = "s3";
     process.env.INSTAGRAM_PUBLISH_MODE = "live";
-    process.env.META_APP_ID = "123456789";
-    process.env.META_APP_SECRET = "test-secret";
-    process.env.META_REDIRECT_URI = "https://app.example.com/api/meta/callback";
+    process.env.INSTAGRAM_APP_ID = "123456789";
+    process.env.INSTAGRAM_APP_SECRET = "test-secret";
+    process.env.INSTAGRAM_OAUTH_REDIRECT_URI = "https://app.example.com/v1/workspace/instagram/oauth/callback";
+    process.env.INSTAGRAM_OAUTH_STATE_SECRET = "test-state-secret-that-is-at-least-thirty-two-bytes";
+    process.env.INSTAGRAM_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+    process.env.INSTAGRAM_GRAPH_VERSION = "v25.0";
+    process.env.INSTAGRAM_OAUTH_SCOPES = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights";
+    process.env.MEDIA_STORAGE_DRIVER = "s3";
+    process.env.AWS_ENDPOINT_URL = "https://storage.railway.app";
+    process.env.AWS_ACCESS_KEY_ID = "fake-access-key";
+    process.env.AWS_SECRET_ACCESS_KEY = "fake-secret-key";
+    process.env.AWS_S3_BUCKET_NAME = "markos-staging";
+    process.env.AWS_DEFAULT_REGION = "auto";
+    process.env.AWS_S3_URL_STYLE = "virtual";
+    process.env.SIGNED_URL_TTL = "3600";
 
     const app = await buildApp();
 
@@ -80,6 +120,7 @@ describe("publishing routes", () => {
     } finally {
       await app.close();
       env.INSTAGRAM_PUBLISH_MODE = previousMode;
+      env.MEDIA_STORAGE_DRIVER = previousStorageDriver;
       restoreProcessEnv(previousProcessEnv);
     }
   });
@@ -222,7 +263,7 @@ describe("publishing routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    const { content, media } = await createPublishableDueContent(session.workspace.id);
+    const { content } = await createPublishableDueContent(session.workspace.id);
 
     await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
 
@@ -250,7 +291,7 @@ describe("publishing routes", () => {
             caption: "Ready to publish\n\n#Bahrain #MarkosAI",
             contentItemId: content.id,
             contentType: "POST",
-            mediaUrls: [media.cdnUrl]
+            mediaCount: 1
           },
           status: "DRY_RUN"
         },
@@ -260,6 +301,120 @@ describe("publishing routes", () => {
     expect(after.status).toBe("SCHEDULED");
     expect(after.instagramPostId).toBeNull();
     expect(after.publishedAt).toBeNull();
+
+    await app.close();
+  });
+
+  it("exposes the temporary item-specific operator path only after MFA step-up", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
+
+    const withoutStepUp = await app.inject({
+      method: "POST",
+      url: `/v1/publishing/content/${content.id}/publish`,
+      headers: authHeaders(session.tokens.accessToken)
+    });
+    const withStepUp = await app.inject({
+      method: "POST",
+      url: `/v1/publishing/content/${content.id}/publish`,
+      headers: authHeaders(await steppedUpToken(session.user.id, session.workspace.id))
+    });
+
+    expect(withoutStepUp.statusCode).toBe(403);
+    expect(withStepUp.statusCode).toBe(200);
+    expect(withStepUp.json()).toMatchObject({
+      data: {
+        contentItemId: content.id,
+        dryRun: true,
+        reasons: [],
+        result: {
+          payload: {
+            mediaCount: 1
+          },
+          status: "DRY_RUN"
+        },
+        status: "DRY_RUN"
+      }
+    });
+
+    await app.close();
+  });
+
+  it("blocks a live provider call until the account is reconnected for the release scopes", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
+    await prisma.instagramConnectionCredential.update({
+      data: {
+        requestedScopes: ["instagram_business_basic"]
+      },
+      where: {
+        workspaceId: session.workspace.id
+      }
+    });
+    let providerCalled = false;
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async () => {
+        providerCalled = true;
+        return new Response(JSON.stringify({ id: "unexpected" }), { status: 200 });
+      }
+    });
+
+    const result = await publishContentItem(session.workspace.id, content.id, { publisher });
+
+    expect(result).toMatchObject({
+      contentItemId: content.id,
+      reasons: ["INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES"],
+      status: "BLOCKED"
+    });
+    expect(providerCalled).toBe(false);
+
+    await app.close();
+  });
+
+  it("mints the S3 provider URL just in time without persisting or returning it", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content, media } = await createPublishableDueContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
+    const signedUrl = "https://markos-bucket.storage.railway.app/object.jpg?X-Amz-Signature=sensitive";
+    const calls: Array<{ body?: string; url: string }> = [];
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: input.toString(),
+          ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() })
+        });
+
+        if (input.toString().includes("content_publishing_limit")) {
+          return new Response(JSON.stringify({ data: [{ config: { quota_duration: 86400, quota_total: 50 }, quota_usage: 0 }] }));
+        }
+        if (input.toString().endsWith("/media")) return new Response(JSON.stringify({ id: "container-1" }));
+        if (input.toString().includes("/container-1?")) return new Response(JSON.stringify({ status_code: "FINISHED" }));
+        return new Response(JSON.stringify({ id: "published-1" }));
+      },
+      pollDelayMs: 0,
+      providerUrlResolver: async (input) => {
+        expect(input).toEqual({
+          publicUrl: media.cdnUrl,
+          storageKey: media.s3Key,
+          workspaceId: session.workspace.id
+        });
+        return signedUrl;
+      }
+    });
+
+    const result = await publishContentItem(session.workspace.id, content.id, { publisher });
+    const persistedMedia = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: media.id } });
+
+    expect(result.status).toBe("PUBLISHED");
+    expect(JSON.stringify(result)).not.toContain("X-Amz-Signature");
+    expect(calls.find((call) => call.url.endsWith("/media"))?.body).toContain(encodeURIComponent(signedUrl));
+    expect(persistedMedia.cdnUrl).toBe("https://cdn.example.com/publish.jpg");
+    expect(persistedMedia.cdnUrl).not.toContain("X-Amz-Signature");
 
     await app.close();
   });
@@ -301,7 +456,7 @@ describe("publishing routes", () => {
     await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     const publisher: InstagramPublisher = {
       async publish() {
-        throw new MetaGraphPublishError("Meta rejected the media container");
+        throw new InstagramPublishError("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
       }
     };
 
@@ -315,11 +470,11 @@ describe("publishing routes", () => {
     expect(attempt).toMatchObject({
       contentItemId: content.id,
       dryRun: false,
-      reasons: ["Meta rejected the media container"],
+      reasons: ["INSTAGRAM_CONTAINER_PROCESSING_FAILED"],
       status: "FAILED"
     });
     expect(failed.status).toBe("FAILED");
-    expect(failed.failureReason).toBe("Meta rejected the media container");
+    expect(failed.failureReason).toBe("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
 
     await app.close();
   });
@@ -348,7 +503,7 @@ describe("publishing routes", () => {
             caption: "Ready to publish\n\n#Bahrain #MarkosAI",
             contentItemId: content.id,
             contentType: "POST",
-            mediaUrls: ["https://cdn.example.com/publish.jpg"]
+            mediaCount: 1
           },
           status: "PUBLISHED"
         };
@@ -371,6 +526,55 @@ describe("publishing routes", () => {
       limit: 30,
       used: 1
     });
+
+    await app.close();
+  });
+
+  it("blocks a duplicate in-process manual publish while the first attempt is active", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
+
+    let releasePublish: (() => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releasePublish = resolve;
+    });
+    const publisher: InstagramPublisher = {
+      async publish() {
+        markStarted?.();
+        await release;
+        return {
+          dryRun: false,
+          instagramPostId: "single-published-id",
+          payload: {
+            accountId: "test-account",
+            caption: "Ready to publish",
+            contentItemId: content.id,
+            contentType: "POST",
+            mediaCount: 1
+          },
+          status: "PUBLISHED"
+        };
+      }
+    };
+
+    const first = publishContentItem(session.workspace.id, content.id, { publisher });
+    await started;
+    const duplicate = await publishContentItem(session.workspace.id, content.id, { publisher });
+    releasePublish?.();
+    const completed = await first;
+
+    expect(duplicate).toMatchObject({
+      contentItemId: content.id,
+      reasons: ["INSTAGRAM_PUBLISH_ALREADY_IN_PROGRESS"],
+      status: "BLOCKED"
+    });
+    expect(completed.status).toBe("PUBLISHED");
 
     await app.close();
   });
@@ -520,7 +724,7 @@ describe("publishing routes", () => {
     await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
     const publisher: InstagramPublisher = {
       async getPublishingLimit() {
-        throw new MetaGraphPublishError("Meta publishing limit check failed");
+        throw new InstagramPublishError("INSTAGRAM_PUBLISHING_LIMIT_CHECK_FAILED");
       },
       async publish() {
         throw new Error("publish should not be called without a cap check");
@@ -537,7 +741,7 @@ describe("publishing routes", () => {
     expect(attempt).toMatchObject({
       contentItemId: content.id,
       dryRun: false,
-      reasons: ["Meta publishing limit check failed"],
+      reasons: ["INSTAGRAM_PUBLISHING_LIMIT_CHECK_FAILED"],
       status: "BLOCKED"
     });
     expect(after.status).toBe("SCHEDULED");
@@ -595,7 +799,7 @@ async function createPublishableContent(workspaceId: string, scheduledAt: Date) 
       workspaceId,
       type: "IMAGE",
       filename: "publish.jpg",
-      s3Key: "external:https://cdn.example.com/publish.jpg",
+      s3Key: `s3:${workspaceId}/publish.jpg`,
       cdnUrl: "https://cdn.example.com/publish.jpg",
       mimeType: "image/jpeg",
       sizeBytes: 120000,
@@ -622,6 +826,20 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
+}
+
+async function steppedUpToken(userId: string, workspaceId: string): Promise<string> {
+  return new SignJWT({
+    workspaceId,
+    roles: ["OWNER"],
+    mfaVerified: true,
+    mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 900
+  })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));
 }
 
 function monthStart(date = new Date()): Date {

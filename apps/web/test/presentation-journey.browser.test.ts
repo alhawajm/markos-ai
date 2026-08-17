@@ -155,6 +155,139 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
     await page.close();
   });
+
+  it("creates, edits, uploads, generates media, approves, schedules, and cancels a saved content item", async () => {
+    const page = await sessionPage();
+    let record: ReturnType<typeof studioContentRecord> & { scheduledAt?: string; status: string } = studioContentRecord();
+    const mediaAssets: Array<Record<string, unknown>> = [];
+    let generationPayload: Record<string, unknown> | undefined;
+    let updatePayload: Record<string, unknown> | undefined;
+    let uploadPayload: Record<string, unknown> | undefined;
+    let imageGenerationPayload: Record<string, unknown> | undefined;
+    let schedulePayload: Record<string, unknown> | undefined;
+    let unscheduleCalls = 0;
+    const statusTransitions: string[] = [];
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json(mediaAssets));
+      if (pathname === "/v1/content/generate" && method === "POST") {
+        generationPayload = route.request().postDataJSON() as Record<string, unknown>;
+        return route.fulfill(json([record]));
+      }
+      if (pathname === `/v1/content/${record.id}` && method === "PATCH") {
+        updatePayload = route.request().postDataJSON() as Record<string, unknown>;
+        record = { ...record, ...updatePayload, updatedAt: "2026-08-17T10:01:00.000Z" };
+        return route.fulfill(json(record));
+      }
+      if (pathname === "/v1/media/upload" && method === "POST") {
+        uploadPayload = route.request().postDataJSON() as Record<string, unknown>;
+        const asset = {
+          createdAt: "2026-08-17T10:02:00.000Z",
+          filename: uploadPayload.filename,
+          height: uploadPayload.height,
+          id: "media-uploaded",
+          mimeType: uploadPayload.mimeType,
+          publicUrl: onePixelJpegDataUrl,
+          sizeBytes: 631,
+          type: "IMAGE",
+          updatedAt: "2026-08-17T10:02:00.000Z",
+          width: uploadPayload.width,
+          workspaceId: session.workspace.id
+        };
+        mediaAssets.unshift(asset);
+        return route.fulfill(json(asset));
+      }
+      if (pathname === `/v1/content/${record.id}/media` && method === "POST") {
+        const payload = route.request().postDataJSON() as { mediaAssetId: string };
+        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, payload.mediaAssetId])) };
+        return route.fulfill(json(record));
+      }
+      if (pathname === `/v1/content/${record.id}/generate-image` && method === "POST") {
+        imageGenerationPayload = route.request().postDataJSON() as Record<string, unknown>;
+        const mediaAsset = {
+          createdAt: "2026-08-17T10:03:00.000Z",
+          filename: "generated-concept.svg",
+          height: 1350,
+          id: "media-generated",
+          mimeType: "image/svg+xml",
+          publicUrl:
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1080' height='1350'%3E%3Crect width='100%25' height='100%25' fill='%23d93f7a'/%3E%3C/svg%3E",
+          sizeBytes: 180,
+          type: "AI_GENERATED",
+          updatedAt: "2026-08-17T10:03:00.000Z",
+          width: 1080,
+          workspaceId: session.workspace.id
+        };
+        mediaAssets.unshift(mediaAsset);
+        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, mediaAsset.id])) };
+        return route.fulfill(json({ contentItem: record, mediaAsset, model: "local-image-generator", prompt: "saved caption", promptVersion: "image.v1" }));
+      }
+      if (pathname === `/v1/content/${record.id}/status` && method === "POST") {
+        const payload = route.request().postDataJSON() as { status: string };
+        statusTransitions.push(payload.status);
+        record = { ...record, status: payload.status };
+        return route.fulfill(json(record));
+      }
+      if (pathname === `/v1/content/${record.id}/schedule` && method === "POST") {
+        schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
+        record = { ...record, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
+        return route.fulfill(json(record));
+      }
+      if (pathname === `/v1/content/${record.id}/unschedule` && method === "POST") {
+        unscheduleCalls += 1;
+        const { scheduledAt: _scheduledAt, ...withoutSchedule } = record;
+        record = { ...withoutSchedule, status: "APPROVED" };
+        return route.fulfill(json(record));
+      }
+
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
+    await page.getByPlaceholder(/Describe the content you want MARKOS/).fill("Launch our new Bahrain dessert subscription to busy professionals.");
+    await page.getByRole("button", { name: "Create draft" }).click();
+    await page.getByText("Draft generated and saved to this workspace.", { exact: true }).waitFor();
+
+    const captionEditor = page.getByPlaceholder("Generated caption will appear here after MARKOS creates a draft.");
+    await captionEditor.fill("A fresh dessert ritual for busy Bahrain teams.");
+    await page.getByRole("button", { name: "العربية", exact: true }).click();
+    await captionEditor.fill("طقوس حلوة جديدة لفرق العمل في البحرين.");
+    await page.getByRole("button", { name: "Save edits", exact: true }).click();
+    await page.getByText("Edits saved to the workspace draft.", { exact: true }).waitFor();
+
+    await page.getByLabel("Upload JPEG").setInputFiles({
+      buffer: Buffer.from(onePixelJpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      name: "showcase.jpg"
+    });
+    await page.getByText("showcase.jpg uploaded and attached to this workspace draft.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Generate image", exact: true }).click();
+    await page.getByText("Image concept generated, saved, and attached to this draft.", { exact: true }).waitFor();
+    await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
+
+    await page.getByRole("button", { name: "Approve draft", exact: true }).click();
+    await page.getByText("Content approved. It is now eligible for scheduling.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Schedule", exact: true }).click();
+    await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
+    await page.getByText("Schedule cancelled. The approved item has returned to the ready queue.", { exact: true }).waitFor();
+
+    expect(generationPayload).toEqual({ contentType: "POST", count: 1, topic: "Launch our new Bahrain dessert subscription to busy professionals." });
+    expect(updatePayload).toMatchObject({
+      captionAr: "طقوس حلوة جديدة لفرق العمل في البحرين.",
+      captionEn: "A fresh dessert ritual for busy Bahrain teams."
+    });
+    expect(uploadPayload).toMatchObject({ filename: "showcase.jpg", height: 1, mimeType: "image/jpeg", type: "IMAGE", width: 1 });
+    expect(typeof uploadPayload?.base64Data).toBe("string");
+    expect(imageGenerationPayload).toEqual({ aspectRatio: "4:5" });
+    expect(statusTransitions).toEqual(["IN_REVIEW", "APPROVED"]);
+    expect(typeof schedulePayload?.scheduledAt).toBe("string");
+    expect(unscheduleCalls).toBe(1);
+    await page.close();
+  });
 });
 
 async function sessionPage(): Promise<Page> {
@@ -236,9 +369,30 @@ function emptyAnalyticsSummary() {
     records: [],
     to: "2026-08-09",
     topContent: [],
-    totals: { comments: 0, engagement: 0, followers: 0, impressions: 0, likes: 0, reach: 0, saves: 0, shares: 0, views: 0 }
+    totals: { comments: 0, engagement: 0, followers: 0, impressions: 0, likes: 0, profileViews: 0, reach: 0, saves: 0, shares: 0, views: 0 }
   };
 }
+
+function studioContentRecord() {
+  return {
+    callToAction: "Subscribe today",
+    captionAr: "اكتشفوا اشتراك الحلويات الجديد.",
+    captionEn: "Discover our new dessert subscription.",
+    contentPillar: "Product launch",
+    contentType: "POST",
+    createdAt: "2026-08-17T10:00:00.000Z",
+    hashtags: ["#SnackLab", "#Bahrain"],
+    id: "content-showcase",
+    mediaIds: [] as string[],
+    status: "DRAFT",
+    updatedAt: "2026-08-17T10:00:00.000Z",
+    workspaceId: session.workspace.id
+  };
+}
+
+const onePixelJpegBase64 =
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
+const onePixelJpegDataUrl = `data:image/jpeg;base64,${onePixelJpegBase64}`;
 
 function json(data: unknown) {
   return { status: 200, contentType: "application/json", body: JSON.stringify({ data }) };

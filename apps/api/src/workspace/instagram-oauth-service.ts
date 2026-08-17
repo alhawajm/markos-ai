@@ -17,10 +17,6 @@ export interface InstagramOAuthConfig {
   appSecret?: string | undefined;
   redirectUri?: string | undefined;
   stateSecret?: string | undefined;
-  authorizeUrl?: string;
-  tokenUrl?: string;
-  longLivedTokenUrl?: string;
-  scopes?: string;
   jwtSecret?: string;
 }
 export class InstagramOAuthConfigurationError extends Error {

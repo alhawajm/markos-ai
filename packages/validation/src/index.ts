@@ -354,7 +354,7 @@ export const uploadMediaSchema = z.object({
   type: mediaTypeSchema.default("IMAGE"),
   filename: z.string().min(1).max(240),
   mimeType: z.string().min(3).max(120),
-  base64Data: z.string().min(1).max(70_000_000),
+  base64Data: z.string().min(1).max(12_000_000),
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional(),
   durationSeconds: z.number().int().positive().max(3600).optional()

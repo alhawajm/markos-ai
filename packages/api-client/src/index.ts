@@ -368,6 +368,13 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async deleteMediaAsset(mediaAssetId: string): Promise<{ id: string }> {
+    const response = await this.request<{ id: string }>(`/v1/media/${mediaAssetId}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
   async generateContent(input: { topic: string; contentType?: ContentType; count?: number; strategyId?: string }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
@@ -706,6 +713,14 @@ export class MarkosApiClient {
 
   async publishContentDryRun(contentItemId: string): Promise<PublishAttemptRecord> {
     const response = await this.request<PublishAttemptRecord>(`/v1/publishing/content/${contentItemId}/dry-run`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async publishContent(contentItemId: string): Promise<PublishAttemptRecord> {
+    const response = await this.request<PublishAttemptRecord>(`/v1/publishing/content/${contentItemId}/publish`, {
       body: {},
       method: "POST"
     });

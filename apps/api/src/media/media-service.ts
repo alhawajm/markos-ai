@@ -7,11 +7,17 @@ import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { toContentRecord } from "../content/content-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { localKeyForRoute, readStoredMedia, storeWorkspaceMedia } from "./storage-service";
+import { deleteStoredMedia, readStoredMedia, storageKeysForRoute, storeWorkspaceMedia } from "./storage-service";
 
 export class MediaAssetNotFoundError extends Error {
   constructor() {
     super("Media asset was not found");
+  }
+}
+
+export class MediaAssetInUseError extends Error {
+  constructor() {
+    super("Detach the media asset from every content item before deleting it");
   }
 }
 
@@ -41,6 +47,7 @@ export class MediaImageGenerationInvalidError extends Error {
 
 const imageAgentName = "IMAGE";
 const localCurrency = "BHD";
+const maxDirectUploadBytes = 8 * 1024 * 1024;
 
 export async function listMediaAssets(workspaceId: string): Promise<MediaAssetRecord[]> {
   const rows = await prisma.mediaAsset.findMany({
@@ -87,7 +94,7 @@ export async function registerPublicMedia(workspaceId: string, input: RegisterPu
 export async function uploadMedia(workspaceId: string, input: UploadMediaInput): Promise<MediaAssetRecord> {
   const bytes = Buffer.from(input.base64Data, "base64");
 
-  if (!isValidBase64Payload(input.base64Data, bytes)) {
+  if (!isValidBase64Payload(input.base64Data, bytes) || bytes.byteLength > maxDirectUploadBytes) {
     throw new MediaUploadInvalidError();
   }
 
@@ -98,6 +105,7 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
     const stored = await storeWorkspaceMedia({
       workspaceId,
       filename: input.filename,
+      contentType: input.mimeType,
       bytes
     });
     const row = await prisma.mediaAsset.create({
@@ -163,6 +171,7 @@ export async function generateImageForContent(
     const stored = await storeWorkspaceMedia({
       workspaceId,
       filename: generated.filename,
+      contentType: generated.mime_type,
       bytes
     });
     const { mediaAsset, updatedContent } = await prisma.$transaction(async (tx) => {
@@ -244,7 +253,9 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
   const asset = await prisma.mediaAsset.findFirst({
     where: {
       workspaceId,
-      s3Key: localKeyForRoute(workspaceId, storedFilename),
+      s3Key: {
+        in: storageKeysForRoute(workspaceId, storedFilename)
+      },
       deletedAt: null
     }
   });
@@ -254,7 +265,7 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
   }
 
   return {
-    bytes: await readStoredMedia(workspaceId, storedFilename),
+    bytes: await readStoredMedia(workspaceId, asset.s3Key),
     mimeType: asset.mimeType
   };
 }
@@ -325,6 +336,47 @@ export async function detachMediaFromContent(workspaceId: string, contentItemId:
   });
 
   return toContentRecord(row);
+}
+
+export async function deleteMediaAsset(workspaceId: string, mediaAssetId: string): Promise<{ id: string }> {
+  const mediaAsset = await prisma.mediaAsset.findFirst({
+    where: {
+      id: mediaAssetId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!mediaAsset) {
+    throw new MediaAssetNotFoundError();
+  }
+
+  const attachedContentCount = await prisma.contentItem.count({
+    where: {
+      workspaceId,
+      deletedAt: null,
+      mediaIds: {
+        has: mediaAsset.id
+      }
+    }
+  });
+
+  if (attachedContentCount > 0) {
+    throw new MediaAssetInUseError();
+  }
+
+  await deleteStoredMedia(workspaceId, mediaAsset.s3Key);
+  await prisma.mediaAsset.update({
+    where: {
+      id: mediaAsset.id
+    },
+    data: {
+      deletedAt: new Date()
+    }
+  });
+  await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: mediaAsset.sizeBytes });
+
+  return { id: mediaAsset.id };
 }
 
 export function toMediaAssetRecord(row: MediaAsset): MediaAssetRecord {

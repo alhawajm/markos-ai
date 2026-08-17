@@ -184,7 +184,7 @@ Pin `@opentelemetry/core` to `2.8.0` through `pnpm-workspace.yaml` overrides bec
 
 # Instagram OAuth security foundation (2026-07-29)
 
-- Instagram Login is a distinct provider contract and requests only `instagram_business_basic`; Facebook Login and Page discovery are intentionally excluded from this slice.
+- At this foundation milestone, Instagram Login requested only `instagram_business_basic`; Facebook Login and Page discovery were intentionally excluded. The provider separation remains active, while the requested-scope subset is superseded by the 2026-08-17 Milestone A contract below.
 - Access tokens use randomized AES-256-GCM envelopes. OAuth state uses a short-lived HMAC-protected payload plus an atomic, persisted nonce consumption record so it remains single-use across API instances.
 - Requested scopes and provider-confirmed scopes are stored separately because consent requested by MarkOS is not evidence of what the provider actually granted.
 
@@ -200,9 +200,9 @@ Instagram Login's stable professional-account identity is the documented `user_i
 
 The web app and API use bearer tokens stored by the browser client rather than an API-origin server session, and Instagram returns to a public API callback. The callback therefore uses transaction binding, not independent returning-browser authentication: only an authenticated member with `instagram:manage` can create the signed, expiring state and persisted nonce; atomic nonce consumption maps the callback back to that initiating user and workspace before any provider exchange. A different browser session cannot redirect the result to its own workspace because the callback accepts no workspace input and persistence uses only the integrity-protected transaction binding. Callback query values are stripped from application URLs and error telemetry. A future server-session design may add returning-browser binding, but this slice does not claim it.
 
-The active business-basic connection consumes `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, and `INSTAGRAM_OAUTH_STATE_SECRET`. Its authorization, short-token, long-token, refresh, and Graph hosts are constrained in code, and its permission is exactly `instagram_business_basic`.
+The business-basic implementation at this date consumed `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, and `INSTAGRAM_OAUTH_STATE_SECRET`. Its authorization, short-token, long-token, refresh, and Graph hosts were constrained in code, and its permission subset was exactly `instagram_business_basic`. The scope subset is superseded by the 2026-08-17 Milestone A contract; the host and security boundaries remain.
 
-Retained compatibility inputs have narrower meanings. `INSTAGRAM_OAUTH_SCOPES` is consumed by unchanged analytics-readiness logic and appears in App Review documentation, but it does not alter the active connection permission. `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, `INSTAGRAM_REFRESH_TOKEN_URL`, and `INSTAGRAM_GRAPH_BASE_URL` currently have no runtime consumer and remain inert compatibility inputs pending a later coordinated cleanup. Secure refresh delegates to `InstagramBasicClient`, whose refresh endpoint is constrained in code. None of these compatibility inputs controls the active business-basic client or activates publishing, analytics, workers, schedulers, or additional permissions.
+At this date, `INSTAGRAM_OAUTH_SCOPES` was an inert compatibility input for the connection flow. The 2026-08-17 Milestone A contract supersedes that behavior: it now drives a constrained allowlisted authorization request and requested-scope persistence. `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, and `INSTAGRAM_REFRESH_TOKEN_URL` remain inert compatibility inputs; active clients constrain their hosts in code. Secure refresh still delegates to `InstagramBasicClient`, whose refresh endpoint is constrained in code.
 
 ## 2026-07-30 — Encrypted Instagram credentials are the only active credential source
 
@@ -235,7 +235,7 @@ The production incident that established this operational lesson was classified 
 
 ## 2026-08-03: A production connection does not activate adjacent Instagram scope
 
-Treat the 2026-08-03 production business-basic OAuth success as completion of the first real professional-account connection milestone only. It proves the connection path for that attempt; it does not activate or verify publishing, insights, App Review, full-lifecycle refresh, provider-side revocation, or launch readiness. The active Instagram Login client continues to request exactly `instagram_business_basic`. Any permission expansion must be an explicit coordinated code, Meta dashboard, environment, test, and external-evidence change.
+Treat the 2026-08-03 production business-basic OAuth success as completion of the first real professional-account connection milestone only. It proves the connection path for that attempt; it does not activate or verify publishing, insights, App Review, full-lifecycle refresh, provider-side revocation, or launch readiness. At that date the client requested exactly `instagram_business_basic`. The coordinated 2026-08-17 Milestone A code, dashboard, environment, and test change supersedes the requested-scope behavior, but deployment, reconnect, and external provider evidence remain required.
 
 ## 2026-08-03: Railway is the early-stage operating platform
 
@@ -350,3 +350,21 @@ Current source exposes 30/60/90 choices in the Sunlit Strategy UI, defaults that
 MARKOS has one Instagram product integration, but current source separates the Instagram Login/account client settings from the publishing/analytics adapter settings. This is a transport/configuration split, not a claim that the product uses two unrelated integrations.
 
 Use v25.0 provisionally for both version defaults because it is the only visible version in the supplied Railway snapshots and is the current working choice. This is not an API-research conclusion. Before enabling either remaining permission, verify the correct hosts, version placement, endpoints, fields, media requirements, metrics, review contract, and migration implications against current authoritative Meta documentation and the real dashboard.
+
+## 2026-08-17: Milestone A locks one Instagram Login application contract
+
+Supersede the provisional repository transport split for the Milestone A application implementation. Request the canonical ordered set `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_insights`; reject duplicates, unknown permissions, missing basic, and Facebook Login permission names. Persist the requested set on a fresh connection, expose it separately from provider-confirmed scopes, and never infer provider confirmation from the authorization request alone.
+
+Use fixed `https://graph.instagram.com/v25.0` versioned calls for Instagram account, publishing, and insights operations. Publishing and insights send the access token in the bearer header, bound provider calls by timeout and response size, and expose only sanitized application error codes. Retire the publishing/analytics `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION` inputs from application readiness; retain the separately consumed webhook verification token.
+
+For the controlled Standard Access proof, publish exactly one validated JPEG through an item-specific, MFA-protected operator route. Use only a process-local duplicate guard for this manual window and keep durable leases, restart recovery, Reels, carousels, and worker scheduling in Milestone B. Account insights use `reach,profile_views` with `period=day`; media insights use `shares,comments`. Preserve absent provider metrics as unavailable and explicit numeric zero as zero throughout persistence, summaries, UI, PDF, and Vault learning.
+
+This decision does not establish provider-granted permissions, deployment, reconnect, live publish/insights success, or App Review. The private Railway Bucket and just-in-time signed-URL design was still pending at the time of this application-contract decision and is superseded by the storage decision below.
+
+## 2026-08-17: Milestone A uses a private Railway Bucket and provider-only signed reads
+
+Use a private Railway Bucket through its S3-compatible interface for Milestone A media. Retain the local filesystem driver for local development. Stored object keys are workspace-prefixed, application-generated, non-overwritable, and persisted as stable `s3:` keys; the ordinary API-facing media URL remains a stable authenticated/application proxy URL rather than a signed bucket URL.
+
+Generate a fresh presigned GET URL from the stored key immediately before Meta image-container creation. Never persist, return to ordinary clients, or log that URL. Configure the API through Railway references to the Bucket-generated `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`, and `AWS_DEFAULT_REGION` credentials. Set the application-owned values `MEDIA_STORAGE_DRIVER=s3` and `AWS_S3_URL_STYLE=virtual`; constrain `SIGNED_URL_TTL` to 300–86,400 seconds with 3,600 seconds as the Milestone A starting value. `MEDIA_PUBLIC_BASE_URL` remains optional when `API_BASE_URL` is the canonical public HTTPS API origin.
+
+Sarah reported on 2026-08-17 that the private Bucket exists, its five credentials are wired to the API, `AWS_S3_URL_STYLE=virtual` is set, and a test image is visible in the Bucket. That operator report does not yet prove application-path upload/read/delete, retention/backups, an external presigned read, deployment of the reviewed application commit, or Meta fetchability. Those remain infrastructure and joint live-verification gates. Direct browser-to-Bucket upload/CORS, lifecycle cleanup, worker credentials, and durable publish attempts remain Milestone B work; browser-to-API upload is part of the application flow.

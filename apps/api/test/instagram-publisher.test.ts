@@ -1,117 +1,162 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { MetaGraphInstagramPublisher } from "../src/publishing/instagram-publisher";
+import { InstagramGraphPublisher, validateInstagramImageForPublishing } from "../src/publishing/instagram-publisher";
 
-describe("MetaGraphInstagramPublisher", () => {
-  it("creates, polls, and publishes a single image container", async () => {
-    const calls: Array<{ body?: string; method?: string; url: string }> = [];
+describe("InstagramGraphPublisher", () => {
+  it("creates, polls, and publishes one JPEG through the constrained Instagram Login transport", async () => {
+    const calls: Array<{ authorization?: string; body?: string; method?: string; url: string }> = [];
+    const signedUrl = "https://bucket.example.test/object.jpg?signature=sensitive";
+    const resolvedObjects: Array<{ publicUrl: string; storageKey: string; workspaceId: string }> = [];
     const fetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      const headers = new Headers(init?.headers);
+      const authorization = headers.get("authorization");
       calls.push({
         url: input.toString(),
+        ...(authorization === null ? {} : { authorization }),
         ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() }),
         ...(init?.method === undefined ? {} : { method: init.method })
       });
 
       if (calls.length === 1) return jsonResponse({ id: "creation-1" });
-      if (calls.length === 2) return jsonResponse({ status_code: "FINISHED" });
+      if (calls.length === 2) return jsonResponse({ status_code: "IN_PROGRESS" });
+      if (calls.length === 3) return jsonResponse({ status_code: "FINISHED" });
       return jsonResponse({ id: "ig-post-1" });
     };
-    const publisher = new MetaGraphInstagramPublisher({
+    const publisher = new InstagramGraphPublisher({
       fetchImpl,
-      graphBaseUrl: "https://graph.test",
-      graphVersion: "v25.0",
-      pollAttempts: 1,
-      pollDelayMs: 0
+      pollAttempts: 2,
+      pollDelayMs: 0,
+      providerUrlResolver: async (input) => {
+        resolvedObjects.push(input);
+        return signedUrl;
+      }
     });
 
     const result = await publisher.publish({
       contentItem: contentItem({ contentType: "POST" }),
-      mediaAssets: [mediaAsset({ cdnUrl: "https://cdn.example.com/post.jpg" })],
+      mediaAssets: [
+        mediaAsset({
+          cdnUrl: "https://api.example.test/media-files/workspace-id/object.jpg",
+          s3Key: "s3:workspace-id/object.jpg"
+        })
+      ],
       workspace: workspace()
     });
 
     expect(result).toMatchObject({
       dryRun: false,
       instagramPostId: "ig-post-1",
+      payload: {
+        mediaCount: 1
+      },
       status: "PUBLISHED"
     });
-    expect(calls).toHaveLength(3);
+    expect(JSON.stringify(result)).not.toContain("signature=sensitive");
+    expect(resolvedObjects).toEqual([
+      {
+        publicUrl: "https://api.example.test/media-files/workspace-id/object.jpg",
+        storageKey: "s3:workspace-id/object.jpg",
+        workspaceId: "workspace-id"
+      }
+    ]);
+    expect(calls).toHaveLength(4);
     expect(calls[0]).toMatchObject({
+      authorization: "Bearer test-token",
       method: "POST",
-      url: "https://graph.test/v25.0/17841400000000000/media"
+      url: "https://graph.instagram.com/v25.0/17841400000000000/media"
     });
-    expect(calls[0]?.body).toContain("image_url=https%3A%2F%2Fcdn.example.com%2Fpost.jpg");
+    expect(calls[0]?.body).toContain("image_url=https%3A%2F%2Fbucket.example.test%2Fobject.jpg%3Fsignature%3Dsensitive");
     expect(calls[0]?.body).toContain("caption=English+caption");
-    expect(calls[1]?.url).toBe("https://graph.test/v25.0/creation-1?fields=status_code&access_token=test-token");
-    expect(calls[2]).toMatchObject({
+    expect(calls[1]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
+    expect(calls[2]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
+    expect(calls[3]).toMatchObject({
       method: "POST",
-      url: "https://graph.test/v25.0/17841400000000000/media_publish"
+      url: "https://graph.instagram.com/v25.0/17841400000000000/media_publish"
     });
-    expect(calls[2]?.body).toContain("creation_id=creation-1");
+    expect(calls.every((call) => !call.url.includes("test-token") && !call.body?.includes("test-token"))).toBe(true);
   });
 
-  it("creates child containers before publishing a carousel container", async () => {
-    const calls: Array<{ body?: string; url: string }> = [];
-    const fetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
-      calls.push({
-        url: input.toString(),
-        ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() })
-      });
+  it("rejects non-JPEG or incomplete image metadata before calling Instagram", async () => {
+    let called = false;
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async () => {
+        called = true;
+        return jsonResponse({ id: "unexpected" });
+      }
+    });
 
-      if (calls.length === 1) return jsonResponse({ id: "child-1" });
-      if (calls.length === 2) return jsonResponse({ id: "child-2" });
-      if (calls.length === 3) return jsonResponse({ id: "carousel-1" });
-      if (calls.length === 4) return jsonResponse({ status_code: "FINISHED" });
-      return jsonResponse({ id: "ig-carousel-1" });
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "POST" }),
+        mediaAssets: [mediaAsset({ filename: "post.svg", height: null, mimeType: "image/jpeg", width: null })],
+        workspace: workspace()
+      })
+    ).rejects.toThrow("INSTAGRAM_PUBLISH_JPEG_REQUIRED");
+    expect(called).toBe(false);
+  });
+
+  it("keeps the Milestone A live publisher constrained to one image post", async () => {
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async () => jsonResponse({ id: "unexpected" })
+    });
+
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "REEL" }),
+        mediaAssets: [mediaAsset({})],
+        workspace: workspace()
+      })
+    ).rejects.toThrow("INSTAGRAM_MILESTONE_A_IMAGE_POST_ONLY");
+  });
+
+  it("returns a sanitized code when a container finishes with an error status", async () => {
+    const fetchImpl = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
+      if (init?.method === "POST") return jsonResponse({ id: "sensitive-container-id" });
+      return jsonResponse({ status_code: "ERROR" });
     };
-    const publisher = new MetaGraphInstagramPublisher({
+    const publisher = new InstagramGraphPublisher({
       fetchImpl,
-      graphBaseUrl: "https://graph.test",
-      graphVersion: "v25.0",
       pollAttempts: 1,
       pollDelayMs: 0
     });
 
-    const result = await publisher.publish({
-      contentItem: contentItem({ contentType: "CAROUSEL" }),
-      mediaAssets: [mediaAsset({ cdnUrl: "https://cdn.example.com/one.jpg" }), mediaAsset({ cdnUrl: "https://cdn.example.com/two.jpg" })],
+    const promise = publisher.publish({
+      contentItem: contentItem({ contentType: "POST" }),
+      mediaAssets: [mediaAsset({})],
       workspace: workspace()
     });
 
-    expect(result.instagramPostId).toBe("ig-carousel-1");
-    expect(calls).toHaveLength(5);
-    expect(calls[0]?.body).toContain("is_carousel_item=true");
-    expect(calls[1]?.body).toContain("is_carousel_item=true");
-    expect(calls[2]?.body).toContain("media_type=CAROUSEL");
-    expect(calls[2]?.body).toContain("children=child-1%2Cchild-2");
+    await expect(promise).rejects.toThrow("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
+    await expect(promise).rejects.not.toThrow("sensitive-container-id");
   });
 
-  it("throws when a container finishes with an error status", async () => {
-    const fetchImpl = async (_input: string | URL, _init?: RequestInit): Promise<Response> => {
-      if (_init?.method === "POST") return jsonResponse({ id: "creation-1" });
-      return jsonResponse({ status_code: "ERROR" });
-    };
-    const publisher = new MetaGraphInstagramPublisher({
-      fetchImpl,
-      graphBaseUrl: "https://graph.test",
-      graphVersion: "v25.0",
-      pollAttempts: 1,
+  it("bounds container polling and marks the timeout as retryable", async () => {
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (_input, init) => (init?.method === "POST" ? jsonResponse({ id: "creation-1" }) : jsonResponse({ status_code: "IN_PROGRESS" })),
+      pollAttempts: 2,
       pollDelayMs: 0
     });
 
     await expect(
       publisher.publish({
         contentItem: contentItem({ contentType: "POST" }),
-        mediaAssets: [mediaAsset({ cdnUrl: "https://cdn.example.com/post.jpg" })],
+        mediaAssets: [mediaAsset({})],
         workspace: workspace()
       })
-    ).rejects.toThrow("Instagram media container creation-1 is ERROR");
+    ).rejects.toMatchObject({
+      code: "INSTAGRAM_CONTAINER_PROCESSING_TIMEOUT",
+      retryable: true
+    });
   });
 
-  it("reads the current content publishing limit", async () => {
-    const calls: string[] = [];
-    const fetchImpl = async (input: string | URL, _init?: RequestInit): Promise<Response> => {
-      calls.push(input.toString());
+  it("reads only live quota fields without guessed fallbacks", async () => {
+    const calls: Array<{ authorization?: string; url: string }> = [];
+    const fetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      const authorization = new Headers(init?.headers).get("authorization");
+      calls.push({
+        ...(authorization === null ? {} : { authorization }),
+        url: input.toString()
+      });
       return jsonResponse({
         data: [
           {
@@ -124,20 +169,78 @@ describe("MetaGraphInstagramPublisher", () => {
         ]
       });
     };
-    const publisher = new MetaGraphInstagramPublisher({
-      fetchImpl,
-      graphBaseUrl: "https://graph.test",
-      graphVersion: "v25.0"
-    });
+    const publisher = new InstagramGraphPublisher({ fetchImpl });
 
-    const limit = await publisher.getPublishingLimit({ workspace: workspace() });
-
-    expect(limit).toEqual({
+    await expect(publisher.getPublishingLimit({ workspace: workspace() })).resolves.toEqual({
       quotaDurationSeconds: 86400,
       quotaTotal: 50,
       quotaUsage: 12
     });
-    expect(calls).toEqual(["https://graph.test/v25.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig&access_token=test-token"]);
+    expect(calls).toEqual([
+      {
+        authorization: "Bearer test-token",
+        url: "https://graph.instagram.com/v25.0/17841400000000000/content_publishing_limit?fields=quota_usage%2Cconfig"
+      }
+    ]);
+
+    const invalid = new InstagramGraphPublisher({ fetchImpl: async () => jsonResponse({ data: [{ quota_usage: 12 }] }) });
+    await expect(invalid.getPublishingLimit({ workspace: workspace() })).rejects.toThrow("INSTAGRAM_PUBLISHING_LIMIT_RESPONSE_INVALID");
+  });
+
+  it("redacts provider bodies and tokens from errors", async () => {
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async () =>
+        jsonResponse(
+          {
+            error: {
+              code: 190,
+              message: "test-token https://bucket.example.test/object.jpg?signature=sensitive",
+              type: "OAuthException"
+            }
+          },
+          401
+        )
+    });
+
+    const promise = publisher.getPublishingLimit({ workspace: workspace() });
+    await expect(promise).rejects.toThrow("INSTAGRAM_PROVIDER_HTTP_ERROR");
+    await expect(promise).rejects.not.toThrow("test-token");
+    await expect(promise).rejects.not.toThrow("signature=sensitive");
+  });
+
+  it("times out provider calls with a sanitized error", async () => {
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("request aborted with test-token")), { once: true });
+        }),
+      requestTimeoutMs: 1
+    });
+
+    await expect(publisher.getPublishingLimit({ workspace: workspace() })).rejects.toThrow("INSTAGRAM_PROVIDER_TIMEOUT");
+  });
+});
+
+describe("validateInstagramImageForPublishing", () => {
+  it("distinguishes explicit JPEG publishing requirements from generic upload metadata", () => {
+    expect(validateInstagramImageForPublishing(mediaAsset({}))).toEqual([]);
+    expect(
+      validateInstagramImageForPublishing(
+        mediaAsset({
+          cdnUrl: "http://localhost/image.jpg",
+          filename: "image.svg",
+          height: null,
+          mimeType: "image/svg+xml",
+          sizeBytes: 0,
+          width: null
+        })
+      )
+    ).toEqual([
+      "INSTAGRAM_PUBLISH_JPEG_REQUIRED",
+      "INSTAGRAM_PUBLISH_IMAGE_DIMENSIONS_REQUIRED",
+      "INSTAGRAM_PUBLISH_IMAGE_SIZE_REQUIRED",
+      "INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED"
+    ]);
   });
 });
 
@@ -194,9 +297,9 @@ function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" }): Cont
   };
 }
 
-function mediaAsset(input: { cdnUrl: string }): MediaAsset {
+function mediaAsset(input: Partial<MediaAsset>): MediaAsset {
   return {
-    cdnUrl: input.cdnUrl,
+    cdnUrl: "https://cdn.example.com/post.jpg",
     createdAt: new Date(),
     deletedAt: null,
     durationSeconds: null,
@@ -209,6 +312,7 @@ function mediaAsset(input: { cdnUrl: string }): MediaAsset {
     type: "IMAGE",
     updatedAt: new Date(),
     width: 1080,
-    workspaceId: "workspace-id"
+    workspaceId: "workspace-id",
+    ...input
   };
 }

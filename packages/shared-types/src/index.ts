@@ -369,6 +369,9 @@ export interface InstagramConnection {
   username?: string;
   accountType?: string;
   profilePictureUrl?: string;
+  requestedScopes?: string[];
+  providerConfirmedScopes?: string[];
+  tokenIssuedAt?: string;
   tokenExpiresAt?: string;
   lastSyncedAt?: string;
   recentMedia?: InstagramRecentMedia[];
@@ -480,7 +483,7 @@ export interface AnalyticsSummary {
     contentType: ContentType;
     caption?: string;
     dataDate: string;
-    engagement: number;
+    engagement: number | null;
     metrics: AnalyticsMetricTotals;
   }>;
   totals: AnalyticsMetricTotals;
@@ -488,15 +491,16 @@ export interface AnalyticsSummary {
 }
 
 export interface AnalyticsMetricTotals {
-  comments: number;
-  engagement: number;
-  followers: number;
-  impressions: number;
-  likes: number;
-  reach: number;
-  saves: number;
-  shares: number;
-  views: number;
+  comments: number | null;
+  engagement: number | null;
+  followers: number | null;
+  impressions: number | null;
+  likes: number | null;
+  profileViews: number | null;
+  reach: number | null;
+  saves: number | null;
+  shares: number | null;
+  views: number | null;
 }
 
 export interface AnalyticsSyncResult {
@@ -558,6 +562,7 @@ export interface AnalyticsLiveReadiness {
   reasons: string[];
   requiredEnv: string[];
   requiredScopes: string[];
+  graphVersion: string;
 }
 
 export interface BillingVatBreakdown {
@@ -726,6 +731,8 @@ export interface PublishingLiveReadiness {
   reasons: string[];
   connection: InstagramConnection;
   requiredEnv: string[];
+  requiredScopes: string[];
+  graphVersion: string;
 }
 
 export interface InstagramPublishPayload {
@@ -733,7 +740,7 @@ export interface InstagramPublishPayload {
   contentItemId: string;
   caption: string;
   contentType: Extract<ContentType, "CAROUSEL" | "POST" | "REEL" | "STORY">;
-  mediaUrls: string[];
+  mediaCount: number;
 }
 
 export interface InstagramPublishResult {

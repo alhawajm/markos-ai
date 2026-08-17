@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
-import { MetaGraphInstagramAnalyticsProvider, type InstagramAnalyticsProvider } from "../src/analytics/instagram-analytics-provider";
-import { syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
+import type { InstagramAnalyticsProvider } from "../src/analytics/instagram-analytics-provider";
+import { syncInstagramAnalytics, syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
 
 vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
@@ -59,8 +59,15 @@ describe("analytics routes", () => {
         mode: "dry_run",
         ready: false,
         reasons: expect.arrayContaining(["INSTAGRAM_ANALYTICS_SYNC_MODE_NOT_LIVE"]),
-        requiredEnv: expect.arrayContaining(["INSTAGRAM_ANALYTICS_SYNC_MODE", "META_APP_ID", "META_APP_SECRET"]),
-        requiredScopes: expect.arrayContaining(["instagram_business_basic", "instagram_business_manage_insights"])
+        requiredEnv: expect.arrayContaining([
+          "INSTAGRAM_ANALYTICS_SYNC_MODE",
+          "INSTAGRAM_APP_ID",
+          "INSTAGRAM_APP_SECRET",
+          "INSTAGRAM_GRAPH_VERSION",
+          "INSTAGRAM_OAUTH_SCOPES"
+        ]),
+        requiredScopes: ["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"],
+        graphVersion: "v25.0"
       }
     });
 
@@ -211,6 +218,71 @@ describe("analytics routes", () => {
     expect(firstSummary.json().data.records.every((record: { workspaceId: string }) => record.workspaceId === first.workspace.id)).toBe(true);
     expect(secondSummary.statusCode).toBe(200);
     expect(secondSummary.json().data.records).toEqual([]);
+
+    await app.close();
+  });
+
+  it("rejects a provider snapshot that tries to attach another workspace's content", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const foreignContent = await createPublishedContent(other.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: owner.workspace.id, actorId: owner.user.id });
+    const provider: InstagramAnalyticsProvider = {
+      mode: "live",
+      async syncWorkspace() {
+        return [
+          {
+            dataDate: dayStart(new Date()),
+            metricType: "ACCOUNT",
+            metrics: { reach: 10 }
+          },
+          {
+            contentItemId: foreignContent.id,
+            dataDate: dayStart(new Date()),
+            metricType: "POST",
+            metrics: { shares: 1 }
+          }
+        ];
+      }
+    };
+
+    await expect(syncInstagramAnalytics(owner.workspace.id, { provider })).rejects.toThrow("INSTAGRAM_ANALYTICS_CONTENT_SCOPE_INVALID");
+    await expect(
+      prisma.instagramAnalytics.count({
+        where: {
+          workspaceId: owner.workspace.id
+        }
+      })
+    ).resolves.toBe(0);
+
+    await app.close();
+  });
+
+  it("blocks a live insights call until the account is reconnected for the release scopes", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    await createPublishedContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id });
+    await prisma.instagramConnectionCredential.update({
+      data: {
+        requestedScopes: ["instagram_business_basic"]
+      },
+      where: {
+        workspaceId: session.workspace.id
+      }
+    });
+    let providerCalled = false;
+    const provider: InstagramAnalyticsProvider = {
+      mode: "live",
+      async syncWorkspace() {
+        providerCalled = true;
+        return [];
+      }
+    };
+
+    await expect(syncInstagramAnalytics(session.workspace.id, { provider })).rejects.toThrow("INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES");
+    expect(providerCalled).toBe(false);
 
     await app.close();
   });
@@ -557,7 +629,7 @@ describe("analytics routes", () => {
   it("maintenance worker analytics sync scans connected workspaces", async () => {
     const workspace = await createWorkspace("analytics-worker");
     await persistTestInstagramConnection({ workspaceId: workspace.id, actorId: workspace.ownerUserId, accessToken: "analytics-worker-token" });
-    const content = await createPublishedContent(workspace.id);
+    const content = await createPublishedContent(workspace.id, { publishedAt: new Date(Date.UTC(2026, 0, 1)) });
     const provider: InstagramAnalyticsProvider = {
       mode: "dry_run",
       async syncWorkspace() {
@@ -597,83 +669,6 @@ describe("analytics routes", () => {
         }
       })
     ]);
-  });
-
-  it("maps live Meta Graph account and media insight responses into analytics snapshots", async () => {
-    const workspace = await createWorkspace("analytics-live-provider");
-    const content = await createPublishedContent(workspace.id, {
-      publishedAt: new Date(Date.UTC(2026, 0, 5))
-    });
-    const urls: string[] = [];
-    const provider = new MetaGraphInstagramAnalyticsProvider({
-      fetchImpl: async (input) => {
-        const url = input.toString();
-        urls.push(url);
-
-        if (url.includes("/17841400000000000?")) {
-          return jsonResponse({
-            followers_count: 3210,
-            media_count: 42
-          });
-        }
-
-        if (url.includes(`/${content.instagramPostId}/insights?`)) {
-          return jsonResponse({
-            data: [
-              { name: "likes", values: [{ value: 21 }] },
-              { name: "comments", values: [{ value: 3 }] },
-              { name: "reach", values: [{ value: 240 }] },
-              { name: "saved", values: [{ value: 5 }] },
-              { name: "shares", values: [{ value: 7 }] },
-              { name: "views", values: [{ value: 400 }] }
-            ]
-          });
-        }
-
-        return jsonResponse({ error: { message: "Unexpected URL" } }, 404);
-      },
-      graphBaseUrl: "https://graph.facebook.test",
-      graphVersion: "v25.0"
-    });
-
-    const snapshots = await provider.syncWorkspace({
-      contentItems: [content],
-      from: new Date(Date.UTC(2026, 0, 1)),
-      to: new Date(Date.UTC(2026, 0, 31)),
-      workspace: {
-        ...workspace,
-        instagramAccessToken: "live-token",
-        instagramAccountId: "17841400000000000",
-        instagramTokenExpiresAt: new Date(Date.UTC(2026, 1, 1))
-      }
-    });
-
-    expect(snapshots).toEqual([
-      {
-        dataDate: new Date(Date.UTC(2026, 0, 31)),
-        metricType: "ACCOUNT",
-        metrics: {
-          followers: 3210,
-          mediaCount: 42
-        }
-      },
-      {
-        contentItemId: content.id,
-        dataDate: new Date(Date.UTC(2026, 0, 5)),
-        metricType: "POST",
-        metrics: {
-          comments: 3,
-          likes: 21,
-          reach: 240,
-          saves: 5,
-          shares: 7,
-          views: 400
-        }
-      }
-    ]);
-    expect(urls[0]).toContain("fields=followers_count%2Cmedia_count");
-    expect(urls[1]).toContain("metric=comments%2Cimpressions%2Clikes%2Creach%2Csaved%2Cshares%2Cviews");
-    expect(urls.every((url) => url.includes("access_token=live-token"))).toBe(true);
   });
 });
 
@@ -810,13 +805,4 @@ function authHeaders(accessToken: string): Record<string, string> {
   return {
     authorization: `Bearer ${accessToken}`
   };
-}
-
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    headers: {
-      "content-type": "application/json"
-    },
-    status
-  });
 }

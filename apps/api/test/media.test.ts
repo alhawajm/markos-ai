@@ -134,6 +134,93 @@ describe("media routes", () => {
     await app.close();
   });
 
+  it("deletes an unattached uploaded object only inside its workspace", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const otherWorkspace = await registerTestUser(app);
+    const bytes = Buffer.from("disposable media object");
+    const uploaded = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers: authHeaders(owner.tokens.accessToken),
+      payload: {
+        type: "IMAGE",
+        filename: "disposable.jpg",
+        mimeType: "image/jpeg",
+        base64Data: bytes.toString("base64")
+      }
+    });
+    const mediaId = uploaded.json().data.id as string;
+    const publicPath = new URL(uploaded.json().data.publicUrl as string).pathname;
+    const crossWorkspaceDelete = await app.inject({
+      method: "DELETE",
+      url: `/v1/media/${mediaId}`,
+      headers: authHeaders(otherWorkspace.tokens.accessToken)
+    });
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/v1/media/${mediaId}`,
+      headers: authHeaders(owner.tokens.accessToken)
+    });
+    const servedAfterDelete = await app.inject({ method: "GET", url: publicPath });
+    const listedAfterDelete = await app.inject({
+      method: "GET",
+      url: "/v1/media",
+      headers: authHeaders(owner.tokens.accessToken)
+    });
+
+    expect(crossWorkspaceDelete.statusCode).toBe(404);
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ data: { id: mediaId } });
+    expect(servedAfterDelete.statusCode).toBe(404);
+    expect(listedAfterDelete.json().data).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: mediaId })]));
+    await expect(
+      prisma.usageCounter.findUniqueOrThrow({
+        where: {
+          workspaceId_metric_periodStart: {
+            workspaceId: owner.workspace.id,
+            metric: "STORAGE_BYTES",
+            periodStart: storagePeriodStart()
+          }
+        }
+      })
+    ).resolves.toMatchObject({ used: 0 });
+
+    await app.close();
+  });
+
+  it("requires an asset to be detached before deleting it", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const registered = await app.inject({
+      method: "POST",
+      url: "/v1/media/public-url",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "attached.jpg",
+        publicUrl: "https://cdn.example.com/attached.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 1000
+      }
+    });
+    const mediaId = registered.json().data.id as string;
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/media`,
+      headers,
+      payload: { mediaAssetId: mediaId }
+    });
+    const blocked = await app.inject({ method: "DELETE", url: `/v1/media/${mediaId}`, headers });
+
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({ error: { code: "MEDIA_IN_USE" } });
+
+    await app.close();
+  });
+
   it("generates an AI image for content, attaches it, and meters usage", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

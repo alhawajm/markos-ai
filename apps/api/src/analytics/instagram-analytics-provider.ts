@@ -1,11 +1,15 @@
 import type { ContentItem, Workspace } from "@prisma/client";
 import { env } from "../config/env";
+import { InstagramGraphClient, InstagramGraphRequestError } from "../workspace/instagram-graph-client";
+
+export const INSTAGRAM_ACCOUNT_INSIGHT_METRICS = ["reach", "profile_views"] as const;
+export const INSTAGRAM_MEDIA_INSIGHT_METRICS = ["shares", "comments"] as const;
 
 export interface InstagramAnalyticsSnapshot {
   contentItemId?: string;
   dataDate: Date;
   metricType: "ACCOUNT" | "AUDIENCE" | "POST" | "REEL" | "STORY";
-  metrics: Record<string, number | string>;
+  metrics: Record<string, number>;
 }
 
 export interface InstagramAnalyticsProvider {
@@ -55,16 +59,22 @@ export class DryRunInstagramAnalyticsProvider implements InstagramAnalyticsProvi
   }
 }
 
-export class MetaGraphInstagramAnalyticsProvider implements InstagramAnalyticsProvider {
+export class InstagramGraphAnalyticsProvider implements InstagramAnalyticsProvider {
   readonly mode = "live" as const;
-  private readonly fetchImpl: FetchLike;
-  private readonly graphBaseUrl: string;
-  private readonly graphVersion: string;
+  private readonly client: InstagramGraphClient;
 
-  constructor(options: { fetchImpl?: FetchLike; graphBaseUrl?: string; graphVersion?: string } = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
-    this.graphBaseUrl = (options.graphBaseUrl ?? env.META_GRAPH_BASE_URL).replace(/\/$/, "");
-    this.graphVersion = options.graphVersion ?? env.META_GRAPH_VERSION;
+  constructor(
+    options: {
+      /** Test-only transport boundary. Production callers must omit it. */
+      fetchImpl?: FetchLike;
+      /** Test-only timeout boundary. Production callers must omit it. */
+      requestTimeoutMs?: number;
+    } = {}
+  ) {
+    this.client = new InstagramGraphClient({
+      ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+      ...(options.requestTimeoutMs === undefined ? {} : { timeoutMs: options.requestTimeoutMs })
+    });
   }
 
   async syncWorkspace(input: { contentItems: ContentItem[]; from: Date; to: Date; workspace: Workspace }): Promise<InstagramAnalyticsSnapshot[]> {
@@ -72,32 +82,26 @@ export class MetaGraphInstagramAnalyticsProvider implements InstagramAnalyticsPr
     const accountId = input.workspace.instagramAccountId;
 
     if (!accountId || !accessToken) {
-      throw new InstagramAnalyticsProviderError("Instagram account connection is missing");
+      throw new InstagramAnalyticsProviderError("INSTAGRAM_NOT_CONNECTED");
     }
 
-    const account = await this.graphGet<{ followers_count?: number; media_count?: number }>(`/${accountId}`, accessToken, {
-      fields: "followers_count,media_count"
+    const account = await this.get(accountId, accessToken, {
+      metric: INSTAGRAM_ACCOUNT_INSIGHT_METRICS.join(","),
+      period: "day"
     });
     const snapshots: InstagramAnalyticsSnapshot[] = [
       {
         dataDate: dayStart(input.to),
         metricType: "ACCOUNT",
-        metrics: {
-          followers: account.followers_count ?? 0,
-          mediaCount: account.media_count ?? 0
-        }
+        metrics: normalizeInsights(account.data)
       }
     ];
 
     for (const item of input.contentItems) {
-      if (!item.instagramPostId) {
-        continue;
-      }
+      if (!item.instagramPostId) continue;
 
-      const metrics = await this.graphGet<{
-        data?: Array<{ name?: string; values?: Array<{ value?: number }> }>;
-      }>(`/${item.instagramPostId}/insights`, accessToken, {
-        metric: "comments,impressions,likes,reach,saved,shares,views"
+      const media = await this.get(item.instagramPostId, accessToken, {
+        metric: INSTAGRAM_MEDIA_INSIGHT_METRICS.join(",")
       });
       const metricType = item.contentType === "REEL" ? "REEL" : item.contentType === "STORY" ? "STORY" : "POST";
 
@@ -105,57 +109,62 @@ export class MetaGraphInstagramAnalyticsProvider implements InstagramAnalyticsPr
         contentItemId: item.id,
         dataDate: dayStart(item.publishedAt ?? input.to),
         metricType,
-        metrics: normalizeInsights(metrics.data ?? [])
+        metrics: normalizeInsights(media.data)
       });
     }
 
     return snapshots;
   }
 
-  private async graphGet<TResponse>(path: string, accessToken: string, query: Record<string, string>): Promise<TResponse> {
-    const url = new URL(`${this.graphBaseUrl}/${this.graphVersion}${path}`);
+  private async get(objectId: string, accessToken: string, query: Record<string, string>): Promise<Record<string, unknown>> {
+    try {
+      return await this.client.get(objectId, "insights", accessToken, query);
+    } catch (error) {
+      if (error instanceof InstagramGraphRequestError) {
+        throw new InstagramAnalyticsProviderError(error.code, error.diagnostic.retryable);
+      }
 
-    for (const [key, value] of Object.entries(query)) {
-      url.searchParams.set(key, value);
+      throw new InstagramAnalyticsProviderError("INSTAGRAM_PROVIDER_CLIENT_ERROR");
     }
-
-    url.searchParams.set("access_token", accessToken);
-    return parseGraphResponse<TResponse>(await this.fetchImpl(url));
   }
 }
 
 export class InstagramAnalyticsProviderError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(
+    readonly code: string,
+    readonly retryable = false
+  ) {
+    super(code);
   }
 }
 
 export function createInstagramAnalyticsProvider(): InstagramAnalyticsProvider {
-  return env.INSTAGRAM_ANALYTICS_SYNC_MODE === "live" ? new MetaGraphInstagramAnalyticsProvider() : new DryRunInstagramAnalyticsProvider();
+  return env.INSTAGRAM_ANALYTICS_SYNC_MODE === "live" ? new InstagramGraphAnalyticsProvider() : new DryRunInstagramAnalyticsProvider();
 }
 
-function normalizeInsights(data: Array<{ name?: string; values?: Array<{ value?: number }> }>): Record<string, number> {
+export function normalizeInsights(value: unknown): Record<string, number> {
+  if (!Array.isArray(value)) return {};
+
   const output: Record<string, number> = {};
 
-  for (const row of data) {
-    if (!row.name) {
-      continue;
-    }
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.name !== "string") continue;
+    const latestValueEntry = Array.isArray(item.values) ? item.values.at(-1) : undefined;
+    const latestValue = isRecord(latestValueEntry) ? latestValueEntry.value : undefined;
+    const totalValue = isRecord(item.total_value) ? item.total_value.value : undefined;
+    const metricValue = typeof latestValue === "number" && Number.isFinite(latestValue) ? latestValue : totalValue;
 
-    output[row.name === "saved" ? "saves" : row.name] = row.values?.[0]?.value ?? 0;
+    if (typeof metricValue !== "number" || !Number.isFinite(metricValue)) continue;
+    output[metricName(item.name)] = metricValue;
   }
 
   return output;
 }
 
-async function parseGraphResponse<TResponse>(response: Response): Promise<TResponse> {
-  const body = (await response.json().catch(() => undefined)) as { error?: { message?: string } } | undefined;
-
-  if (!response.ok) {
-    throw new InstagramAnalyticsProviderError(body?.error?.message ?? `Meta Graph request failed with ${response.status}`);
-  }
-
-  return body as TResponse;
+function metricName(value: string): string {
+  if (value === "saved") return "saves";
+  if (value === "profile_views") return "profileViews";
+  return value;
 }
 
 function dayStart(date: Date): Date {
@@ -164,4 +173,8 @@ function dayStart(date: Date): Date {
 
 function numericSeed(value: string): number {
   return [...value].reduce((total, char) => total + char.charCodeAt(0), 0);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

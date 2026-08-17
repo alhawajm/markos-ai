@@ -26,7 +26,7 @@ describe("Instagram OAuth", () => {
     expect(url.searchParams.get("client_id")).toBe(oauthConfig.appId);
     expect(url.searchParams.get("redirect_uri")).toBe(oauthConfig.redirectUri);
     expect(url.searchParams.get("response_type")).toBe("code");
-    expect(url.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(url.searchParams.get("scope")).toBe("instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights");
     expect(url.searchParams.get("enable_fb_login")).toBe("0");
     expect(url.searchParams.get("force_authentication")).toBe("1");
     expect(url.searchParams.get("state")).toMatch(/\S+\.\S+/);
@@ -107,6 +107,7 @@ describe("Instagram OAuth", () => {
     expect(credential.providerAccountId).toBe("instagram-professional-account-7007");
     expect(audit.targetId).toBe("instagram-professional-account-7007");
     expect(credential.providerConfirmedScopes).toEqual([]);
+    expect(credential.requestedScopes).toEqual(["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"]);
     expect(calls).toHaveLength(3);
     expect(calls[0]?.body).toContain("grant_type=authorization_code");
     expect(calls[0]?.body).toContain("code=callback-code");

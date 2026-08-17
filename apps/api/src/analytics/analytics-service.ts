@@ -11,6 +11,7 @@ import type {
 } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
+import { hasCanonicalReleaseScopeSet, INSTAGRAM_RELEASE_SCOPES } from "../config/instagram-contract";
 import { upsertVaultSection } from "../vault/vault-service";
 import { createInstagramAnalyticsProvider, InstagramAnalyticsProviderError, type InstagramAnalyticsProvider } from "./instagram-analytics-provider";
 import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
@@ -26,8 +27,17 @@ export interface AnalyticsSyncForAllWorkspacesResult {
   results: AnalyticsSyncResult[];
 }
 
-const analyticsRequiredEnv = ["INSTAGRAM_ANALYTICS_SYNC_MODE", "META_APP_ID", "META_APP_SECRET"];
-const analyticsRequiredScopes = ["instagram_business_basic", "instagram_business_manage_insights"];
+const analyticsRequiredEnv = [
+  "INSTAGRAM_ANALYTICS_SYNC_MODE",
+  "INSTAGRAM_APP_ID",
+  "INSTAGRAM_APP_SECRET",
+  "INSTAGRAM_OAUTH_REDIRECT_URI",
+  "INSTAGRAM_OAUTH_STATE_SECRET",
+  "INSTAGRAM_TOKEN_ENCRYPTION_KEY",
+  "INSTAGRAM_GRAPH_VERSION",
+  "INSTAGRAM_OAUTH_SCOPES"
+];
+const analyticsRequiredScopes = [...INSTAGRAM_RELEASE_SCOPES];
 
 export async function getAnalyticsSummary(workspaceId: string, input: { days?: number; from?: Date; to?: Date } = {}): Promise<AnalyticsSummary> {
   const range = analyticsRange(input);
@@ -90,11 +100,7 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     }
   }
 
-  const configuredScopes = new Set(
-    env.INSTAGRAM_OAUTH_SCOPES.split(",")
-      .map((scope) => scope.trim())
-      .filter(Boolean)
-  );
+  const configuredScopes = new Set(env.INSTAGRAM_OAUTH_SCOPES);
 
   for (const scope of analyticsRequiredScopes) {
     if (!configuredScopes.has(scope)) {
@@ -112,13 +118,18 @@ export async function getAnalyticsLiveReadiness(workspaceId: string): Promise<An
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");
   }
 
+  if (connection.connected && !hasCanonicalReleaseScopeSet(connection.requestedScopes ?? [])) {
+    reasons.push("INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES");
+  }
+
   return {
     connection,
     mode: env.INSTAGRAM_ANALYTICS_SYNC_MODE,
     ready: reasons.length === 0,
     reasons,
     requiredEnv: analyticsRequiredEnv,
-    requiredScopes: analyticsRequiredScopes
+    requiredScopes: analyticsRequiredScopes,
+    graphVersion: env.INSTAGRAM_GRAPH_VERSION
   };
 }
 
@@ -189,6 +200,15 @@ export async function syncInstagramAnalytics(
     }
   });
   const provider = options.provider ?? createInstagramAnalyticsProvider();
+
+  if (provider.mode === "live") {
+    const connection = await getSecureInstagramConnection(workspaceId);
+
+    if (connection.connected && !hasCanonicalReleaseScopeSet(connection.requestedScopes ?? [])) {
+      throw new InstagramAnalyticsProviderError("INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES");
+    }
+  }
+
   const providerWorkspace = await withSecureInstagramCredential(workspace);
   const snapshots = await provider.syncWorkspace({
     contentItems,
@@ -198,6 +218,11 @@ export async function syncInstagramAnalytics(
   });
   const syncedAt = options.now ?? new Date();
   const records: InstagramAnalyticsRecord[] = [];
+  const allowedContentItemIds = new Set(contentItems.map((item) => item.id));
+
+  if (snapshots.some((snapshot) => snapshot.contentItemId !== undefined && !allowedContentItemIds.has(snapshot.contentItemId))) {
+    throw new InstagramAnalyticsProviderError("INSTAGRAM_ANALYTICS_CONTENT_SCOPE_INVALID");
+  }
 
   for (const snapshot of snapshots) {
     const existing = await prisma.instagramAnalytics.findFirst({
@@ -357,15 +382,16 @@ function toInstagramAnalyticsRecord(row: InstagramAnalytics): InstagramAnalytics
 
 function emptyTotals(): AnalyticsMetricTotals {
   return {
-    comments: 0,
-    engagement: 0,
-    followers: 0,
-    impressions: 0,
-    likes: 0,
-    reach: 0,
-    saves: 0,
-    shares: 0,
-    views: 0
+    comments: null,
+    engagement: null,
+    followers: null,
+    impressions: null,
+    likes: null,
+    profileViews: null,
+    reach: null,
+    saves: null,
+    shares: null,
+    views: null
   };
 }
 
@@ -377,13 +403,17 @@ function summarizeMetrics(records: InstagramAnalyticsRecord[]): AnalyticsMetricT
       const value = record.metrics[key];
 
       if (typeof value === "number") {
-        totals[key] += value;
+        totals[key] = (totals[key] ?? 0) + value;
       }
     }
   }
 
-  if (totals.engagement === 0) {
-    totals.engagement = totals.likes + totals.comments + totals.shares + totals.saves;
+  if (totals.engagement === null) {
+    const engagementParts = [totals.likes, totals.comments, totals.shares, totals.saves];
+
+    if (engagementParts.some((value) => value !== null)) {
+      totals.engagement = engagementParts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    }
   }
 
   return totals;
@@ -437,7 +467,8 @@ function summarizeTopContent(records: InstagramAnalyticsRecord[], contentById: M
         metrics: totals
       };
     })
-    .sort((left, right) => right.engagement - left.engagement)
+    .filter((item) => item.engagement !== null)
+    .sort((left, right) => (right.engagement ?? -1) - (left.engagement ?? -1))
     .slice(0, 10);
 }
 
@@ -450,34 +481,40 @@ function buildAnalyticsObservations(summary: AnalyticsSummary): string[] {
   const totals = summary.totals;
   const previousDaily = summary.daily.at(-2);
   const latestDaily = summary.daily.at(-1);
-  const strongestBucket = [...summary.byMetricType].sort((left, right) => right.totals.engagement - left.totals.engagement)[0];
+  const strongestBucket = [...summary.byMetricType]
+    .filter((bucket) => bucket.totals.engagement !== null)
+    .sort((left, right) => (right.totals.engagement ?? -1) - (left.totals.engagement ?? -1))[0];
   const bestContent = summary.topContent[0];
 
-  if (summary.records.length === 0) {
+  if (summary.records.length === 0 || !Object.values(totals).some((value) => value !== null)) {
     return ["No Instagram analytics were available for this window; future recommendations should ask for fresh sync data."];
   }
 
   observations.push(
-    `Performance window captured ${summary.records.length} analytics records with reach ${totals.reach}, impressions ${totals.impressions}, and engagement ${totals.engagement}.`
+    `Performance window captured ${summary.records.length} analytics records with reach ${metricText(totals.reach)}, impressions ${metricText(totals.impressions)}, and engagement ${metricText(totals.engagement)}.`
   );
 
   if (bestContent !== undefined) {
     observations.push(
-      `Top content was ${bestContent.contentType} ${bestContent.contentItemId} with engagement ${bestContent.engagement} and reach ${bestContent.metrics.reach}.`
+      `Top content was ${bestContent.contentType} ${bestContent.contentItemId} with engagement ${metricText(bestContent.engagement)} and reach ${metricText(bestContent.metrics.reach)}.`
     );
   }
 
   if (strongestBucket !== undefined) {
-    observations.push(`${strongestBucket.metricType} metrics were the strongest engagement bucket at ${strongestBucket.totals.engagement}.`);
+    observations.push(`${strongestBucket.metricType} metrics were the strongest engagement bucket at ${metricText(strongestBucket.totals.engagement)}.`);
   }
 
-  if (previousDaily !== undefined && latestDaily !== undefined) {
+  if (previousDaily !== undefined && latestDaily !== undefined && previousDaily.totals.reach !== null && latestDaily.totals.reach !== null) {
     const delta = latestDaily.totals.reach - previousDaily.totals.reach;
     const direction = delta >= 0 ? "increased" : "decreased";
     observations.push(`Latest daily reach ${direction} by ${Math.abs(delta)} compared with the prior metric day.`);
   }
 
   return observations;
+}
+
+function metricText(value: number | null): string {
+  return value === null ? "unavailable" : String(value);
 }
 
 function clampDays(days: number): number {
@@ -559,32 +596,34 @@ function buildAnalyticsPdf(input: { locale: Locale; month: string; summary: Anal
     `${labels.generated}: ${new Date().toISOString().slice(0, 10)}`,
     "",
     labels.overview,
-    `${labels.followers}: ${totals.followers}`,
-    `${labels.reach}: ${totals.reach}`,
-    `${labels.impressions}: ${totals.impressions}`,
-    `${labels.views}: ${totals.views}`,
-    `${labels.engagement}: ${totals.engagement}`,
-    `${labels.likes}: ${totals.likes}`,
-    `${labels.comments}: ${totals.comments}`,
-    `${labels.shares}: ${totals.shares}`,
-    `${labels.saves}: ${totals.saves}`,
+    `${labels.followers}: ${metricText(totals.followers)}`,
+    `${labels.profileViews}: ${metricText(totals.profileViews)}`,
+    `${labels.reach}: ${metricText(totals.reach)}`,
+    `${labels.impressions}: ${metricText(totals.impressions)}`,
+    `${labels.views}: ${metricText(totals.views)}`,
+    `${labels.engagement}: ${metricText(totals.engagement)}`,
+    `${labels.likes}: ${metricText(totals.likes)}`,
+    `${labels.comments}: ${metricText(totals.comments)}`,
+    `${labels.shares}: ${metricText(totals.shares)}`,
+    `${labels.saves}: ${metricText(totals.saves)}`,
     "",
     labels.metricBuckets,
     ...input.summary.byMetricType.map(
-      (bucket) => `- ${bucket.metricType}: ${labels.reach} ${bucket.totals.reach}, ${labels.engagement} ${bucket.totals.engagement}`
+      (bucket) => `- ${bucket.metricType}: ${labels.reach} ${metricText(bucket.totals.reach)}, ${labels.engagement} ${metricText(bucket.totals.engagement)}`
     ),
     "",
     labels.topContent,
     ...(input.summary.topContent.length === 0
       ? [`- ${labels.noTopContent}`]
       : input.summary.topContent.map(
-          (item) => `- ${item.caption ?? item.contentType}: ${labels.engagement} ${item.engagement}, ${labels.reach} ${item.metrics.reach}`
+          (item) =>
+            `- ${item.caption ?? item.contentType}: ${labels.engagement} ${metricText(item.engagement)}, ${labels.reach} ${metricText(item.metrics.reach)}`
         )),
     "",
     labels.dailyReach,
     ...(input.summary.daily.length === 0
       ? [`- ${labels.noDailyData}`]
-      : input.summary.daily.map((row) => `- ${row.dataDate.slice(0, 10)}: ${row.totals.reach}`))
+      : input.summary.daily.map((row) => `- ${row.dataDate.slice(0, 10)}: ${metricText(row.totals.reach)}`))
   ];
   const pages = paginatePdfLines(
     lines.map((line) => sanitizePdfText(line ?? "")),
@@ -629,6 +668,7 @@ function pdfLabels(locale: Locale): Record<string, string> {
       noDailyData: "No daily metrics for this month",
       noTopContent: "No top content for this month",
       overview: "Overview",
+      profileViews: "Profile views",
       range: "Range",
       reach: "Reach",
       saves: "Saves",
@@ -652,6 +692,7 @@ function pdfLabels(locale: Locale): Record<string, string> {
     noDailyData: "No daily metrics for this month",
     noTopContent: "No top content for this month",
     overview: "Overview",
+    profileViews: "Profile views",
     range: "Range",
     reach: "Reach",
     saves: "Saves",

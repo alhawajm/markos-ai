@@ -207,6 +207,9 @@ export async function getSecureInstagramConnection(workspaceId: string): Promise
       username: row.username,
       ...(row.accountType ? { accountType: row.accountType } : {}),
       ...(row.profilePictureUrl ? { profilePictureUrl: row.profilePictureUrl } : {}),
+      requestedScopes: row.requestedScopes,
+      providerConfirmedScopes: row.providerConfirmedScopes,
+      tokenIssuedAt: row.tokenIssuedAt.toISOString(),
       tokenExpiresAt: row.tokenExpiresAt.toISOString(),
       ...(row.lastSyncedAt ? { lastSyncedAt: row.lastSyncedAt.toISOString() } : {}),
       recentMedia: media.map((item) => ({

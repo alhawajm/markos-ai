@@ -1,12 +1,14 @@
 # Instagram Permissions Phase 2 Working Checklist
 
-Status date: 2026-08-16.
+Status date: 2026-08-17.
 
-Decision status: the Milestone A boundary, deadline, temporary operator path, and live Meta dashboard gate were locked on 2026-08-16. The Railway Bucket design is the agreed direction but remains pending Sarah's infrastructure confirmation on 2026-08-17. No bucket provisioning or related credential changes are authorized before that confirmation.
+Decision status: all five Milestone A decisions are locked. The boundary, temporary operator path, and live Meta dashboard gate were locked on 2026-08-16; the completion target was updated to Wednesday for Thursday's showcase, and Sarah confirmed the private Railway Bucket plus just-in-time presigned-GET design on 2026-08-17.
 
-This is a working checklist for `instagram_business_content_publish` and `instagram_business_manage_insights`. It separates Khalid's application and Meta work from Sarah's Railway, database, storage, deployment, and operational work. It becomes fully locked when Sarah confirms or replaces the proposed storage design.
+This is a working checklist for `instagram_business_content_publish` and `instagram_business_manage_insights`. It separates Khalid's application and Meta work from Sarah's Railway, database, storage, deployment, and operational work. The implementation boundary is locked; unchecked items still require their stated repository, dashboard, Railway, or live-provider evidence.
 
-Locked target: complete Milestone A by Thursday, 2026-08-20, assuming the Bahrain Sunday-to-Thursday work week. Milestone A is a controlled Standard Access proof against an Instagram professional account owned or managed by the app team. It is not Advanced Access, App Review approval, or general-client production readiness.
+Locked target: complete Milestone A by Wednesday, 2026-08-19, for the Thursday, 2026-08-20 showcase. Milestone A is a controlled Standard Access proof against an Instagram professional account owned or managed by the app team. It is not Advanced Access, App Review approval, or general-client production readiness.
+
+Application status: the second application pass is implemented and locally verified in the working tree. It makes Content Studio usable for the showcase flow and is ready for PR review plus a `dry_run` staging deployment. It does not close the remaining Railway, reconnect, live-publish, live-insights, or rollback evidence gates.
 
 ## Evidence boundary
 
@@ -26,7 +28,7 @@ Locked target: complete Milestone A by Thursday, 2026-08-20, assuming the Bahrai
 6. A tech provider serving professional accounts it does not own or manage needs Advanced Access and App Review. Standard Access can be used for the controlled app-team account proof in Milestone A.
 7. The App Review page requires an externally loadable app, a visible Instagram login entry point, clear step-by-step use descriptions, permission-specific end-to-end screencasts, reviewer access instructions/credentials when applicable, and at least one successful call for permissions where the dashboard requests it. Dependencies must be included in the same submission.
 8. Railway Buckets are private S3-compatible storage. Railway does not currently support public buckets. A file can be fetched directly through a time-limited presigned URL or proxied through the API; presigned URLs can live for up to 90 days.
-9. The provisionally selected publishing design is to store the durable object key and generate a fresh presigned GET URL immediately before container creation. It must not persist or log the signed URL. Its lifetime must cover Meta's entire fetch, processing, and retry window. This design becomes locked only after Sarah confirms it on 2026-08-17.
+9. The locked publishing design is to store the durable object key and generate a fresh presigned GET URL immediately before container creation. It must not persist, return to ordinary clients, or log the signed URL. `SIGNED_URL_TTL` defaults to 3,600 seconds and is constrained to 300–86,400 seconds so the controlled value can cover Meta's fetch and processing window without becoming an unbounded URL.
 10. Meta's current Instagram Login examples use `POST /{ig-user-id}/media`, a container-status read, and `POST /{ig-user-id}/media_publish`. The media URL must be publicly fetchable. The first controlled fixture should be a supported JPEG image.
 11. Current Instagram Login insights examples use `GET /{ig-user-id}/insights?metric=reach,profile_views&period=day` and `GET /{ig-media-id}/insights?metric=shares,comments`. Account user metrics are retained by Meta for up to 90 days. Some account metrics are unavailable below 100 followers, and unavailable data may be returned as an empty data set rather than zero.
 
@@ -62,7 +64,7 @@ Milestone A proves both permissions with Standard Access and an app-team profess
 
 Completion of Milestone A does **not** mean Advanced Access, App Review approval, automated scheduling, Reel reliability, or external-client readiness.
 
-The JPEG-plus-insights boundary is locked. Its private Railway Bucket implementation is pending Sarah's confirmation; application work that does not provision or change Railway storage may proceed meanwhile.
+The JPEG-plus-insights boundary and private Railway Bucket design are locked. The local/S3 application contract and just-in-time signing path are implemented in the working tree; Railway provisioning, variable references, external fetch validation, deployment, reconnect, and live-provider proof remain separate gates.
 
 ### Milestone B — durable product behavior
 
@@ -87,7 +89,7 @@ The skeleton currently polls only five times at one-second intervals inside the 
 
 ## Repository corrections required for Milestone A
 
-| Area | Current repository state | Milestone A correction | Owner |
+| Area | Baseline before the Milestone A implementation | Milestone A correction | Owner |
 | --- | --- | --- | --- |
 | OAuth scopes | `INSTAGRAM_REQUESTED_SCOPES` is hard-coded to basic; `INSTAGRAM_OAUTH_SCOPES` accepts only basic and does not control the request. | Parse and validate only the approved three-scope allowlist, require basic, use a canonical order, and make the OAuth request/store/tests consume the same value. | Khalid |
 | Provider transport | Basic account calls use `graph.instagram.com`, while publishing and analytics use `META_GRAPH_BASE_URL=https://graph.facebook.com` and a separate `META_GRAPH_VERSION`. | Use the constrained Instagram Login host and one `INSTAGRAM_GRAPH_VERSION=v25.0`; keep test-only client injection without permitting arbitrary production hosts. Retire the in-scope legacy Meta Graph transport variables after deployment is verified. | Khalid + Sarah handoff |
@@ -103,46 +105,64 @@ The skeleton currently polls only five times at one-second intervals inside the 
 
 ### Contract and dashboard
 
-- [ ] **K-A01** In the live MarkOS App Dashboard, capture whether the exact requestable identifiers are `instagram_business_content_publish` and `instagram_business_manage_insights`. Record the UI result without exposing app IDs or account data.
-- [ ] **K-A02** Confirm the test professional account is owned/managed by an app role that is eligible for Standard Access. Do not use a client account for Milestone A.
-- [ ] **K-A03** Lock one version contract: `INSTAGRAM_GRAPH_VERSION=v25.0`; versioned Instagram Login calls use `graph.instagram.com`.
-- [ ] **K-A04** Replace the exact-basic environment literal with a canonical allowlisted scope parser for basic, publish, and insights. Reject duplicates, unknown scopes, missing basic, and old Facebook Login names.
-- [ ] **K-A05** Update OAuth, credential persistence, status/readiness output, and tests to consume the same requested-scope set. Do not populate `providerConfirmedScopes` from the request alone.
+- [x] **K-A01** In the live MarkOS App Dashboard, capture whether the exact requestable identifiers are `instagram_business_content_publish` and `instagram_business_manage_insights`. Record the UI result without exposing app IDs or account data. User-confirmed complete on 2026-08-17; no identifiers or account data are reproduced here.
+- [x] **K-A02** Confirm the test professional account is owned/managed by an app role that is eligible for Standard Access. Do not use a client account for Milestone A. User-confirmed complete on 2026-08-17.
+- [x] **K-A03** Lock one version contract: `INSTAGRAM_GRAPH_VERSION=v25.0`; versioned Instagram Login calls use `graph.instagram.com`.
+- [x] **K-A04** Replace the exact-basic environment literal with a canonical allowlisted scope parser for basic, publish, and insights. Reject duplicates, unknown scopes, missing basic, and old Facebook Login names.
+- [x] **K-A05** Update OAuth, credential persistence, status/readiness output, and tests to consume the same requested-scope set. Do not populate `providerConfirmedScopes` from the request alone.
 
 ### Storage and publishing
 
-- [ ] **K-A06** Implement a storage-driver interface with local and S3-compatible implementations. Use workspace-prefixed, non-overwritable object keys and explicit content types.
-- [ ] **K-A07** Add conditional environment validation for the chosen bucket variable contract. Keep real credentials out of `.env.example`; document names and fake placeholders only.
-- [ ] **K-A08** Generate a fresh presigned GET URL from `MediaAsset.s3Key` immediately before container creation. Never persist, return to ordinary clients, or log the signed URL.
-- [ ] **K-A09** Validate publish media separately from generic media upload. The A fixture must be a provider-compatible JPEG with known dimensions/size; reject SVG and an arbitrary MIME label before calling Meta.
-- [ ] **K-A10** Move publishing to the Instagram Login client/transport and test the exact image-container, status, publish, quota, error, timeout, and token-redaction behavior with mocked responses.
-- [ ] **K-A11** Prevent a duplicate manual publish within the controlled run using an application-level guard. Record the need for a durable lease/attempt model in B rather than pretending A solves multi-worker idempotency.
+- [x] **K-A06** Implement a storage-driver interface with local and S3-compatible implementations. Use workspace-prefixed, non-overwritable object keys and explicit content types.
+- [x] **K-A07** Add conditional environment validation for the chosen bucket variable contract. Keep real credentials out of `.env.example`; document names and fake placeholders only.
+- [x] **K-A08** Generate a fresh presigned GET URL from `MediaAsset.s3Key` immediately before container creation. Never persist, return to ordinary clients, or log the signed URL.
+- [x] **K-A09** Validate publish media separately from generic media upload. The A fixture must be a provider-compatible JPEG with known dimensions/size; reject SVG and an arbitrary MIME label before calling Meta.
+- [x] **K-A10** Move publishing to the Instagram Login client/transport and test the exact image-container, status, publish, quota, error, timeout, and token-redaction behavior with mocked responses.
+- [x] **K-A11** Prevent a duplicate manual publish within the controlled run using an application-level guard. Record the need for a durable lease/attempt model in B rather than pretending A solves multi-worker idempotency.
 
 ### Insights
 
-- [ ] **K-A12** Replace the account-profile substitute with a real account `/insights` request using the minimal confirmed day metrics for the controlled call.
-- [ ] **K-A13** Query media `/insights` for the newly published image using media-compatible confirmed metrics. Keep account and media metric sets separate.
-- [ ] **K-A14** Preserve missing/empty provider data as unavailable. Do not coerce an absent metric to zero, and do not require a non-zero result to call a successful provider response successful.
-- [ ] **K-A15** Persist the controlled snapshots through the existing workspace-scoped `InstagramAnalytics` path and verify another workspace cannot read or overwrite them.
+- [x] **K-A12** Replace the account-profile substitute with a real account `/insights` request using the minimal confirmed day metrics for the controlled call.
+- [x] **K-A13** Query media `/insights` for the newly published image using media-compatible confirmed metrics. Keep account and media metric sets separate.
+- [x] **K-A14** Preserve missing/empty provider data as unavailable. Do not coerce an absent metric to zero, and do not require a non-zero result to call a successful provider response successful.
+- [x] **K-A15** Persist the controlled snapshots through the existing workspace-scoped `InstagramAnalytics` path and verify another workspace cannot read or overwrite them.
 
 ### UI, tests, and evidence
 
-- [ ] **K-A16** Decide whether A uses a minimal Sunlit reconnect control or an operator-only route. If operator-only, label it temporary and keep the App Review UI gate open.
-- [ ] **K-A17** Update unit/integration tests for the exact host, version, scope set, storage driver, signed-URL redaction, publish result, insight response variants, and workspace isolation.
-- [ ] **K-A18** Run repository verification only against a disposable test database, never staging or production.
+- [x] **K-A16** Decide whether A uses a minimal Sunlit reconnect control or an operator-only route. If operator-only, label it temporary and keep the App Review UI gate open.
+- [x] **K-A17** Update unit/integration tests for the exact host, version, scope set, storage driver, signed-URL redaction, publish result, insight response variants, and workspace isolation.
+- [x] **K-A18** Run repository verification only against a disposable test database, never staging or production.
 - [ ] **K-A19** After Sarah deploys the dry-run build, disconnect/reconnect the test Instagram account so the new access token is issued for the expanded request.
 - [ ] **K-A20** Conduct the approved live window: one JPEG publish, one account-insights call, and one media-insights call. Save sanitized timestamps, request IDs if safe, statuses, published-media evidence, and persistence evidence.
 - [ ] **K-A21** Confirm modes return to `dry_run` and that no signed URL, token, provider ID, or customer data entered logs or committed artifacts.
+
+### Second application pass — Content Studio
+
+- [x] **K-A22** Mount the authenticated Content Studio flow at `/{locale}/app/content-studio`: generate through the existing AI text contract, edit English and Arabic captions independently, preserve the correct field and RTL direction, and save drafts repeatedly without discarding edits after a failed action.
+- [x] **K-A23** Add authenticated browser-to-API JPEG upload with MIME/type validation, an 8 MiB decoded-byte ceiling, browser-decoded dimensions, workspace-scoped storage, and attachment to the active content item. Direct browser-to-Bucket upload is not part of A.
+- [x] **K-A24** Show the selected real media in the Instagram preview, provide media thumbnails and truthful filename/dimension/size details, allow detaching media without deleting the underlying asset, and remove fabricated engagement metrics from the preview.
+- [x] **K-A25** Mount aspect-ratio-aware image-concept generation for the draft while explicitly identifying the result as deterministic application artwork. This is useful showcase scaffolding, not evidence of a live provider-backed image-generation integration; that production integration moves to B.
+- [x] **K-A26** Enforce explicit approval before scheduling, stop the UI from silently auto-approving a draft, and make schedule cancellation return the item to `APPROVED` without deleting its content or media.
+- [x] **K-A27** Add workspace-scoped media-asset deletion to the API and both local/S3 storage drivers, refuse deletion while an active content item references the asset, soft-delete the database record, and decrement metered storage bytes.
+- [x] **K-A28** Cover the rendered generate → bilingual edit/save → JPEG upload → image concept → approval → scheduling → cancellation journey and the storage deletion boundary with browser, API, and driver tests.
+
+Pass 2 leaves no known application feature gap for the controlled Milestone A JPEG-plus-insights proof. A still requires K-A19 through K-A21, S-A04 through S-A16 as applicable, and J-A02 through J-A07. Scheduled records do not yet trigger a durable worker publish, image concepts are not provider-generated, and Queue/retry/failure, long-term media lifecycle, Reels, and carousels remain Milestone B work.
+
+Repository verification on 2026-08-17 used isolated loopback PostgreSQL and Redis containers only. After the complete Milestone A application, storage, and Content Studio change, `corepack pnpm verify` passed all 32 tasks: 45 API test files/283 tests, 5 web test files/20 tests, and 19 AI tests. The same run passed formatting, TypeScript/Python type checks, lint, and the 10-check Arabic/RTL gate. The rendered presentation and Content Studio journey also passed 5/5 browser tests against the production build using the installed local Chrome. This is repository evidence, not Railway or live-provider evidence.
+
+`corepack pnpm build` also passed all 9 build tasks. The separate registry-backed `corepack pnpm security:audit` gate is not green: it reported 36 advisories (28 high, 8 moderate), including 22 production-path advisories (16 high, 6 moderate) across existing toolchain, framework, infrastructure, and transitive packages. The report did not identify either newly added `@aws-sdk` package. Dependency remediation remains a separate reviewed change and must not be hidden before the showcase or a release.
 
 ## Sarah's Milestone A checklist
 
 ### Railway storage
 
-- [ ] **S-A01** On 2026-08-17, confirm or replace the proposed private Railway Bucket plus just-in-time presigned-URL design. Do not provision storage or change credentials before this decision. If confirmed, check whether a staging bucket already exists; if not, choose the region before creating one because Railway states that a bucket's region cannot be changed after creation.
-- [ ] **S-A02** Keep the bucket private. Do not attempt to make it public; Railway currently supports presigned URLs or backend proxying, not public buckets.
-- [ ] **S-A03** Add bucket credentials to the API through Railway variable references using the agreed application names. Do not paste values into Git, chat, logs, or screenshots. The worker receives them later only when B deploys it.
+- [x] **S-A01** D-02 was confirmed on 2026-08-17. Sarah reported that the staging Bucket is provisioned with its region selected.
+- [x] **S-A02** Sarah confirmed that the Railway Bucket is private.
+- [x] **S-A03** Sarah confirmed that the five Bucket credentials are connected to the API under the agreed application names and that the application-owned `AWS_S3_URL_STYLE=virtual` setting is present. No values are recorded here. The worker receives them later only when B deploys it.
 - [ ] **S-A04** Confirm the API can upload/read/delete a disposable test object and that an unauthenticated external GET succeeds only through a short-lived presigned URL. Remove the disposable object after the check.
 - [ ] **S-A05** Confirm bucket environment isolation and document the retention/lifecycle choice. Do not configure browser-upload CORS for A because the controlled upload can pass through the API.
+
+Sarah reported that a test image is visible in the Bucket. That is partial storage evidence only: she explicitly identified browser/API-path upload and external presigned-URL validation as still unavailable, so S-A04 remains open. The second application pass now mounts authenticated browser-to-API JPEG upload and adds workspace-scoped API deletion locally; staging upload/read/delete and an unauthenticated external presigned GET still need Sarah's validation after the reviewed commit is deployed.
 
 ### Database and environment safety
 
@@ -161,9 +181,11 @@ The skeleton currently polls only five times at one-second intervals inside the 
 - [ ] **S-A15** Watch deployment/application logs for sanitized stage, status, timeout, and request-correlation evidence. Stop the test if secrets, signed URLs, raw provider bodies, or customer data appear.
 - [ ] **S-A16** Immediately return both modes to `dry_run` after the agreed evidence is captured and confirm the rollback deployment is healthy.
 
+Sarah also reported that the baseline API deployed successfully with all listed services online and that both provider modes remain `dry_run`. Because the Milestone A application change is still uncommitted and no deployed SHA was supplied, this does not close S-A11 or S-A12.
+
 ## Joint handoffs and completion gates
 
-- [ ] **J-A01 — Variable contract:** Khalid supplies the exact new/retired variable-name matrix and conditional validation; Sarah confirms Railway references and consumers without sharing values.
+- [x] **J-A01 — Variable contract:** Khalid supplied the exact new/retired variable-name matrix and conditional validation; Sarah confirmed the Railway references, API consumer, `AWS_S3_URL_STYLE=virtual`, exact Instagram version/scopes, and both dry-run modes without sharing values on 2026-08-17.
 - [ ] **J-A02 — Dry-run handoff:** Khalid supplies the verified commit and expected health/readiness output; Sarah deploys it; both confirm the deployed commit before any Meta reconnection.
 - [ ] **J-A03 — Media-fetch gate:** Khalid supplies one disposable JPEG/object key; Sarah confirms durable storage and external signed fetch; Khalid confirms logs and API responses do not expose the signed URL.
 - [ ] **J-A04 — Reconnect gate:** Khalid verifies the live dashboard identifiers, reconnects the owned/managed test account, and confirms the credential records the three requested scopes without claiming provider confirmation.
@@ -179,22 +201,30 @@ Milestone A is complete only when J-A01 through J-A07 are checked. Deployment su
 | --- | --- | --- | --- |
 | Sun 2026-08-16 | Lock the A boundary, deadline, operator path, and dashboard gate. | Staging was intentionally started and confirmed healthy; storage work remains paused. | Record the locked decisions and pending storage confirmation. |
 | Mon 2026-08-17 | Correct host/version/scopes/readiness; start the storage adapter only after Sarah confirms its contract. | Confirm or replace the Bucket design, then provision/reference it if approved; confirm database safety. | Lock the storage decision and review the environment-name diff. |
-| Tue 2026-08-18 | Finish publish/insights adapters and focused tests. | Validate bucket access and prepare dry-run deployment. | External presigned-fetch gate. |
-| Wed 2026-08-19 | Complete disposable-DB verification and hand off the commit. | Deploy in dry-run and verify health/networking. | Confirm deployed commit; reconnect test account. |
-| Thu 2026-08-20 | Run the controlled publish and insights calls; sanitize evidence. | Operate the live window, observe logs, and roll back modes. | J-A01 through J-A07 sign-off. |
+| Tue 2026-08-18 | Hand off the verified application change and one disposable JPEG. | Validate bucket access, deploy in dry-run, and verify health/networking. | Environment matrix and external presigned-fetch gate. |
+| Wed 2026-08-19 | Confirm the deployed commit, reconnect the test account, run the controlled publish/insights calls, and sanitize evidence. | Operate the live window, observe logs, and roll both modes back to dry-run. | J-A01 through J-A07 sign-off. |
+| Thu 2026-08-20 | Present the already-verified browser journey and sanitized Milestone A evidence; keep provider modes in dry-run unless a separate live action is explicitly authorized. | Keep the showcase deployment healthy and retain the rollback target. | Showcase; no new acceptance work should be required. |
 
 This schedule assumes no Meta dashboard identifier/access surprise. A missing `instagram_business_manage_insights` request option is a provider/dashboard blocker for that permission, not a reason to switch the app to Facebook Login or keep the legacy `graph.facebook.com` transport.
 
-## Milestone B database and worker handoff
+## Milestone B product, database, storage, and worker handoff
 
 These are explicitly not required to close A, but they are the next database/runtime work after the controlled proof:
 
 - [ ] **K-B01** Design a workspace-owned publish-attempt/container model with idempotency key, provider container ID, state, bounded error code, attempt count, next-attempt time, lease owner/expiry, and timestamps.
 - [ ] **K-B02** Add a database uniqueness contract for analytics snapshot identity so overlapping worker/manual syncs cannot create duplicates.
 - [ ] **K-B03** Add RLS policies and cross-workspace tests for every new workspace-owned table.
+- [ ] **K-B04** Replace deterministic image-concept artwork with a configured provider-backed image-generation adapter. Meter usage, enforce plan quotas, validate output, handle moderation/provider failures, and keep honest fallback states.
+- [ ] **K-B05** Connect approved schedules and cancellations to durable worker execution with timezone-safe dispatch and a cancellation boundary that prevents a canceled item from publishing during a worker race.
+- [ ] **K-B06** Complete the Sunlit Queue and content-state surfaces for scheduled, publishing, retrying, failed, canceled, and published work instead of depending on one active editor record.
+- [ ] **K-B07** Add product-facing permanent media deletion plus orphan reconciliation while preserving attachment/reference safety. Decide separately whether direct browser-to-Bucket upload is worth its CORS and security surface.
+- [ ] **K-B08** Add provider-compatible Reel and carousel creation, processing, validation, retry, preview, and cancellation behavior after the durable container lifecycle exists.
 - [ ] **S-B01** Review the forward migration against deployed history, take a backup, apply through pre-deploy, and verify application-role RLS.
 - [ ] **S-B02** Create the Railway worker service from `apps/api/worker.Dockerfile`, inject only variables consumed by enabled tasks, and keep one publishing replica until the lease/idempotency proof passes.
+- [ ] **S-B03** Configure and validate the Bucket's retention/lifecycle, recovery, cost, and orphan-cleanup policy; configure direct-upload CORS only if K-B07 selects that design.
 - [ ] **J-B01** Prove restart/retry behavior: stop the worker after container creation, restart it, and confirm exactly one final Instagram post.
+- [ ] **J-B02** Prove one future approved item publishes at the intended time and one canceled item does not publish, including a cancellation close to the worker claim boundary.
+- [ ] **J-B03** Prove one provider-backed generated image can be previewed, approved, stored durably, scheduled, published, and metered without exposing provider credentials or temporary media URLs.
 
 ## App Review preparation split
 
@@ -219,9 +249,9 @@ These are explicitly not required to close A, but they are the next database/run
 | ID | Decision | Status |
 | --- | --- | --- |
 | D-01 | Milestone A proves one JPEG publish plus account and media insights; Reel moves to B. | **Locked 2026-08-16.** |
-| D-02 | Use a private Railway Bucket plus just-in-time presigned URLs as the Milestone A storage design. | **Pending Sarah, 2026-08-17.** Khalid approved the direction; no provisioning or credential changes occur before Sarah confirms it. |
-| D-03 | Complete Milestone A by Thursday, 2026-08-20. | **Locked 2026-08-16.** |
+| D-02 | Use a private Railway Bucket plus just-in-time presigned URLs as the Milestone A storage design. | **Locked 2026-08-17.** Sarah confirmed provisioning, privacy, API credential references, `AWS_S3_URL_STYLE=virtual`, and a test image in the Bucket; application-path operations and external presigned validation remain open. |
+| D-03 | Complete Milestone A by Wednesday, 2026-08-19, for the Thursday showcase. | **Updated and locked 2026-08-17.** |
 | D-04 | An operator-only publish/sync path is acceptable for A; the minimal Sunlit reconnect surface and complete visible review journey remain mandatory before C. | **Locked 2026-08-16.** |
 | D-05 | Inspect the live Meta dashboard and resolve the generic App Review page's permission-name/list inconsistency before changing code constants or submitting permissions. | **Locked 2026-08-16.** This is an execution gate, not an open design choice. |
 
-Non-storage implementation preparation may proceed under D-01, D-03, D-04, and D-05. The plan becomes fully locked when D-02 is confirmed or replaced. If Sarah confirms the proposed design, record the confirmation date here before starting S-A02 through S-A05; if she replaces it, update the storage-dependent Khalid, Sarah, and joint tasks before implementation.
+All Milestone A design decisions are locked. Continue with the unchecked Sarah, Khalid, and joint execution gates; do not treat repository implementation or variable presence as bucket, deployment, permission-grant, or live-provider proof.

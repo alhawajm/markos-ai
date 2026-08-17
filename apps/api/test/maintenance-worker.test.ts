@@ -36,7 +36,7 @@ describe("maintenance worker", () => {
             caption: input.contentItem.captionEn ?? "",
             contentItemId: input.contentItem.id,
             contentType: input.contentItem.contentType,
-            mediaUrls: input.mediaAssets.map((asset) => asset.cdnUrl)
+            mediaCount: input.mediaAssets.length
           },
           status: "PUBLISHED"
         };

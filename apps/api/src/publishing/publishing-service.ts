@@ -1,14 +1,17 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
+import { hasCanonicalReleaseScopeSet, INSTAGRAM_RELEASE_SCOPES } from "../config/instagram-contract";
 import { refundWorkspaceUsage, reserveWorkspaceUsage, UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   createInstagramPublisher,
   DryRunInstagramPublisher,
+  InstagramGraphPublisher,
+  InstagramPublishError,
   type InstagramPublishResult,
   type InstagramPublisher,
   type InstagramPublishingLimit,
-  MetaGraphPublishError
+  validateInstagramImageForPublishing
 } from "./instagram-publisher";
 import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
 
@@ -44,6 +47,8 @@ export interface PublishingLiveReadiness {
     tokenExpiresAt?: string;
   };
   requiredEnv: string[];
+  requiredScopes: string[];
+  graphVersion: string;
 }
 
 export class PublishContentItemNotFoundError extends Error {
@@ -59,6 +64,25 @@ export class PublishRescheduleInvalidError extends Error {
 }
 
 const publishableTypes = new Set(["CAROUSEL", "POST", "REEL"]);
+const publishingRequiredEnv = [
+  "INSTAGRAM_PUBLISH_MODE",
+  "INSTAGRAM_APP_ID",
+  "INSTAGRAM_APP_SECRET",
+  "INSTAGRAM_OAUTH_REDIRECT_URI",
+  "INSTAGRAM_OAUTH_STATE_SECRET",
+  "INSTAGRAM_TOKEN_ENCRYPTION_KEY",
+  "INSTAGRAM_GRAPH_VERSION",
+  "INSTAGRAM_OAUTH_SCOPES",
+  "MEDIA_STORAGE_DRIVER",
+  "AWS_ENDPOINT_URL",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_S3_BUCKET_NAME",
+  "AWS_DEFAULT_REGION",
+  "AWS_S3_URL_STYLE",
+  "SIGNED_URL_TTL"
+];
+const activePublishAttempts = new Map<string, Promise<PublishAttemptRecord>>();
 
 export async function listPublishingQueue(workspaceId: string): Promise<ContentItem[]> {
   return prisma.contentItem.findMany({
@@ -96,14 +120,13 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
     throw new PublishContentItemNotFoundError();
   }
 
-  const requiredEnv = ["INSTAGRAM_PUBLISH_MODE", "META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"];
   const reasons: string[] = [];
 
   if (env.INSTAGRAM_PUBLISH_MODE !== "live") {
     reasons.push("INSTAGRAM_PUBLISH_MODE_NOT_LIVE");
   }
 
-  for (const key of requiredEnv) {
+  for (const key of publishingRequiredEnv) {
     if (!hasConfiguredEnv(key)) {
       reasons.push(`MISSING_${key}`);
     }
@@ -119,12 +142,26 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");
   }
 
+  if (!hasCanonicalReleaseScopeSet(env.INSTAGRAM_OAUTH_SCOPES)) {
+    reasons.push("INSTAGRAM_RELEASE_SCOPE_SET_INVALID");
+  }
+
+  if (env.MEDIA_STORAGE_DRIVER !== "s3") {
+    reasons.push("MEDIA_STORAGE_DRIVER_NOT_S3");
+  }
+
+  if (connection.connected && !hasCanonicalReleaseScopeSet(connection.requestedScopes ?? [])) {
+    reasons.push("INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES");
+  }
+
   return {
     connection,
     mode: env.INSTAGRAM_PUBLISH_MODE,
     ready: reasons.length === 0,
     reasons,
-    requiredEnv
+    requiredEnv: publishingRequiredEnv,
+    requiredScopes: [...INSTAGRAM_RELEASE_SCOPES],
+    graphVersion: env.INSTAGRAM_GRAPH_VERSION
   };
 }
 
@@ -235,7 +272,35 @@ export async function publishContentItem(
   contentItemId: string,
   options: { now?: Date; publisher?: InstagramPublisher } = {}
 ): Promise<PublishAttemptRecord> {
+  const guardKey = `${workspaceId}:${contentItemId}`;
+
+  if (activePublishAttempts.has(guardKey)) {
+    return {
+      contentItemId,
+      dryRun: env.INSTAGRAM_PUBLISH_MODE !== "live",
+      reasons: ["INSTAGRAM_PUBLISH_ALREADY_IN_PROGRESS"],
+      status: "BLOCKED"
+    };
+  }
+
+  const attempt = executePublishContentItem(workspaceId, contentItemId, options);
+  activePublishAttempts.set(guardKey, attempt);
+
+  try {
+    return await attempt;
+  } finally {
+    if (activePublishAttempts.get(guardKey) === attempt) activePublishAttempts.delete(guardKey);
+  }
+}
+
+async function executePublishContentItem(
+  workspaceId: string,
+  contentItemId: string,
+  options: { now?: Date; publisher?: InstagramPublisher } = {}
+): Promise<PublishAttemptRecord> {
   const now = options.now ?? new Date();
+  const publisher = options.publisher ?? createInstagramPublisher();
+  const liveConnection = publisher instanceof InstagramGraphPublisher ? await getSecureInstagramConnection(workspaceId) : undefined;
   const [storedWorkspace, contentItem] = await Promise.all([
     prisma.workspace.findFirst({
       where: {
@@ -269,7 +334,14 @@ export async function publishContentItem(
       createdAt: "asc"
     }
   });
-  const reasons = validatePublishAttempt({ contentItem, mediaAssets, now, workspace });
+  const reasons = validatePublishAttempt({
+    contentItem,
+    mediaAssets,
+    now,
+    workspace,
+    milestoneAImageOnly: publisher instanceof InstagramGraphPublisher,
+    releaseScopesCurrent: liveConnection === undefined || !liveConnection.connected || hasCanonicalReleaseScopeSet(liveConnection.requestedScopes ?? [])
+  });
 
   if (reasons.length > 0) {
     return {
@@ -280,15 +352,13 @@ export async function publishContentItem(
     };
   }
 
-  const publisher = options.publisher ?? createInstagramPublisher();
-
   if (publisher.getPublishingLimit) {
     let publishingLimit: InstagramPublishingLimit;
 
     try {
       publishingLimit = await publisher.getPublishingLimit({ workspace });
     } catch (error) {
-      if (error instanceof MetaGraphPublishError) {
+      if (error instanceof InstagramPublishError) {
         return {
           contentItemId,
           dryRun: false,
@@ -349,7 +419,7 @@ export async function publishContentItem(
       await refundWorkspaceUsage({ workspaceId, metric: "POST_PUBLISH", now });
     }
 
-    if (error instanceof MetaGraphPublishError) {
+    if (error instanceof InstagramPublishError) {
       await prisma.contentItem.update({
         where: {
           id: contentItem.id
@@ -398,7 +468,14 @@ export async function publishContentItem(
   };
 }
 
-function validatePublishAttempt(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; now: Date; workspace: Workspace }): string[] {
+function validatePublishAttempt(input: {
+  contentItem: ContentItem;
+  mediaAssets: MediaAsset[];
+  now: Date;
+  workspace: Workspace;
+  milestoneAImageOnly: boolean;
+  releaseScopesCurrent: boolean;
+}): string[] {
   const reasons: string[] = [];
 
   if (!input.workspace.instagramAccountId || !input.workspace.instagramAccessToken || !input.workspace.instagramTokenExpiresAt) {
@@ -411,12 +488,30 @@ function validatePublishAttempt(input: { contentItem: ContentItem; mediaAssets: 
     reasons.push("CONTENT_NOT_SCHEDULED");
   }
 
+  if (!input.releaseScopesCurrent) {
+    reasons.push("INSTAGRAM_RECONNECT_REQUIRED_FOR_RELEASE_SCOPES");
+  }
+
   if (!input.contentItem.scheduledAt || input.contentItem.scheduledAt > input.now) {
     reasons.push("CONTENT_NOT_DUE");
   }
 
   if (!publishableTypes.has(input.contentItem.contentType)) {
     reasons.push("CONTENT_TYPE_NOT_PUBLISHABLE");
+  }
+
+  if (input.milestoneAImageOnly) {
+    if (input.contentItem.contentType !== "POST") {
+      reasons.push("INSTAGRAM_MILESTONE_A_IMAGE_POST_ONLY");
+    } else if (input.mediaAssets.length !== 1 || input.mediaAssets[0] === undefined) {
+      reasons.push("INSTAGRAM_PUBLISH_REQUIRES_ONE_IMAGE");
+    } else {
+      reasons.push(...validateInstagramImageForPublishing(input.mediaAssets[0]));
+
+      if (!input.mediaAssets[0].s3Key.startsWith("s3:")) {
+        reasons.push("INSTAGRAM_MILESTONE_A_S3_MEDIA_REQUIRED");
+      }
+    }
   }
 
   const validPublicMediaIds = new Set(input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
