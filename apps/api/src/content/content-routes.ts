@@ -5,10 +5,12 @@ import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   ContentContextMissingError,
+  ContentItemDeleteError,
   ContentItemLockedError,
   ContentItemNotFoundError,
   ContentScheduleError,
   ContentStatusTransitionError,
+  deleteContentItem,
   generateWorkspaceContentForSlot,
   generateWorkspaceContent,
   listContentItems,
@@ -144,6 +146,39 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
         if (error instanceof ContentItemLockedError) {
           return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.delete(
+    "/v1/content/:contentItemId",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["content:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await deleteContentItem(workspaceId, params.contentItemId));
+      } catch (error) {
+        if (error instanceof ContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof ContentItemDeleteError) {
+          return reply.status(409).send(errorEnvelope(error.code, error.message));
         }
 
         throw error;

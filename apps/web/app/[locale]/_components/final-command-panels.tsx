@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BarChart3,
   Bell,
+  Bookmark,
   Brain,
   Building2,
   Calendar,
@@ -16,6 +17,7 @@ import {
   CreditCard,
   DollarSign,
   Eye,
+  ExternalLink,
   Heart,
   Image,
   ImagePlus,
@@ -23,10 +25,15 @@ import {
   Lightbulb,
   Link2,
   LogOut,
+  Maximize2,
   MessageCircle,
+  MoreHorizontal,
   Palette,
+  Pencil,
   Play,
+  Repeat2,
   RotateCcw,
+  Send,
   Settings,
   Sparkles,
   Target,
@@ -36,6 +43,7 @@ import {
   User,
   Users,
   Wand2,
+  X,
   Zap
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
@@ -50,6 +58,7 @@ import type {
   VaultCompletenessScore,
   VaultSection
 } from "@markos/shared-types";
+import { instagramImageConstraints } from "@markos/validation";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 
 type Accent = "amber" | "gold" | "teal";
@@ -199,8 +208,6 @@ function toScheduleIso(date: string, time: string): string {
   return scheduled.toISOString();
 }
 
-const maxDirectImageUploadBytes = 8 * 1024 * 1024;
-
 function fileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -239,6 +246,19 @@ function imageDimensions(file: File): Promise<{ height: number; width: number }>
 function formatFileSize(sizeBytes: number): string {
   if (sizeBytes < 1024 * 1024) return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function instagramImageDimensionsError(width: number, height: number): string | undefined {
+  if (width < instagramImageConstraints.minWidth || width > instagramImageConstraints.maxWidth) {
+    return "Choose a JPEG between 320 and 1,440 pixels wide.";
+  }
+
+  const aspectRatio = width / height;
+  if (aspectRatio < instagramImageConstraints.minAspectRatio || aspectRatio > instagramImageConstraints.maxAspectRatio) {
+    return "Choose a JPEG with an aspect ratio between 4:5 portrait and 1.91:1 landscape.";
+  }
+
+  return undefined;
 }
 
 function contentStudioError(error: unknown): string {
@@ -1039,17 +1059,28 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [approving, setApproving] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [unscheduling, setUnscheduling] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmation, setConfirmation] = useState<"cancel-schedule" | "delete-draft" | null>(null);
+  const [expandedMedia, setExpandedMedia] = useState<MediaAssetRecord | null>(null);
   const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
   const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
   const canApprove = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
   const canSchedule = currentRecord?.status === "APPROVED";
-  const canManageMedia = currentRecord !== null && currentRecord.status !== "PUBLISHED" && currentRecord.status !== "FAILED";
+  const canManageMedia = canEdit;
+  const canDelete = currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED";
   const attachedMediaAssets = currentRecord
     ? currentRecord.mediaIds.map((id) => mediaAssets.find((asset) => asset.id === id)).filter((asset): asset is MediaAssetRecord => asset !== undefined)
     : [];
   const selectedMedia = attachedMediaAssets.find((asset) => asset?.id === selectedMediaId) ?? attachedMediaAssets[0] ?? null;
   const activeCaption = captionLanguage === "ar" ? captionAr : captionEn;
   const setActiveCaption = captionLanguage === "ar" ? setCaptionAr : setCaptionEn;
+
+  useEffect(() => {
+    if (contentType === "POST" && imageAspectRatio === "9:16") {
+      setImageAspectRatio("4:5");
+    }
+  }, [contentType, imageAspectRatio]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1112,6 +1143,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setHashtagsText(record.hashtags.join(" "));
       setCallToAction(record.callToAction ?? "");
       setSelectedMediaId(record.mediaIds[0] ?? null);
+    } else {
+      setCaptionEn("");
+      setCaptionAr("");
+      setHashtagsText("");
+      setCallToAction("");
+      setSelectedMediaId(null);
     }
 
     if (note !== undefined) {
@@ -1270,6 +1307,34 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  async function reopenForEditing() {
+    if (!session || !currentRecord || currentRecord.status !== "APPROVED") {
+      setMessage("Only approved content can be reopened directly. Cancel a schedule first if this item is scheduled.");
+      return;
+    }
+
+    setReopening(true);
+
+    try {
+      const draft = await client.updateContentStatus(currentRecord.id, "DRAFT");
+      upsertRecord(draft);
+      applyRecord(draft, "Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setReopening(false);
+    }
+  }
+
+  function requestCancelSchedule() {
+    if (!session || !currentRecord || currentRecord.status !== "SCHEDULED") {
+      setMessage("Choose a scheduled item before cancelling its publishing time.");
+      return;
+    }
+
+    setConfirmation("cancel-schedule");
+  }
+
   async function cancelSchedule() {
     if (!session || !currentRecord || currentRecord.status !== "SCHEDULED") {
       setMessage("Choose a scheduled item before cancelling its publishing time.");
@@ -1282,10 +1347,52 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const unscheduled = await client.unscheduleContent(currentRecord.id);
       upsertRecord(unscheduled);
       applyRecord(unscheduled, "Schedule cancelled. The approved item has returned to the ready queue.");
+      setConfirmation(null);
     } catch (error) {
       setMessage(contentStudioError(error));
     } finally {
       setUnscheduling(false);
+    }
+  }
+
+  function requestDeleteDraft() {
+    if (!session || !currentRecord) {
+      setMessage("Choose a saved post draft before deleting it.");
+      return;
+    }
+
+    if (currentRecord.status === "SCHEDULED") {
+      setMessage("Cancel this post's schedule first. Once it returns to Approved, you can delete it separately.");
+      return;
+    }
+
+    if (currentRecord.status === "PUBLISHED") {
+      setMessage("This action deletes MarkOS drafts; it does not remove an already-published Instagram post.");
+      return;
+    }
+
+    setConfirmation("delete-draft");
+  }
+
+  async function deleteDraft() {
+    if (!session || !currentRecord || !canDelete) {
+      setMessage("Choose a deletable post draft first.");
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      const deletedId = currentRecord.id;
+      await client.deleteContent(deletedId);
+      const remainingRecords = records.filter((record) => record.id !== deletedId);
+      setRecords(remainingRecords);
+      applyRecord(remainingRecords[0] ?? null, "Post draft deleted from MarkOS. Its media files remain in the workspace media library.");
+      setConfirmation(null);
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -1311,7 +1418,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return;
     }
 
-    if (file.size <= 0 || file.size > maxDirectImageUploadBytes) {
+    if (file.size <= 0 || file.size > instagramImageConstraints.maxSizeBytes) {
       setMessage("Choose a non-empty JPEG no larger than 8 MB.");
       return;
     }
@@ -1325,6 +1432,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       if (!editableRecord) return;
 
       const [{ height, width }, base64Data] = await Promise.all([imageDimensions(file), fileAsBase64(file)]);
+      const dimensionsError = instagramImageDimensionsError(width, height);
+
+      if (dimensionsError) {
+        throw new Error(dimensionsError);
+      }
+
       uploadedAsset = await client.uploadMedia({
         base64Data,
         filename: file.name,
@@ -1403,6 +1516,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const updated = await client.detachMediaFromContent(currentRecord.id, selectedMedia.id);
       upsertRecord(updated);
       applyRecord(updated, "Image removed from this draft. The asset remains safely available in the workspace media library.");
+      setExpandedMedia(null);
     } catch (error) {
       setMessage(contentStudioError(error));
     } finally {
@@ -1553,6 +1667,35 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </section>
         ) : null}
 
+        {currentRecord && !canEdit ? (
+          <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
+            <div>
+              <p className="font-extrabold text-[var(--sunlit-ink)]">
+                {currentRecord.status === "APPROVED"
+                  ? "Approved content is locked against accidental changes."
+                  : currentRecord.status === "SCHEDULED"
+                    ? "Cancel the schedule before editing or deleting this post."
+                    : "This post is locked in its current state."}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
+                {currentRecord.status === "APPROVED"
+                  ? "Reopening it removes approval and returns the post to Draft."
+                  : "MARKOS keeps approval, scheduling, and content changes as explicit separate actions."}
+              </p>
+            </div>
+            {currentRecord.status === "APPROVED" ? (
+              <button
+                className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={reopening}
+                onClick={() => void reopenForEditing()}
+                type="button"
+              >
+                <Pencil size={17} /> {reopening ? "Reopening..." : "Edit post"}
+              </button>
+            ) : null}
+          </article>
+        ) : null}
+
         <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
           <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Caption language">
             {(
@@ -1609,9 +1752,19 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">
             {selectedMedia ? (
               <div className="overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper-deep)]">
-                {/* Workspace media can use authenticated API origins or data URLs that Next Image cannot safely preconfigure. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img alt={selectedMedia.filename} className="aspect-[4/3] w-full object-contain" src={selectedMedia.publicUrl} />
+                <button
+                  aria-label={`Expand ${selectedMedia.filename}`}
+                  className="group relative grid max-h-72 min-h-48 w-full place-items-center overflow-hidden bg-[var(--sunlit-paper-deep)]"
+                  onClick={() => setExpandedMedia(selectedMedia)}
+                  type="button"
+                >
+                  {/* Workspace media can use API origins or data URLs that Next Image cannot safely preconfigure. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={selectedMedia.filename} className="max-h-72 w-full object-contain" src={selectedMedia.publicUrl} />
+                  <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/75 px-3 py-2 text-xs font-extrabold text-white opacity-90 transition group-hover:opacity-100">
+                    <Maximize2 size={15} /> Expand
+                  </span>
+                </button>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] bg-white px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-extrabold text-[var(--sunlit-ink)]">{selectedMedia.filename}</p>
@@ -1620,14 +1773,24 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       {formatFileSize(selectedMedia.sizeBytes)}
                     </p>
                   </div>
-                  <button
-                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canManageMedia || removingMedia}
-                    onClick={() => void removeSelectedMedia()}
-                    type="button"
-                  >
-                    <Trash2 size={17} /> {removingMedia ? "Removing..." : "Remove from draft"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-ink-soft)]"
+                      href={selectedMedia.publicUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLink size={16} /> Open original
+                    </a>
+                    <button
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!canManageMedia || removingMedia}
+                      onClick={() => void removeSelectedMedia()}
+                      type="button"
+                    >
+                      <Trash2 size={17} /> {removingMedia ? "Removing..." : "Remove from draft"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1665,7 +1828,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
                 <h3 className="font-extrabold text-[var(--sunlit-ink)]">Upload from your device</h3>
                 <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                  JPEG only, up to 8 MB. The API records the real dimensions and stores it in this workspace.
+                  JPEG only, no larger than 8 MB, 320–1,440 px wide, and between 4:5 portrait and 1.91:1 landscape.
                 </p>
                 <label className="sunlit-secondary mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-4 text-sm font-extrabold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
                   <Upload size={18} /> {uploading ? "Uploading..." : "Choose JPEG"}
@@ -1698,7 +1861,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   >
                     <option value="1:1">Square · 1:1</option>
                     <option value="4:5">Portrait · 4:5</option>
-                    <option value="9:16">Story / Reel · 9:16</option>
+                    {contentType === "POST" ? null : <option value="9:16">Story / Reel · 9:16</option>}
                   </select>
                   <button
                     className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
@@ -1712,8 +1875,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </div>
             </div>
             <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-              Image generation currently validates the saved workflow with deterministic artwork; it is not evidence of a live image provider. For the Milestone
-              A publish, attach a provider-compatible JPEG.
+              The preview preserves the uploaded image&apos;s framing. Instagram may still recompress the file and convert non-sRGB color to sRGB. Image
+              generation currently validates the saved workflow with deterministic artwork; for the Milestone A publish, attach one provider-compatible JPEG.
             </p>
           </article>
         </section>
@@ -1722,7 +1885,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           action={currentRecord?.status === "SCHEDULED" ? "Cancel schedule" : "Schedule"}
           busy={scheduling || unscheduling}
           disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED")}
-          onAction={() => void (currentRecord?.status === "SCHEDULED" ? cancelSchedule() : scheduleDraft())}
+          onAction={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
           title="Schedule"
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1756,7 +1919,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               onClick={acceptDraft}
               type="button"
             >
-              {approving ? "Approving..." : currentRecord?.status === "APPROVED" || currentRecord?.status === "SCHEDULED" ? "Approved" : "Approve draft"}
+              {approving ? "Approving..." : currentRecord && !canApprove ? statusLabel(currentRecord.status) : "Approve draft"}
             </button>
             <button
               className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
@@ -1774,7 +1937,19 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             >
               Share
             </button>
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canDelete || deleting}
+              onClick={requestDeleteDraft}
+              title={currentRecord?.status === "SCHEDULED" ? "Cancel the schedule before deleting this post" : undefined}
+              type="button"
+            >
+              <Trash2 size={17} /> {deleting ? "Deleting..." : "Delete post draft"}
+            </button>
           </div>
+          {currentRecord?.status === "SCHEDULED" ? (
+            <p className="mt-4 text-sm font-bold text-[var(--sunlit-muted)]">Cancel the schedule first; deletion remains a separate confirmed action.</p>
+          ) : null}
         </EditorBlock>
       </div>
 
@@ -1784,19 +1959,39 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           brandName={session?.workspace.name ?? "yourbrand"}
           caption={locale === "ar" ? captionAr || captionEn : captionEn || captionAr}
           hashtags={parseHashtags(hashtagsText)}
+          locale={locale}
           media={selectedMedia}
+          scheduledAt={currentRecord?.scheduledAt}
           type={selectedTypeLabel}
         />
         <button
           className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED") || scheduling || unscheduling}
-          onClick={() => void (currentRecord?.status === "SCHEDULED" ? cancelSchedule() : scheduleDraft())}
+          onClick={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
           type="button"
         >
           {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord?.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
           {currentRecord?.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
         </button>
       </aside>
+
+      {confirmation ? (
+        <ConfirmationDialog
+          busy={confirmation === "cancel-schedule" ? unscheduling : deleting}
+          confirmLabel={confirmation === "cancel-schedule" ? "Yes, cancel schedule" : "Yes, delete draft"}
+          description={
+            confirmation === "cancel-schedule"
+              ? "This removes the publishing time and returns the post to Approved. It does not delete the post."
+              : "This removes the post draft from MarkOS. Its media files remain in the workspace media library."
+          }
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void (confirmation === "cancel-schedule" ? cancelSchedule() : deleteDraft())}
+          title={confirmation === "cancel-schedule" ? "Cancel this scheduled post?" : "Delete this post draft?"}
+          tone={confirmation === "cancel-schedule" ? "neutral" : "danger"}
+        />
+      ) : null}
+
+      {expandedMedia ? <MediaViewerDialog media={expandedMedia} onClose={() => setExpandedMedia(null)} /> : null}
     </section>
   );
 }
@@ -2630,56 +2825,207 @@ function EditorBlock({
   );
 }
 
+function ConfirmationDialog({
+  busy,
+  confirmLabel,
+  description,
+  onCancel,
+  onConfirm,
+  title,
+  tone
+}: {
+  busy: boolean;
+  confirmLabel: string;
+  description: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  title: string;
+  tone: "danger" | "neutral";
+}) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onCancel();
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [busy, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgb(32_33_43_/_58%)] p-5 backdrop-blur-sm">
+      <article
+        aria-describedby="studio-confirmation-description"
+        aria-labelledby="studio-confirmation-title"
+        aria-modal="true"
+        className="sunlit-panel w-full max-w-md rounded-[1.75rem] p-6 shadow-2xl"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="sunlit-eyebrow">Confirmation required</p>
+            <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="studio-confirmation-title">
+              {title}
+            </h2>
+          </div>
+          <button aria-label="Close confirmation" className="rounded-full p-2 text-[var(--sunlit-muted)]" disabled={busy} onClick={onCancel} type="button">
+            <X size={20} />
+          </button>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]" id="studio-confirmation-description">
+          {description}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+            disabled={busy}
+            onClick={onCancel}
+            type="button"
+          >
+            Keep post
+          </button>
+          <button
+            className={
+              tone === "danger"
+                ? "min-h-11 rounded-xl bg-[var(--sunlit-pink)] px-5 text-sm font-extrabold text-white disabled:opacity-50"
+                : "sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+            }
+            disabled={busy}
+            onClick={onConfirm}
+            type="button"
+          >
+            {busy ? "Working..." : confirmLabel}
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function MediaViewerDialog({ media, onClose }: { media: MediaAssetRecord; onClose: () => void }) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
+      <article
+        aria-label={`Expanded preview of ${media.filename}`}
+        aria-modal="true"
+        className="relative flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-black"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between gap-4 bg-black px-4 py-3 text-white">
+          <p className="truncate text-sm font-extrabold">{media.filename}</p>
+          <div className="flex items-center gap-2">
+            <a
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/25 px-3 text-sm font-bold"
+              href={media.publicUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLink size={16} /> Open original
+            </a>
+            <button aria-label="Close expanded image" className="rounded-xl border border-white/25 p-2.5" onClick={onClose} type="button">
+              <X size={19} />
+            </button>
+          </div>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt={media.filename} className="min-h-0 w-full flex-1 object-contain" src={media.publicUrl} />
+      </article>
+    </div>
+  );
+}
+
 function InstagramPreview({
   brandName,
   caption,
   hashtags,
+  locale,
   media,
+  scheduledAt,
   type
 }: {
   brandName: string;
   caption: string;
   hashtags: string[];
+  locale: Locale;
   media: MediaAssetRecord | null;
+  scheduledAt: string | undefined;
   type: string;
 }) {
-  const cleanBrand =
-    brandName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "") || "yourbrand";
-  const previewCaption = caption.trim() || "Generated caption preview will appear here after MARKOS creates a workspace draft.";
-  const previewTags = hashtags.slice(0, 4).join(" ");
+  const cleanBrand = brandName.trim().replace(/^@/, "").replace(/\s+/g, "_").toLowerCase().slice(0, 30) || "yourbrand";
+  const captionWithTags = [caption.trim(), hashtags.join(" ")].filter(Boolean).join("\n\n");
+  const [expanded, setExpanded] = useState(false);
+  const isLongCaption = captionWithTags.length > 150;
+  const visibleCaption = expanded || !isLongCaption ? captionWithTags : `${captionWithTags.slice(0, 147).trimEnd()}…`;
+  const direction = /[\u0600-\u06ff]/.test(captionWithTags) ? "rtl" : "ltr";
+  const scheduledLabel = scheduledAt
+    ? new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "long" }).format(new Date(scheduledAt))
+    : undefined;
+
+  useEffect(() => setExpanded(false), [captionWithTags]);
+
   return (
-    <div className="mx-auto max-w-full rounded-[3rem] bg-[var(--sunlit-ink)] p-3 shadow-[0_24px_70px_rgba(32,33,43,.22)] sm:p-4">
-      <div className="h-[min(590px,calc(100vh-12rem))] min-h-[440px] w-[min(330px,calc(100vw-4rem))] overflow-hidden rounded-[2.5rem] bg-white text-black xl:h-[min(620px,calc(100vh-11rem))]">
-        <div className="flex items-center justify-between border-b border-black/5 px-5 py-4">
-          <span className="font-bold">{cleanBrand}</span>
-          <span className="text-2xl">...</span>
-        </div>
+    <div className="mx-auto max-w-full rounded-[2.5rem] bg-[var(--sunlit-ink)] p-2.5 shadow-[0_24px_70px_rgba(32,33,43,.22)]">
+      <article className="h-[min(620px,calc(100vh-11rem))] min-h-[460px] w-[min(350px,calc(100vw-4rem))] overflow-y-auto rounded-[2rem] bg-white text-[#171717]">
+        <header className="flex items-center justify-between px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-label="Workspace avatar placeholder"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--sunlit-yellow)] via-[var(--sunlit-coral)] to-[var(--sunlit-pink)] text-sm font-black text-white"
+            >
+              {cleanBrand.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="truncate text-sm font-extrabold">{cleanBrand}</span>
+          </div>
+          <MoreHorizontal aria-hidden="true" size={22} />
+        </header>
+
         {media ? (
+          // The natural dimensions preserve feed framing without an artificial crop.
           // eslint-disable-next-line @next/next/no-img-element
-          <img alt={media.filename} className="h-[min(320px,42vh)] w-full object-cover xl:h-[min(350px,45vh)]" src={media.publicUrl} />
+          <img alt={media.filename} className="block h-auto w-full bg-black/5" src={media.publicUrl} />
         ) : (
-          <div className="grid h-[min(320px,42vh)] place-items-center bg-gradient-to-br from-[var(--sunlit-coral)] via-[var(--sunlit-pink)] to-[var(--sunlit-yellow)] text-center xl:h-[min(350px,45vh)]">
+          <div className="grid aspect-[4/5] place-items-center bg-[#f4f4f4] p-8 text-center">
             <div>
-              <Sparkles className="mx-auto text-white" size={60} />
-              <p className="mt-4 text-lg font-bold text-white xl:mt-5 xl:text-xl">{type} preview</p>
+              <ImagePlus className="mx-auto text-black/35" size={42} />
+              <p className="mt-3 text-sm font-bold text-black/55">Attach a JPEG to preview the {type.toLowerCase()} framing.</p>
             </div>
           </div>
         )}
-        <div className="space-y-3 p-4 xl:p-5">
-          <div className="flex justify-between text-xl xl:text-2xl">
-            <span>Like Comment Share</span>
-            <span>Save</span>
+
+        <div className="px-4 pb-5 pt-3">
+          <div className="flex items-center justify-between">
+            <div aria-label="Instagram action preview" className="flex items-center gap-4">
+              <Heart aria-hidden="true" size={25} strokeWidth={1.8} />
+              <MessageCircle aria-hidden="true" size={25} strokeWidth={1.8} />
+              <Repeat2 aria-hidden="true" size={25} strokeWidth={1.8} />
+              <Send aria-hidden="true" size={24} strokeWidth={1.8} />
+            </div>
+            <Bookmark aria-hidden="true" size={25} strokeWidth={1.8} />
           </div>
-          <p className="text-xs font-bold uppercase tracking-[.12em] text-black/45">Preview only · no live metrics</p>
-          <p>
-            <span className="font-bold">{cleanBrand}</span> {previewCaption}
-          </p>
-          {previewTags ? <p className="text-sm text-black/65">{previewTags}</p> : null}
+          <p className="mt-3 text-[10px] font-bold uppercase tracking-[.12em] text-black/40">Follower preview · no fabricated metrics</p>
+          {captionWithTags ? (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-5" dir={direction}>
+              <span className="font-extrabold">{cleanBrand}</span> {visibleCaption}
+              {isLongCaption ? (
+                <button className="ms-1 font-semibold text-black/50" onClick={() => setExpanded((value) => !value)} type="button">
+                  {expanded ? "less" : "more"}
+                </button>
+              ) : null}
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-black/45">Caption preview will appear here.</p>
+          )}
+          {scheduledLabel ? <p className="mt-3 text-xs text-black/45">{scheduledLabel}</p> : null}
         </div>
-      </div>
+      </article>
     </div>
   );
 }

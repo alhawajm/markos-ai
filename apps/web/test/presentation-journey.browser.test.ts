@@ -166,6 +166,7 @@ describe("presentation journey", () => {
     let imageGenerationPayload: Record<string, unknown> | undefined;
     let schedulePayload: Record<string, unknown> | undefined;
     let unscheduleCalls = 0;
+    let deleteCalls = 0;
     const statusTransitions: string[] = [];
 
     await mockApi(page, async (route, pathname) => {
@@ -181,6 +182,10 @@ describe("presentation journey", () => {
         updatePayload = route.request().postDataJSON() as Record<string, unknown>;
         record = { ...record, ...updatePayload, updatedAt: "2026-08-17T10:01:00.000Z" };
         return route.fulfill(json(record));
+      }
+      if (pathname === `/v1/content/${record.id}` && method === "DELETE") {
+        deleteCalls += 1;
+        return route.fulfill(json({ id: record.id }));
       }
       if (pathname === "/v1/media/upload" && method === "POST") {
         uploadPayload = route.request().postDataJSON() as Record<string, unknown>;
@@ -258,12 +263,25 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Save edits", exact: true }).click();
     await page.getByText("Edits saved to the workspace draft.", { exact: true }).waitFor();
 
+    const publishableJpegBase64 = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1080;
+      canvas.height = 1080;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is unavailable");
+      context.fillStyle = "#d93f7a";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.8).split(",")[1] ?? "";
+    });
     await page.getByLabel("Upload JPEG").setInputFiles({
-      buffer: Buffer.from(onePixelJpegBase64, "base64"),
+      buffer: Buffer.from(publishableJpegBase64, "base64"),
       mimeType: "image/jpeg",
       name: "showcase.jpg"
     });
     await page.getByText("showcase.jpg uploaded and attached to this workspace draft.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Expand showcase.jpg" }).click();
+    await expect(page.getByRole("dialog", { name: "Expanded preview of showcase.jpg" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Close expanded image" }).click();
     await page.getByRole("button", { name: "Generate image", exact: true }).click();
     await page.getByText("Image concept generated, saved, and attached to this draft.", { exact: true }).waitFor();
     await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
@@ -273,19 +291,29 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Schedule", exact: true }).click();
     await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
     await page.getByText("Schedule cancelled. The approved item has returned to the ready queue.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Edit post", exact: true }).click();
+    await page.getByText("Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.", { exact: true }).waitFor();
+    await expect(captionEditor.isEnabled()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Delete post draft" }).click();
+    await expect(page.getByRole("dialog", { name: "Delete this post draft?" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Yes, delete draft" }).click();
+    await page.getByText("Post draft deleted from MarkOS. Its media files remain in the workspace media library.", { exact: true }).waitFor();
 
     expect(generationPayload).toEqual({ contentType: "POST", count: 1, topic: "Launch our new Bahrain dessert subscription to busy professionals." });
     expect(updatePayload).toMatchObject({
       captionAr: "طقوس حلوة جديدة لفرق العمل في البحرين.",
       captionEn: "A fresh dessert ritual for busy Bahrain teams."
     });
-    expect(uploadPayload).toMatchObject({ filename: "showcase.jpg", height: 1, mimeType: "image/jpeg", type: "IMAGE", width: 1 });
+    expect(uploadPayload).toMatchObject({ filename: "showcase.jpg", height: 1080, mimeType: "image/jpeg", type: "IMAGE", width: 1080 });
     expect(typeof uploadPayload?.base64Data).toBe("string");
     expect(imageGenerationPayload).toEqual({ aspectRatio: "4:5" });
-    expect(statusTransitions).toEqual(["IN_REVIEW", "APPROVED"]);
+    expect(statusTransitions).toEqual(["IN_REVIEW", "APPROVED", "DRAFT"]);
     expect(typeof schedulePayload?.scheduledAt).toBe("string");
     expect(unscheduleCalls).toBe(1);
+    expect(deleteCalls).toBe(1);
     await page.close();
   });
 });

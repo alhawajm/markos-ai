@@ -249,7 +249,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const file = await readPublicMediaFile(params.workspaceId, params.storedFilename);
-      return reply.type(file.mimeType).send(file.bytes);
+      return reply.header("Cross-Origin-Resource-Policy", "cross-origin").type(file.mimeType).send(file.bytes);
     } catch (error) {
       if (error instanceof MediaAssetNotFoundError) {
         return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", error.message));

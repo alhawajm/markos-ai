@@ -41,6 +41,15 @@ export class ContentScheduleError extends Error {
   }
 }
 
+export class ContentItemDeleteError extends Error {
+  constructor(
+    message: string,
+    readonly code: "CONTENT_DELETE_FORBIDDEN" | "CONTENT_DELETE_REQUIRES_CANCELLATION"
+  ) {
+    super(message);
+  }
+}
+
 export async function listContentItems(workspaceId: string): Promise<ContentRecord[]> {
   const rows = await prisma.contentItem.findMany({
     where: {
@@ -298,6 +307,39 @@ export async function updateContentItem(workspaceId: string, contentItemId: stri
   });
 
   return toContentRecord(row);
+}
+
+export async function deleteContentItem(workspaceId: string, contentItemId: string): Promise<{ id: string }> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status === "SCHEDULED") {
+    throw new ContentItemDeleteError("Cancel the scheduled publishing time before deleting this post draft", "CONTENT_DELETE_REQUIRES_CANCELLATION");
+  }
+
+  if (current.status === "PUBLISHED") {
+    throw new ContentItemDeleteError("Published Instagram posts cannot be deleted through the draft deletion action", "CONTENT_DELETE_FORBIDDEN");
+  }
+
+  await prisma.contentItem.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      deletedAt: new Date()
+    }
+  });
+
+  return { id: current.id };
 }
 
 export async function updateContentItemStatus(workspaceId: string, contentItemId: string, input: UpdateContentStatusInput): Promise<ContentRecord> {

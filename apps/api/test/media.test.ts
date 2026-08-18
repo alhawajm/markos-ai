@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { instagramJpegFixture } from "./helpers/jpeg";
 
 vi.mock("../src/ai/image-client", () => ({
   generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
@@ -99,7 +100,7 @@ describe("media routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    const bytes = Buffer.from("markos media upload");
+    const bytes = instagramJpegFixture(924, 875);
 
     const uploaded = await app.inject({
       method: "POST",
@@ -124,12 +125,70 @@ describe("media routes", () => {
         filename: "upload.jpg",
         mimeType: "image/jpeg",
         sizeBytes: bytes.byteLength,
+        width: 924,
+        height: 875,
         workspaceId: session.workspace.id
       }
     });
     expect(served.statusCode).toBe(200);
     expect(served.headers["content-type"]).toContain("image/jpeg");
-    expect(served.body).toBe("markos media upload");
+    expect(served.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(served.rawPayload).toEqual(bytes);
+
+    await app.close();
+  });
+
+  it("rejects renamed files and JPEGs outside the Instagram feed contract before storage", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    const invalidBytes = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "renamed.jpg",
+        mimeType: "image/jpeg",
+        base64Data: Buffer.from("not really a JPEG").toString("base64")
+      }
+    });
+    const narrowWidth = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "small.jpg",
+        mimeType: "image/jpeg",
+        base64Data: instagramJpegFixture(200, 200).toString("base64")
+      }
+    });
+    const unsupportedRatio = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload",
+      headers,
+      payload: {
+        type: "IMAGE",
+        filename: "tall.jpg",
+        mimeType: "image/jpeg",
+        base64Data: instagramJpegFixture(1080, 1920).toString("base64")
+      }
+    });
+
+    expect(invalidBytes.statusCode).toBe(400);
+    expect(invalidBytes.json()).toMatchObject({
+      error: {
+        code: "MEDIA_UPLOAD_INVALID",
+        message: expect.stringContaining("valid JPEG")
+      }
+    });
+    expect(narrowWidth.statusCode).toBe(400);
+    expect(narrowWidth.json().error.message).toContain("between 320 and 1440 pixels wide");
+    expect(unsupportedRatio.statusCode).toBe(400);
+    expect(unsupportedRatio.json().error.message).toContain("between 4:5 and 1.91:1");
+    await expect(prisma.mediaAsset.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
 
     await app.close();
   });
@@ -138,7 +197,7 @@ describe("media routes", () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);
     const otherWorkspace = await registerTestUser(app);
-    const bytes = Buffer.from("disposable media object");
+    const bytes = instagramJpegFixture();
     const uploaded = await app.inject({
       method: "POST",
       url: "/v1/media/upload",
@@ -368,6 +427,41 @@ describe("media routes", () => {
     await app.close();
   });
 
+  it("requires an approved post to return to draft before its media can change", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: session.workspace.id,
+        type: "IMAGE",
+        filename: "approved.jpg",
+        s3Key: "external:https://cdn.example.com/approved.jpg",
+        cdnUrl: "https://cdn.example.com/approved.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 120000,
+        width: 1080,
+        height: 1080
+      }
+    });
+    await prisma.contentItem.update({ where: { id: content.id }, data: { status: "APPROVED" } });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/media`,
+      headers,
+      payload: {
+        mediaAssetId: media.id
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("CONTENT_LOCKED");
+
+    await app.close();
+  });
+
   it("requires HTTPS public media URLs", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -512,7 +606,7 @@ describe("media routes", () => {
         type: "IMAGE",
         filename: "cancelled.jpg",
         mimeType: "image/jpeg",
-        base64Data: Buffer.from("blocked media").toString("base64")
+        base64Data: instagramJpegFixture().toString("base64")
       }
     });
 

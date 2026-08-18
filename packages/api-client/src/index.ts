@@ -410,6 +410,13 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async deleteContent(contentItemId: string): Promise<{ id: string }> {
+    const response = await this.request<{ id: string }>(`/v1/content/${contentItemId}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
   async updateContentStatus(contentItemId: string, status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {

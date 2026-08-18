@@ -242,6 +242,21 @@ describe("validateInstagramImageForPublishing", () => {
       "INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED"
     ]);
   });
+
+  it("enforces the Instagram API size, width, and feed aspect-ratio limits", () => {
+    expect(
+      validateInstagramImageForPublishing(
+        mediaAsset({
+          height: 2400,
+          sizeBytes: 8_000_001,
+          width: 1600
+        })
+      )
+    ).toEqual(["INSTAGRAM_PUBLISH_IMAGE_WIDTH_UNSUPPORTED", "INSTAGRAM_PUBLISH_ASPECT_RATIO_UNSUPPORTED", "INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE"]);
+    expect(validateInstagramImageForPublishing(mediaAsset({ height: 875, width: 924 }))).toEqual([]);
+    expect(validateInstagramImageForPublishing(mediaAsset({ height: 1350, width: 1080 }))).toEqual([]);
+    expect(validateInstagramImageForPublishing(mediaAsset({ height: 566, width: 1080 }))).toEqual([]);
+  });
 });
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {

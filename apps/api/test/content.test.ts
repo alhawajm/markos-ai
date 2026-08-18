@@ -618,6 +618,73 @@ describe("content routes", () => {
     await app.close();
   });
 
+  it("soft-deletes workspace drafts only after scheduled publishing is cancelled", async () => {
+    const app = await buildApp();
+    const ownerSession = await registerTestUser(app);
+    const ownerHeaders = authHeaders(ownerSession.tokens.accessToken);
+    const otherSession = await registerTestUser(app);
+    const created = await createDraftContent(app, ownerHeaders);
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: ownerSession.workspace.id,
+        type: "IMAGE",
+        filename: "kept-in-library.jpg",
+        s3Key: "external:https://cdn.example.com/kept-in-library.jpg",
+        cdnUrl: "https://cdn.example.com/kept-in-library.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 120000,
+        width: 1080,
+        height: 1080
+      }
+    });
+    await prisma.contentItem.update({ where: { id: created.id }, data: { mediaIds: [media.id] } });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "IN_REVIEW" } });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "APPROVED" } });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers: ownerHeaders,
+      payload: { scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+    });
+
+    const crossWorkspace = await app.inject({
+      method: "DELETE",
+      url: `/v1/content/${created.id}`,
+      headers: authHeaders(otherSession.tokens.accessToken)
+    });
+    const scheduledDelete = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/unschedule`, headers: ownerHeaders, payload: {} });
+    const deleted = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    const listed = await app.inject({ method: "GET", url: "/v1/content", headers: ownerHeaders });
+
+    expect(crossWorkspace.statusCode).toBe(404);
+    expect(scheduledDelete.statusCode).toBe(409);
+    expect(scheduledDelete.json().error.code).toBe("CONTENT_DELETE_REQUIRES_CANCELLATION");
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ data: { id: created.id } });
+    expect(listed.json().data).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: created.id })]));
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({ deletedAt: expect.any(Date) });
+    await expect(prisma.mediaAsset.findUniqueOrThrow({ where: { id: media.id } })).resolves.toMatchObject({ deletedAt: null });
+
+    await app.close();
+  });
+
+  it("does not treat published Instagram content as a deletable draft", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    await prisma.contentItem.update({ where: { id: created.id }, data: { status: "PUBLISHED", instagramPostId: "instagram-post-id" } });
+
+    const response = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("CONTENT_DELETE_FORBIDDEN");
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({ deletedAt: null });
+
+    await app.close();
+  });
+
   it("schedules approved content and records it in the monthly calendar", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

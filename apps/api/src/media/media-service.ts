@@ -1,12 +1,20 @@
 import type { ContentStatus, MediaAsset, Prisma } from "@prisma/client";
 import type { AiImageGenerationResult, ContentRecord, MediaAssetRecord } from "@markos/shared-types";
-import type { GenerateImageForContentInput, RegisterPublicMediaInput, UploadMediaInput } from "@markos/validation";
+import {
+  instagramImageConstraints,
+  validateInstagramImageMetadata,
+  type GenerateImageForContentInput,
+  type InstagramImageValidationCode,
+  type RegisterPublicMediaInput,
+  type UploadMediaInput
+} from "@markos/validation";
 import { generateImageAsset } from "../ai/image-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { toContentRecord } from "../content/content-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
+import { inspectJpegDimensions } from "./jpeg-inspection";
 import { deleteStoredMedia, readStoredMedia, storageKeysForRoute, storeWorkspaceMedia } from "./storage-service";
 
 export class MediaAssetNotFoundError extends Error {
@@ -34,8 +42,10 @@ export class MediaContentLockedError extends Error {
 }
 
 export class MediaUploadInvalidError extends Error {
-  constructor() {
-    super("Uploaded media data is invalid");
+  constructor(
+    readonly reason: InstagramImageValidationCode | "INSTAGRAM_PUBLISH_JPEG_BYTES_INVALID" | "MEDIA_UPLOAD_DATA_INVALID" = "MEDIA_UPLOAD_DATA_INVALID"
+  ) {
+    super(mediaUploadErrorMessage(reason));
   }
 }
 
@@ -47,7 +57,7 @@ export class MediaImageGenerationInvalidError extends Error {
 
 const imageAgentName = "IMAGE";
 const localCurrency = "BHD";
-const maxDirectUploadBytes = 8 * 1024 * 1024;
+const maxDirectUploadBytes = instagramImageConstraints.maxSizeBytes;
 
 export async function listMediaAssets(workspaceId: string): Promise<MediaAssetRecord[]> {
   const rows = await prisma.mediaAsset.findMany({
@@ -94,8 +104,32 @@ export async function registerPublicMedia(workspaceId: string, input: RegisterPu
 export async function uploadMedia(workspaceId: string, input: UploadMediaInput): Promise<MediaAssetRecord> {
   const bytes = Buffer.from(input.base64Data, "base64");
 
-  if (!isValidBase64Payload(input.base64Data, bytes) || bytes.byteLength > maxDirectUploadBytes) {
+  if (!isValidBase64Payload(input.base64Data, bytes)) {
     throw new MediaUploadInvalidError();
+  }
+
+  if (bytes.byteLength > maxDirectUploadBytes) {
+    throw new MediaUploadInvalidError("INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE");
+  }
+
+  const verifiedImageDimensions = input.type === "IMAGE" ? inspectJpegDimensions(bytes) : undefined;
+
+  if (input.type === "IMAGE" && !verifiedImageDimensions) {
+    throw new MediaUploadInvalidError("INSTAGRAM_PUBLISH_JPEG_BYTES_INVALID");
+  }
+
+  if (input.type === "IMAGE" && verifiedImageDimensions) {
+    const [reason] = validateInstagramImageMetadata({
+      filename: input.filename,
+      height: verifiedImageDimensions.height,
+      mimeType: input.mimeType,
+      sizeBytes: bytes.byteLength,
+      width: verifiedImageDimensions.width
+    });
+
+    if (reason) {
+      throw new MediaUploadInvalidError(reason);
+    }
   }
 
   const usagePeriodDate = new Date();
@@ -117,8 +151,8 @@ export async function uploadMedia(workspaceId: string, input: UploadMediaInput):
         cdnUrl: stored.publicUrl,
         mimeType: input.mimeType,
         sizeBytes: stored.sizeBytes,
-        ...(input.width === undefined ? {} : { width: input.width }),
-        ...(input.height === undefined ? {} : { height: input.height }),
+        ...(verifiedImageDimensions ? { width: verifiedImageDimensions.width } : input.width === undefined ? {} : { width: input.width }),
+        ...(verifiedImageDimensions ? { height: verifiedImageDimensions.height } : input.height === undefined ? {} : { height: input.height }),
         ...(input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds })
       }
     });
@@ -397,9 +431,24 @@ export function toMediaAssetRecord(row: MediaAsset): MediaAssetRecord {
 }
 
 function assertMediaEditable(status: ContentStatus): void {
-  if (status === "PUBLISHED" || status === "FAILED") {
+  if (status !== "DRAFT" && status !== "IN_REVIEW") {
     throw new MediaContentLockedError();
   }
+}
+
+function mediaUploadErrorMessage(reason: MediaUploadInvalidError["reason"]): string {
+  const messages: Record<MediaUploadInvalidError["reason"], string> = {
+    INSTAGRAM_PUBLISH_ASPECT_RATIO_UNSUPPORTED: "Choose a JPEG with an aspect ratio between 4:5 and 1.91:1",
+    INSTAGRAM_PUBLISH_IMAGE_DIMENSIONS_REQUIRED: "MARKOS could not read the JPEG dimensions",
+    INSTAGRAM_PUBLISH_IMAGE_SIZE_REQUIRED: "Choose a non-empty JPEG",
+    INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE: "Choose a JPEG no larger than 8 MB",
+    INSTAGRAM_PUBLISH_IMAGE_WIDTH_UNSUPPORTED: "Choose a JPEG between 320 and 1440 pixels wide",
+    INSTAGRAM_PUBLISH_JPEG_BYTES_INVALID: "Choose a valid JPEG file; changing a filename or MIME type is not enough",
+    INSTAGRAM_PUBLISH_JPEG_REQUIRED: "Choose a JPEG with a .jpg or .jpeg filename and image/jpeg MIME type",
+    MEDIA_UPLOAD_DATA_INVALID: "Uploaded media data is invalid"
+  };
+
+  return messages[reason];
 }
 
 function isValidBase64Payload(value: string, bytes: Buffer): boolean {

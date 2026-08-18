@@ -126,17 +126,6 @@ describe("M2 acceptance", () => {
     });
     const content = generated.json().data as { id: string };
 
-    const image = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/generate-image`,
-      headers,
-      payload: {
-        aspectRatio: "4:5",
-        prompt: "Premium Bahrain office coffee setup with Pearl Coffee branding"
-      }
-    });
-    const imageBody = image.json().data;
-
     const unscheduled = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/unschedule`,
@@ -151,6 +140,17 @@ describe("M2 acceptance", () => {
         status: "DRAFT"
       }
     });
+    const image = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        prompt: "Premium Bahrain office coffee setup with Pearl Coffee branding"
+      }
+    });
+    const imageBody = image.json().data;
+
     const review = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/status`,

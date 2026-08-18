@@ -1,6 +1,6 @@
 # Instagram Permissions Phase 2 Working Checklist
 
-Status date: 2026-08-17.
+Status date: 2026-08-18.
 
 Decision status: all five Milestone A decisions are locked. The boundary, temporary operator path, and live Meta dashboard gate were locked on 2026-08-16; the completion target was updated to Wednesday for Thursday's showcase, and Sarah confirmed the private Railway Bucket plus just-in-time presigned-GET design on 2026-08-17.
 
@@ -8,7 +8,7 @@ This is a working checklist for `instagram_business_content_publish` and `instag
 
 Locked target: complete Milestone A by Wednesday, 2026-08-19, for the Thursday, 2026-08-20 showcase. Milestone A is a controlled Standard Access proof against an Instagram professional account owned or managed by the app team. It is not Advanced Access, App Review approval, or general-client production readiness.
 
-Application status: the second application pass is implemented and locally verified in the working tree. It makes Content Studio usable for the showcase flow and is ready for PR review plus a `dry_run` staging deployment. It does not close the remaining Railway, reconnect, live-publish, live-insights, or rollback evidence gates.
+Application status: the second application pass and the 2026-08-18 Content Studio stabilization pass are implemented and locally verified in the working tree. The stabilization pass addresses the browser preview failure, Instagram feed-image preflight, approval-safe editing, confirmed cancellation/deletion, and follower-view preview. These local changes still require review, push, and a new `dry_run` staging deployment; they do not close the remaining Railway, reconnect, live-publish, live-insights, or rollback evidence gates.
 
 ## Evidence boundary
 
@@ -116,7 +116,7 @@ The skeleton currently polls only five times at one-second intervals inside the 
 - [x] **K-A06** Implement a storage-driver interface with local and S3-compatible implementations. Use workspace-prefixed, non-overwritable object keys and explicit content types.
 - [x] **K-A07** Add conditional environment validation for the chosen bucket variable contract. Keep real credentials out of `.env.example`; document names and fake placeholders only.
 - [x] **K-A08** Generate a fresh presigned GET URL from `MediaAsset.s3Key` immediately before container creation. Never persist, return to ordinary clients, or log the signed URL.
-- [x] **K-A09** Validate publish media separately from generic media upload. The A fixture must be a provider-compatible JPEG with known dimensions/size; reject SVG and an arbitrary MIME label before calling Meta.
+- [x] **K-A09** Validate publish media separately from generic media upload. The A fixture must be a real JPEG no larger than 8,000,000 bytes, 320–1,440 pixels wide, and between 4:5 and 1.91:1. Derive uploaded JPEG dimensions from its bytes, reject renamed/non-JPEG data, and repeat the metadata contract before calling Meta.
 - [x] **K-A10** Move publishing to the Instagram Login client/transport and test the exact image-container, status, publish, quota, error, timeout, and token-redaction behavior with mocked responses.
 - [x] **K-A11** Prevent a duplicate manual publish within the controlled run using an application-level guard. Record the need for a durable lease/attempt model in B rather than pretending A solves multi-worker idempotency.
 
@@ -138,17 +138,25 @@ The skeleton currently polls only five times at one-second intervals inside the 
 
 ### Second application pass — Content Studio
 
-- [x] **K-A22** Mount the authenticated Content Studio flow at `/{locale}/app/content-studio`: generate through the existing AI text contract, edit English and Arabic captions independently, preserve the correct field and RTL direction, and save drafts repeatedly without discarding edits after a failed action.
-- [x] **K-A23** Add authenticated browser-to-API JPEG upload with MIME/type validation, an 8 MiB decoded-byte ceiling, browser-decoded dimensions, workspace-scoped storage, and attachment to the active content item. Direct browser-to-Bucket upload is not part of A.
-- [x] **K-A24** Show the selected real media in the Instagram preview, provide media thumbnails and truthful filename/dimension/size details, allow detaching media without deleting the underlying asset, and remove fabricated engagement metrics from the preview.
+- [x] **K-A22** Mount the authenticated Content Studio flow at `/{locale}/app/content-studio`: generate through the existing AI text contract, edit English and Arabic captions independently while the item is `DRAFT`/`IN_REVIEW`, preserve the correct field and RTL direction, and save drafts repeatedly without discarding edits after a failed action. An explicit **Edit post** action now invalidates `APPROVED` and returns the item to `DRAFT` before any content or media changes.
+- [x] **K-A23** Add authenticated browser-to-API JPEG upload with MIME/extension checks, a conservative 8,000,000-byte ceiling, browser preflight, server-inspected dimensions, workspace-scoped storage, and attachment to the active content item. Direct browser-to-Bucket upload is not part of A.
+- [x] **K-A24** Show selected real media without a forced crop, provide compact media thumbnails plus truthful filename/dimension/size details, add expand/open-original controls, allow detaching media without deleting the underlying asset, and remove fabricated engagement metrics from the follower preview.
 - [x] **K-A25** Mount aspect-ratio-aware image-concept generation for the draft while explicitly identifying the result as deterministic application artwork. This is useful showcase scaffolding, not evidence of a live provider-backed image-generation integration; that production integration moves to B.
-- [x] **K-A26** Enforce explicit approval before scheduling, stop the UI from silently auto-approving a draft, and make schedule cancellation return the item to `APPROVED` without deleting its content or media.
+- [x] **K-A26** Enforce explicit approval before scheduling, stop the UI from silently auto-approving a draft, and make a separately confirmed schedule cancellation return the item to `APPROVED` without deleting its content or media.
 - [x] **K-A27** Add workspace-scoped media-asset deletion to the API and both local/S3 storage drivers, refuse deletion while an active content item references the asset, soft-delete the database record, and decrement metered storage bytes.
-- [x] **K-A28** Cover the rendered generate → bilingual edit/save → JPEG upload → image concept → approval → scheduling → cancellation journey and the storage deletion boundary with browser, API, and driver tests.
+- [x] **K-A28** Cover the rendered generate → bilingual edit/save → JPEG upload → image concept → approval → scheduling → confirmed cancellation → reopen → confirmed draft deletion journey and the storage deletion boundary with browser, API, and driver tests.
 
-Pass 2 leaves no known application feature gap for the controlled Milestone A JPEG-plus-insights proof. A still requires K-A19 through K-A21, S-A04 through S-A16 as applicable, and J-A02 through J-A07. Scheduled records do not yet trigger a durable worker publish, image concepts are not provider-generated, and Queue/retry/failure, long-term media lifecycle, Reels, and carousels remain Milestone B work.
+### Third application pass — live-test stabilization
 
-Repository verification on 2026-08-17 used isolated loopback PostgreSQL and Redis containers only. After the complete Milestone A application, storage, and Content Studio change, `corepack pnpm verify` passed all 32 tasks: 45 API test files/283 tests, 5 web test files/20 tests, and 19 AI tests. The same run passed formatting, TypeScript/Python type checks, lint, and the 10-check Arabic/RTL gate. The rendered presentation and Content Studio journey also passed 5/5 browser tests against the production build using the installed local Chrome. This is repository evidence, not Railway or live-provider evidence.
+- [x] **K-A29** Keep media workspace-owned and workspace-prefixed. Override the public media proxy's cross-origin resource policy only on the media-file route so staging web origins can render the stable API URL without weakening global response headers.
+- [x] **K-A30** Reject incompatible feed images before storage by inspecting JPEG structure and dimensions server-side; expose the same width, aspect-ratio, type, and size boundaries in Content Studio. Preserve framing in the preview and state truthfully that Instagram may recompress files and convert non-sRGB color to sRGB.
+- [x] **K-A31** Add workspace-scoped soft deletion for a whole post draft. A scheduled item must be cancelled first; published Instagram content is not treated as a deletable draft. Cancellation and deletion each have a separate accessible confirmation, and deleting a draft does not delete workspace media assets.
+- [x] **K-A32** Replace the schematic preview with a follower-style post card using the real workspace name, real media, real caption/hashtags, RTL direction when applicable, actual scheduled date only when present, familiar action icons, and no invented likes, counts, dates, categories, carousel controls, or owner-only Insights/Boost actions.
+- [x] **K-A33** Verify the stabilization path with focused API integration tests on disposable seeded PostgreSQL/Redis and a rendered real-Chrome journey. Treat staging redeployment and provider fetch/publish results as separate unchecked evidence.
+
+Pass 2 established the controlled browser workflow; the live staging check then exposed a cross-origin preview defect and lifecycle/presentation gaps that the third pass closes locally. No known local application blocker remains for the controlled Milestone A JPEG-plus-insights proof, but the 2026-08-18 stabilization diff is not yet staging evidence. A still requires K-A19 through K-A21, S-A04 through S-A16 as applicable, and J-A02 through J-A07. Scheduled records do not yet trigger a durable worker publish, image concepts are not provider-generated, and Queue/retry/failure, permanent media cleanup, normalization/derivatives, Reels, and carousels remain Milestone B work.
+
+Repository verification on 2026-08-18 used isolated loopback PostgreSQL and Redis containers only. After the complete Milestone A application, storage, and Content Studio stabilization change, `corepack pnpm verify` passed all 32 tasks: 46 API test files/290 tests (271 passed, 19 provider-gated skips), 5 web test files/20 tests, and 19 AI tests. The same run passed formatting, TypeScript/Python type checks, lint, and the 10-check Arabic/RTL gate. The rendered presentation and Content Studio journey also passed 5/5 browser tests against an isolated local Next server using the installed local Chrome. This is repository evidence, not Railway or live-provider evidence.
 
 `corepack pnpm build` also passed all 9 build tasks. The separate registry-backed `corepack pnpm security:audit` gate is not green: it reported 36 advisories (28 high, 8 moderate), including 22 production-path advisories (16 high, 6 moderate) across existing toolchain, framework, infrastructure, and transitive packages. The report did not identify either newly added `@aws-sdk` package. Dependency remediation remains a separate reviewed change and must not be hidden before the showcase or a release.
 
@@ -162,7 +170,7 @@ Repository verification on 2026-08-17 used isolated loopback PostgreSQL and Redi
 - [ ] **S-A04** Confirm the API can upload/read/delete a disposable test object and that an unauthenticated external GET succeeds only through a short-lived presigned URL. Remove the disposable object after the check.
 - [ ] **S-A05** Confirm bucket environment isolation and document the retention/lifecycle choice. Do not configure browser-upload CORS for A because the controlled upload can pass through the API.
 
-Sarah reported that a test image is visible in the Bucket. That is partial storage evidence only: she explicitly identified browser/API-path upload and external presigned-URL validation as still unavailable, so S-A04 remains open. The second application pass now mounts authenticated browser-to-API JPEG upload and adds workspace-scoped API deletion locally; staging upload/read/delete and an unauthenticated external presigned GET still need Sarah's validation after the reviewed commit is deployed.
+Sarah first reported that a test image was visible in the Bucket. On 2026-08-18, Khalid then observed a successful staging browser-to-API upload and a working stable public API-proxy URL after the environment-name corrections. That is useful upload/read evidence, but it does not prove application-path object deletion or the provider-only presigned Bucket GET used immediately before Meta container creation, so S-A04 remains open. The stabilization pass changes the media proxy response header locally and still needs redeployment before its browser-preview fix can be called staging-verified.
 
 ### Database and environment safety
 
@@ -181,7 +189,7 @@ Sarah reported that a test image is visible in the Bucket. That is partial stora
 - [ ] **S-A15** Watch deployment/application logs for sanitized stage, status, timeout, and request-correlation evidence. Stop the test if secrets, signed URLs, raw provider bodies, or customer data appear.
 - [ ] **S-A16** Immediately return both modes to `dry_run` after the agreed evidence is captured and confirm the rollback deployment is healthy.
 
-Sarah also reported that the baseline API deployed successfully with all listed services online and that both provider modes remain `dry_run`. Because the Milestone A application change is still uncommitted and no deployed SHA was supplied, this does not close S-A11 or S-A12.
+Sarah also reported that the pre-stabilization API deployed successfully after correcting two mistyped environment-variable names, with all listed services online and both provider modes still `dry_run`. No deployed SHA was supplied, and the 2026-08-18 stabilization changes remain local, so this does not close S-A11 or S-A12.
 
 ## Joint handoffs and completion gates
 
@@ -217,8 +225,10 @@ These are explicitly not required to close A, but they are the next database/run
 - [ ] **K-B04** Replace deterministic image-concept artwork with a configured provider-backed image-generation adapter. Meter usage, enforce plan quotas, validate output, handle moderation/provider failures, and keep honest fallback states.
 - [ ] **K-B05** Connect approved schedules and cancellations to durable worker execution with timezone-safe dispatch and a cancellation boundary that prevents a canceled item from publishing during a worker race.
 - [ ] **K-B06** Complete the Sunlit Queue and content-state surfaces for scheduled, publishing, retrying, failed, canceled, and published work instead of depending on one active editor record.
-- [ ] **K-B07** Add product-facing permanent media deletion plus orphan reconciliation while preserving attachment/reference safety. Decide separately whether direct browser-to-Bucket upload is worth its CORS and security surface.
+- [ ] **K-B07** Add product-facing permanent media-library deletion plus orphan reconciliation while preserving attachment/reference safety. Keep **Remove from draft** as detach-only, and decide separately whether direct browser-to-Bucket upload is worth its CORS and security surface.
 - [ ] **K-B08** Add provider-compatible Reel and carousel creation, processing, validation, retry, preview, and cancellation behavior after the durable container lifecycle exists.
+- [ ] **K-B09** Add an image-normalization/derivative pipeline if product evidence justifies it: validated decode/re-encode, metadata policy, color-space conversion, quality policy, source/derivative relationship, quota accounting, and deterministic cleanup. Do not silently transform source uploads in A.
+- [ ] **K-B10** Calibrate preview fidelity against controlled published results across supported aspect ratios, compression-sensitive artwork, light/dark Instagram presentation, and Arabic/RTL captions. Add carousel navigation only when carousel publishing itself is supported.
 - [ ] **S-B01** Review the forward migration against deployed history, take a backup, apply through pre-deploy, and verify application-role RLS.
 - [ ] **S-B02** Create the Railway worker service from `apps/api/worker.Dockerfile`, inject only variables consumed by enabled tasks, and keep one publishing replica until the lease/idempotency proof passes.
 - [ ] **S-B03** Configure and validate the Bucket's retention/lifecycle, recovery, cost, and orphan-cleanup policy; configure direct-upload CORS only if K-B07 selects that design.

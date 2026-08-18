@@ -360,6 +360,61 @@ export const uploadMediaSchema = z.object({
   durationSeconds: z.number().int().positive().max(3600).optional()
 });
 
+export const instagramImageConstraints = {
+  maxAspectRatio: 1.91,
+  maxSizeBytes: 8_000_000,
+  maxWidth: 1440,
+  minAspectRatio: 4 / 5,
+  minWidth: 320
+} as const;
+
+export type InstagramImageValidationCode =
+  | "INSTAGRAM_PUBLISH_ASPECT_RATIO_UNSUPPORTED"
+  | "INSTAGRAM_PUBLISH_IMAGE_DIMENSIONS_REQUIRED"
+  | "INSTAGRAM_PUBLISH_IMAGE_SIZE_REQUIRED"
+  | "INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE"
+  | "INSTAGRAM_PUBLISH_IMAGE_WIDTH_UNSUPPORTED"
+  | "INSTAGRAM_PUBLISH_JPEG_REQUIRED";
+
+export function validateInstagramImageMetadata(input: {
+  filename: string;
+  height?: number | null;
+  mimeType: string;
+  sizeBytes: number;
+  width?: number | null;
+}): InstagramImageValidationCode[] {
+  const reasons: InstagramImageValidationCode[] = [];
+  const extension = input.filename.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+
+  if (input.mimeType.toLowerCase() !== "image/jpeg" || (extension !== ".jpg" && extension !== ".jpeg")) {
+    reasons.push("INSTAGRAM_PUBLISH_JPEG_REQUIRED");
+  }
+
+  if (!Number.isInteger(input.width) || (input.width ?? 0) <= 0 || !Number.isInteger(input.height) || (input.height ?? 0) <= 0) {
+    reasons.push("INSTAGRAM_PUBLISH_IMAGE_DIMENSIONS_REQUIRED");
+  } else {
+    const width = input.width as number;
+    const height = input.height as number;
+    const aspectRatio = width / height;
+
+    if (width < instagramImageConstraints.minWidth || width > instagramImageConstraints.maxWidth) {
+      reasons.push("INSTAGRAM_PUBLISH_IMAGE_WIDTH_UNSUPPORTED");
+    }
+
+    if (aspectRatio < instagramImageConstraints.minAspectRatio || aspectRatio > instagramImageConstraints.maxAspectRatio) {
+      reasons.push("INSTAGRAM_PUBLISH_ASPECT_RATIO_UNSUPPORTED");
+    }
+  }
+
+  if (!Number.isInteger(input.sizeBytes) || input.sizeBytes <= 0) {
+    reasons.push("INSTAGRAM_PUBLISH_IMAGE_SIZE_REQUIRED");
+  } else if (input.sizeBytes > instagramImageConstraints.maxSizeBytes) {
+    reasons.push("INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE");
+  }
+
+  return reasons;
+}
+
 export const attachMediaToContentSchema = z.object({
   mediaAssetId: z.string().uuid()
 });

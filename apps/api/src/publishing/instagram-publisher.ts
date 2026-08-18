@@ -1,4 +1,5 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
+import { validateInstagramImageMetadata } from "@markos/validation";
 import { env } from "../config/env";
 import { createProviderFetchUrl, MediaStorageError } from "../media/storage-service";
 import { InstagramGraphClient, InstagramGraphRequestError } from "../workspace/instagram-graph-client";
@@ -205,20 +206,7 @@ export function createInstagramPublisher(): InstagramPublisher {
 }
 
 export function validateInstagramImageForPublishing(mediaAsset: MediaAsset): string[] {
-  const reasons: string[] = [];
-  const extension = mediaAsset.filename.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
-
-  if (mediaAsset.mimeType.toLowerCase() !== "image/jpeg" || (extension !== ".jpg" && extension !== ".jpeg")) {
-    reasons.push("INSTAGRAM_PUBLISH_JPEG_REQUIRED");
-  }
-
-  if (!Number.isInteger(mediaAsset.width) || (mediaAsset.width ?? 0) <= 0 || !Number.isInteger(mediaAsset.height) || (mediaAsset.height ?? 0) <= 0) {
-    reasons.push("INSTAGRAM_PUBLISH_IMAGE_DIMENSIONS_REQUIRED");
-  }
-
-  if (!Number.isInteger(mediaAsset.sizeBytes) || mediaAsset.sizeBytes <= 0) {
-    reasons.push("INSTAGRAM_PUBLISH_IMAGE_SIZE_REQUIRED");
-  }
+  const reasons: string[] = validateInstagramImageMetadata(mediaAsset);
 
   if (!isPublicHttpsUrl(mediaAsset.cdnUrl)) {
     reasons.push("INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED");
