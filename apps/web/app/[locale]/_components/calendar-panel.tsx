@@ -97,9 +97,7 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
       setRecords(nextRecords);
       setMediaAssets(nextAssets);
       setSelectedRecordId((current) =>
-        current && nextRecords.some((record) => record.id === current)
-          ? current
-          : (nextCalendarAction(nextRecords)?.id ?? nextRecords[0]?.id ?? null),
+        current && nextRecords.some((record) => record.id === current) ? current : (nextCalendarAction(nextRecords)?.id ?? nextRecords[0]?.id ?? null)
       );
     } catch (error) {
       setMessage(calendarError(error, locale));
