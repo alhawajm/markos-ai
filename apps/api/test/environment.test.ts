@@ -35,6 +35,8 @@ describe("environment configuration", () => {
 
     expect(parsed.INSTAGRAM_GRAPH_VERSION).toBe("v25.0");
     expect(parsed.INSTAGRAM_OAUTH_SCOPES).toEqual(["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"]);
+    expect(parsed.INSTAGRAM_CONTAINER_POLL_ATTEMPTS).toBe(6);
+    expect(parsed.INSTAGRAM_CONTAINER_POLL_DELAY_MS).toBe(60_000);
   });
 
   it("canonicalizes the allowlisted Instagram release scopes", () => {

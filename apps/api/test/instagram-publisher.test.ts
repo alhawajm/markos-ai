@@ -130,7 +130,7 @@ describe("InstagramGraphPublisher", () => {
     await expect(promise).rejects.not.toThrow("sensitive-container-id");
   });
 
-  it("bounds container polling and marks the timeout as retryable", async () => {
+  it("bounds container polling and requires operator review after a timeout", async () => {
     const publisher = new InstagramGraphPublisher({
       fetchImpl: async (_input, init) => (init?.method === "POST" ? jsonResponse({ id: "creation-1" }) : jsonResponse({ status_code: "IN_PROGRESS" })),
       pollAttempts: 2,
@@ -145,7 +145,7 @@ describe("InstagramGraphPublisher", () => {
       })
     ).rejects.toMatchObject({
       code: "INSTAGRAM_CONTAINER_PROCESSING_TIMEOUT",
-      retryable: true
+      retryable: false
     });
   });
 

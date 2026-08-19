@@ -85,7 +85,7 @@ The JPEG-plus-insights boundary and private Railway Bucket design are locked. Th
 
 ## Why Reel proof moves out of Milestone A
 
-The skeleton currently polls only five times at one-second intervals inside the synchronous publish call, and staging has no worker service. That is not a reliable video-processing design. A JPEG publish is sufficient to exercise `instagram_business_content_publish`; moving Reel proof to Milestone B prevents a short-term HTTP wait loop from becoming the final scheduler architecture.
+The Milestone A operator path now performs one immediate container-status check followed by five one-minute checks, covering the provider's five-minute guidance for the controlled JPEG proof. It still runs inside one synchronous request, does not persist the container lifecycle, and staging has no worker service. That is not a reliable video-processing design. A JPEG publish is sufficient to exercise `instagram_business_content_publish`; moving Reel proof to Milestone B prevents a temporary operator wait loop from becoming the final scheduler architecture.
 
 ## Repository corrections required for Milestone A
 

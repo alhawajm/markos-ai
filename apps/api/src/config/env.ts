@@ -83,8 +83,8 @@ export const envSchema = z
     INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().default(14),
     INSTAGRAM_ANALYTICS_SYNC_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
     INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
-    INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(5),
-    INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
+    INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(6),
+    INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(60_000),
     WORKER_PUBLISHING_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     WORKER_ANALYTICS_EMAIL_INTERVAL_MS: z.coerce
       .number()

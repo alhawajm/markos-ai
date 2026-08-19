@@ -205,6 +205,8 @@ Before testing this branch in staging, review the following AI-service values de
 - set `LLM_PRIMARY_MODEL` to the approved content-copy model instead of relying on the compatibility fallback;
 - use `AI_TEXT_PROVIDER=openai` only when running the intended real-provider test, and confirm the correct OpenAI project before sending the request.
 
+For the API service, use `INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6` and `INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000`, or remove explicit overrides so these safe defaults apply. This gives the controlled JPEG path one immediate status read followed by five one-minute checks. A timeout requires operator review and is not an automatic retry signal. No other service consumes these values.
+
 The Calendar MVP adds `POST /v1/content/:contentItemId/reschedule` and a new web route, but requires no new environment variable, database migration, storage setting, Redis change, or Railway service. Deploy the existing API and web services. It records and manages schedule state only: until the dedicated worker service is provisioned and verified, a saved `SCHEDULED` item must not be described as proof of automatic Instagram publication.
 
 ### 2026-08-16 Railway variable-name snapshot

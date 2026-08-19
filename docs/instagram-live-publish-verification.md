@@ -13,7 +13,7 @@ Keep `INSTAGRAM_PUBLISH_MODE=dry_run` except during the approved live window. Mi
 - Deploy the reviewed application commit while both provider modes remain `dry_run`.
 - Disconnect and reconnect after deployment so the stored credential records the exact requested-scope set.
 - Complete the confirmed private Railway Bucket gate: provision or select the staging bucket, reference its generated variables from the API, and prove a disposable external presigned GET. The URL must remain valid for Meta's fetch and processing window and must never be logged, persisted, or returned to ordinary clients.
-- Prepare exactly one due, approved `POST` content item linked to one supported JPEG whose MIME type, extension, dimensions, size, and durable object key are known.
+- Prepare exactly one `POST` content item whose status is `SCHEDULED` and whose `scheduledAt` is at or before the current API time. Scheduling follows approval, but `APPROVED` by itself is not publishable. Link the item to one supported JPEG whose MIME type, extension, dimensions, size, and durable object key are known. The Calendar accepts future times, so schedule the proof item in advance and wait until it is due; do not edit shared database state manually.
 - Confirm the workspace plan has at least one `POST_PUBLISH` unit available.
 
 ## Application environment contract
@@ -31,6 +31,8 @@ INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publi
 INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS=15000
 INSTAGRAM_GRAPH_MAX_RESPONSE_BYTES=262144
 INSTAGRAM_PUBLISH_MODE=dry_run
+INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6
+INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000
 MEDIA_STORAGE_DRIVER=s3
 AWS_ENDPOINT_URL=<railway-bucket-variable-reference>
 AWS_ACCESS_KEY_ID=<railway-bucket-variable-reference>
@@ -44,6 +46,8 @@ SIGNED_URL_TTL=3600
 `graph.instagram.com/v25.0` is fixed by the application. The retired `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION` names do not configure this adapter. `META_WEBHOOK_VERIFY_TOKEN` remains a separate webhook setting.
 
 The first five `AWS_*` names must reference the private Bucket's generated Railway credentials; do not copy their values. `AWS_S3_URL_STYLE=virtual` is an application-owned API setting because the Railway dashboard does not expose a corresponding service-reference variable. `MEDIA_PUBLIC_BASE_URL` is optional and should remain unset when the existing `API_BASE_URL` is the canonical public HTTPS API origin. The API validates the complete S3 contract conditionally, accepts `SIGNED_URL_TTL` only from 300 through 86,400 seconds, and keeps signed URLs provider-only. Do not add these variables to web, AI, PostgreSQL, or Redis. The worker receives them only in Milestone B.
+
+The polling defaults perform one immediate container-status read and then wait one minute between five further reads, covering a five-minute processing window without querying more than once per minute after the initial read. If Railway already defines either polling variable explicitly, update the API service to the values above or remove the override so the safe application defaults apply. The signed URL's 3,600-second starting TTL covers this bounded window.
 
 ## Dry-run preflight
 
@@ -97,12 +101,12 @@ Expected behavior:
 
 1. The application obtains a fresh provider-fetch URL from the durable object key immediately before container creation.
 2. It checks the live publishing-limit response without inventing fallback quota values.
-3. It creates one image container, polls its status, and publishes it once.
+3. It creates one image container, checks its status immediately, then checks no more than once per minute for up to five minutes before publishing it once.
 4. The response reports `status: "PUBLISHED"`, `dryRun: false`, and `mediaCount: 1`, without returning the signed URL.
 5. The content item is `PUBLISHED`, has a persisted provider media ID, and the image is visible on the test Instagram account.
 6. A simultaneous duplicate request is blocked in this process. Durable multi-worker idempotency remains Milestone B work.
 
-Stop on any unknown container state, timeout, provider error, duplicate uncertainty, or sensitive log output. Error responses and persisted failure reasons must use bounded application codes rather than raw provider messages.
+Stop on any unknown container state, timeout, provider error, duplicate uncertainty, or sensitive log output. A timeout requires operator review and must not trigger a second publish request or an automatic fresh-container attempt. First confirm that no media ID was persisted and no post appeared; durable container persistence and reconciliation remain Milestone B work. Error responses and persisted failure reasons must use bounded application codes rather than raw provider messages.
 
 ## Evidence and rollback
 

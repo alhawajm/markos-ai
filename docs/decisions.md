@@ -392,3 +392,11 @@ Make Calendar a primary Sunlit destination between Create and Insights. Default 
 Build this MVP from existing workspace-owned `ContentItem` records. Do not fabricate pre-draft planned slots: the current `ContentCalendar.plan` is only a monthly index of scheduled content IDs and cannot represent an objective, pillar, topic, or proposed time before content exists. A complete AI monthly plan needs a reviewed slot contract linked to a content item in a later pass.
 
 Add the ordinary user-facing `POST /v1/content/:contentItemId/reschedule` contract for `SCHEDULED` and `FAILED` items. Update the content item and its monthly index in one transaction, clear the bounded prior failure on recovery, and retain separately confirmed schedule cancellation. This route requires no migration or new cloud service. A saved schedule remains MARKOS state, not provider-confirmed automatic publication, until the durable worker and live Instagram path are separately verified.
+
+## 2026-08-19: Milestone A container polling covers five minutes without automatic retry
+
+For the controlled JPEG proof, query the new container once immediately and then at one-minute intervals for five further attempts. Use `INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6` and `INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000` as the application defaults, which covers five elapsed minutes while keeping the provider polling cadence bounded.
+
+Treat a container-processing timeout as an operator-review state, not an automatic retry signal. Do not issue another publish request or create a replacement container until the operator confirms that no provider media ID was persisted and no post appeared. Durable container IDs, attempt state, reconciliation, leases, and retry policy remain Milestone B work.
+
+The item-specific publish route continues to require a workspace-owned `POST` in `SCHEDULED` state with `scheduledAt` at or before the current API time. `APPROVED` is a prerequisite state in the journey, not a publishable substitute for a due schedule.

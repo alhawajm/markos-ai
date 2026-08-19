@@ -176,7 +176,7 @@ export class InstagramGraphPublisher implements InstagramPublisher {
       }
     }
 
-    throw new InstagramPublishError("INSTAGRAM_CONTAINER_PROCESSING_TIMEOUT", true);
+    throw new InstagramPublishError("INSTAGRAM_CONTAINER_PROCESSING_TIMEOUT");
   }
 
   private async get(
