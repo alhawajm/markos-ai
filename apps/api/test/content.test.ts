@@ -763,6 +763,98 @@ describe("content routes", () => {
     await app.close();
   });
 
+  it("reschedules scheduled or failed content atomically and moves its monthly calendar index", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    const originalDate = new Date();
+    originalDate.setUTCMonth(originalDate.getUTCMonth() + 1, 5);
+    originalDate.setUTCHours(15, 0, 0, 0);
+    const movedDate = new Date(originalDate);
+    movedDate.setUTCMonth(movedDate.getUTCMonth() + 1, 7);
+    const originalScheduledAt = originalDate.toISOString();
+    const movedScheduledAt = movedDate.toISOString();
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: { status: "IN_REVIEW" }
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: { status: "APPROVED" }
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers,
+      payload: { scheduledAt: originalScheduledAt }
+    });
+
+    const otherSession = await registerTestUser(app);
+    const crossWorkspaceResponse = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers: authHeaders(otherSession.tokens.accessToken),
+      payload: { scheduledAt: movedScheduledAt }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers,
+      payload: { scheduledAt: movedScheduledAt }
+    });
+    const recoveredDate = new Date(movedDate);
+    recoveredDate.setUTCDate(recoveredDate.getUTCDate() + 1);
+    const recoveredScheduledAt = recoveredDate.toISOString();
+    await prisma.contentItem.update({
+      where: { id: created.id },
+      data: { failureReason: "Provider processing failed", status: "FAILED" }
+    });
+    const recoveryResponse = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers,
+      payload: { scheduledAt: recoveredScheduledAt }
+    });
+    const originalCalendar = await prisma.contentCalendar.findFirstOrThrow({
+      where: { month: monthStart(originalDate), workspaceId: session.workspace.id }
+    });
+    const movedCalendar = await prisma.contentCalendar.findFirstOrThrow({
+      where: { month: monthStart(movedDate), workspaceId: session.workspace.id }
+    });
+
+    expect(crossWorkspaceResponse.statusCode).toBe(404);
+    expect(crossWorkspaceResponse.json().error.code).toBe("CONTENT_NOT_FOUND");
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: created.id,
+        scheduledAt: movedScheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+    expect(response.json().data.failureReason).toBeUndefined();
+    expect(recoveryResponse.statusCode).toBe(200);
+    expect(recoveryResponse.json()).toMatchObject({
+      data: {
+        id: created.id,
+        scheduledAt: recoveredScheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+    expect(recoveryResponse.json().data.failureReason).toBeUndefined();
+    expect(originalCalendar.plan).toMatchObject({ scheduledContentIds: [] });
+    expect(movedCalendar.plan).toMatchObject({ scheduledContentIds: [created.id] });
+
+    await app.close();
+  });
+
   it("generates content directly from a calendar slot and records the schedule", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

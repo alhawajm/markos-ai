@@ -87,7 +87,7 @@ def test_openai_profile_provider_uses_strict_schema_and_validates_output() -> No
     kwargs = client.fake_responses.last_kwargs
 
     assert kwargs is not None
-    assert kwargs["store"] is False
+    assert kwargs["store"] is True
     assert kwargs["model"] == "gpt-profile-configured"
     assert "workspace-secret-id" not in str(kwargs["input"])
     assert "Pearl Coffee" in str(kwargs["input"])

@@ -134,7 +134,7 @@ def test_content_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-content-model"
-    assert body["prompt_version"] == "content.v1.local"
+    assert body["prompt_version"] == "content.v2.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert len(body["drafts"]) == 2

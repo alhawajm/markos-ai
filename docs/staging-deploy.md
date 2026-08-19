@@ -170,14 +170,16 @@ Current code consumes:
 
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
-- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy and onboarding profiles)
+- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy, onboarding profiles, and content copy)
 - `OPENAI_API_KEY` (AI service only; required when `AI_TEXT_PROVIDER=openai`)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
+- `AI_CONTENT_TIMEOUT_SECONDS`
 - `OPENAI_TIMEOUT_SECONDS`
 - `OPENAI_MAX_RETRIES`
 - `OPENAI_MAX_OUTPUT_TOKENS`
 - `OPENAI_REASONING_EFFORT`
+- `OPENAI_STORE_RESPONSES` (`true` during the current quality-tuning phase so requests and responses remain inspectable in the OpenAI API dashboard)
 - `DATABASE_URL` (configured but not used by current handlers)
 - `LLM_PRIMARY_MODEL`
 - `LLM_FLAGSHIP_MODEL`
@@ -192,7 +194,18 @@ Current code consumes:
 - `SENTRY_RELEASE`
 - `SENTRY_TRACES_SAMPLE_RATE`
 
-Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request.
+Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request. While `OPENAI_STORE_RESPONSES=true`, use only approved provider inputs: the OpenAI project retains request/response application state for dashboard review, including the business context intentionally sent to the model. Turn it off when the quality-review phase ends or before the applicable privacy/retention boundary requires stateless requests.
+
+### 2026-08-19 branch deployment delta
+
+Before testing this branch in staging, review the following AI-service values deliberately:
+
+- set `AI_CONTENT_TIMEOUT_SECONDS=50` unless a different reviewed budget is required;
+- set `OPENAI_STORE_RESPONSES=true` during the temporary dashboard quality-review phase;
+- set `LLM_PRIMARY_MODEL` to the approved content-copy model instead of relying on the compatibility fallback;
+- use `AI_TEXT_PROVIDER=openai` only when running the intended real-provider test, and confirm the correct OpenAI project before sending the request.
+
+The Calendar MVP adds `POST /v1/content/:contentItemId/reschedule` and a new web route, but requires no new environment variable, database migration, storage setting, Redis change, or Railway service. Deploy the existing API and web services. It records and manages schedule state only: until the dedicated worker service is provisioned and verified, a saved `SCHEDULED` item must not be described as proof of automatic Instagram publication.
 
 ### 2026-08-16 Railway variable-name snapshot
 
@@ -212,7 +225,7 @@ Repository/snapshot gaps to resolve deliberately:
 
 - The visible API list does not show `OPENSEARCH_URL`, health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or a future bucket variable contract. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone. The retired publishing/analytics `META_*` variables are no longer application prerequisites; `META_WEBHOOK_VERIFY_TOKEN` remains separately active.
 - The visible AI `PORT` name is ignored by the current fixed-port Docker command. Current code consumes `AI_PORT`, which is not visible in the supplied service-level list.
-- The AI screenshot does not show `DATABASE_URL`, embedding/image model settings, alternate model slots, or Sentry settings. Some are not used by current handlers, but the code/default relationship must remain explicit.
+- The AI screenshot does not show `DATABASE_URL`, `LLM_PRIMARY_MODEL`, `AI_CONTENT_TIMEOUT_SECONDS`, embedding/image model settings, alternate model slots, or Sentry settings. Some are optional or not used by current handlers. Provider-backed content prefers `LLM_PRIMARY_MODEL` and temporarily falls back to the configured long-form model when the gateway supplies an older synthetic `local-*` default; configure the primary slot deliberately instead of treating that compatibility behavior as final setup.
 - Reserved future variables that are not part of current work should remain untouched until their feature is reviewed. Do not rename or delete them merely because the current service does not consume them.
 
 ## Secret handling
@@ -348,8 +361,9 @@ Record commit/ref, service names, Dockerfile mapping, variable-name inventory, h
 
 Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify the current contract:
 
-- Strategy and onboarding-profile resolution can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; content, images, embeddings, and generic agents remain deterministic.
+- Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; images, embeddings, and generic agents remain deterministic.
 - `OPENAI_API_KEY` is consumed only by the AI service in OpenAI mode.
+- `OPENAI_STORE_RESPONSES=true` is an intentional temporary quality-review setting; confirm the chosen OpenAI project is the one being inspected and do not send secrets or unapproved customer data.
 - `INTERNAL_SERVICE_TOKEN` is enforced on non-health AI routes and sent by the API.
 - `/ai/health/deep` still reports dependencies as `not_checked`/`degraded`.
 - Docker listens on fixed port 8000 even if Railway supplies `PORT`.

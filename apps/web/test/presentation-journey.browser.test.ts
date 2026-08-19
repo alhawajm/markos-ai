@@ -290,6 +290,9 @@ describe("presentation journey", () => {
     await page.getByText("Content approved. It is now eligible for scheduling.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Schedule", exact: true }).click();
     await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
+    await expect(page.getByRole("heading", { name: "Content and schedule" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Scheduled 1", exact: true }).click();
+    await expect(page.getByText(/^Scheduled · /).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
@@ -314,6 +317,104 @@ describe("presentation journey", () => {
     expect(typeof schedulePayload?.scheduledAt).toBe("string");
     expect(unscheduleCalls).toBe(1);
     expect(deleteCalls).toBe(1);
+    await page.close();
+  });
+
+  it("plans the week, schedules ready content, reschedules safely, and confirms cancellation", async () => {
+    const page = await sessionPage();
+    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const ready = {
+      ...studioContentRecord(),
+      captionEn: "Ready campaign post for the dessert subscription.",
+      id: "calendar-ready",
+      status: "APPROVED"
+    };
+    const scheduled = {
+      ...studioContentRecord(),
+      captionEn: "Product story scheduled for this week.",
+      id: "calendar-scheduled",
+      scheduledAt,
+      status: "SCHEDULED"
+    };
+    const published = {
+      ...studioContentRecord(),
+      captionEn: "Published customer story.",
+      id: "calendar-published",
+      publishedAt,
+      status: "PUBLISHED"
+    };
+    let records = [scheduled, ready, published];
+    let schedulePayload: Record<string, unknown> | undefined;
+    let reschedulePayload: Record<string, unknown> | undefined;
+    let unscheduleCalls = 0;
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json(records));
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      if (pathname === `/v1/content/${ready.id}/schedule` && method === "POST") {
+        schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
+        const updated = { ...ready, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
+        records = records.map((record) => (record.id === updated.id ? updated : record));
+        return route.fulfill(json(updated));
+      }
+      if (pathname === `/v1/content/${scheduled.id}/reschedule` && method === "POST") {
+        reschedulePayload = route.request().postDataJSON() as Record<string, unknown>;
+        const updated = { ...scheduled, scheduledAt: reschedulePayload.scheduledAt as string };
+        records = records.map((record) => (record.id === updated.id ? updated : record));
+        return route.fulfill(json(updated));
+      }
+      if (pathname === `/v1/content/${scheduled.id}/unschedule` && method === "POST") {
+        unscheduleCalls += 1;
+        const { scheduledAt: _scheduledAt, ...withoutSchedule } = scheduled;
+        const updated = { ...withoutSchedule, status: "APPROVED" };
+        records = records.map((record) => (record.id === updated.id ? updated : record));
+        return route.fulfill(json(updated));
+      }
+
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Plan the week. Know what happens next." }).waitFor();
+    await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
+    await expect(page.getByText("Unscheduled", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: /Ready campaign post/ }).click();
+
+    const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
+    await page.getByLabel("Choose publishing time").fill(readyScheduleInput);
+    await page.getByRole("button", { name: "Schedule content" }).click();
+    await page.getByText(/^Saved in MARKOS for /).waitFor();
+
+    await page
+      .getByRole("button", { name: /Product story scheduled for this week/ })
+      .first()
+      .click();
+    const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
+    await page.getByLabel("Choose a new time").fill(rescheduleInput);
+    await page.getByRole("button", { name: "Save new time" }).click();
+    await page.getByText(/^Saved in MARKOS for /).waitFor();
+    await page.getByRole("button", { name: "Cancel schedule" }).click();
+    const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
+    await expect(dialog.isVisible()).resolves.toBe(true);
+    await dialog.getByRole("button", { name: "Cancel schedule" }).click();
+    await page.getByText("Schedule cancelled. The content is back in the Ready queue.", { exact: true }).waitFor();
+
+    await page.getByRole("button", { name: "Month", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.screenshot({ path: "evidence/sunlit-calendar.png", fullPage: true });
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    await page.goto(`${baseUrl}/ar/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "خطّط للأسبوع واعرف الخطوة التالية." }).waitFor();
+    await expect(page.locator("main").getAttribute("dir")).resolves.toBe("rtl");
+    await expect(page.getByRole("link", { name: "التقويم" }).getAttribute("aria-current")).resolves.toBe("page");
+    await page.screenshot({ path: "evidence/sunlit-calendar-rtl-mobile.png", fullPage: true });
+
+    expect(schedulePayload).toEqual({ scheduledAt: new Date(`${readyScheduleInput}:00+03:00`).toISOString() });
+    expect(reschedulePayload).toEqual({ scheduledAt: new Date(`${rescheduleInput}:00+03:00`).toISOString() });
+    expect(unscheduleCalls).toBe(1);
     await page.close();
   });
 });
@@ -416,6 +517,18 @@ function studioContentRecord() {
     updatedAt: "2026-08-17T10:00:00.000Z",
     workspaceId: session.workspace.id
   };
+}
+
+function bahrainInputDaysFromNow(days: number, hour: number, minute: number): string {
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Bahrain",
+    year: "numeric"
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 const onePixelJpegBase64 =

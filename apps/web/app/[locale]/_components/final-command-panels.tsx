@@ -19,7 +19,7 @@ import {
   Eye,
   ExternalLink,
   Heart,
-  Image,
+  Image as ImageIcon,
   ImagePlus,
   Instagram,
   Lightbulb,
@@ -64,6 +64,7 @@ import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./brows
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
 type StudioContentType = Extract<ContentType, "POST" | "REEL" | "CAROUSEL" | "STORY">;
+type ContentPipelineFilter = "ALL" | "DRAFTS" | "READY" | "SCHEDULED" | "PUBLISHED";
 
 interface ContentReadyCardModel {
   accent: Accent;
@@ -106,9 +107,9 @@ const accent = {
 } as const;
 
 const studioTypes: Array<[StudioContentType, string, IconType]> = [
-  ["POST", "Post", Image],
+  ["POST", "Post", ImageIcon],
   ["REEL", "Reel", Play],
-  ["CAROUSEL", "Carousel", Image],
+  ["CAROUSEL", "Carousel", ImageIcon],
   ["STORY", "Story", Instagram]
 ];
 
@@ -150,6 +151,38 @@ function statusLabel(status: ContentStatus): string {
     .replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
+function localizedContentStatusLabel(status: ContentStatus, locale: Locale): string {
+  if (locale === "en") return statusLabel(status);
+
+  return {
+    APPROVED: "جاهز",
+    DRAFT: "مسودة",
+    FAILED: "يحتاج إلى مراجعة",
+    IN_REVIEW: "قيد المراجعة",
+    PUBLISHED: "منشور",
+    SCHEDULED: "مجدول"
+  }[status];
+}
+
+function localizedContentTypeLabel(type: ContentType, locale: Locale): string {
+  if (locale === "en") return contentTypeLabel(type);
+
+  return {
+    CAROUSEL: "منشور متعدد الصور",
+    POST: "منشور",
+    REEL: "ريل",
+    STORY: "ستوري"
+  }[type];
+}
+
+function contentPipelineTitle(record: ContentRecord, locale: Locale): string {
+  const preferredCaption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
+  const firstSentence = (preferredCaption ?? record.contentPillar ?? "").split(/[.!?\n]/)[0]?.trim();
+
+  if (!firstSentence) return localizedContentTypeLabel(record.contentType, locale);
+  return firstSentence.length > 58 ? `${firstSentence.slice(0, 55)}...` : firstSentence;
+}
+
 function contentCardFromRecord(record: ContentRecord, locale: Locale, index: number): ContentReadyCardModel {
   const accentNames: Accent[] = ["teal", "gold", "amber", "teal"];
   const status = record.scheduledAt ? formatShortTime(record.scheduledAt) : statusLabel(record.status);
@@ -169,6 +202,67 @@ function contentCardFromRecord(record: ContentRecord, locale: Locale, index: num
 
 function formatShortTime(value: string): string {
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string {
+  const value = record.publishedAt ?? record.scheduledAt ?? record.updatedAt;
+  const prefix =
+    record.publishedAt !== undefined
+      ? locale === "ar"
+        ? "نُشر"
+        : "Published"
+      : record.scheduledAt !== undefined
+        ? locale === "ar"
+          ? "مجدول"
+          : "Scheduled"
+        : locale === "ar"
+          ? "آخر تحديث"
+          : "Updated";
+  const formatted = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "Asia/Bahrain"
+  }).format(new Date(value));
+
+  return `${prefix} · ${formatted}`;
+}
+
+function matchesContentPipelineFilter(record: ContentRecord, filter: ContentPipelineFilter): boolean {
+  if (filter === "DRAFTS") {
+    return record.status === "DRAFT" || record.status === "IN_REVIEW";
+  }
+
+  if (filter === "READY") {
+    return record.status === "APPROVED";
+  }
+
+  return filter === "ALL" || record.status === filter;
+}
+
+function sortContentPipelineRecords(records: ContentRecord[], filter: ContentPipelineFilter): ContentRecord[] {
+  return [...records].sort((left, right) => {
+    if (filter === "SCHEDULED") {
+      return new Date(left.scheduledAt ?? left.updatedAt).getTime() - new Date(right.scheduledAt ?? right.updatedAt).getTime();
+    }
+
+    const leftPriority = left.status === "SCHEDULED" ? 0 : left.status === "APPROVED" ? 1 : 2;
+    const rightPriority = right.status === "SCHEDULED" ? 0 : right.status === "APPROVED" ? 1 : 2;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+}
+
+function contentStatusBadgeClass(status: ContentStatus): string {
+  if (status === "SCHEDULED") return "bg-[var(--sunlit-aqua-soft)] text-[#157A70]";
+  if (status === "APPROVED" || status === "PUBLISHED") return "bg-[#EEF8E9] text-[#44713A]";
+  if (status === "FAILED") return "bg-[#FFF0F1] text-[#A43C49]";
+  return "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-ink-soft)]";
 }
 
 function formatCompactNumber(value: number): string {
@@ -1035,6 +1129,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [contentType, setContentType] = useState<StudioContentType>("POST");
+  const [contentFilter, setContentFilter] = useState<ContentPipelineFilter>("ALL");
   const [prompt, setPrompt] = useState("");
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
@@ -1063,6 +1158,55 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState<"cancel-schedule" | "delete-draft" | null>(null);
   const [expandedMedia, setExpandedMedia] = useState<MediaAssetRecord | null>(null);
+  const contentPipelineCopy =
+    locale === "ar"
+      ? {
+          all: "الكل",
+          drafts: "المسودات",
+          empty: "لا يوجد محتوى في هذه المرحلة حتى الآن.",
+          heading: "المحتوى والجدول",
+          note: "تعكس هذه القائمة الحالة والأوقات المحفوظة في MARKOS، ولا تؤكد بحد ذاتها النشر على إنستغرام.",
+          published: "المنشور",
+          ready: "جاهز",
+          scheduled: "المجدول",
+          subtitle: "افتح أي مسودة محفوظة أو راجع مواعيد المحتوى القادمة."
+        }
+      : {
+          all: "All",
+          drafts: "Drafts",
+          empty: "There is no content at this stage yet.",
+          heading: "Content and schedule",
+          note: "This list reflects saved MARKOS status and times; it does not by itself confirm publication on Instagram.",
+          published: "Published",
+          ready: "Ready",
+          scheduled: "Scheduled",
+          subtitle: "Open any saved draft or review the next content times."
+        };
+  const contentPipelineFilters: Array<[ContentPipelineFilter, string]> = [
+    ["ALL", contentPipelineCopy.all],
+    ["DRAFTS", contentPipelineCopy.drafts],
+    ["READY", contentPipelineCopy.ready],
+    ["SCHEDULED", contentPipelineCopy.scheduled],
+    ["PUBLISHED", contentPipelineCopy.published]
+  ];
+  const contentPipelineCounts = useMemo<Record<ContentPipelineFilter, number>>(
+    () => ({
+      ALL: records.length,
+      DRAFTS: records.filter((record) => matchesContentPipelineFilter(record, "DRAFTS")).length,
+      PUBLISHED: records.filter((record) => record.status === "PUBLISHED").length,
+      READY: records.filter((record) => record.status === "APPROVED").length,
+      SCHEDULED: records.filter((record) => record.status === "SCHEDULED").length
+    }),
+    [records]
+  );
+  const visibleContentRecords = useMemo(
+    () =>
+      sortContentPipelineRecords(
+        records.filter((record) => matchesContentPipelineFilter(record, contentFilter)),
+        contentFilter
+      ),
+    [contentFilter, records]
+  );
   const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
   const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
   const canApprove = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
@@ -1638,34 +1782,88 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         </section>
 
         {loadingRecords ? (
-          <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">Loading workspace drafts...</article>
-        ) : records.length > 0 ? (
-          <section>
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Workspace drafts</h2>
-              <span className="text-sm font-bold text-[var(--sunlit-muted)]">{records.length} saved</span>
+          <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">
+            {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
+          </article>
+        ) : (
+          <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6" aria-labelledby="content-pipeline-heading">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
+                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="content-pipeline-heading">
+                  {contentPipelineCopy.heading}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
+              </div>
+              <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
+                {records.length}
+              </span>
             </div>
-            <div className="grid gap-3">
-              {records.slice(0, 4).map((record) => (
+
+            <div className="mt-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={locale === "ar" ? "تصفية المحتوى" : "Filter content"}>
+              {contentPipelineFilters.map(([value, label]) => (
                 <button
+                  aria-pressed={contentFilter === value}
                   className={
-                    currentRecord?.id === record.id
-                      ? "rounded-2xl border border-[rgb(33_191_174_/_32%)] bg-[var(--sunlit-aqua-soft)] px-5 py-4 text-left"
-                      : "sunlit-panel rounded-2xl px-5 py-4 text-left transition hover:border-[var(--sunlit-line-strong)]"
+                    contentFilter === value
+                      ? "shrink-0 rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
+                      : "shrink-0 rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
                   }
-                  key={record.id}
-                  onClick={() => applyRecord(record, "Loaded workspace draft.")}
+                  key={value}
+                  onClick={() => setContentFilter(value)}
                   type="button"
                 >
-                  <span className="block font-extrabold text-[var(--sunlit-ink)]">{recordTitle(record)}</span>
-                  <span className="mt-1 block text-sm text-[var(--sunlit-muted)]">
-                    {contentTypeLabel(record.contentType)} · {statusLabel(record.status)}
-                  </span>
+                  {label} <span className="ms-1 opacity-65">{contentPipelineCounts[value]}</span>
                 </button>
               ))}
             </div>
+
+            {visibleContentRecords.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-8 text-center text-sm font-bold text-[var(--sunlit-muted)]">
+                {contentPipelineCopy.empty}
+              </div>
+            ) : (
+              <div className="mt-5 grid max-h-[34rem] gap-3 overflow-y-auto pe-1">
+                {visibleContentRecords.map((record) => (
+                  <button
+                    aria-pressed={currentRecord?.id === record.id}
+                    className={
+                      currentRecord?.id === record.id
+                        ? "rounded-2xl border border-[rgb(33_191_174_/_32%)] bg-[var(--sunlit-aqua-soft)] px-5 py-4 text-start"
+                        : "rounded-2xl border border-[var(--sunlit-line)] bg-white px-5 py-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+                    }
+                    key={record.id}
+                    onClick={() => applyRecord(record, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
+                    type="button"
+                  >
+                    <span className="flex items-start justify-between gap-4">
+                      <span className="min-w-0">
+                        <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
+                        <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
+                          <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
+                            {contentPipelineTimestamp(record, locale)}
+                          </span>
+                          {record.mediaIds.length > 0 ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <ImageIcon size={14} /> {record.mediaIds.length}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${contentStatusBadgeClass(record.status)}`}>
+                        {localizedContentStatusLabel(record.status, locale)}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">{contentPipelineCopy.note}</p>
           </section>
-        ) : null}
+        )}
 
         {currentRecord && !canEdit ? (
           <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">

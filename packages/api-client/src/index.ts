@@ -437,6 +437,16 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async rescheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/reschedule`, {
+      body: {
+        scheduledAt
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async unscheduleContent(contentItemId: string): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/unschedule`, {
       body: {},

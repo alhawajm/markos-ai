@@ -23,6 +23,14 @@ MARKOS AI is an Instagram-first AI marketing OS for Bahrain SMBs. It learns a bu
 
 When the spec is silent, choose the smallest conventional option and record it in `docs/decisions.md`.
 
+## Testing
+
+- After each development pass, run only the tests that directly cover the changed behavior, plus the nearest relevant typecheck or lint check. Do not run root `pnpm verify`, an entire workspace suite, browser suites, or Docker-backed verification unless the user asks for it or the change genuinely crosses shared foundations, database/schema behavior, multiple services, or a release gate.
+- For a focused Vitest file, invoke Vitest directly and pass the discovered path without an extra argument separator. Example: `corepack pnpm --filter api exec vitest run test/content.test.ts`. Do not use `corepack pnpm --filter api test -- test/content.test.ts`; that form can lose the intended file filter and collect the full API suite.
+- Confirm a requested test path exists before running it. If a supposedly focused command starts collecting unrelated files or services, terminate it immediately, correct the invocation, and rerun only the intended scope. Do not wait for a timeout and do not compensate for a mistaken command by launching a repository-wide gate.
+- Start PostgreSQL, Redis, OpenSearch, browsers, or other local services only when the selected tests actually require them. Any persistent API test must use an explicitly named disposable database, never an ordinary development, staging, or production database.
+- Report the exact focused checks that passed, failed, or were skipped. Never describe focused coverage as a full-suite result. Leave broad regression coverage to CI or an explicitly requested release-verification pass.
+
 ## Local Git and GitHub CLI
 
 In local Codex or IDE sessions, run every `git` and `gh` command with elevated, unsandboxed access. Do not first attempt these commands inside the sandbox, because sandboxed credential and repository access can produce misleading failures.

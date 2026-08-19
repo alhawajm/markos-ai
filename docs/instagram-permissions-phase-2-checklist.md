@@ -1,6 +1,6 @@
 # Instagram Permissions Phase 2 Working Checklist
 
-Status date: 2026-08-18.
+Status date: 2026-08-19.
 
 Decision status: all five Milestone A decisions are locked. The boundary, temporary operator path, and live Meta dashboard gate were locked on 2026-08-16; the completion target was updated to Wednesday for Thursday's showcase, and Sarah confirmed the private Railway Bucket plus just-in-time presigned-GET design on 2026-08-17.
 
@@ -8,7 +8,7 @@ This is a working checklist for `instagram_business_content_publish` and `instag
 
 Locked target: complete Milestone A by Wednesday, 2026-08-19, for the Thursday, 2026-08-20 showcase. Milestone A is a controlled Standard Access proof against an Instagram professional account owned or managed by the app team. It is not Advanced Access, App Review approval, or general-client production readiness.
 
-Application status: the second application pass and the 2026-08-18 Content Studio stabilization pass are implemented and locally verified in the working tree. The stabilization pass addresses the browser preview failure, Instagram feed-image preflight, approval-safe editing, confirmed cancellation/deletion, and follower-view preview. These local changes still require review, push, and a new `dry_run` staging deployment; they do not close the remaining Railway, reconnect, live-publish, live-insights, or rollback evidence gates.
+Application status: the second application pass and the 2026-08-18 Content Studio stabilization pass are implemented in commit `df937b5`, pushed, and deployed to staging with green CI and terminal-success Railway service states. The stabilization pass addresses the browser preview failure, Instagram feed-image preflight, approval-safe editing, confirmed cancellation/deletion, and follower-view preview. Deployment closes the reviewed-code handoff, but it does not close the remaining external media-fetch, reconnect, live-publish, live-insights, or rollback evidence gates.
 
 ## Evidence boundary
 
@@ -154,11 +154,42 @@ The skeleton currently polls only five times at one-second intervals inside the 
 - [x] **K-A32** Replace the schematic preview with a follower-style post card using the real workspace name, real media, real caption/hashtags, RTL direction when applicable, actual scheduled date only when present, familiar action icons, and no invented likes, counts, dates, categories, carousel controls, or owner-only Insights/Boost actions.
 - [x] **K-A33** Verify the stabilization path with focused API integration tests on disposable seeded PostgreSQL/Redis and a rendered real-Chrome journey. Treat staging redeployment and provider fetch/publish results as separate unchecked evidence.
 
-Pass 2 established the controlled browser workflow; the live staging check then exposed a cross-origin preview defect and lifecycle/presentation gaps that the third pass closes locally. No known local application blocker remains for the controlled Milestone A JPEG-plus-insights proof, but the 2026-08-18 stabilization diff is not yet staging evidence. A still requires K-A19 through K-A21, S-A04 through S-A16 as applicable, and J-A02 through J-A07. Scheduled records do not yet trigger a durable worker publish, image concepts are not provider-generated, and Queue/retry/failure, permanent media cleanup, normalization/derivatives, Reels, and carousels remain Milestone B work.
+Pass 2 established the controlled browser workflow; the live staging check then exposed a cross-origin preview defect and lifecycle/presentation gaps that the third pass closed and redeployed in `df937b5`. No known application blocker remains for the controlled Milestone A JPEG-plus-insights proof. A still requires K-A19 through K-A21, S-A04 through S-A10 and S-A12 through S-A16 as applicable, and J-A03 through J-A07. Scheduled records do not yet trigger a durable worker publish, image concepts are not provider-generated, and Queue/retry/failure, permanent media cleanup, normalization/derivatives, Reels, and carousels remain Milestone B work.
 
 Repository verification on 2026-08-18 used isolated loopback PostgreSQL and Redis containers only. After the complete Milestone A application, storage, and Content Studio stabilization change, `corepack pnpm verify` passed all 32 tasks: 46 API test files/290 tests (271 passed, 19 provider-gated skips), 5 web test files/20 tests, and 19 AI tests. The same run passed formatting, TypeScript/Python type checks, lint, and the 10-check Arabic/RTL gate. The rendered presentation and Content Studio journey also passed 5/5 browser tests against an isolated local Next server using the installed local Chrome. This is repository evidence, not Railway or live-provider evidence.
 
 `corepack pnpm build` also passed all 9 build tasks. The separate registry-backed `corepack pnpm security:audit` gate is not green: it reported 36 advisories (28 high, 8 moderate), including 22 production-path advisories (16 high, 6 moderate) across existing toolchain, framework, infrastructure, and transitive packages. The report did not identify either newly added `@aws-sdk` package. Dependency remediation remains a separate reviewed change and must not be hidden before the showcase or a release.
+
+## Showcase priority overlay — Wednesday, 2026-08-19
+
+This overlay controls the remaining implementation order for the Thursday-noon showcase without changing the Milestone A acceptance boundary or reclassifying Milestone B work as complete.
+
+1. **P0 — close the real Instagram loop:** complete the external signed-media gate, fresh reconnect, one JPEG publish, account insights, media insights, sanitized evidence, and immediate rollback to both `dry_run` modes.
+2. **P0 — real AI copy creation:** replace deterministic content-copy scaffolding with configured provider-backed bilingual caption, hashtag, and CTA generation through the existing retrieval, quota, persistence, and usage-accounting boundaries. Provider-backed image generation remains K-B04.
+3. **P1 — scheduled-content visibility:** add a trustworthy draft/scheduled list or lightweight calendar using existing content and queue contracts. This is visibility and management only; durable timed execution remains K-B01/K-B05/S-B02/J-B01/J-B02.
+4. **P1 — analytics visibility:** expose the existing sync/readiness boundary and honest empty/unavailable states after the first real sync. Do not expand this into the complete M4 Analytics Consultant surface before the showcase.
+5. **P2 — targeted journey fixes:** prioritize draft discovery/selection, then small upload or contextual-guidance improvements only when they remove friction from the showcase path. Freeze broad onboarding and major visual redesign work until after the showcase.
+
+Feature implementation freezes Wednesday evening. Thursday morning is reserved for exact-deployment verification, smoke tests, demo-data and fallback-evidence checks, and presentation-script rehearsal.
+
+### Showcase execution checks
+
+- [x] **K-S01 — Provider-backed AI copy source:** route content-copy generation through the configured text provider with a strict bilingual structured contract, grounded prompt inputs, exact content-type/count validation, provider token usage, and the existing local fallback. During the current quality-tuning phase, `OPENAI_STORE_RESPONSES=true` intentionally retains provider requests/responses for OpenAI API dashboard review; this must be revisited at the production privacy/retention gate. Focused local evidence on 2026-08-19 passed AI lint, AI typecheck, all 23 AI tests, and the 13 Content API integration tests. At Khalid's request, the broader Docker-backed verification run was stopped and is not claimed here.
+- [ ] **K-S02 — Staging AI copy proof:** deploy K-S01, generate one real bilingual content draft from the browser with `AI_TEXT_PROVIDER=openai`, inspect the stored response in the correct OpenAI project dashboard, and confirm the saved draft, configured model, latency, and metered token usage without recording customer data or secrets in repository evidence. Local mocks and a configured environment do not prove this provider call.
+- [x] **K-S03 — Draft and schedule visibility:** replace the four-record draft snippet with a bilingual, filterable workspace content pipeline covering all loaded records across Drafts, Ready, Scheduled, and Published stages. Show Bahrain-time schedule/update labels and state explicitly that a saved status is not proof of Instagram publication. Focused evidence passed web lint, web typecheck, and the one rendered create → schedule → Scheduled-filter → cancel browser scenario; the other four tests in that file were deliberately skipped.
+- [ ] **K-S04 — Staging content-pipeline smoke:** after Railway service resumes and the branch is deployed, confirm the correct workspace's existing drafts and scheduled records appear under the expected filters and open the selected editor record. This does not close the durable publishing worker or complete-calendar work in K-B05/K-B06.
+- [x] **K-S05 — Calendar MVP:** add Calendar as a bilingual/RTL primary destination with a week-first planner, compact month overview, next-action summary, unscheduled Draft/Review/Ready queue, Bahrain-time labels, media/status detail, editor handoff, scheduling, atomic scheduled/failed-item rescheduling, and separately confirmed cancellation. Keep saved MARKOS state distinct from provider-confirmed publication. Focused evidence on 2026-08-19 passed the one rendered Calendar scenario in desktop English and mobile Arabic/RTL; the other five presentation scenarios were deliberately skipped.
+- [x] **K-S06 — Calendar schedule contract:** add workspace-scoped `POST /v1/content/:contentItemId/reschedule` for scheduled or failed content, clear a bounded prior failure on recovery, and move the monthly calendar index atomically without a schema migration. Cover the scheduled, failed, cross-workspace, and month-change boundaries in the focused Content API test.
+- [ ] **K-S07 — Staging Calendar and AI smoke:** deploy the branch, confirm Calendar loads the correct workspace records and completes schedule → reschedule → confirmed cancellation, then generate one real bilingual content draft with `AI_TEXT_PROVIDER=openai`. Inspect the stored response in the correct OpenAI project. Required AI review: `AI_CONTENT_TIMEOUT_SECONDS`, `OPENAI_STORE_RESPONSES`, and `LLM_PRIMARY_MODEL`; Calendar itself adds no variable, migration, or service.
+
+### Sarah's parallel zero-code journey review
+
+This is product research and ideation, not Milestone A infrastructure work, implementation authorization, or a Thursday-showcase dependency.
+
+- [ ] **S-R01 — Current journey map:** describe the owner journey from signup and verification through onboarding, Vault/profile approval, Strategy, content creation, scheduling, publishing, and insights. Identify avoidable steps, repeated questions, unclear transitions, likely abandonment points, and places where MARKOS asks for information before the user understands its value.
+- [ ] **S-R02 — Progressive onboarding proposal:** propose a shorter first-run path that still captures the minimum trustworthy grounding needed for a useful first Strategy/content result. Separate **required now**, **helpful later**, and **learn progressively from use**, and explain how deferred information returns to the Vault without surprising the user.
+- [ ] **S-R03 — Subsidiary feature ideas:** suggest supporting features that would materially save users time, increase confidence, or help them keep a weekly marketing habit. Rank ideas by user value, urgency, implementation effort/dependency, and whether they belong in onboarding, daily use, or a later milestone.
+- [ ] **S-R04 — Review package:** return a concise current-versus-proposed journey, the five highest-value recommendations, assumptions/open questions, and any risks to grounding, privacy, workspace ownership, Arabic/RTL usability, or user trust. Use plain language and include no code, cloud configuration, schema proposal, or unapproved delivery promise.
 
 ## Sarah's Milestone A checklist
 
@@ -170,7 +201,7 @@ Repository verification on 2026-08-18 used isolated loopback PostgreSQL and Redi
 - [ ] **S-A04** Confirm the API can upload/read/delete a disposable test object and that an unauthenticated external GET succeeds only through a short-lived presigned URL. Remove the disposable object after the check.
 - [ ] **S-A05** Confirm bucket environment isolation and document the retention/lifecycle choice. Do not configure browser-upload CORS for A because the controlled upload can pass through the API.
 
-Sarah first reported that a test image was visible in the Bucket. On 2026-08-18, Khalid then observed a successful staging browser-to-API upload and a working stable public API-proxy URL after the environment-name corrections. That is useful upload/read evidence, but it does not prove application-path object deletion or the provider-only presigned Bucket GET used immediately before Meta container creation, so S-A04 remains open. The stabilization pass changes the media proxy response header locally and still needs redeployment before its browser-preview fix can be called staging-verified.
+Sarah first reported that a test image was visible in the Bucket. On 2026-08-18, Khalid then observed a successful staging browser-to-API upload and a working stable public API-proxy URL after the environment-name corrections. Commit `df937b5` subsequently redeployed the media-proxy header correction. That is useful upload/read/preview evidence, but it does not prove application-path object deletion or the provider-only presigned Bucket GET used immediately before Meta container creation, so S-A04 remains open.
 
 ### Database and environment safety
 
@@ -182,19 +213,19 @@ Sarah first reported that a test image was visible in the Bucket. On 2026-08-18,
 
 ### Deployment and live window
 
-- [ ] **S-A11** Deploy the reviewed commit to staging with publish and analytics modes still set to `dry_run`; record the deployed commit and confirm web/API/AI/pgvector/Redis health.
+- [x] **S-A11** Deploy the reviewed commit to staging with publish and analytics modes still set to `dry_run`; record the deployed commit and confirm web/API/AI/pgvector/Redis health. Commit `df937b5` was observed deployed with terminal-success service states on 2026-08-18; this does not substitute for S-A12 reachability/network validation.
 - [ ] **S-A12** Confirm public web/API HTTPS reachability and private API-to-pgvector/Redis/AI networking. Keep real domains and connection strings out of committed evidence.
 - [ ] **S-A13** Confirm outbound access from the API to `graph.instagram.com` and bucket storage without logging authorization headers or signed URLs.
 - [ ] **S-A14** During the agreed controlled window, switch only the two provider modes needed for the test, restart the consuming service if required, and keep a rollback path ready.
 - [ ] **S-A15** Watch deployment/application logs for sanitized stage, status, timeout, and request-correlation evidence. Stop the test if secrets, signed URLs, raw provider bodies, or customer data appear.
 - [ ] **S-A16** Immediately return both modes to `dry_run` after the agreed evidence is captured and confirm the rollback deployment is healthy.
 
-Sarah also reported that the pre-stabilization API deployed successfully after correcting two mistyped environment-variable names, with all listed services online and both provider modes still `dry_run`. No deployed SHA was supplied, and the 2026-08-18 stabilization changes remain local, so this does not close S-A11 or S-A12.
+Sarah first reported that the pre-stabilization API deployed successfully after correcting two mistyped environment-variable names, with all listed services online and both provider modes still `dry_run`. The subsequent staging deployment was matched to `df937b5`, closing S-A11. S-A12 remains open until the public and private reachability checks are recorded explicitly.
 
 ## Joint handoffs and completion gates
 
 - [x] **J-A01 — Variable contract:** Khalid supplied the exact new/retired variable-name matrix and conditional validation; Sarah confirmed the Railway references, API consumer, `AWS_S3_URL_STYLE=virtual`, exact Instagram version/scopes, and both dry-run modes without sharing values on 2026-08-17.
-- [ ] **J-A02 — Dry-run handoff:** Khalid supplies the verified commit and expected health/readiness output; Sarah deploys it; both confirm the deployed commit before any Meta reconnection.
+- [x] **J-A02 — Dry-run handoff:** Khalid supplied verified commit `df937b5`; it was pushed and matched to the staging deployment with both provider modes kept in `dry_run` before Meta reconnection.
 - [ ] **J-A03 — Media-fetch gate:** Khalid supplies one disposable JPEG/object key; Sarah confirms durable storage and external signed fetch; Khalid confirms logs and API responses do not expose the signed URL.
 - [ ] **J-A04 — Reconnect gate:** Khalid verifies the live dashboard identifiers, reconnects the owned/managed test account, and confirms the credential records the three requested scopes without claiming provider confirmation.
 - [ ] **J-A05 — Publish gate:** MarkOS creates an image container, observes an acceptable container state, publishes it once, persists the returned media ID, and the post is visible on the test account.

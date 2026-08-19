@@ -409,6 +409,47 @@ export async function scheduleContentItem(workspaceId: string, contentItemId: st
   return toContentRecord(row);
 }
 
+export async function rescheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status !== "SCHEDULED" && current.status !== "FAILED") {
+    throw new ContentScheduleError("Only scheduled or failed content can be rescheduled");
+  }
+
+  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
+  const row = await prisma.$transaction(async (tx) => {
+    const updated = await tx.contentItem.update({
+      where: {
+        id: current.id
+      },
+      data: {
+        failureReason: null,
+        scheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+
+    if (current.scheduledAt) {
+      await removeFromContentCalendar(tx, workspaceId, current.id, current.scheduledAt);
+    }
+    await addToContentCalendar(tx, workspaceId, updated.id, scheduledAt);
+
+    return updated;
+  });
+
+  return toContentRecord(row);
+}
+
 export async function unscheduleContentItem(workspaceId: string, contentItemId: string): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {

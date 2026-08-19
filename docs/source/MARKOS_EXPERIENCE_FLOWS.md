@@ -70,7 +70,7 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
 | Onboarding | Seven real modules feed the Vault. At 100% completeness, the user generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy. | Real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
 | Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
-| Content/media | Create and Campaign Builder can generate persisted drafts, edit bilingual captions and core fields, approve, upload or generate and attach images, preview the selected asset, schedule, and cancel a schedule. | Full calendar/library/editing/media workflows, provider-backed content/images, and all final content-type states. |
+| Content/media | Create and Campaign Builder can generate persisted drafts, edit bilingual captions and core fields, approve, upload or generate and attach images, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, provider-backed images, and all final content-type states. |
 | Instagram | A production-observed business-basic connection exists. The Milestone A working source requests the canonical basic, publish, and insights scope set and defaults both live-provider modes to `dry_run`. | Deploy, reconnect, provision/validate durable media, complete controlled live publish/insights evidence, and later obtain App Review/Advanced Access. |
 | Insights | An API-backed 7/30-day summary, top-content view, empty/error/loading states, and monthly PDF download are mounted. | Full `AN-01`–`AN-06`, live permission-backed sync, 28/90 comparisons, provider-backed interpretation, digest/chat, and learning evidence. |
 | Operations | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history. | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal. |
@@ -137,7 +137,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **B3. Turn Strategy into a content plan**
 
 - Final target: generate a monthly calendar whose slots map to objectives, pillars, content type, topic, and best time, then allow deliberate rescheduling.
-- Current implementation note: no standalone `/v1/calendar/plan` contract exists. Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call that the complete `CONT-01` calendar.
+- Current implementation note: the dedicated Calendar surface reads existing content records and can schedule, atomically reschedule, cancel, and open them for editing. No standalone `/v1/calendar/plan` contract or pre-draft slot model exists; Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call this the complete `CONT-01` calendar.
 
 ### Flow C — Create, review, and approve content
 
@@ -152,7 +152,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - The API checks Vault presence and quota, retrieves relevant workspace context and tone, selects a prompt, and calls `POST /ai/content/generate` through the internal bearer boundary.
 - It persists `ContentItem` drafts and an `ai_interaction`, then records token usage.
-- Current implementation note: the content AI route is deterministic scaffolding even though the API-side retrieval, persistence, quota, and workflow are real. Do not describe it as provider-backed generation.
+- Current implementation note: the content AI route now supports the configured OpenAI provider through a strict bilingual structured contract while preserving deterministic local development behavior. The source capability is not staging proof; a browser-to-API-to-AI request and stored OpenAI dashboard response still need external verification.
 
 **C3. Edit and attach media**
 
@@ -187,7 +187,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - `POST /v1/content/:contentItemId/schedule` accepts only an approved item and sets a future schedule. `POST /v1/content/:contentItemId/unschedule` reverses an eligible schedule.
 - Create keeps approval explicit: scheduling does not silently approve a draft. A scheduled item exposes a cancel action that returns it to `APPROVED` without deleting the item.
-- The dedicated queue is read through `GET /v1/publishing/queue`; rescheduling uses `POST /v1/publishing/content/:contentItemId/reschedule`.
+- Calendar rescheduling uses the workspace-scoped `POST /v1/content/:contentItemId/reschedule` contract for scheduled or failed items and keeps the monthly content index consistent. The dedicated operator queue is read through `GET /v1/publishing/queue`; its existing publishing reschedule route remains the narrower failed-item recovery path.
 - Final UI must expose the chosen time, approval, account, media readiness, provider cap, failure, and recovery. The current Sunlit app does not yet mount the complete queue/recovery surface.
 
 **E2. Publish**

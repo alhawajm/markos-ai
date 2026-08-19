@@ -139,7 +139,7 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 - [ ] Dedicated publishing queue UI is mounted in Sunlit.
 - [ ] Failed-publish explanation and alert UX are mounted in Sunlit.
 - [ ] Reschedule/recovery UX for failed publishing is mounted in Sunlit.
-  - Note: queue/readiness/dry-run/reschedule API foundations and the scheduling control in Create remain, but PR #19 deleted the complete operational Schedule panel before a Sunlit replacement existed.
+  - Note: Calendar now supplies an initial Sunlit week/month schedule, saved-time management, and failed-item detail/rescheduling over existing content records. The complete durable publishing queue, attempt history, worker state, cap/readiness controls, and close-race recovery surface remain unimplemented.
 - [ ] M3 acceptance gate fully passed.
 
 ## M4 Analytics

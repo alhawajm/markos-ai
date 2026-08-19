@@ -13,11 +13,13 @@ class Settings(BaseSettings):
     ai_text_provider: Literal["local", "openai"] = "local"
     ai_strategy_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)
     openai_api_key: SecretStr | None = None
     openai_timeout_seconds: float = Field(default=45, gt=0, le=60)
     openai_max_retries: int = Field(default=1, ge=0, le=3)
     openai_max_output_tokens: int = Field(default=4_000, ge=256, le=32_000)
     openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "low"
+    openai_store_responses: bool = True
     llm_primary_model: str = ""
     llm_flagship_model: str = ""
     llm_longform_model: str = ""
