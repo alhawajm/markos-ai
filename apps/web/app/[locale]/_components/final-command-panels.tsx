@@ -2487,7 +2487,10 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
             <p className="sunlit-eyebrow">{copy.modules}</p>
             <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
             <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
-            <a className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/onboarding`}>
+            <a
+              className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
+              href={`/${locale}/onboarding?mode=edit`}
+            >
               {copy.edit} <ArrowRight size={17} />
             </a>
           </div>

@@ -1,6 +1,6 @@
 # Railway Deployment and Staging Runbook
 
-Status date: 2026-08-17.
+Status date: 2026-08-19.
 
 Railway is the current early-stage operating direction for MARKOS AI. The working planning horizon is approximately the first 50 users while capacity, reliability, cost, and security are observed. AWS may be considered later; no migration is approved or scheduled.
 
@@ -23,8 +23,8 @@ PRs #18, #19, and #20 are merged into the current repository `main`. The supplie
 | Worker             | `apps/api/worker.Dockerfile`                           | `pnpm --filter api worker`; no HTTP port                                                              | Worker lifecycle logs and resulting database/audit state    | Repository implementation only; verify whether a Railway worker service exists and is healthy.                                                                     |
 | AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | A 2026-08-16 screenshot shows its variable panel. A prior direct provider request succeeded, but the current application adapter remains pending deployed verification. |
 | PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | A `pgvector` variable panel is externally evidenced and persistence worked for the production connection; version, extensions, roles, backups, limits, and migration history still require operator verification. |
-| Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | A `redis` variable panel is externally evidenced; deployment status, private networking, persistence expectations, and availability remain unverified. |
-| OpenSearch         | `docker-compose.yml`, API deep health/search code      | Reachable HTTP service                                                                                | API deep health checks `/_cluster/health`                   | Verify whether it is deployed. Loopback is invalid from a separate Railway API service.                                                                            |
+| Redis              | `docker-compose.yml`, API auth/cache code               | Redis URL supplied to the API                                                                         | API deep health                                             | A `redis` variable panel is externally evidenced; deployment status, private networking, persistence expectations, and availability remain unverified. The current maintenance worker does not consume Redis. |
+| OpenSearch         | `docker-compose.yml`, API deep-health probe only        | Optional reachable HTTP service for the deep-health report                                             | API deep health checks `/_cluster/health`                   | Not required for the 2026-08-20 showcase. No current product or worker path queries OpenSearch, so provisioning is deferred.                                         |
 | Media storage      | `apps/api/src/media/storage-service.ts`                | `MEDIA_STORAGE_DRIVER` selects local filesystem or private S3-compatible storage; ordinary URLs use the API media route and provider reads are signed just in time | Upload/read smoke plus external signed GET and Meta fetchability when publishing | Sarah reports that the private Bucket and API credential wiring are complete and a test image is visible in the Bucket. Application-path upload/read/delete, external presigned GET, reviewed-code deployment, and Meta fetchability remain unverified. |
 
 The repository's `.github/workflows/deploy-staging.yml` builds and publishes web, API, worker, and AI images to GHCR. It can optionally roll AWS ECS when GitHub environment variables exist. That workflow is not proof of the current Railway deployment and does not make AWS the current platform.
@@ -35,8 +35,8 @@ The repository's `.github/workflows/deploy-staging.yml` builds and publishes web
 - pnpm 11.5.2 through Corepack.
 - Python `>=3.11,<3.12`; the AI Dockerfile uses Python 3.11.
 - PostgreSQL 16-compatible server with pgvector and privileges needed by the initialization contract.
-- Redis 7-compatible service where cache/worker behavior is enabled.
-- OpenSearch 2-compatible service for the current deep-health/search contract.
+- Redis 7-compatible service for the API's authentication/cache behavior.
+- OpenSearch is a local Compose dependency and an optional API deep-health probe; it is not a current staging feature prerequisite.
 - Public HTTPS domains for browser, API, and Meta callbacks.
 
 ## Environment loading contract
@@ -154,7 +154,9 @@ Observability:
 
 ### Worker runtime
 
-The worker imports the same API environment schema. At minimum, mirror the database, Redis, relevant provider, encryption, model, media, and Sentry settings needed by its enabled tasks. Worker intervals are:
+Follow the focused [Railway worker setup guide](railway-worker-setup.md) for the exact service, reference variables, deployment settings, and live verification sequence. The current worker needs PostgreSQL, the Instagram credential encryption key, live-mode settings, and private Bucket access. It does not consume Redis, OpenSearch, the AI service, SendGrid, JWT settings, or OAuth callback configuration.
+
+Worker intervals are:
 
 - `WORKER_PUBLISHING_INTERVAL_MS`
 - `WORKER_ANALYTICS_EMAIL_INTERVAL_MS`
@@ -162,7 +164,7 @@ The worker imports the same API environment schema. At minimum, mirror the datab
 - `WORKER_TOKEN_REFRESH_INTERVAL_MS`
 - `WORKER_USAGE_RESET_INTERVAL_MS`
 
-Do not copy all API secrets blindly. Record which worker task consumes each shared secret before choosing shared variables.
+For the showcase, set only `WORKER_PUBLISHING_INTERVAL_MS=300000`; the remaining intervals use their source defaults. Do not copy all API secrets blindly.
 
 ### AI runtime
 
@@ -225,7 +227,7 @@ Railway-added platform variables were collapsed in the screenshots and are not e
 
 Repository/snapshot gaps to resolve deliberately:
 
-- The visible API list does not show `OPENSEARCH_URL`, health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or a future bucket variable contract. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone. The retired publishing/analytics `META_*` variables are no longer application prerequisites; `META_WEBHOOK_VERIFY_TOKEN` remains separately active.
+- The visible API list does not show health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or a future bucket variable contract. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone. `OPENSEARCH_URL` may remain unset for the showcase because OpenSearch is not on a current product path. The retired publishing/analytics `META_*` variables are no longer application prerequisites; `META_WEBHOOK_VERIFY_TOKEN` remains separately active.
 - The visible AI `PORT` name is ignored by the current fixed-port Docker command. Current code consumes `AI_PORT`, which is not visible in the supplied service-level list.
 - The AI screenshot does not show `DATABASE_URL`, `LLM_PRIMARY_MODEL`, `AI_CONTENT_TIMEOUT_SECONDS`, embedding/image model settings, alternate model slots, or Sentry settings. Some are optional or not used by current handlers. Provider-backed content prefers `LLM_PRIMARY_MODEL` and temporarily falls back to the configured long-form model when the gateway supplies an older synthetic `local-*` default; configure the primary slot deliberately instead of treating that compatibility behavior as final setup.
 - Reserved future variables that are not part of current work should remain untouched until their feature is reviewed. Do not rename or delete them merely because the current service does not consume them.
@@ -301,18 +303,18 @@ For an existing Railway database, first inspect migration status, roles, extensi
 Populate required names from the inventory above using Railway variables/secrets. Verify:
 
 - browser-facing API URL is public HTTPS and embedded in the web build;
-- API/worker database and Redis URLs use reachable service addresses;
-- `AI_BASE_URL` and `OPENSEARCH_URL` are not loopback URLs when services are separate;
+- API and worker database URLs, plus the API's Redis URL, use reachable service addresses;
+- `AI_BASE_URL` is not a loopback URL when the AI service is separate;
 - `API_BASE_URL` and `WEB_BASE_URL` are the deployed public origins;
 - OAuth redirect and Meta callback paths match `instagram-app-review.md` exactly;
-- provider modes remain `dry_run` unless their separate acceptance runbooks are satisfied.
+- provider modes match the authorized test window. The 2026-08-19 staging worker pass explicitly uses `live` for publishing and analytics.
 
 ### 6. Deploy in dependency order
 
 For a new environment:
 
 1. PostgreSQL and required extensions/roles.
-2. Redis and OpenSearch if included.
+2. Redis for API authentication/cache behavior. Do not add OpenSearch for the showcase.
 3. AI service if included and reviewed.
 4. API after database pre-deploy succeeds.
 5. Worker after API/database/provider configuration is coherent.
@@ -336,10 +338,12 @@ curl https://<web-host>/en
 curl https://<ai-host>/ai/health
 ```
 
+When OpenSearch is intentionally absent, `/v1/health/deep` reports a degraded body while still returning HTTP 200. Use `/v1/health` as Railway's API deployment health-check path; treat deep health as dependency diagnostics rather than the deployment gate.
+
 Interpret results narrowly:
 
 - API shallow health proves the API process responds.
-- API deep health reports database, Redis, OpenSearch, and AI reachability; a degraded dependency remains an acceptance gap.
+- API deep health reports database, Redis, OpenSearch, and AI reachability. For this showcase, only the intentionally deferred OpenSearch check may be down; database, Redis, and AI should still report healthy.
 - Web 200 responses prove rendered routes, not authentication or business behavior.
 - AI shallow health proves only the FastAPI process. Current deep health is always degraded. A prior direct provider request succeeded, but the current shared application adapter still requires deployed end-to-end verification.
 

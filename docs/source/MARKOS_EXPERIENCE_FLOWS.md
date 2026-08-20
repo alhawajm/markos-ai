@@ -71,7 +71,7 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Onboarding | Seven real modules feed the Vault. At 100% completeness, the user generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy. | Real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
 | Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
 | Content/media | Create and Campaign Builder can generate persisted drafts, edit bilingual captions and core fields, approve, upload or generate and attach images, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, provider-backed images, and all final content-type states. |
-| Instagram | A production-observed business-basic connection exists. The Milestone A working source requests the canonical basic, publish, and insights scope set and defaults both live-provider modes to `dry_run`. | Deploy, reconnect, provision/validate durable media, complete controlled live publish/insights evidence, and later obtain App Review/Advanced Access. |
+| Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
 | Insights | An API-backed 7/30-day summary, top-content view, empty/error/loading states, and monthly PDF download are mounted. | Full `AN-01`–`AN-06`, live permission-backed sync, 28/90 comparisons, provider-backed interpretation, digest/chat, and learning evidence. |
 | Operations | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history. | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal. |
 
@@ -114,6 +114,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - `POST /v1/onboarding/profile/generate` produces a bilingual draft from the raw module entries and records the interaction/usage.
 - The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, clears the browser draft, and routes to `/{locale}/app/strategy`.
 - Approval does **not** automatically generate Strategy. The user sees the Strategy surface and chooses the objective and horizon explicitly.
+- An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Strategy. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
 - Editing a canonical onboarding module later invalidates the resolved profile and returns the workspace to `IN_PROGRESS` while preserving history.
 
 ### Flow B — Generate the first Strategy
@@ -145,17 +146,21 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **C1. Start from Create or a campaign**
 
-- The user chooses a content type and topic, optionally ties it to a Strategy, and requests one or more drafts.
-- Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`.
+- With no item selected, Create opens as a compact action hub rather than an empty editor. Primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**.
+- **Start a blank post** creates one workspace-owned `DRAFT` without calling AI, retrieving Vault context, or consuming AI quota. **Draft with MARKOS AI** remains the grounded generation path. Ideas are not persisted until the user deliberately selects one.
+- Supporting account-readiness or performance cards may appear only from real workspace/provider data. Missing data receives an honest empty state.
+- Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`. The locked manual path requires the build-spec-aligned blank `POST /v1/content` contract and is not implemented merely by this documentation decision.
 
 **C2. Generate copy**
 
 - The API checks Vault presence and quota, retrieves relevant workspace context and tone, selects a prompt, and calls `POST /ai/content/generate` through the internal bearer boundary.
 - It persists `ContentItem` drafts and an `ai_interaction`, then records token usage.
+- AI generation is optional assistance, not a prerequisite for opening or saving a post draft. It must not overwrite manual text without a deliberate user action.
 - Current implementation note: the content AI route now supports the configured OpenAI provider through a strict bilingual structured contract while preserving deterministic local development behavior. The source capability is not staging proof; a browser-to-API-to-AI request and stored OpenAI dashboard response still need external verification.
 
 **C3. Edit and attach media**
 
+- Selecting or creating a draft moves Create into one focused Draft Editor. That editor owns the editable bilingual copy, hashtags, CTA, media, follower-style preview, approval, schedule/cancel, and eligible delete actions for that item; leaving the editor returns to the action hub or draft list without discarding confirmed saves.
 - Core edits use `PATCH /v1/content/:contentItemId`.
 - Upload uses `POST /v1/media/upload`; AI image generation uses `POST /v1/content/:contentItemId/generate-image`; attachment uses the content media routes.
 - The mounted Create surface sends JPEGs through the authenticated API, records browser-decoded dimensions, attaches them to the saved item, and preserves the current edits if upload/generation fails. It also exposes the deterministic image workflow honestly rather than presenting it as a live image provider.
@@ -196,7 +201,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - Success stores the provider media ID and `publishedAt` and moves the item to `PUBLISHED`. A provider error moves it to `FAILED` with a safe reason and an explicit reschedule path.
 - Never mark a dry run or container creation as published. Never retry the same failed container indefinitely.
 - Query the provider's current publishing-limit contract when live rather than hardcoding an old approximate post count. Exact cap, host, per-format behavior, and Story/Reel upload requirements must be revalidated during the permission/API research phase.
-- Current Milestone A source provides a temporary MFA-protected item-specific operator path for one validated JPEG. It requires a private S3-backed object key, mints a just-in-time signed GET, checks the live quota response, and performs create → poll → publish through Instagram Login. Local tests pass; Railway storage/deployment, provider-granted permission, one real image publish, App Review, durable multi-worker idempotency, and Reel evidence remain open.
+- Current source retains the MFA-protected item-specific path and also lets the Railway worker select due scheduled items. Both require a private S3-backed object key, mint a just-in-time signed GET, check the live quota response, and perform create → poll → publish through Instagram Login. On 2026-08-20, Khalid supplied follower-visible screenshots of the first automated JPEG result. Durable attempt/container persistence, multi-worker leases, restart reconciliation, App Review/Advanced Access, and Reel evidence remain open.
 
 ### Flow F — Sync and explain Insights
 

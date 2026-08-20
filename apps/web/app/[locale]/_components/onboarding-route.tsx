@@ -4,15 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { createOnboardingDraftFromVault, type OnboardingDraft } from "./onboarding-draft";
 import { OnboardingPanel } from "./onboarding-panel";
 
 type RouteStatus = "checking" | "allowed" | "failed";
 
-export function OnboardingRoute({ locale }: { locale: Locale }) {
+export function OnboardingRoute({ editMode, locale }: { editMode: boolean; locale: Locale }) {
   const client = useMarkosClient(locale);
   const router = useRouter();
   const session = useMarkosSession();
   const [attempt, setAttempt] = useState(0);
+  const [initialDraft, setInitialDraft] = useState<OnboardingDraft | null>(null);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<RouteStatus>("checking");
 
@@ -26,31 +28,38 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
 
     let active = true;
     setStatus("checking");
+    setInitialDraft(null);
     setMessage("");
 
-    void client
-      .onboarding()
-      .then((state) => {
+    void (async () => {
+      try {
+        const state = await client.onboarding();
         if (!active) return;
 
-        if (state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
+        if (!editMode && state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
           window.localStorage.removeItem("markos.onboarding.draft.v2");
           router.replace(`/${locale}/app/strategy`);
           return;
         }
 
+        if (editMode) {
+          const vault = await client.vault();
+          if (!active) return;
+          setInitialDraft(createOnboardingDraftFromVault(vault));
+        }
+
         setStatus("allowed");
-      })
-      .catch((error) => {
+      } catch (error) {
         if (!active) return;
         setMessage(error instanceof Error ? error.message : locale === "ar" ? "تعذر التحقق من حالة الإعداد." : "Could not check onboarding status.");
         setStatus("failed");
-      });
+      }
+    })();
 
     return () => {
       active = false;
     };
-  }, [client, locale, router, session]);
+  }, [client, editMode, locale, router, session]);
 
   useEffect(() => {
     if (session) return;
@@ -64,7 +73,7 @@ export function OnboardingRoute({ locale }: { locale: Locale }) {
   useEffect(() => checkOnboarding(), [attempt, checkOnboarding]);
 
   if (status === "allowed") {
-    return <OnboardingPanel locale={locale} />;
+    return <OnboardingPanel editMode={editMode} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />;
   }
 
   return (

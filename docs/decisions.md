@@ -400,3 +400,19 @@ For the controlled JPEG proof, query the new container once immediately and then
 Treat a container-processing timeout as an operator-review state, not an automatic retry signal. Do not issue another publish request or create a replacement container until the operator confirms that no provider media ID was persisted and no post appeared. Durable container IDs, attempt state, reconciliation, leases, and retry policy remain Milestone B work.
 
 The item-specific publish route continues to require a workspace-owned `POST` in `SCHEDULED` state with `scheduledAt` at or before the current API time. `APPROVED` is a prerequisite state in the journey, not a publishable substitute for a due schedule.
+
+## 2026-08-20: Create uses an action hub before a focused Draft Editor
+
+Open Create in an overview/action-hub state when no content item is selected. Do not mount a large empty post form by default. The primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**. Account readiness and recent performance may appear as supporting cards only when backed by real workspace/provider data; empty states must not invent activity or success.
+
+**Start a blank post** is a first-class manual path. It creates one workspace-owned `DRAFT` without Vault retrieval, an AI request, or AI quota/token usage. **Draft with MARKOS AI** creates an editable grounded draft through the existing metered generation boundary. Content ideas remain suggestions until the user deliberately selects one; merely viewing an idea must not create a saved item or consume publishing state.
+
+After a draft is created or selected, Create becomes the focused Draft Editor for caption, hashtags, CTA, media, follower-style preview, approval, scheduling, cancellation, and deletion according to the existing lifecycle. AI assistance is optional and contextual inside the editor; it must never overwrite user work without confirmation. Manual media upload remains first-class. Provider-backed image generation must use the configured image-provider interface, enforce quota/metering and moderation, normalize or reject output into the supported Instagram JPEG contract, and keep deterministic concept artwork clearly separate until that provider path exists.
+
+The information architecture is locked; implementation remains a subsequent UI/API slice. The smallest API addition is an ordinary workspace-scoped blank-content create contract consistent with the build specification's `POST /content` catalogue.
+
+## 2026-08-20: Business Profile editing is an explicit return to onboarding
+
+An ordinary visit to onboarding still redirects a workspace whose business profile is complete and approved to Strategy. The **Review and edit profile** action is different: it opens onboarding in explicit edit mode and hydrates the seven modules from the workspace's current Vault values so the user edits existing truth rather than an empty form.
+
+Saving any changed canonical module retains the existing invalidation contract: the resolved profile becomes stale, onboarding returns to `IN_PROGRESS`, and the user reviews and approves a regenerated profile before it becomes the new grounding record. Historical approved interactions remain preserved.

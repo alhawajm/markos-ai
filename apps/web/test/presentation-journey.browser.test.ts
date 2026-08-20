@@ -89,6 +89,40 @@ describe("presentation journey", () => {
     await page.close();
   });
 
+  it("opens an approved Business Profile in populated onboarding edit mode", async () => {
+    const page = await sessionPage();
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/onboarding") {
+        return route.fulfill(
+          json({
+            status: "COMPLETE",
+            businessProfile: { status: "APPROVED", interactionId: "profile-1", profile: null, updatedAt: "2026-08-20T06:00:00.000Z" }
+          })
+        );
+      }
+
+      if (pathname === "/v1/vault/score") {
+        return route.fulfill(
+          json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
+        );
+      }
+
+      if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
+    const editLink = page.getByRole("link", { name: "Review and edit profile" });
+    await expect(editLink.getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
+    await editLink.click();
+    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`);
+    await page.getByRole("heading", { name: "Tell us about your company" }).waitFor();
+    await expect(page.getByLabel("Company Name *").inputValue()).resolves.toBe("SnackLab");
+    await expect(page.getByLabel("Industry *").inputValue()).resolves.toBe("Food & Beverage");
+    await expect(page.getByLabel("Business location *").inputValue()).resolves.toBe("Manama, Bahrain");
+    await page.close();
+  });
+
   it("exposes Strategy in the authenticated app and sends a real 30-day generation request", async () => {
     const page = await sessionPage();
     let generationPayload: Record<string, unknown> | undefined;
@@ -322,20 +356,23 @@ describe("presentation journey", () => {
 
   it("plans the week, schedules ready content, reschedules safely, and confirms cancellation", async () => {
     const page = await sessionPage();
+    const updatedAt = new Date().toISOString();
     const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
     const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const ready = {
       ...studioContentRecord(),
       captionEn: "Ready campaign post for the dessert subscription.",
       id: "calendar-ready",
-      status: "APPROVED"
+      status: "APPROVED",
+      updatedAt
     };
     const scheduled = {
       ...studioContentRecord(),
       captionEn: "Product story scheduled for this week.",
       id: "calendar-scheduled",
       scheduledAt,
-      status: "SCHEDULED"
+      status: "SCHEDULED",
+      updatedAt
     };
     const published = {
       ...studioContentRecord(),
@@ -344,7 +381,14 @@ describe("presentation journey", () => {
       publishedAt,
       status: "PUBLISHED"
     };
-    let records = [scheduled, ready, published];
+    const draft = {
+      ...studioContentRecord(),
+      captionEn: "Draft founder story for review.",
+      id: "calendar-draft",
+      status: "DRAFT",
+      updatedAt
+    };
+    let records = [scheduled, ready, published, draft];
     let schedulePayload: Record<string, unknown> | undefined;
     let reschedulePayload: Record<string, unknown> | undefined;
     let unscheduleCalls = 0;
@@ -377,20 +421,26 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Plan the week. Know what happens next." }).waitFor();
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
-    await expect(page.getByText("Unscheduled", { exact: true }).isVisible()).resolves.toBe(true);
+    const readyCounter = page.getByRole("button", { name: /Ready to schedule/ });
+    await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
+    await readyCounter.click();
+    await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("true");
+    await readyCounter.click();
+    await page.getByText("Ready campaign post for the dessert subscription", { exact: true }).click();
+    await page.getByText("Draft founder story for review", { exact: true }).waitFor();
     await page.getByRole("button", { name: /Ready campaign post/ }).click();
+    await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
 
     const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
     await page.getByLabel("Choose publishing time").fill(readyScheduleInput);
     await page.getByRole("button", { name: "Schedule content" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
-    await page
-      .getByRole("button", { name: /Product story scheduled for this week/ })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByText("Product story scheduled for this week", { exact: true }).click();
+    await page.getByRole("button", { name: /Product story scheduled for this week/ }).click();
     const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
     await page.getByLabel("Choose a new time").fill(rescheduleInput);
     await page.getByRole("button", { name: "Save new time" }).click();
@@ -401,13 +451,14 @@ describe("presentation journey", () => {
     await dialog.getByRole("button", { name: "Cancel schedule" }).click();
     await page.getByText("Schedule cancelled. The content is back in the Ready queue.", { exact: true }).waitFor();
 
+    await page.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     await page.screenshot({ path: "evidence/sunlit-calendar.png", fullPage: true });
 
     await page.setViewportSize({ height: 844, width: 390 });
     await page.goto(`${baseUrl}/ar/app/calendar`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "خطّط للأسبوع واعرف الخطوة التالية." }).waitFor();
+    await page.getByRole("heading", { name: "تقويم المحتوى" }).waitFor();
     await expect(page.locator("main").getAttribute("dir")).resolves.toBe("rtl");
     await expect(page.getByRole("link", { name: "التقويم" }).getAttribute("aria-current")).resolves.toBe("page");
     await page.screenshot({ path: "evidence/sunlit-calendar-rtl-mobile.png", fullPage: true });
@@ -435,28 +486,42 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
 }
 
 function snackLabVault() {
-  const entry = (section: string, key: string) => [
+  const entry = (section: string, key: string, value: Record<string, unknown>) => [
     {
       createdAt: "2026-08-09T11:30:00.000Z",
       id: `${section}-${key}`,
       key,
       section,
       updatedAt: "2026-08-09T11:30:00.000Z",
-      value: { business: "SnackLab" },
+      value,
       version: 1,
       workspaceId: session.workspace.id
     }
   ];
 
   return {
-    AUDIENCE: entry("AUDIENCE", "target-audience"),
-    BRAND: entry("BRAND", "brand-identity"),
-    COMPANY: entry("COMPANY", "company-info"),
-    COMPETITORS: entry("COMPETITORS", "competitors"),
-    OBJECTIVES: entry("OBJECTIVES", "content-goals"),
-    PRODUCTS: entry("PRODUCTS", "products-services"),
-    STORY: entry("STORY", "business-story"),
-    TONE: entry("TONE", "brand-tone")
+    AUDIENCE: entry("AUDIENCE", "primary-audience", {
+      demographics: "Bahrain dessert lovers",
+      interests: ["baking", "desserts"],
+      locations: ["Manama"],
+      painPoints: ["Finding reliable dessert kits"]
+    }),
+    BRAND: entry("BRAND", "identity", { aestheticWords: ["warm", "playful"], colors: ["#EA6A32"], fonts: ["Inter"] }),
+    COMPANY: entry("COMPANY", "profile", {
+      industry: "Food & Beverage",
+      languages: ["Arabic", "English"],
+      location: "Manama, Bahrain",
+      name: "SnackLab"
+    }),
+    COMPETITORS: entry("COMPETITORS", "competitors", { items: [{ name: "Bahrain Bake House" }] }),
+    OBJECTIVES: entry("OBJECTIVES", "goals", { goals: ["Increase brand awareness"] }),
+    PRODUCTS: entry("PRODUCTS", "catalog", { items: [{ category: "Dessert kits", name: "Experiment Box" }] }),
+    STORY: entry("STORY", "story", {
+      mission: "Make dessert experimentation easy and playful.",
+      usp: "Small-batch guided baking kits.",
+      values: ["curiosity", "quality"]
+    }),
+    TONE: entry("TONE", "voice", { toneWords: ["playful"] })
   };
 }
 

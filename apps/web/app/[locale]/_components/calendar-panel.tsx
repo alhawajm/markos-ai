@@ -8,8 +8,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock3,
-  Eye,
   Image as ImageIcon,
   LayoutGrid,
   List,
@@ -27,28 +25,28 @@ const BAHRAIN_TIME_ZONE = "Asia/Bahrain";
 const BAHRAIN_UTC_OFFSET = "+03:00";
 
 type CalendarView = "month" | "week";
+type CalendarLayer = "overview" | "day" | "record";
+type CalendarFilter = "scheduled" | "ready" | "failed" | null;
 
 interface CalendarCopy {
   addContent: string;
   allTimes: string;
-  automaticNote: string;
+  backToCalendar: string;
+  backToDay: string;
   cancel: string;
   cancelConfirm: string;
   cancelSchedule: string;
-  calendarEyebrow: string;
-  calendarSubtitle: string;
   calendarTitle: string;
   close: string;
-  contentLibrary: string;
   details: string;
   emptyDay: string;
   failed: string;
   loading: string;
   month: string;
-  nextUp: string;
-  noContent: string;
-  noNextAction: string;
+  nextDay: string;
+  openDay: string;
   openEditor: string;
+  previousDay: string;
   published: string;
   ready: string;
   refresh: string;
@@ -58,12 +56,8 @@ interface CalendarCopy {
   schedulePost: string;
   scheduled: string;
   scheduledThisWeek: string;
-  selectContent: string;
-  selectedDay: string;
-  subtitle: string;
   today: string;
-  unscheduled: string;
-  unscheduledEmpty: string;
+  updated: string;
   viewInsights: string;
   week: string;
 }
@@ -74,6 +68,8 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
   const copy = calendarCopy(locale);
   const todayKey = bahrainDateKey(new Date());
   const [view, setView] = useState<CalendarView>("week");
+  const [layer, setLayer] = useState<CalendarLayer>("overview");
+  const [activeFilter, setActiveFilter] = useState<CalendarFilter>(null);
   const [anchorDateKey, setAnchorDateKey] = useState(todayKey);
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const [records, setRecords] = useState<ContentRecord[]>([]);
@@ -96,9 +92,7 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
       const [nextRecords, nextAssets] = await Promise.all([client.contentItems(), client.mediaAssets()]);
       setRecords(nextRecords);
       setMediaAssets(nextAssets);
-      setSelectedRecordId((current) =>
-        current && nextRecords.some((record) => record.id === current) ? current : (nextCalendarAction(nextRecords)?.id ?? nextRecords[0]?.id ?? null)
-      );
+      setSelectedRecordId((current) => (current && nextRecords.some((record) => record.id === current) ? current : null));
     } catch (error) {
       setMessage(calendarError(error, locale));
     } finally {
@@ -123,21 +117,22 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
   const monthStartKey = `${anchorDateKey.slice(0, 7)}-01`;
   const monthDateKeys = useMemo(() => calendarMonthGrid(monthStartKey), [monthStartKey]);
   const recordsByDate = useMemo(() => groupCalendarRecords(records), [records]);
+  const filteredRecords = useMemo(() => records.filter((record) => matchesCalendarFilter(record, activeFilter)), [activeFilter, records]);
+  const overviewRecordsByDate = useMemo(() => groupCalendarRecords(filteredRecords), [filteredRecords]);
   const selectedDayRecords = recordsByDate.get(selectedDateKey) ?? [];
-  const unscheduledRecords = useMemo(
-    () =>
-      records
-        .filter((record) => !record.scheduledAt && !record.publishedAt && ["APPROVED", "DRAFT", "IN_REVIEW"].includes(record.status))
-        .sort((left, right) => contentPriority(left) - contentPriority(right) || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)),
-    [records]
-  );
-  const nextAction = useMemo(() => nextCalendarAction(records), [records]);
   const scheduledThisWeek = weekDateKeys.reduce(
     (total, dateKey) => total + (recordsByDate.get(dateKey) ?? []).filter((record) => record.status === "SCHEDULED").length,
     0
   );
   const readyCount = records.filter((record) => record.status === "APPROVED").length;
   const failedCount = records.filter((record) => record.status === "FAILED").length;
+
+  function openDay(dateKey: string) {
+    setSelectedDateKey(dateKey);
+    setAnchorDateKey(dateKey);
+    setSelectedRecordId(null);
+    setLayer("day");
+  }
 
   function chooseRecord(record: ContentRecord) {
     setSelectedRecordId(record.id);
@@ -146,6 +141,31 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
       setSelectedDateKey(recordDate);
       setAnchorDateKey(recordDate);
     }
+    setLayer("record");
+  }
+
+  function closeDrillDown() {
+    setSelectedRecordId(null);
+    setLayer("overview");
+  }
+
+  function backToDay() {
+    setSelectedRecordId(null);
+    setLayer("day");
+  }
+
+  function navigateDay(direction: -1 | 1) {
+    const next = addDays(selectedDateKey, direction);
+    setSelectedDateKey(next);
+    setAnchorDateKey(next);
+    setSelectedRecordId(null);
+    setLayer("day");
+  }
+
+  function toggleFilter(filter: Exclude<CalendarFilter, null>) {
+    setActiveFilter((current) => (current === filter ? null : filter));
+    setSelectedRecordId(null);
+    setLayer("overview");
   }
 
   function upsertRecord(record: ContentRecord) {
@@ -198,6 +218,11 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
     try {
       const updated = await client.unscheduleContent(selectedRecord.id);
       upsertRecord(updated);
+      const newDateKey = calendarDateKey(updated);
+      if (newDateKey) {
+        setSelectedDateKey(newDateKey);
+        setAnchorDateKey(newDateKey);
+      }
       setShowCancelConfirmation(false);
       setMessage(locale === "ar" ? "أُلغي الموعد وعاد المحتوى إلى قائمة الجاهز." : "Schedule cancelled. The content is back in the Ready queue.");
     } catch (error) {
@@ -221,28 +246,50 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-7">
-      <section className="sunlit-panel overflow-hidden rounded-[1.75rem] p-5 sm:p-7">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,.52fr)] xl:items-end">
-          <div className="max-w-4xl">
-            <p className="sunlit-eyebrow">{copy.calendarEyebrow}</p>
-            <h1 className="mt-3 font-display text-3xl font-black tracking-[-.04em] text-[var(--sunlit-ink)] sm:text-4xl">{copy.calendarTitle}</h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.calendarSubtitle}</p>
-          </div>
-          <div className="flex flex-wrap gap-3 xl:justify-end">
+      <section className="sunlit-panel overflow-hidden rounded-[1.75rem] p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <h1 className="font-display text-2xl font-black tracking-[-.035em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.calendarTitle}</h1>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <button
-              className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+              className="sunlit-secondary inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
               onClick={() => void refresh()}
               type="button"
             >
               <RefreshCw className={loading ? "animate-spin" : ""} size={17} /> {copy.refresh}
             </button>
             <Link
-              className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
+              className="sunlit-primary inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
               href={`/${locale}/app/content-studio`}
             >
               <Plus size={18} /> {copy.addContent}
             </Link>
           </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <CalendarMetric
+            active={activeFilter === "scheduled"}
+            icon={CalendarDays}
+            label={copy.scheduledThisWeek}
+            onClick={() => toggleFilter("scheduled")}
+            tone="aqua"
+            value={scheduledThisWeek}
+          />
+          <CalendarMetric
+            active={activeFilter === "ready"}
+            icon={CheckCircle2}
+            label={copy.ready}
+            onClick={() => toggleFilter("ready")}
+            tone="yellow"
+            value={readyCount}
+          />
+          <CalendarMetric
+            active={activeFilter === "failed"}
+            icon={AlertCircle}
+            label={copy.failed}
+            onClick={() => toggleFilter("failed")}
+            tone="coral"
+            value={failedCount}
+          />
         </div>
       </section>
 
@@ -252,46 +299,13 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
         </div>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <CalendarMetric icon={CalendarDays} label={copy.scheduledThisWeek} tone="aqua" value={scheduledThisWeek} />
-        <CalendarMetric icon={CheckCircle2} label={copy.ready} tone="yellow" value={readyCount} />
-        <CalendarMetric icon={AlertCircle} label={copy.failed} tone="coral" value={failedCount} />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(20rem,.65fr)] xl:items-start">
-        <div className="min-w-0 space-y-5">
-          {nextAction ? (
-            <article className="sunlit-panel-soft rounded-[1.5rem] p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="sunlit-eyebrow">{copy.nextUp}</p>
-                  <p className="mt-2 truncate text-lg font-black text-[var(--sunlit-ink)]">{contentTitle(nextAction, locale)}</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--sunlit-muted)]">
-                    {statusLabel(nextAction.status, locale)}
-                    {calendarInstant(nextAction) ? ` · ${formatCalendarDateTime(calendarInstant(nextAction) ?? "", locale)}` : ""}
-                  </p>
-                </div>
-                <button
-                  className="sunlit-secondary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
-                  onClick={() => chooseRecord(nextAction)}
-                  type="button"
-                >
-                  <Eye size={17} /> {copy.details}
-                </button>
-              </div>
-            </article>
-          ) : (
-            <article className="sunlit-panel-soft rounded-[1.5rem] p-6 text-sm font-bold text-[var(--sunlit-muted)]">{copy.noNextAction}</article>
-          )}
-
-          <section className="sunlit-panel rounded-[1.75rem] p-4 sm:p-6">
+      <section className="sunlit-panel min-w-0 rounded-[1.75rem] p-4 sm:p-6">
+        {layer === "overview" ? (
+          <>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="sunlit-eyebrow">{copy.contentLibrary}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">
-                  {view === "week" ? formatWeekRange(weekDateKeys, locale) : formatMonthLabel(monthStartKey, locale)}
-                </h2>
-              </div>
+              <h2 className="text-xl font-black text-[var(--sunlit-ink)] sm:text-2xl">
+                {view === "week" ? formatWeekRange(weekDateKeys, locale) : formatMonthLabel(monthStartKey, locale)}
+              </h2>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   className="sunlit-secondary inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-extrabold"
@@ -362,11 +376,10 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
                     dateKey={dateKey}
                     key={dateKey}
                     locale={locale}
-                    onChooseDate={() => setSelectedDateKey(dateKey)}
-                    onChooseRecord={chooseRecord}
-                    records={recordsByDate.get(dateKey) ?? []}
+                    onChooseDate={() => openDay(dateKey)}
+                    openDayLabel={copy.openDay}
+                    records={overviewRecordsByDate.get(dateKey) ?? []}
                     selectedDateKey={selectedDateKey}
-                    selectedRecordId={selectedRecordId}
                     todayKey={todayKey}
                   />
                 ))}
@@ -376,102 +389,66 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
                 anchorMonthKey={monthStartKey}
                 dateKeys={monthDateKeys}
                 locale={locale}
-                onChooseDate={(dateKey) => {
-                  setSelectedDateKey(dateKey);
-                  const firstRecord = recordsByDate.get(dateKey)?.[0];
-                  if (firstRecord) setSelectedRecordId(firstRecord.id);
-                }}
-                recordsByDate={recordsByDate}
+                onChooseDate={openDay}
+                recordsByDate={overviewRecordsByDate}
                 selectedDateKey={selectedDateKey}
                 todayKey={todayKey}
               />
             )}
-
-            <div className="mt-5 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-muted)]">{copy.selectedDay}</p>
-                  <p className="mt-1 font-black text-[var(--sunlit-ink)]">{formatDayHeading(selectedDateKey, locale)}</p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">{selectedDayRecords.length}</span>
+          </>
+        ) : layer === "record" && selectedRecord ? (
+          <>
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--sunlit-line)] pb-5">
+              <button
+                className="sunlit-secondary inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-extrabold"
+                onClick={backToDay}
+                type="button"
+              >
+                {locale === "ar" ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+                {copy.backToDay}
+              </button>
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate text-sm font-bold text-[var(--sunlit-muted)]">{formatDayHeading(selectedDateKey, locale)}</p>
+                <h2 className="mt-1 text-xl font-black text-[var(--sunlit-ink)]">{copy.details}</h2>
               </div>
-              {selectedDayRecords.length > 0 ? (
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {selectedDayRecords.map((record) => (
-                    <CalendarRecordButton
-                      key={record.id}
-                      locale={locale}
-                      onClick={() => chooseRecord(record)}
-                      record={record}
-                      selected={selectedRecordId === record.id}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm font-semibold text-[var(--sunlit-muted)]">{copy.emptyDay}</p>
-              )}
+              <button
+                aria-label={copy.close}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+                onClick={closeDrillDown}
+                type="button"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </section>
-
-          <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="sunlit-eyebrow">{copy.unscheduled}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">{copy.subtitle}</h2>
-              </div>
-              <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
-                {unscheduledRecords.length}
-              </span>
+            <div className="mt-6">
+              <CalendarDetails
+                copy={copy}
+                locale={locale}
+                media={selectedRecord.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null}
+                onCancelRequest={() => setShowCancelConfirmation(true)}
+                onSaveSchedule={() => void saveSchedule()}
+                record={selectedRecord}
+                saving={saving}
+                scheduleValue={scheduleValue}
+                setScheduleValue={setScheduleValue}
+              />
             </div>
-            {unscheduledRecords.length > 0 ? (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {unscheduledRecords.map((record) => (
-                  <CalendarRecordButton
-                    key={record.id}
-                    locale={locale}
-                    onClick={() => chooseRecord(record)}
-                    record={record}
-                    selected={selectedRecordId === record.id}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                {copy.unscheduledEmpty}
-              </div>
-            )}
-          </section>
-        </div>
-
-        <aside className="sunlit-panel min-w-0 rounded-[1.75rem] p-5 sm:p-6 xl:sticky xl:top-28">
-          {selectedRecord ? (
-            <CalendarDetails
-              copy={copy}
-              locale={locale}
-              media={selectedRecord.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null}
-              onCancelRequest={() => setShowCancelConfirmation(true)}
-              onSaveSchedule={() => void saveSchedule()}
-              record={selectedRecord}
-              saving={saving}
-              scheduleValue={scheduleValue}
-              setScheduleValue={setScheduleValue}
-            />
-          ) : (
-            <div className="grid min-h-80 place-items-center text-center">
-              <div className="max-w-xs">
-                <CalendarDays className="mx-auto text-[var(--sunlit-aqua)]" size={38} />
-                <p className="mt-4 font-black text-[var(--sunlit-ink)]">{copy.selectContent}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.noContent}</p>
-              </div>
-            </div>
-          )}
-        </aside>
+          </>
+        ) : (
+          <CalendarDayView
+            copy={copy}
+            dateKey={selectedDateKey}
+            locale={locale}
+            mediaById={mediaById}
+            onChooseRecord={chooseRecord}
+            onClose={closeDrillDown}
+            onGoToday={() => openDay(todayKey)}
+            onNavigate={navigateDay}
+            records={selectedDayRecords}
+            todayKey={todayKey}
+          />
+        )}
       </section>
-
-      <p className="rounded-2xl border border-[var(--sunlit-line)] bg-white/70 px-5 py-4 text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">
-        <Clock3 className="me-2 inline text-[var(--sunlit-aqua-dark)]" size={16} />
-        {copy.allTimes} {copy.automaticNote}
-      </p>
 
       {showCancelConfirmation && selectedRecord?.status === "SCHEDULED" ? (
         <div
@@ -544,94 +521,196 @@ function CalendarDetails({
   setScheduleValue: (value: string) => void;
 }) {
   const canChooseTime = ["APPROVED", "FAILED", "SCHEDULED"].includes(record.status);
+  const caption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <p className="sunlit-eyebrow">{copy.details}</p>
-        <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${statusBadgeClass(record.status)}`}>{statusLabel(record.status, locale)}</span>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,.92fr)] lg:items-start">
+      <div>
+        {media ? (
+          <div className="mx-auto aspect-[4/5] max-h-[42rem] overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
+            {/* Workspace media can be an API proxy URL or a short-lived provider URL, so it intentionally bypasses Next image optimization. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt={media.filename} className="h-full w-full object-contain" src={media.publicUrl} />
+          </div>
+        ) : (
+          <div className="grid aspect-[4/5] max-h-[42rem] place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)]">
+            <div className="text-center">
+              <ImageIcon className="mx-auto" size={32} />
+              <p className="mt-2 text-sm font-bold">{locale === "ar" ? "لا توجد وسائط مرفقة" : "No media attached"}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {media ? (
-        <div className="mt-5 aspect-[4/3] overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
-          {/* Workspace media can be an API proxy URL or a short-lived provider URL, so it intentionally bypasses Next image optimization. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt={media.filename} className="h-full w-full object-cover" src={media.publicUrl} />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${statusBadgeClass(record.status)}`}>{statusLabel(record.status, locale)}</span>
+          <span className="text-xs font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
+        </div>
+        <h3 className="mt-4 text-2xl font-black leading-8 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</h3>
+        {caption ? <p className="mt-3 whitespace-pre-line text-sm font-medium leading-6 text-[var(--sunlit-ink-soft)]">{caption}</p> : null}
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[var(--sunlit-muted)]">
+          <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{contentTypeLabel(record, locale)}</span>
+          {record.contentPillar ? <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{record.contentPillar}</span> : null}
+          <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">
+            {record.mediaIds.length} {locale === "ar" ? "وسائط" : "media"}
+          </span>
+        </div>
+
+        {record.failureReason ? (
+          <div className="mt-5 rounded-2xl bg-[#FFF0F1] p-4 text-sm font-semibold leading-6 text-[#8F3340]">
+            <AlertCircle className="me-2 inline" size={17} /> {record.failureReason}
+          </div>
+        ) : null}
+
+        {canChooseTime ? (
+          <div className="mt-6 border-t border-[var(--sunlit-line)] pt-5">
+            <label className="block text-sm font-extrabold text-[var(--sunlit-ink)]" htmlFor={`calendar-time-${record.id}`}>
+              {record.status === "APPROVED" ? copy.schedulePost : copy.reschedule}
+            </label>
+            <p className="mt-1 text-xs leading-5 text-[var(--sunlit-muted)]">{copy.allTimes}</p>
+            <input
+              className="sunlit-field mt-3 min-h-12 w-full rounded-xl px-3 text-sm font-bold outline-none"
+              id={`calendar-time-${record.id}`}
+              min={minimumScheduleInput()}
+              onChange={(event) => setScheduleValue(event.target.value)}
+              type="datetime-local"
+              value={scheduleValue}
+            />
+            <button
+              className="sunlit-primary mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-60"
+              disabled={saving || !scheduleValue}
+              onClick={onSaveSchedule}
+              type="button"
+            >
+              <Send size={16} /> {saving ? (locale === "ar" ? "جارٍ الحفظ..." : "Saving...") : record.status === "APPROVED" ? copy.schedule : copy.saveNewTime}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <Link
+            className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+            href={`/${locale}/app/content-studio?item=${record.id}`}
+          >
+            <Pencil size={16} /> {copy.openEditor}
+          </Link>
+          {record.status === "PUBLISHED" ? (
+            <Link
+              className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+              href={`/${locale}/app/analytics`}
+            >
+              <Sparkles size={16} /> {copy.viewInsights}
+            </Link>
+          ) : null}
+          {record.status === "SCHEDULED" ? (
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#E49AAA] bg-white px-4 text-sm font-extrabold text-[#A43C49] sm:col-span-2 lg:col-span-1"
+              onClick={onCancelRequest}
+              type="button"
+            >
+              <X size={16} /> {copy.cancelSchedule}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalendarDayView({
+  copy,
+  dateKey,
+  locale,
+  mediaById,
+  onChooseRecord,
+  onClose,
+  onGoToday,
+  onNavigate,
+  records,
+  todayKey
+}: {
+  copy: CalendarCopy;
+  dateKey: string;
+  locale: Locale;
+  mediaById: Map<string, MediaAssetRecord>;
+  onChooseRecord: (record: ContentRecord) => void;
+  onClose: () => void;
+  onGoToday: () => void;
+  onNavigate: (direction: -1 | 1) => void;
+  records: ContentRecord[];
+  todayKey: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-3 border-b border-[var(--sunlit-line)] pb-5">
+        <button className="sunlit-secondary inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-extrabold" onClick={onClose} type="button">
+          {locale === "ar" ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+          <span className="hidden sm:inline">{copy.backToCalendar}</span>
+        </button>
+        <div className="min-w-0 flex-1 text-center">
+          <h2 className="text-xl font-black leading-7 text-[var(--sunlit-ink)] sm:text-2xl">{formatDayHeading(dateKey, locale)}</h2>
+          <p className="mt-1 text-sm font-bold text-[var(--sunlit-muted)]">{formatItemCount(records.length, locale)}</p>
+        </div>
+        <button
+          aria-label={copy.close}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+          onClick={onClose}
+          type="button"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-center gap-2">
+        <button
+          aria-label={copy.previousDay}
+          className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-white text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--sunlit-paper)]"
+          onClick={() => onNavigate(-1)}
+          type="button"
+        >
+          {locale === "ar" ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
+        <button className="sunlit-secondary min-h-10 rounded-xl px-4 text-sm font-extrabold" disabled={dateKey === todayKey} onClick={onGoToday} type="button">
+          {copy.today}
+        </button>
+        <button
+          aria-label={copy.nextDay}
+          className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-white text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--sunlit-paper)]"
+          onClick={() => onNavigate(1)}
+          type="button"
+        >
+          {locale === "ar" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
+      </div>
+
+      {records.length > 0 ? (
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {records.map((record) => (
+            <CalendarDayRecordButton
+              key={record.id}
+              locale={locale}
+              media={record.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null}
+              onClick={() => onChooseRecord(record)}
+              record={record}
+              copy={copy}
+            />
+          ))}
         </div>
       ) : (
-        <div className="mt-5 grid aspect-[4/3] place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)]">
-          <div className="text-center">
-            <ImageIcon className="mx-auto" size={28} />
-            <p className="mt-2 text-xs font-bold">{locale === "ar" ? "لا توجد وسائط مرفقة" : "No media attached"}</p>
+        <div className="mt-6 grid min-h-64 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-center">
+          <div className="max-w-sm">
+            <CalendarDays className="mx-auto text-[var(--sunlit-aqua)]" size={36} />
+            <p className="mt-3 text-sm font-bold leading-6 text-[var(--sunlit-muted)]">{copy.emptyDay}</p>
+            <Link
+              className="sunlit-primary mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+              href={`/${locale}/app/content-studio`}
+            >
+              <Plus size={17} /> {copy.addContent}
+            </Link>
           </div>
         </div>
       )}
-
-      <h2 className="mt-5 text-xl font-black leading-7 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</h2>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-[var(--sunlit-muted)]">
-        <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{contentTypeLabel(record, locale)}</span>
-        {record.contentPillar ? <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{record.contentPillar}</span> : null}
-        <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">
-          {record.mediaIds.length} {locale === "ar" ? "وسائط" : "media"}
-        </span>
-      </div>
-
-      {record.failureReason ? (
-        <div className="mt-5 rounded-2xl bg-[#FFF0F1] p-4 text-sm font-semibold leading-6 text-[#8F3340]">
-          <AlertCircle className="me-2 inline" size={17} /> {record.failureReason}
-        </div>
-      ) : null}
-
-      {canChooseTime ? (
-        <div className="mt-6 border-t border-[var(--sunlit-line)] pt-5">
-          <label className="block text-sm font-extrabold text-[var(--sunlit-ink)]" htmlFor={`calendar-time-${record.id}`}>
-            {record.status === "APPROVED" ? copy.schedulePost : copy.reschedule}
-          </label>
-          <p className="mt-1 text-xs leading-5 text-[var(--sunlit-muted)]">{copy.allTimes}</p>
-          <input
-            className="sunlit-field mt-3 min-h-12 w-full rounded-xl px-3 text-sm font-bold outline-none"
-            id={`calendar-time-${record.id}`}
-            min={minimumScheduleInput()}
-            onChange={(event) => setScheduleValue(event.target.value)}
-            type="datetime-local"
-            value={scheduleValue}
-          />
-          <button
-            className="sunlit-primary mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-60"
-            disabled={saving || !scheduleValue}
-            onClick={onSaveSchedule}
-            type="button"
-          >
-            <Send size={16} /> {saving ? (locale === "ar" ? "جارٍ الحفظ..." : "Saving...") : record.status === "APPROVED" ? copy.schedule : copy.saveNewTime}
-          </button>
-        </div>
-      ) : null}
-
-      <div className="mt-5 grid gap-3">
-        <Link
-          className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
-          href={`/${locale}/app/content-studio?item=${record.id}`}
-        >
-          <Pencil size={16} /> {copy.openEditor}
-        </Link>
-        {record.status === "PUBLISHED" ? (
-          <Link
-            className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold"
-            href={`/${locale}/app/analytics`}
-          >
-            <Sparkles size={16} /> {copy.viewInsights}
-          </Link>
-        ) : null}
-        {record.status === "SCHEDULED" ? (
-          <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#E49AAA] bg-white px-4 text-sm font-extrabold text-[#A43C49]"
-            onClick={onCancelRequest}
-            type="button"
-          >
-            <X size={16} /> {copy.cancelSchedule}
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -640,33 +719,34 @@ function CalendarDayColumn({
   dateKey,
   locale,
   onChooseDate,
-  onChooseRecord,
+  openDayLabel,
   records,
   selectedDateKey,
-  selectedRecordId,
   todayKey
 }: {
   dateKey: string;
   locale: Locale;
   onChooseDate: () => void;
-  onChooseRecord: (record: ContentRecord) => void;
+  openDayLabel: string;
   records: ContentRecord[];
   selectedDateKey: string;
-  selectedRecordId: string | null;
   todayKey: string;
 }) {
   const isSelected = dateKey === selectedDateKey;
   const isToday = dateKey === todayKey;
 
   return (
-    <article
+    <button
+      aria-label={`${openDayLabel}: ${formatDayHeading(dateKey, locale)} · ${formatItemCount(records.length, locale)}`}
       className={
         isSelected
-          ? "min-w-0 rounded-2xl border border-[rgb(33_191_174_/_35%)] bg-[var(--sunlit-aqua-soft)] p-3"
-          : "min-w-0 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3"
+          ? "min-w-0 rounded-2xl border border-[rgb(33_191_174_/_45%)] bg-[var(--sunlit-aqua-soft)] p-3 text-start shadow-sm"
+          : "min-w-0 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3 text-start transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
       }
+      onClick={onChooseDate}
+      type="button"
     >
-      <button className="flex w-full items-center justify-between gap-2 text-start md:block" onClick={onChooseDate} type="button">
+      <span className="flex w-full items-center justify-between gap-2 md:block">
         <span className="block text-[11px] font-extrabold uppercase tracking-[.1em] text-[var(--sunlit-muted)]">{formatWeekday(dateKey, locale)}</span>
         <span
           className={
@@ -677,26 +757,27 @@ function CalendarDayColumn({
         >
           {Number(dateKey.slice(-2))}
         </span>
-      </button>
-      <div className="mt-3 grid gap-2">
+      </span>
+      <span className="mt-3 grid gap-2">
         {records.length > 0 ? (
-          records.map((record) => (
-            <CalendarRecordButton
-              compact
-              key={record.id}
-              locale={locale}
-              onClick={() => onChooseRecord(record)}
-              record={record}
-              selected={selectedRecordId === record.id}
-            />
-          ))
+          <>
+            {records.slice(0, 3).map((record) => (
+              <span className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-white/85 px-2.5 py-2" key={record.id}>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(record.status)}`} />
+                  <span className="min-w-0 flex-1 truncate text-[10px] font-extrabold text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
+                </span>
+              </span>
+            ))}
+            {records.length > 3 ? <span className="text-center text-[10px] font-extrabold text-[var(--sunlit-muted)]">+{records.length - 3}</span> : null}
+          </>
         ) : (
-          <p className="rounded-xl border border-dashed border-[var(--sunlit-line)] bg-white/70 px-2 py-3 text-center text-[10px] font-bold text-[var(--sunlit-muted)]">
+          <span className="rounded-xl border border-dashed border-[var(--sunlit-line)] bg-white/70 px-2 py-3 text-center text-[10px] font-bold text-[var(--sunlit-muted)]">
             —
-          </p>
+          </span>
         )}
-      </div>
-    </article>
+      </span>
+    </button>
   );
 }
 
@@ -772,61 +853,98 @@ function MonthOverview({
   );
 }
 
-function CalendarRecordButton({
-  compact = false,
+function CalendarDayRecordButton({
+  copy,
   locale,
+  media,
   onClick,
-  record,
-  selected
+  record
 }: {
-  compact?: boolean;
+  copy: CalendarCopy;
   locale: Locale;
+  media: MediaAssetRecord | null;
   onClick: () => void;
   record: ContentRecord;
-  selected: boolean;
 }) {
   return (
     <button
-      aria-pressed={selected}
-      className={
-        selected
-          ? "min-w-0 rounded-xl border border-[rgb(33_191_174_/_35%)] bg-white px-3 py-2.5 text-start shadow-sm"
-          : "min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-white/85 px-3 py-2.5 text-start transition hover:border-[var(--sunlit-line-strong)]"
-      }
+      className={`group min-w-0 rounded-2xl border p-3 text-start transition hover:-translate-y-0.5 hover:shadow-md ${statusCardClass(record.status)}`}
       onClick={onClick}
       type="button"
     >
-      <span className="flex items-center gap-2">
-        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(record.status)}`} />
-        <span className={`min-w-0 flex-1 truncate font-extrabold text-[var(--sunlit-ink)] ${compact ? "text-[11px]" : "text-sm"}`}>
-          {contentTitle(record, locale)}
+      <span className="flex gap-3">
+        <span className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-black/5 bg-white/70 text-[var(--sunlit-muted)]">
+          {media ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="" className="h-full w-full object-cover" src={media.publicUrl} />
+            </>
+          ) : (
+            <ImageIcon size={22} />
+          )}
         </span>
-      </span>
-      <span className={`mt-1.5 flex items-center justify-between gap-2 font-bold text-[var(--sunlit-muted)] ${compact ? "text-[9px]" : "text-xs"}`}>
-        <span className="truncate">{statusLabel(record.status, locale)}</span>
-        {calendarInstant(record) ? <span className="shrink-0">{formatCalendarTime(calendarInstant(record) ?? "", locale)}</span> : null}
+        <span className="min-w-0 flex-1 py-0.5">
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold ${statusBadgeClass(record.status)}`}>
+            {statusLabel(record.status, locale)}
+          </span>
+          <span className="mt-2 block min-w-0 text-sm font-black leading-5 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
+          <span className="mt-1.5 block text-xs font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
+        </span>
+        <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)]">
+          {locale === "ar" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </span>
       </span>
     </button>
   );
 }
 
-function CalendarMetric({ icon: Icon, label, tone, value }: { icon: typeof CalendarDays; label: string; tone: "aqua" | "coral" | "yellow"; value: number }) {
+function CalendarMetric({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+  tone,
+  value
+}: {
+  active: boolean;
+  icon: typeof CalendarDays;
+  label: string;
+  onClick: () => void;
+  tone: "aqua" | "coral" | "yellow";
+  value: number;
+}) {
   const styles = {
-    aqua: "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]",
-    coral: "bg-[#FFF0F1] text-[#A43C49]",
-    yellow: "bg-[var(--sunlit-yellow-soft)] text-[#8A6510]"
+    aqua: {
+      active: "border-[rgb(33_191_174_/_55%)] bg-[var(--sunlit-aqua-soft)] shadow-[0_8px_24px_rgb(33_191_174_/_12%)]",
+      icon: "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+    },
+    coral: {
+      active: "border-[rgb(217_76_97_/_45%)] bg-[#FFF0F1] shadow-[0_8px_24px_rgb(217_76_97_/_10%)]",
+      icon: "bg-[#FFF0F1] text-[#A43C49]"
+    },
+    yellow: {
+      active: "border-[rgb(234_184_72_/_55%)] bg-[var(--sunlit-yellow-soft)] shadow-[0_8px_24px_rgb(234_184_72_/_12%)]",
+      icon: "bg-[var(--sunlit-yellow-soft)] text-[#8A6510]"
+    }
   }[tone];
 
   return (
-    <article className="sunlit-panel flex items-center gap-4 rounded-2xl p-5">
-      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${styles}`}>
-        <Icon size={20} />
+    <button
+      aria-pressed={active}
+      className={`flex min-h-[4.75rem] items-center gap-2 rounded-2xl border px-2 py-2.5 text-start transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] sm:min-h-16 sm:gap-3 sm:px-3 ${
+        active ? styles.active : "border-[var(--sunlit-line)] bg-white/70"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl sm:h-9 sm:w-9 ${styles.icon}`}>
+        <Icon size={18} />
       </span>
-      <div>
-        <p className="text-2xl font-black text-[var(--sunlit-ink)]">{value}</p>
-        <p className="text-xs font-bold text-[var(--sunlit-muted)]">{label}</p>
-      </div>
-    </article>
+      <span className="min-w-0">
+        <span className="block text-lg font-black leading-none text-[var(--sunlit-ink)] sm:text-xl">{value}</span>
+        <span className="mt-1 block text-[11px] font-bold leading-4 text-[var(--sunlit-muted)] sm:text-xs">{label}</span>
+      </span>
+    </button>
   );
 }
 
@@ -835,24 +953,22 @@ function calendarCopy(locale: Locale): CalendarCopy {
     return {
       addContent: "إنشاء محتوى",
       allTimes: "جميع المواعيد بتوقيت البحرين.",
-      automaticNote: "يعرض التقويم حالات MARKOS المحفوظة؛ النشر التلقائي على إنستغرام يعتمد على جاهزية العامل والموفر.",
+      backToCalendar: "العودة إلى التقويم",
+      backToDay: "العودة إلى اليوم",
       cancel: "رجوع",
       cancelConfirm: "هل تريد إلغاء موعد هذا المحتوى؟",
       cancelSchedule: "إلغاء الموعد",
-      calendarEyebrow: "تقويم المحتوى",
-      calendarSubtitle: "راجع ما سيُنشر قريباً، عالج ما يحتاج انتباهاً، وانقل المحتوى الجاهز إلى موعد واضح دون فقدان خطوة الموافقة.",
-      calendarTitle: "خطّط للأسبوع واعرف الخطوة التالية.",
+      calendarTitle: "تقويم المحتوى",
       close: "إغلاق",
-      contentLibrary: "جدول مساحة العمل",
-      details: "التفاصيل",
-      emptyDay: "لا يوجد محتوى محفوظ في هذا اليوم.",
+      details: "تفاصيل المحتوى",
+      emptyDay: "لا توجد مسودات محدّثة أو منشورات مجدولة أو منشورة في هذا اليوم.",
       failed: "يحتاج انتباهاً",
       loading: "جارٍ تحميل تقويم مساحة العمل...",
       month: "الشهر",
-      nextUp: "التالي",
-      noContent: "اختر محتوى من التقويم أو من قائمة غير المجدول.",
-      noNextAction: "لا توجد خطوة محتوى عاجلة. يمكنك إنشاء مسودة جديدة عندما تكون جاهزاً.",
-      openEditor: "فتح في إنشاء المحتوى",
+      nextDay: "اليوم التالي",
+      openDay: "فتح اليوم",
+      openEditor: "تعديل المحتوى",
+      previousDay: "اليوم السابق",
       published: "منشور",
       ready: "جاهز للجدولة",
       refresh: "تحديث",
@@ -862,12 +978,8 @@ function calendarCopy(locale: Locale): CalendarCopy {
       schedulePost: "اختيار موعد النشر",
       scheduled: "مجدول في MARKOS",
       scheduledThisWeek: "مجدول هذا الأسبوع",
-      selectContent: "اختر محتوى",
-      selectedDay: "اليوم المحدد",
-      subtitle: "المحتوى الذي ما زال يحتاج موعداً",
       today: "اليوم",
-      unscheduled: "غير مجدول",
-      unscheduledEmpty: "لا توجد مسودات أو منشورات جاهزة تنتظر موعداً.",
+      updated: "آخر تحديث",
       viewInsights: "عرض الإحصاءات",
       week: "الأسبوع"
     };
@@ -876,24 +988,22 @@ function calendarCopy(locale: Locale): CalendarCopy {
   return {
     addContent: "Create content",
     allTimes: "All times are shown in Bahrain time.",
-    automaticNote: "The calendar reflects saved MARKOS states; automatic Instagram publishing still depends on worker and provider readiness.",
+    backToCalendar: "Back to calendar",
+    backToDay: "Back to day",
     cancel: "Go back",
     cancelConfirm: "Cancel this content schedule?",
     cancelSchedule: "Cancel schedule",
-    calendarEyebrow: "Content calendar",
-    calendarSubtitle: "See what is coming, resolve what needs attention, and give ready content a clear time without skipping approval.",
-    calendarTitle: "Plan the week. Know what happens next.",
+    calendarTitle: "Content calendar",
     close: "Close",
-    contentLibrary: "Workspace schedule",
-    details: "Details",
-    emptyDay: "There is no saved content on this day.",
+    details: "Content details",
+    emptyDay: "No drafts were updated and no content was scheduled or published on this day.",
     failed: "Needs attention",
     loading: "Loading the workspace calendar...",
     month: "Month",
-    nextUp: "Next up",
-    noContent: "Choose an item from the calendar or the unscheduled queue.",
-    noNextAction: "There is no urgent content action. Create a new draft whenever you are ready.",
-    openEditor: "Open in Create",
+    nextDay: "Next day",
+    openDay: "Open day",
+    openEditor: "Edit content",
+    previousDay: "Previous day",
     published: "Published",
     ready: "Ready to schedule",
     refresh: "Refresh",
@@ -903,12 +1013,8 @@ function calendarCopy(locale: Locale): CalendarCopy {
     schedulePost: "Choose publishing time",
     scheduled: "Scheduled in MARKOS",
     scheduledThisWeek: "Scheduled this week",
-    selectContent: "Select content",
-    selectedDay: "Selected day",
-    subtitle: "Content that still needs a time",
     today: "Today",
-    unscheduled: "Unscheduled",
-    unscheduledEmpty: "No drafts or ready posts are waiting for a time.",
+    updated: "Updated",
     viewInsights: "View insights",
     week: "Week"
   };
@@ -919,7 +1025,6 @@ function groupCalendarRecords(records: ContentRecord[]): Map<string, ContentReco
 
   for (const record of records) {
     const dateKey = calendarDateKey(record);
-    if (!dateKey) continue;
     const existing = grouped.get(dateKey) ?? [];
     existing.push(record);
     grouped.set(dateKey, existing);
@@ -928,42 +1033,27 @@ function groupCalendarRecords(records: ContentRecord[]): Map<string, ContentReco
   for (const [dateKey, items] of grouped) {
     grouped.set(
       dateKey,
-      items.sort((left, right) => Date.parse(calendarInstant(left) ?? left.updatedAt) - Date.parse(calendarInstant(right) ?? right.updatedAt))
+      items.sort((left, right) => Date.parse(calendarPlacementInstant(left)) - Date.parse(calendarPlacementInstant(right)))
     );
   }
 
   return grouped;
 }
 
-function nextCalendarAction(records: ContentRecord[]): ContentRecord | undefined {
-  const failed = records.filter((record) => record.status === "FAILED").sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
-  if (failed) return failed;
-
-  const now = Date.now();
-  const nextScheduled = records
-    .filter((record) => record.status === "SCHEDULED" && record.scheduledAt && Date.parse(record.scheduledAt) >= now)
-    .sort((left, right) => Date.parse(left.scheduledAt ?? left.updatedAt) - Date.parse(right.scheduledAt ?? right.updatedAt))[0];
-  if (nextScheduled) return nextScheduled;
-
-  return records
-    .filter((record) => ["APPROVED", "DRAFT", "IN_REVIEW"].includes(record.status))
-    .sort((left, right) => contentPriority(left) - contentPriority(right) || Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+function matchesCalendarFilter(record: ContentRecord, filter: CalendarFilter): boolean {
+  if (filter === "scheduled") return record.status === "SCHEDULED";
+  if (filter === "ready") return record.status === "APPROVED";
+  if (filter === "failed") return record.status === "FAILED";
+  return true;
 }
 
-function contentPriority(record: ContentRecord): number {
-  if (record.status === "APPROVED") return 0;
-  if (record.status === "IN_REVIEW") return 1;
-  if (record.status === "DRAFT") return 2;
-  return 3;
+function calendarPlacementInstant(record: ContentRecord): string {
+  if (record.status === "PUBLISHED" && record.publishedAt) return record.publishedAt;
+  return record.scheduledAt ?? record.updatedAt;
 }
 
-function calendarInstant(record: ContentRecord): string | undefined {
-  return record.publishedAt ?? record.scheduledAt;
-}
-
-function calendarDateKey(record: ContentRecord): string | undefined {
-  const value = calendarInstant(record);
-  return value ? bahrainDateKey(value) : undefined;
+function calendarDateKey(record: ContentRecord): string {
+  return bahrainDateKey(calendarPlacementInstant(record));
 }
 
 function contentTitle(record: ContentRecord, locale: Locale): string {
@@ -1016,7 +1106,29 @@ function statusDotClass(status: ContentStatus): string {
   if (status === "SCHEDULED") return "bg-[var(--sunlit-aqua)]";
   if (status === "PUBLISHED") return "bg-[#71A867]";
   if (status === "APPROVED") return "bg-[var(--sunlit-yellow)]";
+  if (status === "DRAFT") return "bg-[#9D9A96]";
   return "bg-[var(--sunlit-coral)]";
+}
+
+function statusCardClass(status: ContentStatus): string {
+  if (status === "FAILED") return "border-[#F0C3C9] bg-[#FFF5F6]";
+  if (status === "SCHEDULED") return "border-[rgb(33_191_174_/_28%)] bg-[var(--sunlit-aqua-soft)]";
+  if (status === "PUBLISHED") return "border-[#CFE2C9] bg-[#F5FAF2]";
+  if (status === "APPROVED") return "border-[#EAD9A4] bg-[var(--sunlit-yellow-soft)]";
+  if (status === "DRAFT") return "border-[#D8D4CF] bg-[#F3F1EE]";
+  return "border-[#E3D7DA] bg-[#F8F3F4]";
+}
+
+function recordMomentLabel(record: ContentRecord, copy: CalendarCopy, locale: Locale): string {
+  if (record.status === "PUBLISHED" && record.publishedAt) return `${copy.published} · ${formatCalendarTime(record.publishedAt, locale)}`;
+  if (record.scheduledAt)
+    return `${record.status === "SCHEDULED" ? copy.scheduled : statusLabel(record.status, locale)} · ${formatCalendarTime(record.scheduledAt, locale)}`;
+  return `${copy.updated} · ${formatCalendarTime(record.updatedAt, locale)}`;
+}
+
+function formatItemCount(count: number, locale: Locale): string {
+  if (locale === "ar") return count === 1 ? "عنصر واحد" : `${count} عناصر`;
+  return `${count} ${count === 1 ? "item" : "items"}`;
 }
 
 function bahrainDateKey(value: Date | string): string {
