@@ -112,8 +112,8 @@ Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, m
 - [x] Bilingual tone-locked content workflow.
 - [ ] Rich-text/editorial workflow is complete in the active Sunlit Create surface.
   - Note: core caption/hashtag/CTA editing is mounted, but the prior rich editor was removed during the Sunlit cutover.
-- [ ] Provider-backed AI image pipeline.
-  - Note: the current FastAPI path creates deterministic SVGs locally.
+- [x] Provider-backed AI image pipeline.
+  - Note: the source now provides a separately configured OpenAI Images adapter, exact JPEG output contracts, moderation/provider error mapping, pre-request image quota enforcement, provider token metering, and workspace-owned durable storage. A deployed provider call is still required by the acceptance gate.
 - [x] Prompt A/B tooling.
 - [ ] Provider-reported token and image metering is verified end to end.
   - Note: provider-capable Strategy/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.

@@ -51,7 +51,7 @@ export class MediaUploadInvalidError extends Error {
 
 export class MediaImageGenerationInvalidError extends Error {
   constructor() {
-    super("Generated image data is invalid");
+    super("The generated file is not a supported Instagram JPEG");
   }
 }
 
@@ -185,41 +185,43 @@ export async function generateImageForContent(
 
   const prompt = input.prompt?.trim() || promptFromContent(contentItem);
   const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`);
-  const generated = await generateImageAsset({
-    aspectRatio: input.aspectRatio,
-    prompt,
-    ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-    workspaceId
-  });
-  const promptVersion = promptTemplate?.version ?? generated.prompt_version;
-  const bytes = Buffer.from(generated.base64_data, "base64");
-
-  if (!isValidBase64Payload(generated.base64_data, bytes)) {
-    throw new MediaImageGenerationInvalidError();
-  }
-
   const usagePeriodDate = new Date();
-  await reserveMediaUsage(workspaceId, "AI_GENERATED", bytes.byteLength, usagePeriodDate);
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
+  let reservedStorageBytes = 0;
+  let stored: Awaited<ReturnType<typeof storeWorkspaceMedia>> | undefined;
 
   try {
-    const stored = await storeWorkspaceMedia({
+    const generated = await generateImageAsset({
+      aspectRatio: input.aspectRatio,
+      prompt,
+      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
+      workspaceId
+    });
+    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
+    const bytes = Buffer.from(generated.base64_data, "base64");
+    const verifiedImageDimensions = validateGeneratedImage(generated, bytes, input.aspectRatio);
+
+    await reserveWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: bytes.byteLength, now: usagePeriodDate });
+    reservedStorageBytes = bytes.byteLength;
+    const storedMedia = await storeWorkspaceMedia({
       workspaceId,
       filename: generated.filename,
       contentType: generated.mime_type,
       bytes
     });
+    stored = storedMedia;
     const { mediaAsset, updatedContent } = await prisma.$transaction(async (tx) => {
       const asset = await tx.mediaAsset.create({
         data: {
           workspaceId,
           type: "AI_GENERATED",
           filename: generated.filename,
-          s3Key: stored.key,
-          cdnUrl: stored.publicUrl,
+          s3Key: storedMedia.key,
+          cdnUrl: storedMedia.publicUrl,
           mimeType: generated.mime_type,
-          sizeBytes: stored.sizeBytes,
-          width: generated.width,
-          height: generated.height
+          sizeBytes: storedMedia.sizeBytes,
+          width: verifiedImageDimensions.width,
+          height: verifiedImageDimensions.height
         }
       });
       const content = await tx.contentItem.update({
@@ -245,8 +247,8 @@ export async function generateImageForContent(
           } as unknown as Prisma.InputJsonValue,
           response: {
             mediaAssetId: asset.id,
-            publicUrl: stored.publicUrl,
-            sizeBytes: stored.sizeBytes,
+            publicUrl: storedMedia.publicUrl,
+            sizeBytes: storedMedia.sizeBytes,
             providerPromptVersion: generated.prompt_version
           } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
@@ -278,7 +280,17 @@ export async function generateImageForContent(
       promptVersion
     };
   } catch (error) {
-    await refundMediaUsage(workspaceId, "AI_GENERATED", bytes.byteLength, usagePeriodDate);
+    if (stored !== undefined) {
+      try {
+        await deleteStoredMedia(workspaceId, stored.key);
+      } catch {
+        // Preserve the original generation or persistence error; storage cleanup can be retried operationally.
+      }
+    }
+    if (reservedStorageBytes > 0) {
+      await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: reservedStorageBytes, now: usagePeriodDate });
+    }
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
     throw error;
   }
 }
@@ -453,6 +465,65 @@ function mediaUploadErrorMessage(reason: MediaUploadInvalidError["reason"]): str
 
 function isValidBase64Payload(value: string, bytes: Buffer): boolean {
   return bytes.byteLength > 0 && bytes.toString("base64").replace(/=+$/, "") === value.replace(/=+$/, "");
+}
+
+function validateGeneratedImage(
+  generated: {
+    base64_data: string;
+    filename: string;
+    height: number;
+    mime_type: string;
+    size_bytes: number;
+    width: number;
+  },
+  bytes: Buffer,
+  aspectRatio: GenerateImageForContentInput["aspectRatio"]
+): { height: number; width: number } {
+  if (!isValidBase64Payload(generated.base64_data, bytes) || generated.size_bytes !== bytes.byteLength) {
+    throw new MediaImageGenerationInvalidError();
+  }
+
+  const verified = inspectJpegDimensions(bytes);
+  const expectedDimensions = {
+    "1:1": { height: 1024, width: 1024 },
+    "4:5": { height: 1280, width: 1024 },
+    "9:16": { height: 1792, width: 1008 }
+  }[aspectRatio];
+
+  if (
+    verified === undefined ||
+    verified.width !== generated.width ||
+    verified.height !== generated.height ||
+    verified.width !== expectedDimensions.width ||
+    verified.height !== expectedDimensions.height
+  ) {
+    throw new MediaImageGenerationInvalidError();
+  }
+
+  const extension = generated.filename.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+  if (
+    generated.mime_type.toLowerCase() !== "image/jpeg" ||
+    (extension !== ".jpg" && extension !== ".jpeg") ||
+    bytes.byteLength > instagramImageConstraints.maxSizeBytes
+  ) {
+    throw new MediaImageGenerationInvalidError();
+  }
+
+  if (aspectRatio !== "9:16") {
+    const reasons = validateInstagramImageMetadata({
+      filename: generated.filename,
+      height: verified.height,
+      mimeType: generated.mime_type,
+      sizeBytes: bytes.byteLength,
+      width: verified.width
+    });
+
+    if (reasons.length > 0) {
+      throw new MediaImageGenerationInvalidError();
+    }
+  }
+
+  return verified;
 }
 
 function promptFromContent(contentItem: {

@@ -173,10 +173,12 @@ Current code consumes:
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
 - `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy, onboarding profiles, and content copy)
-- `OPENAI_API_KEY` (AI service only; required when `AI_TEXT_PROVIDER=openai`)
+- `AI_IMAGE_PROVIDER` (`local` for deterministic development JPEGs, `openai` for live provider-backed image generation)
+- `OPENAI_API_KEY` (AI service only; required when either provider selector is `openai`)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
+- `AI_IMAGE_TIMEOUT_SECONDS`
 - `OPENAI_TIMEOUT_SECONDS`
 - `OPENAI_MAX_RETRIES`
 - `OPENAI_MAX_OUTPUT_TOKENS`
@@ -196,7 +198,17 @@ Current code consumes:
 - `SENTRY_RELEASE`
 - `SENTRY_TRACES_SAMPLE_RATE`
 
-Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request. While `OPENAI_STORE_RESPONSES=true`, use only approved provider inputs: the OpenAI project retains request/response application state for dashboard review, including the business context intentionally sent to the model. Turn it off when the quality-review phase ends or before the applicable privacy/retention boundary requires stateless requests.
+Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request. While `OPENAI_STORE_RESPONSES=true`, use only approved text-provider inputs: the OpenAI project retains Responses API application state for dashboard review. That switch does not control Images API retention. Turn it off when the quality-review phase ends or before the applicable privacy/retention boundary requires stateless text requests.
+
+### 2026-08-20 provider image deployment delta
+
+The provider-backed image path requires only these deliberate changes:
+
+- API: set `IMAGE_MODEL_PRIMARY=gpt-image-2` and update `AI_HTTP_TIMEOUT_MS=130000` so the gateway does not abort a valid long-running image request.
+- AI: set `AI_IMAGE_PROVIDER=openai`, `IMAGE_MODEL_PRIMARY=gpt-image-2`, and `AI_IMAGE_TIMEOUT_SECONDS=120`. Keep the existing sealed `OPENAI_API_KEY`; do not copy it to API, web, or worker.
+- No web or worker variable is added. No database migration, Redis change, OpenSearch service, or new storage variable is required.
+
+The adapter asks the Images API for one medium-quality JPEG at 90% compression, uses `1024x1024` for 1:1, `1024x1280` for 4:5, and `1008x1792` for 9:16, and keeps automatic provider moderation enabled. The API reserves the workspace's `AI_IMAGE` quota before the paid request, validates the returned bytes and exact dimensions, records provider token usage, and stores the object under the existing workspace-owned S3 path. `OPENAI_STORE_RESPONSES` does not apply to this endpoint; inspect image activity in the same OpenAI project without assuming that the text response-retention switch governs it.
 
 ### 2026-08-19 branch deployment delta
 
@@ -367,7 +379,7 @@ Record commit/ref, service names, Dockerfile mapping, variable-name inventory, h
 
 Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify the current contract:
 
-- Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; images, embeddings, and generic agents remain deterministic.
+- Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; JPEG generation can use the OpenAI Images API when `AI_IMAGE_PROVIDER=openai`. Embeddings and generic agents remain deterministic.
 - `OPENAI_API_KEY` is consumed only by the AI service in OpenAI mode.
 - `OPENAI_STORE_RESPONSES=true` is an intentional temporary quality-review setting; confirm the chosen OpenAI project is the one being inspected and do not send secrets or unapproved customer data.
 - `INTERNAL_SERVICE_TOKEN` is enforced on non-health AI routes and sent by the API.

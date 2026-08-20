@@ -407,9 +407,15 @@ Open Create in an overview/action-hub state when no content item is selected. Do
 
 **Start a blank post** is a first-class manual path. It creates one workspace-owned `DRAFT` without Vault retrieval, an AI request, or AI quota/token usage. **Draft with MARKOS AI** creates an editable grounded draft through the existing metered generation boundary. Content ideas remain suggestions until the user deliberately selects one; merely viewing an idea must not create a saved item or consume publishing state.
 
-After a draft is created or selected, Create becomes the focused Draft Editor for caption, hashtags, CTA, media, follower-style preview, approval, scheduling, cancellation, and deletion according to the existing lifecycle. AI assistance is optional and contextual inside the editor; it must never overwrite user work without confirmation. Manual media upload remains first-class. Provider-backed image generation must use the configured image-provider interface, enforce quota/metering and moderation, normalize or reject output into the supported Instagram JPEG contract, and keep deterministic concept artwork clearly separate until that provider path exists.
+After a draft is created or selected, Create becomes the focused Draft Editor for caption, hashtags, CTA, media, follower-style preview, approval, scheduling, cancellation, and deletion according to the existing lifecycle. AI assistance is optional and contextual inside the editor; it must never overwrite user work without confirmation. Manual media upload remains first-class. Provider-backed image generation must use the configured image-provider interface, enforce quota/metering and moderation, normalize or reject output into the supported Instagram JPEG contract, and use the local JPEG renderer only as an explicitly selected development fallback.
 
 The information architecture is locked; implementation remains a subsequent UI/API slice. The smallest API addition is an ordinary workspace-scoped blank-content create contract consistent with the build specification's `POST /content` catalogue.
+
+## 2026-08-20: Provider images are direct, validated workspace JPEGs
+
+Use the OpenAI Images API behind the independent `AI_IMAGE_PROVIDER` selector so image rollout does not change text-provider behavior. Resolve the model through the existing `IMAGE_MODEL_PRIMARY` slot; the initial live setting is `gpt-image-2`. Generate one medium-quality, 90%-compressed JPEG with automatic provider moderation. Request exact sizes of 1024×1024 for 1:1, 1024×1280 for 4:5, and 1008×1792 for 9:16.
+
+Reserve the workspace's `AI_IMAGE` allowance before making the paid provider request. Require provider usage, valid base64, a decodable JPEG, no more than 8 MB, and exact requested dimensions before storage. Then reserve storage, persist the workspace-owned object and attachment, and record the interaction and input/output tokens transactionally. Refund the image allowance when moderation, provider, validation, storage, or persistence prevents delivery. Never send a raw workspace ID to the provider or log prompts/image bytes; use a pseudonymous provider user identifier.
 
 ## 2026-08-20: Business Profile editing is an explicit return to onboarding
 

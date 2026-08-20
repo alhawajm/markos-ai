@@ -35,7 +35,7 @@ export const envSchema = z
     WEB_BASE_URL: z.string().url().default("http://localhost:3000"),
     AI_BASE_URL: z.string().url().default("http://localhost:8000"),
     INTERNAL_SERVICE_TOKEN: z.string().min(1).default("change-me"),
-    AI_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(55_000),
+    AI_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(180_000).default(130_000),
     DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     OPENSEARCH_URL: z.string().url().default("http://localhost:9200"),

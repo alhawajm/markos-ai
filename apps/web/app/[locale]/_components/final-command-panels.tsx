@@ -1723,7 +1723,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     }
 
     setGeneratingImage(true);
-    setMessage("MARKOS is building and saving an image concept for this draft...");
+    setMessage("MARKOS is generating and saving a publish-ready JPEG. This can take up to two minutes...");
 
     try {
       const editableRecord = canEdit ? await persistEditableDraft(false) : currentRecord;
@@ -1735,7 +1735,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       });
       upsertMediaAsset(generated.mediaAsset);
       upsertRecord(generated.contentItem);
-      applyRecord(generated.contentItem, "Image concept generated, saved, and attached to this draft.");
+      applyRecord(generated.contentItem, "AI image generated, saved, and attached to this draft.");
       setSelectedMediaId(generated.mediaAsset.id);
     } catch (error) {
       setMessage(contentStudioError(error));
@@ -2164,7 +2164,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Images</h2>
-                  <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate a saved image concept.</p>
+                  <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate one with MARKOS AI.</p>
                 </div>
                 <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
                   {attachedMediaAssets.length} attached
@@ -2265,7 +2265,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   </div>
 
                   <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
-                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Generate an image concept</h3>
+                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Generate an AI image</h3>
                     <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">Uses the saved caption when the optional direction is empty.</p>
                     <input
                       className="sunlit-field mt-3 h-11 rounded-xl px-3 text-sm outline-none"
@@ -2296,9 +2296,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-                  The preview preserves the uploaded image&apos;s framing. Instagram may still recompress the file and convert non-sRGB color to sRGB. Image
-                  generation currently validates the saved workflow with deterministic artwork; for the Milestone A publish, attach one provider-compatible
-                  JPEG.
+                  MARKOS saves generated images as Instagram-ready JPEGs in this workspace. Review every generated image before approval. Instagram may still
+                  recompress the file and convert non-sRGB color to sRGB.
                 </p>
               </article>
             </section>

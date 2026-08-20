@@ -4,22 +4,30 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { instagramJpegFixture } from "./helpers/jpeg";
 
+const imageMock = vi.hoisted(() => ({ calls: 0 }));
+
 vi.mock("../src/ai/image-client", () => ({
   generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
-    const bytes = Buffer.from(`<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`);
+    imageMock.calls += 1;
+    const dimensions = {
+      "1:1": { height: 1024, width: 1024 },
+      "4:5": { height: 1280, width: 1024 },
+      "9:16": { height: 1792, width: 1008 }
+    }[input.aspectRatio] ?? { height: 1280, width: 1024 };
+    const bytes = instagramJpegFixture(dimensions.width, dimensions.height);
 
     return {
       base64_data: bytes.toString("base64"),
-      filename: "generated-test.svg",
-      height: 1350,
-      mime_type: "image/svg+xml",
+      filename: "generated-test.jpg",
+      height: dimensions.height,
+      mime_type: "image/jpeg",
       model: "test-image-model",
       prompt: input.prompt,
       prompt_version: "image.v1.test",
       size_bytes: bytes.byteLength,
       tokens_in: 31,
       tokens_out: 7,
-      width: 1080
+      width: dimensions.width
     };
   }
 }));
@@ -318,17 +326,17 @@ describe("media routes", () => {
       mediaAsset: {
         id: assetId,
         type: "AI_GENERATED",
-        filename: "generated-test.svg",
-        mimeType: "image/svg+xml",
-        width: 1080,
-        height: 1350
+        filename: "generated-test.jpg",
+        mimeType: "image/jpeg",
+        width: 1024,
+        height: 1280
       },
       model: "test-image-model",
       prompt: "Premium Bahrain coffee product photo",
       promptVersion: "image.v1.test"
     });
     expect(served.statusCode).toBe(200);
-    expect(served.body).toContain("Premium Bahrain coffee product photo");
+    expect(served.rawPayload).toEqual(instagramJpegFixture(1024, 1280));
     expect(interaction).toMatchObject({
       promptVersion: "image.v1.test",
       tokensIn: 31,
@@ -580,6 +588,46 @@ describe("media routes", () => {
       }
     });
     expect(storageCounter?.used ?? 0n).toBe(0n);
+
+    await app.close();
+  });
+
+  it("checks the AI image quota before calling the provider", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+    const providerCallsBefore = imageMock.calls;
+
+    await prisma.usageCounter.create({
+      data: {
+        workspaceId: session.workspace.id,
+        metric: "AI_IMAGE",
+        periodStart: monthStart(),
+        periodEnd: nextMonthStart(),
+        used: 20,
+        limit: 20
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        prompt: "A Bahrain coffee product image"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "QUOTA_EXCEEDED",
+        details: [{ metric: "AI_IMAGE" }]
+      }
+    });
+    expect(imageMock.calls).toBe(providerCallsBefore);
 
     await app.close();
   });

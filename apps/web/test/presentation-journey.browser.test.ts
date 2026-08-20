@@ -287,21 +287,20 @@ describe("presentation journey", () => {
         imageGenerationPayload = route.request().postDataJSON() as Record<string, unknown>;
         const mediaAsset = {
           createdAt: "2026-08-17T10:03:00.000Z",
-          filename: "generated-concept.svg",
-          height: 1350,
+          filename: "generated-image.jpg",
+          height: 1280,
           id: "media-generated",
-          mimeType: "image/svg+xml",
-          publicUrl:
-            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1080' height='1350'%3E%3Crect width='100%25' height='100%25' fill='%23d93f7a'/%3E%3C/svg%3E",
-          sizeBytes: 180,
+          mimeType: "image/jpeg",
+          publicUrl: onePixelJpegDataUrl,
+          sizeBytes: 631,
           type: "AI_GENERATED",
           updatedAt: "2026-08-17T10:03:00.000Z",
-          width: 1080,
+          width: 1024,
           workspaceId: session.workspace.id
         };
         mediaAssets.unshift(mediaAsset);
         record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, mediaAsset.id])) };
-        return route.fulfill(json({ contentItem: record, mediaAsset, model: "local-image-generator", prompt: "saved caption", promptVersion: "image.v1" }));
+        return route.fulfill(json({ contentItem: record, mediaAsset, model: "gpt-image-2", prompt: "saved caption", promptVersion: "image.v2.openai" }));
       }
       if (pathname === `/v1/content/${record.id}/status` && method === "POST") {
         const payload = route.request().postDataJSON() as { status: string };
@@ -357,7 +356,7 @@ describe("presentation journey", () => {
     await expect(page.getByRole("dialog", { name: "Expanded preview of showcase.jpg" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Close expanded image" }).click();
     await page.getByRole("button", { name: "Generate image", exact: true }).click();
-    await page.getByText("Image concept generated, saved, and attached to this draft.", { exact: true }).waitFor();
+    await page.getByText("AI image generated, saved, and attached to this draft.", { exact: true }).waitFor();
     await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
 
     await page.getByRole("button", { name: "Approve draft", exact: true }).click();

@@ -1,12 +1,11 @@
 import asyncio
-import base64
 import hashlib
 import math
 import re
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Literal, TypedDict
+from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -18,6 +17,7 @@ from app.contracts.business_profile import (
     BusinessProfileGenerateResponse,
 )
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
+from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
 from app.contracts.strategy import (
     StrategyContextChunk,
     StrategyGenerateRequest,
@@ -28,6 +28,7 @@ from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
 from app.providers.business_profile import get_business_profile_provider
 from app.providers.content import get_content_provider
+from app.providers.image import get_image_provider
 from app.providers.strategy import get_strategy_provider
 
 
@@ -46,35 +47,6 @@ class VaultEmbedResponse(BaseModel):
     model: str
     dimensions: int
     embeddings: list[list[float]]
-
-
-class ImageGenerateRequest(BaseModel):
-    workspace_id: str
-    prompt: str = Field(min_length=3, max_length=1000)
-    aspect_ratio: Literal["1:1", "4:5", "9:16"] = "4:5"
-    model: str | None = None
-
-
-class ImageGenerateResponse(BaseModel):
-    model: str
-    prompt_version: str
-    tokens_in: int
-    tokens_out: int
-    prompt: str
-    filename: str
-    mime_type: str
-    base64_data: str
-    size_bytes: int
-    width: int
-    height: int
-
-
-class BuiltImage(TypedDict):
-    bytes: bytes
-    filename: str
-    height: int
-    summary: str
-    width: int
 
 
 AgentName = Literal[
@@ -105,6 +77,7 @@ class AgentRunResponse(BaseModel):
     tokens_in: int
     tokens_out: int
     output: dict[str, object]
+
 
 init_observability()
 app = FastAPI(title="MARKOS AI Service", version="0.0.0")
@@ -196,7 +169,9 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
     return VaultEmbedResponse(
         model=model,
         dimensions=settings.embedding_dimensions,
-        embeddings=[deterministic_embedding(text, settings.embedding_dimensions) for text in request.texts],
+        embeddings=[
+            deterministic_embedding(text, settings.embedding_dimensions) for text in request.texts
+        ],
     )
 
 
@@ -242,7 +217,9 @@ async def generate_business_profile(
         ) from None
 
 
-@app.post("/ai/content/generate", response_model=ContentGenerateResponse, response_model_exclude_none=True)
+@app.post(
+    "/ai/content/generate", response_model=ContentGenerateResponse, response_model_exclude_none=True
+)
 async def generate_content(request: ContentGenerateRequest) -> ContentGenerateResponse:
     if not request.context:
         raise AiServiceError(
@@ -268,23 +245,18 @@ async def generate_content(request: ContentGenerateRequest) -> ContentGenerateRe
 
 @app.post("/ai/images/generate", response_model=ImageGenerateResponse)
 async def generate_image(request: ImageGenerateRequest) -> ImageGenerateResponse:
-    model = request.model or settings.image_model_primary or "local-image-generator"
-    prompt_text = image_prompt_text(request)
-    image = build_image_svg(request)
+    provider = get_image_provider()
 
-    return ImageGenerateResponse(
-        model=model,
-        prompt_version="image.v1.local",
-        tokens_in=estimate_tokens(prompt_text),
-        tokens_out=estimate_tokens(image["summary"]),
-        prompt=request.prompt,
-        filename=image["filename"],
-        mime_type="image/svg+xml",
-        base64_data=base64.b64encode(image["bytes"]).decode("ascii"),
-        size_bytes=len(image["bytes"]),
-        width=image["width"],
-        height=image["height"],
-    )
+    try:
+        async with asyncio.timeout(settings.ai_image_timeout_seconds):
+            return await provider.generate_image(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI image provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
 
 
 @app.post("/ai/agents/run", response_model=AgentRunResponse)
@@ -337,51 +309,6 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(re.findall(r"\S+", text)))
 
 
-def image_prompt_text(request: ImageGenerateRequest) -> str:
-    return f"{request.workspace_id} {request.aspect_ratio} {request.prompt}"
-
-
-def build_image_svg(request: ImageGenerateRequest) -> BuiltImage:
-    dimensions = {
-        "1:1": (1080, 1080),
-        "4:5": (1080, 1350),
-        "9:16": (1080, 1920),
-    }
-    width, height = dimensions[request.aspect_ratio]
-    digest = hashlib.sha256(f"{request.workspace_id}:{request.prompt}:{request.aspect_ratio}".encode()).hexdigest()
-    primary = f"#{digest[:6]}"
-    secondary = f"#{digest[6:12]}"
-    accent = f"#{digest[12:18]}"
-    title = shorten_for_svg(request.prompt, 92)
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
-  <rect width="{width}" height="{height}" fill="{primary}"/>
-  <rect x="{width * 0.08:.0f}" y="{height * 0.08:.0f}" width="{width * 0.84:.0f}" height="{height * 0.84:.0f}" rx="32" fill="{secondary}" opacity="0.84"/>
-  <circle cx="{width * 0.78:.0f}" cy="{height * 0.24:.0f}" r="{width * 0.14:.0f}" fill="{accent}" opacity="0.72"/>
-  <path d="M {width * 0.12:.0f} {height * 0.70:.0f} C {width * 0.30:.0f} {height * 0.56:.0f}, {width * 0.50:.0f} {height * 0.82:.0f}, {width * 0.88:.0f} {height * 0.62:.0f}" fill="none" stroke="#ffffff" stroke-width="18" opacity="0.40"/>
-  <text x="{width * 0.12:.0f}" y="{height * 0.46:.0f}" fill="#ffffff" font-family="Arial, sans-serif" font-size="52" font-weight="700">
-    <tspan>{escape_svg(title)}</tspan>
-  </text>
-  <text x="{width * 0.12:.0f}" y="{height * 0.55:.0f}" fill="#ffffff" font-family="Arial, sans-serif" font-size="30" opacity="0.82">MARKOS AI generated visual</text>
-</svg>"""
-
-    return {
-        "bytes": svg.encode("utf-8"),
-        "filename": f"markos-ai-{digest[:12]}.svg",
-        "height": height,
-        "summary": f"{request.aspect_ratio} image for {request.prompt}",
-        "width": width,
-    }
-
-
-def shorten_for_svg(value: str, max_length: int) -> str:
-    clean = " ".join(value.split())
-    return clean if len(clean) <= max_length else f"{clean[: max_length - 1].rstrip()}..."
-
-
-def escape_svg(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
 def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
     context_summary = summarize_context(request.context)
     base = {
@@ -396,9 +323,17 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
         return {
             **base,
             "strategy": {
-                "objectives": ["Clarify offer", "Increase qualified Instagram inquiries", "Build bilingual trust"],
+                "objectives": [
+                    "Clarify offer",
+                    "Increase qualified Instagram inquiries",
+                    "Build bilingual trust",
+                ],
                 "pillars": ["Proof and trust", "Offer education", "Local relevance"],
-                "nextActions": ["Choose one 30-day objective", "Generate a content plan", "Review weekly analytics"],
+                "nextActions": [
+                    "Choose one 30-day objective",
+                    "Generate a content plan",
+                    "Review weekly analytics",
+                ],
             },
         }
 
@@ -406,10 +341,30 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
         return {
             **base,
             "calendar": [
-                {"week": 1, "contentType": "CAROUSEL", "theme": "Proof and trust", "bestTime": "19:00 Asia/Bahrain"},
-                {"week": 2, "contentType": "REEL", "theme": "Offer education", "bestTime": "20:00 Asia/Bahrain"},
-                {"week": 3, "contentType": "POST", "theme": "Local relevance", "bestTime": "18:30 Asia/Bahrain"},
-                {"week": 4, "contentType": "STORY", "theme": "Conversion prompt", "bestTime": "12:30 Asia/Bahrain"},
+                {
+                    "week": 1,
+                    "contentType": "CAROUSEL",
+                    "theme": "Proof and trust",
+                    "bestTime": "19:00 Asia/Bahrain",
+                },
+                {
+                    "week": 2,
+                    "contentType": "REEL",
+                    "theme": "Offer education",
+                    "bestTime": "20:00 Asia/Bahrain",
+                },
+                {
+                    "week": 3,
+                    "contentType": "POST",
+                    "theme": "Local relevance",
+                    "bestTime": "18:30 Asia/Bahrain",
+                },
+                {
+                    "week": 4,
+                    "contentType": "STORY",
+                    "theme": "Conversion prompt",
+                    "bestTime": "12:30 Asia/Bahrain",
+                },
             ],
             "distribution": {"POST": 35, "CAROUSEL": 30, "REEL": 25, "STORY": 10},
         }
@@ -430,7 +385,11 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
             **base,
             "script": {
                 "hook": f"One thing your audience should know about {request.task}",
-                "beats": ["show the product or process", "explain the practical benefit", "close with a direct CTA"],
+                "beats": [
+                    "show the product or process",
+                    "explain the practical benefit",
+                    "close with a direct CTA",
+                ],
                 "cta": "Message us today.",
                 "durationSeconds": 20,
             },
@@ -450,10 +409,19 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
         return {
             **base,
             "insights": [
-                {"metric": "engagementRate", "interpretation": "Track whether educational posts outperform proof-led posts."},
-                {"metric": "qualifiedInquiries", "interpretation": "Tie CTA performance back to business outcomes."},
+                {
+                    "metric": "engagementRate",
+                    "interpretation": "Track whether educational posts outperform proof-led posts.",
+                },
+                {
+                    "metric": "qualifiedInquiries",
+                    "interpretation": "Tie CTA performance back to business outcomes.",
+                },
             ],
-            "recommendations": ["Compare 7-day and 28-day trends", "Promote the format with the strongest saves and DMs"],
+            "recommendations": [
+                "Compare 7-day and 28-day trends",
+                "Promote the format with the strongest saves and DMs",
+            ],
         }
 
     if request.agent == "RECOMMENDATION_ENGINE":
@@ -473,7 +441,11 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
             "Use customer objections from the Vault as content inputs.",
             "Review weekly performance before expanding campaigns.",
         ],
-        "risks": ["Generic content", "Unclear CTA", "No link between marketing activity and revenue"],
+        "risks": [
+            "Generic content",
+            "Unclear CTA",
+            "No link between marketing activity and revenue",
+        ],
     }
 
 
