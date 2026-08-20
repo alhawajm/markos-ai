@@ -2302,13 +2302,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </article>
             </section>
 
-            <EditorBlock
-              action={currentRecord?.status === "SCHEDULED" ? "Cancel schedule" : "Schedule"}
-              busy={scheduling || unscheduling}
-              disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED")}
-              onAction={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
-              title="Schedule"
-            >
+            <EditorBlock title="Schedule">
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
@@ -2336,11 +2330,31 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <div className="flex flex-wrap gap-3">
                 <button
                   className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!canApprove || approving}
-                  onClick={acceptDraft}
+                  disabled={currentRecord?.status === "APPROVED" ? scheduling : currentRecord?.status === "SCHEDULED" ? unscheduling : !canApprove || approving}
+                  onClick={() => {
+                    if (currentRecord?.status === "APPROVED") {
+                      void scheduleDraft();
+                    } else if (currentRecord?.status === "SCHEDULED") {
+                      requestCancelSchedule();
+                    } else {
+                      void acceptDraft();
+                    }
+                  }}
                   type="button"
                 >
-                  {approving ? "Approving..." : currentRecord && !canApprove ? statusLabel(currentRecord.status) : "Approve draft"}
+                  {approving
+                    ? "Approving..."
+                    : scheduling
+                      ? "Scheduling..."
+                      : unscheduling
+                        ? "Cancelling..."
+                        : currentRecord?.status === "APPROVED"
+                          ? "Schedule"
+                          : currentRecord?.status === "SCHEDULED"
+                            ? "Cancel schedule"
+                            : currentRecord && !canApprove
+                              ? statusLabel(currentRecord.status)
+                              : "Approve draft"}
                 </button>
                 <button
                   className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
@@ -3279,7 +3293,7 @@ function EditorBlock({
   onAction,
   title
 }: {
-  action: string;
+  action?: string;
   busy?: boolean;
   children: ReactNode;
   disabled?: boolean;
@@ -3294,14 +3308,16 @@ function EditorBlock({
     <section>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
-        <button
-          className="text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={disabled || busy}
-          onClick={handleAction}
-          type="button"
-        >
-          {busy ? "Working..." : action}
-        </button>
+        {action ? (
+          <button
+            className="text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={disabled || busy}
+            onClick={handleAction}
+            type="button"
+          >
+            {busy ? "Working..." : action}
+          </button>
+        ) : null}
       </div>
       <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">{children}</article>
     </section>

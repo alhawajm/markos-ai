@@ -367,7 +367,9 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: /Continue a draft/ }).click();
     await expect(page.getByRole("heading", { name: "Content and schedule" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Scheduled 1", exact: true }).click();
-    await expect(page.getByText(/^Scheduled · /).isVisible()).resolves.toBe(true);
+    const scheduledItem = page.getByText(/^Scheduled · /);
+    await expect(scheduledItem.isVisible()).resolves.toBe(true);
+    await scheduledItem.click();
     await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
@@ -464,6 +466,11 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar" }).waitFor();
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
+    const desktopWeekDay = await page
+      .getByRole("button", { name: /^Open day:/ })
+      .first()
+      .boundingBox();
+    expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(380);
     const readyCounter = page.getByRole("button", { name: /Ready to schedule/ });
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     await readyCounter.click();

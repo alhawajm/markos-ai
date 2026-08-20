@@ -740,8 +740,8 @@ function CalendarDayColumn({
       aria-label={`${openDayLabel}: ${formatDayHeading(dateKey, locale)} · ${formatItemCount(records.length, locale)}`}
       className={
         isSelected
-          ? "min-w-0 rounded-2xl border border-[rgb(33_191_174_/_45%)] bg-[var(--sunlit-aqua-soft)] p-3 text-start shadow-sm"
-          : "min-w-0 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3 text-start transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+          ? "min-w-0 rounded-2xl border border-[rgb(33_191_174_/_45%)] bg-[var(--sunlit-aqua-soft)] p-3 text-start shadow-sm lg:min-h-[28rem] xl:min-h-[32rem]"
+          : "min-w-0 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3 text-start transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm lg:min-h-[28rem] xl:min-h-[32rem]"
       }
       onClick={onChooseDate}
       type="button"
