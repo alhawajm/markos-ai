@@ -355,7 +355,7 @@ describe("strategy routes", () => {
         ]
       }
     });
-    expect(aiCounter?.used ?? 0).toBe(0);
+    expect(aiCounter?.used ?? 0n).toBe(0n);
 
     await app.close();
   });
