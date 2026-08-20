@@ -65,6 +65,7 @@ type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
 type StudioContentType = Extract<ContentType, "POST" | "REEL" | "CAROUSEL" | "STORY">;
 type ContentPipelineFilter = "ALL" | "DRAFTS" | "READY" | "SCHEDULED" | "PUBLISHED";
+type ContentStudioHomePanel = "AI_DRAFT" | "DRAFTS" | "IDEAS" | null;
 
 interface ContentReadyCardModel {
   accent: Accent;
@@ -1130,6 +1131,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const client = useMarkosClient(locale);
   const [contentType, setContentType] = useState<StudioContentType>("POST");
   const [contentFilter, setContentFilter] = useState<ContentPipelineFilter>("ALL");
+  const [homePanel, setHomePanel] = useState<ContentStudioHomePanel>(null);
   const [prompt, setPrompt] = useState("");
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
@@ -1146,6 +1148,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [scheduleTime, setScheduleTime] = useState("19:30");
   const [message, setMessage] = useState("");
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [creatingBlank, setCreatingBlank] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1158,6 +1161,62 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState<"cancel-schedule" | "delete-draft" | null>(null);
   const [expandedMedia, setExpandedMedia] = useState<MediaAssetRecord | null>(null);
+  const studioHomeCopy =
+    locale === "ar"
+      ? {
+          aiAction: "اكتب مسودة مع MARKOS AI",
+          aiDescription: "حوّل فكرة أو عرضاً إلى مسودة مبنية على ملف نشاطك التجاري.",
+          aiTitle: "صف المنشور الذي تريد إنشاءه",
+          blankAction: "ابدأ منشوراً فارغاً",
+          blankDescription: "افتح مسودة قابلة للتحرير من دون استخدام الذكاء الاصطناعي أو استهلاك الرصيد.",
+          calendarAction: "افتح التقويم",
+          calendarDescription: "راجع ما تم نشره وما هو مجدول واختر موعدك التالي.",
+          continueAction: "تابع مسودة",
+          continueDescription: "ارجع إلى المحتوى المحفوظ وعدّل من حيث توقفت.",
+          eyebrow: "إنشاء",
+          ideasAction: "استكشف أفكار المحتوى",
+          ideasDescription: "اختر نقطة بداية قبل إنشاء أي مسودة.",
+          statsDrafts: "مسودات",
+          statsPublished: "منشور",
+          statsScheduled: "مجدول",
+          subtitle: "ابدأ بنفسك أو اطلب مساعدة MARKOS فقط عندما تحتاجها.",
+          title: "كيف تريد أن تبدأ منشورك التالي؟"
+        }
+      : {
+          aiAction: "Draft with MARKOS AI",
+          aiDescription: "Turn an idea or offer into a draft grounded in your Business Profile.",
+          aiTitle: "Describe the post you want to create",
+          blankAction: "Start a blank post",
+          blankDescription: "Open an editable draft without calling AI or consuming quota.",
+          calendarAction: "Open Calendar",
+          calendarDescription: "Review published and scheduled work, then choose what comes next.",
+          continueAction: "Continue a draft",
+          continueDescription: "Return to saved content and pick up where you left off.",
+          eyebrow: "Create",
+          ideasAction: "Explore content ideas",
+          ideasDescription: "Choose a useful starting point before anything is saved.",
+          statsDrafts: "Drafts",
+          statsPublished: "Published",
+          statsScheduled: "Scheduled",
+          subtitle: "Start on your own, or ask MARKOS for help only when you want it.",
+          title: "How do you want to start your next post?"
+        };
+  const contentIdeaStarters =
+    locale === "ar"
+      ? [
+          ["خلف الكواليس", "عرّف المتابعين على شخص أو خطوة أو تفصيل يصنع الفرق في عملك."],
+          ["منتج تحت الضوء", "اشرح لمن صُمم أحد منتجاتك ولماذا يختاره العملاء."],
+          ["إجابة على سؤال متكرر", "حوّل سؤالاً حقيقياً من العملاء إلى منشور مفيد وسهل الحفظ."],
+          ["قصة عميل", "شارك نتيجة أو تجربة حقيقية من دون اختلاق أرقام أو اقتباسات."],
+          ["دعوة محلية", "أنشئ سبباً واضحاً يدعو جمهور البحرين للزيارة أو التواصل هذا الأسبوع."]
+        ]
+      : [
+          ["Behind the scenes", "Introduce a person, process, or detail that makes your business different."],
+          ["Product spotlight", "Explain who one offer is for and why customers choose it."],
+          ["Answer a common question", "Turn a real customer question into something useful and saveable."],
+          ["Customer story", "Share a real outcome or experience without inventing numbers or quotes."],
+          ["Local invitation", "Give your Bahrain audience a clear reason to visit or get in touch this week."]
+        ];
   const contentPipelineCopy =
     locale === "ar"
       ? {
@@ -1252,12 +1311,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         setRecords(nextRecords);
         setMediaAssets(nextMediaAssets);
         const requestedItemId = params.get("item");
-        const requestedRecord = requestedItemId ? nextRecords.find((item) => item.id === requestedItemId) : null;
-        const latestEditable =
-          nextRecords.find((item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED") ?? nextRecords[0] ?? null;
+        const requestedRecord = requestedItemId ? nextRecords.find((item) => item.id === requestedItemId) : undefined;
 
-        if (requestedRecord ?? latestEditable) {
-          applyRecord(requestedRecord ?? latestEditable);
+        if (requestedRecord) {
+          applyRecord(requestedRecord);
+        } else if (requestedItemId) {
+          setMessage(locale === "ar" ? "تعذر العثور على المحتوى المطلوب في مساحة العمل هذه." : "That content item was not found in this workspace.");
         }
       } catch (error) {
         if (!cancelled) {
@@ -1275,7 +1334,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     return () => {
       cancelled = true;
     };
-  }, [client, session]);
+  }, [client, locale, session]);
 
   function applyRecord(record: ContentRecord | null, note?: string) {
     setCurrentRecord(record);
@@ -1321,6 +1380,47 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       next[existingIndex] = mediaAsset;
       return next;
     });
+  }
+
+  function returnToCreateHome(note?: string) {
+    applyRecord(null, note);
+    setHomePanel(null);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("item");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  async function createBlankDraft() {
+    if (!session) {
+      setMessage(
+        locale === "ar"
+          ? "سجّل الدخول أو أكمل الإعداد أولاً حتى يتمكن MARKOS من حفظ المسودة."
+          : "Sign in or complete onboarding first so MARKOS can save the draft."
+      );
+      return;
+    }
+
+    setCreatingBlank(true);
+    setMessage(locale === "ar" ? "جارٍ فتح مسودة فارغة..." : "Opening a blank post draft...");
+
+    try {
+      const draft = await client.createContent({ contentType: "POST" });
+      upsertRecord(draft);
+      applyRecord(draft, locale === "ar" ? "تم حفظ مسودة فارغة. ابدأ بالكتابة عندما تكون جاهزاً." : "Blank draft saved. Start writing whenever you are ready.");
+      setHomePanel(null);
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setCreatingBlank(false);
+    }
+  }
+
+  function openAiDraft(idea?: string) {
+    if (idea) {
+      setPrompt(idea);
+    }
+    setHomePanel("AI_DRAFT");
   }
 
   async function generate() {
@@ -1531,7 +1631,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       await client.deleteContent(deletedId);
       const remainingRecords = records.filter((record) => record.id !== deletedId);
       setRecords(remainingRecords);
-      applyRecord(remainingRecords[0] ?? null, "Post draft deleted from MarkOS. Its media files remain in the workspace media library.");
+      returnToCreateHome("Post draft deleted from MarkOS. Its media files remain in the workspace media library.");
+      setHomePanel("DRAFTS");
       setConfirmation(null);
     } catch (error) {
       setMessage(contentStudioError(error));
@@ -1700,12 +1801,33 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   return (
     <section className="grid min-h-[calc(100vh-8rem)] min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-7">
       <div className="min-w-0 space-y-6">
-        <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-pink)] p-5 sm:p-6">
-          <p className="sunlit-eyebrow">Create</p>
-          <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">Turn an idea into your next post.</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">
-            MARKOS uses your Business Profile and saves every draft to this workspace.
-          </p>
+        <section className="sunlit-panel rounded-[1.5rem] border-s-4 border-s-[var(--sunlit-pink)] p-4 sm:px-5 sm:py-4">
+          {currentRecord ? (
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="sunlit-eyebrow">{locale === "ar" ? "محرر المسودة" : "Draft editor"}</p>
+                <h1 className="mt-1 truncate font-display text-xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
+                  {contentPipelineTitle(currentRecord, locale)}
+                </h1>
+              </div>
+              <button
+                className="sunlit-secondary inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+                onClick={() =>
+                  returnToCreateHome(locale === "ar" ? "تم حفظ العمل المؤكد في مساحة العمل." : "Your confirmed changes remain saved in the workspace.")
+                }
+                type="button"
+              >
+                <ArrowRight className={locale === "ar" ? "" : "rotate-180"} size={17} />
+                {locale === "ar" ? "العودة" : "Back to Create"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="sunlit-eyebrow">{studioHomeCopy.eyebrow}</p>
+              <h1 className="mt-1 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{studioHomeCopy.title}</h1>
+              <p className="mt-1 max-w-3xl text-base leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.subtitle}</p>
+            </>
+          )}
         </section>
         {message ? (
           <article className="sunlit-panel-soft rounded-2xl p-5">
@@ -1713,442 +1835,551 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </article>
         ) : null}
 
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-              <Wand2 size={22} />
-            </span>
-            <div>
-              <h2 className="text-xl font-black text-[var(--sunlit-ink)]">What are we creating?</h2>
-              <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Choose a format, then describe the job this content needs to do.</p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {studioTypes.map(([value, label, Icon]) => (
-              <button
-                className={
-                  contentType === value
-                    ? "rounded-xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] px-4 py-3 text-left font-extrabold text-[var(--sunlit-pink)]"
-                    : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3 text-left font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
-                }
-                key={value}
-                onClick={() => setContentType(value)}
-                type="button"
-              >
-                <span className="inline-flex items-center gap-3">
-                  <Icon size={19} />
-                  {label}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <textarea
-            className="sunlit-field mt-5 min-h-36 resize-y rounded-xl p-4 text-base leading-7 outline-none"
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Describe the content you want MARKOS to create, including offer, audience, language, and objective."
-            value={prompt}
-          />
-          <button
-            className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={generating}
-            onClick={generate}
-            type="button"
-          >
-            {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
-            {generating ? "Creating your draft..." : "Create draft"}
-          </button>
-        </article>
-
-        <section className="sunlit-panel-soft rounded-2xl p-5">
-          <h2 className="sunlit-eyebrow">Starting points</h2>
-          <div className="flex flex-wrap gap-3">
-            {["Behind the scenes", "Product showcase", "Customer testimonial", "Limited offer", "Story time"].map((prompt) => (
-              <button
-                className="rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)] hover:text-[var(--sunlit-ink)]"
-                key={prompt}
-                onClick={() =>
-                  setPrompt(
-                    `Create a ${selectedTypeLabel.toLowerCase()} about ${prompt.toLowerCase()} for our current campaign. Use the Business Profile for brand voice and audience context.`
-                  )
-                }
-                type="button"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {loadingRecords ? (
-          <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">
-            {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
-          </article>
-        ) : (
-          <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6" aria-labelledby="content-pipeline-heading">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="content-pipeline-heading">
-                  {contentPipelineCopy.heading}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
-              </div>
-              <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
-                {records.length}
-              </span>
-            </div>
-
-            <div className="mt-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={locale === "ar" ? "تصفية المحتوى" : "Filter content"}>
-              {contentPipelineFilters.map(([value, label]) => (
-                <button
-                  aria-pressed={contentFilter === value}
-                  className={
-                    contentFilter === value
-                      ? "shrink-0 rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
-                      : "shrink-0 rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
-                  }
-                  key={value}
-                  onClick={() => setContentFilter(value)}
-                  type="button"
-                >
-                  {label} <span className="ms-1 opacity-65">{contentPipelineCounts[value]}</span>
-                </button>
-              ))}
-            </div>
-
-            {visibleContentRecords.length === 0 ? (
-              <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-8 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                {contentPipelineCopy.empty}
-              </div>
-            ) : (
-              <div className="mt-5 grid max-h-[34rem] gap-3 overflow-y-auto pe-1">
-                {visibleContentRecords.map((record) => (
-                  <button
-                    aria-pressed={currentRecord?.id === record.id}
-                    className={
-                      currentRecord?.id === record.id
-                        ? "rounded-2xl border border-[rgb(33_191_174_/_32%)] bg-[var(--sunlit-aqua-soft)] px-5 py-4 text-start"
-                        : "rounded-2xl border border-[var(--sunlit-line)] bg-white px-5 py-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                    }
-                    key={record.id}
-                    onClick={() => applyRecord(record, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
-                    type="button"
-                  >
-                    <span className="flex items-start justify-between gap-4">
-                      <span className="min-w-0">
-                        <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
-                        <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
-                          <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
-                          <span className="inline-flex items-center gap-1.5">
-                            {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
-                            {contentPipelineTimestamp(record, locale)}
-                          </span>
-                          {record.mediaIds.length > 0 ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <ImageIcon size={14} /> {record.mediaIds.length}
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${contentStatusBadgeClass(record.status)}`}>
-                        {localizedContentStatusLabel(record.status, locale)}
-                      </span>
-                    </span>
-                  </button>
+        {!currentRecord ? (
+          <>
+            <article className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  [studioHomeCopy.statsDrafts, contentPipelineCounts.DRAFTS, "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-ink-soft)]"],
+                  [studioHomeCopy.statsScheduled, contentPipelineCounts.SCHEDULED, "bg-[var(--sunlit-aqua-soft)] text-[#157A70]"],
+                  [studioHomeCopy.statsPublished, contentPipelineCounts.PUBLISHED, "bg-[#EEF8E9] text-[#44713A]"]
+                ].map(([label, value, className]) => (
+                  <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${className}`} key={label}>
+                    <span className="text-sm font-extrabold">{label}</span>
+                    <span className="text-xl font-black">{value}</span>
+                  </div>
                 ))}
               </div>
-            )}
-
-            <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">{contentPipelineCopy.note}</p>
-          </section>
-        )}
-
-        {currentRecord && !canEdit ? (
-          <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
-            <div>
-              <p className="font-extrabold text-[var(--sunlit-ink)]">
-                {currentRecord.status === "APPROVED"
-                  ? "Approved content is locked against accidental changes."
-                  : currentRecord.status === "SCHEDULED"
-                    ? "Cancel the schedule before editing or deleting this post."
-                    : "This post is locked in its current state."}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                {currentRecord.status === "APPROVED"
-                  ? "Reopening it removes approval and returns the post to Draft."
-                  : "MARKOS keeps approval, scheduling, and content changes as explicit separate actions."}
-              </p>
-            </div>
-            {currentRecord.status === "APPROVED" ? (
-              <button
-                className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={reopening}
-                onClick={() => void reopenForEditing()}
-                type="button"
-              >
-                <Pencil size={17} /> {reopening ? "Reopening..." : "Edit post"}
-              </button>
-            ) : null}
-          </article>
-        ) : null}
-
-        <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
-          <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Caption language">
-            {(
-              [
-                ["en", "English"],
-                ["ar", "العربية"]
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                className={
-                  captionLanguage === value
-                    ? "rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
-                    : "rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)]"
-                }
-                key={value}
-                onClick={() => setCaptionLanguage(value)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <textarea
-            className="min-h-56 w-full resize-y border-0 bg-transparent text-lg leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)] xl:min-h-64"
-            dir={captionLanguage === "ar" ? "rtl" : "ltr"}
-            disabled={!canEdit}
-            onChange={(event) => setActiveCaption(event.target.value)}
-            placeholder="Generated caption will appear here after MARKOS creates a draft."
-            value={activeCaption}
-          />
-          <div className="mt-8 border-t border-[var(--sunlit-line)] pt-5 text-sm text-[var(--sunlit-muted)]">{activeCaption.length} / 2,200 characters</div>
-        </EditorBlock>
-
-        <EditorBlock action="Save tags" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Hashtags">
-          <textarea
-            className="min-h-24 w-full resize-y border-0 bg-transparent text-base leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
-            disabled={!canEdit}
-            onChange={(event) => setHashtagsText(event.target.value)}
-            placeholder="#Generated #Hashtags"
-            value={hashtagsText}
-          />
-        </EditorBlock>
-
-        <section>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Images</h2>
-              <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate a saved image concept.</p>
-            </div>
-            <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
-              {attachedMediaAssets.length} attached
-            </span>
-          </div>
-          <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">
-            {selectedMedia ? (
-              <div className="overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper-deep)]">
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 <button
-                  aria-label={`Expand ${selectedMedia.filename}`}
-                  className="group relative grid max-h-72 min-h-48 w-full place-items-center overflow-hidden bg-[var(--sunlit-paper-deep)]"
-                  onClick={() => setExpandedMedia(selectedMedia)}
+                  className="sunlit-primary flex min-h-36 items-start gap-4 rounded-2xl p-5 text-start disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
+                  disabled={creatingBlank}
+                  onClick={() => void createBlankDraft()}
                   type="button"
                 >
-                  {/* Workspace media can use API origins or data URLs that Next Image cannot safely preconfigure. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={selectedMedia.filename} className="max-h-72 w-full object-contain" src={selectedMedia.publicUrl} />
-                  <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/75 px-3 py-2 text-xs font-extrabold text-white opacity-90 transition group-hover:opacity-100">
-                    <Maximize2 size={15} /> Expand
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/20">
+                    <Pencil size={21} />
+                  </span>
+                  <span>
+                    <span className="block text-lg font-black">
+                      {creatingBlank ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : studioHomeCopy.blankAction}
+                    </span>
+                    <span className="mt-1 block text-sm font-semibold leading-6 opacity-85">{studioHomeCopy.blankDescription}</span>
                   </span>
                 </button>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] bg-white px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold text-[var(--sunlit-ink)]">{selectedMedia.filename}</p>
-                    <p className="mt-1 text-xs text-[var(--sunlit-muted)]">
-                      {selectedMedia.width && selectedMedia.height ? `${selectedMedia.width} × ${selectedMedia.height} · ` : ""}
-                      {formatFileSize(selectedMedia.sizeBytes)}
+                <StudioHomeAction
+                  active={homePanel === "AI_DRAFT"}
+                  description={studioHomeCopy.aiDescription}
+                  icon={Wand2}
+                  label={studioHomeCopy.aiAction}
+                  onClick={() => openAiDraft()}
+                />
+                <StudioHomeAction
+                  active={homePanel === "IDEAS"}
+                  description={studioHomeCopy.ideasDescription}
+                  icon={Lightbulb}
+                  label={studioHomeCopy.ideasAction}
+                  onClick={() => setHomePanel("IDEAS")}
+                />
+                <StudioHomeAction
+                  active={homePanel === "DRAFTS"}
+                  badge={contentPipelineCounts.DRAFTS}
+                  description={studioHomeCopy.continueDescription}
+                  icon={Clock}
+                  label={studioHomeCopy.continueAction}
+                  onClick={() => {
+                    setContentFilter("DRAFTS");
+                    setHomePanel("DRAFTS");
+                  }}
+                />
+                <a
+                  className="rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+                  href={`/${locale}/app/calendar`}
+                >
+                  <span className="flex items-start gap-4">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[#157A70]">
+                      <Calendar size={21} />
+                    </span>
+                    <span>
+                      <span className="block font-black text-[var(--sunlit-ink)]">{studioHomeCopy.calendarAction}</span>
+                      <span className="mt-1 block text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.calendarDescription}</span>
+                    </span>
+                  </span>
+                </a>
+              </div>
+            </article>
+
+            {homePanel === "AI_DRAFT" ? (
+              <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+                    <Wand2 size={22} />
+                  </span>
+                  <div>
+                    <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{studioHomeCopy.aiTitle}</h2>
+                    <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
+                      {locale === "ar" ? "اختر النوع ثم وضّح الهدف والجمهور والعرض." : "Choose a format, then explain the objective, audience, and offer."}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <a
-                      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-ink-soft)]"
-                      href={selectedMedia.publicUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <ExternalLink size={16} /> Open original
-                    </a>
+                </div>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {studioTypes.map(([value, , Icon]) => (
                     <button
-                      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!canManageMedia || removingMedia}
-                      onClick={() => void removeSelectedMedia()}
+                      className={
+                        contentType === value
+                          ? "rounded-xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] px-4 py-3 text-start font-extrabold text-[var(--sunlit-pink)]"
+                          : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3 text-start font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
+                      }
+                      key={value}
+                      onClick={() => setContentType(value)}
                       type="button"
                     >
-                      <Trash2 size={17} /> {removingMedia ? "Removing..." : "Remove from draft"}
+                      <span className="inline-flex items-center gap-3">
+                        <Icon size={19} />
+                        {localizedContentTypeLabel(value, locale)}
+                      </span>
                     </button>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] p-6 text-center">
-                <div>
-                  <ImagePlus className="mx-auto text-[var(--sunlit-pink)]" size={34} />
-                  <p className="mt-3 font-extrabold text-[var(--sunlit-ink)]">No image attached yet</p>
-                  <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Create or upload one after saving a content draft.</p>
-                </div>
-              </div>
-            )}
+                <textarea
+                  className="sunlit-field mt-5 min-h-36 resize-y rounded-xl p-4 text-base leading-7 outline-none"
+                  dir={locale === "ar" ? "rtl" : "ltr"}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder={
+                    locale === "ar"
+                      ? "صف المحتوى المطلوب، بما في ذلك العرض والجمهور واللغة والهدف."
+                      : "Describe the content, including the offer, audience, language, and objective."
+                  }
+                  value={prompt}
+                />
+                <button
+                  className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={generating}
+                  onClick={generate}
+                  type="button"
+                >
+                  {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
+                  {generating ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : locale === "ar" ? "إنشاء المسودة" : "Generate draft"}
+                </button>
+              </article>
+            ) : null}
 
-            {attachedMediaAssets.length > 1 ? (
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                {attachedMediaAssets.map((asset) => (
+            {homePanel === "IDEAS" ? (
+              <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+                <p className="sunlit-eyebrow">{locale === "ar" ? "أفكار المحتوى" : "Content ideas"}</p>
+                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">{locale === "ar" ? "اختر فكرة لتطويرها" : "Choose an idea to develop"}</h2>
+                <div className="mt-5 grid gap-3">
+                  {contentIdeaStarters.map(([title, description]) => (
+                    <button
+                      className="rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+                      key={title}
+                      onClick={() => openAiDraft(`${title}. ${description}`)}
+                      type="button"
+                    >
+                      <span className="font-black text-[var(--sunlit-ink)]">{title}</span>
+                      <span className="mt-1 block text-sm leading-6 text-[var(--sunlit-muted)]">{description}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
+                  {locale === "ar"
+                    ? "لن يتم حفظ أي شيء حتى تختار الفكرة وتطلب إنشاء المسودة."
+                    : "Nothing is saved until you select an idea and ask MARKOS to create the draft."}
+                </p>
+              </section>
+            ) : null}
+
+            {homePanel === "DRAFTS" ? (
+              loadingRecords ? (
+                <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">
+                  {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
+                </article>
+              ) : (
+                <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6" aria-labelledby="content-pipeline-heading">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
+                      <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="content-pipeline-heading">
+                        {contentPipelineCopy.heading}
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
+                    </div>
+                    <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
+                      {records.length}
+                    </span>
+                  </div>
+                  <div className="mt-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={locale === "ar" ? "تصفية المحتوى" : "Filter content"}>
+                    {contentPipelineFilters.map(([value, label]) => (
+                      <button
+                        aria-pressed={contentFilter === value}
+                        className={
+                          contentFilter === value
+                            ? "shrink-0 rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
+                            : "shrink-0 rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
+                        }
+                        key={value}
+                        onClick={() => setContentFilter(value)}
+                        type="button"
+                      >
+                        {label} <span className="ms-1 opacity-65">{contentPipelineCounts[value]}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {visibleContentRecords.length === 0 ? (
+                    <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-8 text-center text-sm font-bold text-[var(--sunlit-muted)]">
+                      {contentPipelineCopy.empty}
+                    </div>
+                  ) : (
+                    <div className="mt-5 grid max-h-[34rem] gap-3 overflow-y-auto pe-1">
+                      {visibleContentRecords.map((record) => (
+                        <button
+                          className="rounded-2xl border border-[var(--sunlit-line)] bg-white px-5 py-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+                          key={record.id}
+                          onClick={() => applyRecord(record, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
+                          type="button"
+                        >
+                          <span className="flex items-start justify-between gap-4">
+                            <span className="min-w-0">
+                              <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
+                              <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
+                                <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
+                                <span className="inline-flex items-center gap-1.5">
+                                  {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
+                                  {contentPipelineTimestamp(record, locale)}
+                                </span>
+                                {record.mediaIds.length > 0 ? (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <ImageIcon size={14} />
+                                    {record.mediaIds.length}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </span>
+                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${contentStatusBadgeClass(record.status)}`}>
+                              {localizedContentStatusLabel(record.status, locale)}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">{contentPipelineCopy.note}</p>
+                </section>
+              )
+            ) : null}
+          </>
+        ) : null}
+
+        {currentRecord ? (
+          <>
+            {currentRecord && !canEdit ? (
+              <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
+                <div>
+                  <p className="font-extrabold text-[var(--sunlit-ink)]">
+                    {currentRecord.status === "APPROVED"
+                      ? "Approved content is locked against accidental changes."
+                      : currentRecord.status === "SCHEDULED"
+                        ? "Cancel the schedule before editing or deleting this post."
+                        : "This post is locked in its current state."}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
+                    {currentRecord.status === "APPROVED"
+                      ? "Reopening it removes approval and returns the post to Draft."
+                      : "MARKOS keeps approval, scheduling, and content changes as explicit separate actions."}
+                  </p>
+                </div>
+                {currentRecord.status === "APPROVED" ? (
                   <button
-                    aria-label={`Preview ${asset.filename}`}
-                    className={
-                      selectedMedia?.id === asset.id
-                        ? "h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-[var(--sunlit-pink)]"
-                        : "h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--sunlit-line)]"
-                    }
-                    key={asset.id}
-                    onClick={() => setSelectedMediaId(asset.id)}
+                    className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={reopening}
+                    onClick={() => void reopenForEditing()}
                     type="button"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt="" className="h-full w-full object-cover" src={asset.publicUrl} />
+                    <Pencil size={17} /> {reopening ? "Reopening..." : "Edit post"}
+                  </button>
+                ) : null}
+              </article>
+            ) : null}
+
+            <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
+              <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Caption language">
+                {(
+                  [
+                    ["en", "English"],
+                    ["ar", "العربية"]
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    className={
+                      captionLanguage === value
+                        ? "rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
+                        : "rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)]"
+                    }
+                    key={value}
+                    onClick={() => setCaptionLanguage(value)}
+                    type="button"
+                  >
+                    {label}
                   </button>
                 ))}
               </div>
-            ) : null}
+              <textarea
+                className="min-h-56 w-full resize-y border-0 bg-transparent text-lg leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)] xl:min-h-64"
+                dir={captionLanguage === "ar" ? "rtl" : "ltr"}
+                disabled={!canEdit}
+                onChange={(event) => setActiveCaption(event.target.value)}
+                placeholder={locale === "ar" ? "اكتب النص العربي لهذا المنشور." : "Write the caption for this post."}
+                value={activeCaption}
+              />
+              <div className="mt-8 border-t border-[var(--sunlit-line)] pt-5 text-sm text-[var(--sunlit-muted)]">{activeCaption.length} / 2,200 characters</div>
+            </EditorBlock>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
-                <h3 className="font-extrabold text-[var(--sunlit-ink)]">Upload from your device</h3>
-                <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                  JPEG only, no larger than 8 MB, 320–1,440 px wide, and between 4:5 portrait and 1.91:1 landscape.
-                </p>
-                <label className="sunlit-secondary mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-4 text-sm font-extrabold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-                  <Upload size={18} /> {uploading ? "Uploading..." : "Choose JPEG"}
-                  <input
-                    accept=".jpg,.jpeg,image/jpeg"
-                    aria-label="Upload JPEG"
-                    className="sr-only"
-                    disabled={!currentRecord || !canManageMedia || uploading}
-                    onChange={(event) => void uploadImage(event)}
-                    type="file"
-                  />
-                </label>
-              </div>
+            <EditorBlock action="Save tags" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Hashtags">
+              <textarea
+                className="min-h-24 w-full resize-y border-0 bg-transparent text-base leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
+                disabled={!canEdit}
+                onChange={(event) => setHashtagsText(event.target.value)}
+                placeholder="#Generated #Hashtags"
+                value={hashtagsText}
+              />
+            </EditorBlock>
 
-              <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
-                <h3 className="font-extrabold text-[var(--sunlit-ink)]">Generate an image concept</h3>
-                <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">Uses the saved caption when the optional direction is empty.</p>
-                <input
-                  className="sunlit-field mt-3 h-11 rounded-xl px-3 text-sm outline-none"
-                  onChange={(event) => setImagePrompt(event.target.value)}
-                  placeholder="Optional visual direction"
-                  value={imagePrompt}
-                />
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <select
-                    aria-label="Image aspect ratio"
-                    className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
-                    onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
-                    value={imageAspectRatio}
-                  >
-                    <option value="1:1">Square · 1:1</option>
-                    <option value="4:5">Portrait · 4:5</option>
-                    {contentType === "POST" ? null : <option value="9:16">Story / Reel · 9:16</option>}
-                  </select>
-                  <button
-                    className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!currentRecord || !canManageMedia || generatingImage}
-                    onClick={() => void generateImage()}
-                    type="button"
-                  >
-                    <Wand2 size={18} /> {generatingImage ? "Generating..." : "Generate image"}
-                  </button>
+            <EditorBlock
+              action={locale === "ar" ? "حفظ الدعوة" : "Save CTA"}
+              busy={saving}
+              disabled={!currentRecord || !canEdit}
+              onAction={() => void persistEditableDraft()}
+              title={locale === "ar" ? "الدعوة إلى الإجراء" : "Call to action"}
+            >
+              <input
+                className="w-full border-0 bg-transparent text-base text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
+                disabled={!canEdit}
+                onChange={(event) => setCallToAction(event.target.value)}
+                placeholder={locale === "ar" ? "مثال: أرسل لنا رسالة لمعرفة المزيد" : "Example: Send us a message to learn more"}
+                value={callToAction}
+              />
+            </EditorBlock>
+
+            <section>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Images</h2>
+                  <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate a saved image concept.</p>
                 </div>
+                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                  {attachedMediaAssets.length} attached
+                </span>
               </div>
-            </div>
-            <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-              The preview preserves the uploaded image&apos;s framing. Instagram may still recompress the file and convert non-sRGB color to sRGB. Image
-              generation currently validates the saved workflow with deterministic artwork; for the Milestone A publish, attach one provider-compatible JPEG.
-            </p>
-          </article>
-        </section>
+              <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">
+                {selectedMedia ? (
+                  <div className="overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper-deep)]">
+                    <button
+                      aria-label={`Expand ${selectedMedia.filename}`}
+                      className="group relative grid max-h-72 min-h-48 w-full place-items-center overflow-hidden bg-[var(--sunlit-paper-deep)]"
+                      onClick={() => setExpandedMedia(selectedMedia)}
+                      type="button"
+                    >
+                      {/* Workspace media can use API origins or data URLs that Next Image cannot safely preconfigure. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt={selectedMedia.filename} className="max-h-72 w-full object-contain" src={selectedMedia.publicUrl} />
+                      <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/75 px-3 py-2 text-xs font-extrabold text-white opacity-90 transition group-hover:opacity-100">
+                        <Maximize2 size={15} /> Expand
+                      </span>
+                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] bg-white px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-extrabold text-[var(--sunlit-ink)]">{selectedMedia.filename}</p>
+                        <p className="mt-1 text-xs text-[var(--sunlit-muted)]">
+                          {selectedMedia.width && selectedMedia.height ? `${selectedMedia.width} × ${selectedMedia.height} · ` : ""}
+                          {formatFileSize(selectedMedia.sizeBytes)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-ink-soft)]"
+                          href={selectedMedia.publicUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <ExternalLink size={16} /> Open original
+                        </a>
+                        <button
+                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={!canManageMedia || removingMedia}
+                          onClick={() => void removeSelectedMedia()}
+                          type="button"
+                        >
+                          <Trash2 size={17} /> {removingMedia ? "Removing..." : "Remove from draft"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] p-6 text-center">
+                    <div>
+                      <ImagePlus className="mx-auto text-[var(--sunlit-pink)]" size={34} />
+                      <p className="mt-3 font-extrabold text-[var(--sunlit-ink)]">No image attached yet</p>
+                      <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Create or upload one after saving a content draft.</p>
+                    </div>
+                  </div>
+                )}
 
-        <EditorBlock
-          action={currentRecord?.status === "SCHEDULED" ? "Cancel schedule" : "Schedule"}
-          busy={scheduling || unscheduling}
-          disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED")}
-          onAction={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
-          title="Schedule"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <input
-              className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-              disabled={currentRecord?.status === "SCHEDULED"}
-              onChange={(event) => setScheduleDate(event.target.value)}
-              type="date"
-              value={scheduleDate}
-            />
-            <input
-              className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-              disabled={currentRecord?.status === "SCHEDULED"}
-              onChange={(event) => setScheduleTime(event.target.value)}
-              type="time"
-              value={scheduleTime}
-            />
-          </div>
-          <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]">
-            {currentRecord?.status === "SCHEDULED"
-              ? `Scheduled for ${formatShortTime(currentRecord.scheduledAt ?? new Date().toISOString())}. Cancelling returns it to Approved; it does not delete the content.`
-              : "Approval is a separate required step. Once approved, choose a future time and add the item to the publishing queue."}
-          </p>
-        </EditorBlock>
+                {attachedMediaAssets.length > 1 ? (
+                  <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+                    {attachedMediaAssets.map((asset) => (
+                      <button
+                        aria-label={`Preview ${asset.filename}`}
+                        className={
+                          selectedMedia?.id === asset.id
+                            ? "h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-[var(--sunlit-pink)]"
+                            : "h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--sunlit-line)]"
+                        }
+                        key={asset.id}
+                        onClick={() => setSelectedMediaId(asset.id)}
+                        type="button"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img alt="" className="h-full w-full object-cover" src={asset.publicUrl} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
 
-        <EditorBlock action="Copy" disabled={!currentRecord} onAction={() => void copyCaption()} title="Actions">
-          <div className="flex flex-wrap gap-3">
-            <button
-              className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canApprove || approving}
-              onClick={acceptDraft}
-              type="button"
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
+                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Upload from your device</h3>
+                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
+                      JPEG only, no larger than 8 MB, 320–1,440 px wide, and between 4:5 portrait and 1.91:1 landscape.
+                    </p>
+                    <label className="sunlit-secondary mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-4 text-sm font-extrabold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                      <Upload size={18} /> {uploading ? "Uploading..." : "Choose JPEG"}
+                      <input
+                        accept=".jpg,.jpeg,image/jpeg"
+                        aria-label="Upload JPEG"
+                        className="sr-only"
+                        disabled={!currentRecord || !canManageMedia || uploading}
+                        onChange={(event) => void uploadImage(event)}
+                        type="file"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
+                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Generate an image concept</h3>
+                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">Uses the saved caption when the optional direction is empty.</p>
+                    <input
+                      className="sunlit-field mt-3 h-11 rounded-xl px-3 text-sm outline-none"
+                      onChange={(event) => setImagePrompt(event.target.value)}
+                      placeholder="Optional visual direction"
+                      value={imagePrompt}
+                    />
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <select
+                        aria-label="Image aspect ratio"
+                        className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
+                        onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
+                        value={imageAspectRatio}
+                      >
+                        <option value="1:1">Square · 1:1</option>
+                        <option value="4:5">Portrait · 4:5</option>
+                        {contentType === "POST" ? null : <option value="9:16">Story / Reel · 9:16</option>}
+                      </select>
+                      <button
+                        className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!currentRecord || !canManageMedia || generatingImage}
+                        onClick={() => void generateImage()}
+                        type="button"
+                      >
+                        <Wand2 size={18} /> {generatingImage ? "Generating..." : "Generate image"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
+                  The preview preserves the uploaded image&apos;s framing. Instagram may still recompress the file and convert non-sRGB color to sRGB. Image
+                  generation currently validates the saved workflow with deterministic artwork; for the Milestone A publish, attach one provider-compatible
+                  JPEG.
+                </p>
+              </article>
+            </section>
+
+            <EditorBlock
+              action={currentRecord?.status === "SCHEDULED" ? "Cancel schedule" : "Schedule"}
+              busy={scheduling || unscheduling}
+              disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED")}
+              onAction={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
+              title="Schedule"
             >
-              {approving ? "Approving..." : currentRecord && !canApprove ? statusLabel(currentRecord.status) : "Approve draft"}
-            </button>
-            <button
-              className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={generating || !prompt.trim()}
-              onClick={generate}
-              type="button"
-            >
-              Create another
-            </button>
-            <button
-              className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!currentRecord}
-              onClick={() => void shareCaption()}
-              type="button"
-            >
-              Share
-            </button>
-            <button
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canDelete || deleting}
-              onClick={requestDeleteDraft}
-              title={currentRecord?.status === "SCHEDULED" ? "Cancel the schedule before deleting this post" : undefined}
-              type="button"
-            >
-              <Trash2 size={17} /> {deleting ? "Deleting..." : "Delete post draft"}
-            </button>
-          </div>
-          {currentRecord?.status === "SCHEDULED" ? (
-            <p className="mt-4 text-sm font-bold text-[var(--sunlit-muted)]">Cancel the schedule first; deletion remains a separate confirmed action.</p>
-          ) : null}
-        </EditorBlock>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <input
+                  className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
+                  disabled={currentRecord?.status === "SCHEDULED"}
+                  onChange={(event) => setScheduleDate(event.target.value)}
+                  type="date"
+                  value={scheduleDate}
+                />
+                <input
+                  className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
+                  disabled={currentRecord?.status === "SCHEDULED"}
+                  onChange={(event) => setScheduleTime(event.target.value)}
+                  type="time"
+                  value={scheduleTime}
+                />
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]">
+                {currentRecord?.status === "SCHEDULED"
+                  ? `Scheduled for ${formatShortTime(currentRecord.scheduledAt ?? new Date().toISOString())}. Cancelling returns it to Approved; it does not delete the content.`
+                  : "Approval is a separate required step. Once approved, choose a future time and add the item to the publishing queue."}
+              </p>
+            </EditorBlock>
+
+            <EditorBlock action="Copy" disabled={!currentRecord} onAction={() => void copyCaption()} title="Actions">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canApprove || approving}
+                  onClick={acceptDraft}
+                  type="button"
+                >
+                  {approving ? "Approving..." : currentRecord && !canApprove ? statusLabel(currentRecord.status) : "Approve draft"}
+                </button>
+                <button
+                  className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() =>
+                    returnToCreateHome(
+                      locale === "ar"
+                        ? "تم حفظ العمل المؤكد. اختر كيف تريد بدء المحتوى التالي."
+                        : "Your confirmed work is saved. Choose how to start the next item."
+                    )
+                  }
+                  type="button"
+                >
+                  {locale === "ar" ? "إنشاء محتوى آخر" : "Create another"}
+                </button>
+                <button
+                  className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!currentRecord}
+                  onClick={() => void shareCaption()}
+                  type="button"
+                >
+                  Share
+                </button>
+                <button
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canDelete || deleting}
+                  onClick={requestDeleteDraft}
+                  title={currentRecord?.status === "SCHEDULED" ? "Cancel the schedule before deleting this post" : undefined}
+                  type="button"
+                >
+                  <Trash2 size={17} /> {deleting ? "Deleting..." : "Delete post draft"}
+                </button>
+              </div>
+              {currentRecord?.status === "SCHEDULED" ? (
+                <p className="mt-4 text-sm font-bold text-[var(--sunlit-muted)]">Cancel the schedule first; deletion remains a separate confirmed action.</p>
+              ) : null}
+            </EditorBlock>
+          </>
+        ) : null}
       </div>
 
       <aside className="sticky top-6 hidden h-[calc(100vh-7.5rem)] flex-col items-center justify-center rounded-[2rem] bg-[var(--sunlit-paper-deep)] p-6 xl:flex">
@@ -2162,15 +2393,21 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           scheduledAt={currentRecord?.scheduledAt}
           type={selectedTypeLabel}
         />
-        <button
-          className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!currentRecord || (!canSchedule && currentRecord.status !== "SCHEDULED") || scheduling || unscheduling}
-          onClick={() => void (currentRecord?.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
-          type="button"
-        >
-          {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord?.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
-          {currentRecord?.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
-        </button>
+        {currentRecord ? (
+          <button
+            className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={(!canSchedule && currentRecord.status !== "SCHEDULED") || scheduling || unscheduling}
+            onClick={() => void (currentRecord.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
+            type="button"
+          >
+            {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
+            {currentRecord.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
+          </button>
+        ) : (
+          <a className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/calendar`}>
+            {studioHomeCopy.calendarAction} <ArrowRight className={locale === "ar" ? "rotate-180" : ""} size={24} />
+          </a>
+        )}
       </aside>
 
       {confirmation ? (
@@ -2986,6 +3223,52 @@ function ObjectiveCard({ icon, label, sub, value }: { icon: IconType; label: str
       <p className="mt-5 font-display text-3xl font-bold text-white xl:mt-6 xl:text-4xl">{value}</p>
       <p className="mt-3 text-base text-[#9AA7BD] xl:text-lg">{sub}</p>
     </article>
+  );
+}
+
+function StudioHomeAction({
+  active,
+  badge,
+  description,
+  icon,
+  label,
+  onClick
+}: {
+  active: boolean;
+  badge?: number;
+  description: string;
+  icon: IconType;
+  label: string;
+  onClick: () => void;
+}) {
+  const Icon = icon;
+
+  return (
+    <button
+      aria-pressed={active}
+      className={
+        active
+          ? "rounded-2xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] p-5 text-start shadow-sm"
+          : "rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+      }
+      onClick={onClick}
+      type="button"
+    >
+      <span className="flex items-start gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+          <Icon size={21} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center justify-between gap-3">
+            <span className="font-black text-[var(--sunlit-ink)]">{label}</span>
+            {badge === undefined ? null : (
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">{badge}</span>
+            )}
+          </span>
+          <span className="mt-1 block text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{description}</span>
+        </span>
+      </span>
+    </button>
   );
 }
 

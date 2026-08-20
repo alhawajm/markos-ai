@@ -90,7 +90,7 @@ describe("media routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 245000
+      used: 245000n
     });
 
     await app.close();
@@ -243,7 +243,7 @@ describe("media routes", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 0 });
+    ).resolves.toMatchObject({ used: 0n });
 
     await app.close();
   });
@@ -348,8 +348,8 @@ describe("media routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 1,
-      limit: 20
+      used: 1n,
+      limit: 20n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -362,7 +362,7 @@ describe("media routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 31
+      used: 31n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -375,7 +375,7 @@ describe("media routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 7
+      used: 7n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -388,7 +388,7 @@ describe("media routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: body.mediaAsset.sizeBytes
+      used: BigInt(body.mediaAsset.sizeBytes)
     });
 
     await app.close();
@@ -579,7 +579,7 @@ describe("media routes", () => {
         ]
       }
     });
-    expect(storageCounter?.used ?? 0).toBe(0);
+    expect(storageCounter?.used ?? 0n).toBe(0n);
 
     await app.close();
   });

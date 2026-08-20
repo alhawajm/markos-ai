@@ -1,6 +1,13 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
 import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
-import type { GenerateContentForSlotInput, GenerateContentInput, ScheduleContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
+import type {
+  CreateContentInput,
+  GenerateContentForSlotInput,
+  GenerateContentInput,
+  ScheduleContentInput,
+  UpdateContentInput,
+  UpdateContentStatusInput
+} from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -63,6 +70,20 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
   });
 
   return rows.map(toContentRecord);
+}
+
+export async function createWorkspaceContent(workspaceId: string, input: CreateContentInput): Promise<ContentRecord> {
+  const row = await prisma.contentItem.create({
+    data: {
+      workspaceId,
+      contentType: input.contentType,
+      status: "DRAFT",
+      hashtags: [],
+      mediaIds: []
+    }
+  });
+
+  return toContentRecord(row);
 }
 
 export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {

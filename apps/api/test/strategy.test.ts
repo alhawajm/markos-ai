@@ -153,8 +153,8 @@ describe("strategy routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 1,
-      limit: 1
+      used: 1n,
+      limit: 1n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -167,8 +167,8 @@ describe("strategy routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 1,
-      limit: 100
+      used: 1n,
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -181,7 +181,7 @@ describe("strategy routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 101
+      used: 101n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -194,7 +194,7 @@ describe("strategy routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 202
+      used: 202n
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({

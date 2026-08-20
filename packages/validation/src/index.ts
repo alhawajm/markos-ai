@@ -222,6 +222,12 @@ export const approveBusinessProfileSchema = z
   })
   .strict();
 
+export const createContentSchema = z
+  .object({
+    contentType: contentTypeSchema.default("POST")
+  })
+  .strict();
+
 export const generateContentSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
@@ -469,6 +475,7 @@ export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 export type ApproveBusinessProfileInput = z.infer<typeof approveBusinessProfileSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
+export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
 export type RunAgentInput = z.infer<typeof runAgentSchema>;

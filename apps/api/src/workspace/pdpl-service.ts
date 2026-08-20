@@ -233,5 +233,14 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
 }
 
 function toJsonRows(rows: unknown[]): unknown[] {
-  return JSON.parse(JSON.stringify(rows)) as unknown[];
+  return JSON.parse(
+    JSON.stringify(rows, (_key, value: unknown) => {
+      if (typeof value !== "bigint") {
+        return value;
+      }
+
+      const numberValue = Number(value);
+      return Number.isSafeInteger(numberValue) ? numberValue : value.toString();
+    })
+  ) as unknown[];
 }

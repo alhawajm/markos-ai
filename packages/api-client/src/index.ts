@@ -330,6 +330,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async createContent(input: { contentType?: ContentType } = {}): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>("/v1/content", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async mediaAssets(): Promise<MediaAssetRecord[]> {
     const response = await this.request<MediaAssetRecord[]>("/v1/media");
     return response.data;

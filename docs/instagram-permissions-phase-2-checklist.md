@@ -187,10 +187,13 @@ Feature implementation freezes Wednesday evening. Thursday morning is reserved f
 ### Locked Create redesign — Thursday, 2026-08-20
 
 - [x] **K-S08 — Create information architecture:** lock the two-state Create experience: a compact action hub when no item is selected, followed by one focused Draft Editor after a draft is created or opened. Keep manual creation and upload first-class; AI remains optional assistance.
-- [ ] **K-S09 — Manual blank draft:** add the workspace-scoped blank `POST /v1/content` path and **Start a blank post** action without Vault retrieval, an AI request, or AI quota/token usage.
-- [ ] **K-S10 — Create Home:** implement **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar** alongside the manual action. Suggestions stay ephemeral until selected, and supporting account/performance cards show only real data or honest empty states.
-- [ ] **K-S11 — Focused Draft Editor:** move the existing editable bilingual fields, hashtags, CTA, media, follower preview, lifecycle controls, and contextual AI assistance behind the selected-draft state without losing confirmed saves.
+- [x] **K-S09 — Manual blank draft:** add the workspace-scoped blank `POST /v1/content` path and **Start a blank post** action without Vault retrieval, an AI request, or AI quota/token usage.
+- [x] **K-S10 — Create Home:** implement **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar** alongside the manual action. Suggestions stay ephemeral until selected, and supporting account/performance cards show only real data or honest empty states.
+- [x] **K-S11 — Focused Draft Editor:** move the existing editable bilingual fields, hashtags, CTA, media, follower preview, lifecycle controls, and contextual AI assistance behind the selected-draft state without losing confirmed saves.
 - [ ] **K-S12 — Real AI image path:** complete K-B04/J-B03 through the configured provider interface, quota/metering, moderation/error handling, durable workspace media, and the supported Instagram JPEG contract. Deterministic SVG concepts remain non-publishable scaffolding until replaced.
+- [x] **K-S13 — Paid-plan quota range:** promote usage-counter values and limits to PostgreSQL `BIGINT` through a forward migration so the existing Premium and Enterprise storage allowances can be represented without lowering the plan catalog. Preserve JSON portability in the PDPL export and update affected counter assertions. Railway must apply the migration before reseeding/restoring the full plan limits; this adds no environment variable or service.
+
+K-S09 through K-S11 passed focused API/web typechecks, changed-file web lint, the migration contract test, and formatting checks on 2026-08-20. The PostgreSQL-backed Content integration test and rendered browser journey remain delegated to CI for this pass, following the repository's focused-testing rule and the explicit request to avoid unnecessary local Docker work.
 
 ### Sarah's parallel zero-code journey review
 

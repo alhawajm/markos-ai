@@ -1,5 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { generateContentForSlotSchema, generateContentSchema, scheduleContentSchema, updateContentSchema, updateContentStatusSchema } from "@markos/validation";
+import {
+  createContentSchema,
+  generateContentForSlotSchema,
+  generateContentSchema,
+  scheduleContentSchema,
+  updateContentSchema,
+  updateContentStatusSchema
+} from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -10,6 +17,7 @@ import {
   ContentItemNotFoundError,
   ContentScheduleError,
   ContentStatusTransitionError,
+  createWorkspaceContent,
   deleteContentItem,
   generateWorkspaceContentForSlot,
   generateWorkspaceContent,
@@ -33,6 +41,26 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listContentItems(workspaceId));
+    }
+  );
+
+  app.post(
+    "/v1/content",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["content:write"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = createContentSchema.safeParse(request.body ?? {});
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid blank content request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await createWorkspaceContent(workspaceId, parsed.data));
     }
   );
 

@@ -130,8 +130,8 @@ describe("agent routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: agentNames.length,
-      limit: 100
+      used: BigInt(agentNames.length),
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -144,7 +144,7 @@ describe("agent routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 77 * agentNames.length
+      used: BigInt(77 * agentNames.length)
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -157,7 +157,7 @@ describe("agent routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 123 * agentNames.length
+      used: BigInt(123 * agentNames.length)
     });
     await expect(
       prisma.aiInteraction.groupBy({

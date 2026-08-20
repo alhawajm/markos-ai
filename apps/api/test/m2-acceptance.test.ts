@@ -258,7 +258,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 2 });
+    ).resolves.toMatchObject({ used: 2n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -269,7 +269,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 1 });
+    ).resolves.toMatchObject({ used: 1n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -280,7 +280,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 164 });
+    ).resolves.toMatchObject({ used: 164n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -291,7 +291,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 270 });
+    ).resolves.toMatchObject({ used: 270n });
 
     await app.close();
   });

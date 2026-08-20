@@ -178,8 +178,9 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Turn an idea into your next post." }).waitFor();
-    await expect(page.getByRole("button", { name: "Create draft" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
+    await expect(page.getByRole("button", { name: /Start a blank post/ }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("button", { name: /Draft with MARKOS AI/ }).isVisible()).resolves.toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
@@ -187,6 +188,44 @@ describe("presentation journey", () => {
     await expect(page.getByText("No synced insight data yet", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Live", { exact: true }).count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
+    await page.close();
+  });
+
+  it("opens a saved blank post without calling AI", async () => {
+    const page = await sessionPage();
+    const blankRecord = {
+      ...studioContentRecord(),
+      callToAction: undefined,
+      captionAr: undefined,
+      captionEn: undefined,
+      contentPillar: undefined,
+      hashtags: []
+    };
+    let blankCreateCalls = 0;
+    let aiGenerateCalls = 0;
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/content" && method === "POST") {
+        blankCreateCalls += 1;
+        expect(route.request().postDataJSON()).toEqual({ contentType: "POST" });
+        return route.fulfill(json(blankRecord));
+      }
+      if (pathname === "/v1/content/generate" && method === "POST") {
+        aiGenerateCalls += 1;
+      }
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /Start a blank post/ }).click();
+    await page.getByText("Blank draft saved. Start writing whenever you are ready.", { exact: true }).waitFor();
+    await expect(page.getByRole("heading", { name: "Feed Post" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByPlaceholder("Write the caption for this post.").isEnabled()).resolves.toBe(true);
+    expect(blankCreateCalls).toBe(1);
+    expect(aiGenerateCalls).toBe(0);
     await page.close();
   });
 
@@ -286,11 +325,12 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByPlaceholder(/Describe the content you want MARKOS/).fill("Launch our new Bahrain dessert subscription to busy professionals.");
-    await page.getByRole("button", { name: "Create draft" }).click();
+    await page.getByRole("button", { name: /Draft with MARKOS AI/ }).click();
+    await page.getByPlaceholder(/Describe the content, including/).fill("Launch our new Bahrain dessert subscription to busy professionals.");
+    await page.getByRole("button", { name: "Generate draft" }).click();
     await page.getByText("Draft generated and saved to this workspace.", { exact: true }).waitFor();
 
-    const captionEditor = page.getByPlaceholder("Generated caption will appear here after MARKOS creates a draft.");
+    const captionEditor = page.getByPlaceholder("Write the caption for this post.");
     await captionEditor.fill("A fresh dessert ritual for busy Bahrain teams.");
     await page.getByRole("button", { name: "العربية", exact: true }).click();
     await captionEditor.fill("طقوس حلوة جديدة لفرق العمل في البحرين.");
@@ -324,6 +364,8 @@ describe("presentation journey", () => {
     await page.getByText("Content approved. It is now eligible for scheduling.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Schedule", exact: true }).click();
     await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Back to Create" }).click();
+    await page.getByRole("button", { name: /Continue a draft/ }).click();
     await expect(page.getByRole("heading", { name: "Content and schedule" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Scheduled 1", exact: true }).click();
     await expect(page.getByText(/^Scheduled · /).isVisible()).resolves.toBe(true);

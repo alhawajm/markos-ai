@@ -34,8 +34,8 @@ describe("usage quota enforcement", () => {
         }
       })
     ).resolves.toMatchObject({
-      limit: 1,
-      used: 1
+      limit: 1n,
+      used: 1n
     });
 
     await app.close();

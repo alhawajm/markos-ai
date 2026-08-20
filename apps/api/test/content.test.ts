@@ -46,6 +46,40 @@ vi.mock("../src/ai/content-client", () => ({
 }));
 
 describe("content routes", () => {
+  it("creates a workspace-owned blank draft without Vault context or AI usage", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        workspaceId: session.workspace.id,
+        contentType: "POST",
+        status: "DRAFT",
+        hashtags: [],
+        mediaIds: []
+      }
+    });
+    await expect(
+      prisma.contentItem.findMany({
+        where: {
+          workspaceId: session.workspace.id,
+          deletedAt: null
+        }
+      })
+    ).resolves.toHaveLength(1);
+    await expect(prisma.aiInteraction.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.usageCounter.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+
+    await app.close();
+  });
+
   it("requires Vault context before generating content", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -164,8 +198,8 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 2,
-      limit: 100
+      used: 2n,
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -178,7 +212,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 55
+      used: 55n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -191,7 +225,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 89
+      used: 89n
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toHaveLength(2);
@@ -375,7 +409,7 @@ describe("content routes", () => {
         ]
       }
     });
-    expect(counter.used).toBe(99);
+    expect(counter.used).toBe(99n);
 
     await app.close();
   });
@@ -512,7 +546,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 0
+      used: 0n
     });
 
     await app.close();
@@ -940,8 +974,8 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 1,
-      limit: 100
+      used: 1n,
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -954,7 +988,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 55
+      used: 55n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -967,7 +1001,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 89
+      used: 89n
     });
 
     await app.close();

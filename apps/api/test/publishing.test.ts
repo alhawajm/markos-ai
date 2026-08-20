@@ -523,8 +523,8 @@ describe("publishing routes", () => {
 
     expect(attempt.status).toBe("PUBLISHED");
     expect(counter).toMatchObject({
-      limit: 30,
-      used: 1
+      limit: 30n,
+      used: 1n
     });
 
     await app.close();
