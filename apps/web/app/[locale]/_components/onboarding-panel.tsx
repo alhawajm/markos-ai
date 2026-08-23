@@ -432,7 +432,7 @@ function languageOptions(locale: Locale): SelectOption[] {
 
 type OnboardingCopy = ReturnType<typeof onboardingCopy>;
 
-export function OnboardingPanel({ locale }: { locale: Locale }) {
+export function OnboardingPanel({ editMode, initialDraft, locale }: { editMode: boolean; initialDraft?: OnboardingDraft; locale: Locale }) {
   const copy = onboardingCopy(locale);
   const isRtl = locale === "ar";
   const steps = copy.steps;
@@ -460,7 +460,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     window.localStorage.removeItem(legacyOnboardingDraftKey);
-    const baseDraft = createEmptyOnboardingDraft();
+    const baseDraft = initialDraft ?? createEmptyOnboardingDraft();
     const storedDraft = window.localStorage.getItem(onboardingDraftKey);
 
     if (storedDraft) {
@@ -483,7 +483,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     setProfileLoading(false);
     setStep(getInitialStep());
     setDraftHydrated(true);
-  }, [locale]);
+  }, [initialDraft, locale]);
 
   useEffect(() => {
     if (session) return;
@@ -509,7 +509,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
       .then((state) => {
         if (!active) return;
 
-        if (state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
+        if (!editMode && state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
           router.replace(`/${locale}/app/strategy`);
           return;
         }
@@ -529,7 +529,7 @@ export function OnboardingPanel({ locale }: { locale: Locale }) {
     return () => {
       active = false;
     };
-  }, [applyBusinessProfileState, client, copy.errors.generate, locale, profileLoaded, router, session, step]);
+  }, [applyBusinessProfileState, client, copy.errors.generate, editMode, locale, profileLoaded, router, session, step]);
 
   useEffect(() => {
     if (!draftHydrated) return;

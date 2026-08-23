@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { instagramJpegFixture } from "./helpers/jpeg";
 
 const contentMock = vi.hoisted(() => ({
   lastInput: undefined as
@@ -73,20 +74,20 @@ vi.mock("../src/ai/content-client", () => ({
 
 vi.mock("../src/ai/image-client", () => ({
   generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
-    const bytes = Buffer.from(`<svg>${input.workspaceId}:${input.aspectRatio}:${input.prompt}</svg>`);
+    const bytes = instagramJpegFixture(1024, 1280);
 
     return {
       base64_data: bytes.toString("base64"),
-      filename: "m2-acceptance-image.svg",
-      height: 1350,
-      mime_type: "image/svg+xml",
+      filename: "m2-acceptance-image.jpg",
+      height: 1280,
+      mime_type: "image/jpeg",
       model: "test-image-model",
       prompt: input.prompt,
       prompt_version: "image.v1.m2",
       size_bytes: bytes.byteLength,
       tokens_in: 23,
       tokens_out: 11,
-      width: 1080
+      width: 1024
     };
   }
 }));
@@ -126,17 +127,6 @@ describe("M2 acceptance", () => {
     });
     const content = generated.json().data as { id: string };
 
-    const image = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/generate-image`,
-      headers,
-      payload: {
-        aspectRatio: "4:5",
-        prompt: "Premium Bahrain office coffee setup with Pearl Coffee branding"
-      }
-    });
-    const imageBody = image.json().data;
-
     const unscheduled = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/unschedule`,
@@ -151,6 +141,17 @@ describe("M2 acceptance", () => {
         status: "DRAFT"
       }
     });
+    const image = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        prompt: "Premium Bahrain office coffee setup with Pearl Coffee branding"
+      }
+    });
+    const imageBody = image.json().data;
+
     const review = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/status`,
@@ -221,10 +222,10 @@ describe("M2 acceptance", () => {
       },
       mediaAsset: {
         type: "AI_GENERATED",
-        filename: "m2-acceptance-image.svg",
-        mimeType: "image/svg+xml",
-        width: 1080,
-        height: 1350
+        filename: "m2-acceptance-image.jpg",
+        mimeType: "image/jpeg",
+        width: 1024,
+        height: 1280
       },
       promptVersion: "image.v1.m2"
     });
@@ -258,7 +259,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 2 });
+    ).resolves.toMatchObject({ used: 2n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -269,7 +270,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 1 });
+    ).resolves.toMatchObject({ used: 1n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -280,7 +281,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 164 });
+    ).resolves.toMatchObject({ used: 164n });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -291,7 +292,7 @@ describe("M2 acceptance", () => {
           }
         }
       })
-    ).resolves.toMatchObject({ used: 270 });
+    ).resolves.toMatchObject({ used: 270n });
 
     await app.close();
   });

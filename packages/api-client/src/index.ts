@@ -330,6 +330,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async createContent(input: { contentType?: ContentType } = {}): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>("/v1/content", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async mediaAssets(): Promise<MediaAssetRecord[]> {
     const response = await this.request<MediaAssetRecord[]>("/v1/media");
     return response.data;
@@ -364,6 +372,13 @@ export class MarkosApiClient {
     const response = await this.request<MediaAssetRecord>("/v1/media/upload", {
       body: input,
       method: "POST"
+    });
+    return response.data;
+  }
+
+  async deleteMediaAsset(mediaAssetId: string): Promise<{ id: string }> {
+    const response = await this.request<{ id: string }>(`/v1/media/${mediaAssetId}`, {
+      method: "DELETE"
     });
     return response.data;
   }
@@ -403,6 +418,13 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async deleteContent(contentItemId: string): Promise<{ id: string }> {
+    const response = await this.request<{ id: string }>(`/v1/content/${contentItemId}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
   async updateContentStatus(contentItemId: string, status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {
@@ -415,6 +437,16 @@ export class MarkosApiClient {
 
   async scheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/schedule`, {
+      body: {
+        scheduledAt
+      },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async rescheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/reschedule`, {
       body: {
         scheduledAt
       },
@@ -706,6 +738,14 @@ export class MarkosApiClient {
 
   async publishContentDryRun(contentItemId: string): Promise<PublishAttemptRecord> {
     const response = await this.request<PublishAttemptRecord>(`/v1/publishing/content/${contentItemId}/dry-run`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async publishContent(contentItemId: string): Promise<PublishAttemptRecord> {
+    const response = await this.request<PublishAttemptRecord>(`/v1/publishing/content/${contentItemId}/publish`, {
       body: {},
       method: "POST"
     });

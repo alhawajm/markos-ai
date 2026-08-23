@@ -1,3 +1,5 @@
+import base64
+
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
@@ -134,7 +136,7 @@ def test_content_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-content-model"
-    assert body["prompt_version"] == "content.v1.local"
+    assert body["prompt_version"] == "content.v2.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert len(body["drafts"]) == 2
@@ -159,15 +161,15 @@ def test_image_generation_contract() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model"] == "test-image-model"
-    assert body["prompt_version"] == "image.v1.local"
-    assert body["mime_type"] == "image/svg+xml"
-    assert body["filename"].endswith(".svg")
-    assert body["width"] == 1080
-    assert body["height"] == 1350
-    assert body["tokens_in"] > 0
-    assert body["tokens_out"] > 0
-    assert body["base64_data"]
+    assert body["model"] == "local-image-generator"
+    assert body["prompt_version"] == "image.v2.local"
+    assert body["mime_type"] == "image/jpeg"
+    assert body["filename"].endswith(".jpg")
+    assert body["width"] == 1024
+    assert body["height"] == 1280
+    assert body["tokens_in"] == 0
+    assert body["tokens_out"] == 0
+    assert base64.b64decode(body["base64_data"]).startswith(b"\xff\xd8")
 
 
 def test_all_agent_run_contracts_are_grounded() -> None:

@@ -12,6 +12,7 @@ import { sendMonthlyAnalyticsPdfEmail } from "./analytics-email-service";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
+import { InstagramAnalyticsProviderError } from "./instagram-analytics-provider";
 import {
   AnalyticsWorkspaceNotFoundError,
   exportMonthlyAnalyticsPdf,
@@ -27,6 +28,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
     {
       config: {
         permissions: ["analytics:sync"],
+        verifiedUserRequired: true,
         workspaceRequired: true
       }
     },
@@ -67,6 +69,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
     {
       config: {
         permissions: ["analytics:sync"],
+        verifiedUserRequired: true,
         workspaceRequired: true
       }
     },
@@ -79,6 +82,12 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
       } catch (error) {
         if (error instanceof AnalyticsWorkspaceNotFoundError) {
           return reply.status(404).send(errorEnvelope("WORKSPACE_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof InstagramAnalyticsProviderError) {
+          return reply
+            .status(error.retryable ? 503 : 409)
+            .send(errorEnvelope(error.code, "Instagram analytics sync could not be completed", [{ retryable: error.retryable }]));
         }
 
         throw error;

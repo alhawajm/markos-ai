@@ -12,6 +12,7 @@ import {
   PublishRescheduleInvalidError,
   rescheduleFailedPublish
 } from "./publishing-service";
+import { DryRunInstagramPublisher } from "./instagram-publisher";
 
 export async function registerPublishingRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -62,6 +63,39 @@ export async function registerPublishingRoutes(app: FastifyInstance): Promise<vo
     "/v1/publishing/content/:contentItemId/dry-run",
     {
       config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["publishing:run"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await publishContentItem(workspaceId, params.contentItemId, { publisher: new DryRunInstagramPublisher() }));
+      } catch (error) {
+        if (error instanceof PublishContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  // Temporary Milestone A operator path. The complete browser-visible publish
+  // journey remains a separate App Review gate.
+  app.post(
+    "/v1/publishing/content/:contentItemId/publish",
+    {
+      config: {
+        mfaRequired: true,
         workspaceRequired: true,
         verifiedUserRequired: true,
         permissions: ["publishing:run"]

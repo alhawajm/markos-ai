@@ -1,6 +1,6 @@
 # Railway Deployment and Staging Runbook
 
-Status date: 2026-08-16.
+Status date: 2026-08-19.
 
 Railway is the current early-stage operating direction for MARKOS AI. The working planning horizon is approximately the first 50 users while capacity, reliability, cost, and security are observed. AWS may be considered later; no migration is approved or scheduled.
 
@@ -10,7 +10,7 @@ This is the A-to-Z repository runbook for reconstructing and auditing the deploy
 
 The repository proves Dockerfiles, commands, health endpoints, environment parsing, database initialization, CI behavior, and application contracts. It cannot prove the current Railway dashboard.
 
-The handoff reports one repository and an early-stage Railway deployment. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. User-supplied Railway variable screenshots captured on 2026-08-16 show service panels for `web`, `api`, `ai`, `pgvector`, and `redis`; they do not prove deployment health, networking, domains, worker/OpenSearch existence, or the complete project/environment topology.
+The handoff reports one repository and an early-stage Railway deployment. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. User-supplied Railway variable screenshots captured on 2026-08-16 show service panels for `web`, `api`, `ai`, `pgvector`, and `redis`; additional redacted API captures supplied on 2026-08-17 show the existing `API_BASE_URL` and Instagram variable names. Later on 2026-08-17, Sarah reported that she provisioned the private Bucket, connected its five credentials to the API, set `AWS_S3_URL_STYLE=virtual`, saw a test image in the Bucket, and observed the baseline API deployment with all listed services online. This is operator-reported configuration evidence; it does not prove the reviewed application commit, deployed SHA, application-path upload/read/delete, external presigned GET, exact public/private networking, worker/OpenSearch existence, or the complete project/environment topology.
 
 PRs #18, #19, and #20 are merged into the current repository `main`. The supplied screenshots do not expose the deployed commit SHA, so repository merge state must not be described as current Railway deployment proof. The shared provider-backed Strategy/onboarding-profile application path still requires a controlled live request and persisted-result review.
 
@@ -23,9 +23,9 @@ PRs #18, #19, and #20 are merged into the current repository `main`. The supplie
 | Worker             | `apps/api/worker.Dockerfile`                           | `pnpm --filter api worker`; no HTTP port                                                              | Worker lifecycle logs and resulting database/audit state    | Repository implementation only; verify whether a Railway worker service exists and is healthy.                                                                     |
 | AI                 | `services/ai/Dockerfile`                               | Uvicorn on fixed port 8000                                                                            | `/ai/health`; `/ai/health/deep` currently always `degraded` | A 2026-08-16 screenshot shows its variable panel. A prior direct provider request succeeded, but the current application adapter remains pending deployed verification. |
 | PostgreSQL         | `apps/api/prisma`, `apps/api/prisma/init/001-init.sql` | PostgreSQL with `vector`, `pgcrypto`, `uuid_generate_v7()`, `markos`, and `markos_app`                | Prisma migration status plus application-role/RLS checks    | A `pgvector` variable panel is externally evidenced and persistence worked for the production connection; version, extensions, roles, backups, limits, and migration history still require operator verification. |
-| Redis              | `docker-compose.yml`, API cache/worker code            | Redis URL supplied to API and worker                                                                  | API deep health                                             | A `redis` variable panel is externally evidenced; deployment status, private networking, persistence expectations, and availability remain unverified. |
-| OpenSearch         | `docker-compose.yml`, API deep health/search code      | Reachable HTTP service                                                                                | API deep health checks `/_cluster/health`                   | Verify whether it is deployed. Loopback is invalid from a separate Railway API service.                                                                            |
-| Media storage      | `apps/api/src/media/storage-service.ts`                | Local filesystem under `MEDIA_STORAGE_DIR`; public URL from `MEDIA_PUBLIC_BASE_URL` or `API_BASE_URL` | Upload/read smoke plus Meta fetchability when publishing    | Not durable CDN infrastructure. Acceptable only for current connection work; not approved for live publishing.                                                     |
+| Redis              | `docker-compose.yml`, API auth/cache code               | Redis URL supplied to the API                                                                         | API deep health                                             | A `redis` variable panel is externally evidenced; deployment status, private networking, persistence expectations, and availability remain unverified. The current maintenance worker does not consume Redis. |
+| OpenSearch         | `docker-compose.yml`, API deep-health probe only        | Optional reachable HTTP service for the deep-health report                                             | API deep health checks `/_cluster/health`                   | Not required for the 2026-08-20 showcase. No current product or worker path queries OpenSearch, so provisioning is deferred.                                         |
+| Media storage      | `apps/api/src/media/storage-service.ts`                | `MEDIA_STORAGE_DRIVER` selects local filesystem or private S3-compatible storage; ordinary URLs use the API media route and provider reads are signed just in time | Upload/read smoke plus external signed GET and Meta fetchability when publishing | Sarah reports that the private Bucket and API credential wiring are complete and a test image is visible in the Bucket. Application-path upload/read/delete, external presigned GET, reviewed-code deployment, and Meta fetchability remain unverified. |
 
 The repository's `.github/workflows/deploy-staging.yml` builds and publishes web, API, worker, and AI images to GHCR. It can optionally roll AWS ECS when GitHub environment variables exist. That workflow is not proof of the current Railway deployment and does not make AWS the current platform.
 
@@ -35,8 +35,8 @@ The repository's `.github/workflows/deploy-staging.yml` builds and publishes web
 - pnpm 11.5.2 through Corepack.
 - Python `>=3.11,<3.12`; the AI Dockerfile uses Python 3.11.
 - PostgreSQL 16-compatible server with pgvector and privileges needed by the initialization contract.
-- Redis 7-compatible service where cache/worker behavior is enabled.
-- OpenSearch 2-compatible service for the current deep-health/search contract.
+- Redis 7-compatible service for the API's authentication/cache behavior.
+- OpenSearch is a local Compose dependency and an optional API deep-health probe; it is not a current staging feature prerequisite.
 - Public HTTPS domains for browser, API, and Meta callbacks.
 
 ## Environment loading contract
@@ -101,8 +101,16 @@ Authentication and application security:
 
 Media and models:
 
-- `MEDIA_STORAGE_DIR`
-- `MEDIA_PUBLIC_BASE_URL` (optional for connection; not durable storage by itself)
+- `MEDIA_STORAGE_DRIVER` — `local` for development; `s3` for the Milestone A Railway deployment.
+- `MEDIA_STORAGE_DIR` — used only by the local driver.
+- `MEDIA_PUBLIC_BASE_URL` — optional stable media-proxy origin. Omit it when `API_BASE_URL` is the canonical public HTTPS API origin.
+- `AWS_ENDPOINT_URL` — required for `s3`; reference the Bucket-generated variable.
+- `AWS_ACCESS_KEY_ID` — required for `s3`; secret Bucket-generated reference.
+- `AWS_SECRET_ACCESS_KEY` — required for `s3`; secret Bucket-generated reference.
+- `AWS_S3_BUCKET_NAME` — required for `s3`; Bucket-generated reference.
+- `AWS_DEFAULT_REGION` — required for `s3`; Bucket-generated reference.
+- `AWS_S3_URL_STYLE` — required for `s3`; set the application-owned value to `virtual` for Railway Buckets. The Railway dashboard does not expose a corresponding service-reference variable, while [Railway CLI credential output](https://docs.railway.com/cli/bucket#show-or-reset-credentials) reports `urlStyle: "virtual"`.
+- `SIGNED_URL_TTL` — provider-only presigned GET lifetime in seconds; default `3600`, accepted range `300`–`86400`.
 - `LLM_PRIMARY_MODEL`
 - `LLM_LONGFORM_MODEL`
 - `IMAGE_MODEL_PRIMARY`
@@ -116,12 +124,13 @@ Instagram Login and callbacks:
 - `INSTAGRAM_OAUTH_STATE_SECRET`
 - `INSTAGRAM_TOKEN_ENCRYPTION_KEY`
 - `INSTAGRAM_GRAPH_VERSION`
-- `INSTAGRAM_OAUTH_SCOPES` — validated as exactly `instagram_business_basic`; it is a readiness/compatibility input, not the active authorization source.
+- `INSTAGRAM_OAUTH_SCOPES` — canonical allowlist for exactly the requested release subset. Milestone A uses `instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights`; duplicates, unknown names, missing basic, and old Facebook Login names are rejected.
+- `INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS`
+- `INSTAGRAM_GRAPH_MAX_RESPONSE_BYTES`
 - `INSTAGRAM_TOKEN_REFRESH_WINDOW_DAYS`
-- `META_APP_SECRET`
 - `META_WEBHOOK_VERIFY_TOKEN`
 
-The schema also parses `INSTAGRAM_GRAPH_BASE_URL`, `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, and `INSTAGRAM_REFRESH_TOKEN_URL` as compatibility inputs. The active business-basic client constrains those provider hosts in code; setting the compatibility names does not redirect or expand the live client.
+The schema still parses `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, and `INSTAGRAM_REFRESH_TOKEN_URL` as inert compatibility inputs. Active OAuth/account/publishing/analytics clients constrain their provider hosts in code; setting these compatibility names cannot redirect the live clients.
 
 Publishing and analytics foundations:
 
@@ -129,13 +138,12 @@ Publishing and analytics foundations:
 - `INSTAGRAM_ANALYTICS_SYNC_MODE`
 - `INSTAGRAM_CONTAINER_POLL_ATTEMPTS`
 - `INSTAGRAM_CONTAINER_POLL_DELAY_MS`
-- `META_APP_ID`
-- `META_APP_SECRET`
-- `META_REDIRECT_URI`
-- `META_GRAPH_BASE_URL`
-- `META_GRAPH_VERSION`
 
-The active OAuth request is fixed in code to `instagram_business_basic`. Compatibility/readiness variables do not grant additional permissions. `INSTAGRAM_GRAPH_*` supports the Instagram Login/account client, while `META_GRAPH_*` currently supports publishing/analytics adapters. Those are two transports inside one Instagram integration; the host/version contract must be confirmed during permission research. Use v25.0 provisionally in current configuration.
+OAuth, account, publishing, and analytics code now share the canonical requested-scope set and version contract. Versioned calls use the fixed `https://graph.instagram.com/v25.0` origin, and live provider tokens are sent in bearer headers for publishing and insights. Configuration and readiness do not prove provider-granted permission; a fresh connection and controlled live calls remain required.
+
+D-02 was confirmed on 2026-08-17. For the API service only, set the three application-owned values `MEDIA_STORAGE_DRIVER=s3`, `AWS_S3_URL_STYLE=virtual`, and `SIGNED_URL_TTL=3600`, then add Railway references for the five Bucket credentials: endpoint, access key ID, secret access key, bucket name, and region. Do not duplicate or paste credential values. The environment parser fails closed if any required field is absent, the endpoint is not HTTPS, the public media-proxy origin is not HTTPS, or the TTL is outside its bounded range.
+
+Keep the Bucket private. Do not enable public-bucket access or browser-upload CORS for Milestone A. Do not grant Bucket variables to web, AI, PostgreSQL, or Redis; the worker receives them only when Milestone B enables worker-owned media publishing. Existing `API_BASE_URL` is sufficient for stable application media URLs, so `MEDIA_PUBLIC_BASE_URL` should remain unset unless Sarah intentionally needs a different public API/proxy origin.
 
 Observability:
 
@@ -146,7 +154,9 @@ Observability:
 
 ### Worker runtime
 
-The worker imports the same API environment schema. At minimum, mirror the database, Redis, relevant provider, encryption, model, media, and Sentry settings needed by its enabled tasks. Worker intervals are:
+Follow the focused [Railway worker setup guide](railway-worker-setup.md) for the exact service, reference variables, deployment settings, and live verification sequence. The current worker needs PostgreSQL, the Instagram credential encryption key, live-mode settings, and private Bucket access. It does not consume Redis, OpenSearch, the AI service, SendGrid, JWT settings, or OAuth callback configuration.
+
+Worker intervals are:
 
 - `WORKER_PUBLISHING_INTERVAL_MS`
 - `WORKER_ANALYTICS_EMAIL_INTERVAL_MS`
@@ -154,7 +164,7 @@ The worker imports the same API environment schema. At minimum, mirror the datab
 - `WORKER_TOKEN_REFRESH_INTERVAL_MS`
 - `WORKER_USAGE_RESET_INTERVAL_MS`
 
-Do not copy all API secrets blindly. Record which worker task consumes each shared secret before choosing shared variables.
+For the showcase, set only `WORKER_PUBLISHING_INTERVAL_MS=300000`; the remaining intervals use their source defaults. Do not copy all API secrets blindly.
 
 ### AI runtime
 
@@ -162,14 +172,18 @@ Current code consumes:
 
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
-- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy and onboarding profiles)
-- `OPENAI_API_KEY` (AI service only; required when `AI_TEXT_PROVIDER=openai`)
+- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy, onboarding profiles, and content copy)
+- `AI_IMAGE_PROVIDER` (`local` for deterministic development JPEGs, `openai` for live provider-backed image generation)
+- `OPENAI_API_KEY` (AI service only; required when either provider selector is `openai`)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
+- `AI_CONTENT_TIMEOUT_SECONDS`
+- `AI_IMAGE_TIMEOUT_SECONDS`
 - `OPENAI_TIMEOUT_SECONDS`
 - `OPENAI_MAX_RETRIES`
 - `OPENAI_MAX_OUTPUT_TOKENS`
 - `OPENAI_REASONING_EFFORT`
+- `OPENAI_STORE_RESPONSES` (`true` during the current quality-tuning phase so requests and responses remain inspectable in the OpenAI API dashboard)
 - `DATABASE_URL` (configured but not used by current handlers)
 - `LLM_PRIMARY_MODEL`
 - `LLM_FLAGSHIP_MODEL`
@@ -184,7 +198,30 @@ Current code consumes:
 - `SENTRY_RELEASE`
 - `SENTRY_TRACES_SAMPLE_RATE`
 
-Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request.
+Inject `OPENAI_API_KEY` only into the AI service. The API reaches the AI service through `AI_BASE_URL`, authenticates with the matching `INTERNAL_SERVICE_TOKEN`, and uses `AI_HTTP_TIMEOUT_MS` as its outer request budget. A configured key or successful shallow health response does not replace a controlled browser-to-API-to-AI request. While `OPENAI_STORE_RESPONSES=true`, use only approved text-provider inputs: the OpenAI project retains Responses API application state for dashboard review. That switch does not control Images API retention. Turn it off when the quality-review phase ends or before the applicable privacy/retention boundary requires stateless text requests.
+
+### 2026-08-20 provider image deployment delta
+
+The provider-backed image path requires only these deliberate changes:
+
+- API: set `IMAGE_MODEL_PRIMARY=gpt-image-2` and update `AI_HTTP_TIMEOUT_MS=130000` so the gateway does not abort a valid long-running image request.
+- AI: set `AI_IMAGE_PROVIDER=openai`, `IMAGE_MODEL_PRIMARY=gpt-image-2`, and `AI_IMAGE_TIMEOUT_SECONDS=120`. Keep the existing sealed `OPENAI_API_KEY`; do not copy it to API, web, or worker.
+- No web or worker variable is added. No database migration, Redis change, OpenSearch service, or new storage variable is required.
+
+The adapter asks the Images API for one medium-quality JPEG at 90% compression, uses `1024x1024` for 1:1, `1024x1280` for 4:5, and `1008x1792` for 9:16, and keeps automatic provider moderation enabled. The API reserves the workspace's `AI_IMAGE` quota before the paid request, validates the returned bytes and exact dimensions, records provider token usage, and stores the object under the existing workspace-owned S3 path. `OPENAI_STORE_RESPONSES` does not apply to this endpoint; inspect image activity in the same OpenAI project without assuming that the text response-retention switch governs it.
+
+### 2026-08-19 branch deployment delta
+
+Before testing this branch in staging, review the following AI-service values deliberately:
+
+- set `AI_CONTENT_TIMEOUT_SECONDS=50` unless a different reviewed budget is required;
+- set `OPENAI_STORE_RESPONSES=true` during the temporary dashboard quality-review phase;
+- set `LLM_PRIMARY_MODEL` to the approved content-copy model instead of relying on the compatibility fallback;
+- use `AI_TEXT_PROVIDER=openai` only when running the intended real-provider test, and confirm the correct OpenAI project before sending the request.
+
+For the API service, use `INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6` and `INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000`, or remove explicit overrides so these safe defaults apply. This gives the controlled JPEG path one immediate status read followed by five one-minute checks. A timeout requires operator review and is not an automatic retry signal. No other service consumes these values.
+
+The Calendar MVP adds `POST /v1/content/:contentItemId/reschedule` and a new web route, but requires no new environment variable, database migration, storage setting, Redis change, or Railway service. Deploy the existing API and web services. It records and manages schedule state only: until the dedicated worker service is provisioned and verified, a saved `SCHEDULED` item must not be described as proof of automatic Instagram publication.
 
 ### 2026-08-16 Railway variable-name snapshot
 
@@ -202,9 +239,9 @@ Railway-added platform variables were collapsed in the screenshots and are not e
 
 Repository/snapshot gaps to resolve deliberately:
 
-- The visible API list does not show `OPENSEARCH_URL`, health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or the publishing/analytics adapter's `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION`. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone.
+- The visible API list does not show health timeouts, worker intervals, Sentry settings, JWT TTLs, Google settings, or a future bucket variable contract. Confirm whether needed names are supplied elsewhere before relying on them; do not infer absence or readiness from a screenshot alone. `OPENSEARCH_URL` may remain unset for the showcase because OpenSearch is not on a current product path. The retired publishing/analytics `META_*` variables are no longer application prerequisites; `META_WEBHOOK_VERIFY_TOKEN` remains separately active.
 - The visible AI `PORT` name is ignored by the current fixed-port Docker command. Current code consumes `AI_PORT`, which is not visible in the supplied service-level list.
-- The AI screenshot does not show `DATABASE_URL`, embedding/image model settings, alternate model slots, or Sentry settings. Some are not used by current handlers, but the code/default relationship must remain explicit.
+- The AI screenshot does not show `DATABASE_URL`, `LLM_PRIMARY_MODEL`, `AI_CONTENT_TIMEOUT_SECONDS`, embedding/image model settings, alternate model slots, or Sentry settings. Some are optional or not used by current handlers. Provider-backed content prefers `LLM_PRIMARY_MODEL` and temporarily falls back to the configured long-form model when the gateway supplies an older synthetic `local-*` default; configure the primary slot deliberately instead of treating that compatibility behavior as final setup.
 - Reserved future variables that are not part of current work should remain untouched until their feature is reviewed. Do not rename or delete them merely because the current service does not consume them.
 
 ## Secret handling
@@ -278,18 +315,18 @@ For an existing Railway database, first inspect migration status, roles, extensi
 Populate required names from the inventory above using Railway variables/secrets. Verify:
 
 - browser-facing API URL is public HTTPS and embedded in the web build;
-- API/worker database and Redis URLs use reachable service addresses;
-- `AI_BASE_URL` and `OPENSEARCH_URL` are not loopback URLs when services are separate;
+- API and worker database URLs, plus the API's Redis URL, use reachable service addresses;
+- `AI_BASE_URL` is not a loopback URL when the AI service is separate;
 - `API_BASE_URL` and `WEB_BASE_URL` are the deployed public origins;
 - OAuth redirect and Meta callback paths match `instagram-app-review.md` exactly;
-- provider modes remain `dry_run` unless their separate acceptance runbooks are satisfied.
+- provider modes match the authorized test window. The 2026-08-19 staging worker pass explicitly uses `live` for publishing and analytics.
 
 ### 6. Deploy in dependency order
 
 For a new environment:
 
 1. PostgreSQL and required extensions/roles.
-2. Redis and OpenSearch if included.
+2. Redis for API authentication/cache behavior. Do not add OpenSearch for the showcase.
 3. AI service if included and reviewed.
 4. API after database pre-deploy succeeds.
 5. Worker after API/database/provider configuration is coherent.
@@ -313,10 +350,12 @@ curl https://<web-host>/en
 curl https://<ai-host>/ai/health
 ```
 
+When OpenSearch is intentionally absent, `/v1/health/deep` reports a degraded body while still returning HTTP 200. Use `/v1/health` as Railway's API deployment health-check path; treat deep health as dependency diagnostics rather than the deployment gate.
+
 Interpret results narrowly:
 
 - API shallow health proves the API process responds.
-- API deep health reports database, Redis, OpenSearch, and AI reachability; a degraded dependency remains an acceptance gap.
+- API deep health reports database, Redis, OpenSearch, and AI reachability. For this showcase, only the intentionally deferred OpenSearch check may be down; database, Redis, and AI should still report healthy.
 - Web 200 responses prove rendered routes, not authentication or business behavior.
 - AI shallow health proves only the FastAPI process. Current deep health is always degraded. A prior direct provider request succeeded, but the current shared application adapter still requires deployed end-to-end verification.
 
@@ -340,8 +379,9 @@ Record commit/ref, service names, Dockerfile mapping, variable-name inventory, h
 
 Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify the current contract:
 
-- Strategy and onboarding-profile resolution can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; content, images, embeddings, and generic agents remain deterministic.
+- Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; JPEG generation can use the OpenAI Images API when `AI_IMAGE_PROVIDER=openai`. Embeddings and generic agents remain deterministic.
 - `OPENAI_API_KEY` is consumed only by the AI service in OpenAI mode.
+- `OPENAI_STORE_RESPONSES=true` is an intentional temporary quality-review setting; confirm the chosen OpenAI project is the one being inspected and do not send secrets or unapproved customer data.
 - `INTERNAL_SERVICE_TOKEN` is enforced on non-health AI routes and sent by the API.
 - `/ai/health/deep` still reports dependencies as `not_checked`/`degraded`.
 - Docker listens on fixed port 8000 even if Railway supplies `PORT`.
@@ -447,7 +487,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 | `credential_configuration` / `encryption_key_invalid`             | Canonical Base64 32-byte format check                                     | Variable presence is not validity; do not print it.                                            |
 | Migration mismatch                                                | `prisma migrate status`, `_prisma_migrations`, backup/data classification | Do not apply the clean baseline to valuable inherited history.                                 |
 | AI shallow health passes but API deep health or AI behavior fails | `AI_BASE_URL`, port/routing, AI logs, `/ai/health/deep`                   | Shallow health does not prove auth, providers, embeddings, RAG, or database access.            |
-| Publishing media rejected                                         | Public HTTPS reachability and durable storage design                      | Current container filesystem/API fallback is not approved durable publishing media.            |
+| Publishing media rejected                                         | S3-backed object key, public HTTPS API origin, signing, and external fetch | Local/container filesystem media is intentionally rejected by the Milestone A live-publish gate. |
 
 ## Remaining manual verification
 
@@ -458,6 +498,6 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 - Confirm variable names by consumer without inspecting or copying values into documentation.
 - Confirm Meta dashboard URLs, mode, roles, permissions, Graph version, webhooks, and App Review status.
 - Confirm the AI service's current deployed SHA, fixed-port routing, health checks, internal-token pairing, provider mode, and one current application response.
-- Decide durable image storage/CDN and upload flow before live publishing.
+- Provision/reference the confirmed private Bucket contract and prove upload, read, delete, and an external just-in-time signed fetch before live publishing.
 
 See `project-status.md` for roadmap/ownership and `instagram-app-review.md` for the Meta boundary.

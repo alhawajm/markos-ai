@@ -112,8 +112,8 @@ Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, m
 - [x] Bilingual tone-locked content workflow.
 - [ ] Rich-text/editorial workflow is complete in the active Sunlit Create surface.
   - Note: core caption/hashtag/CTA editing is mounted, but the prior rich editor was removed during the Sunlit cutover.
-- [ ] Provider-backed AI image pipeline.
-  - Note: the current FastAPI path creates deterministic SVGs locally.
+- [x] Provider-backed AI image pipeline.
+  - Note: the source now provides a separately configured OpenAI Images adapter, exact JPEG output contracts, moderation/provider error mapping, pre-request image quota enforcement, provider token metering, and workspace-owned durable storage. A deployed provider call is still required by the acceptance gate.
 - [x] Prompt A/B tooling.
 - [ ] Provider-reported token and image metering is verified end to end.
   - Note: provider-capable Strategy/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
@@ -126,7 +126,7 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 - [x] Instagram OAuth connection flow implemented and covered by focused source, integration, browser, persistence, and redaction tests.
 - [x] One production Instagram professional-account connection completed on 2026-08-03.
   - Note: production Settings showed Connected and rendered bounded recent provider media. The successful path includes state/transaction security, provider exchanges, `/me.user_id` professional-account resolution, encrypted persistence, atomic recent-media and `INSTAGRAM_CONNECTED` writes, secured status read, redirect, and UI refresh.
-- [x] Meta Graph adapter behind live flag.
+- [x] Instagram Login Graph adapter behind live flag.
 - [x] Dry-run publishing worker.
 - [x] Publish readiness checks for public media URLs.
 - [x] Instagram daily publish cap guard.
@@ -139,7 +139,7 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 - [ ] Dedicated publishing queue UI is mounted in Sunlit.
 - [ ] Failed-publish explanation and alert UX are mounted in Sunlit.
 - [ ] Reschedule/recovery UX for failed publishing is mounted in Sunlit.
-  - Note: queue/readiness/dry-run/reschedule API foundations and the scheduling control in Create remain, but PR #19 deleted the complete operational Schedule panel before a Sunlit replacement existed.
+  - Note: Calendar now supplies an initial Sunlit week/month schedule, saved-time management, and failed-item detail/rescheduling over existing content records. The complete durable publishing queue, attempt history, worker state, cap/readiness controls, and close-race recovery surface remain unimplemented.
 - [ ] M3 acceptance gate fully passed.
 
 ## M4 Analytics
@@ -147,7 +147,7 @@ Gate: Real post and reel publish to a test Instagram Business account; forced fa
 Gate: Real metrics render; AI interprets 30 days; monthly PDF emails; performance data feeds the Vault.
 
 - [ ] Instagram analytics sync workers.
-  - Note: foundation exists with workspace-scoped API sync, maintenance worker hook, provider boundary, live-readiness endpoint, tests, UI, and live verification runbook. The active OAuth client still requests only `instagram_business_basic`; permission expansion and live Instagram metrics remain unverified.
+  - Note: foundation exists with workspace-scoped API sync, maintenance worker hook, a constrained Instagram Login provider, live-readiness endpoint, tests, UI, and live verification runbook. The working OAuth client requests the canonical three-scope Milestone A set; deployment/reconnect, provider-granted access, and live Instagram metrics remain unverified.
 - [ ] Complete analytics screens `AN-01` through `AN-06` are mounted in Sunlit.
   - Note: the current Insights page provides an API-backed 7/30-day aggregate, top content, empty/loading/error states, and monthly PDF export; posts/detail/audience/Stories/Reels pages and 28/90 comparisons are not complete.
 - [ ] Provider-backed Analytics Consultant agent.

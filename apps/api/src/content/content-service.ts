@@ -1,6 +1,13 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
 import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
-import type { GenerateContentForSlotInput, GenerateContentInput, ScheduleContentInput, UpdateContentInput, UpdateContentStatusInput } from "@markos/validation";
+import type {
+  CreateContentInput,
+  GenerateContentForSlotInput,
+  GenerateContentInput,
+  ScheduleContentInput,
+  UpdateContentInput,
+  UpdateContentStatusInput
+} from "@markos/validation";
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -41,6 +48,15 @@ export class ContentScheduleError extends Error {
   }
 }
 
+export class ContentItemDeleteError extends Error {
+  constructor(
+    message: string,
+    readonly code: "CONTENT_DELETE_FORBIDDEN" | "CONTENT_DELETE_REQUIRES_CANCELLATION"
+  ) {
+    super(message);
+  }
+}
+
 export async function listContentItems(workspaceId: string): Promise<ContentRecord[]> {
   const rows = await prisma.contentItem.findMany({
     where: {
@@ -54,6 +70,20 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
   });
 
   return rows.map(toContentRecord);
+}
+
+export async function createWorkspaceContent(workspaceId: string, input: CreateContentInput): Promise<ContentRecord> {
+  const row = await prisma.contentItem.create({
+    data: {
+      workspaceId,
+      contentType: input.contentType,
+      status: "DRAFT",
+      hashtags: [],
+      mediaIds: []
+    }
+  });
+
+  return toContentRecord(row);
 }
 
 export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {
@@ -300,6 +330,39 @@ export async function updateContentItem(workspaceId: string, contentItemId: stri
   return toContentRecord(row);
 }
 
+export async function deleteContentItem(workspaceId: string, contentItemId: string): Promise<{ id: string }> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status === "SCHEDULED") {
+    throw new ContentItemDeleteError("Cancel the scheduled publishing time before deleting this post draft", "CONTENT_DELETE_REQUIRES_CANCELLATION");
+  }
+
+  if (current.status === "PUBLISHED") {
+    throw new ContentItemDeleteError("Published Instagram posts cannot be deleted through the draft deletion action", "CONTENT_DELETE_FORBIDDEN");
+  }
+
+  await prisma.contentItem.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      deletedAt: new Date()
+    }
+  });
+
+  return { id: current.id };
+}
+
 export async function updateContentItemStatus(workspaceId: string, contentItemId: string, input: UpdateContentStatusInput): Promise<ContentRecord> {
   const current = await prisma.contentItem.findFirst({
     where: {
@@ -359,6 +422,47 @@ export async function scheduleContentItem(workspaceId: string, contentItemId: st
       }
     });
 
+    await addToContentCalendar(tx, workspaceId, updated.id, scheduledAt);
+
+    return updated;
+  });
+
+  return toContentRecord(row);
+}
+
+export async function rescheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (current.status !== "SCHEDULED" && current.status !== "FAILED") {
+    throw new ContentScheduleError("Only scheduled or failed content can be rescheduled");
+  }
+
+  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
+  const row = await prisma.$transaction(async (tx) => {
+    const updated = await tx.contentItem.update({
+      where: {
+        id: current.id
+      },
+      data: {
+        failureReason: null,
+        scheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+
+    if (current.scheduledAt) {
+      await removeFromContentCalendar(tx, workspaceId, current.id, current.scheduledAt);
+    }
     await addToContentCalendar(tx, workspaceId, updated.id, scheduledAt);
 
     return updated;

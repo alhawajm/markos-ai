@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { BarChart3, Brain, Home, Palette, Settings, Sparkles, Target, UserRound } from "lucide-react";
+import { BarChart3, Brain, CalendarDays, Home, Palette, Settings, Sparkles, Target, UserRound } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import {
   CampaignBuilderPanel,
@@ -14,11 +14,13 @@ import {
   OpportunitiesPanel
 } from "./final-command-panels";
 import { StrategyPanel } from "./strategy-panel";
+import { CalendarPanel } from "./calendar-panel";
 import { initializeBrowserSession, useMarkosSession, watchBrowserSession } from "./browser-session";
 
 export type SectionSlug =
   | "analytics"
   | "briefing"
+  | "calendar"
   | "campaign-builder"
   | "content-studio"
   | "dashboard"
@@ -40,6 +42,7 @@ const navItems: Array<{
   { icon: Home, slug: "dashboard" },
   { icon: Target, slug: "strategy" },
   { icon: Palette, slug: "content-studio" },
+  { icon: CalendarDays, slug: "calendar" },
   { icon: BarChart3, slug: "analytics" },
   { icon: Brain, slug: "knowledge" },
   { icon: Settings, slug: "settings" }
@@ -48,6 +51,7 @@ const navItems: Array<{
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+  const mobileNavRef = useRef<HTMLElement>(null);
   const session = useMarkosSession();
 
   const checkSession = useCallback(() => {
@@ -66,6 +70,10 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
     if (activeSection === "settings") return;
     window.sessionStorage.setItem("markos.settings.returnTo", localizedHref(locale, activeSection));
   }, [activeSection, locale]);
+
+  useEffect(() => {
+    mobileNavRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" });
+  }, [activeSection, locale, sessionChecked]);
 
   if (!sessionChecked) {
     return (
@@ -182,7 +190,11 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             </div>
           </header>
 
-          <nav className="flex gap-2 overflow-x-auto border-b border-[var(--sunlit-line)] bg-white/75 px-4 py-3 lg:hidden" aria-label="Mobile primary">
+          <nav
+            className="flex gap-2 overflow-x-auto border-b border-[var(--sunlit-line)] bg-white/75 px-4 py-3 lg:hidden"
+            aria-label="Mobile primary"
+            ref={mobileNavRef}
+          >
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = item.slug === activeSection;
@@ -211,6 +223,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
             {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
             {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
+            {activeSection === "calendar" ? <CalendarPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
             {activeSection === "knowledge" ? <FinalVaultPanel locale={locale} /> : null}
           </div>
@@ -244,6 +257,7 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
     ar: {
       analytics: "التحليلات",
       briefing: "الموجز اليومي",
+      calendar: "التقويم",
       "campaign-builder": "منشئ الحملات",
       "content-studio": "إنشاء المحتوى",
       dashboard: "نظرة عامة",
@@ -255,6 +269,7 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
     en: {
       analytics: "Insights",
       briefing: "Daily briefing",
+      calendar: "Calendar",
       "campaign-builder": "Campaign builder",
       "content-studio": "Create",
       dashboard: "Overview",

@@ -30,8 +30,74 @@ describe("environment configuration", () => {
     expect(parseEnvironment(input).MEDIA_PUBLIC_BASE_URL).toBe(expected);
   });
 
-  it("uses the provisional v25.0 publishing and analytics Graph version by default", () => {
-    expect(parseEnvironment({}).META_GRAPH_VERSION).toBe("v25.0");
+  it("uses the locked Instagram Login graph version and release scope set by default", () => {
+    const parsed = parseEnvironment({});
+
+    expect(parsed.INSTAGRAM_GRAPH_VERSION).toBe("v25.0");
+    expect(parsed.INSTAGRAM_OAUTH_SCOPES).toEqual(["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"]);
+    expect(parsed.INSTAGRAM_CONTAINER_POLL_ATTEMPTS).toBe(6);
+    expect(parsed.INSTAGRAM_CONTAINER_POLL_DELAY_MS).toBe(60_000);
+  });
+
+  it("canonicalizes the allowlisted Instagram release scopes", () => {
+    expect(
+      parseEnvironment({
+        INSTAGRAM_OAUTH_SCOPES: "instagram_business_manage_insights, instagram_business_basic,instagram_business_content_publish"
+      }).INSTAGRAM_OAUTH_SCOPES
+    ).toEqual(["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"]);
+  });
+
+  it.each([
+    ["duplicates", "instagram_business_basic,instagram_business_basic"],
+    ["missing basic", "instagram_business_content_publish,instagram_business_manage_insights"],
+    ["unknown scope", "instagram_business_basic,instagram_business_manage_messages"],
+    ["Facebook Login scope", "instagram_business_basic,instagram_content_publish"]
+  ])("rejects Instagram OAuth scopes with %s", (_case, scopes) => {
+    expect(() => parseEnvironment({ INSTAGRAM_OAUTH_SCOPES: scopes })).toThrow();
+  });
+
+  it("keeps local media storage as the zero-credential development default", () => {
+    const parsed = parseEnvironment({});
+
+    expect(parsed.MEDIA_STORAGE_DRIVER).toBe("local");
+    expect(parsed.SIGNED_URL_TTL).toBe(3600);
+    expect(parsed.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+  });
+
+  it("requires the complete Railway S3 contract only when the S3 driver is selected", () => {
+    expect(() => parseEnvironment({ MEDIA_STORAGE_DRIVER: "s3", API_BASE_URL: "https://api.example.test" })).toThrow();
+
+    expect(
+      parseEnvironment({
+        API_BASE_URL: "https://api.example.test",
+        AWS_ACCESS_KEY_ID: "fake-access-key",
+        AWS_DEFAULT_REGION: "auto",
+        AWS_ENDPOINT_URL: "https://storage.railway.app",
+        AWS_S3_BUCKET_NAME: "markos-staging",
+        AWS_S3_URL_STYLE: "virtual",
+        AWS_SECRET_ACCESS_KEY: "fake-secret-key",
+        MEDIA_STORAGE_DRIVER: "s3",
+        SIGNED_URL_TTL: "3600"
+      })
+    ).toMatchObject({
+      AWS_S3_URL_STYLE: "virtual",
+      MEDIA_STORAGE_DRIVER: "s3",
+      SIGNED_URL_TTL: 3600
+    });
+  });
+
+  it("requires HTTPS storage and stable public endpoints for the S3 driver", () => {
+    const base = {
+      AWS_ACCESS_KEY_ID: "fake-access-key",
+      AWS_DEFAULT_REGION: "auto",
+      AWS_S3_BUCKET_NAME: "markos-staging",
+      AWS_S3_URL_STYLE: "virtual",
+      AWS_SECRET_ACCESS_KEY: "fake-secret-key",
+      MEDIA_STORAGE_DRIVER: "s3"
+    };
+
+    expect(() => parseEnvironment({ ...base, API_BASE_URL: "https://api.example.test", AWS_ENDPOINT_URL: "http://storage.example.test" })).toThrow();
+    expect(() => parseEnvironment({ ...base, API_BASE_URL: "http://localhost:4000", AWS_ENDPOINT_URL: "https://storage.railway.app" })).toThrow();
   });
 
   it("loads an explicit environment file without overwriting existing process values", () => {

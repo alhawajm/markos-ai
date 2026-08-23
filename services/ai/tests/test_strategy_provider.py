@@ -115,7 +115,7 @@ def strategy_request(*, locale: Literal["ar", "en"] = "en") -> StrategyGenerateR
     )
 
 
-def test_openai_provider_uses_stateless_structured_request_and_real_usage() -> None:
+def test_openai_provider_stores_structured_request_and_reports_real_usage() -> None:
     response = FakeResponse(output_text=generated_content().model_dump_json(by_alias=True))
     client = FakeClient(response)
     provider = OpenAIStrategyProvider(client=client)
@@ -125,7 +125,7 @@ def test_openai_provider_uses_stateless_structured_request_and_real_usage() -> N
 
     assert kwargs is not None
     assert kwargs["model"] == "gpt-test-configured-model"
-    assert kwargs["store"] is False
+    assert kwargs["store"] is True
     text = kwargs["text"]
     assert isinstance(text, dict)
     output_format = text["format"]

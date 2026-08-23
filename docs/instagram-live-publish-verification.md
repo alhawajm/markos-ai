@@ -1,121 +1,125 @@
 # Instagram Live Publish Verification
 
-This runbook closes the M3 gates for real image post and reel publishing against a test Instagram Business account.
+This runbook verifies the Milestone A publishing proof: one approved JPEG is published once to an app-team Instagram professional account through the temporary operator route.
 
-Status on 2026-08-16: **not externally verified**. The successful 2026-08-03 production business-basic connection proves that MARKOS connected one real professional account; it does not prove publish permission, durable public media, container creation/polling, media publication, failure recovery, or App Review. The active OAuth request still omits `instagram_business_content_publish`.
+Status on 2026-08-17: **application implementation and local verification are complete for the current uncommitted pass; reviewed-code deployment and live proof remain open**. The repository now constrains publishing calls to Instagram Login on `graph.instagram.com/v25.0`, requests the three Milestone A scopes, validates one JPEG, provides an item-specific operator route, writes through local/S3 storage drivers, and signs an S3 GET immediately before container creation. Sarah reports that the private Railway Bucket is provisioned and wired to the API, `AWS_S3_URL_STYLE=virtual` is set, a test image is visible in the Bucket, the exact version/scopes and dry-run modes are configured, and the baseline API deployment is healthy. Application-path upload/read/delete, external presigned GET, deployment of the reviewed commit, reconnect, and one real publish remain open. A successful 2026-08-03 business-basic connection does not prove publishing.
 
-Keep `INSTAGRAM_PUBLISH_MODE=dry_run` until every prerequisite below is complete. Switch to `live` only for the verification window or a production-like environment with Meta App Review permissions.
+Keep `INSTAGRAM_PUBLISH_MODE=dry_run` except during the approved live window. Milestone A does not verify Reels, carousels, scheduled-worker behavior, Advanced Access, or App Review.
 
-## Prerequisites
+## Preconditions
 
-- Meta app has Instagram Login configured.
-- Meta app has `instagram_business_basic` and `instagram_business_content_publish` available for the test user.
-- The active OAuth client has been intentionally changed and tested to request the publishing permission. The current source requests exactly `instagram_business_basic`; changing `INSTAGRAM_OAUTH_SCOPES` alone does not expand it.
-- Test Instagram account is a Business or Creator account connected to the Meta app test user.
-- MARKOS workspace is connected through the Instagram OAuth flow.
-- API can reach Meta Graph API from the running environment.
-- Media URLs used for publishing are durable public `https://` URLs reachable by Meta for the entire container/publish window. Current Railway/local filesystem serving is not an accepted durable media design.
-- MARKOS plan quota allows at least two `POST_PUBLISH` events.
-- Formal App Review and the controlled test-account conditions required by Meta are confirmed in the current dashboard.
+- In the current Meta App Dashboard, confirm the requestable identifier is `instagram_business_content_publish`.
+- Confirm the test professional account is owned or managed by an eligible app role; do not use a client account.
+- Deploy the reviewed application commit while both provider modes remain `dry_run`.
+- Disconnect and reconnect after deployment so the stored credential records the exact requested-scope set.
+- Complete the confirmed private Railway Bucket gate: provision or select the staging bucket, reference its generated variables from the API, and prove a disposable external presigned GET. The URL must remain valid for Meta's fetch and processing window and must never be logged, persisted, or returned to ordinary clients.
+- Prepare exactly one `POST` content item whose status is `SCHEDULED` and whose `scheduledAt` is at or before the current API time. Scheduling follows approval, but `APPROVED` by itself is not publishable. Link the item to one supported JPEG whose MIME type, extension, dimensions, size, and durable object key are known. The Calendar accepts future times, so schedule the proof item in advance and wait until it is due; do not edit shared database state manually.
+- Confirm the workspace plan has at least one `POST_PUBLISH` unit available.
 
-## Required Environment
+## Application environment contract
 
-The publishing provider uses the Graph base URL and version below; the readiness service also checks the listed app and redirect settings. The connected credential comes from the separately configured `INSTAGRAM_*` OAuth variables. Supply names through the deployment secret manager; never put real values in this file or a command transcript.
+Supply values through the deployment secret manager. Never paste real values into Git, chat, commands, screenshots, or evidence.
 
 ```bash
-INSTAGRAM_PUBLISH_MODE=live
-META_APP_ID=<secret-manager-reference>
-META_APP_SECRET=<secret-manager-reference>
-META_REDIRECT_URI=<deployed-oauth-callback>
-META_WEBHOOK_VERIFY_TOKEN=<secret-manager-reference>
-META_GRAPH_BASE_URL=https://graph.facebook.com
-# Provisional; confirm during the permission/API research phase before live activation.
-META_GRAPH_VERSION=v25.0
+INSTAGRAM_APP_ID=<secret-manager-reference>
+INSTAGRAM_APP_SECRET=<secret-manager-reference>
+INSTAGRAM_OAUTH_REDIRECT_URI=<deployed-oauth-callback>
+INSTAGRAM_OAUTH_STATE_SECRET=<secret-manager-reference>
+INSTAGRAM_TOKEN_ENCRYPTION_KEY=<secret-manager-reference>
+INSTAGRAM_GRAPH_VERSION=v25.0
+INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights
+INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS=15000
+INSTAGRAM_GRAPH_MAX_RESPONSE_BYTES=262144
+INSTAGRAM_PUBLISH_MODE=dry_run
+INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6
+INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000
+MEDIA_STORAGE_DRIVER=s3
+AWS_ENDPOINT_URL=<railway-bucket-variable-reference>
+AWS_ACCESS_KEY_ID=<railway-bucket-variable-reference>
+AWS_SECRET_ACCESS_KEY=<railway-bucket-variable-reference>
+AWS_S3_BUCKET_NAME=<railway-bucket-variable-reference>
+AWS_DEFAULT_REGION=<railway-bucket-variable-reference>
+AWS_S3_URL_STYLE=virtual
+SIGNED_URL_TTL=3600
 ```
 
-Then restart the API and worker.
+`graph.instagram.com/v25.0` is fixed by the application. The retired `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION` names do not configure this adapter. `META_WEBHOOK_VERIFY_TOKEN` remains a separate webhook setting.
 
-The live-readiness endpoint currently checks configuration presence and connection state; it cannot prove the granted provider permission, App Review state, media fetchability, or a successful publish. Treat `ready: true` as a preflight result, not acceptance evidence.
+The first five `AWS_*` names must reference the private Bucket's generated Railway credentials; do not copy their values. `AWS_S3_URL_STYLE=virtual` is an application-owned API setting because the Railway dashboard does not expose a corresponding service-reference variable. `MEDIA_PUBLIC_BASE_URL` is optional and should remain unset when the existing `API_BASE_URL` is the canonical public HTTPS API origin. The API validates the complete S3 contract conditionally, accepts `SIGNED_URL_TTL` only from 300 through 86,400 seconds, and keeps signed URLs provider-only. Do not add these variables to web, AI, PostgreSQL, or Redis. The worker receives them only in Milestone B.
 
-## Readiness Check
+The polling defaults perform one immediate container-status read and then wait one minute between five further reads, covering a five-minute processing window without querying more than once per minute after the initial read. If Railway already defines either polling variable explicitly, update the API service to the values above or remove the override so the safe application defaults apply. The signed URL's 3,600-second starting TTL covers this bounded window.
 
-After signing in to MARKOS and connecting Instagram, call:
+## Dry-run preflight
+
+With a verified operator session that has `publishing:run`, call:
 
 ```bash
 curl -H "Authorization: Bearer <access-token>" \
   -H "X-Workspace-Id: <workspace-id>" \
-  http://localhost:4000/v1/publishing/live-readiness
+  https://<api-host>/v1/publishing/live-readiness
 ```
 
-Expected ready response:
+The response must report:
 
-```json
-{
-  "data": {
-    "mode": "live",
-    "ready": true,
-    "reasons": [],
-    "connection": {
-      "connected": true,
-      "accountId": "<provider-account-id>"
-    }
-  }
-}
+- `graphVersion: "v25.0"`;
+- the exact three `requiredScopes`;
+- a connected credential issued after the expanded scope request;
+- `INSTAGRAM_PUBLISH_MODE_NOT_LIVE` while safely in dry-run;
+- no storage-configuration reason other than the expected dry-run mode; in particular, it must not report `MEDIA_STORAGE_DRIVER_NOT_S3`.
+
+Readiness is a preflight only. It does not prove provider-granted permission, Meta dashboard state, media fetchability, storage signing, or a successful publish.
+
+Exercise the existing item-specific dry-run route first:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <access-token>" \
+  -H "X-Workspace-Id: <workspace-id>" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  https://<api-host>/v1/publishing/content/<content-item-id>/dry-run
 ```
 
-If `ready` is false, resolve every reason before attempting a live publish.
+The result must be `DRY_RUN`, must contain `mediaCount: 1`, and must not contain a media URL or signed query string.
 
-## Image Post Verification
+## Controlled live window
 
-1. Register or upload one public `https://` image media asset.
-2. Create or generate a `POST` content item with bilingual caption and hashtags.
-3. Attach the public image media asset.
-4. Approve and schedule the item for the current time.
-5. Run the due publishing worker or `POST /v1/publishing/run-due` through an authorized operator flow. The complete Sunlit Queue page is not currently mounted.
-6. Confirm the attempt returns `status: "PUBLISHED"` with an `instagramPostId`.
-7. Confirm the content item is marked `PUBLISHED`.
-8. Confirm the post appears on the test Instagram Business account.
+Sarah switches only `INSTAGRAM_PUBLISH_MODE` to `live` and confirms the API restart/deployment is healthy. Do not start the worker and do not use the multi-item `run-due` route for this proof.
 
-Evidence to save:
+With a verified operator session, `publishing:run`, and a recent MFA step-up, call exactly once:
 
-- API response with `instagramPostId`.
-- Screenshot or link showing the post on Instagram.
-- Audit/log entry for the publish run.
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <mfa-stepped-up-access-token>" \
+  -H "X-Workspace-Id: <workspace-id>" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  https://<api-host>/v1/publishing/content/<content-item-id>/publish
+```
 
-Redact tokens, provider-account IDs, workspace/user IDs, callback data, headers, raw provider bodies, and customer data before sharing evidence. Store real evidence outside Git unless the repository evidence policy explicitly permits a sanitized artifact.
+Expected behavior:
 
-## Reel Verification
+1. The application obtains a fresh provider-fetch URL from the durable object key immediately before container creation.
+2. It checks the live publishing-limit response without inventing fallback quota values.
+3. It creates one image container, checks its status immediately, then checks no more than once per minute for up to five minutes before publishing it once.
+4. The response reports `status: "PUBLISHED"`, `dryRun: false`, and `mediaCount: 1`, without returning the signed URL.
+5. The content item is `PUBLISHED`, has a persisted provider media ID, and the image is visible on the test Instagram account.
+6. A simultaneous duplicate request is blocked in this process. Durable multi-worker idempotency remains Milestone B work.
 
-1. Register or upload one public `https://` MP4 video media asset accepted by Instagram Reels.
-2. Create or generate a `REEL` content item with bilingual caption and hashtags.
-3. Attach the public video media asset.
-4. Approve and schedule the item for the current time.
-5. Run the due publishing worker or `POST /v1/publishing/run-due` through an authorized operator flow. The complete Sunlit Queue page is not currently mounted.
-6. Confirm the attempt returns `status: "PUBLISHED"` with an `instagramPostId`.
-7. Confirm the content item is marked `PUBLISHED`.
-8. Confirm the reel appears on the test Instagram Business account.
+Stop on any unknown container state, timeout, provider error, duplicate uncertainty, or sensitive log output. A timeout requires operator review and must not trigger a second publish request or an automatic fresh-container attempt. First confirm that no media ID was persisted and no post appeared; durable container persistence and reconciliation remain Milestone B work. Error responses and persisted failure reasons must use bounded application codes rather than raw provider messages.
 
-Evidence to save:
+## Evidence and rollback
 
-- API response with `instagramPostId`.
-- Screenshot or link showing the reel on Instagram.
-- Audit/log entry for the publish run.
+Capture only sanitized timestamps, application request IDs when safe, high-level container/publish statuses, confirmation that a non-empty media ID was persisted, and a redacted screenshot showing the test post. Never commit or share access tokens, signed URLs, account/workspace/user IDs, raw provider bodies, callback data, headers, or customer content.
 
-## Failure Drill
-
-1. Schedule a publishable item with a deliberately invalid or blocked public media URL.
-2. Run the due queue in live mode.
-3. Confirm the content item moves to `FAILED`.
-4. Confirm `failureReason` is returned/persisted safely. The M3 UI gate remains open until the restored Sunlit Queue exposes it.
-5. Reschedule the failed item with corrected media.
-6. Confirm `failureReason` clears and the item returns to `SCHEDULED`.
-
-## Rollback
-
-After verification, return non-production environments to:
+Immediately restore:
 
 ```bash
 INSTAGRAM_PUBLISH_MODE=dry_run
 ```
 
-Restart the API and worker, then confirm `/v1/publishing/live-readiness` reports `INSTAGRAM_PUBLISH_MODE_NOT_LIVE`.
+After the API restarts, confirm `/v1/publishing/live-readiness` again reports `INSTAGRAM_PUBLISH_MODE_NOT_LIVE`. Confirm logs and committed artifacts contain no signed URL, token, provider ID, or customer data.
+
+## Deferred to Milestone B
+
+Reel/carousel publishing, worker-driven scheduling, durable publish leases/attempts, restart recovery, retry policy, and a complete Sunlit Queue/failure UI are not Milestone A acceptance criteria.

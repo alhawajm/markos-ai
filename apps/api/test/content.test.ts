@@ -46,6 +46,40 @@ vi.mock("../src/ai/content-client", () => ({
 }));
 
 describe("content routes", () => {
+  it("creates a workspace-owned blank draft without Vault context or AI usage", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        workspaceId: session.workspace.id,
+        contentType: "POST",
+        status: "DRAFT",
+        hashtags: [],
+        mediaIds: []
+      }
+    });
+    await expect(
+      prisma.contentItem.findMany({
+        where: {
+          workspaceId: session.workspace.id,
+          deletedAt: null
+        }
+      })
+    ).resolves.toHaveLength(1);
+    await expect(prisma.aiInteraction.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.usageCounter.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+
+    await app.close();
+  });
+
   it("requires Vault context before generating content", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -164,8 +198,8 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 2,
-      limit: 100
+      used: 2n,
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -178,7 +212,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 55
+      used: 55n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -191,7 +225,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 89
+      used: 89n
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toHaveLength(2);
@@ -375,7 +409,7 @@ describe("content routes", () => {
         ]
       }
     });
-    expect(counter.used).toBe(99);
+    expect(counter.used).toBe(99n);
 
     await app.close();
   });
@@ -512,7 +546,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 0
+      used: 0n
     });
 
     await app.close();
@@ -618,6 +652,73 @@ describe("content routes", () => {
     await app.close();
   });
 
+  it("soft-deletes workspace drafts only after scheduled publishing is cancelled", async () => {
+    const app = await buildApp();
+    const ownerSession = await registerTestUser(app);
+    const ownerHeaders = authHeaders(ownerSession.tokens.accessToken);
+    const otherSession = await registerTestUser(app);
+    const created = await createDraftContent(app, ownerHeaders);
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: ownerSession.workspace.id,
+        type: "IMAGE",
+        filename: "kept-in-library.jpg",
+        s3Key: "external:https://cdn.example.com/kept-in-library.jpg",
+        cdnUrl: "https://cdn.example.com/kept-in-library.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 120000,
+        width: 1080,
+        height: 1080
+      }
+    });
+    await prisma.contentItem.update({ where: { id: created.id }, data: { mediaIds: [media.id] } });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "IN_REVIEW" } });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "APPROVED" } });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers: ownerHeaders,
+      payload: { scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+    });
+
+    const crossWorkspace = await app.inject({
+      method: "DELETE",
+      url: `/v1/content/${created.id}`,
+      headers: authHeaders(otherSession.tokens.accessToken)
+    });
+    const scheduledDelete = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    await app.inject({ method: "POST", url: `/v1/content/${created.id}/unschedule`, headers: ownerHeaders, payload: {} });
+    const deleted = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    const listed = await app.inject({ method: "GET", url: "/v1/content", headers: ownerHeaders });
+
+    expect(crossWorkspace.statusCode).toBe(404);
+    expect(scheduledDelete.statusCode).toBe(409);
+    expect(scheduledDelete.json().error.code).toBe("CONTENT_DELETE_REQUIRES_CANCELLATION");
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ data: { id: created.id } });
+    expect(listed.json().data).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: created.id })]));
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({ deletedAt: expect.any(Date) });
+    await expect(prisma.mediaAsset.findUniqueOrThrow({ where: { id: media.id } })).resolves.toMatchObject({ deletedAt: null });
+
+    await app.close();
+  });
+
+  it("does not treat published Instagram content as a deletable draft", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    await prisma.contentItem.update({ where: { id: created.id }, data: { status: "PUBLISHED", instagramPostId: "instagram-post-id" } });
+
+    const response = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("CONTENT_DELETE_FORBIDDEN");
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({ deletedAt: null });
+
+    await app.close();
+  });
+
   it("schedules approved content and records it in the monthly calendar", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -692,6 +793,98 @@ describe("content routes", () => {
       }
     });
     expect(unschedule.json().data.scheduledAt).toBeUndefined();
+
+    await app.close();
+  });
+
+  it("reschedules scheduled or failed content atomically and moves its monthly calendar index", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const created = await createDraftContent(app, headers);
+    const originalDate = new Date();
+    originalDate.setUTCMonth(originalDate.getUTCMonth() + 1, 5);
+    originalDate.setUTCHours(15, 0, 0, 0);
+    const movedDate = new Date(originalDate);
+    movedDate.setUTCMonth(movedDate.getUTCMonth() + 1, 7);
+    const originalScheduledAt = originalDate.toISOString();
+    const movedScheduledAt = movedDate.toISOString();
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: { status: "IN_REVIEW" }
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/status`,
+      headers,
+      payload: { status: "APPROVED" }
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/schedule`,
+      headers,
+      payload: { scheduledAt: originalScheduledAt }
+    });
+
+    const otherSession = await registerTestUser(app);
+    const crossWorkspaceResponse = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers: authHeaders(otherSession.tokens.accessToken),
+      payload: { scheduledAt: movedScheduledAt }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers,
+      payload: { scheduledAt: movedScheduledAt }
+    });
+    const recoveredDate = new Date(movedDate);
+    recoveredDate.setUTCDate(recoveredDate.getUTCDate() + 1);
+    const recoveredScheduledAt = recoveredDate.toISOString();
+    await prisma.contentItem.update({
+      where: { id: created.id },
+      data: { failureReason: "Provider processing failed", status: "FAILED" }
+    });
+    const recoveryResponse = await app.inject({
+      method: "POST",
+      url: `/v1/content/${created.id}/reschedule`,
+      headers,
+      payload: { scheduledAt: recoveredScheduledAt }
+    });
+    const originalCalendar = await prisma.contentCalendar.findFirstOrThrow({
+      where: { month: monthStart(originalDate), workspaceId: session.workspace.id }
+    });
+    const movedCalendar = await prisma.contentCalendar.findFirstOrThrow({
+      where: { month: monthStart(movedDate), workspaceId: session.workspace.id }
+    });
+
+    expect(crossWorkspaceResponse.statusCode).toBe(404);
+    expect(crossWorkspaceResponse.json().error.code).toBe("CONTENT_NOT_FOUND");
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: created.id,
+        scheduledAt: movedScheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+    expect(response.json().data.failureReason).toBeUndefined();
+    expect(recoveryResponse.statusCode).toBe(200);
+    expect(recoveryResponse.json()).toMatchObject({
+      data: {
+        id: created.id,
+        scheduledAt: recoveredScheduledAt,
+        status: "SCHEDULED"
+      }
+    });
+    expect(recoveryResponse.json().data.failureReason).toBeUndefined();
+    expect(originalCalendar.plan).toMatchObject({ scheduledContentIds: [] });
+    expect(movedCalendar.plan).toMatchObject({ scheduledContentIds: [created.id] });
 
     await app.close();
   });
@@ -781,8 +974,8 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 1,
-      limit: 100
+      used: 1n,
+      limit: 100n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -795,7 +988,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 55
+      used: 55n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -808,7 +1001,7 @@ describe("content routes", () => {
         }
       })
     ).resolves.toMatchObject({
-      used: 89
+      used: 89n
     });
 
     await app.close();

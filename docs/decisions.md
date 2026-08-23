@@ -184,7 +184,7 @@ Pin `@opentelemetry/core` to `2.8.0` through `pnpm-workspace.yaml` overrides bec
 
 # Instagram OAuth security foundation (2026-07-29)
 
-- Instagram Login is a distinct provider contract and requests only `instagram_business_basic`; Facebook Login and Page discovery are intentionally excluded from this slice.
+- At this foundation milestone, Instagram Login requested only `instagram_business_basic`; Facebook Login and Page discovery were intentionally excluded. The provider separation remains active, while the requested-scope subset is superseded by the 2026-08-17 Milestone A contract below.
 - Access tokens use randomized AES-256-GCM envelopes. OAuth state uses a short-lived HMAC-protected payload plus an atomic, persisted nonce consumption record so it remains single-use across API instances.
 - Requested scopes and provider-confirmed scopes are stored separately because consent requested by MarkOS is not evidence of what the provider actually granted.
 
@@ -200,9 +200,9 @@ Instagram Login's stable professional-account identity is the documented `user_i
 
 The web app and API use bearer tokens stored by the browser client rather than an API-origin server session, and Instagram returns to a public API callback. The callback therefore uses transaction binding, not independent returning-browser authentication: only an authenticated member with `instagram:manage` can create the signed, expiring state and persisted nonce; atomic nonce consumption maps the callback back to that initiating user and workspace before any provider exchange. A different browser session cannot redirect the result to its own workspace because the callback accepts no workspace input and persistence uses only the integrity-protected transaction binding. Callback query values are stripped from application URLs and error telemetry. A future server-session design may add returning-browser binding, but this slice does not claim it.
 
-The active business-basic connection consumes `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, and `INSTAGRAM_OAUTH_STATE_SECRET`. Its authorization, short-token, long-token, refresh, and Graph hosts are constrained in code, and its permission is exactly `instagram_business_basic`.
+The business-basic implementation at this date consumed `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, and `INSTAGRAM_OAUTH_STATE_SECRET`. Its authorization, short-token, long-token, refresh, and Graph hosts were constrained in code, and its permission subset was exactly `instagram_business_basic`. The scope subset is superseded by the 2026-08-17 Milestone A contract; the host and security boundaries remain.
 
-Retained compatibility inputs have narrower meanings. `INSTAGRAM_OAUTH_SCOPES` is consumed by unchanged analytics-readiness logic and appears in App Review documentation, but it does not alter the active connection permission. `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, `INSTAGRAM_REFRESH_TOKEN_URL`, and `INSTAGRAM_GRAPH_BASE_URL` currently have no runtime consumer and remain inert compatibility inputs pending a later coordinated cleanup. Secure refresh delegates to `InstagramBasicClient`, whose refresh endpoint is constrained in code. None of these compatibility inputs controls the active business-basic client or activates publishing, analytics, workers, schedulers, or additional permissions.
+At this date, `INSTAGRAM_OAUTH_SCOPES` was an inert compatibility input for the connection flow. The 2026-08-17 Milestone A contract supersedes that behavior: it now drives a constrained allowlisted authorization request and requested-scope persistence. `INSTAGRAM_OAUTH_AUTHORIZE_URL`, `INSTAGRAM_OAUTH_TOKEN_URL`, `INSTAGRAM_LONG_LIVED_TOKEN_URL`, and `INSTAGRAM_REFRESH_TOKEN_URL` remain inert compatibility inputs; active clients constrain their hosts in code. Secure refresh still delegates to `InstagramBasicClient`, whose refresh endpoint is constrained in code.
 
 ## 2026-07-30 — Encrypted Instagram credentials are the only active credential source
 
@@ -235,7 +235,7 @@ The production incident that established this operational lesson was classified 
 
 ## 2026-08-03: A production connection does not activate adjacent Instagram scope
 
-Treat the 2026-08-03 production business-basic OAuth success as completion of the first real professional-account connection milestone only. It proves the connection path for that attempt; it does not activate or verify publishing, insights, App Review, full-lifecycle refresh, provider-side revocation, or launch readiness. The active Instagram Login client continues to request exactly `instagram_business_basic`. Any permission expansion must be an explicit coordinated code, Meta dashboard, environment, test, and external-evidence change.
+Treat the 2026-08-03 production business-basic OAuth success as completion of the first real professional-account connection milestone only. It proves the connection path for that attempt; it does not activate or verify publishing, insights, App Review, full-lifecycle refresh, provider-side revocation, or launch readiness. At that date the client requested exactly `instagram_business_basic`. The coordinated 2026-08-17 Milestone A code, dashboard, environment, and test change supersedes the requested-scope behavior, but deployment, reconnect, and external provider evidence remain required.
 
 ## 2026-08-03: Railway is the early-stage operating platform
 
@@ -350,3 +350,75 @@ Current source exposes 30/60/90 choices in the Sunlit Strategy UI, defaults that
 MARKOS has one Instagram product integration, but current source separates the Instagram Login/account client settings from the publishing/analytics adapter settings. This is a transport/configuration split, not a claim that the product uses two unrelated integrations.
 
 Use v25.0 provisionally for both version defaults because it is the only visible version in the supplied Railway snapshots and is the current working choice. This is not an API-research conclusion. Before enabling either remaining permission, verify the correct hosts, version placement, endpoints, fields, media requirements, metrics, review contract, and migration implications against current authoritative Meta documentation and the real dashboard.
+
+## 2026-08-17: Milestone A locks one Instagram Login application contract
+
+Supersede the provisional repository transport split for the Milestone A application implementation. Request the canonical ordered set `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_insights`; reject duplicates, unknown permissions, missing basic, and Facebook Login permission names. Persist the requested set on a fresh connection, expose it separately from provider-confirmed scopes, and never infer provider confirmation from the authorization request alone.
+
+Use fixed `https://graph.instagram.com/v25.0` versioned calls for Instagram account, publishing, and insights operations. Publishing and insights send the access token in the bearer header, bound provider calls by timeout and response size, and expose only sanitized application error codes. Retire the publishing/analytics `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`, `META_GRAPH_BASE_URL`, and `META_GRAPH_VERSION` inputs from application readiness; retain the separately consumed webhook verification token.
+
+For the controlled Standard Access proof, publish exactly one validated JPEG through an item-specific, MFA-protected operator route. Use only a process-local duplicate guard for this manual window and keep durable leases, restart recovery, Reels, carousels, and worker scheduling in Milestone B. Account insights use `reach,profile_views` with `period=day`; media insights use `shares,comments`. Preserve absent provider metrics as unavailable and explicit numeric zero as zero throughout persistence, summaries, UI, PDF, and Vault learning.
+
+This decision does not establish provider-granted permissions, deployment, reconnect, live publish/insights success, or App Review. The private Railway Bucket and just-in-time signed-URL design was still pending at the time of this application-contract decision and is superseded by the storage decision below.
+
+## 2026-08-17: Milestone A uses a private Railway Bucket and provider-only signed reads
+
+Use a private Railway Bucket through its S3-compatible interface for Milestone A media. Retain the local filesystem driver for local development. Stored object keys are workspace-prefixed, application-generated, non-overwritable, and persisted as stable `s3:` keys; the ordinary API-facing media URL remains a stable authenticated/application proxy URL rather than a signed bucket URL.
+
+Generate a fresh presigned GET URL from the stored key immediately before Meta image-container creation. Never persist, return to ordinary clients, or log that URL. Configure the API through Railway references to the Bucket-generated `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`, and `AWS_DEFAULT_REGION` credentials. Set the application-owned values `MEDIA_STORAGE_DRIVER=s3` and `AWS_S3_URL_STYLE=virtual`; constrain `SIGNED_URL_TTL` to 300–86,400 seconds with 3,600 seconds as the Milestone A starting value. `MEDIA_PUBLIC_BASE_URL` remains optional when `API_BASE_URL` is the canonical public HTTPS API origin.
+
+Sarah reported on 2026-08-17 that the private Bucket exists, its five credentials are wired to the API, `AWS_S3_URL_STYLE=virtual` is set, and a test image is visible in the Bucket. That operator report does not yet prove application-path upload/read/delete, retention/backups, an external presigned read, deployment of the reviewed application commit, or Meta fetchability. Those remain infrastructure and joint live-verification gates. Direct browser-to-Bucket upload/CORS, lifecycle cleanup, worker credentials, and durable publish attempts remain Milestone B work; browser-to-API upload is part of the application flow.
+
+## 2026-08-18: Content media and post drafts remain workspace-owned with separate lifecycles
+
+Store media under workspace-prefixed object keys and keep `MediaAsset` ownership at `workspaceId`. A user's or workspace member's identity may be recorded later as attribution/audit metadata, but it must not become the storage ownership boundary or permit an asset to cross workspaces.
+
+Treat **Remove from draft**, **Delete post draft**, and permanent media-library deletion as distinct actions. Removing media from a draft only detaches the asset. Deleting a post draft soft-deletes the workspace-scoped `ContentItem` and leaves its media assets in the workspace library. Permanent object deletion continues to require no active content references; product-facing media-library deletion and orphan reconciliation remain Milestone B.
+
+Content and media can change only in `DRAFT` or `IN_REVIEW`. Reopening an `APPROVED` item explicitly invalidates approval and returns it to `DRAFT`. A `SCHEDULED` item must first pass through a separately confirmed cancellation back to `APPROVED`; draft deletion is then a second, separately confirmed action. The draft deletion control never represents deletion of an already-published Instagram post.
+
+For the Milestone A feed upload, reject rather than silently transform incompatible input. Require JPEG bytes, a `.jpg`/`.jpeg` name, `image/jpeg`, no more than 8,000,000 bytes, 320–1,440 pixel width, and an aspect ratio from 4:5 through 1.91:1. Derive dimensions from the uploaded JPEG structure on the API. Keep decode/re-encode, color normalization, source/derivative relationships, and platform-specific variants in Milestone B; the preview must preserve source framing while stating that Instagram may recompress and convert color to sRGB.
+
+## 2026-08-19: Provider responses remain inspectable during AI quality tuning
+
+Temporarily supersede the earlier stateless Responses API choice while MARKOS content quality, latency, and token efficiency are being tuned. Default `OPENAI_STORE_RESPONSES` to `true` and send that explicit value through the shared structured-output adapter so approved inputs and outputs can be inspected in the correct OpenAI project dashboard. This applies to provider-backed Strategy, onboarding-profile, and content-copy requests; the deterministic local provider remains the default development mode.
+
+Stored provider state can include the business context deliberately sent to the model. Never send secrets, credentials, raw private identifiers, or production customer data that has not been approved for provider processing. Revisit and normally disable storage at the production privacy/retention gate or when the tuning phase ends. A Zero Data Retention project overrides the requested storage behavior. Dashboard presence is quality-review evidence, not proof that MARKOS persisted the result or completed the browser-to-provider journey.
+
+## 2026-08-19: Calendar MVP is week-first and manages existing content truthfully
+
+Make Calendar a primary Sunlit destination between Create and Insights. Default to a week-first actionable view, provide a compact month overview, surface the next meaningful content action, and keep Draft/Review/Ready work in an unscheduled queue. Use Bahrain-local labels, bilingual/RTL behavior, and text plus color for status. The mobile primary navigation centers the active destination so Calendar remains discoverable in both directions.
+
+Build this MVP from existing workspace-owned `ContentItem` records. Do not fabricate pre-draft planned slots: the current `ContentCalendar.plan` is only a monthly index of scheduled content IDs and cannot represent an objective, pillar, topic, or proposed time before content exists. A complete AI monthly plan needs a reviewed slot contract linked to a content item in a later pass.
+
+Add the ordinary user-facing `POST /v1/content/:contentItemId/reschedule` contract for `SCHEDULED` and `FAILED` items. Update the content item and its monthly index in one transaction, clear the bounded prior failure on recovery, and retain separately confirmed schedule cancellation. This route requires no migration or new cloud service. A saved schedule remains MARKOS state, not provider-confirmed automatic publication, until the durable worker and live Instagram path are separately verified.
+
+## 2026-08-19: Milestone A container polling covers five minutes without automatic retry
+
+For the controlled JPEG proof, query the new container once immediately and then at one-minute intervals for five further attempts. Use `INSTAGRAM_CONTAINER_POLL_ATTEMPTS=6` and `INSTAGRAM_CONTAINER_POLL_DELAY_MS=60000` as the application defaults, which covers five elapsed minutes while keeping the provider polling cadence bounded.
+
+Treat a container-processing timeout as an operator-review state, not an automatic retry signal. Do not issue another publish request or create a replacement container until the operator confirms that no provider media ID was persisted and no post appeared. Durable container IDs, attempt state, reconciliation, leases, and retry policy remain Milestone B work.
+
+The item-specific publish route continues to require a workspace-owned `POST` in `SCHEDULED` state with `scheduledAt` at or before the current API time. `APPROVED` is a prerequisite state in the journey, not a publishable substitute for a due schedule.
+
+## 2026-08-20: Create uses an action hub before a focused Draft Editor
+
+Open Create in an overview/action-hub state when no content item is selected. Do not mount a large empty post form by default. The primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**. Account readiness and recent performance may appear as supporting cards only when backed by real workspace/provider data; empty states must not invent activity or success.
+
+**Start a blank post** is a first-class manual path. It creates one workspace-owned `DRAFT` without Vault retrieval, an AI request, or AI quota/token usage. **Draft with MARKOS AI** creates an editable grounded draft through the existing metered generation boundary. Content ideas remain suggestions until the user deliberately selects one; merely viewing an idea must not create a saved item or consume publishing state.
+
+After a draft is created or selected, Create becomes the focused Draft Editor for caption, hashtags, CTA, media, follower-style preview, approval, scheduling, cancellation, and deletion according to the existing lifecycle. AI assistance is optional and contextual inside the editor; it must never overwrite user work without confirmation. Manual media upload remains first-class. Provider-backed image generation must use the configured image-provider interface, enforce quota/metering and moderation, normalize or reject output into the supported Instagram JPEG contract, and use the local JPEG renderer only as an explicitly selected development fallback.
+
+The information architecture is locked; implementation remains a subsequent UI/API slice. The smallest API addition is an ordinary workspace-scoped blank-content create contract consistent with the build specification's `POST /content` catalogue.
+
+## 2026-08-20: Provider images are direct, validated workspace JPEGs
+
+Use the OpenAI Images API behind the independent `AI_IMAGE_PROVIDER` selector so image rollout does not change text-provider behavior. Resolve the model through the existing `IMAGE_MODEL_PRIMARY` slot; the initial live setting is `gpt-image-2`. Generate one medium-quality, 90%-compressed JPEG with automatic provider moderation. Request exact sizes of 1024×1024 for 1:1, 1024×1280 for 4:5, and 1008×1792 for 9:16.
+
+Reserve the workspace's `AI_IMAGE` allowance before making the paid provider request. Require provider usage, valid base64, a decodable JPEG, no more than 8 MB, and exact requested dimensions before storage. Then reserve storage, persist the workspace-owned object and attachment, and record the interaction and input/output tokens transactionally. Refund the image allowance when moderation, provider, validation, storage, or persistence prevents delivery. Never send a raw workspace ID to the provider or log prompts/image bytes; use a pseudonymous provider user identifier.
+
+## 2026-08-20: Business Profile editing is an explicit return to onboarding
+
+An ordinary visit to onboarding still redirects a workspace whose business profile is complete and approved to Strategy. The **Review and edit profile** action is different: it opens onboarding in explicit edit mode and hydrates the seven modules from the workspace's current Vault values so the user edits existing truth rather than an empty form.
+
+Saving any changed canonical module retains the existing invalidation contract: the resolved profile becomes stale, onboarding returns to `IN_PROGRESS`, and the user reviews and approves a regenerated profile before it becomes the new grounding record. Historical approved interactions remain preserved.

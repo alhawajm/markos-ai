@@ -1,3 +1,4 @@
+import type { KnowledgeVaultEntry, VaultSection } from "@markos/shared-types";
 import { onboardingObjectiveFieldLimits } from "@markos/validation";
 
 export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -91,6 +92,95 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     vision: "",
     website: ""
   };
+}
+
+export function createOnboardingDraftFromVault(vault: Record<VaultSection, KnowledgeVaultEntry[]>): OnboardingDraft {
+  const company = vaultValue(vault, "COMPANY", "profile");
+  const story = vaultValue(vault, "STORY", "story");
+  const products = vaultValue(vault, "PRODUCTS", "catalog");
+  const audience = vaultValue(vault, "AUDIENCE", "primary-audience");
+  const competitors = vaultValue(vault, "COMPETITORS", "competitors");
+  const brand = vaultValue(vault, "BRAND", "identity");
+  const tone = vaultValue(vault, "TONE", "voice");
+  const objectives = vaultValue(vault, "OBJECTIVES", "goals");
+  const languages = stringArray(company.languages);
+
+  return {
+    ...createEmptyOnboardingDraft(),
+    ageRange: stringValue(audience.ageRange),
+    audienceDescription: stringValue(audience.demographics),
+    audienceLocations: joinedValue(audience.locations),
+    brandColor: stringArray(brand.colors)[0] ?? "",
+    brandFonts: joinedValue(brand.fonts),
+    brandVisualWords: joinedValue(brand.aestheticWords),
+    brandVoiceNotes: stringValue(tone.voiceNotes),
+    budgetRange: stringValue(objectives.budgetRange),
+    companyName: stringValue(company.name),
+    competitiveAdvantage: stringValue(competitors.competitiveAdvantage),
+    competitorDifference: stringValue(competitors.doDifferently),
+    competitors: recordArray(competitors.items)
+      .map((item) => stringValue(item.name))
+      .filter(Boolean),
+    differentiators: joinedValue(products.differentiators),
+    genderFocus: stringValue(audience.genderBreakdown),
+    goals: stringArray(objectives.goals),
+    industry: stringValue(company.industry),
+    instagramExperience: stringValue(objectives.instagramExperience),
+    interests: joinedValue(audience.interests),
+    languagePreference: onboardingLanguagePreference(languages),
+    location: stringValue(company.location),
+    mission: stringValue(story.mission),
+    motivations: joinedValue(audience.motivations),
+    origin: stringValue(story.origin),
+    painPoints: joinedValue(audience.painPoints),
+    priceRange: stringValue(products.priceRange),
+    problemSolved: stringValue(story.problemSolved),
+    products: recordArray(products.items)
+      .map((item) => ({
+        category: stringValue(item.category),
+        description: stringValue(item.description),
+        name: stringValue(item.name)
+      }))
+      .filter((item) => item.name.length > 0),
+    salesChannels: joinedValue(products.salesChannels),
+    success90Days: stringValue(objectives.success90Days),
+    tone: stringArray(tone.toneWords)[0] ?? "",
+    usp: stringValue(story.usp),
+    values: joinedValue(story.values),
+    vision: stringValue(story.vision),
+    website: stringValue(company.website)
+  };
+}
+
+function vaultValue(vault: Record<VaultSection, KnowledgeVaultEntry[]>, section: VaultSection, preferredKey: string): Record<string, unknown> {
+  const entries = vault[section] ?? [];
+  return entries.find((entry) => entry.key === preferredKey)?.value ?? entries[0]?.value ?? {};
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function joinedValue(value: unknown): string {
+  return stringArray(value).join(", ");
+}
+
+function recordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item)) : [];
+}
+
+function onboardingLanguagePreference(languages: string[]): string {
+  const includesArabic = languages.includes("Arabic");
+  const includesEnglish = languages.includes("English");
+
+  if (includesArabic && includesEnglish) return "Both";
+  if (includesArabic) return "Arabic";
+  if (includesEnglish) return "English";
+  return "";
 }
 
 export function splitOnboardingList(value: string): string[] {

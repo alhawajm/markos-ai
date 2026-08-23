@@ -65,9 +65,10 @@ async def generate_structured(
     schema_name: str,
 ) -> StructuredResult[ContractT]:
     logger.info(
-        "openai_structured_request_started schema=%s model=%s",
+        "openai_structured_request_started schema=%s model=%s store=%s",
         schema_name,
         model,
+        settings.openai_store_responses,
     )
 
     try:
@@ -77,7 +78,7 @@ async def generate_structured(
             max_output_tokens=settings.openai_max_output_tokens,
             model=model,
             reasoning={"effort": settings.openai_reasoning_effort},
-            store=False,
+            store=settings.openai_store_responses,
             text={
                 "format": {
                     "type": "json_schema",

@@ -1,13 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { attachMediaToContentSchema, generateImageForContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
+import { AiServiceRequestError } from "../ai/request";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
+import { MediaStorageError } from "./storage-service";
 import {
   attachMediaToContent,
+  deleteMediaAsset,
   detachMediaFromContent,
   generateImageForContent,
   listMediaAssets,
+  MediaAssetInUseError,
   MediaAssetNotFoundError,
   MediaContentItemNotFoundError,
   MediaContentLockedError,
@@ -17,6 +21,8 @@ import {
   registerPublicMedia,
   uploadMedia
 } from "./media-service";
+
+const maxDirectUploadBodyBytes = 12 * 1024 * 1024;
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -36,6 +42,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/v1/media/upload",
     {
+      bodyLimit: maxDirectUploadBodyBytes,
       config: {
         workspaceRequired: true,
         permissions: ["media:write"]
@@ -63,6 +70,47 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
         if (error instanceof UsagePlanInactiveError) {
           return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+
+        if (error instanceof MediaStorageError) {
+          return reply.status(503).send(errorEnvelope(error.code, "Media storage is temporarily unavailable"));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.delete(
+    "/v1/media/:mediaAssetId",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { mediaAssetId?: string };
+
+      if (!params.mediaAssetId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Media asset id is required"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await deleteMediaAsset(workspaceId, params.mediaAssetId));
+      } catch (error) {
+        if (error instanceof MediaAssetNotFoundError) {
+          return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof MediaAssetInUseError) {
+          return reply.status(409).send(errorEnvelope("MEDIA_IN_USE", error.message));
+        }
+
+        if (error instanceof MediaStorageError) {
+          return reply.status(503).send(errorEnvelope(error.code, "Media storage is temporarily unavailable"));
         }
 
         throw error;
@@ -202,10 +250,14 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const file = await readPublicMediaFile(params.workspaceId, params.storedFilename);
-      return reply.type(file.mimeType).send(file.bytes);
+      return reply.header("Cross-Origin-Resource-Policy", "cross-origin").type(file.mimeType).send(file.bytes);
     } catch (error) {
       if (error instanceof MediaAssetNotFoundError) {
         return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", error.message));
+      }
+
+      if (error instanceof MediaStorageError) {
+        return reply.status(503).send(errorEnvelope(error.code, "Media storage is temporarily unavailable"));
       }
 
       throw error;
@@ -232,6 +284,14 @@ function handleMediaMutationError(error: unknown, reply: { status: (code: number
 
   if (error instanceof UsagePlanInactiveError) {
     return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+  }
+
+  if (error instanceof AiServiceRequestError) {
+    return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message, [{ retryable: error.retryable }]));
+  }
+
+  if (error instanceof MediaStorageError) {
+    return reply.status(503).send(errorEnvelope(error.code, "Media storage is temporarily unavailable"));
   }
 
   throw error;

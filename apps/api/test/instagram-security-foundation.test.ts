@@ -25,13 +25,13 @@ class MemoryStore implements OAuthStateStore {
 }
 
 describe("Instagram provider contract", () => {
-  it("uses only Instagram Login v25.0 and the basic business scope", () => {
+  it("uses only Instagram Login v25.0 and the canonical release scopes", () => {
     expect(INSTAGRAM_AUTHORIZATION_URL).toBe("https://www.instagram.com/oauth/authorize");
     expect(INSTAGRAM_SHORT_LIVED_TOKEN_URL).toBe("https://api.instagram.com/oauth/access_token");
     expect(INSTAGRAM_LONG_LIVED_TOKEN_URL).toBe("https://graph.instagram.com/access_token");
     expect(INSTAGRAM_GRAPH_VERSION).toBe("v25.0");
     expect(INSTAGRAM_GRAPH_BASE_URL).toBe("https://graph.instagram.com/v25.0");
-    expect(INSTAGRAM_REQUESTED_SCOPES).toEqual(["instagram_business_basic"]);
+    expect(INSTAGRAM_REQUESTED_SCOPES).toEqual(["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"]);
   });
 
   it("accepts a canonical redirect and rejects ambiguous credentials or fragments", () => {

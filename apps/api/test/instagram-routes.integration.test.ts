@@ -14,8 +14,18 @@ describeInstagramDatabase("registered Instagram routes", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let originalFetch: typeof fetch;
   let providerCalls = 0;
+  const originalOAuthConfig = {
+    appId: env.INSTAGRAM_APP_ID,
+    appSecret: env.INSTAGRAM_APP_SECRET,
+    redirectUri: env.INSTAGRAM_OAUTH_REDIRECT_URI,
+    stateSecret: env.INSTAGRAM_OAUTH_STATE_SECRET
+  };
 
   beforeAll(async () => {
+    env.INSTAGRAM_APP_ID = "test-instagram-app-id";
+    env.INSTAGRAM_APP_SECRET = "test-instagram-app-secret";
+    env.INSTAGRAM_OAUTH_REDIRECT_URI = "https://api.example.test/v1/workspace/instagram/oauth/callback";
+    env.INSTAGRAM_OAUTH_STATE_SECRET = "test-instagram-state-secret-at-least-32-bytes";
     originalFetch = globalThis.fetch;
     globalThis.fetch = async (input) => {
       providerCalls += 1;
@@ -31,6 +41,10 @@ describeInstagramDatabase("registered Instagram routes", () => {
 
   afterAll(async () => {
     globalThis.fetch = originalFetch;
+    env.INSTAGRAM_APP_ID = originalOAuthConfig.appId;
+    env.INSTAGRAM_APP_SECRET = originalOAuthConfig.appSecret;
+    env.INSTAGRAM_OAUTH_REDIRECT_URI = originalOAuthConfig.redirectUri;
+    env.INSTAGRAM_OAUTH_STATE_SECRET = originalOAuthConfig.stateSecret;
     await app.close();
     await prisma.oAuthStateNonce.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
     await prisma.auditLog.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
@@ -72,7 +86,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(started.statusCode).toBe(200);
     const authorization = new URL(started.json().data.authorizationUrl);
     expect(authorization.origin + authorization.pathname).toBe("https://www.instagram.com/oauth/authorize");
-    expect(authorization.searchParams.get("scope")).toBe("instagram_business_basic");
+    expect(authorization.searchParams.get("scope")).toBe("instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights");
     expect(authorization.searchParams.get("enable_fb_login")).toBe("0");
     expect(authorization.searchParams.get("force_authentication")).toBe("1");
     expect(authorization.searchParams.get("redirect_uri")).toBe(env.INSTAGRAM_OAUTH_REDIRECT_URI);

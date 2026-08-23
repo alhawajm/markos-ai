@@ -70,8 +70,8 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
 | Onboarding | Seven real modules feed the Vault. At 100% completeness, the user generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy. | Real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
 | Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
-| Content/media | Create and Campaign Builder can generate persisted drafts, edit core fields, approve, attach through existing media contracts, and schedule. | Full calendar/library/editing/media workflows, provider-backed content/images, and all final content-type states. |
-| Instagram | A production-observed business-basic connection exists. The active OAuth request still asks for exactly `instagram_business_basic`; publishing and analytics modes default to `dry_run`. | `instagram_business_content_publish`, `instagram_business_manage_insights`, current provider-contract research, App Review, durable media, and controlled live evidence. |
+| Content/media | Create can start a manual or AI-assisted persisted draft, edit bilingual captions and core fields, approve, upload or provider-generate and attach validated JPEGs, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, deployed image-provider proof, and all final content-type states. |
+| Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
 | Insights | An API-backed 7/30-day summary, top-content view, empty/error/loading states, and monthly PDF download are mounted. | Full `AN-01`–`AN-06`, live permission-backed sync, 28/90 comparisons, provider-backed interpretation, digest/chat, and learning evidence. |
 | Operations | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history. | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal. |
 
@@ -114,6 +114,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - `POST /v1/onboarding/profile/generate` produces a bilingual draft from the raw module entries and records the interaction/usage.
 - The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, clears the browser draft, and routes to `/{locale}/app/strategy`.
 - Approval does **not** automatically generate Strategy. The user sees the Strategy surface and chooses the objective and horizon explicitly.
+- An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Strategy. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
 - Editing a canonical onboarding module later invalidates the resolved profile and returns the workspace to `IN_PROGRESS` while preserving history.
 
 ### Flow B — Generate the first Strategy
@@ -137,7 +138,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **B3. Turn Strategy into a content plan**
 
 - Final target: generate a monthly calendar whose slots map to objectives, pillars, content type, topic, and best time, then allow deliberate rescheduling.
-- Current implementation note: no standalone `/v1/calendar/plan` contract exists. Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call that the complete `CONT-01` calendar.
+- Current implementation note: the dedicated Calendar surface reads existing content records and can schedule, atomically reschedule, cancel, and open them for editing. No standalone `/v1/calendar/plan` contract or pre-draft slot model exists; Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call this the complete `CONT-01` calendar.
 
 ### Flow C — Create, review, and approve content
 
@@ -145,20 +146,25 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **C1. Start from Create or a campaign**
 
-- The user chooses a content type and topic, optionally ties it to a Strategy, and requests one or more drafts.
-- Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`.
+- With no item selected, Create opens as a compact action hub rather than an empty editor. Primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**.
+- **Start a blank post** creates one workspace-owned `DRAFT` without calling AI, retrieving Vault context, or consuming AI quota. **Draft with MARKOS AI** remains the grounded generation path. Ideas are not persisted until the user deliberately selects one.
+- Supporting account-readiness or performance cards may appear only from real workspace/provider data. Missing data receives an honest empty state.
+- Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`. The locked manual path requires the build-spec-aligned blank `POST /v1/content` contract and is not implemented merely by this documentation decision.
 
 **C2. Generate copy**
 
 - The API checks Vault presence and quota, retrieves relevant workspace context and tone, selects a prompt, and calls `POST /ai/content/generate` through the internal bearer boundary.
 - It persists `ContentItem` drafts and an `ai_interaction`, then records token usage.
-- Current implementation note: the content AI route is deterministic scaffolding even though the API-side retrieval, persistence, quota, and workflow are real. Do not describe it as provider-backed generation.
+- AI generation is optional assistance, not a prerequisite for opening or saving a post draft. It must not overwrite manual text without a deliberate user action.
+- Current implementation note: the content AI route now supports the configured OpenAI provider through a strict bilingual structured contract while preserving deterministic local development behavior. The source capability is not staging proof; a browser-to-API-to-AI request and stored OpenAI dashboard response still need external verification.
 
 **C3. Edit and attach media**
 
+- Selecting or creating a draft moves Create into one focused Draft Editor. That editor owns the editable bilingual copy, hashtags, CTA, media, follower-style preview, approval, schedule/cancel, and eligible delete actions for that item; leaving the editor returns to the action hub or draft list without discarding confirmed saves.
 - Core edits use `PATCH /v1/content/:contentItemId`.
 - Upload uses `POST /v1/media/upload`; AI image generation uses `POST /v1/content/:contentItemId/generate-image`; attachment uses the content media routes.
-- Current storage is workspace-scoped local filesystem with an API-served public fallback. It is not approved durable publishing storage.
+- The mounted Create surface sends JPEGs through the authenticated API, records browser-decoded dimensions for uploads, attaches them to the saved item, and preserves the current edits if upload/generation fails. Generated images use the separately configured provider path, reserve quota before the request, validate exact JPEG bytes/dimensions, meter provider usage, and persist through workspace-owned storage; local mode remains an explicit development fallback.
+- Current working source has workspace-scoped local and S3-compatible storage drivers. The Milestone A live path requires a durable `s3:` key and mints a provider-only signed GET immediately before container creation. Sarah reports Railway provisioning and API credential wiring complete; deployment of the reviewed code plus application-path and external signed-GET validation remain open.
 - Final target includes the rich editor, per-section regeneration, carousel/reel tools, content history/comments, media library, asset detail, storage meter, and a complete Instagram preview.
 
 **C4. Review and approve**
@@ -174,8 +180,8 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - The API issues signed expiring state bound to the user, workspace, return path, and a single-use persisted transaction.
 - It exchanges the code, retrieves the token-authenticated profile, stores `/me.user_id` as the professional-account identity, encrypts the token in `instagram_connection_credentials`, replaces bounded recent media, and writes the audit record atomically.
 - This is Instagram Login. Do not introduce Facebook Login or Facebook Page discovery into this flow unless a separately reviewed provider contract requires it.
-- Current source has separate `INSTAGRAM_GRAPH_*` account-client and `META_GRAPH_*` publishing/analytics adapter settings inside this one Instagram integration. Both version defaults are provisionally v25.0; the permission/API research phase must verify the correct host and version contract before live activation.
-- The current OAuth request asks for exactly `instagram_business_basic`. `INSTAGRAM_OAUTH_SCOPES` cannot expand it. Publishing and insights each require an intentional application, dashboard, reconnect, test, and evidence change.
+- Current working source uses one constrained Instagram Login contract for account, publishing, and insights calls: versioned requests use `graph.instagram.com/v25.0`, while OAuth/token endpoints remain separately constrained to their documented Instagram hosts.
+- `INSTAGRAM_OAUTH_SCOPES` is parsed through the canonical allowlist and drives authorization plus requested-scope persistence. Milestone A requests exactly `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_insights`; a deployment and fresh connection are still required before a new token can carry that request, and requested scopes are not provider-grant evidence.
 - A verified user with the required MFA step-up may connect, reconnect, refresh, or disconnect. Expired/missing credentials block provider actions with a reconnect action; MARKOS never attempts a publish using a known-invalid credential.
 
 ### Flow E — Schedule and publish
@@ -185,16 +191,17 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **E1. Schedule**
 
 - `POST /v1/content/:contentItemId/schedule` accepts only an approved item and sets a future schedule. `POST /v1/content/:contentItemId/unschedule` reverses an eligible schedule.
-- The dedicated queue is read through `GET /v1/publishing/queue`; rescheduling uses `POST /v1/publishing/content/:contentItemId/reschedule`.
+- Create keeps approval explicit: scheduling does not silently approve a draft. A scheduled item exposes a cancel action that returns it to `APPROVED` without deleting the item.
+- Calendar rescheduling uses the workspace-scoped `POST /v1/content/:contentItemId/reschedule` contract for scheduled or failed items and keeps the monthly content index consistent. The dedicated operator queue is read through `GET /v1/publishing/queue`; its existing publishing reschedule route remains the narrower failed-item recovery path.
 - Final UI must expose the chosen time, approval, account, media readiness, provider cap, failure, and recovery. The current Sunlit app does not yet mount the complete queue/recovery surface.
 
 **E2. Publish**
 
-- The worker selects due `SCHEDULED` items, checks plan and provider readiness, ensures every media URL is public HTTPS for the provider fetch window, creates a media container, polls until the provider reports a terminal result, and publishes only after readiness.
+- The final worker selects due `SCHEDULED` items, checks plan and provider readiness, obtains provider-fetchable media for the full processing window, creates a media container, polls until the provider reports a terminal result, and publishes only after readiness.
 - Success stores the provider media ID and `publishedAt` and moves the item to `PUBLISHED`. A provider error moves it to `FAILED` with a safe reason and an explicit reschedule path.
 - Never mark a dry run or container creation as published. Never retry the same failed container indefinitely.
 - Query the provider's current publishing-limit contract when live rather than hardcoding an old approximate post count. Exact cap, host, per-format behavior, and Story/Reel upload requirements must be revalidated during the permission/API research phase.
-- Current implementation note: a Meta Graph adapter and local/mock tests exist behind `INSTAGRAM_PUBLISH_MODE`; durable media, the publish permission, App Review, and real image/Reel evidence remain open.
+- Current source retains the MFA-protected item-specific path and also lets the Railway worker select due scheduled items. Both require a private S3-backed object key, mint a just-in-time signed GET, check the live quota response, and perform create → poll → publish through Instagram Login. On 2026-08-20, Khalid supplied follower-visible screenshots of the first automated JPEG result. Durable attempt/container persistence, multi-worker leases, restart reconciliation, App Review/Advanced Access, and Reel evidence remain open.
 
 ### Flow F — Sync and explain Insights
 
@@ -203,8 +210,8 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **F1. Sync**
 
 - `POST /v1/analytics/sync` runs a workspace-scoped sync through the selected provider; `GET /v1/analytics` returns the summarized range.
-- Current live-readiness requires `instagram_business_basic` plus `instagram_business_manage_insights`, a fresh appropriately authorized credential, live mode, and provider configuration. It is not activatable by changing an inert scope string alone.
-- The current provider/worker/persistence foundation exists, but live metrics are not externally verified and `INSTAGRAM_ANALYTICS_SYNC_MODE` defaults to `dry_run`.
+- Current live-readiness requires the canonical three-scope Milestone A request, a fresh appropriately requested credential, live mode, and Instagram Login configuration. A configured or requested scope is still not evidence that Meta granted it.
+- The live provider uses separate account `reach,profile_views` and media `shares,comments` requests and preserves unavailable data separately from explicit zero. Local provider and workspace-isolation tests pass, but live metrics are not externally verified and `INSTAGRAM_ANALYTICS_SYNC_MODE` defaults to `dry_run`.
 
 **F2. View and interpret**
 

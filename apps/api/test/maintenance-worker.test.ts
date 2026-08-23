@@ -36,7 +36,7 @@ describe("maintenance worker", () => {
             caption: input.contentItem.captionEn ?? "",
             contentItemId: input.contentItem.id,
             contentType: input.contentItem.contentType,
-            mediaUrls: input.mediaAssets.map((asset) => asset.cdnUrl)
+            mediaCount: input.mediaAssets.length
           },
           status: "PUBLISHED"
         };
@@ -185,8 +185,8 @@ describe("maintenance worker", () => {
       "POST_PUBLISH",
       "STRATEGY"
     ]);
-    expect(currentCounters.every((counter) => counter.used === 0)).toBe(true);
-    expect(previousCounter.used).toBe(7);
+    expect(currentCounters.every((counter) => counter.used === 0n)).toBe(true);
+    expect(previousCounter.used).toBe(7n);
     expect(currentStorageCounter).toBeNull();
   }, 60_000);
 
