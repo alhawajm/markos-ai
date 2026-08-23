@@ -4,7 +4,7 @@ Source of truth: `MARKOS_BUILD_SPEC. 2.pdf`, especially Section 7.3 and Section 
 
 Use this file as the working progress tracker. Only tick an item when the implementation is merged, verified, and the relevant test or acceptance gate passes. If a feature is scaffolded but missing a required spec condition, leave it unchecked and add a short note.
 
-The active visual direction is documented in `docs/ui-design-foundation.md`. Prior UI parity evidence remains in `docs/ui-functionality-checklist.md` and `docs/final-ui-implementation-checklist.md` as historical records.
+The active visual direction is documented in `docs/ui-design-foundation.md`; the working design method and interpreted improvement backlog are in `docs/ui-ux-workflow.md` and `docs/ui-ux-improvement-plan.md`. Prior UI parity evidence is archived under `docs/archive/ui/pre-sunlit/`.
 
 Current implementation, roadmap, ownership, and evidence classifications are summarized in `docs/project-status.md`.
 

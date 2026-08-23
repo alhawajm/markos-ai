@@ -422,3 +422,11 @@ Reserve the workspace's `AI_IMAGE` allowance before making the paid provider req
 An ordinary visit to onboarding still redirects a workspace whose business profile is complete and approved to Strategy. The **Review and edit profile** action is different: it opens onboarding in explicit edit mode and hydrates the seven modules from the workspace's current Vault values so the user edits existing truth rather than an empty form.
 
 Saving any changed canonical module retains the existing invalidation contract: the resolved profile becomes stale, onboarding returns to `IN_PROGRESS`, and the user reviews and approves a regenerated profile before it becomes the new grounding record. Historical approved interactions remain preserved.
+
+## 2026-08-23: UI feedback is interpreted within the active Sunlit system
+
+Treat meeting notes, screenshots, templates, design exports, and stakeholder suggestions as evidence and prompts for investigation rather than automatic product requirements. Keep raw review notes outside the active repository documentation. Promote only an interpreted problem, proposed direction, decision state, preserved contracts, and observable acceptance criteria. The product team may accept, reframe, defer, or reject a suggestion.
+
+Keep `docs/ui-design-foundation.md` as the active visual and interaction authority beneath the build specification and experience flows. Use `docs/ui-ux-workflow.md` for reference, prototype, implementation, and QA practice, and `docs/ui-ux-improvement-plan.md` for the interpreted working backlog. Archive the superseded light/red and dark command-center checklists, exports, and dated state audits rather than leaving them in the active documentation root.
+
+Prototype consequential navigation, information hierarchy, multi-step journey, and dense workspace changes before implementation when feasible. A Figma file, browser prototype, or annotated screenshot is evidence only after the intended frames and relevant states have been visually reviewed. Preserve application behavior, workspace isolation, approval gates, metering, accessibility, Arabic/RTL, and honest external-provider state throughout visual work.

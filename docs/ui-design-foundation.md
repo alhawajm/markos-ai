@@ -2,7 +2,7 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-16
+- Last updated: 2026-08-23
 
 This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
 
@@ -12,6 +12,8 @@ Product behavior still comes from:
 - `docs/source/MARKOS_EXPERIENCE_FLOWS.md` for journeys, state transitions, and failure behavior.
 
 If this visual document conflicts with either source on product behavior, follow those sources. The mounted components under `apps/web/app/[locale]/_components` are the most accurate coded reference for the adopted visual direction.
+
+Use `docs/ui-ux-workflow.md` for reference gathering, prototyping, implementation, and visual QA. Use `docs/ui-ux-improvement-plan.md` for interpreted design problems that have not yet become durable product decisions. Meeting notes, screenshots, templates, and stakeholder suggestions are challengeable inputs; they become active direction only after the product team records the problem, intended outcome, and decision state.
 
 ## Product idea
 
@@ -205,6 +207,7 @@ The authenticated Sunlit journey is mounted at the real application routes:
 | Overview | `/app` |
 | Strategy | `/app/strategy` |
 | Create | `/app/content-studio` |
+| Calendar | `/app/calendar` |
 | Insights | `/app/analytics` |
 | Business Profile | `/app/knowledge` |
 | Settings | `/app/settings` |
@@ -215,12 +218,12 @@ These routes preserve their existing session, workspace, API, approval, and fail
 ## Current implementation boundary
 
 - `apps/web/app/sunlit-theme.css` and the canonical localized routes are the active visual reference.
-- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Insights, Business Profile, and Settings use the adopted UI.
+- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Calendar, Insights, Business Profile, and Settings use the adopted UI.
 - The former `/design-preview` routes and duplicate dark public/authentication components were removed rather than retained as fallbacks.
 - `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
-- Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
+- Historical Figma inventories, dark-theme checklists, state audits, and the completed August presentation runbook live under `docs/archive/ui/` and `docs/archive/presentations/`. They are evidence only, not active instructions.
 
 ### Deferred Sunlit product-surface restoration
 
@@ -245,12 +248,14 @@ Universal obligations from the retired design source still apply to every restor
 ## Production migration rules
 
 1. Preserve product behavior, API contracts, session handling, workspace isolation, approval gates, metering, and failure recovery.
-2. Extract shared semantic tokens and components before copying page-specific CSS into multiple product surfaces.
-3. Migrate one coherent surface at a time and keep each pull request reviewable.
-4. Replace fixtures with API-backed data or explicit empty/demo states.
-5. Preserve English and Arabic behavior in the same change.
-6. Verify source tests, browser interaction, typecheck, lint, responsive layouts, keyboard operation, and RTL before retiring the old surface.
-7. Remove an old route only after its replacement covers the real journey and recovery states; do not retain a duplicate route family by default.
+2. Treat visual references as evidence for composition and hierarchy, not as code, data, brand, or behavior contracts.
+3. Prototype consequential navigation, hierarchy, and multi-step journey changes before implementation.
+4. Extract shared semantic tokens and components before copying page-specific CSS into multiple product surfaces.
+5. Migrate one coherent surface at a time and keep each pull request reviewable.
+6. Replace fixtures with API-backed data or explicit empty/demo states.
+7. Preserve English and Arabic behavior in the same change.
+8. Verify focused source tests, browser interaction, responsive layouts, keyboard operation, and RTL before retiring the old surface.
+9. Remove an old route only after its replacement covers the real journey and recovery states; do not retain a duplicate route family by default.
 
 Migration sequence:
 
@@ -264,7 +269,7 @@ Migration sequence:
 ## Deferred decisions
 
 - Detailed mobile and tablet composition beyond basic functional layouts.
-- Final onboarding recovery copy and per-step refinement after the presentation journey.
+- Final onboarding grouping, document-assisted import, field requirements, and recovery behavior after prototype and product review.
 - Plans page structure and commercial copy.
 - Advanced Insights comparisons and recommendations beyond the current API-backed summary.
 - Final Terms and Privacy content and scroll-navigation tuning.

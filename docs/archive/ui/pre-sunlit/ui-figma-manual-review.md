@@ -1,6 +1,6 @@
 # MARKOS UI Figma Manual Review
 
-> **Archived pre-Sunlit evidence:** This review covers the superseded `Design AI Marketing Platform` export and the 2026-06-17 implementation snapshot. PR #19 later removed or redirected several recorded pages. Every pass result below is historical, not proof of the current Sunlit UI. Use [the Sunlit Social Studio UI foundation](./ui-design-foundation.md) and its restoration register for current work.
+> **Archived pre-Sunlit evidence:** This review covers the superseded `Design AI Marketing Platform` export and the 2026-06-17 implementation snapshot. PR #19 later removed or redirected several recorded pages. Every pass result below is historical, not proof of the current Sunlit UI. Use [the Sunlit Social Studio UI foundation](../../../ui-design-foundation.md) and its restoration register for current work.
 
 Date: 2026-06-17
 
