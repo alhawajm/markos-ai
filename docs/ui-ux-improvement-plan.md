@@ -6,7 +6,7 @@
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
-Durable accepted decisions belong in docs/decisions.md. This file keeps the design problems, proposed directions, and validation questions visible while they are being explored.
+Accepted UI-specific decisions belong in docs/ui-ux-decisions.md. Product behavior and data-contract decisions belong in docs/decisions.md. This file keeps the design problems, proposed directions, and validation questions visible while they are being explored.
 
 ## Decision states
 

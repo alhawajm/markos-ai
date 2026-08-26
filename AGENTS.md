@@ -23,6 +23,10 @@ MARKOS AI is an Instagram-first AI marketing OS for Bahrain SMBs. It learns a bu
 
 When the spec is silent, choose the smallest conventional option and record it in `docs/decisions.md`.
 
+## UI/UX work
+
+For browser-visible UI/UX design, prototyping, implementation, or review, follow `docs/ui-ux-workflow.md`. It defines the active Sunlit/Figma authority boundaries and the Chrome DevTools MCP desktop validation workflow.
+
 ## Testing
 
 - After each development pass, run only the tests that directly cover the changed behavior, plus the nearest relevant typecheck or lint check. Do not run root `pnpm verify`, an entire workspace suite, browser suites, or Docker-backed verification unless the user asks for it or the change genuinely crosses shared foundations, database/schema behavior, multiple services, or a release gate.

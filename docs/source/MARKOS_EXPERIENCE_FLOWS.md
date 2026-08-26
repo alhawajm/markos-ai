@@ -147,7 +147,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **C1. Start from Create or a campaign**
 
 - With no item selected, Create opens as a compact action hub rather than an empty editor. Primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**.
-- **Start a blank post** creates one workspace-owned `DRAFT` without calling AI, retrieving Vault context, or consuming AI quota. **Draft with MARKOS AI** remains the grounded generation path. Ideas are not persisted until the user deliberately selects one.
+- **Start a blank post** opens an unpersisted browser working copy without calling AI, retrieving Vault context, or consuming AI quota. It creates a workspace-owned `DRAFT` only when the user deliberately saves meaningful work. **Draft with MARKOS AI** remains the grounded generation path. Ideas are not persisted until the user deliberately selects one.
 - Supporting account-readiness or performance cards may appear only from real workspace/provider data. Missing data receives an honest empty state.
 - Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`. The locked manual path requires the build-spec-aligned blank `POST /v1/content` contract and is not implemented merely by this documentation decision.
 
@@ -155,12 +155,14 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - The API checks Vault presence and quota, retrieves relevant workspace context and tone, selects a prompt, and calls `POST /ai/content/generate` through the internal bearer boundary.
 - It persists `ContentItem` drafts and an `ai_interaction`, then records token usage.
+- Submitting a valid **Generate draft** request is an explicit first-persistence boundary for the least-cost implementation. The UI states before submission that successful generation creates a saved workspace draft and consumes metered AI usage. Leaving that saved result without later edits requires no unsaved-changes prompt; deleting it remains a separate deliberate action and does not refund consumed usage.
 - AI generation is optional assistance, not a prerequisite for opening or saving a post draft. It must not overwrite manual text without a deliberate user action.
 - Current implementation note: the content AI route now supports the configured OpenAI provider through a strict bilingual structured contract while preserving deterministic local development behavior. The source capability is not staging proof; a browser-to-API-to-AI request and stored OpenAI dashboard response still need external verification.
 
 **C3. Edit and attach media**
 
-- Selecting or creating a draft moves Create into one focused Draft Editor. That editor owns the editable bilingual copy, hashtags, CTA, media, follower-style preview, approval, schedule/cancel, and eligible delete actions for that item; leaving the editor returns to the action hub or draft list without discarding confirmed saves.
+- Selecting a saved draft or starting an unsaved working copy moves Create into one focused Draft Editor. That editor owns the editable bilingual copy, hashtags, CTA, optional planned publication date/time, media, follower-style preview, readiness, schedule/cancel, and eligible delete actions for that item.
+- Leaving an untouched new working copy returns to the action hub without creating a record. In-app navigation away from meaningful unsaved changes offers Save draft, Discard changes, and Keep editing. A saved draft may omit `plannedAt` and appear in Unscheduled, or include `plannedAt` and appear on that Calendar date without becoming scheduled. Confirmed saves are preserved; browser unload uses the native unsaved-changes warning where available.
 - Core edits use `PATCH /v1/content/:contentItemId`.
 - Upload uses `POST /v1/media/upload`; AI image generation uses `POST /v1/content/:contentItemId/generate-image`; attachment uses the content media routes.
 - The mounted Create surface sends JPEGs through the authenticated API, records browser-decoded dimensions for uploads, attaches them to the saved item, and preserves the current edits if upload/generation fails. Generated images use the separately configured provider path, reserve quota before the request, validate exact JPEG bytes/dimensions, meter provider usage, and persist through workspace-owned storage; local mode remains an explicit development fallback.
@@ -190,8 +192,10 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **E1. Schedule**
 
-- `POST /v1/content/:contentItemId/schedule` accepts only an approved item and sets a future schedule. `POST /v1/content/:contentItemId/unschedule` reverses an eligible schedule.
-- Create keeps approval explicit: scheduling does not silently approve a draft. A scheduled item exposes a cancel action that returns it to `APPROVED` without deleting the item.
+- `GET /v1/calendar` reads one inclusive, bounded Bahrain date range for the active workspace and returns lifecycle-timestamped Calendar items, referenced media, a summary, and a paginated Unscheduled queue. Status and content-type filters are server-backed. Draft/Review/Ready use `plannedAt`, Scheduled/Failed use `scheduledAt`, and Published use `publishedAt`; records without the relevant placement timestamp must not be placed by `createdAt` or hidden behind a newest-content limit.
+- `POST /v1/content/:contentItemId/schedule` accepts only an approved item and sets a future schedule. `POST /v1/content/:contentItemId/unschedule` reverses an eligible schedule, clears both scheduled and planned publication time, and places the Ready item in Unscheduled.
+- `plannedAt` on a Draft/Review/Ready item is an intended Calendar time only. It does not enter the publishing queue. The explicit schedule action may propose that value, but only a confirmed scheduling request writes `scheduledAt` and moves the item to `SCHEDULED`.
+- Create keeps approval explicit: scheduling does not silently approve a draft. A scheduled item exposes a cancel action that returns it to `APPROVED` without deleting the item. Cancelling from Calendar Post Focus returns to the originating Day Focus and gives timed notice that the item moved to Unscheduled.
 - Calendar rescheduling uses the workspace-scoped `POST /v1/content/:contentItemId/reschedule` contract for scheduled or failed items and keeps the monthly content index consistent. The dedicated operator queue is read through `GET /v1/publishing/queue`; its existing publishing reschedule route remains the narrower failed-item recovery path.
 - Final UI must expose the chosen time, approval, account, media readiness, provider cap, failure, and recovery. The current Sunlit app does not yet mount the complete queue/recovery surface.
 
