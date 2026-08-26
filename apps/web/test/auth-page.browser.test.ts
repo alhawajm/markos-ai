@@ -159,9 +159,11 @@ describe("rendered Sunlit authentication", () => {
     await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
     await page.getByRole("button", { name: "Log in" }).click();
 
-    await expect(page.getByLabel("MFA code").isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("status").textContent()).resolves.toContain("6-digit code");
-    await page.getByLabel("MFA code").fill("123456");
+    const mfaCode = page.getByLabel("MFA code");
+    const mfaStatus = page.getByRole("status");
+    await mfaCode.waitFor();
+    await mfaStatus.getByText(/6-digit code/).waitFor();
+    await mfaCode.fill("123456");
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL(/\/en\/app$/);
 

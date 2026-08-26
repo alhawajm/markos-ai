@@ -534,8 +534,8 @@ describe("presentation journey", () => {
     await expect(page.getByRole("link", { name: /Draft founder story/ }).isVisible()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: "Load more" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Load more" }).click();
-    await expect(page.getByRole("link", { name: /Queued draft 12/ }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("button", { name: "Load more" }).count()).resolves.toBe(0);
+    await page.getByRole("link", { name: /Queued draft 12/ }).waitFor();
+    await page.getByRole("button", { name: "Load more" }).waitFor({ state: "detached" });
     await unscheduled.click();
 
     const directReadyItem = page.getByRole("button", { name: /Ready: Ready campaign post/ });
