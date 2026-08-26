@@ -189,6 +189,7 @@ function contentItem(): ContentItem {
     id: "content-id",
     instagramPostId: "ig-media-id",
     mediaIds: [],
+    plannedAt: null,
     publishedAt: new Date(Date.UTC(2026, 0, 5)),
     reelScript: null,
     scheduledAt: null,

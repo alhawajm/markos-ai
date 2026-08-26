@@ -23,6 +23,7 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
+  CalendarReadResult,
   ContentRecord,
   ContentStatus,
   ContentType,
@@ -330,7 +331,36 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async createContent(input: { contentType?: ContentType } = {}): Promise<ContentRecord> {
+  async calendar(input: {
+    from: string;
+    to: string;
+    statuses?: ContentStatus[];
+    contentTypes?: ContentType[];
+    unscheduledOffset?: number;
+    unscheduledLimit?: number;
+  }): Promise<CalendarReadResult> {
+    const search = new URLSearchParams({ from: input.from, to: input.to });
+    if (input.statuses?.length) search.set("statuses", input.statuses.join(","));
+    if (input.contentTypes?.length) search.set("contentTypes", input.contentTypes.join(","));
+    if (input.unscheduledOffset !== undefined) search.set("unscheduledOffset", String(input.unscheduledOffset));
+    if (input.unscheduledLimit !== undefined) search.set("unscheduledLimit", String(input.unscheduledLimit));
+    const response = await this.request<CalendarReadResult>(`/v1/calendar?${search.toString()}`);
+    return response.data;
+  }
+
+  async createContent(
+    input: {
+      contentType?: ContentType;
+      captionEn?: string | null;
+      captionAr?: string | null;
+      hashtags?: string[];
+      callToAction?: string | null;
+      contentPillar?: string | null;
+      carousel?: Record<string, unknown> | null;
+      reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
+    } = {}
+  ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content", {
       body: input,
       method: "POST"
@@ -409,6 +439,7 @@ export class MarkosApiClient {
       contentPillar?: string | null;
       carousel?: Record<string, unknown> | null;
       reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
     }
   ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}`, {

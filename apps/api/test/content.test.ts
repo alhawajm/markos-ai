@@ -46,6 +46,179 @@ vi.mock("../src/ai/content-client", () => ({
 }));
 
 describe("content routes", () => {
+  it("reads a filtered Calendar range with isolated placed content, referenced media, and paginated Unscheduled items", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    const ids = {
+      plannedDraft: randomUUID(),
+      plannedReady: randomUUID(),
+      scheduled: randomUUID(),
+      published: randomUUID(),
+      failed: randomUUID(),
+      outside: randomUUID(),
+      unscheduledFirst: randomUUID(),
+      unscheduledSecond: randomUUID(),
+      otherWorkspace: randomUUID()
+    };
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: owner.workspace.id,
+        type: "IMAGE",
+        filename: "calendar-reference.jpg",
+        s3Key: "external:https://example.com/calendar-reference.jpg",
+        cdnUrl: "https://example.com/calendar-reference.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 1024
+      }
+    });
+    const base = {
+      hashtags: [],
+      mediaIds: [] as string[],
+      workspaceId: owner.workspace.id
+    };
+
+    await Promise.all([
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.plannedDraft,
+          contentType: "POST",
+          status: "DRAFT",
+          captionEn: "Planned draft",
+          plannedAt: new Date("2026-08-10T09:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.plannedReady,
+          contentType: "CAROUSEL",
+          status: "APPROVED",
+          captionEn: "Planned ready carousel",
+          mediaIds: [media.id],
+          plannedAt: new Date("2026-08-11T10:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.scheduled,
+          contentType: "REEL",
+          status: "SCHEDULED",
+          captionEn: "Scheduled reel",
+          scheduledAt: new Date("2026-08-27T11:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.published,
+          contentType: "STORY",
+          status: "PUBLISHED",
+          captionEn: "Published story",
+          publishedAt: new Date("2026-08-13T12:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.failed,
+          contentType: "POST",
+          status: "FAILED",
+          captionEn: "Failed post",
+          scheduledAt: new Date("2026-08-14T13:00:00+03:00"),
+          failureReason: "Provider rejected the test post"
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.outside,
+          contentType: "POST",
+          status: "SCHEDULED",
+          captionEn: "Outside range",
+          scheduledAt: new Date("2026-09-02T09:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.unscheduledFirst,
+          contentType: "CAROUSEL",
+          status: "APPROVED",
+          captionEn: "First unscheduled carousel",
+          updatedAt: new Date("2026-08-25T12:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          ...base,
+          id: ids.unscheduledSecond,
+          contentType: "CAROUSEL",
+          status: "APPROVED",
+          captionEn: "Second unscheduled carousel",
+          updatedAt: new Date("2026-08-24T12:00:00+03:00")
+        }
+      }),
+      prisma.contentItem.create({
+        data: {
+          hashtags: [],
+          mediaIds: [],
+          workspaceId: other.workspace.id,
+          id: ids.otherWorkspace,
+          contentType: "POST",
+          status: "SCHEDULED",
+          captionEn: "Other workspace item",
+          scheduledAt: new Date("2026-08-15T09:00:00+03:00")
+        }
+      })
+    ]);
+
+    const page = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?from=2026-08-01&to=2026-08-31&unscheduledLimit=1",
+      headers
+    });
+    const pageData = page.json().data;
+
+    expect(page.statusCode).toBe(200);
+    expect(pageData.items.map((item: { id: string }) => item.id)).toEqual(
+      expect.arrayContaining([ids.plannedDraft, ids.plannedReady, ids.scheduled, ids.published, ids.failed])
+    );
+    expect(pageData.items.map((item: { id: string }) => item.id)).not.toEqual(expect.arrayContaining([ids.outside, ids.otherWorkspace]));
+    expect(pageData.mediaAssets).toEqual([expect.objectContaining({ id: media.id, workspaceId: owner.workspace.id })]);
+    expect(pageData.unscheduled).toMatchObject({ total: 2, nextOffset: 1 });
+    expect(pageData.unscheduled.items).toHaveLength(1);
+    expect(pageData.summary).toMatchObject({ ready: 3, needsAttention: 1 });
+    expect(pageData.summary.scheduledThisWeek).toEqual(expect.any(Number));
+
+    const filteredPage = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?from=2026-08-01&to=2026-08-31&statuses=APPROVED&contentTypes=CAROUSEL&unscheduledOffset=1&unscheduledLimit=1",
+      headers
+    });
+    const filteredData = filteredPage.json().data;
+
+    expect(filteredPage.statusCode).toBe(200);
+    expect(filteredData.items).toEqual([expect.objectContaining({ id: ids.plannedReady, status: "APPROVED", contentType: "CAROUSEL" })]);
+    expect(filteredData.unscheduled).toMatchObject({ total: 2 });
+    expect(filteredData.unscheduled.items).toEqual([expect.objectContaining({ id: ids.unscheduledSecond })]);
+    expect(filteredData.unscheduled.nextOffset).toBeUndefined();
+    expect(filteredData.summary.ready).toBe(3);
+
+    const invalid = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?from=2026-08-31&to=2026-08-01&statuses=READY",
+      headers
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error.code).toBe("VALIDATION_ERROR");
+
+    await app.close();
+  });
+
   it("creates a workspace-owned blank draft without Vault context or AI usage", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -76,6 +249,42 @@ describe("content routes", () => {
     ).resolves.toHaveLength(1);
     await expect(prisma.aiInteraction.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
     await expect(prisma.usageCounter.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+
+    await app.close();
+  });
+
+  it("creates a populated manual draft atomically with an optional planned publication time", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const plannedAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {
+        callToAction: "Send us a message.",
+        captionAr: "مسودة يدوية",
+        captionEn: "Manual draft",
+        contentType: "POST",
+        hashtags: ["#Manual", "#Bahrain"],
+        plannedAt
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        callToAction: "Send us a message.",
+        captionAr: "مسودة يدوية",
+        captionEn: "Manual draft",
+        contentType: "POST",
+        hashtags: ["#Manual", "#Bahrain"],
+        plannedAt,
+        status: "DRAFT",
+        workspaceId: session.workspace.id
+      }
+    });
+    await expect(prisma.aiInteraction.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
 
     await app.close();
   });
@@ -558,6 +767,7 @@ describe("content routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const created = await createDraftContent(app, headers);
     const itemId = created.id;
+    const plannedAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
 
     const update = await app.inject({
       method: "PATCH",
@@ -568,7 +778,8 @@ describe("content routes", () => {
         captionAr: "Edited Arabic caption",
         hashtags: ["#Edited", "#Bahrain"],
         callToAction: "Book a tasting.",
-        contentPillar: "Lead generation"
+        contentPillar: "Lead generation",
+        plannedAt
       }
     });
 
@@ -580,7 +791,8 @@ describe("content routes", () => {
         captionEn: "Edited English caption",
         hashtags: ["#Edited", "#Bahrain"],
         callToAction: "Book a tasting.",
-        contentPillar: "Lead generation"
+        contentPillar: "Lead generation",
+        plannedAt
       }
     });
 
@@ -642,7 +854,8 @@ describe("content routes", () => {
       url: `/v1/content/${created.id}`,
       headers: otherHeaders,
       payload: {
-        captionEn: "Cross workspace edit"
+        captionEn: "Cross workspace edit",
+        plannedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       }
     });
 
@@ -724,7 +937,15 @@ describe("content routes", () => {
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
     const created = await createDraftContent(app, headers);
+    const plannedAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/content/${created.id}`,
+      headers,
+      payload: { plannedAt }
+    });
 
     const draftSchedule = await app.inject({
       method: "POST",
@@ -778,6 +999,7 @@ describe("content routes", () => {
     expect(schedule.json()).toMatchObject({
       data: {
         id: created.id,
+        plannedAt,
         status: "SCHEDULED",
         scheduledAt
       }
@@ -792,6 +1014,7 @@ describe("content routes", () => {
         status: "APPROVED"
       }
     });
+    expect(unschedule.json().data.plannedAt).toBeUndefined();
     expect(unschedule.json().data.scheduledAt).toBeUndefined();
 
     await app.close();

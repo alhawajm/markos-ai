@@ -224,7 +224,15 @@ export const approveBusinessProfileSchema = z
 
 export const createContentSchema = z
   .object({
-    contentType: contentTypeSchema.default("POST")
+    contentType: contentTypeSchema.default("POST"),
+    captionEn: z.string().max(2200).nullable().optional(),
+    captionAr: z.string().max(2200).nullable().optional(),
+    hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
+    callToAction: z.string().max(500).nullable().optional(),
+    contentPillar: z.string().max(160).nullable().optional(),
+    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
+    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
+    plannedAt: z.string().datetime().nullable().optional()
   })
   .strict();
 
@@ -316,7 +324,8 @@ export const updateContentSchema = z
     callToAction: z.string().max(500).nullable().optional(),
     contentPillar: z.string().max(160).nullable().optional(),
     carousel: z.record(z.string(), z.unknown()).nullable().optional(),
-    reelScript: z.record(z.string(), z.unknown()).nullable().optional()
+    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
+    plannedAt: z.string().datetime().nullable().optional()
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one content field is required"
@@ -329,6 +338,50 @@ export const updateContentStatusSchema = z.object({
 export const scheduleContentSchema = z.object({
   scheduledAt: z.string().datetime()
 });
+
+const calendarDateKeySchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Calendar date must be a real YYYY-MM-DD date");
+
+const calendarStatusesSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .transform((value) => value.split(","))
+  .pipe(z.array(contentStatusSchema).min(1).max(6));
+
+const calendarContentTypesSchema = z
+  .string()
+  .min(1)
+  .max(80)
+  .transform((value) => value.split(","))
+  .pipe(z.array(contentTypeSchema).min(1).max(4));
+
+export const calendarReadQuerySchema = z
+  .object({
+    from: calendarDateKeySchema,
+    to: calendarDateKeySchema,
+    statuses: calendarStatusesSchema.optional(),
+    contentTypes: calendarContentTypesSchema.optional(),
+    unscheduledOffset: z.coerce.number().int().min(0).max(10_000).default(0),
+    unscheduledLimit: z.coerce.number().int().min(1).max(50).default(12)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const from = Date.parse(`${value.from}T00:00:00Z`);
+    const to = Date.parse(`${value.to}T00:00:00Z`);
+    const days = Math.round((to - from) / 86_400_000);
+
+    if (days < 0) {
+      context.addIssue({ code: "custom", message: "Calendar range end must not precede its start", path: ["to"] });
+    } else if (days > 62) {
+      context.addIssue({ code: "custom", message: "Calendar range cannot exceed 63 days", path: ["to"] });
+    }
+  });
 
 export const connectInstagramSchema = z.object({
   accountId: z.string().min(3).max(120),
@@ -494,6 +547,7 @@ export type SelectPromptVariantInput = z.infer<typeof selectPromptVariantSchema>
 export type UpdateContentInput = z.infer<typeof updateContentSchema>;
 export type UpdateContentStatusInput = z.infer<typeof updateContentStatusSchema>;
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
+export type CalendarReadQueryInput = z.infer<typeof calendarReadQuerySchema>;
 export type ConnectInstagramInput = z.infer<typeof connectInstagramSchema>;
 export type EraseWorkspaceDataInput = z.infer<typeof eraseWorkspaceDataSchema>;
 export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>;

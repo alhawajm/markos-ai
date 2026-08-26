@@ -328,6 +328,7 @@ model ContentItem {
   contentPillar   String?
   campaignId      String?       @db.Uuid
   aiPromptUsed    String?
+  plannedAt       DateTime?
   scheduledAt     DateTime?
   publishedAt     DateTime?
   instagramPostId String?
@@ -337,6 +338,7 @@ model ContentItem {
   deletedAt       DateTime?
 
   @@index([workspaceId, status])
+  @@index([workspaceId, plannedAt])
   @@index([workspaceId, scheduledAt])
   @@map("content_items")
 }

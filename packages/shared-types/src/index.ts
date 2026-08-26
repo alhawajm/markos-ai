@@ -312,6 +312,7 @@ export interface ContentRecord {
   contentPillar?: string;
   campaignId?: string;
   aiPromptUsed?: string;
+  plannedAt?: string;
   scheduledAt?: string;
   publishedAt?: string;
   instagramPostId?: string;
@@ -333,6 +334,29 @@ export interface MediaAssetRecord {
   durationSeconds?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CalendarSummary {
+  scheduledThisWeek: number;
+  ready: number;
+  needsAttention: number;
+}
+
+export interface CalendarUnscheduledPage {
+  items: ContentRecord[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface CalendarReadResult {
+  range: {
+    from: string;
+    to: string;
+  };
+  items: ContentRecord[];
+  mediaAssets: MediaAssetRecord[];
+  summary: CalendarSummary;
+  unscheduled: CalendarUnscheduledPage;
 }
 
 export interface AiImageGenerationResult {
