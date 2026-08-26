@@ -191,7 +191,7 @@ describe("presentation journey", () => {
     await page.close();
   });
 
-  it("opens a saved blank post without calling AI", async () => {
+  it("keeps a blank manual post local until meaningful work is explicitly saved", async () => {
     const page = await sessionPage();
     const blankRecord = {
       ...studioContentRecord(),
@@ -202,6 +202,7 @@ describe("presentation journey", () => {
       hashtags: []
     };
     let blankCreateCalls = 0;
+    let blankCreatePayload: Record<string, unknown> | undefined;
     let aiGenerateCalls = 0;
 
     await mockApi(page, async (route, pathname) => {
@@ -209,8 +210,8 @@ describe("presentation journey", () => {
       if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
       if (pathname === "/v1/content" && method === "POST") {
         blankCreateCalls += 1;
-        expect(route.request().postDataJSON()).toEqual({ contentType: "POST" });
-        return route.fulfill(json(blankRecord));
+        blankCreatePayload = route.request().postDataJSON() as Record<string, unknown>;
+        return route.fulfill(json({ ...blankRecord, ...blankCreatePayload }));
       }
       if (pathname === "/v1/content/generate" && method === "POST") {
         aiGenerateCalls += 1;
@@ -221,10 +222,36 @@ describe("presentation journey", () => {
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: /Start a blank post/ }).click();
-    await page.getByText("Blank draft saved. Start writing whenever you are ready.", { exact: true }).waitFor();
-    await expect(page.getByRole("heading", { name: "Feed Post" }).isVisible()).resolves.toBe(true);
+    await page.getByText("This draft is not saved yet. MARKOS will create a record only after you save real work.", { exact: true }).waitFor();
+    await expect(page.getByRole("heading", { name: "New post draft" }).isVisible()).resolves.toBe(true);
     await expect(page.getByPlaceholder("Write the caption for this post.").isEnabled()).resolves.toBe(true);
+    expect(blankCreateCalls).toBe(0);
+
+    await page.getByRole("button", { name: "Back to Create" }).click();
+    await expect(page.getByRole("dialog", { name: "Save this draft before leaving?" }).count()).resolves.toBe(0);
+    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
+    expect(blankCreateCalls).toBe(0);
+
+    await page.getByRole("button", { name: /Start a blank post/ }).click();
+    await page.getByPlaceholder("Write the caption for this post.").fill("Manual launch reminder for Bahrain.");
+    await page.getByLabel("Planned publication").fill("2026-08-28T18:30");
+    await page.getByRole("button", { name: "Back to Create" }).click();
+    const unsavedDialog = page.getByRole("dialog", { name: "Save this draft before leaving?" });
+    await expect(unsavedDialog.isVisible()).resolves.toBe(true);
+    await unsavedDialog.getByRole("button", { name: "Keep editing" }).click();
+    await expect(page.getByRole("heading", { name: "New post draft" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Back to Create" }).click();
+    await page.getByRole("dialog", { name: "Save this draft before leaving?" }).getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
     expect(blankCreateCalls).toBe(1);
+    expect(blankCreatePayload).toEqual({
+      callToAction: null,
+      captionAr: null,
+      captionEn: "Manual launch reminder for Bahrain.",
+      contentType: "POST",
+      hashtags: [],
+      plannedAt: "2026-08-28T15:30:00.000Z"
+    });
     expect(aiGenerateCalls).toBe(0);
     await page.close();
   });
@@ -359,8 +386,8 @@ describe("presentation journey", () => {
     await page.getByText("AI image generated, saved, and attached to this draft.", { exact: true }).waitFor();
     await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
 
-    await page.getByRole("button", { name: "Approve draft", exact: true }).click();
-    await page.getByText("Content approved. It is now eligible for scheduling.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Mark as ready", exact: true }).click();
+    await page.getByText("Content marked Ready. It is now eligible for scheduling.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Schedule", exact: true }).click();
     await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Back to Create" }).click();
@@ -373,9 +400,9 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
-    await page.getByText("Schedule cancelled. The approved item has returned to the ready queue.", { exact: true }).waitFor();
+    await page.getByText("Schedule cancelled. The item has returned to the Ready queue.", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Edit post", exact: true }).click();
-    await page.getByText("Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.", { exact: true }).waitFor();
+    await page.getByText("Ready state removed. The post is a draft again and its caption, hashtags, and media can be edited.", { exact: true }).waitFor();
     await expect(captionEditor.isEnabled()).resolves.toBe(true);
     await page.getByRole("button", { name: "Delete post draft" }).click();
     await expect(page.getByRole("dialog", { name: "Delete this post draft?" }).isVisible()).resolves.toBe(true);
@@ -399,20 +426,24 @@ describe("presentation journey", () => {
 
   it("plans the week, schedules ready content, reschedules safely, and confirms cancellation", async () => {
     const page = await sessionPage();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const updatedAt = new Date().toISOString();
-    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = updatedAt;
     const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const ready = {
       ...studioContentRecord(),
       captionEn: "Ready campaign post for the dessert subscription.",
       id: "calendar-ready",
+      plannedAt: updatedAt,
       status: "APPROVED",
       updatedAt
     };
     const scheduled = {
       ...studioContentRecord(),
       captionEn: "Product story scheduled for this week.",
+      contentType: "REEL",
       id: "calendar-scheduled",
+      plannedAt: updatedAt,
       scheduledAt,
       status: "SCHEDULED",
       updatedAt
@@ -431,15 +462,21 @@ describe("presentation journey", () => {
       status: "DRAFT",
       updatedAt
     };
-    let records = [scheduled, ready, published, draft];
+    const queuedDrafts = Array.from({ length: 12 }, (_, index) => ({
+      ...studioContentRecord(),
+      captionEn: `Queued draft ${String(index + 1).padStart(2, "0")} for later.`,
+      id: `calendar-queued-${index + 1}`,
+      status: "DRAFT",
+      updatedAt: new Date(Date.now() - (index + 1) * 60_000).toISOString()
+    }));
+    let records = [scheduled, ready, published, draft, ...queuedDrafts];
     let schedulePayload: Record<string, unknown> | undefined;
     let reschedulePayload: Record<string, unknown> | undefined;
     let unscheduleCalls = 0;
 
     await mockApi(page, async (route, pathname) => {
       const method = route.request().method();
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json(records));
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult(records, route.request().url())));
       if (pathname === `/v1/content/${ready.id}/schedule` && method === "POST") {
         schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
         const updated = { ...ready, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
@@ -454,7 +491,7 @@ describe("presentation journey", () => {
       }
       if (pathname === `/v1/content/${scheduled.id}/unschedule` && method === "POST") {
         unscheduleCalls += 1;
-        const { scheduledAt: _scheduledAt, ...withoutSchedule } = scheduled;
+        const { plannedAt: _plannedAt, scheduledAt: _scheduledAt, ...withoutSchedule } = scheduled;
         const updated = { ...withoutSchedule, status: "APPROVED" };
         records = records.map((record) => (record.id === updated.id ? updated : record));
         return route.fulfill(json(updated));
@@ -463,23 +500,114 @@ describe("presentation journey", () => {
       return route.fulfill(json([]));
     });
 
+    await page.setViewportSize({ height: 900, width: 1440 });
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar" }).waitFor();
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
-    const desktopWeekDay = await page
-      .getByRole("button", { name: /^Open day:/ })
-      .first()
-      .boundingBox();
+    const firstDayControl = page.getByRole("button", { name: /^Open day:/ }).first();
+    const desktopWeekDay = await firstDayControl.locator("xpath=ancestor::section[1]").boundingBox();
     expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(380);
-    const readyCounter = page.getByRole("button", { name: /Ready to schedule/ });
+
+    const statusFilters = page.getByRole("group", { name: "Filter by content status" });
+    await expect(statusFilters.getByRole("button", { name: "All", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await statusFilters.getByRole("button", { name: "Draft", exact: true }).click();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get("filter") === "draft");
+    await expect(statusFilters.getByRole("button", { name: "Draft", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await statusFilters.getByRole("button", { name: "All", exact: true }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("filter"));
+
+    await page.getByLabel("Content type").selectOption({ label: "Reel" });
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get("type") === "REEL");
+    await expect(page.getByRole("button", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("button", { name: /Ready campaign post/ }).count()).resolves.toBe(0);
+    await page.getByLabel("Content type").selectOption({ label: "All types" });
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("type"));
+
+    const summaryGroup = page.getByRole("group", { name: "Calendar summary" });
+    const readyCounter = summaryGroup.getByRole("button", { name: /Ready to schedule/ });
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     await readyCounter.click();
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("true");
     await readyCounter.click();
-    await page.getByText("Ready campaign post for the dessert subscription", { exact: true }).click();
-    await page.getByText("Draft founder story for review", { exact: true }).waitFor();
-    await page.getByRole("button", { name: /Ready campaign post/ }).click();
+    const unscheduled = page.getByRole("button", { name: /Unscheduled · 13/ });
+    await unscheduled.click();
+    await expect(page.getByRole("link", { name: /Draft founder story/ }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("button", { name: "Load more" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Load more" }).click();
+    await expect(page.getByRole("link", { name: /Queued draft 12/ }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("button", { name: "Load more" }).count()).resolves.toBe(0);
+    await unscheduled.click();
+
+    const directReadyItem = page.getByRole("button", { name: /Ready: Ready campaign post/ });
+    await directReadyItem.click();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("item"));
+    const focusSurface = page.locator('[data-calendar-motion="focus-surface"]');
+    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("calendar-to-record");
+    await expect(
+      focusSurface.evaluate((element) => element.getAnimations({ subtree: true }).some((animation) => animation.playState === "running"))
+    ).resolves.toBe(true);
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("record-to-day");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    expect(new URL(page.url()).searchParams.has("day")).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label")?.startsWith("Ready: Ready campaign post"));
+    await expect(directReadyItem.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+
+    const readyDayColumn = directReadyItem.locator("xpath=ancestor::section[1]");
+    await readyDayColumn.getByRole("button", { name: /^Open day:/ }).click();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day"));
+    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("calendar-to-day");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    const dayUrl = new URL(page.url());
+    expect(dayUrl.searchParams.get("day")).toBeTruthy();
+    expect(dayUrl.searchParams.has("item")).toBe(false);
+    const dayDialog = page.getByRole("dialog", { name: /2026/ });
+    await expect(dayDialog.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      dayDialog.evaluate((element) => {
+        const focusable = Array.from(
+          element.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((candidate) => candidate.getClientRects().length > 0 && candidate.getAttribute("aria-hidden") !== "true");
+        return document.activeElement === focusable.at(-1);
+      })
+    ).resolves.toBe(true);
+    await page.keyboard.press("Tab");
+    await expect(dayDialog.getByRole("button", { name: "Back to calendar" }).evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await dayDialog.getByRole("button", { name: /Ready campaign post/ }).click();
+    await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
+    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("day-to-record");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    await expect(page.locator('button[aria-current="true"]').getByText("Ready campaign post...", { exact: true }).isVisible()).resolves.toBe(true);
+    expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
+
+    const dayContext = page.locator('[data-calendar-motion-part="day-context"]');
+    const originalDayContext = await dayContext.elementHandle();
+    if (!originalDayContext) throw new Error("Expected the persistent day context to be mounted.");
+    const alternatePost = dayContext.getByRole("button", { name: /Product story scheduled/ });
+    await alternatePost.click();
+    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("record-switch");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    await expect(
+      originalDayContext.evaluate((element) => element.isSameNode(document.querySelector('[data-calendar-motion-part="day-context"]')))
+    ).resolves.toBe(true);
+    await dayContext.getByRole("button", { name: /Ready campaign post/ }).click();
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
+
+    await page.goBack();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("item"));
+    await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
+    await page.goForward();
+    await page.getByRole("button", { name: "Back to day" }).waitFor();
 
     const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
     await page.getByLabel("Choose publishing time").fill(readyScheduleInput);
@@ -487,8 +615,11 @@ describe("presentation journey", () => {
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
     await page.getByRole("button", { name: "Close" }).click();
-    await page.getByText("Product story scheduled for this week", { exact: true }).click();
-    await page.getByRole("button", { name: /Product story scheduled for this week/ }).click();
+    const scheduledCounter = summaryGroup.getByRole("button", { name: /Scheduled this week/ });
+    await scheduledCounter.click();
+    await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.getByRole("button", { name: /Scheduled in MARKOS: Product story scheduled/ }).click();
+    await page.getByRole("button", { name: "Back to day" }).waitFor();
     const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
     await page.getByLabel("Choose a new time").fill(rescheduleInput);
     await page.getByRole("button", { name: "Save new time" }).click();
@@ -496,20 +627,57 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Cancel schedule" }).click();
     const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
     await expect(dialog.isVisible()).resolves.toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(dialog.isVisible()).resolves.toBe(false);
+    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Cancel schedule");
+    await expect(page.getByRole("button", { name: "Cancel schedule" }).evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.getByRole("button", { name: "Cancel schedule" }).click();
     await dialog.getByRole("button", { name: "Cancel schedule" }).click();
-    await page.getByText("Schedule cancelled. The content is back in the Ready queue.", { exact: true }).waitFor();
+    const cancellationNotice = page.getByText("Schedule cancelled. The post is Ready and has moved to Unscheduled.", { exact: true });
+    await cancellationNotice.waitFor();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Back to calendar" }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
+    await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("false");
+    const movedToUnscheduled = page.getByRole("button", { name: /Unscheduled · 14/ });
+    await expect(movedToUnscheduled.getAttribute("aria-expanded")).resolves.toBe("true");
+    await expect(page.getByRole("link", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
+    await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
 
-    await page.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect(page.getByLabel("Content status legend").isVisible()).resolves.toBe(true);
+    await expect(page.getByLabel("Month calendar").getByText("Product story scheduled...", { exact: true }).count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-calendar.png", fullPage: true });
 
-    await page.setViewportSize({ height: 844, width: 390 });
+    await page.setViewportSize({ height: 768, width: 1366 });
     await page.goto(`${baseUrl}/ar/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "تقويم المحتوى" }).waitFor();
     await expect(page.locator("main").getAttribute("dir")).resolves.toBe("rtl");
     await expect(page.getByRole("link", { name: "التقويم" }).getAttribute("aria-current")).resolves.toBe("page");
-    await page.screenshot({ path: "evidence/sunlit-calendar-rtl-mobile.png", fullPage: true });
+    await expect(page.getByRole("group", { name: "تصفية حالة المحتوى" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByLabel("نوع المحتوى").isVisible()).resolves.toBe(true);
+    await expect(page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).resolves.toBe(false);
+    await page.screenshot({ path: "evidence/sunlit-calendar-rtl-desktop.png", fullPage: true });
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await page
+      .getByRole("button", { name: /^Open day:/ })
+      .first()
+      .click();
+    await page.locator('[data-calendar-layer="day"]').waitFor();
+    await expect(focusSurface.getAttribute("data-calendar-motion-state")).resolves.toBe("reduced");
+    await expect(
+      page
+        .locator('[data-calendar-layer="day"]')
+        .evaluate((element) => element.getAnimations({ subtree: true }).filter((animation) => animation.playState === "running" || animation.pending).length)
+    ).resolves.toBe(0);
+    await page.keyboard.press("Escape");
+    await page.locator('[data-calendar-layer="overview"]').waitFor();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
 
     expect(schedulePayload).toEqual({ scheduledAt: new Date(`${readyScheduleInput}:00+03:00`).toISOString() });
     expect(reschedulePayload).toEqual({ scheduledAt: new Date(`${rescheduleInput}:00+03:00`).toISOString() });
@@ -531,6 +699,52 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
     await handler(route, pathname);
   });
+}
+
+function calendarReadResult(records: Array<Record<string, unknown>>, requestUrl: string) {
+  const search = new URL(requestUrl).searchParams;
+  const from = search.get("from") ?? "0000-01-01";
+  const to = search.get("to") ?? "9999-12-31";
+  const statuses = new Set((search.get("statuses") ?? "").split(",").filter(Boolean));
+  const contentTypes = new Set((search.get("contentTypes") ?? "").split(",").filter(Boolean));
+  const offset = Number(search.get("unscheduledOffset") ?? 0);
+  const limit = Number(search.get("unscheduledLimit") ?? 12);
+  const matchesType = (record: Record<string, unknown>) => contentTypes.size === 0 || contentTypes.has(String(record.contentType));
+  const matchesStatus = (record: Record<string, unknown>) => statuses.size === 0 || statuses.has(String(record.status));
+  const filtered = records.filter((record) => matchesType(record) && matchesStatus(record));
+  const placement = (record: Record<string, unknown>) => {
+    if (record.status === "PUBLISHED") return record.publishedAt;
+    if (record.status === "SCHEDULED" || record.status === "FAILED") return record.scheduledAt;
+    return record.plannedAt;
+  };
+  const items = filtered.filter((record) => {
+    const value = placement(record);
+    if (typeof value !== "string") return false;
+    const dateKey = value.slice(0, 10);
+    return dateKey >= from && dateKey <= to;
+  });
+  const unscheduled = filtered
+    .filter((record) => ["DRAFT", "IN_REVIEW", "APPROVED"].includes(String(record.status)) && typeof record.plannedAt !== "string")
+    .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+  const page = unscheduled.slice(offset, offset + limit);
+  const summaryRecords = records.filter(matchesType);
+  const nextOffset = offset + page.length;
+
+  return {
+    range: { from, to },
+    items,
+    mediaAssets: [],
+    summary: {
+      scheduledThisWeek: summaryRecords.filter((record) => record.status === "SCHEDULED").length,
+      ready: summaryRecords.filter((record) => record.status === "APPROVED").length,
+      needsAttention: summaryRecords.filter((record) => record.status === "FAILED").length
+    },
+    unscheduled: {
+      items: page,
+      total: unscheduled.length,
+      ...(nextOffset < unscheduled.length ? { nextOffset } : {})
+    }
+  };
 }
 
 function snackLabVault() {

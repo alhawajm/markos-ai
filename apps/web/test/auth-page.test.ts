@@ -53,6 +53,16 @@ describe("Sunlit authentication pages", () => {
     expect(authStyles).toContain("color: var(--ink-soft)");
   });
 
+  it("mounts the restrained interactive calendar preview on Login", () => {
+    expect(authSource).toContain("MARKOS PRODUCT PREVIEW");
+    expect(authSource).toContain("معاينة منتج MARKOS");
+    expect(authSource).toContain("data-login-preview={view}");
+    expect(authSource).toContain('setView("day")');
+    expect(authSource).toContain('setView("post")');
+    expect(authStyles).toContain(".loginPreview");
+    expect(authStyles).toContain("grid-template-columns: 520px minmax(0, 752px)");
+  });
+
   it("keeps browser autofill and text selection within the bright field theme", () => {
     expect(authSource).toContain("sunlit-theme");
     expect(sunlitTheme).toContain("color-scheme: light");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -60,12 +60,23 @@ import type {
 } from "@markos/shared-types";
 import { instagramImageConstraints } from "@markos/validation";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import {
+  bahrainInputValue,
+  contentDraftFieldsFromRecord,
+  contentDraftHasMeaningfulWork,
+  contentDraftIsDirty,
+  contentDraftPayload,
+  emptyContentDraftFields,
+  parseDraftHashtags as parseHashtags,
+  type ContentDraftFields
+} from "./content-studio-draft-state";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
 type StudioContentType = Extract<ContentType, "POST" | "REEL" | "CAROUSEL" | "STORY">;
 type ContentPipelineFilter = "ALL" | "DRAFTS" | "READY" | "SCHEDULED" | "PUBLISHED";
 type ContentStudioHomePanel = "AI_DRAFT" | "DRAFTS" | "IDEAS" | null;
+type StudioExitIntent = { kind: "home"; note?: string } | { href: string; kind: "navigate" };
 
 interface ContentReadyCardModel {
   accent: Accent;
@@ -146,6 +157,8 @@ function contentTypeLabel(type: ContentType): string {
 }
 
 function statusLabel(status: ContentStatus): string {
+  if (status === "APPROVED") return "Ready";
+
   return status
     .toLowerCase()
     .replace("_", " ")
@@ -188,7 +201,7 @@ function contentCardFromRecord(record: ContentRecord, locale: Locale, index: num
   const accentNames: Accent[] = ["teal", "gold", "amber", "teal"];
   const status = record.scheduledAt ? formatShortTime(record.scheduledAt) : statusLabel(record.status);
   const cta =
-    record.status === "SCHEDULED" || record.status === "PUBLISHED" ? "View Details" : record.status === "APPROVED" ? "Schedule Post" : "Review & Approve";
+    record.status === "SCHEDULED" || record.status === "PUBLISHED" ? "View Details" : record.status === "APPROVED" ? "Schedule Post" : "Review & mark ready";
 
   return {
     accent: accentNames[index % accentNames.length] ?? "teal",
@@ -206,7 +219,7 @@ function formatShortTime(value: string): string {
 }
 
 function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string {
-  const value = record.publishedAt ?? record.scheduledAt ?? record.updatedAt;
+  const value = record.publishedAt ?? record.scheduledAt ?? record.plannedAt ?? record.updatedAt;
   const prefix =
     record.publishedAt !== undefined
       ? locale === "ar"
@@ -216,9 +229,13 @@ function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string
         ? locale === "ar"
           ? "مجدول"
           : "Scheduled"
-        : locale === "ar"
-          ? "آخر تحديث"
-          : "Updated";
+        : record.plannedAt !== undefined
+          ? locale === "ar"
+            ? "مخطط"
+            : "Planned"
+          : locale === "ar"
+            ? "آخر تحديث"
+            : "Updated";
   const formatted = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", {
     day: "numeric",
     hour: "numeric",
@@ -272,16 +289,6 @@ function formatCompactNumber(value: number): string {
 
 function formatMetricValue(value: number | null): string {
   return value === null ? "—" : formatCompactNumber(value);
-}
-
-function parseHashtags(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-    .filter((tag, index, all) => all.indexOf(tag) === index)
-    .slice(0, 30);
 }
 
 function initialScheduleDate(): string {
@@ -397,7 +404,7 @@ async function approveContentRecord(client: MarkosApiClient, record: ContentReco
     return client.updateContentStatus(record.id, "APPROVED");
   }
 
-  throw new Error(`Only draft or in-review content can be approved. Current status: ${statusLabel(record.status)}.`);
+  throw new Error(`Only draft or in-review content can be marked Ready. Current status: ${statusLabel(record.status)}.`);
 }
 
 const performanceHighlights = [
@@ -1136,11 +1143,14 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
   const [currentRecord, setCurrentRecord] = useState<ContentRecord | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [draftBaseline, setDraftBaseline] = useState<ContentDraftFields | null>(null);
   const [captionLanguage, setCaptionLanguage] = useState<"ar" | "en">(locale);
   const [captionEn, setCaptionEn] = useState("");
   const [captionAr, setCaptionAr] = useState("");
   const [hashtagsText, setHashtagsText] = useState("");
   const [callToAction, setCallToAction] = useState("");
+  const [plannedAtInput, setPlannedAtInput] = useState("");
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageAspectRatio, setImageAspectRatio] = useState<"1:1" | "4:5" | "9:16">("4:5");
@@ -1148,7 +1158,6 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [scheduleTime, setScheduleTime] = useState("19:30");
   const [message, setMessage] = useState("");
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [creatingBlank, setCreatingBlank] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1160,7 +1169,9 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [reopening, setReopening] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState<"cancel-schedule" | "delete-draft" | null>(null);
+  const [pendingExit, setPendingExit] = useState<StudioExitIntent | null>(null);
   const [expandedMedia, setExpandedMedia] = useState<MediaAssetRecord | null>(null);
+  const ignoreUnsavedWarningRef = useRef(false);
   const studioHomeCopy =
     locale === "ar"
       ? {
@@ -1267,10 +1278,20 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     [contentFilter, records]
   );
   const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
-  const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
-  const canApprove = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
+  const currentDraftFields: ContentDraftFields = {
+    callToAction,
+    captionAr,
+    captionEn,
+    contentType,
+    hashtagsText,
+    plannedAtInput
+  };
+  const isDraftDirty = editorOpen && draftBaseline !== null && contentDraftIsDirty(currentDraftFields, draftBaseline);
+  const hasMeaningfulDraftWork = editorOpen && contentDraftHasMeaningfulWork(currentDraftFields);
+  const canEdit = editorOpen && (currentRecord === null || currentRecord.status === "DRAFT" || currentRecord.status === "IN_REVIEW");
+  const canApprove = canEdit;
   const canSchedule = currentRecord?.status === "APPROVED";
-  const canManageMedia = canEdit;
+  const canManageMedia = currentRecord !== null && canEdit;
   const canDelete = currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED";
   const attachedMediaAssets = currentRecord
     ? currentRecord.mediaIds.map((id) => mediaAssets.find((asset) => asset.id === id)).filter((asset): asset is MediaAssetRecord => asset !== undefined)
@@ -1284,6 +1305,40 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setImageAspectRatio("4:5");
     }
   }, [contentType, imageAspectRatio]);
+
+  useEffect(() => {
+    if (!isDraftDirty) return;
+
+    function warnBeforeUnload(event: BeforeUnloadEvent) {
+      if (ignoreUnsavedWarningRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    function interceptWorkspaceNavigation(event: MouseEvent) {
+      if (ignoreUnsavedWarningRef.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      const anchor = target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingExit({ href: destination.href, kind: "navigate" });
+    }
+
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    document.addEventListener("click", interceptWorkspaceNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      document.removeEventListener("click", interceptWorkspaceNavigation, true);
+    };
+  }, [isDraftDirty]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1340,17 +1395,34 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     setCurrentRecord(record);
 
     if (record) {
-      setContentType(record.contentType);
-      setCaptionEn(record.captionEn ?? "");
-      setCaptionAr(record.captionAr ?? "");
-      setHashtagsText(record.hashtags.join(" "));
-      setCallToAction(record.callToAction ?? "");
+      const fields = contentDraftFieldsFromRecord(record);
+      setEditorOpen(true);
+      setContentType(fields.contentType);
+      setCaptionEn(fields.captionEn);
+      setCaptionAr(fields.captionAr);
+      setHashtagsText(fields.hashtagsText);
+      setCallToAction(fields.callToAction);
+      setPlannedAtInput(fields.plannedAtInput);
+      setDraftBaseline(fields);
       setSelectedMediaId(record.mediaIds[0] ?? null);
+
+      const publishingInstant = record.scheduledAt ?? record.plannedAt;
+      if (publishingInstant) {
+        const localValue = bahrainInputValue(publishingInstant);
+        setScheduleDate(localValue.slice(0, 10));
+        setScheduleTime(localValue.slice(11));
+      } else {
+        setScheduleDate(initialScheduleDate());
+        setScheduleTime("19:30");
+      }
     } else {
+      setEditorOpen(false);
       setCaptionEn("");
       setCaptionAr("");
       setHashtagsText("");
       setCallToAction("");
+      setPlannedAtInput("");
+      setDraftBaseline(null);
       setSelectedMediaId(null);
     }
 
@@ -1391,7 +1463,45 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
-  async function createBlankDraft() {
+  function requestReturnToCreateHome(note?: string) {
+    if (isDraftDirty) {
+      setPendingExit({ kind: "home", ...(note === undefined ? {} : { note }) });
+      return;
+    }
+
+    returnToCreateHome(note);
+  }
+
+  function completeExit(intent: StudioExitIntent) {
+    if (intent.kind === "home") {
+      returnToCreateHome(intent.note);
+      return;
+    }
+
+    ignoreUnsavedWarningRef.current = true;
+    window.location.assign(intent.href);
+  }
+
+  function discardDraftAndExit() {
+    const intent = pendingExit;
+    if (!intent) return;
+    setPendingExit(null);
+    completeExit(intent);
+  }
+
+  async function saveDraftAndExit() {
+    const intent = pendingExit;
+    if (!intent) return;
+    const saved = await persistEditableDraft(false);
+    if (!saved) {
+      setPendingExit(null);
+      return;
+    }
+    setPendingExit(null);
+    completeExit(intent);
+  }
+
+  function createBlankDraft() {
     if (!session) {
       setMessage(
         locale === "ar"
@@ -1401,19 +1511,23 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return;
     }
 
-    setCreatingBlank(true);
-    setMessage(locale === "ar" ? "جارٍ فتح مسودة فارغة..." : "Opening a blank post draft...");
-
-    try {
-      const draft = await client.createContent({ contentType: "POST" });
-      upsertRecord(draft);
-      applyRecord(draft, locale === "ar" ? "تم حفظ مسودة فارغة. ابدأ بالكتابة عندما تكون جاهزاً." : "Blank draft saved. Start writing whenever you are ready.");
-      setHomePanel(null);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setCreatingBlank(false);
-    }
+    const fields = emptyContentDraftFields("POST");
+    setCurrentRecord(null);
+    setEditorOpen(true);
+    setContentType(fields.contentType);
+    setCaptionEn(fields.captionEn);
+    setCaptionAr(fields.captionAr);
+    setHashtagsText(fields.hashtagsText);
+    setCallToAction(fields.callToAction);
+    setPlannedAtInput(fields.plannedAtInput);
+    setDraftBaseline(fields);
+    setSelectedMediaId(null);
+    setHomePanel(null);
+    setMessage(
+      locale === "ar"
+        ? "هذه المسودة لم تُحفظ بعد. لن يُنشئ MARKOS سجلاً حتى تحفظ عملاً فعلياً."
+        : "This draft is not saved yet. MARKOS will create a record only after you save real work."
+    );
   }
 
   function openAiDraft(idea?: string) {
@@ -1466,29 +1580,51 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return null;
     }
 
-    if (!currentRecord) {
-      setMessage("Generate or choose a draft before saving edits.");
+    if (!editorOpen) {
+      setMessage("Open or generate a draft before saving edits.");
       return null;
     }
 
     if (!canEdit) {
       if (showMessage) {
-        setMessage(`This item is ${statusLabel(currentRecord.status).toLowerCase()} and cannot be edited in this state.`);
+        setMessage(`This item is ${statusLabel(currentRecord?.status ?? "DRAFT").toLowerCase()} and cannot be edited in this state.`);
       }
       return currentRecord;
+    }
+
+    if (!currentRecord && !hasMeaningfulDraftWork) {
+      setMessage(
+        locale === "ar"
+          ? "أضف نصاً أو وسوماً أو موعداً مخططاً له قبل حفظ المسودة."
+          : "Add a caption, hashtags, call to action, or planned time before saving this draft."
+      );
+      return null;
     }
 
     setSaving(true);
 
     try {
-      const updated = await client.updateContent(currentRecord.id, {
-        callToAction: callToAction.trim() || null,
-        captionAr: captionAr.trim() || null,
-        captionEn: captionEn.trim() || null,
-        hashtags: parseHashtags(hashtagsText)
-      });
+      const payload = contentDraftPayload(currentDraftFields);
+      const updated = currentRecord
+        ? await client.updateContent(currentRecord.id, {
+            callToAction: payload.callToAction,
+            captionAr: payload.captionAr,
+            captionEn: payload.captionEn,
+            hashtags: payload.hashtags,
+            plannedAt: payload.plannedAt
+          })
+        : await client.createContent(payload);
       upsertRecord(updated);
-      applyRecord(updated, showMessage ? "Edits saved to the workspace draft." : undefined);
+      applyRecord(
+        updated,
+        showMessage
+          ? locale === "ar"
+            ? "تم حفظ المسودة في مساحة العمل."
+            : currentRecord
+              ? "Edits saved to the workspace draft."
+              : "Draft saved to the workspace."
+          : undefined
+      );
       return updated;
     } catch (error) {
       setMessage(contentStudioError(error));
@@ -1499,8 +1635,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   }
 
   async function acceptDraft() {
-    if (!session || !currentRecord) {
-      setMessage("Generate or choose a workspace draft before approving.");
+    if (!session || !editorOpen) {
+      setMessage("Open or generate a workspace draft before marking it ready.");
       return;
     }
 
@@ -1514,7 +1650,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
       const approved = await approveContentRecord(client, editableRecord);
       upsertRecord(approved);
-      applyRecord(approved, "Content approved. It is now eligible for scheduling.");
+      applyRecord(approved, "Content marked Ready. It is now eligible for scheduling.");
     } catch (error) {
       setMessage(contentStudioError(error));
     } finally {
@@ -1532,7 +1668,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setMessage(
         currentRecord.status === "SCHEDULED"
           ? "This item is already scheduled. Cancel its schedule before choosing a different time."
-          : "Approve this draft explicitly before choosing its publishing time."
+          : "Mark this draft Ready before choosing its publishing time."
       );
       return;
     }
@@ -1553,7 +1689,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
   async function reopenForEditing() {
     if (!session || !currentRecord || currentRecord.status !== "APPROVED") {
-      setMessage("Only approved content can be reopened directly. Cancel a schedule first if this item is scheduled.");
+      setMessage("Only Ready content can be reopened directly. Cancel a schedule first if this item is scheduled.");
       return;
     }
 
@@ -1562,7 +1698,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     try {
       const draft = await client.updateContentStatus(currentRecord.id, "DRAFT");
       upsertRecord(draft);
-      applyRecord(draft, "Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.");
+      applyRecord(draft, "Ready state removed. The post is a draft again and its caption, hashtags, and media can be edited.");
     } catch (error) {
       setMessage(contentStudioError(error));
     } finally {
@@ -1590,7 +1726,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     try {
       const unscheduled = await client.unscheduleContent(currentRecord.id);
       upsertRecord(unscheduled);
-      applyRecord(unscheduled, "Schedule cancelled. The approved item has returned to the ready queue.");
+      applyRecord(unscheduled, "Schedule cancelled. The item has returned to the Ready queue.");
       setConfirmation(null);
     } catch (error) {
       setMessage(contentStudioError(error));
@@ -1606,7 +1742,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     }
 
     if (currentRecord.status === "SCHEDULED") {
-      setMessage("Cancel this post's schedule first. Once it returns to Approved, you can delete it separately.");
+      setMessage("Cancel this post's schedule first. Once it returns to Ready, you can delete it separately.");
       return;
     }
 
@@ -1802,18 +1938,18 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     <section className="grid min-h-[calc(100vh-8rem)] min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-7">
       <div className="min-w-0 space-y-6">
         <section className="sunlit-panel rounded-[1.5rem] border-s-4 border-s-[var(--sunlit-pink)] p-4 sm:px-5 sm:py-4">
-          {currentRecord ? (
+          {editorOpen ? (
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="sunlit-eyebrow">{locale === "ar" ? "محرر المسودة" : "Draft editor"}</p>
                 <h1 className="mt-1 truncate font-display text-xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
-                  {contentPipelineTitle(currentRecord, locale)}
+                  {currentRecord ? contentPipelineTitle(currentRecord, locale) : locale === "ar" ? "مسودة منشور جديدة" : "New post draft"}
                 </h1>
               </div>
               <button
                 className="sunlit-secondary inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
                 onClick={() =>
-                  returnToCreateHome(locale === "ar" ? "تم حفظ العمل المؤكد في مساحة العمل." : "Your confirmed changes remain saved in the workspace.")
+                  requestReturnToCreateHome(locale === "ar" ? "تم حفظ العمل المؤكد في مساحة العمل." : "Your confirmed changes remain saved in the workspace.")
                 }
                 type="button"
               >
@@ -1835,7 +1971,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </article>
         ) : null}
 
-        {!currentRecord ? (
+        {!editorOpen ? (
           <>
             <article className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
               <div className="grid gap-3 sm:grid-cols-3">
@@ -1852,18 +1988,15 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </div>
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 <button
-                  className="sunlit-primary flex min-h-36 items-start gap-4 rounded-2xl p-5 text-start disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
-                  disabled={creatingBlank}
-                  onClick={() => void createBlankDraft()}
+                  className="sunlit-primary flex min-h-36 items-start gap-4 rounded-2xl p-5 text-start lg:col-span-2"
+                  onClick={createBlankDraft}
                   type="button"
                 >
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/20">
                     <Pencil size={21} />
                   </span>
                   <span>
-                    <span className="block text-lg font-black">
-                      {creatingBlank ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : studioHomeCopy.blankAction}
-                    </span>
+                    <span className="block text-lg font-black">{studioHomeCopy.blankAction}</span>
                     <span className="mt-1 block text-sm font-semibold leading-6 opacity-85">{studioHomeCopy.blankDescription}</span>
                   </span>
                 </button>
@@ -2070,22 +2203,22 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           </>
         ) : null}
 
-        {currentRecord ? (
+        {editorOpen ? (
           <>
             {currentRecord && !canEdit ? (
               <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
                 <div>
                   <p className="font-extrabold text-[var(--sunlit-ink)]">
                     {currentRecord.status === "APPROVED"
-                      ? "Approved content is locked against accidental changes."
+                      ? "Ready content is locked against accidental changes."
                       : currentRecord.status === "SCHEDULED"
                         ? "Cancel the schedule before editing or deleting this post."
                         : "This post is locked in its current state."}
                   </p>
                   <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
                     {currentRecord.status === "APPROVED"
-                      ? "Reopening it removes approval and returns the post to Draft."
-                      : "MARKOS keeps approval, scheduling, and content changes as explicit separate actions."}
+                      ? "Reopening it removes the Ready state and returns the post to Draft."
+                      : "MARKOS keeps readiness, scheduling, and content changes as explicit separate actions."}
                   </p>
                 </div>
                 {currentRecord.status === "APPROVED" ? (
@@ -2101,7 +2234,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </article>
             ) : null}
 
-            <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
+            <EditorBlock
+              action={currentRecord ? (locale === "ar" ? "حفظ التعديلات" : "Save edits") : locale === "ar" ? "حفظ المسودة" : "Save draft"}
+              busy={saving}
+              disabled={!canEdit || !isDraftDirty}
+              onAction={() => void persistEditableDraft()}
+              title={locale === "ar" ? "النص" : "Caption"}
+            >
               <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Caption language">
                 {(
                   [
@@ -2134,7 +2273,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <div className="mt-8 border-t border-[var(--sunlit-line)] pt-5 text-sm text-[var(--sunlit-muted)]">{activeCaption.length} / 2,200 characters</div>
             </EditorBlock>
 
-            <EditorBlock action="Save tags" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Hashtags">
+            <EditorBlock
+              action={locale === "ar" ? "حفظ الوسوم" : "Save tags"}
+              busy={saving}
+              disabled={!canEdit || !isDraftDirty}
+              onAction={() => void persistEditableDraft()}
+              title={locale === "ar" ? "الوسوم" : "Hashtags"}
+            >
               <textarea
                 className="min-h-24 w-full resize-y border-0 bg-transparent text-base leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
                 disabled={!canEdit}
@@ -2147,7 +2292,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             <EditorBlock
               action={locale === "ar" ? "حفظ الدعوة" : "Save CTA"}
               busy={saving}
-              disabled={!currentRecord || !canEdit}
+              disabled={!canEdit || !isDraftDirty}
               onAction={() => void persistEditableDraft()}
               title={locale === "ar" ? "الدعوة إلى الإجراء" : "Call to action"}
             >
@@ -2158,6 +2303,29 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 placeholder={locale === "ar" ? "مثال: أرسل لنا رسالة لمعرفة المزيد" : "Example: Send us a message to learn more"}
                 value={callToAction}
               />
+            </EditorBlock>
+
+            <EditorBlock
+              action={currentRecord ? (locale === "ar" ? "حفظ الموعد" : "Save planned time") : locale === "ar" ? "حفظ المسودة" : "Save draft"}
+              busy={saving}
+              disabled={!canEdit || !isDraftDirty}
+              onAction={() => void persistEditableDraft()}
+              title={locale === "ar" ? "موعد النشر المخطط" : "Planned publication"}
+            >
+              <input
+                aria-describedby="planned-publication-help"
+                aria-label={locale === "ar" ? "موعد النشر المخطط" : "Planned publication"}
+                className="sunlit-field h-12 w-full rounded-xl px-4 text-base outline-none sm:max-w-sm"
+                disabled={!canEdit}
+                onChange={(event) => setPlannedAtInput(event.target.value)}
+                type="datetime-local"
+                value={plannedAtInput}
+              />
+              <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]" id="planned-publication-help">
+                {locale === "ar"
+                  ? "اختياري. يظهر المحتوى في التقويم في هذا الموعد، لكنه لن يُنشر حتى يصبح جاهزاً ثم تتم جدولته. اتركه فارغاً لحفظه ضمن غير المجدول."
+                  : "Optional. This places the content on Calendar, but it will not publish until it is marked Ready and scheduled. Leave it empty to keep the draft in Unscheduled."}
+              </p>
             </EditorBlock>
 
             <section>
@@ -2269,6 +2437,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">Uses the saved caption when the optional direction is empty.</p>
                     <input
                       className="sunlit-field mt-3 h-11 rounded-xl px-3 text-sm outline-none"
+                      disabled={!canManageMedia}
                       onChange={(event) => setImagePrompt(event.target.value)}
                       placeholder="Optional visual direction"
                       value={imagePrompt}
@@ -2277,6 +2446,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       <select
                         aria-label="Image aspect ratio"
                         className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
+                        disabled={!canManageMedia}
                         onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
                         value={imageAspectRatio}
                       >
@@ -2296,8 +2466,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-                  MARKOS saves generated images as Instagram-ready JPEGs in this workspace. Review every generated image before approval. Instagram may still
-                  recompress the file and convert non-sRGB color to sRGB.
+                  MARKOS saves generated images as Instagram-ready JPEGs in this workspace. Review every generated image before marking the post Ready.
+                  Instagram may still recompress the file and convert non-sRGB color to sRGB.
                 </p>
               </article>
             </section>
@@ -2306,14 +2476,14 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-                  disabled={currentRecord?.status === "SCHEDULED"}
+                  disabled={currentRecord?.status !== "APPROVED"}
                   onChange={(event) => setScheduleDate(event.target.value)}
                   type="date"
                   value={scheduleDate}
                 />
                 <input
                   className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-                  disabled={currentRecord?.status === "SCHEDULED"}
+                  disabled={currentRecord?.status !== "APPROVED"}
                   onChange={(event) => setScheduleTime(event.target.value)}
                   type="time"
                   value={scheduleTime}
@@ -2321,16 +2491,22 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </div>
               <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]">
                 {currentRecord?.status === "SCHEDULED"
-                  ? `Scheduled for ${formatShortTime(currentRecord.scheduledAt ?? new Date().toISOString())}. Cancelling returns it to Approved; it does not delete the content.`
-                  : "Approval is a separate required step. Once approved, choose a future time and add the item to the publishing queue."}
+                  ? `Scheduled for ${formatShortTime(currentRecord.scheduledAt ?? new Date().toISOString())}. Cancelling returns it to Ready; it does not delete the content.`
+                  : "Ready is a separate required step. Once ready, choose a future time and add the item to the publishing queue."}
               </p>
             </EditorBlock>
 
-            <EditorBlock action="Copy" disabled={!currentRecord} onAction={() => void copyCaption()} title="Actions">
+            <EditorBlock action="Copy" disabled={!hasMeaningfulDraftWork} onAction={() => void copyCaption()} title="Actions">
               <div className="flex flex-wrap gap-3">
                 <button
                   className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={currentRecord?.status === "APPROVED" ? scheduling : currentRecord?.status === "SCHEDULED" ? unscheduling : !canApprove || approving}
+                  disabled={
+                    currentRecord?.status === "APPROVED"
+                      ? scheduling
+                      : currentRecord?.status === "SCHEDULED"
+                        ? unscheduling
+                        : !canApprove || approving || (!currentRecord && !hasMeaningfulDraftWork)
+                  }
                   onClick={() => {
                     if (currentRecord?.status === "APPROVED") {
                       void scheduleDraft();
@@ -2343,7 +2519,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   type="button"
                 >
                   {approving
-                    ? "Approving..."
+                    ? "Marking ready..."
                     : scheduling
                       ? "Scheduling..."
                       : unscheduling
@@ -2354,12 +2530,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                             ? "Cancel schedule"
                             : currentRecord && !canApprove
                               ? statusLabel(currentRecord.status)
-                              : "Approve draft"}
+                              : "Mark as ready"}
                 </button>
                 <button
                   className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() =>
-                    returnToCreateHome(
+                    requestReturnToCreateHome(
                       locale === "ar"
                         ? "تم حفظ العمل المؤكد. اختر كيف تريد بدء المحتوى التالي."
                         : "Your confirmed work is saved. Choose how to start the next item."
@@ -2416,6 +2592,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
             {currentRecord.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
           </button>
+        ) : editorOpen ? (
+          <p className="mt-6 max-w-xs text-center text-sm font-bold leading-6 text-[var(--sunlit-muted)]">
+            {locale === "ar" ? "احفظ عملاً فعلياً أولاً لإضافة الوسائط أو الانتقال إلى الجدولة." : "Save real work first to add media or move into scheduling."}
+          </p>
         ) : (
           <a className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/calendar`}>
             {studioHomeCopy.calendarAction} <ArrowRight className={locale === "ar" ? "rotate-180" : ""} size={24} />
@@ -2429,13 +2609,23 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           confirmLabel={confirmation === "cancel-schedule" ? "Yes, cancel schedule" : "Yes, delete draft"}
           description={
             confirmation === "cancel-schedule"
-              ? "This removes the publishing time and returns the post to Approved. It does not delete the post."
+              ? "This removes the publishing time and returns the post to Ready. It does not delete the post."
               : "This removes the post draft from MarkOS. Its media files remain in the workspace media library."
           }
           onCancel={() => setConfirmation(null)}
           onConfirm={() => void (confirmation === "cancel-schedule" ? cancelSchedule() : deleteDraft())}
           title={confirmation === "cancel-schedule" ? "Cancel this scheduled post?" : "Delete this post draft?"}
           tone={confirmation === "cancel-schedule" ? "neutral" : "danger"}
+        />
+      ) : null}
+
+      {pendingExit ? (
+        <UnsavedDraftDialog
+          busy={saving}
+          locale={locale}
+          onDiscard={discardDraftAndExit}
+          onKeepEditing={() => setPendingExit(null)}
+          onSave={() => void saveDraftAndExit()}
         />
       ) : null}
 
@@ -3393,6 +3583,91 @@ function ConfirmationDialog({
             type="button"
           >
             {busy ? "Working..." : confirmLabel}
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function UnsavedDraftDialog({
+  busy,
+  locale,
+  onDiscard,
+  onKeepEditing,
+  onSave
+}: {
+  busy: boolean;
+  locale: Locale;
+  onDiscard: () => void;
+  onKeepEditing: () => void;
+  onSave: () => void;
+}) {
+  useEffect(() => {
+    function keepEditingOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onKeepEditing();
+    }
+
+    document.addEventListener("keydown", keepEditingOnEscape);
+    return () => document.removeEventListener("keydown", keepEditingOnEscape);
+  }, [busy, onKeepEditing]);
+
+  const copy =
+    locale === "ar"
+      ? {
+          description: "لديك تغييرات لم تُحفظ. يمكنك حفظ المسودة، تجاهل التغييرات، أو متابعة التحرير.",
+          discard: "تجاهل التغييرات",
+          eyebrow: "مسودة غير محفوظة",
+          keep: "متابعة التحرير",
+          save: "حفظ المسودة",
+          saving: "جارٍ الحفظ...",
+          title: "هل تريد حفظ هذه المسودة؟"
+        }
+      : {
+          description: "You have unsaved changes. Save the draft, discard those changes, or keep editing.",
+          discard: "Discard changes",
+          eyebrow: "Unsaved draft",
+          keep: "Keep editing",
+          save: "Save draft",
+          saving: "Saving...",
+          title: "Save this draft before leaving?"
+        };
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-[rgb(32_33_43_/_58%)] p-5 backdrop-blur-sm">
+      <article
+        aria-describedby="unsaved-draft-description"
+        aria-labelledby="unsaved-draft-title"
+        aria-modal="true"
+        className="sunlit-panel w-full max-w-lg rounded-[1.75rem] p-6 shadow-2xl"
+        role="dialog"
+      >
+        <p className="sunlit-eyebrow">{copy.eyebrow}</p>
+        <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="unsaved-draft-title">
+          {copy.title}
+        </h2>
+        <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]" id="unsaved-draft-description">
+          {copy.description}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+            disabled={busy}
+            onClick={onKeepEditing}
+            type="button"
+          >
+            {copy.keep}
+          </button>
+          <button
+            className="min-h-11 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:opacity-50"
+            disabled={busy}
+            onClick={onDiscard}
+            type="button"
+          >
+            {copy.discard}
+          </button>
+          <button className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50" disabled={busy} onClick={onSave} type="button">
+            {busy ? copy.saving : copy.save}
           </button>
         </div>
       </article>

@@ -100,7 +100,7 @@ describe("rendered Sunlit authentication", () => {
   }, 90_000);
 
   it("logs a verified user into the canonical app route", async () => {
-    const context = await browser.newContext({ viewport: { height: 900, width: 1280 } });
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
     const page = await context.newPage();
     let loginBody: unknown;
 
@@ -114,12 +114,61 @@ describe("rendered Sunlit authentication", () => {
     });
 
     await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
+    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Open Wednesday 26 August" }).click();
+    await expect(page.locator('[data-login-preview="day"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Open Product spotlight" }).click();
+    await expect(page.locator('[data-login-preview="post"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Wednesday" }).click();
+    await page.getByRole("button", { name: "Week overview" }).click();
+    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
     await page.getByLabel("Email").fill(verifiedSession.user.email);
     await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL(/\/en\/app$/);
 
     expect(loginBody).toEqual({ email: "mariam@example.com", password: "a-secure-passphrase" });
+    await expect(noHorizontalOverflow(page)).resolves.toBe(true);
+    await context.close();
+  });
+
+  it("reveals the optional MFA step only after the API requests it", async () => {
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
+    const page = await context.newPage();
+    const loginBodies: unknown[] = [];
+
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/login") {
+        const body = route.request().postDataJSON();
+        loginBodies.push(body);
+        if (!(body as { totpCode?: string }).totpCode) {
+          return route.fulfill({
+            body: JSON.stringify({ error: { code: "MFA_REQUIRED", message: "MFA is required" } }),
+            contentType: "application/json",
+            status: 401
+          });
+        }
+        return route.fulfill(json(verifiedSession));
+      }
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
+    await page.getByLabel("Email").fill(verifiedSession.user.email);
+    await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
+    await page.getByRole("button", { name: "Log in" }).click();
+
+    await expect(page.getByLabel("MFA code").isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("status").textContent()).resolves.toContain("6-digit code");
+    await page.getByLabel("MFA code").fill("123456");
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL(/\/en\/app$/);
+
+    expect(loginBodies).toEqual([
+      { email: "mariam@example.com", password: "a-secure-passphrase" },
+      { email: "mariam@example.com", password: "a-secure-passphrase", totpCode: "123456" }
+    ]);
     await context.close();
   });
 
