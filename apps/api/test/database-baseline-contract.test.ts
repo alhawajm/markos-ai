@@ -7,6 +7,7 @@ const usageCounterBigintMigration = readFileSync(
   new URL("../prisma/migrations/20260820000000_expand_usage_counters_to_bigint/migration.sql", import.meta.url),
   "utf8"
 );
+const plannedAtMigration = readFileSync(new URL("../prisma/migrations/20260825000000_add_content_planned_at/migration.sql", import.meta.url), "utf8");
 const seed = readFileSync(new URL("../prisma/seed.ts", import.meta.url), "utf8");
 
 describe("clean database baseline contract", () => {
@@ -18,7 +19,11 @@ describe("clean database baseline contract", () => {
       .map((entry) => entry.name)
       .sort();
 
-    expect(migrationDirectories).toEqual(["20260802000000_clean_baseline", "20260820000000_expand_usage_counters_to_bigint"]);
+    expect(migrationDirectories).toEqual([
+      "20260802000000_clean_baseline",
+      "20260820000000_expand_usage_counters_to_bigint",
+      "20260825000000_add_content_planned_at"
+    ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);
     }
@@ -27,6 +32,8 @@ describe("clean database baseline contract", () => {
     expect(usageCounterBigintMigration).toContain('ALTER TABLE "usage_counters"');
     expect(usageCounterBigintMigration).toContain('ALTER COLUMN "used" TYPE BIGINT');
     expect(usageCounterBigintMigration).toContain('ALTER COLUMN "limit" TYPE BIGINT');
+    expect(plannedAtMigration).toContain('ADD COLUMN "plannedAt" TIMESTAMP(3)');
+    expect(plannedAtMigration).toContain('CREATE INDEX "content_items_workspaceId_plannedAt_idx"');
   });
 
   it("seeds only the runtime plan catalog through idempotent upserts", () => {
