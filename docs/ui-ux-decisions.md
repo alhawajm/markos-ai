@@ -103,7 +103,7 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - Add content-type filtering in the first pass. Defer Campaign filtering until a real campaign read/name contract exists.
 - Preserve active filters when entering Day/Post Focus and provide a clear way to show all content.
 - Week shows three or four compact items per day followed by `+N more`. Day Focus exposes the complete day collection and remains usable with approximately five to ten items.
-- Month is a distribution view and does not show content titles. Each occupied day groups its content into compact status markers with distinct icon/color treatment and a count, supported by a visible status legend. This keeps status and volume legible without turning each cell into a miniature content list.
+- Month is a distribution view and does not show content titles. Each occupied day groups its content into compact status markers with distinct icon/color treatment and a count. The persistent status-filter row provides the visible color key, so Month does not need a second legend that consumes grid height. This keeps status and volume legible without turning each cell into a miniature content list.
 - Month cells show the day's total volume separately. When a dense day cannot expose every status marker, prioritize Needs attention, Scheduled, and Ready before lower-action states and summarize the hidden remainder without introducing titles.
 - Keep only actionable counts backed by the Calendar read contract. Do not show week-over-week trends until real historical aggregates support them.
 
@@ -168,7 +168,7 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 ### 2026-08-25 — Calendar motion and drag-and-drop technology research
 
-**Status: research recommendation; no dependency has been selected or installed**
+**Status: superseded on 2026-08-26 by the accepted Motion adoption below; retained as the research record**
 
 - Use a focused **Motion for React** proof as the next motion step. Its shared-layout, presence, coordinated-layout, scroll-measurement, and reduced-motion primitives map directly to `Calendar → Day Focus → Post Focus` while allowing the existing URL, history, focus, and product-state contracts to remain authoritative.
 - Keep CSS transitions and the Web Animations API for small local effects such as hover, emphasis, and toasts. Do not continue expanding the current manual geometry orchestration unless the library proof fails.
@@ -202,3 +202,35 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - dnd kit sensors: <https://dndkit.com/react/guides/sensors/>
 - dnd kit collision detection: <https://dndkit.com/react/guides/collision-detection/>
 - Atlassian Pragmatic Drag and Drop accessibility guidance: <https://atlassian.design/components/pragmatic-drag-and-drop/accessibility-guidelines/>
+
+### 2026-08-26 — Desktop Calendar density and shell hierarchy
+
+**Accepted**
+
+- Remove the redundant authenticated desktop header. On desktop, the sidebar identifies the active section and each page owns one authoritative heading. Keep a compact section header only where the desktop sidebar is absent.
+- Keep language selection and account controls in Settings rather than repeating them above every authenticated page.
+- At `1440x900 @ 1x`, Week, Month, and the collapsed Unscheduled panel should fit in the initial viewport. At `1366x768 @ 1x`, the complete Week or Month calendar grid must remain visible; Unscheduled may continue below the fold.
+- Keep Month titleless. A dense day shows at most three prioritized status markers plus one `+N` remainder, while its accessible name retains the complete item and status summary.
+- Use the persistent filter row as the status color key and remove a separate Month legend.
+- Keep the Calendar canvas and ordinary content surfaces predominantly white. Use restrained brand tint for selection and reserve stronger semantic color for status dots, markers, badges, and logical-edge accents.
+
+**Status palette for this pass**
+
+- Draft uses slate, Ready uses blue, Scheduled uses orange, Published uses green, Needs attention uses rose, and the underlying review state uses violet.
+- Color is never the only status cue; labels, icons, counts, and accessible names remain authoritative.
+- These are semantic UI tokens rather than a final lock on every MARKOS brand color. Revisit them through the shared design-foundation process if the broader palette changes.
+
+### 2026-08-26 — Motion for React adoption and interaction outcome
+
+**Accepted**
+
+- Adopt the pinned `motion` package for the Calendar focus hierarchy and load its DOM feature bundle lazily inside Calendar rather than making it shell-wide infrastructure.
+- Keep URL state, browser history, focus management, dialog semantics, API mutations, and reduced-motion behavior authoritative. Motion explains the hierarchy; it does not own product state.
+- Use short tween-based transitions and opacity changes for routine navigation. Avoid persistent backdrop blur and broad layout animation that make the interface feel slow or leave an inert visual layer behind.
+- A direct post selection still constructs the logical `Calendar → Day → Post` history chain. Escape, Back, and explicit close actions progressively unwind that chain and restore focus to the originating Calendar control.
+- Preserve the Day overview as a distinct state. Direct Post Focus accelerates known-item review, while Day Focus remains the complete date-level overview and the intermediate navigation context.
+
+**Still deferred**
+
+- Drag-and-drop scheduling and rescheduling remain a separate safety-sensitive pass. Do not begin it until explicit eligibility, activation, confirmation, time selection, cancellation, and accessible non-drag alternatives are agreed and tested.
+- Further shared-element polish remains optional. Prefer responsive routine interaction over longer or more cinematic motion.

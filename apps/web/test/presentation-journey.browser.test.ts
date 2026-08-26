@@ -506,7 +506,9 @@ describe("presentation journey", () => {
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
     const firstDayControl = page.getByRole("button", { name: /^Open day:/ }).first();
     const desktopWeekDay = await firstDayControl.locator("xpath=ancestor::section[1]").boundingBox();
-    expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(380);
+    expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(350);
+    expect((desktopWeekDay?.y ?? 0) + (desktopWeekDay?.height ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
+    await expect(page.getByLabel("Language switcher").count()).resolves.toBe(0);
 
     const statusFilters = page.getByRole("group", { name: "Filter by content status" });
     await expect(statusFilters.getByRole("button", { name: "All", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
@@ -549,7 +551,6 @@ describe("presentation journey", () => {
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
     await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
     await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("record-to-day");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
@@ -560,7 +561,9 @@ describe("presentation journey", () => {
     await expect(directReadyItem.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
 
     const readyDayColumn = directReadyItem.locator("xpath=ancestor::section[1]");
-    await readyDayColumn.getByRole("button", { name: /^Open day:/ }).click();
+    const readyDayBox = await readyDayColumn.boundingBox();
+    if (!readyDayBox) throw new Error("Expected the ready day surface to be visible.");
+    await readyDayColumn.click({ position: { x: readyDayBox.width / 2, y: readyDayBox.height - 12 } });
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day"));
     await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("calendar-to-day");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
@@ -590,6 +593,9 @@ describe("presentation journey", () => {
     expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
 
     const dayContext = page.locator('[data-calendar-motion-part="day-context"]');
+    await expect(
+      dayContext.locator("[data-calendar-status]").evaluateAll((rows) => new Set(rows.map((row) => getComputedStyle(row).backgroundColor)).size)
+    ).resolves.toBeGreaterThan(1);
     const originalDayContext = await dayContext.elementHandle();
     if (!originalDayContext) throw new Error("Expected the persistent day context to be mounted.");
     const alternatePost = dayContext.getByRole("button", { name: /Product story scheduled/ });
@@ -615,6 +621,8 @@ describe("presentation journey", () => {
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
     await page.getByRole("button", { name: "Close" }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await focusSurface.waitFor({ state: "detached" });
     const scheduledCounter = summaryGroup.getByRole("button", { name: /Scheduled this week/ });
     await scheduledCounter.click();
     await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("true");
@@ -639,6 +647,7 @@ describe("presentation journey", () => {
     await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Back to calendar" }).click();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
+    await focusSurface.waitFor({ state: "detached" });
     await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     const movedToUnscheduled = page.getByRole("button", { name: /Unscheduled · 14/ });
     await expect(movedToUnscheduled.getAttribute("aria-expanded")).resolves.toBe("true");
@@ -647,8 +656,11 @@ describe("presentation journey", () => {
 
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
-    await expect(page.getByLabel("Content status legend").isVisible()).resolves.toBe(true);
+    await expect(statusFilters.locator("[data-calendar-status]").count()).resolves.toBe(5);
     await expect(page.getByLabel("Month calendar").getByText("Product story scheduled...", { exact: true }).count()).resolves.toBe(0);
+    const monthCalendar = await page.getByLabel("Month calendar").boundingBox();
+    if (!monthCalendar) throw new Error("Expected the Month calendar to be visible.");
+    expect(monthCalendar.y + monthCalendar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
     await page.screenshot({ path: "evidence/sunlit-calendar.png", fullPage: true });
 
     await page.setViewportSize({ height: 768, width: 1366 });
@@ -683,7 +695,7 @@ describe("presentation journey", () => {
     expect(reschedulePayload).toEqual({ scheduledAt: new Date(`${rescheduleInput}:00+03:00`).toISOString() });
     expect(unscheduleCalls).toBe(1);
     await page.close();
-  });
+  }, 60_000);
 });
 
 async function sessionPage(): Promise<Page> {

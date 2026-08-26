@@ -65,18 +65,20 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 | Ink | `--ink` | `#20212B` | Primary text, dark surfaces, strong secondary actions |
 | Ink soft | `--ink-soft` | `#4D4853` | Supporting text with strong contrast |
 | Muted | `--muted` | `#625B66` | Secondary metadata; avoid beside oversized headings when too small |
-| Paper | `--paper` | `#FFFAF5` | Main warm page canvas |
-| Paper deep | `--paper-deep` | `#FFF0E5` | Warm secondary surfaces and hover states |
+| Paper | `--paper` | `#FFFDFB` | Near-white warm page canvas |
+| Paper deep | `--paper-deep` | `#FFF4EE` | Warm secondary surfaces and hover states |
 | White | `--white` | `#FFFFFF` | Cards, fields, and high-contrast text on dark surfaces |
 | Coral | `--coral` | `#FF665A` | Primary-action gradients and energetic accents |
 | Coral deep | `--coral-deep` | `#DC3F64` | Strong accent text and gradient depth |
 | Pink | `--pink` | `#D93F7A` | Brand emphasis, links, selected states |
-| Aqua | `--aqua` | `#21BFAE` | Success, progress, focus, and insight accents |
+| Aqua | `--aqua` | `#21BFAE` | Selection, progress, focus, and insight accents |
 | Aqua dark | `--aqua-dark` | `#087D71` | Accessible text on pale aqua surfaces |
 | Aqua soft | `--aqua-soft` | `#DFF8F2` | Success and informational backgrounds |
 | Yellow | `--yellow` | `#F6C453` | Warm highlights, attention, and selected accents |
 
 Use semantic roles in shared production tokens instead of copying these raw values into every component. Warning, error, disabled, border, focus, and overlay roles must also be centralized during migration.
+
+Calendar currently establishes the first explicit lifecycle-status token set: Draft slate, Ready blue, Scheduled orange, Published green, Needs attention rose, and review violet. These colors support labels, icons, counts, and accessible names; they never replace those cues. Treat them as semantic status roles rather than additions to the brand-accent palette.
 
 ### Runtime token scope
 
@@ -131,7 +133,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - Settings is a standalone workspace-management route, not a child canvas inside the primary application shell. Its header provides a back action to the last main application page, with Overview as the safe fallback.
 - Use one persistent section menu as the top-level navigation on desktop and a select control on narrow screens.
 - Render one selected section at a time; do not combine this menu with top-level accordions.
-- Keep locale switching in the shared header; language does not need its own settings section.
+- Keep locale switching in the standalone Settings header; language does not need its own settings section or a repeated control above every authenticated page.
 - Order sections by the user's likely job: Account, Connected accounts, Security, Plan and billing, then Data and activity.
 - Keep nested disclosures only for local details such as MFA setup steps or advanced data controls.
 - Show gated sections, such as Instagram connection before MFA, in a visible but clearly locked state.
@@ -142,13 +144,13 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
-- At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls, with a restrained sticky workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
+- At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Strategy**, **Create**, **Calendar**, **Insights**, **Business Profile**, and **Settings**.
 - Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Strategy should put generation controls beside the current strategy; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
 - Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
 - Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.
-- Give each page one authoritative heading. The workspace header may repeat the active destination visually, but it must not introduce a second page-level heading in the accessibility tree.
+- Give each page one authoritative heading. Where the desktop sidebar is unavailable, a compact responsive shell header may identify the active destination without becoming a second page-level heading in the accessibility tree.
 
 ### Legal documents
 

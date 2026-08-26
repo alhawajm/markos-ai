@@ -2,7 +2,7 @@
 
 - Status: interpreted working backlog
 - Started: 2026-08-23
-- Current focus: UI and UX only unless an urgent functional issue appears
+- Current focus: authenticated desktop sidebar and shell refinement after the accepted Calendar foundation
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
@@ -43,7 +43,7 @@ The goal is to reduce effort and perceived length without weakening the business
 | Problem or goal | Interpreted direction | State |
 | --- | --- | --- |
 | The page should communicate the next useful task instead of exposing system terminology | Reframe cards and actions around current workspace state, upcoming content, required attention, and the next decision. | Accepted direction |
-| Duplicate shell and page chrome consumes the first viewport | Prototype a smaller workspace header and one clear page introduction, preserving account, locale, and navigation access. | Prototype |
+| Duplicate shell and page chrome consumes the first viewport | Keep one page-owned heading, remove the redundant authenticated desktop header, and place locale/account controls in Settings. Retain a compact header only where the desktop sidebar is unavailable. | Accepted direction |
 | Decorative or duplicated metrics can crowd out work | Keep only data backed by the workspace and tied to a useful action. Use honest empty states instead of placeholder success. | Accepted direction |
 
 ## Strategy
@@ -64,6 +64,24 @@ The already accepted Create information architecture remains: an action hub firs
 | The preview should be useful during editing and easy to demonstrate | Use a follower-style Instagram post preview without decorative phone hardware. Match supported crop and caption behavior while clearly separating approximation from provider output. | Accepted direction |
 | AI currently risks feeling like the only path into creation | Keep Start a blank post and manual upload first-class. AI suggestions, copy, and images remain optional, metered actions. | Accepted direction |
 | The editor needs a clearer hierarchy and less friction | Review section order, progressive disclosure, sticky actions, save state, and the handoff from approval to scheduling as one connected journey. | Prototype |
+
+## Calendar
+
+| Problem or goal | Interpreted direction | State |
+| --- | --- | --- |
+| Week and Month require scrolling before the complete grid is visible | Fit the complete active calendar grid in the first desktop viewport at `1440x900 @ 1x` and `1366x768 @ 1x`. Keep the separate Unscheduled collection below Calendar and allow it to continue below the fold at the smaller viewport. | Accepted direction |
+| Month needs useful density without tiny content cards | Keep cells titleless. Show total volume, at most three prioritized status markers, and one `+N` remainder; use the persistent filter row as the color key. | Accepted direction |
+| Day and Post Focus previously felt disconnected or slow | Preserve `Calendar → Day → Post` history, focus, and URL state while using short Motion transitions to explain scope changes. Keep reduced-motion behavior and eliminate heavy blur or broad layout work. | Accepted direction |
+| Statuses are difficult to distinguish in dense review states | Use semantic slate, blue, orange, green, rose, and violet markers with labels, icons, counts, and logical-edge accents on predominantly white surfaces. Treat the exact palette as reviewable design tokens, not immutable brand law. | Accepted direction |
+| Dragging could accelerate planning but an accidental move is dangerous | Keep drag-and-drop deferred until eligibility, activation, time selection, exact source/destination confirmation, cancellation, and accessible non-drag controls are designed together. | Later |
+
+## Shared shell and sidebar — next pass
+
+| Problem or goal | Interpreted direction | State |
+| --- | --- | --- |
+| The current desktop sidebar is visually heavy and uses more width than every task needs | Audit a compact desktop-first navigation treatment using the supplied 21st.dev example only as a visual reference. Preserve MARKOS routes and components; do not reuse the sample source. | Prototype |
+| Hover-driven automatic expansion can create motion and targeting friction | Do not adopt auto-expand by default. Compare a stable compact rail, a stable labeled sidebar, and an explicit user-controlled collapse only if each remains understandable without relying on hover. | Prototype |
+| Navigation must remain obvious in English and Arabic | Preserve visible active state, accessible names, keyboard navigation, RTL logical edges, and reliable access to Settings before choosing the final width or collapse behavior. | Accepted direction |
 
 ## Areas not yet reconstructed
 

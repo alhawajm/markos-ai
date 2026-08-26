@@ -3,8 +3,8 @@
   --sunlit-ink: #20212b;
   --sunlit-ink-soft: #4d4853;
   --sunlit-muted: #625b66;
-  --sunlit-paper: #fffaf5;
-  --sunlit-paper-deep: #fff0e5;
+  --sunlit-paper: #fffdfb;
+  --sunlit-paper-deep: #fff4ee;
   --sunlit-surface: #ffffff;
   --sunlit-coral: #ff665a;
   --sunlit-coral-deep: #dc3f64;
@@ -13,6 +13,19 @@
   --sunlit-aqua-dark: #087d71;
   --sunlit-aqua-soft: #dff8f2;
   --sunlit-yellow: #f6c453;
+  --sunlit-yellow-soft: #fff6d8;
+  --sunlit-status-draft: #475569;
+  --sunlit-status-draft-soft: #f8fafc;
+  --sunlit-status-ready: #2563eb;
+  --sunlit-status-ready-soft: #eff6ff;
+  --sunlit-status-scheduled: #c2410c;
+  --sunlit-status-scheduled-soft: #fff7ed;
+  --sunlit-status-published: #15803d;
+  --sunlit-status-published-soft: #f0fdf4;
+  --sunlit-status-failed: #e11d48;
+  --sunlit-status-failed-soft: #fff1f2;
+  --sunlit-status-review: #7c3aed;
+  --sunlit-status-review-soft: #f5f3ff;
   --sunlit-line: rgb(32 33 43 / 11%);
   --sunlit-line-strong: rgb(32 33 43 / 18%);
   --sunlit-danger: #c73550;
@@ -46,20 +59,62 @@
 .sunlit-app {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 8% 8%, rgb(246 196 83 / 19%), transparent 26rem), radial-gradient(circle at 92% 18%, rgb(33 191 174 / 13%), transparent 29rem),
-    linear-gradient(180deg, var(--sunlit-paper) 0%, #fffdf9 52%, #fff8f1 100%);
+    radial-gradient(circle at 8% 8%, rgb(246 196 83 / 10%), transparent 26rem), radial-gradient(circle at 92% 18%, rgb(33 191 174 / 7%), transparent 29rem),
+    linear-gradient(180deg, var(--sunlit-paper) 0%, #ffffff 52%, #fffaf6 100%);
   color: var(--sunlit-ink);
 }
 
 .sunlit-panel {
   border: 1px solid var(--sunlit-line);
-  background: rgb(255 255 255 / 92%);
+  background: rgb(255 255 255 / 96%);
   box-shadow: var(--sunlit-shadow-sm);
 }
 
 .sunlit-panel-soft {
   border: 1px solid var(--sunlit-line);
-  background: rgb(255 240 229 / 72%);
+  background: rgb(255 247 242 / 82%);
+}
+
+.calendar-status-card--draft {
+  border-color: #cbd5e1;
+  border-inline-start-color: var(--sunlit-status-draft);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-draft-soft);
+}
+
+.calendar-status-card--ready {
+  border-color: #bfdbfe;
+  border-inline-start-color: var(--sunlit-status-ready);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-ready-soft);
+}
+
+.calendar-status-card--scheduled {
+  border-color: #fed7aa;
+  border-inline-start-color: var(--sunlit-status-scheduled);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-scheduled-soft);
+}
+
+.calendar-status-card--published {
+  border-color: #bbf7d0;
+  border-inline-start-color: var(--sunlit-status-published);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-published-soft);
+}
+
+.calendar-status-card--failed {
+  border-color: #fecdd3;
+  border-inline-start-color: var(--sunlit-status-failed);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-failed-soft);
+}
+
+.calendar-status-card--review {
+  border-color: #ddd6fe;
+  border-inline-start-color: var(--sunlit-status-review);
+  border-inline-start-width: 4px;
+  background: var(--sunlit-status-review-soft);
 }
 
 .sunlit-panel-dark {

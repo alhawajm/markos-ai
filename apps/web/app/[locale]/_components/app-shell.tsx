@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { BarChart3, Brain, CalendarDays, Home, Palette, Settings, Sparkles, Target, UserRound } from "lucide-react";
+import { BarChart3, Brain, CalendarDays, Home, Palette, Settings, Sparkles, Target } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import {
   CampaignBuilderPanel,
@@ -15,7 +15,7 @@ import {
 } from "./final-command-panels";
 import { StrategyPanel } from "./strategy-panel";
 import { CalendarPanel } from "./calendar-panel";
-import { initializeBrowserSession, useMarkosSession, watchBrowserSession } from "./browser-session";
+import { initializeBrowserSession, watchBrowserSession } from "./browser-session";
 
 export type SectionSlug =
   | "analytics"
@@ -52,8 +52,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const [sessionChecked, setSessionChecked] = useState(false);
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
-  const session = useMarkosSession();
-
   const checkSession = useCallback(() => {
     setSessionCheckFailed(false);
     void initializeBrowserSession(locale)
@@ -103,9 +101,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
       </main>
     );
   }
-
-  const firstName = session?.user.fullName.split(/\s+/)[0] || (locale === "ar" ? "مرحباً" : "Profile");
-  const workspaceName = session?.workspace.name || (locale === "ar" ? "مساحة العمل" : "Workspace");
 
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
@@ -160,33 +155,16 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-[var(--sunlit-line)] bg-[rgb(255_250_245_/_88%)] px-5 py-4 backdrop-blur-xl sm:px-7 xl:px-10">
-            <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <Link
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] lg:hidden"
-                  href={`/${locale}/app`}
-                  aria-label="MARKOS AI"
-                >
-                  <Sparkles size={19} />
-                </Link>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-[var(--sunlit-muted)]">{workspaceName}</p>
-                  <p className="truncate text-xl font-black tracking-tight text-[var(--sunlit-ink)]">{sectionLabel(locale, activeSection)}</p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <LocaleSwitch activeSection={activeSection} locale={locale} />
-                <Link
-                  className="hidden min-h-11 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white px-3.5 font-bold text-[var(--sunlit-ink)] shadow-[0_8px_24px_rgb(75_47_36_/_6%)] sm:flex"
-                  href={`/${locale}/app/settings#profile`}
-                >
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
-                    <UserRound size={15} />
-                  </span>
-                  <span>{firstName}</span>
-                </Link>
-              </div>
+          <header className="sticky top-0 z-30 border-b border-[var(--sunlit-line)] bg-white/92 px-5 py-3 backdrop-blur-xl sm:px-7 lg:hidden">
+            <div className="mx-auto flex max-w-[1500px] items-center gap-3">
+              <Link
+                aria-label="MARKOS AI"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)]"
+                href={`/${locale}/app`}
+              >
+                <Sparkles size={19} />
+              </Link>
+              <p className="truncate text-lg font-black tracking-tight text-[var(--sunlit-ink)]">{sectionLabel(locale, activeSection)}</p>
             </div>
           </header>
 
@@ -216,7 +194,13 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             })}
           </nav>
 
-          <div className="mx-auto w-full max-w-[1500px] min-w-0 px-5 py-7 sm:px-7 xl:px-10 xl:py-9 2xl:px-12">
+          <div
+            className={
+              activeSection === "calendar"
+                ? "mx-auto w-full max-w-[1500px] min-w-0 px-5 py-5 sm:px-7 xl:px-8 xl:py-6 2xl:px-10"
+                : "mx-auto w-full max-w-[1500px] min-w-0 px-5 py-7 sm:px-7 xl:px-10 xl:py-9 2xl:px-12"
+            }
+          >
             {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
             {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
@@ -230,25 +214,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </section>
       </div>
     </main>
-  );
-}
-
-function LocaleSwitch({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
-  const arabicLabel = "\u0627\u0644\u0639\u0631\u0628\u064a\u0629";
-  const languageLinkClass = (linkLocale: Locale) =>
-    linkLocale === locale
-      ? "shrink-0 rounded-lg bg-[var(--sunlit-ink)] px-3 py-2 text-xs font-extrabold text-white"
-      : "shrink-0 rounded-lg px-3 py-2 text-xs font-extrabold text-[var(--sunlit-muted)] transition hover:bg-white hover:text-[var(--sunlit-ink)]";
-
-  return (
-    <div className="flex items-center rounded-xl border border-[var(--sunlit-line)] bg-white/80 p-1" aria-label="Language switcher">
-      <Link aria-current={locale === "ar" ? "page" : undefined} className={languageLinkClass("ar")} href={localizedHref("ar", activeSection)}>
-        {arabicLabel}
-      </Link>
-      <Link aria-current={locale === "en" ? "page" : undefined} className={languageLinkClass("en")} href={localizedHref("en", activeSection)}>
-        English
-      </Link>
-    </div>
   );
 }
 
