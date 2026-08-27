@@ -212,6 +212,8 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - At `1440x900 @ 1x`, Week, Month, and the collapsed Unscheduled panel should fit in the initial viewport. At `1366x768 @ 1x`, the complete Week or Month calendar grid must remain visible; Unscheduled may continue below the fold.
 - Keep Month titleless. A dense day shows at most three prioritized status markers plus one `+N` remainder, while its accessible name retains the complete item and status summary.
 - Use the persistent filter row as the status color key and remove a separate Month legend.
+- Replace the duplicated three-card Calendar summary with a compact title/action row and one persistent filter toolbar. Keep the stable Ready, scheduled-this-week, and needs-attention counts by embedding them in their corresponding filter controls.
+- Use larger Month weekday and date typography, with Arabic dates sharing the same `font-bold` treatment as muted outside-month dates. Differentiate outside-month, current-month, selected, and Today states through color and surface treatment rather than switching numeral weight.
 - Keep the Calendar canvas and ordinary content surfaces predominantly white. Use restrained brand tint for selection and reserve stronger semantic color for status dots, markers, badges, and logical-edge accents.
 
 **Status palette for this pass**
@@ -234,3 +236,43 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 - Drag-and-drop scheduling and rescheduling remain a separate safety-sensitive pass. Do not begin it until explicit eligibility, activation, confirmation, time selection, cancellation, and accessible non-drag alternatives are agreed and tested.
 - Further shared-element polish remains optional. Prefer responsive routine interaction over longer or more cinematic motion.
+
+### 2026-08-27 — Calendar desktop checkpoint
+
+**Accepted and frozen**
+
+- Treat the current English and Arabic desktop Calendar as the accepted working baseline while product refinement moves to the shared shell and then Create. Preserve its Week and Month overview, status and content-type filters, Unscheduled collection, Day and Post Focus hierarchy, lifecycle actions, URL/history state, keyboard focus behavior, and reduced-motion path.
+- The complete active Week and Month grids remain first-viewport requirements at the named desktop checkpoints. The compact filter toolbar, titleless Month cells, larger localized dates, predominantly white surfaces, semantic status treatments, and separate below-calendar Unscheduled collection are part of this baseline.
+- A freeze means no opportunistic Calendar redesign during another surface's pass. Reopen Calendar only through a scoped correction or a separately reviewed motion, accessibility, responsive, or drag-and-drop pass.
+
+**Deferred when this checkpoint closes**
+
+- Refine the source-aware Day/Post transition only in an isolated motion prototype before reintegrating it. Include rapid input, interrupted transitions, reverse navigation, and stale-overlay removal in that pass's acceptance criteria.
+- Keep scheduling and rescheduling drag-and-drop deferred with the safeguards already recorded above.
+- Mobile Calendar composition remains outside the current desktop-first scope until the mobile companion capability set is decided.
+
+## Shared shell and sidebar
+
+### 2026-08-26 — Explicit desktop sidebar collapse
+
+**Accepted**
+
+- Keep the desktop sidebar expanded by default and provide one explicit edge control that collapses it into a stable icon rail. Do not auto-expand on hover.
+- Use one fixed icon column in both expanded and collapsed states so every navigation glyph retains its exact horizontal position. Omit a separate Workspace eyebrow and use slightly larger navigation icons for faster scanning.
+- Persist the user's collapsed/expanded preference in browser-local storage. The preference is presentational and does not require a backend or workspace contract.
+- Keep navigation routes, labels, active-page semantics, and keyboard access unchanged. In the compact rail, retain accessible link names and show the localized label on hover or keyboard focus.
+- Keep the MARKOS brand at the top, the six primary workspace destinations together, and Settings separated at the bottom. Do not add a decorative avatar or an inert profile control.
+- Use logical positioning and logical-edge active accents so the rail, collapse control, and tooltips mirror correctly in Arabic/RTL. Respect reduced-motion preferences and let the page canvas reflow rather than covering it.
+- Treat the supplied 21st.dev sidebar as a visual reference only. No source was reused; the implementation stays within the existing MARKOS application shell, route, token, icon, and Motion foundations.
+
+**Deferred**
+
+- Keep the existing compact narrow-screen navigation for now. A dedicated mobile navigation redesign belongs to the later mobile-management scope decision.
+
+### 2026-08-26 — Web typography weight
+
+**Accepted**
+
+- Remove the 900/`font-black` weight from the active MARKOS web UI because its dense glyphs reduce readability, especially in Arabic and compact controls.
+- Use 700/`font-bold` consistently for headings, important values, labels, and emphasized content. Preserve hierarchy through type size, spacing, contrast, and surface treatment rather than introducing a heavier weight.
+- This is a readability correction for the current type system, not approval of Inter or any other family as the permanent MARKOS typography. Font-family, bilingual pairing, scale, and role choices remain open to a focused foundation review.

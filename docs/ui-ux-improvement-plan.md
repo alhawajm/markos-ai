@@ -2,7 +2,7 @@
 
 - Status: interpreted working backlog
 - Started: 2026-08-23
-- Current focus: authenticated desktop sidebar and shell refinement after the accepted Calendar foundation
+- Current focus: freeze the accepted Calendar desktop baseline, then review the shared shell, palette, and typography before focused Create discovery and prototyping
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
@@ -24,6 +24,8 @@ Accepted UI-specific decisions belong in docs/ui-ux-decisions.md. Product behavi
 | Earlier UI documents still describe dark backgrounds and retired routes | Sunlit is the only active customer-facing visual direction. Preserve useful behavior and QA guidance, then archive the old documents. | Accepted direction |
 | UI work previously began from vague requests without a shared visual target | Use annotated references and a visually reviewed prototype for consequential layout or journey changes. | Accepted direction |
 | English-first composition can break in Arabic | Design and review English and Arabic together, including reading order, control direction, copy expansion, and locale formatting. | Accepted direction |
+| The current Sunlit palette was selected before enough product-wide color-system research | Revisit brand, neutral, surface, action, semantic-status, data-visualization, focus, and disabled colors as one accessible token system. Compare a small number of researched directions in representative dense and quiet screens before changing runtime tokens. | Prototype |
+| The current typography has not been evaluated as a bilingual product system | Review type families, Arabic/Latin pairing, numerals, weights, scale, density, licensing, loading, and fallback behavior. Test candidates in real MARKOS controls and content rather than approving a font from isolated specimens. | Prototype |
 
 ## Onboarding
 
@@ -70,18 +72,23 @@ The already accepted Create information architecture remains: an action hub firs
 | Problem or goal | Interpreted direction | State |
 | --- | --- | --- |
 | Week and Month require scrolling before the complete grid is visible | Fit the complete active calendar grid in the first desktop viewport at `1440x900 @ 1x` and `1366x768 @ 1x`. Keep the separate Unscheduled collection below Calendar and allow it to continue below the fold at the smaller viewport. | Accepted direction |
+| Three large summary cards duplicate the status filters and consume working space | Use a compact title/action row plus one larger-type filter toolbar. Embed the stable Ready, scheduled-this-week, and needs-attention counts in the matching filter controls. | Accepted direction |
 | Month needs useful density without tiny content cards | Keep cells titleless. Show total volume, at most three prioritized status markers, and one `+N` remainder; use the persistent filter row as the color key. | Accepted direction |
 | Day and Post Focus previously felt disconnected or slow | Preserve `Calendar → Day → Post` history, focus, and URL state while using short Motion transitions to explain scope changes. Keep reduced-motion behavior and eliminate heavy blur or broad layout work. | Accepted direction |
 | Statuses are difficult to distinguish in dense review states | Use semantic slate, blue, orange, green, rose, and violet markers with labels, icons, counts, and logical-edge accents on predominantly white surfaces. Treat the exact palette as reviewable design tokens, not immutable brand law. | Accepted direction |
 | Dragging could accelerate planning but an accidental move is dangerous | Keep drag-and-drop deferred until eligibility, activation, time selection, exact source/destination confirmation, cancellation, and accessible non-drag controls are designed together. | Later |
 
-## Shared shell and sidebar — next pass
+**Checkpoint — 2026-08-27:** Freeze the current desktop Calendar as the accepted working baseline. Its remaining source-aware motion polish, interrupted-transition hardening, mobile composition, and safeguarded drag-and-drop are separate future passes rather than incidental work during another page's refinement.
+
+## Shared shell and sidebar
 
 | Problem or goal | Interpreted direction | State |
 | --- | --- | --- |
-| The current desktop sidebar is visually heavy and uses more width than every task needs | Audit a compact desktop-first navigation treatment using the supplied 21st.dev example only as a visual reference. Preserve MARKOS routes and components; do not reuse the sample source. | Prototype |
-| Hover-driven automatic expansion can create motion and targeting friction | Do not adopt auto-expand by default. Compare a stable compact rail, a stable labeled sidebar, and an explicit user-controlled collapse only if each remains understandable without relying on hover. | Prototype |
-| Navigation must remain obvious in English and Arabic | Preserve visible active state, accessible names, keyboard navigation, RTL logical edges, and reliable access to Settings before choosing the final width or collapse behavior. | Accepted direction |
+| The current desktop sidebar is visually heavy and uses more width than every task needs | Keep a readable expanded default and provide an explicit persisted collapse into a stable icon rail. Let the page canvas reflow into the released space. | Accepted direction |
+| Navigation icons shift when the sidebar changes width | Keep one fixed icon column in both states, remove the Workspace eyebrow, and use slightly larger icons without changing route labels or active semantics. | Accepted direction |
+| Hover-driven automatic expansion can create motion and targeting friction | Do not auto-expand. Use one discoverable edge control; hover and keyboard focus reveal compact localized tooltips only. | Accepted direction |
+| Navigation must remain obvious in English and Arabic | Preserve visible active state, accessible link names, keyboard navigation, localized tooltips, RTL logical edges, and Settings anchored at the bottom. | Accepted direction |
+| A generic sample could add unnecessary framework and ownership overhead | Use the supplied 21st.dev component as a visual reference only. Keep the implementation inside the existing MARKOS shell and dependencies; do not reuse its source. | Accepted direction |
 
 ## Areas not yet reconstructed
 
@@ -89,9 +96,10 @@ The short written review did not capture all useful verbal feedback from the mee
 
 ## Suggested review order
 
-1. Establish the shared shell, hierarchy, naming, and reference workflow.
-2. Prototype the scaled-down onboarding journey.
-3. Refine Overview and Strategy around the weekly habit.
-4. Refine the locked Create action hub and Draft Editor.
-5. Apply the accepted patterns to Calendar, Insights, Business Profile, and Settings.
-6. Finish responsive, Arabic/RTL, accessibility, and cross-browser hardening across the connected journey.
+1. Close the Calendar checkpoint without reopening its deferred polish.
+2. Finish the shared desktop shell and run focused palette and bilingual typography explorations before changing global tokens or fonts.
+3. Run a short read-only Onboarding dependency audit to identify the business context Create can rely on; do not begin the wider Onboarding redesign in that audit.
+4. Research and prototype the locked Create action hub and Draft Editor around the daily solo-creator workflow, then implement one reviewed vertical slice.
+5. Return to Onboarding as a separately briefed product and data initiative covering required context, progressive collection, and document-assisted import.
+6. Refine Overview and Strategy around the recurring planning habit, then apply accepted patterns to Insights, Business Profile, and Settings.
+7. Complete responsive capability decisions, Arabic/RTL, accessibility, and cross-browser hardening across each connected journey.

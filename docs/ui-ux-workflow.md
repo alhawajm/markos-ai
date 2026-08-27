@@ -2,7 +2,7 @@
 
 - Status: active working method
 - Adopted: 2026-08-23
-- Updated: 2026-08-24
+- Updated: 2026-08-27
 - Visual foundation: docs/ui-design-foundation.md
 - UI decisions: docs/ui-ux-decisions.md
 
@@ -49,6 +49,20 @@ For each surface or interaction:
 Useful user input can be informal. A screenshot plus what feels wrong, what should remain, and what the user expected is enough; the implementation record should translate that into precise UI terms.
 
 Do not copy template code, sample data, brand identity, or interaction behavior wholesale. References may inform hierarchy, composition, density, component treatment, or motion while MARKOS retains its own contracts and identity.
+
+## Pass lifecycle and checkpoints
+
+Use one lightweight lifecycle for each consequential surface or connected workflow:
+
+1. Write a short initiative brief: user, job, outcome, scope, exclusions, important states, data dependencies, viewport, locale, and acceptance criteria.
+2. Audit the mounted experience and current contracts before collecting references.
+3. Time-box focused workflow and reference research around the unresolved decisions.
+4. Prototype the risky information architecture or interaction and pass the review gate below.
+5. Implement one connected vertical slice without silently expanding its product or backend scope.
+6. Run focused automated checks and browser-visible validation for the changed slice.
+7. Create a checkpoint: record the accepted baseline, evidence, known limitations, deferred work, and next handoff before committing it.
+
+A checkpoint may be intentionally good enough rather than final. Once a surface is frozen, do not keep making opportunistic corrections while another initiative is active. Reopen it through a new scoped pass with its own acceptance criteria. Urgent regressions and data-loss, accessibility, security, or broken-journey defects may interrupt a freeze; ordinary polish belongs in the deferred list.
 
 ## Figma review model
 

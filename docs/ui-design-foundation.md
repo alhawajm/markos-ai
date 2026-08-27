@@ -95,7 +95,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Typography
 
 - Inter is the current baseline because the preview inherits the application font stack.
-- Headings are bold, compact, and high contrast.
+- Headings are bold, compact, and high contrast. Do not use the 900/`font-black` weight in the active web UI; use 700/`font-bold` and create hierarchy through size, spacing, and color instead.
 - Body copy should normally remain around 1rem with comfortable line height.
 - Small utility text must retain sufficient size and contrast; muted gray text must not disappear beside large headings.
 - Keep readable line lengths, generally around 45–70 characters for explanatory copy.
@@ -144,7 +144,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
-- At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Strategy**, **Create**, **Calendar**, **Insights**, **Business Profile**, and **Settings**.
+- At large breakpoints, keep the desktop sidebar pinned to the viewport while the page canvas scrolls. It starts as a labeled navigation surface and may be collapsed explicitly into a compact icon rail; never make hover the only way to reveal or control it. Preserve accessible link names and keyboard/focus tooltips in the compact state, keep **Settings** anchored separately at the bottom, and store the user's display preference locally. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Strategy**, **Create**, **Calendar**, **Insights**, and **Business Profile**.
 - Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Strategy should put generation controls beside the current strategy; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
 - Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
