@@ -471,10 +471,6 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
     );
   }
 
-  function toggleFilter(filter: Exclude<CalendarFilter, null>) {
-    changeFilter(activeFilter === filter ? null : filter);
-  }
-
   function changeContentType(next: ContentType | null) {
     setContentTypeFilter(next);
     setSelectedRecordId(null);
@@ -669,10 +665,10 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
         inert={layer === "overview" ? undefined : true}
         transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
       >
-        <section className="sunlit-panel overflow-hidden rounded-[1.75rem] p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="sunlit-panel overflow-hidden rounded-[1.75rem] px-4 py-3.5 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <h1
-              className="font-display text-2xl font-black tracking-[-.035em] text-[var(--sunlit-ink)] outline-none sm:text-3xl"
+              className="font-display text-2xl font-bold tracking-[-.035em] text-[var(--sunlit-ink)] outline-none sm:text-3xl"
               ref={overviewFallbackFocusRef}
               tabIndex={-1}
             >
@@ -694,61 +690,59 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
               </Link>
             </div>
           </div>
-          <div aria-label={locale === "ar" ? "ملخص التقويم" : "Calendar summary"} className="mt-4 grid grid-cols-3 gap-2" role="group">
-            <CalendarMetric
-              active={activeFilter === "scheduled"}
-              icon={CalendarDays}
-              label={copy.scheduledThisWeek}
-              onClick={() => toggleFilter("scheduled")}
-              tone="scheduled"
-              value={scheduledThisWeek}
-            />
-            <CalendarMetric
-              active={activeFilter === "ready"}
-              icon={CheckCircle2}
-              label={copy.ready}
-              onClick={() => toggleFilter("ready")}
-              tone="ready"
-              value={readyCount}
-            />
-            <CalendarMetric
-              active={activeFilter === "failed"}
-              icon={AlertCircle}
-              label={copy.failed}
-              onClick={() => toggleFilter("failed")}
-              tone="failed"
-              value={failedCount}
-            />
-          </div>
-          <div className="mt-4 flex flex-col gap-3 border-t border-[var(--sunlit-line)] pt-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="mt-3 flex flex-col gap-3 border-t border-[var(--sunlit-line)] pt-3 xl:flex-row xl:items-center xl:justify-between">
             <div aria-label={locale === "ar" ? "تصفية حالة المحتوى" : "Filter by content status"} className="flex flex-wrap gap-1.5" role="group">
               {calendarFilterOptions(copy).map((option) => {
                 const selected = activeFilter === option.value;
                 const status = calendarFilterStatus(option.value);
+                const metric =
+                  option.value === "scheduled"
+                    ? {
+                        ariaLabel: `${option.label} · ${scheduledThisWeek} ${copy.scheduledThisWeek}`,
+                        scope: locale === "ar" ? "هذا الأسبوع" : "this week",
+                        value: scheduledThisWeek
+                      }
+                    : option.value === "ready"
+                      ? { ariaLabel: `${option.label} · ${readyCount}`, value: readyCount }
+                      : option.value === "failed"
+                        ? { ariaLabel: `${option.label} · ${failedCount}`, value: failedCount }
+                        : null;
                 return (
                   <button
+                    aria-label={metric?.ariaLabel}
                     aria-pressed={selected}
                     data-calendar-status={status ?? undefined}
                     className={
                       selected
-                        ? "inline-flex min-h-9 items-center gap-2 rounded-xl bg-[var(--sunlit-ink)] px-3 text-xs font-extrabold text-white"
-                        : "inline-flex min-h-9 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white px-3 text-xs font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
+                        ? "inline-flex min-h-10 items-center gap-2 rounded-xl bg-[var(--sunlit-ink)] px-3 text-base font-extrabold text-white"
+                        : "inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white px-3 text-base font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
                     }
                     key={option.value ?? "all"}
-                    onClick={() => changeFilter(option.value)}
+                    onClick={() => changeFilter(selected ? null : option.value)}
                     type="button"
                   >
                     {status ? <span aria-hidden="true" className={`h-2 w-2 rounded-full ${statusDotClass(status)}`} /> : null}
                     {option.label}
+                    {metric && status ? (
+                      <span
+                        aria-hidden="true"
+                        className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-bold leading-none ${
+                          selected ? "bg-white/15 text-white" : statusBadgeClass(status)
+                        }`}
+                      >
+                        {formatCompactCount(metric.value, locale)}
+                        {metric.scope ? <span className="font-extrabold opacity-75">{metric.scope}</span> : null}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
-            <label className="flex min-w-52 items-center gap-2 text-xs font-extrabold text-[var(--sunlit-muted)]">
+            <label className="flex min-w-52 items-center gap-2 text-base font-extrabold text-[var(--sunlit-muted)]">
               <span className="shrink-0">{copy.contentType}</span>
               <select
                 aria-label={copy.contentType}
-                className="sunlit-field min-h-10 min-w-0 flex-1 rounded-xl px-3 text-sm font-bold text-[var(--sunlit-ink)] outline-none"
+                className="sunlit-field min-h-10 min-w-0 flex-1 rounded-xl px-3 text-base font-bold text-[var(--sunlit-ink)] outline-none"
                 id="calendar-content-type-filter"
                 name="calendar-content-type"
                 onChange={(event) => changeContentType(event.target.value ? (event.target.value as ContentType) : null)}
@@ -767,7 +761,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
 
         <section className="sunlit-panel min-w-0 rounded-[1.75rem] p-4 sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <h2 className="text-xl font-black text-[var(--sunlit-ink)] sm:text-2xl">
+            <h2 className="text-xl font-bold text-[var(--sunlit-ink)] sm:text-2xl">
               {view === "week" ? formatWeekRange(weekDateKeys, locale) : formatMonthLabel(monthStartKey, locale)}
             </h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -997,7 +991,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="sunlit-eyebrow">{copy.cancelSchedule}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="calendar-cancel-title">
+                <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="calendar-cancel-title">
                   {copy.cancelConfirm}
                 </h2>
               </div>
@@ -1132,7 +1126,7 @@ function CalendarRecordFocus({
         <div className="mt-5 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="sunlit-eyebrow">{formatWeekday(dateKey, locale)}</p>
-            <h3 className="mt-1 text-xl font-black leading-7 text-[var(--sunlit-ink)]">{formatCompactDate(dateKey, locale)}</h3>
+            <h3 className="mt-1 text-xl font-bold leading-7 text-[var(--sunlit-ink)]">{formatCompactDate(dateKey, locale)}</h3>
             <p className="mt-1 text-xs font-bold text-[var(--sunlit-muted)]">{formatItemCount(records.length, locale)}</p>
           </div>
           <div className="flex shrink-0 gap-1.5">
@@ -1193,7 +1187,7 @@ function CalendarRecordFocus({
                     <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(dayRecord.status)}`} />
                     {statusLabel(dayRecord.status, locale)}
                   </span>
-                  <span className="mt-1 block truncate text-xs font-black text-[var(--sunlit-ink)]">{contentTitle(dayRecord, locale)}</span>
+                  <span className="mt-1 block truncate text-xs font-bold text-[var(--sunlit-ink)]">{contentTitle(dayRecord, locale)}</span>
                   <span className="mt-1 block text-[10px] font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(dayRecord, copy, locale)}</span>
                 </span>
                 {selected ? (
@@ -1234,7 +1228,7 @@ function CalendarRecordFocus({
               <p className="mt-3 text-xs font-bold text-[var(--sunlit-muted)]">
                 {copy.calendarTitle} / {formatDayHeading(dateKey, locale)} / {formatCalendarTime(temporalContext, locale)}
               </p>
-              <h2 className="mt-1 text-xl font-black text-[var(--sunlit-ink)]" id="calendar-focus-title">
+              <h2 className="mt-1 text-xl font-bold text-[var(--sunlit-ink)]" id="calendar-focus-title">
                 {copy.details}
               </h2>
             </div>
@@ -1315,7 +1309,7 @@ function CalendarDetails({
           <span className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${statusBadgeClass(record.status)}`}>{statusLabel(record.status, locale)}</span>
           <span className="text-xs font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
         </div>
-        <h3 className="mt-4 text-2xl font-black leading-8 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</h3>
+        <h3 className="mt-4 text-2xl font-bold leading-8 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</h3>
         {caption ? <p className="mt-3 whitespace-pre-line text-sm font-medium leading-6 text-[var(--sunlit-ink-soft)]">{caption}</p> : null}
         <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[var(--sunlit-muted)]">
           <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{contentTypeLabel(record, locale)}</span>
@@ -1428,7 +1422,7 @@ function CalendarDayView({
           <span className="hidden sm:inline">{copy.backToCalendar}</span>
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <h2 className="text-xl font-black leading-7 text-[var(--sunlit-ink)] sm:text-2xl" id="calendar-focus-title">
+          <h2 className="text-xl font-bold leading-7 text-[var(--sunlit-ink)] sm:text-2xl" id="calendar-focus-title">
             {formatDayHeading(dateKey, locale)}
           </h2>
           <p className="mt-1 text-sm font-bold text-[var(--sunlit-muted)]">{formatItemCount(records.length, locale)}</p>
@@ -1530,7 +1524,7 @@ function UnscheduledCollection({
             <CalendarDays size={19} />
           </span>
           <span className="min-w-0">
-            <span className="block font-black text-[var(--sunlit-ink)]">
+            <span className="block font-bold text-[var(--sunlit-ink)]">
               {copy.unscheduled} <span className="text-[var(--sunlit-muted)]">· {formatCompactCount(total, locale)}</span>
             </span>
             <span className="mt-0.5 block text-xs font-semibold leading-5 text-[var(--sunlit-muted)]">{copy.unscheduledDescription}</span>
@@ -1550,7 +1544,7 @@ function UnscheduledCollection({
                 >
                   <span className="flex items-start justify-between gap-3">
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-black text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
+                      <span className="block truncate text-sm font-bold text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
                       <span className="mt-1 block text-xs font-bold text-[var(--sunlit-muted)]">
                         {contentTypeLabel(record, locale)} · {copy.updated} {formatCalendarDateTime(record.updatedAt, locale)}
                       </span>
@@ -1632,8 +1626,8 @@ function CalendarDayColumn({
         <span
           className={
             isToday
-              ? "mt-1 inline-grid h-8 w-8 place-items-center rounded-full bg-[var(--sunlit-coral)] text-sm font-black text-white"
-              : "mt-1 block text-lg font-black text-[var(--sunlit-ink)]"
+              ? "mt-1 inline-grid h-8 w-8 place-items-center rounded-full bg-[var(--sunlit-coral)] text-sm font-bold text-white"
+              : "mt-1 block text-lg font-bold text-[var(--sunlit-ink)]"
           }
         >
           {Number(dateKey.slice(-2))}
@@ -1711,11 +1705,17 @@ function MonthOverview({
     <div className="mt-4">
       <div aria-label={locale === "ar" ? "تقويم الشهر" : "Month calendar"} className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {weekdayKeys.map((dateKey) => (
-          <div className="pb-1 text-center text-[10px] font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-muted)] sm:text-xs" key={dateKey}>
+          <div
+            className={`pb-1 text-center font-extrabold text-[var(--sunlit-muted)] ${
+              locale === "ar" ? "text-base tracking-normal" : "text-sm uppercase tracking-[.08em]"
+            }`}
+            key={dateKey}
+          >
             {formatWeekday(dateKey, locale)}
           </div>
         ))}
         {dateKeys.map((dateKey) => {
+          const dayNumber = Number(dateKey.slice(-2));
           const dayRecords = recordsByDate.get(dateKey) ?? [];
           const currentMonth = dateKey.slice(0, 7) === anchorMonthKey.slice(0, 7);
           const selected = dateKey === selectedDateKey;
@@ -1727,6 +1727,7 @@ function MonthOverview({
           const visibleStatuses = new Set(visibleStatusGroups.map((group) => group.status));
           const hiddenItemCount = statusGroups.filter((group) => !visibleStatuses.has(group.status)).reduce((total, group) => total + group.count, 0);
           const statusSummary = statusGroups.map((group) => `${statusLabel(group.status, locale)}: ${formatCompactCount(group.count, locale)}`).join(", ");
+          const dayNumberSize = locale === "ar" ? "text-lg" : "text-base";
 
           return (
             <m.button
@@ -1746,18 +1747,18 @@ function MonthOverview({
                 <span
                   className={
                     today
-                      ? "grid h-6 w-6 place-items-center rounded-full bg-[var(--sunlit-coral)] text-[11px] font-black text-white"
+                      ? `grid h-7 w-7 place-items-center rounded-full bg-[var(--sunlit-coral)] font-bold leading-none text-white ${dayNumberSize}`
                       : currentMonth
-                        ? "text-xs font-black text-[var(--sunlit-ink)]"
-                        : "text-xs font-bold text-[var(--sunlit-muted)] opacity-45"
+                        ? `font-bold leading-none text-[var(--sunlit-ink)] ${dayNumberSize}`
+                        : `font-bold leading-none text-[var(--sunlit-muted)] opacity-45 ${dayNumberSize}`
                   }
                 >
-                  {formatCompactCount(Number(dateKey.slice(-2)), locale)}
+                  {formatCompactCount(dayNumber, locale)}
                 </span>
                 {dayRecords.length > 0 ? (
                   <span
                     aria-hidden="true"
-                    className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--sunlit-paper-deep)] px-1.5 text-[9px] font-black text-[var(--sunlit-ink-soft)]"
+                    className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--sunlit-paper-deep)] px-1.5 text-[9px] font-bold text-[var(--sunlit-ink-soft)]"
                   >
                     {formatCompactCount(dayRecords.length, locale)}
                   </span>
@@ -1767,7 +1768,7 @@ function MonthOverview({
                 <span aria-hidden="true" className="mt-2 flex flex-wrap gap-1">
                   {visibleStatusGroups.map((group) => (
                     <span
-                      className={`inline-flex min-h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-black ${monthStatusMarkerClass(group.status)}`}
+                      className={`inline-flex min-h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-bold ${monthStatusMarkerClass(group.status)}`}
                       key={group.status}
                     >
                       <MonthStatusGlyph size={10} status={group.status} />
@@ -1775,7 +1776,7 @@ function MonthOverview({
                     </span>
                   ))}
                   {hiddenItemCount > 0 ? (
-                    <span className="inline-flex min-h-5 items-center rounded-md bg-[var(--sunlit-paper-deep)] px-1.5 text-[9px] font-black text-[var(--sunlit-muted)]">
+                    <span className="inline-flex min-h-5 items-center rounded-md bg-[var(--sunlit-paper-deep)] px-1.5 text-[9px] font-bold text-[var(--sunlit-muted)]">
                       +{formatCompactCount(hiddenItemCount, locale)}
                     </span>
                   ) : null}
@@ -1832,62 +1833,12 @@ function CalendarDayRecordButton({
           <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-extrabold ${statusBadgeClass(record.status)}`}>
             {statusLabel(record.status, locale)}
           </span>
-          <span className="mt-2 block min-w-0 text-sm font-black leading-5 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
+          <span className="mt-2 block min-w-0 text-sm font-bold leading-5 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
           <span className="mt-1.5 block text-xs font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
         </span>
         <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)]">
           {locale === "ar" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </span>
-      </span>
-    </button>
-  );
-}
-
-function CalendarMetric({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-  tone,
-  value
-}: {
-  active: boolean;
-  icon: typeof CalendarDays;
-  label: string;
-  onClick: () => void;
-  tone: "failed" | "ready" | "scheduled";
-  value: number;
-}) {
-  const styles = {
-    failed: {
-      active: "border-[#FDA4AF] bg-[var(--sunlit-status-failed-soft)] shadow-[0_8px_24px_rgb(225_29_72_/_10%)]",
-      icon: "bg-[var(--sunlit-status-failed-soft)] text-[var(--sunlit-status-failed)]"
-    },
-    ready: {
-      active: "border-[#93C5FD] bg-[var(--sunlit-status-ready-soft)] shadow-[0_8px_24px_rgb(37_99_235_/_10%)]",
-      icon: "bg-[var(--sunlit-status-ready-soft)] text-[var(--sunlit-status-ready)]"
-    },
-    scheduled: {
-      active: "border-[#FDBA74] bg-[var(--sunlit-status-scheduled-soft)] shadow-[0_8px_24px_rgb(234_88_12_/_10%)]",
-      icon: "bg-[var(--sunlit-status-scheduled-soft)] text-[var(--sunlit-status-scheduled)]"
-    }
-  }[tone];
-
-  return (
-    <button
-      aria-pressed={active}
-      className={`flex min-h-[4.75rem] items-center gap-2 rounded-2xl border px-2 py-2.5 text-start transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] sm:min-h-16 sm:gap-3 sm:px-3 ${
-        active ? styles.active : "border-[var(--sunlit-line)] bg-white/70"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl sm:h-9 sm:w-9 ${styles.icon}`}>
-        <Icon size={18} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-lg font-black leading-none text-[var(--sunlit-ink)] sm:text-xl">{value}</span>
-        <span className="mt-1 block text-[11px] font-bold leading-4 text-[var(--sunlit-muted)] sm:text-xs">{label}</span>
       </span>
     </button>
   );

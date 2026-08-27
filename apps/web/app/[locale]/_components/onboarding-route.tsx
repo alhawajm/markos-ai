@@ -80,7 +80,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
     <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
       <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
         <span className="mx-auto block h-16 w-16 animate-pulse rounded-2xl bg-[var(--sunlit-aqua-soft)] shadow-[inset_0_0_0_1px_rgb(33_191_174_/_22%)]" />
-        <h1 className="mt-7 text-3xl font-black text-[var(--sunlit-ink)]">
+        <h1 className="mt-7 text-3xl font-bold text-[var(--sunlit-ink)]">
           {status === "failed"
             ? locale === "ar"
               ? "تعذر فتح الإعداد"
@@ -97,7 +97,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
               : "Checking your workspace before opening the onboarding steps."}
         </p>
         {status === "failed" ? (
-          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-black" onClick={() => setAttempt((current) => current + 1)} type="button">
+          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-bold" onClick={() => setAttempt((current) => current + 1)} type="button">
             {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
           </button>
         ) : null}

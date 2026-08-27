@@ -504,6 +504,41 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar" }).waitFor();
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
+
+    const desktopSidebar = page.locator("[data-app-sidebar]");
+    const desktopShell = page.locator("[data-sidebar-collapsed]");
+    const expandedSidebarBox = await desktopSidebar.boundingBox();
+    if (!expandedSidebarBox) throw new Error("Expected the desktop sidebar to be visible.");
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+    );
+    await expect(desktopShell.getAttribute("data-sidebar-collapsed")).resolves.toBe("true");
+    await expect(page.evaluate(() => localStorage.getItem("markos.sidebar.collapsed"))).resolves.toBe("true");
+    const collapsedSidebarBox = await desktopSidebar.boundingBox();
+    if (!collapsedSidebarBox) throw new Error("Expected the collapsed desktop sidebar to be visible.");
+    expect(collapsedSidebarBox.width).toBeLessThan(expandedSidebarBox.width);
+
+    const collapsedCalendarLink = page.getByRole("link", { name: "Calendar", exact: true });
+    const expandSidebarButton = page.getByRole("button", { name: "Expand sidebar" });
+    await expect(expandSidebarButton.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(collapsedCalendarLink.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector<HTMLElement>('[data-sidebar-tooltip="calendar"]')!).opacity === "1");
+    await expect(collapsedCalendarLink.getAttribute("aria-current")).resolves.toBe("page");
+    await expandSidebarButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "false" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? 0) > 180
+    );
+    await expect(page.evaluate(() => localStorage.getItem("markos.sidebar.collapsed"))).resolves.toBe("false");
+
     const firstDayControl = page.getByRole("button", { name: /^Open day:/ }).first();
     const desktopWeekDay = await firstDayControl.locator("xpath=ancestor::section[1]").boundingBox();
     expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(350);
@@ -525,8 +560,7 @@ describe("presentation journey", () => {
     await page.getByLabel("Content type").selectOption({ label: "All types" });
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("type"));
 
-    const summaryGroup = page.getByRole("group", { name: "Calendar summary" });
-    const readyCounter = summaryGroup.getByRole("button", { name: /Ready to schedule/ });
+    const readyCounter = statusFilters.getByRole("button", { name: /Ready to schedule/ });
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     await readyCounter.click();
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("true");
@@ -623,7 +657,7 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Close" }).click();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
     await focusSurface.waitFor({ state: "detached" });
-    const scheduledCounter = summaryGroup.getByRole("button", { name: /Scheduled this week/ });
+    const scheduledCounter = statusFilters.getByRole("button", { name: /Scheduled in MARKOS/ });
     await scheduledCounter.click();
     await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("true");
     await page.getByRole("button", { name: /Scheduled in MARKOS: Product story scheduled/ }).click();
@@ -671,6 +705,34 @@ describe("presentation journey", () => {
     await expect(page.getByRole("group", { name: "تصفية حالة المحتوى" }).isVisible()).resolves.toBe(true);
     await expect(page.getByLabel("نوع المحتوى").isVisible()).resolves.toBe(true);
     await expect(page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).resolves.toBe(false);
+
+    await page.getByRole("button", { name: "طي الشريط الجانبي" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+    );
+    const rtlSidebarGeometry = await desktopSidebar.evaluate((element) => {
+      const sidebar = element.getBoundingClientRect();
+      const activeLink = element.querySelector<HTMLElement>('[aria-current="page"]');
+      const activeAccentStyle = activeLink ? getComputedStyle(activeLink, "::before") : null;
+      return {
+        activeAccentLeft: Number.parseFloat(activeAccentStyle?.left ?? "0"),
+        activeAccentRight: Number.parseFloat(activeAccentStyle?.right ?? "0"),
+        activeAccentWidth: Number.parseFloat(activeAccentStyle?.width ?? "0"),
+        right: sidebar.right,
+        viewportWidth: window.innerWidth
+      };
+    });
+    expect(Math.abs(rtlSidebarGeometry.viewportWidth - rtlSidebarGeometry.right)).toBeLessThan(1);
+    expect(rtlSidebarGeometry.activeAccentRight).toBeLessThan(rtlSidebarGeometry.activeAccentLeft);
+    expect(rtlSidebarGeometry.activeAccentWidth).toBeGreaterThanOrEqual(3);
+    await page.getByRole("button", { name: "توسيع الشريط الجانبي" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "false" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? 0) > 180
+    );
     await page.screenshot({ path: "evidence/sunlit-calendar-rtl-desktop.png", fullPage: true });
 
     await page.emulateMedia({ reducedMotion: "reduce" });

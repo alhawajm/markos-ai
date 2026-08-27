@@ -39,7 +39,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <Sparkles size={25} />
           </span>
-          <h1 className="mt-6 text-2xl font-black text-[var(--sunlit-ink)]">
+          <h1 className="mt-6 text-2xl font-bold text-[var(--sunlit-ink)]">
             {sessionCheckFailed
               ? locale === "ar"
                 ? "تعذر فتح الإعدادات"
@@ -49,7 +49,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
                 : "Opening Settings"}
           </h1>
           {sessionCheckFailed ? (
-            <button className="sunlit-primary mt-5 rounded-xl px-5 py-3 font-black" onClick={checkSession} type="button">
+            <button className="sunlit-primary mt-5 rounded-xl px-5 py-3 font-bold" onClick={checkSession} type="button">
               {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
             </button>
           ) : null}
@@ -78,7 +78,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
                 <Sparkles size={18} />
               </span>
               <span className="hidden sm:block">
-                <span className="block text-sm font-black text-[var(--sunlit-ink)]">MARKOS AI</span>
+                <span className="block text-sm font-bold text-[var(--sunlit-ink)]">MARKOS AI</span>
                 <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{locale === "ar" ? "إعدادات مساحة العمل" : "Workspace settings"}</span>
               </span>
             </Link>

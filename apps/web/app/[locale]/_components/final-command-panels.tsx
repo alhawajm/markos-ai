@@ -612,7 +612,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">
               {copy.today} {workspaceName} · {now}
             </p>
-            <h2 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
+            <h2 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -680,7 +680,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="sunlit-eyebrow">{copy.next}</p>
-              <h2 className="mt-2 font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
+              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
               <a className="sunlit-primary mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
                 {missionCta} <ArrowRight size={17} />
@@ -694,9 +694,9 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
               <Brain size={22} />
             </span>
-            <span className="text-3xl font-black text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
+            <span className="text-3xl font-bold text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
           </div>
-          <h2 className="mt-5 text-lg font-black text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
+          <h2 className="mt-5 text-lg font-bold text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
             <div className="h-full rounded-full bg-[var(--sunlit-aqua)]" style={{ width: `${liveState.vaultScore?.score ?? 0}%` }} />
           </div>
@@ -707,7 +707,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
       </section>
 
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
+        <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
         <a className="inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/content-studio`}>
           {copy.openAll} <ArrowRight size={17} />
         </a>
@@ -734,14 +734,14 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
                   {statusLabel(item.status)}
                 </span>
               </div>
-              <h3 className="mt-5 line-clamp-2 font-black leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
+              <h3 className="mt-5 line-clamp-2 font-bold leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
               <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--sunlit-muted)]">{recordSubtitle(item)}</p>
             </a>
           ))}
         </section>
       ) : (
         <article className="sunlit-panel-soft rounded-[1.75rem] p-6 xl:p-7">
-          <p className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentEmpty}</p>
+          <p className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.contentEmpty}</p>
           <a
             className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
             href={`/${locale}/app/content-studio`}
@@ -780,7 +780,7 @@ function SunlitMetricCard({
         <span className={`grid h-11 w-11 place-items-center rounded-xl ${toneClass}`}>
           <Icon size={20} />
         </span>
-        <strong className="text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
+        <strong className="text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
       </div>
       <p className="mt-5 font-extrabold text-[var(--sunlit-ink)]">{label}</p>
       <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--sunlit-muted)]">{note}</p>
@@ -1942,7 +1942,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="sunlit-eyebrow">{locale === "ar" ? "محرر المسودة" : "Draft editor"}</p>
-                <h1 className="mt-1 truncate font-display text-xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
+                <h1 className="mt-1 truncate font-display text-xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
                   {currentRecord ? contentPipelineTitle(currentRecord, locale) : locale === "ar" ? "مسودة منشور جديدة" : "New post draft"}
                 </h1>
               </div>
@@ -1960,7 +1960,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           ) : (
             <>
               <p className="sunlit-eyebrow">{studioHomeCopy.eyebrow}</p>
-              <h1 className="mt-1 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{studioHomeCopy.title}</h1>
+              <h1 className="mt-1 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{studioHomeCopy.title}</h1>
               <p className="mt-1 max-w-3xl text-base leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.subtitle}</p>
             </>
           )}
@@ -1982,7 +1982,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 ].map(([label, value, className]) => (
                   <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${className}`} key={label}>
                     <span className="text-sm font-extrabold">{label}</span>
-                    <span className="text-xl font-black">{value}</span>
+                    <span className="text-xl font-bold">{value}</span>
                   </div>
                 ))}
               </div>
@@ -1996,7 +1996,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     <Pencil size={21} />
                   </span>
                   <span>
-                    <span className="block text-lg font-black">{studioHomeCopy.blankAction}</span>
+                    <span className="block text-lg font-bold">{studioHomeCopy.blankAction}</span>
                     <span className="mt-1 block text-sm font-semibold leading-6 opacity-85">{studioHomeCopy.blankDescription}</span>
                   </span>
                 </button>
@@ -2034,7 +2034,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       <Calendar size={21} />
                     </span>
                     <span>
-                      <span className="block font-black text-[var(--sunlit-ink)]">{studioHomeCopy.calendarAction}</span>
+                      <span className="block font-bold text-[var(--sunlit-ink)]">{studioHomeCopy.calendarAction}</span>
                       <span className="mt-1 block text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.calendarDescription}</span>
                     </span>
                   </span>
@@ -2049,7 +2049,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     <Wand2 size={22} />
                   </span>
                   <div>
-                    <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{studioHomeCopy.aiTitle}</h2>
+                    <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{studioHomeCopy.aiTitle}</h2>
                     <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
                       {locale === "ar" ? "اختر النوع ثم وضّح الهدف والجمهور والعرض." : "Choose a format, then explain the objective, audience, and offer."}
                     </p>
@@ -2100,7 +2100,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             {homePanel === "IDEAS" ? (
               <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
                 <p className="sunlit-eyebrow">{locale === "ar" ? "أفكار المحتوى" : "Content ideas"}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">{locale === "ar" ? "اختر فكرة لتطويرها" : "Choose an idea to develop"}</h2>
+                <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{locale === "ar" ? "اختر فكرة لتطويرها" : "Choose an idea to develop"}</h2>
                 <div className="mt-5 grid gap-3">
                   {contentIdeaStarters.map(([title, description]) => (
                     <button
@@ -2109,7 +2109,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       onClick={() => openAiDraft(`${title}. ${description}`)}
                       type="button"
                     >
-                      <span className="font-black text-[var(--sunlit-ink)]">{title}</span>
+                      <span className="font-bold text-[var(--sunlit-ink)]">{title}</span>
                       <span className="mt-1 block text-sm leading-6 text-[var(--sunlit-muted)]">{description}</span>
                     </button>
                   ))}
@@ -2132,7 +2132,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
-                      <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="content-pipeline-heading">
+                      <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="content-pipeline-heading">
                         {contentPipelineCopy.heading}
                       </h2>
                       <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
@@ -2331,7 +2331,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             <section>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Images</h2>
+                  <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">Images</h2>
                   <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate one with MARKOS AI.</p>
                 </div>
                 <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
@@ -2725,7 +2725,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">Instagram performance</p>
-            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
             <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -2771,7 +2771,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
           <p className="sunlit-eyebrow">Reach over time</p>
-          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Daily Instagram reach</h2>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">Daily Instagram reach</h2>
           {daily.length > 0 ? (
             <div className="mt-7 flex h-72 items-end gap-2 rounded-2xl bg-[var(--sunlit-paper)] px-5 pb-5 pt-8">
               {daily.map((item) => (
@@ -2799,7 +2799,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
         </article>
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
           <p className="sunlit-eyebrow">Content signals</p>
-          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Top content</h2>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">Top content</h2>
           <div className="mt-6 grid gap-3">
             {summary?.topContent.length ? (
               summary.topContent.slice(0, 4).map((item, index) => (
@@ -2809,7 +2809,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                   key={item.contentItemId}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-black text-[var(--sunlit-pink)]">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-bold text-[var(--sunlit-pink)]">
                       {index + 1}
                     </span>
                     <div className="min-w-0">
@@ -2925,7 +2925,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-center">
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">{copy.modules}</p>
-            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
             <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
             <a
               className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
@@ -2942,7 +2942,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                   {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
                 </p>
               </div>
-              <p className="text-3xl font-black text-[var(--sunlit-pink)]">{score}%</p>
+              <p className="text-3xl font-bold text-[var(--sunlit-pink)]">{score}%</p>
             </div>
             <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
               <div className="h-full rounded-full bg-[var(--sunlit-aqua)] transition-[width]" style={{ width: `${score}%` }} />
@@ -2966,7 +2966,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
       ) : null}
 
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.modules}</h2>
+        <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.modules}</h2>
         <span className="text-sm font-bold text-[var(--sunlit-muted)]">
           {completedCount}/{modules.length}
         </span>
@@ -2993,7 +2993,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                   {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
                 </span>
                 <div>
-                  <h3 className="text-lg font-black text-[var(--sunlit-ink)]">{module.title}</h3>
+                  <h3 className="text-lg font-bold text-[var(--sunlit-ink)]">{module.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
                   <p className="mt-4 text-xs font-bold text-[var(--sunlit-muted)]">
                     {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}
@@ -3019,7 +3019,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <Lightbulb size={20} />
         </span>
         <div>
-          <h2 className="font-black text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
+          <h2 className="font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--sunlit-muted)]">
             Changes to approved business context can influence future Strategy and content. Existing saved work remains unchanged until you create a new
             version.
@@ -3463,7 +3463,7 @@ function StudioHomeAction({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-3">
-            <span className="font-black text-[var(--sunlit-ink)]">{label}</span>
+            <span className="font-bold text-[var(--sunlit-ink)]">{label}</span>
             {badge === undefined ? null : (
               <span className="rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">{badge}</span>
             )}
@@ -3497,7 +3497,7 @@ function EditorBlock({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
+        <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{title}</h2>
         {action ? (
           <button
             className="text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-45"
@@ -3552,7 +3552,7 @@ function ConfirmationDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="sunlit-eyebrow">Confirmation required</p>
-            <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="studio-confirmation-title">
+            <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="studio-confirmation-title">
               {title}
             </h2>
           </div>
@@ -3643,7 +3643,7 @@ function UnsavedDraftDialog({
         role="dialog"
       >
         <p className="sunlit-eyebrow">{copy.eyebrow}</p>
-        <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="unsaved-draft-title">
+        <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="unsaved-draft-title">
           {copy.title}
         </h2>
         <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]" id="unsaved-draft-description">
@@ -3752,7 +3752,7 @@ function InstagramPreview({
           <div className="flex min-w-0 items-center gap-3">
             <span
               aria-label="Workspace avatar placeholder"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--sunlit-yellow)] via-[var(--sunlit-coral)] to-[var(--sunlit-pink)] text-sm font-black text-white"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--sunlit-yellow)] via-[var(--sunlit-coral)] to-[var(--sunlit-pink)] text-sm font-bold text-white"
             >
               {cleanBrand.slice(0, 1).toUpperCase()}
             </span>

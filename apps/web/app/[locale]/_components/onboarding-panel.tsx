@@ -754,7 +754,7 @@ export function OnboardingPanel({ editMode, initialDraft, locale }: { editMode: 
               <Sparkles size={20} strokeWidth={2.4} />
             </span>
             <span>
-              <span className="block font-display text-xl font-black tracking-tight">MARKOS AI</span>
+              <span className="block font-display text-xl font-bold tracking-tight">MARKOS AI</span>
               <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{copy.progress(step, steps.length)}</span>
             </span>
           </a>
@@ -1263,7 +1263,7 @@ function ReviewStep({
           <span className="absolute inset-2 animate-pulse rounded-3xl border border-[rgb(33_191_174_/_28%)] bg-[var(--sunlit-aqua-soft)]" />
           <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} strokeWidth={1.8} />
         </div>
-        <h2 className="font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.generatingTitle}</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.generatingTitle}</h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--sunlit-muted)] sm:text-base">{copy.profile.generatingBody}</p>
         <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
           {[copy.story.title, copy.audience.title, copy.brand.title].map((label, index) => (
@@ -1310,7 +1310,7 @@ function ReviewStep({
             <Sparkles size={13} />
             {copy.profile.draftEyebrow}
           </span>
-          <h2 className="mt-4 font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.draftTitle}</h2>
+          <h2 className="mt-4 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.draftTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.profile.draftBody}</p>
         </div>
         <div className="inline-flex shrink-0 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1" aria-label="Profile language">
@@ -1346,7 +1346,7 @@ function ReviewStep({
             {copy.profile.businessName}
           </span>
           <input
-            className="mt-2 w-full bg-transparent font-display text-2xl font-black text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
+            className="mt-2 w-full bg-transparent font-display text-2xl font-bold text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
             dir="auto"
             onChange={(event) => updateBusinessName(event.target.value)}
             value={profile.businessName}
@@ -1422,7 +1422,7 @@ interface StepProps {
 function StepHeading({ body, center = false, title }: { body: string; center?: boolean; title: string }) {
   return (
     <div className={center ? "mb-6 text-center sm:mb-8" : "mb-6 sm:mb-8"}>
-      <h2 className="font-display text-[26px] font-black tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{title}</h2>
+      <h2 className="font-display text-[26px] font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{title}</h2>
       <p className="mt-2 max-w-3xl text-[15px] leading-7 text-[var(--sunlit-muted)]">{body}</p>
     </div>
   );

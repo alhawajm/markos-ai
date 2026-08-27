@@ -117,6 +117,20 @@
   background: var(--sunlit-status-review-soft);
 }
 
+.sunlit-sidebar-link-active {
+  border-inline-start-color: var(--sunlit-coral);
+}
+
+.sunlit-sidebar-link-active::before {
+  position: absolute;
+  inset-block: 0.55rem;
+  inset-inline-start: -1px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--sunlit-coral);
+  content: "";
+}
+
 .sunlit-panel-dark {
   border: 1px solid rgb(255 255 255 / 10%);
   background:

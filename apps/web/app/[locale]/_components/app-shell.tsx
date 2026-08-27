@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Brain, CalendarDays, Home, Palette, Settings, Sparkles, Target } from "lucide-react";
+import { BarChart3, Brain, CalendarDays, ChevronLeft, ChevronRight, Home, Palette, Settings, Sparkles, Target, type LucideIcon } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import {
   CampaignBuilderPanel,
@@ -29,28 +29,28 @@ export type SectionSlug =
   | "settings"
   | "strategy";
 
-type Icon = ComponentType<{
-  className?: string;
-  size?: number;
-  strokeWidth?: number;
-}>;
-
-const navItems: Array<{
-  icon: Icon;
+type NavItem = {
+  icon: LucideIcon;
   slug: SectionSlug;
-}> = [
+};
+
+const primaryNavItems: NavItem[] = [
   { icon: Home, slug: "dashboard" },
   { icon: Target, slug: "strategy" },
   { icon: Palette, slug: "content-studio" },
   { icon: CalendarDays, slug: "calendar" },
   { icon: BarChart3, slug: "analytics" },
-  { icon: Brain, slug: "knowledge" },
-  { icon: Settings, slug: "settings" }
+  { icon: Brain, slug: "knowledge" }
 ];
+const settingsNavItem: NavItem = { icon: Settings, slug: "settings" };
+const navItems: NavItem[] = [...primaryNavItems, settingsNavItem];
+const SIDEBAR_COLLAPSED_KEY = "markos.sidebar.collapsed";
 
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarPreferenceReady, setSidebarPreferenceReady] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
     setSessionCheckFailed(false);
@@ -73,6 +73,31 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
     mobileNavRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" });
   }, [activeSection, locale, sessionChecked]);
 
+  useEffect(() => {
+    let preferenceReadyFrame = 0;
+    try {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
+    } catch {
+      // A local display preference is optional when browser storage is unavailable.
+    } finally {
+      preferenceReadyFrame = window.requestAnimationFrame(() => setSidebarPreferenceReady(true));
+    }
+
+    return () => window.cancelAnimationFrame(preferenceReadyFrame);
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Keep the in-memory choice even when browser storage is unavailable.
+      }
+      return next;
+    });
+  }, []);
+
   if (!sessionChecked) {
     return (
       <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
@@ -80,7 +105,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <Sparkles size={28} />
           </span>
-          <h1 className="mt-7 text-3xl font-black text-[var(--sunlit-ink)]">
+          <h1 className="mt-7 text-3xl font-bold text-[var(--sunlit-ink)]">
             {sessionCheckFailed ? (locale === "ar" ? "تعذر فتح MARKOS" : "Could not open MARKOS") : locale === "ar" ? "جارٍ فتح MARKOS" : "Opening MARKOS"}
           </h1>
           <p className="mt-3 text-base leading-relaxed text-[var(--sunlit-muted)]">
@@ -93,7 +118,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
                 : "Checking your workspace session before loading the command center."}
           </p>
           {sessionCheckFailed ? (
-            <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-black" onClick={checkSession} type="button">
+            <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-bold" onClick={checkSession} type="button">
               {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
             </button>
           ) : null}
@@ -102,56 +127,63 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
     );
   }
 
+  const SidebarToggleIcon = sidebarCollapsed ? (locale === "ar" ? ChevronLeft : ChevronRight) : locale === "ar" ? ChevronRight : ChevronLeft;
+
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <div className="grid min-h-screen lg:grid-cols-[17.5rem_minmax(0,1fr)]">
+      <div
+        className={`grid min-h-screen ${sidebarCollapsed ? "lg:grid-cols-[5.75rem_minmax(0,1fr)]" : "lg:grid-cols-[15.25rem_minmax(0,1fr)]"} ${
+          sidebarPreferenceReady ? "lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out motion-reduce:transition-none" : ""
+        }`}
+        data-sidebar-collapsed={sidebarCollapsed}
+      >
         <aside
-          className="hidden border-e border-[var(--sunlit-line)] bg-white/80 px-5 py-6 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-y-auto"
+          className="relative hidden border-e border-[var(--sunlit-line)] bg-white/95 px-6 py-5 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-visible"
           data-app-sidebar
         >
-          <Link className="flex items-center gap-3 rounded-2xl px-2 py-2 text-[var(--sunlit-ink)]" href={`/${locale}/app`}>
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_12px_28px_rgb(32_33_43_/_18%)]">
+          <Link
+            className={`grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl text-[var(--sunlit-ink)] ${
+              sidebarCollapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
+            }`}
+            href={`/${locale}/app`}
+          >
+            <span className="grid h-[40px] w-[40px] shrink-0 place-items-center justify-self-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_10px_24px_rgb(32_33_43_/_16%)]">
               <Sparkles size={21} strokeWidth={2.2} />
             </span>
-            <span>
-              <span className="block text-lg font-black tracking-tight">MARKOS AI</span>
+            <span
+              className={`min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-150 motion-reduce:transition-none ${
+                sidebarCollapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"
+              }`}
+            >
+              <span className="block text-lg font-bold tracking-tight">MARKOS AI</span>
               <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{locale === "ar" ? "استوديو التسويق" : "Marketing studio"}</span>
             </span>
           </Link>
 
-          <nav aria-label="Primary" className="mt-10 grid gap-2">
-            <p className="px-3 text-[11px] font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-muted)]">
-              {locale === "ar" ? "مساحة العمل" : "Workspace"}
-            </p>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = item.slug === activeSection;
-              const label = sectionLabel(locale, item.slug);
-              return (
-                <Link
-                  aria-current={active ? "page" : undefined}
-                  className={
-                    active
-                      ? "flex min-h-12 items-center gap-3 rounded-xl border border-[rgb(217_63_122_/_22%)] bg-[var(--sunlit-paper-deep)] px-3.5 font-extrabold text-[var(--sunlit-ink)] shadow-[inset_4px_0_0_var(--sunlit-coral)]"
-                      : "flex min-h-12 items-center gap-3 rounded-xl border border-transparent px-3.5 font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line)] hover:bg-white"
-                  }
-                  href={localizedHref(locale, item.slug)}
-                  key={item.slug}
-                >
-                  <span
-                    className={
-                      active
-                        ? "grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--sunlit-pink)]"
-                        : "grid h-8 w-8 place-items-center rounded-lg bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)]"
-                    }
-                  >
-                    <Icon size={18} strokeWidth={active ? 2.3 : 1.9} />
-                  </span>
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
+          <button
+            aria-controls="markos-primary-navigation"
+            aria-expanded={!sidebarCollapsed}
+            aria-label={
+              sidebarCollapsed ? (locale === "ar" ? "توسيع الشريط الجانبي" : "Expand sidebar") : locale === "ar" ? "طي الشريط الجانبي" : "Collapse sidebar"
+            }
+            className="group absolute -end-[20px] top-[54px] z-50 grid h-[40px] w-[40px] place-items-center rounded-full outline-none"
+            onClick={toggleSidebar}
+            type="button"
+          >
+            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-white text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--sunlit-coral)] group-hover:text-[var(--sunlit-coral-deep)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--sunlit-aqua)]">
+              <SidebarToggleIcon aria-hidden="true" size={14} strokeWidth={2.4} />
+            </span>
+          </button>
+
+          <nav aria-label="Primary" className="mt-8 grid gap-2" id="markos-primary-navigation">
+            {primaryNavItems.map((item) => (
+              <SidebarNavLink activeSection={activeSection} collapsed={sidebarCollapsed} item={item} key={item.slug} locale={locale} />
+            ))}
           </nav>
+
+          <div className="mt-auto border-t border-[var(--sunlit-line)] pt-4">
+            <SidebarNavLink activeSection={activeSection} collapsed={sidebarCollapsed} item={settingsNavItem} locale={locale} />
+          </div>
         </aside>
 
         <section className="min-w-0">
@@ -164,7 +196,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               >
                 <Sparkles size={19} />
               </Link>
-              <p className="truncate text-lg font-black tracking-tight text-[var(--sunlit-ink)]">{sectionLabel(locale, activeSection)}</p>
+              <p className="truncate text-lg font-bold tracking-tight text-[var(--sunlit-ink)]">{sectionLabel(locale, activeSection)}</p>
             </div>
           </header>
 
@@ -214,6 +246,54 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </section>
       </div>
     </main>
+  );
+}
+
+function SidebarNavLink({ activeSection, collapsed, item, locale }: { activeSection: SectionSlug; collapsed: boolean; item: NavItem; locale: Locale }) {
+  const Icon = item.icon;
+  const active = item.slug === activeSection;
+  const label = sectionLabel(locale, item.slug);
+
+  return (
+    <Link
+      aria-current={active ? "page" : undefined}
+      className={`group relative grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border outline-none transition ${
+        collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
+      } ${
+        active
+          ? "sunlit-sidebar-link-active border-[rgb(255_102_90_/_26%)] bg-[var(--sunlit-paper-deep)] font-extrabold text-[var(--sunlit-ink)]"
+          : "border-transparent font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]"
+      }`}
+      href={localizedHref(locale, item.slug)}
+    >
+      <span
+        className={`grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg transition ${
+          active
+            ? "bg-white text-[var(--sunlit-coral-deep)] shadow-[0_5px_14px_rgb(255_102_90_/_10%)]"
+            : "text-[var(--sunlit-muted)] group-hover:text-[var(--sunlit-ink)]"
+        }`}
+      >
+        <Icon aria-hidden="true" size={20} strokeWidth={active ? 2.35 : 1.95} />
+      </span>
+      <span
+        className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-150 motion-reduce:transition-none ${
+          collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"
+        }`}
+      >
+        {label}
+      </span>
+      {collapsed ? (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg bg-[var(--sunlit-ink)] px-3 py-2 text-xs font-extrabold text-white opacity-0 shadow-[0_12px_30px_rgb(32_33_43_/_20%)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
+            locale === "ar" ? "right-full mr-6" : "left-full ml-6"
+          }`}
+          data-sidebar-tooltip={item.slug}
+        >
+          {label}
+        </span>
+      ) : null}
+    </Link>
   );
 }
 

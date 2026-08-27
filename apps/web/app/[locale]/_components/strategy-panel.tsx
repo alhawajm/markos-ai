@@ -101,7 +101,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-display text-2xl font-black leading-tight tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{text(locale, "title")}</h2>
+              <h2 className="font-display text-2xl font-bold leading-tight tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{text(locale, "title")}</h2>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]">
                 <Target size={14} />
                 {session ? text(locale, "businessInformed") : text(locale, "previewMode")}
@@ -177,7 +177,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
           <div>
             <p className="sunlit-eyebrow">{text(locale, "latest")}</p>
-            <h3 className="mt-2 font-display text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{active.title}</h3>
+            <h3 className="mt-2 font-display text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{active.title}</h3>
             <p className="mt-4 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">{active.content.summary}</p>
           </div>
 
@@ -210,7 +210,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
       {strategies.length > 0 ? (
         <>
           <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-            <h3 className="text-xl font-black text-[var(--sunlit-ink)]">{text(locale, "cadence")}</h3>
+            <h3 className="text-xl font-bold text-[var(--sunlit-ink)]">{text(locale, "cadence")}</h3>
             <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{text(locale, "cadenceSub")}</p>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {active.content.weeklyCadence.slice(0, 4).map((week) => (
