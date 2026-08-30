@@ -99,7 +99,7 @@ def test_business_profile_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-profile-model"
-    assert body["prompt_version"] == "onboarding-business-profile.v1.local"
+    assert body["prompt_version"] == "onboarding-business-profile.v2.local"
     assert body["profile"]["businessName"] == "Pearl Coffee"
     assert body["profile"]["overview"]["en"]
     assert body["profile"]["overview"]["ar"]
