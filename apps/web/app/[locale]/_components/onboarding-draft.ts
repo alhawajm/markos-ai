@@ -1,96 +1,48 @@
 import type { KnowledgeVaultEntry, VaultSection } from "@markos/shared-types";
-import { onboardingObjectiveFieldLimits } from "@markos/validation";
 
-export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-
-export interface OnboardingProductDraft {
-  category: string;
-  description: string;
-  name: string;
-}
+export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface OnboardingDraft {
-  ageRange: string;
-  audienceDescription: string;
-  audienceLocations: string;
-  brandColor: string;
-  brandFonts: string;
-  brandVisualWords: string;
-  brandVoiceNotes: string;
-  budgetRange: string;
-  companyName: string;
-  competitiveAdvantage: string;
-  competitorDifference: string;
-  competitors: string[];
-  differentiators: string;
-  genderFocus: string;
-  goals: string[];
+  audience: string;
+  avoid: string;
+  businessName: string;
+  competitors: string;
+  difference: string;
   industry: string;
-  instagramExperience: string;
-  interests: string;
-  languagePreference: string;
-  location: string;
-  mission: string;
+  market: string;
   motivations: string;
-  newCompetitor: string;
-  newProduct: OnboardingProductDraft;
-  origin: string;
-  painPoints: string;
-  priceRange: string;
-  problemSolved: string;
-  products: OnboardingProductDraft[];
-  salesChannels: string;
-  success90Days: string;
-  tone: string;
-  usp: string;
-  values: string;
-  vision: string;
-  website: string;
+  needs: string;
+  offer: string;
+  priority: string;
+  problem: string;
+  story: string;
+  toneWords: string;
+  voice: string;
 }
 
-export type OnboardingValidationIssue = "audience" | "brand" | "company" | "competitors" | "objectives" | "objectivesLength" | "products" | "story";
+export type OnboardingValidationIssue = "company" | "products" | "tone";
 
 export const legacyOnboardingDraftKey = "markos.onboarding.draft";
-export const onboardingDraftKey = "markos.onboarding.draft.v2";
+export const previousOnboardingDraftKey = "markos.onboarding.draft.v2";
+export const onboardingDraftKey = "markos.onboarding.draft.v3";
 
 export function createEmptyOnboardingDraft(): OnboardingDraft {
   return {
-    ageRange: "",
-    audienceDescription: "",
-    audienceLocations: "",
-    brandColor: "",
-    brandFonts: "",
-    brandVisualWords: "",
-    brandVoiceNotes: "",
-    budgetRange: "",
-    companyName: "",
-    competitiveAdvantage: "",
-    competitorDifference: "",
-    competitors: [],
-    differentiators: "",
-    genderFocus: "",
-    goals: [],
+    audience: "",
+    avoid: "",
+    businessName: "",
+    competitors: "",
+    difference: "",
     industry: "",
-    instagramExperience: "",
-    interests: "",
-    languagePreference: "",
-    location: "",
-    mission: "",
+    market: "",
     motivations: "",
-    newCompetitor: "",
-    newProduct: { category: "", description: "", name: "" },
-    origin: "",
-    painPoints: "",
-    priceRange: "",
-    problemSolved: "",
-    products: [],
-    salesChannels: "",
-    success90Days: "",
-    tone: "",
-    usp: "",
-    values: "",
-    vision: "",
-    website: ""
+    needs: "",
+    offer: "",
+    priority: "",
+    problem: "",
+    story: "",
+    toneWords: "",
+    voice: ""
   };
 }
 
@@ -100,56 +52,117 @@ export function createOnboardingDraftFromVault(vault: Record<VaultSection, Knowl
   const products = vaultValue(vault, "PRODUCTS", "catalog");
   const audience = vaultValue(vault, "AUDIENCE", "primary-audience");
   const competitors = vaultValue(vault, "COMPETITORS", "competitors");
-  const brand = vaultValue(vault, "BRAND", "identity");
   const tone = vaultValue(vault, "TONE", "voice");
   const objectives = vaultValue(vault, "OBJECTIVES", "goals");
-  const languages = stringArray(company.languages);
 
   return {
     ...createEmptyOnboardingDraft(),
-    ageRange: stringValue(audience.ageRange),
-    audienceDescription: stringValue(audience.demographics),
-    audienceLocations: joinedValue(audience.locations),
-    brandColor: stringArray(brand.colors)[0] ?? "",
-    brandFonts: joinedValue(brand.fonts),
-    brandVisualWords: joinedValue(brand.aestheticWords),
-    brandVoiceNotes: stringValue(tone.voiceNotes),
-    budgetRange: stringValue(objectives.budgetRange),
-    companyName: stringValue(company.name),
-    competitiveAdvantage: stringValue(competitors.competitiveAdvantage),
-    competitorDifference: stringValue(competitors.doDifferently),
-    competitors: recordArray(competitors.items)
-      .map((item) => stringValue(item.name))
-      .filter(Boolean),
-    differentiators: joinedValue(products.differentiators),
-    genderFocus: stringValue(audience.genderBreakdown),
-    goals: stringArray(objectives.goals),
+    audience: stringValue(audience.demographics),
+    avoid: stringValue(competitors.doDifferently),
+    businessName: stringValue(company.name),
+    competitors:
+      stringValue(competitors.marketContext) ||
+      recordArray(competitors.items)
+        .map((item) => stringValue(item.name))
+        .filter(Boolean)
+        .join(", "),
+    difference: stringValue(story.usp) || stringValue(story.mission),
     industry: stringValue(company.industry),
-    instagramExperience: stringValue(objectives.instagramExperience),
-    interests: joinedValue(audience.interests),
-    languagePreference: onboardingLanguagePreference(languages),
-    location: stringValue(company.location),
-    mission: stringValue(story.mission),
+    market: stringValue(company.location),
     motivations: joinedValue(audience.motivations),
-    origin: stringValue(story.origin),
-    painPoints: joinedValue(audience.painPoints),
-    priceRange: stringValue(products.priceRange),
-    problemSolved: stringValue(story.problemSolved),
-    products: recordArray(products.items)
-      .map((item) => ({
-        category: stringValue(item.category),
-        description: stringValue(item.description),
-        name: stringValue(item.name)
-      }))
-      .filter((item) => item.name.length > 0),
-    salesChannels: joinedValue(products.salesChannels),
-    success90Days: stringValue(objectives.success90Days),
-    tone: stringArray(tone.toneWords)[0] ?? "",
-    usp: stringValue(story.usp),
-    values: joinedValue(story.values),
-    vision: stringValue(story.vision),
-    website: stringValue(company.website)
+    needs: joinedValue(audience.painPoints),
+    offer: stringValue(products.summary) || productSummary(products.items),
+    priority: stringValue(objectives.currentPriority) || joinedValue(objectives.goals),
+    problem: stringValue(story.problemSolved),
+    story: stringValue(story.origin) || joinedValue(story.values),
+    toneWords: joinedValue(tone.toneWords),
+    voice: stringValue(tone.voiceNotes)
   };
+}
+
+export function splitOnboardingList(value: string): string[] {
+  return value
+    .split(/[,،]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function hasOnboardingStepData(step: OnboardingStepId, draft: OnboardingDraft): boolean {
+  switch (step) {
+    case 1:
+      return Boolean(draft.businessName.trim() || draft.industry.trim() || draft.market.trim());
+    case 2:
+      return Boolean(draft.difference.trim() || draft.problem.trim() || draft.story.trim());
+    case 3:
+      return Boolean(draft.offer.trim());
+    case 4:
+      return Boolean(draft.audience.trim() || draft.needs.trim() || draft.motivations.trim());
+    case 5:
+      return Boolean(draft.competitors.trim() || draft.avoid.trim());
+    case 6:
+      return Boolean(draft.toneWords.trim() || draft.voice.trim());
+    case 7:
+      return Boolean(draft.priority.trim());
+  }
+}
+
+export function validateOnboardingStep(step: OnboardingStepId, draft: OnboardingDraft): OnboardingValidationIssue | null {
+  if (step === 1 && draft.businessName.trim().length < 2) return "company";
+  if (step === 3 && draft.offer.trim().length < 2) return "products";
+  if (step === 6 && splitOnboardingList(draft.toneWords).length > 4) return "tone";
+  return null;
+}
+
+export function payloadForOnboardingStep(step: OnboardingStepId, draft: OnboardingDraft): { body: Record<string, unknown>; module: string } {
+  switch (step) {
+    case 1:
+      return {
+        module: "company",
+        body: {
+          name: draft.businessName.trim(),
+          ...(draft.industry.trim() ? { industry: draft.industry.trim() } : {}),
+          ...(draft.market.trim() ? { location: draft.market.trim() } : {})
+        }
+      };
+    case 2:
+      return {
+        module: "story",
+        body: {
+          ...(draft.difference.trim() ? { usp: draft.difference.trim() } : {}),
+          ...(draft.problem.trim() ? { problemSolved: draft.problem.trim() } : {}),
+          ...(draft.story.trim() ? { origin: draft.story.trim() } : {})
+        }
+      };
+    case 3:
+      return { module: "products", body: { summary: draft.offer.trim() } };
+    case 4:
+      return {
+        module: "audience",
+        body: {
+          ...(draft.audience.trim() ? { demographics: draft.audience.trim() } : {}),
+          motivations: splitOnboardingList(draft.motivations),
+          painPoints: draft.needs.trim() ? [draft.needs.trim()] : []
+        }
+      };
+    case 5:
+      return {
+        module: "competitors",
+        body: {
+          ...(draft.competitors.trim() ? { marketContext: draft.competitors.trim() } : {}),
+          ...(draft.avoid.trim() ? { doDifferently: draft.avoid.trim() } : {})
+        }
+      };
+    case 6:
+      return {
+        module: "brand",
+        body: {
+          toneWords: splitOnboardingList(draft.toneWords).slice(0, 4),
+          ...(draft.voice.trim() ? { voiceNotes: draft.voice.trim() } : {})
+        }
+      };
+    case 7:
+      return { module: "objectives", body: { currentPriority: draft.priority.trim() } };
+  }
 }
 
 function vaultValue(vault: Record<VaultSection, KnowledgeVaultEntry[]>, section: VaultSection, preferredKey: string): Record<string, unknown> {
@@ -173,165 +186,13 @@ function recordArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item)) : [];
 }
 
-function onboardingLanguagePreference(languages: string[]): string {
-  const includesArabic = languages.includes("Arabic");
-  const includesEnglish = languages.includes("English");
-
-  if (includesArabic && includesEnglish) return "Both";
-  if (includesArabic) return "Arabic";
-  if (includesEnglish) return "English";
-  return "";
-}
-
-export function splitOnboardingList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-export function validateOnboardingStep(step: OnboardingStepId, draft: OnboardingDraft): OnboardingValidationIssue | null {
-  if (
-    step === 1 &&
-    (draft.companyName.trim().length < 2 || draft.industry.trim().length < 2 || draft.location.trim().length < 2 || !draft.languagePreference)
-  ) {
-    return "company";
-  }
-
-  if (step === 2 && (draft.mission.trim().length < 10 || draft.usp.trim().length < 5 || splitOnboardingList(draft.values).length === 0)) {
-    return "story";
-  }
-
-  if (step === 3 && (draft.products.length === 0 || draft.products.some((product) => !product.name.trim()))) {
-    return "products";
-  }
-
-  if (
-    step === 4 &&
-    (draft.audienceDescription.trim().length < 2 || splitOnboardingList(draft.interests).length === 0 || splitOnboardingList(draft.painPoints).length === 0)
-  ) {
-    return "audience";
-  }
-
-  if (step === 5 && draft.competitors.length === 0) {
-    return "competitors";
-  }
-
-  if (step === 6 && (!draft.brandColor || !draft.tone)) {
-    return "brand";
-  }
-
-  if (step === 7) {
-    if (draft.goals.length === 0) {
-      return "objectives";
-    }
-
-    if (
-      draft.budgetRange.trim().length > onboardingObjectiveFieldLimits.budgetRange ||
-      draft.instagramExperience.trim().length > onboardingObjectiveFieldLimits.instagramExperience ||
-      draft.success90Days.trim().length > onboardingObjectiveFieldLimits.success90Days
-    ) {
-      return "objectivesLength";
-    }
-  }
-
-  return null;
-}
-
-export function payloadForOnboardingStep(step: OnboardingStepId, draft: OnboardingDraft): { body: Record<string, unknown>; module: string } | null {
-  if (step === 1) {
-    return {
-      module: "company",
-      body: {
-        industry: draft.industry.trim(),
-        languages: draft.languagePreference === "Both" ? ["Arabic", "English"] : [draft.languagePreference],
-        location: draft.location.trim(),
-        name: draft.companyName.trim(),
-        ...(draft.website.trim() ? { website: draft.website.trim() } : {})
-      }
-    };
-  }
-
-  if (step === 2) {
-    return {
-      module: "story",
-      body: {
-        mission: draft.mission.trim(),
-        ...(draft.origin.trim() ? { origin: draft.origin.trim() } : {}),
-        ...(draft.problemSolved.trim() ? { problemSolved: draft.problemSolved.trim() } : {}),
-        usp: draft.usp.trim(),
-        values: splitOnboardingList(draft.values),
-        ...(draft.vision.trim() ? { vision: draft.vision.trim() } : {})
-      }
-    };
-  }
-
-  if (step === 3) {
-    return {
-      module: "products",
-      body: {
-        differentiators: splitOnboardingList(draft.differentiators),
-        items: draft.products.map((product) => ({
-          name: product.name.trim(),
-          ...(product.category.trim() ? { category: product.category.trim() } : {}),
-          ...(product.description.trim() ? { description: product.description.trim() } : {})
-        })),
-        ...(draft.priceRange.trim() ? { priceRange: draft.priceRange.trim() } : {}),
-        salesChannels: splitOnboardingList(draft.salesChannels)
-      }
-    };
-  }
-
-  if (step === 4) {
-    return {
-      module: "audience",
-      body: {
-        ...(draft.ageRange ? { ageRange: draft.ageRange } : {}),
-        demographics: draft.audienceDescription.trim(),
-        ...(draft.genderFocus ? { genderBreakdown: draft.genderFocus } : {}),
-        interests: splitOnboardingList(draft.interests),
-        locations: splitOnboardingList(draft.audienceLocations),
-        motivations: splitOnboardingList(draft.motivations),
-        painPoints: splitOnboardingList(draft.painPoints)
-      }
-    };
-  }
-
-  if (step === 5) {
-    return {
-      module: "competitors",
-      body: {
-        ...(draft.competitiveAdvantage.trim() ? { competitiveAdvantage: draft.competitiveAdvantage.trim() } : {}),
-        ...(draft.competitorDifference.trim() ? { doDifferently: draft.competitorDifference.trim() } : {}),
-        items: draft.competitors.map((name) => ({ name: name.trim() }))
-      }
-    };
-  }
-
-  if (step === 6) {
-    return {
-      module: "brand",
-      body: {
-        aestheticWords: splitOnboardingList(draft.brandVisualWords),
-        colors: [draft.brandColor],
-        fonts: splitOnboardingList(draft.brandFonts),
-        toneWords: [draft.tone],
-        ...(draft.brandVoiceNotes.trim() ? { voiceNotes: draft.brandVoiceNotes.trim() } : {})
-      }
-    };
-  }
-
-  if (step === 7) {
-    return {
-      module: "objectives",
-      body: {
-        ...(draft.budgetRange.trim() ? { budgetRange: draft.budgetRange.trim() } : {}),
-        goals: draft.goals,
-        ...(draft.instagramExperience.trim() ? { instagramExperience: draft.instagramExperience.trim() } : {}),
-        ...(draft.success90Days.trim() ? { success90Days: draft.success90Days.trim() } : {})
-      }
-    };
-  }
-
-  return null;
+function productSummary(value: unknown): string {
+  return recordArray(value)
+    .map((item) => {
+      const name = stringValue(item.name);
+      const description = stringValue(item.description);
+      return [name, description].filter(Boolean).join(": ");
+    })
+    .filter(Boolean)
+    .join("\n");
 }

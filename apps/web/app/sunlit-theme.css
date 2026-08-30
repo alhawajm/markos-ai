@@ -64,6 +64,34 @@
   color: var(--sunlit-ink);
 }
 
+.onboarding-stage {
+  background:
+    radial-gradient(circle at 12% 18%, rgb(255 102 90 / 12%), transparent 27rem), radial-gradient(circle at 88% 16%, rgb(33 191 174 / 12%), transparent 30rem),
+    radial-gradient(circle at 70% 88%, rgb(246 196 83 / 12%), transparent 25rem), linear-gradient(145deg, #fffaf6 0%, #ffffff 46%, #f6fffd 100%);
+}
+
+.onboarding-orb {
+  position: fixed;
+  width: 25rem;
+  height: 25rem;
+  border-radius: 999px;
+  filter: blur(72px);
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.onboarding-orb-one {
+  inset-block-start: -9rem;
+  inset-inline-start: -7rem;
+  background: var(--sunlit-coral);
+}
+
+.onboarding-orb-two {
+  inset-block-end: -11rem;
+  inset-inline-end: -7rem;
+  background: var(--sunlit-aqua);
+}
+
 .sunlit-panel {
   border: 1px solid var(--sunlit-line);
   background: rgb(255 255 255 / 96%);
@@ -199,6 +227,14 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .onboarding-orb-one {
+    animation: onboarding-drift-one 14s ease-in-out infinite alternate;
+  }
+
+  .onboarding-orb-two {
+    animation: onboarding-drift-two 17s ease-in-out infinite alternate;
+  }
+
   .sunlit-primary,
   .sunlit-secondary {
     transition:
@@ -206,5 +242,17 @@
       filter 160ms ease,
       border-color 160ms ease,
       background-color 160ms ease;
+  }
+}
+
+@keyframes onboarding-drift-one {
+  to {
+    transform: translate3d(5rem, 3rem, 0) scale(1.08);
+  }
+}
+
+@keyframes onboarding-drift-two {
+  to {
+    transform: translate3d(-4rem, -2rem, 0) scale(1.12);
   }
 }

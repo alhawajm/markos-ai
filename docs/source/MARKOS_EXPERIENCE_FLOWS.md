@@ -68,7 +68,7 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Area | Current `main` | Final-system work still open |
 | --- | --- | --- |
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
-| Onboarding | Seven real modules feed the Vault. At 100% completeness, the user generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy. | Real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
+| Onboarding | A greeting introduces seven concise modules that feed the Vault. Company and Products are essential; the other modules can be skipped and resumed. Once the essentials are saved, the user reviews the information and generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy without pretending the Vault is 100% complete. | Document extraction and confirmation, real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
 | Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
 | Content/media | Create can start a manual or AI-assisted persisted draft, edit bilingual captions and core fields, approve, upload or provider-generate and attach validated JPEGs, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, deployed image-provider proof, and all final content-type states. |
 | Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
@@ -98,21 +98,25 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **A3. Seven-module wizard**
 
+- After verification, a short greeting explains that the user will share what they know, MARKOS will organize it, and the owner will review the result before it is used.
 - `OB-03`–`OB-09` collect Company, Story, Products, Audience, Competitors, Brand, and Objectives.
 - Each save calls `PUT /v1/onboarding/:module`, writes the matching Vault section(s), creates deterministic embeddings through the current AI boundary, updates completeness, invalidates any previously resolved profile, and leaves onboarding `IN_PROGRESS`.
-- Brand writes both `BRAND` and `TONE`. Guidance, placeholders, palettes, and options are suggestions only; only selected or entered facts are persisted.
+- Company and Products are essential because they identify the business and its offer. Story, Audience, Competitors, Brand/Tone, and Objectives are useful but optional; `POST /v1/onboarding/:module/skip` persists an optional skip so the journey can resume without asking the same question again. Essential modules cannot be skipped.
+- Brand writes `BRAND` only when visual-identity facts are supplied and `TONE` only when voice facts are supplied. Guidance, placeholders, palettes, and options are suggestions only; only selected or entered facts are persisted.
 - The browser keeps the current draft locally until the API confirms saves. Validation or API failure blocks forward progress without discarding the user's typed work.
-- Current implementation note: the active wizard collects brand values but does not upload logo/guideline files. The full upload flow remains open.
+- Optional steps offer explicit skip actions; the information-check rows are clickable and return directly to the corresponding step for editing.
+- Current implementation note: the active wizard does not present document or brand-file upload. A visible upload control waits for a complete extraction, issue-reporting, field-mapping, and owner-confirmation path; merely storing an unread file is not onboarding.
 
 **A4. Completeness and gaps**
 
 - `GET /v1/vault/score` returns the workspace score and missing sections.
-- The resolved profile may be generated only after all seven modules produce 100% completeness. A gap explains which section needs attention and routes the user back to it.
+- Journey readiness and Vault completeness are separate signals. `readyForProfile` becomes true after Company and Products are saved, while the Vault score and missing-section list continue to report the context that is actually present.
+- The information check labels the two essentials, shows each optional gap without blocking progress, and allows the owner to add or edit context before generation.
 
 **A5. Resolve, approve, and hand off**
 
-- `POST /v1/onboarding/profile/generate` produces a bilingual draft from the raw module entries and records the interaction/usage.
-- The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, clears the browser draft, and routes to `/{locale}/app/strategy`.
+- `POST /v1/onboarding/profile/generate` produces a bilingual draft from the available raw module entries and records the interaction/usage. It must not invent optional facts; unsupported profile fields use honest, editable wording that indicates they are not defined yet.
+- The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, preserves the real Vault completeness score, clears the browser draft, and routes to `/{locale}/app/strategy`.
 - Approval does **not** automatically generate Strategy. The user sees the Strategy surface and chooses the objective and horizon explicitly.
 - An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Strategy. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
 - Editing a canonical onboarding module later invalidates the resolved profile and returns the workspace to `IN_PROGRESS` while preserving history.

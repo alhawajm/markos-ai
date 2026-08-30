@@ -160,6 +160,7 @@ model Workspace {
   instagramTokenExpiresAt DateTime?
   onboardingStatus        OnboardingStatus @default(NOT_STARTED)
   onboardingScore         Int              @default(0)
+  onboardingSkippedModules String[]         @default([])
   vatPricingMode          VatMode          @default(EXCLUSIVE)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt

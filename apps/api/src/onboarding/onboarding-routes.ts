@@ -22,7 +22,14 @@ import {
   BusinessProfileNotFoundError,
   generateWorkspaceBusinessProfile
 } from "./business-profile-service";
-import { completeOnboarding, getOnboardingState, OnboardingIncompleteError, saveOnboardingModule } from "./onboarding-service";
+import {
+  completeOnboarding,
+  getOnboardingState,
+  OnboardingIncompleteError,
+  RequiredOnboardingModuleError,
+  saveOnboardingModule,
+  skipOnboardingModule
+} from "./onboarding-service";
 
 const moduleSchemas = {
   company: companyOnboardingSchema,
@@ -76,6 +83,36 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
 
       const { workspaceId } = requireWorkspaceContext();
       return ok(await saveOnboardingModule(workspaceId, module.data, parsed.data as z.infer<ModuleSchema>));
+    }
+  );
+
+  app.post(
+    "/v1/onboarding/:module/skip",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["onboarding:write"]
+      }
+    },
+    async (request, reply) => {
+      const module = onboardingModuleSchema.safeParse((request.params as { module?: string }).module);
+
+      if (!module.success) {
+        return reply.status(404).send(errorEnvelope("ONBOARDING_MODULE_NOT_FOUND", "Unknown onboarding module"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await skipOnboardingModule(workspaceId, module.data));
+      } catch (error) {
+        if (error instanceof RequiredOnboardingModuleError) {
+          return reply.status(409).send(errorEnvelope("ONBOARDING_MODULE_REQUIRED", error.message));
+        }
+
+        throw error;
+      }
     }
   );
 

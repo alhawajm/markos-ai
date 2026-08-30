@@ -27,7 +27,7 @@ describe("rendered Sunlit authentication", () => {
   });
 
   it("registers, requests verification, verifies the token, and resumes onboarding", async () => {
-    const context = await browser.newContext({ viewport: { height: 1000, width: 1440 } });
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
     const page = await context.newPage();
     const requests: Array<{ body: unknown; path: string }> = [];
 
@@ -50,7 +50,7 @@ describe("rendered Sunlit authentication", () => {
       }
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(json({ businessProfile: { status: "NOT_GENERATED" }, status: "NOT_STARTED" }));
+        return route.fulfill(json(emptyOnboardingState()));
       }
 
       return route.fulfill(json([]));
@@ -210,6 +210,32 @@ function authSession(isVerified: boolean) {
     tokens: { accessToken: isVerified ? "verified-access-token" : "unverified-access-token", expiresIn: 900 },
     user: { email: "mariam@example.com", fullName: "Mariam Ali", id: "user-mariam", isVerified, locale: "en" },
     workspace: { id: "workspace-mariam", name: "Mariam's Workspace", slug: "mariam-workspace" }
+  };
+}
+
+function emptyOnboardingState() {
+  const sections = {
+    company: ["COMPANY"],
+    story: ["STORY"],
+    products: ["PRODUCTS"],
+    audience: ["AUDIENCE"],
+    competitors: ["COMPETITORS"],
+    brand: ["TONE"],
+    objectives: ["OBJECTIVES"]
+  };
+  return {
+    status: "NOT_STARTED",
+    onboardingScore: 0,
+    readyForProfile: false,
+    vaultScore: {
+      score: 0,
+      completedSections: [],
+      missingSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+      requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+      entryCount: 0
+    },
+    modules: Object.entries(sections).map(([module, moduleSections]) => ({ module, completed: false, skipped: false, sections: moduleSections })),
+    businessProfile: { status: "NOT_GENERATED", interactionId: null, profile: null, updatedAt: null }
   };
 }
 

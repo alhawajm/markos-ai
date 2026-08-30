@@ -109,84 +109,148 @@ const nonEmptyStringArraySchema = z.array(z.string().min(1).max(80)).min(1).max(
 
 export const companyOnboardingSchema = z.object({
   name: z.string().min(2).max(160),
-  industry: z.string().min(2).max(120),
+  industry: z.string().min(2).max(120).optional(),
   size: z.string().min(1).max(80).optional(),
-  location: z.string().min(2).max(120),
+  location: z.string().min(2).max(120).optional(),
   socials: z.array(z.string().min(1).max(160)).max(20).default([]),
   website: z.string().url().optional(),
-  languages: nonEmptyStringArraySchema
+  languages: z.array(z.string().min(1).max(80)).max(30).default([])
 });
 
-export const storyOnboardingSchema = z.object({
-  mission: z.string().min(10).max(2000),
-  origin: z.string().max(2000).optional(),
-  problemSolved: z.string().max(1000).optional(),
-  values: nonEmptyStringArraySchema,
-  usp: z.string().min(5).max(1000),
-  vision: z.string().max(1000).optional()
-});
+export const storyOnboardingSchema = z
+  .object({
+    mission: z.string().min(2).max(2000).optional(),
+    origin: z.string().max(2000).optional(),
+    problemSolved: z.string().max(1000).optional(),
+    values: z.array(z.string().min(1).max(80)).max(30).default([]),
+    usp: z.string().min(2).max(1000).optional(),
+    vision: z.string().max(1000).optional()
+  })
+  .refine(
+    (value) =>
+      Boolean(value.mission?.trim() || value.origin?.trim() || value.problemSolved?.trim() || value.usp?.trim() || value.vision?.trim() || value.values.length),
+    {
+      message: "Add at least one story or differentiator detail"
+    }
+  );
 
-export const productsOnboardingSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        name: z.string().min(1).max(160),
-        category: z.string().max(120).optional(),
-        priceMinor: z.number().int().nonnegative().optional(),
-        currency: z.string().length(3).default("BHD"),
-        description: z.string().max(1000).optional()
-      })
-    )
-    .min(1)
-    .max(30),
-  differentiators: z.array(z.string().min(1).max(160)).max(20).default([]),
-  priceRange: z.string().max(120).optional(),
-  salesChannels: z.array(z.string().min(1).max(80)).max(12).default([])
-});
+export const productsOnboardingSchema = z
+  .object({
+    summary: z.string().min(2).max(4000).optional(),
+    items: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(160),
+          category: z.string().max(120).optional(),
+          priceMinor: z.number().int().nonnegative().optional(),
+          currency: z.string().length(3).default("BHD"),
+          description: z.string().max(1000).optional()
+        })
+      )
+      .max(30)
+      .default([]),
+    differentiators: z.array(z.string().min(1).max(160)).max(20).default([]),
+    priceRange: z.string().max(120).optional(),
+    salesChannels: z.array(z.string().min(1).max(80)).max(12).default([])
+  })
+  .refine((value) => Boolean(value.summary?.trim() || value.items.length), {
+    message: "Add a products and services summary or at least one item"
+  });
 
-export const audienceOnboardingSchema = z.object({
-  ageRange: z.string().max(80).optional(),
-  demographics: z.string().min(2).max(1000),
-  genderBreakdown: z.string().max(120).optional(),
-  interests: nonEmptyStringArraySchema,
-  locations: z.array(z.string().min(1).max(120)).max(20).default([]),
-  motivations: z.array(z.string().min(1).max(120)).max(20).default([]),
-  painPoints: nonEmptyStringArraySchema
-});
+export const audienceOnboardingSchema = z
+  .object({
+    ageRange: z.string().max(80).optional(),
+    demographics: z.string().min(2).max(1000).optional(),
+    genderBreakdown: z.string().max(120).optional(),
+    interests: z.array(z.string().min(1).max(80)).max(30).default([]),
+    locations: z.array(z.string().min(1).max(120)).max(20).default([]),
+    motivations: z.array(z.string().min(1).max(120)).max(20).default([]),
+    painPoints: z.array(z.string().min(1).max(80)).max(30).default([])
+  })
+  .refine(
+    (value) =>
+      Boolean(
+        value.demographics?.trim() ||
+        value.ageRange?.trim() ||
+        value.genderBreakdown?.trim() ||
+        value.interests.length ||
+        value.locations.length ||
+        value.motivations.length ||
+        value.painPoints.length
+      ),
+    { message: "Add at least one audience detail" }
+  );
 
-export const competitorsOnboardingSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        name: z.string().min(1).max(160),
-        instagramHandle: z.string().max(80).optional(),
-        website: z.string().url().optional(),
-        notes: z.string().max(1000).optional()
-      })
-    )
-    .min(1)
-    .max(20),
-  competitiveAdvantage: z.string().max(1000).optional(),
-  doDifferently: z.string().max(1000).optional()
-});
+export const competitorsOnboardingSchema = z
+  .object({
+    marketContext: z.string().max(2000).optional(),
+    items: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(160),
+          instagramHandle: z.string().max(80).optional(),
+          website: z.string().url().optional(),
+          notes: z.string().max(1000).optional()
+        })
+      )
+      .max(20)
+      .default([]),
+    competitiveAdvantage: z.string().max(1000).optional(),
+    doDifferently: z.string().max(1000).optional()
+  })
+  .refine((value) => Boolean(value.marketContext?.trim() || value.items.length || value.competitiveAdvantage?.trim() || value.doDifferently?.trim()), {
+    message: "Add at least one market detail"
+  });
 
-export const brandOnboardingSchema = z.object({
-  aestheticWords: z.array(z.string().min(1).max(80)).max(20).default([]),
-  logoMediaId: z.string().uuid().optional(),
-  colors: nonEmptyStringArraySchema,
-  fonts: z.array(z.string().min(1).max(120)).max(12).default([]),
-  guidelinesMediaId: z.string().uuid().optional(),
-  toneWords: nonEmptyStringArraySchema,
-  voiceNotes: z.string().max(1000).optional()
-});
+export const brandOnboardingSchema = z
+  .object({
+    aestheticWords: z.array(z.string().min(1).max(80)).max(20).default([]),
+    logoMediaId: z.string().uuid().optional(),
+    colors: z.array(z.string().min(1).max(80)).max(30).default([]),
+    fonts: z.array(z.string().min(1).max(120)).max(12).default([]),
+    guidelinesMediaId: z.string().uuid().optional(),
+    toneWords: z.array(z.string().min(1).max(80)).max(4).default([]),
+    voiceNotes: z.string().max(1000).optional()
+  })
+  .refine(
+    (value) =>
+      Boolean(
+        value.toneWords.length ||
+        value.voiceNotes?.trim() ||
+        value.aestheticWords.length ||
+        value.colors.length ||
+        value.fonts.length ||
+        value.logoMediaId ||
+        value.guidelinesMediaId
+      ),
+    {
+      message: "Add at least one tone or brand detail"
+    }
+  );
 
-export const objectivesOnboardingSchema = z.object({
-  goals: nonEmptyStringArraySchema,
-  budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
-  instagramExperience: z.string().max(onboardingObjectiveFieldLimits.instagramExperience).optional(),
-  kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-  success90Days: z.string().max(onboardingObjectiveFieldLimits.success90Days).optional()
-});
+export const objectivesOnboardingSchema = z
+  .object({
+    currentPriority: z.string().min(2).max(1000).optional(),
+    goals: z.array(z.string().min(1).max(80)).max(30).default([]),
+    budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
+    instagramExperience: z.string().max(onboardingObjectiveFieldLimits.instagramExperience).optional(),
+    kpiTargets: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+    success90Days: z.string().max(onboardingObjectiveFieldLimits.success90Days).optional()
+  })
+  .refine(
+    (value) =>
+      Boolean(
+        value.currentPriority?.trim() ||
+        value.goals.length ||
+        value.budgetRange?.trim() ||
+        value.instagramExperience?.trim() ||
+        value.success90Days?.trim() ||
+        Object.keys(value.kpiTargets).length
+      ),
+    {
+      message: "Add at least one current priority detail"
+    }
+  );
 
 export const generateStrategySchema = z.object({
   objective: z.string().min(3).max(500).optional(),

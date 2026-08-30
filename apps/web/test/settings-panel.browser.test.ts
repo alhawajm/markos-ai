@@ -133,7 +133,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
-  it("resets the fixture onboarding draft and exposes honest Story and Products steps", async () => {
+  it("renders the greeting and keeps the reduced onboarding contract honest in both locales", async () => {
     const page = await browserPage();
     await page.addInitScript(
       ({ identity }) => {
@@ -152,45 +152,59 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
       const pathname = new URL(route.request().url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
+      if (pathname === "/v1/onboarding" && route.request().method() === "GET") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/company") return route.fulfill(json(onboardingStateWith({ completed: ["company"] })));
+      if (pathname === "/v1/onboarding/story/skip") return route.fulfill(json(onboardingStateWith({ completed: ["company"], skipped: ["story"] })));
       return route.fulfill({ status: 404, body: "{}" });
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, {
       waitUntil: "domcontentloaded"
     });
-    await page.getByRole("heading", { name: "Tell us about your company" }).waitFor();
-    await expect.poll(() => page.getByLabel("Company Name *").inputValue()).toBe("Browser Workspace");
+    await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
+    await page.getByRole("button", { name: "Set up my business" }).click();
+    const basicsHeading = page.getByRole("heading", { name: "Let’s start with the basics" });
+    await basicsHeading.waitFor();
+    await basicsHeading.evaluate(async (element) => {
+      const animatedScreen = element.closest("main > div");
+      await Promise.all((animatedScreen?.getAnimations({ subtree: true }) ?? []).map((animation) => animation.finished.catch(() => undefined)));
+    });
+    await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("Browser Workspace");
+    await expect(page.getByText("—", { exact: true }).count()).resolves.toBe(0);
+    const stepOneActionTop = Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1);
     const body = await page.locator("body").innerText();
     expect(body).not.toMatch(/Zain Arabia|Batelco|STC Bahrain|@zain_bh/i);
     const stored = await page.evaluate(() => ({
       legacy: localStorage.getItem("markos.onboarding.draft"),
-      next: localStorage.getItem("markos.onboarding.draft.v2")
+      previous: localStorage.getItem("markos.onboarding.draft.v2"),
+      next: localStorage.getItem("markos.onboarding.draft.v3")
     }));
     expect(stored.legacy).toBeNull();
+    expect(stored.previous).toBeNull();
     expect(JSON.parse(stored.next ?? "{}")).toMatchObject({
-      companyName: "Browser Workspace",
-      competitors: [],
-      products: []
+      businessName: "Browser Workspace",
+      competitors: "",
+      offer: ""
     });
 
-    await page.getByRole("button", { name: /Business Story/ }).click();
-    await page.getByRole("heading", { name: "Tell your business story" }).waitFor();
-    await expect(page.getByLabel("Business mission *").inputValue()).resolves.toBe("");
-
-    await page.getByRole("button", { name: /Products & Services/ }).click();
-    await page.getByRole("heading", { name: "What do you offer?" }).waitFor();
-    await expect(page.getByText("No products or services added yet.").isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Continue" }).click();
-    const alert = page.locator('[data-notification-toast][role="alert"]');
-    await alert.getByText("Add at least one product or service.").waitFor();
-    await expect(alert.getAttribute("class")).resolves.toContain("fixed");
+    await page.getByRole("button", { name: "Save & continue" }).click();
+    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
+    await expect(page.locator("[data-notification-toast]").count()).resolves.toBe(0);
+    await expect
+      .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
+      .toBeLessThanOrEqual(4);
+    await page.getByRole("button", { name: "Skip for now" }).click();
+    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
+    await expect
+      .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
+      .toBeLessThanOrEqual(4);
+    await expect(page.getByRole("button", { name: "Save & continue" }).isDisabled()).resolves.toBe(true);
+    await page.getByLabel("Products and services").fill("Coffee beans and recurring office coffee services.");
+    await expect(page.getByRole("button", { name: "Save & continue" }).isEnabled()).resolves.toBe(true);
     await page.screenshot({
-      path: "evidence/onboarding-products-empty.png",
+      path: "evidence/onboarding-products-ready.png",
       fullPage: true
     });
-    await page.getByRole("button", { name: "Dismiss notification" }).click();
-    await expect(page.locator('[data-notification-toast][role="alert"]').count()).resolves.toBe(0);
 
     await page.setViewportSize({ height: 844, width: 390 });
     const widths = await page.evaluate(() => ({
@@ -209,15 +223,21 @@ describe("active SettingsPanel Instagram interactions", () => {
     await arabic.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
       const pathname = new URL(route.request().url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "NOT_STARTED", businessProfile: { status: "NOT_GENERATED" } }));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
       return route.fulfill({ status: 404, body: "{}" });
     });
-    await arabic.goto(`${baseUrl}/ar/onboarding?step=2`, {
+    await arabic.goto(`${baseUrl}/ar/onboarding`, {
       waitUntil: "domcontentloaded"
     });
-    await arabic.getByRole("heading", { name: "احكِ قصة نشاطك" }).waitFor();
+    await arabic.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
+    await arabic.getByRole("button", { name: "ابدأ إعداد نشاطي" }).click();
+    await arabic.getByRole("heading", { name: "لنبدأ بالأساسيات" }).waitFor();
     await arabic.setViewportSize({ height: 844, width: 390 });
     await expect(arabic.locator('[lang="ar"][dir="rtl"]').count()).resolves.toBeGreaterThan(0);
+    await expect(arabic.evaluate(() => ({ dir: document.documentElement.dir, lang: document.documentElement.lang }))).resolves.toEqual({
+      dir: "rtl",
+      lang: "ar"
+    });
     const arabicWidths = await arabic.evaluate(() => ({
       client: document.documentElement.clientWidth,
       scroll: document.documentElement.scrollWidth
@@ -234,6 +254,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     const onboarding = {
       status: "IN_PROGRESS",
       onboardingScore: 100,
+      readyForProfile: true,
       vaultScore: {
         score: 100,
         completedSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
@@ -241,7 +262,7 @@ describe("active SettingsPanel Instagram interactions", () => {
         requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
         entryCount: 8
       },
-      modules: [],
+      modules: onboardingModules({ completed: ["company", "story", "products", "audience", "competitors", "brand", "objectives"] }),
       businessProfile: {
         status: "DRAFT",
         interactionId,
@@ -256,6 +277,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       const pathname = new URL(request.url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
       if (pathname === "/v1/onboarding" && request.method() === "GET") return route.fulfill(json(onboarding));
+      if (pathname === "/v1/vault") return route.fulfill(json(emptyVault()));
       if (pathname === "/v1/onboarding/profile/approve") {
         approvalPayload = request.postDataJSON() as Record<string, unknown>;
         return route.fulfill(
@@ -273,14 +295,14 @@ describe("active SettingsPanel Instagram interactions", () => {
       return route.fulfill(json([]));
     });
 
-    await page.goto(`${baseUrl}/en/onboarding?step=8`, {
+    await page.goto(`${baseUrl}/en/onboarding`, {
       waitUntil: "domcontentloaded"
     });
-    await page.getByRole("heading", { name: "This is your business identity" }).waitFor();
+    await page.getByRole("heading", { name: "Review your business profile" }).waitFor();
     await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("Pearl Coffee");
-    await page.getByLabel("Short description").fill("Bahrain coffee, personally crafted.");
+    await page.getByLabel("Tagline").fill("Bahrain coffee, personally crafted.");
     await page.getByRole("button", { name: "العربية", exact: true }).click();
-    await expect(page.getByLabel("Short description").inputValue()).resolves.toBe(profile.tagline.ar);
+    await expect(page.getByLabel("Tagline").inputValue()).resolves.toBe(profile.tagline.ar);
     await page.getByRole("button", { name: "English", exact: true }).click();
     await page.screenshot({
       path: "evidence/onboarding-business-profile.png",
@@ -737,9 +759,68 @@ async function settingsPage(connection: Record<string, unknown>, path = "/en/app
 
 async function browserPage(): Promise<Page> {
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 1100 }
+    viewport: { width: 1440, height: 900 }
   });
   return context.newPage();
+}
+
+function emptyOnboardingState() {
+  return onboardingStateWith({});
+}
+
+function onboardingStateWith({ completed = [], skipped = [] }: { completed?: string[]; skipped?: string[] }) {
+  const completedSections = completed.flatMap((module) => onboardingSections(module));
+  const requiredSections = ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"];
+  return {
+    status: completed.length || skipped.length ? "IN_PROGRESS" : "NOT_STARTED",
+    onboardingScore: Math.round((new Set(completedSections).size / requiredSections.length) * 100),
+    readyForProfile: completed.includes("company") && completed.includes("products"),
+    vaultScore: {
+      score: Math.round((new Set(completedSections).size / requiredSections.length) * 100),
+      completedSections,
+      missingSections: requiredSections.filter((section) => !completedSections.includes(section)),
+      requiredSections,
+      entryCount: completed.length
+    },
+    modules: onboardingModules({ completed, skipped }),
+    businessProfile: { status: "NOT_GENERATED", interactionId: null, profile: null, updatedAt: null }
+  };
+}
+
+function onboardingModules({ completed = [], skipped = [] }: { completed?: string[]; skipped?: string[] }) {
+  return ["company", "story", "products", "audience", "competitors", "brand", "objectives"].map((module) => ({
+    module,
+    completed: completed.includes(module),
+    skipped: skipped.includes(module),
+    sections: onboardingSections(module)
+  }));
+}
+
+function onboardingSections(module: string): string[] {
+  return (
+    {
+      company: ["COMPANY"],
+      story: ["STORY"],
+      products: ["PRODUCTS"],
+      audience: ["AUDIENCE"],
+      competitors: ["COMPETITORS"],
+      brand: ["TONE"],
+      objectives: ["OBJECTIVES"]
+    }[module] ?? []
+  );
+}
+
+function emptyVault() {
+  return {
+    COMPANY: [],
+    STORY: [],
+    PRODUCTS: [],
+    AUDIENCE: [],
+    COMPETITORS: [],
+    BRAND: [],
+    TONE: [],
+    OBJECTIVES: []
+  };
 }
 
 function json(data: unknown) {

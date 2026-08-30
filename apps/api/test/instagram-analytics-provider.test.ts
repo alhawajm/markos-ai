@@ -164,6 +164,7 @@ function workspace(): Workspace {
     instagramTokenExpiresAt: new Date(Date.UTC(2026, 1, 1)),
     name: "Workspace",
     onboardingScore: 0,
+    onboardingSkippedModules: [],
     onboardingStatus: "NOT_STARTED",
     ownerUserId: "owner-id",
     slug: "workspace",

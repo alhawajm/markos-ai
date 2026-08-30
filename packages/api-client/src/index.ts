@@ -193,6 +193,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async skipOnboardingModule(module: string): Promise<OnboardingState> {
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async completeOnboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding/complete", {
       body: {},

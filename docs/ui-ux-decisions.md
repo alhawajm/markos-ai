@@ -276,3 +276,23 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - Remove the 900/`font-black` weight from the active MARKOS web UI because its dense glyphs reduce readability, especially in Arabic and compact controls.
 - Use 700/`font-bold` consistently for headings, important values, labels, and emphasized content. Preserve hierarchy through type size, spacing, contrast, and surface treatment rather than introducing a heavier weight.
 - This is a readability correction for the current type system, not approval of Inter or any other family as the permanent MARKOS typography. Font-family, bilingual pairing, scale, and role choices remain open to a focused foundation review.
+
+## Onboarding
+
+### 2026-08-30 — Reduced-effort business setup checkpoint
+
+**Accepted**
+
+- Introduce the journey with one concise greeting, then use seven short business modules followed by an information check and an editable bilingual Business Profile. Keep English and Arabic/RTL behavior in the same pass.
+- Treat Company and Products as the only essentials for the first profile. Let the owner explicitly skip Story, Audience, Competitors, Brand/Tone, and Objectives without presenting optional context as mandatory setup.
+- Replace the clickable module sidebar with a compact Previous, Current, and Next context strip. Leave a missing previous or next label visually blank rather than displaying placeholder punctuation.
+- Use open fields for products and services, tone, and current priority. Suggestions may populate or remove values, but they do not replace free-form input. Limit tone to four words and keep one combined products-and-services field rather than requiring item-by-item entry.
+- Keep Why this helps as the primary contextual explanation. Advance after a successful save without an overlay toast; show failures as readable inline recovery messages.
+- Keep ordinary desktop step panels and their action rows visually stable as content changes. The information check and editable profile may use natural height because their review task is materially denser.
+- Make every information-check row a direct edit action, then return the owner to the check after saving or backing out of that focused edit.
+- Increase Onboarding's small labels, help text, body copy, and controls locally. Reuse the current Sunlit hierarchy and predominantly white surfaces, but do not import Calendar's lifecycle palette or treat the still-open shared font and color exploration as approved production foundation.
+
+**Deferred**
+
+- Document-assisted extraction, upload retention, processing quotas, and a future whole-business automatic path remain a separate pipeline with their own policy and validation pass.
+- The product-wide notification redesign and final shared font and palette selection remain outside this Onboarding checkpoint.

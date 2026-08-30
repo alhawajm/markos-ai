@@ -1,43 +1,75 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
-  BriefcaseBusiness,
+  Building2,
+  Check,
   CheckCircle2,
-  Gem,
+  Compass,
+  Info,
   Languages,
+  Layers3,
   LoaderCircle,
-  Plus,
+  MessageCircleMore,
+  Pencil,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Target,
-  Trash2,
+  Users,
   WandSparkles,
-  Zap
+  X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { BusinessProfile, Locale, OnboardingBusinessProfileState } from "@markos/shared-types";
-import { onboardingObjectiveFieldLimits } from "@markos/validation";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import type { BusinessProfile, Locale, OnboardingState } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
-import { NotificationToast } from "./notification-toast";
 import {
   createEmptyOnboardingDraft,
+  hasOnboardingStepData,
   legacyOnboardingDraftKey,
   onboardingDraftKey,
   payloadForOnboardingStep,
+  previousOnboardingDraftKey,
+  splitOnboardingList,
   validateOnboardingStep,
   type OnboardingDraft,
-  type OnboardingProductDraft,
   type OnboardingStepId
 } from "./onboarding-draft";
 
-type StepId = OnboardingStepId;
-type Icon = ComponentType<{ className?: string; color?: string; size?: number; strokeWidth?: number }>;
-type SelectOption = { label: string; value: string };
+type Screen = "greeting" | "profile" | "review" | "step";
 type ProfileFieldKey = Exclude<keyof BusinessProfile, "businessName">;
+type DraftFieldKey = keyof OnboardingDraft;
+type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+
+interface FieldDefinition {
+  area?: boolean;
+  full?: boolean;
+  helper?: string;
+  key: DraftFieldKey;
+  label: string;
+  maxLength?: number;
+  placeholder: string;
+  recommended?: boolean;
+}
+
+interface StepDefinition {
+  description: string;
+  fields: FieldDefinition[];
+  help: string;
+  icon: Icon;
+  id: OnboardingStepId;
+  label: string;
+  module: string;
+  skippable: boolean;
+  suggestions?: string[];
+  suggestionMode?: "multi" | "single";
+  suggestionTarget?: DraftFieldKey;
+  title: string;
+  intro: string;
+}
 
 const profileFieldKeys: ProfileFieldKey[] = [
   "tagline",
@@ -50,79 +82,44 @@ const profileFieldKeys: ProfileFieldKey[] = [
   "marketingFocus"
 ];
 
-const toneMeta: Array<{ icon: Icon; id: string }> = [
-  { id: "professional", icon: BriefcaseBusiness },
-  { id: "friendly", icon: CheckCircle2 },
-  { id: "bold", icon: Zap },
-  { id: "luxury", icon: Gem },
-  { id: "playful", icon: Sparkles },
-  { id: "informative", icon: BookOpen }
-];
-
-const goalValues = ["Increase brand awareness", "Drive website traffic", "Generate leads", "Boost sales", "Build community", "Customer retention"];
+const moduleOrder = ["company", "story", "products", "audience", "competitors", "brand", "objectives"];
 
 function onboardingCopy(locale: Locale) {
   if (locale === "ar") {
     return {
-      add: "إضافة",
-      addCompetitorPlaceholder: "أضف اسم منافس...",
-      addProduct: "إضافة المنتج أو الخدمة",
       attention: "تنبيه",
-      aiCardBody: "تصبح إجاباتك السياق الذي يستخدمه MARKOS للاستراتيجية والمحتوى.",
-      aiCardTitle: "مصمم حول نشاطك",
       back: "السابق",
-      brand: {
-        color: "لون العلامة الأساسي *",
-        fonts: "خطوط العلامة (افصل بينها بفواصل)",
-        tone: "نبرة صوت العلامة *",
-        visualWords: "كلمات تصف الهوية البصرية (افصل بينها بفواصل)",
-        voiceNotes: "ملاحظات إضافية عن أسلوب الكتابة",
-        title: "حدّد هوية علامتك",
-        body: "اختر القيم التي تمثل علامتك فعلاً. يمكنك إضافة الملفات من الخزنة لاحقاً."
-      },
-      build: "مراجعة الملف",
-      company: {
-        body: "يساعد هذا MARKOS على إنشاء محتوى يمثل علامتك بدقة.",
-        industry: "القطاع *",
-        language: "لغات العمل *",
-        location: "موقع النشاط *",
-        name: "اسم الشركة *",
-        title: "حدثنا عن شركتك",
-        website: "الموقع الإلكتروني"
-      },
-      complete: "مكتمل",
-      competitors: {
-        advantage: "ما ميزتك التنافسية؟",
-        body: "تساعد إجاباتك MARKOS على فهم موقع نشاطك في السوق.",
-        hint: "يمكنك إضافة المزيد لاحقاً من الإعدادات.",
-        difference: "ماذا تريد أن تفعل بشكل مختلف؟",
-        title: "من هم منافسوك؟"
-      },
-      continue: "متابعة",
       dismiss: "إغلاق الإشعار",
+      edit: "تعديل",
+      essential: "أساسي",
       errors: {
         approve: "تعذر اعتماد ملف النشاط الآن.",
-        complete: "تعذر إنهاء الإعداد الآن.",
+        company: "أدخل اسم النشاط بحرفين على الأقل.",
         generate: "تعذر إنشاء ملف النشاط الآن. إجاباتك محفوظة ويمكنك المحاولة مجدداً.",
+        products: "صف منتجاً أو خدمة واحدة على الأقل.",
         save: "تعذر حفظ هذه الخطوة الآن.",
-        session: "ما زلنا نتحقق من جلستك. حاول مرة أخرى بعد لحظة."
+        session: "ما زلنا نتحقق من جلستك. حاول مرة أخرى بعد لحظة.",
+        tone: "استخدم أربع كلمات أو أقل لوصف نبرة الصوت."
       },
-      goals: {
-        body: "اختر كل ما ينطبق. سيضبط MARKOS استراتيجية المحتوى وفقاً لذلك.",
-        budget: "نطاق الميزانية الاختياري",
-        instagramExperience: "خبرتك الحالية مع إنستغرام (120 حرفاً كحد أقصى)",
-        success90Days: "كيف يبدو النجاح بعد 90 يوماً؟",
-        title: "ما أهدافك من المحتوى؟"
+      greeting: {
+        eyebrow: "مرحباً بك في MARKOS",
+        start: "ابدأ إعداد نشاطي",
+        title: "يبدأ تسويقك بفهم نشاطك.",
+        journey: ["شارك ما تعرفه", "ينظم MARKOS المعلومات", "راجع قبل الاستخدام"]
       },
-      launch: "إكمال الإعداد",
+      helpTitle: "لماذا نطلب هذا؟",
+      informationCheck: "فحص المعلومات",
+      next: "التالي",
+      notAdded: "غير مضاف",
+      optional: "اختياري",
+      previous: "السابق",
       profile: {
         approve: "اعتماد الملف والمتابعة",
-        back: "مراجعة الإجابات",
+        back: "العودة إلى فحص المعلومات",
+        body: "راجع الصياغة وعدّلها حتى تمثل نشاطك كما تريد. سيستخدم MARKOS النسخة التي تعتمدها كذاكرة أساسية.",
         businessName: "اسم النشاط",
-        draftBody: "راجع الصياغة وعدّلها حتى تمثل نشاطك كما تريد. سيستخدم MARKOS النسخة التي تعتمدها كذاكرة أساسية.",
-        draftEyebrow: "ملف أنشأه MARKOS",
-        draftTitle: "هذه هي هوية نشاطك",
-        editHint: "كل النصوص قابلة للتعديل. راجع اللغتين قبل الاعتماد.",
+        editHint: "راجع النصين العربي والإنجليزي قبل الاعتماد. يمكنك تعديل كل حقل.",
+        eyebrow: "ملف أعدّه MARKOS",
         fields: {
           tagline: "الوصف المختصر",
           overview: "نبذة عن النشاط",
@@ -133,139 +130,72 @@ function onboardingCopy(locale: Locale) {
           brandVoice: "صوت العلامة",
           marketingFocus: "التركيز التسويقي"
         },
-        generate: "إنشاء ملف نشاطي",
-        generateBody: "سيحوّل MARKOS إجاباتك إلى ملف ثنائي اللغة يمكنك مراجعته وتعديله قبل اعتماده.",
-        generateTitle: "حوّل معرفتك إلى هوية واضحة",
-        generatingBody: "نلخّص قصتك وعروضك وجمهورك وصوت علامتك باللغتين العربية والإنجليزية.",
+        generatingBody: "نحوّل المعلومات المؤكدة إلى ملف نشاط يمكنك مراجعته باللغتين.",
         generatingTitle: "MARKOS يبني ملف نشاطك",
-        languageAr: "العربية",
-        languageEn: "English",
-        regenerate: "إنشاء صياغة جديدة"
+        regenerate: "إنشاء صياغة جديدة",
+        title: "راجع ملف نشاطك"
       },
-      products: {
-        body: "أضف منتجاً أو خدمة واحدة على الأقل حتى يفهم MARKOS ما تبيعه.",
-        category: "الفئة",
-        description: "وصف مختصر",
-        differentiators: "عوامل التميز (افصل بينها بفواصل)",
-        empty: "لم تتم إضافة منتجات أو خدمات بعد.",
-        name: "اسم المنتج أو الخدمة *",
-        priceRange: "نطاق الأسعار الاختياري",
-        salesChannels: "قنوات البيع (افصل بينها بفواصل)",
-        title: "ماذا تقدم؟"
+      recommended: "موصى به",
+      review: {
+        body: "يكفي اسم النشاط وما يقدمه لإنشاء ملف أولي. ستجعل التفاصيل الإضافية اقتراحات MARKOS الأولى أكثر دقة.",
+        create: "إنشاء ملف نشاطي",
+        missingEssential: "أضف الأساسيات أولاً",
+        ready: "جاهز",
+        rows: [
+          ["اسم النشاط", "أساسي"],
+          ["المنتجات والخدمات", "أساسي"],
+          ["العملاء", "يساعد على تخصيص النتائج"],
+          ["القصة ونقاط القوة", "يحسّن الموقع التسويقي"],
+          ["سياق السوق", "اختياري"],
+          ["نبرة الصوت", "حتى أربع كلمات"],
+          ["الأولوية الحالية", "تؤكدها الاستراتيجية لاحقاً"]
+        ],
+        title: "راجع ما سيعرفه MARKOS"
       },
-      progress: (step: StepId, total: number) => `الخطوة ${step} من ${total}`,
-      saved: "تم الحفظ في الخزنة",
-      status: "تم الحفظ",
-      setup: {
-        body: "راجِع أن الأقسام السبعة تعكس نشاطك الحقيقي. عند الإكمال سيحفظ MARKOS الملف في خزنة مساحة العمل.",
-        readyTitle: "ملف نشاطك جاهز للحفظ"
-      },
-      story: {
-        body: "ساعد MARKOS على فهم سبب وجود نشاطك وما الذي يجعله مختلفاً.",
-        mission: "رسالة النشاط *",
-        origin: "قصة البداية",
-        problemSolved: "المشكلة التي تحلها",
-        title: "احكِ قصة نشاطك",
-        usp: "عرض القيمة الفريد *",
-        values: "قيم النشاط * (افصل بينها بفواصل)",
-        vision: "الرؤية"
-      },
-      steps: [
-        { id: 1 as const, label: "معلومات الشركة", desc: "عرّفنا على نشاطك" },
-        { id: 2 as const, label: "قصة النشاط", desc: "اشرح رسالتك وقيمك" },
-        { id: 3 as const, label: "المنتجات والخدمات", desc: "ماذا تقدم؟" },
-        { id: 4 as const, label: "الجمهور المستهدف", desc: "من تخدم؟" },
-        { id: 5 as const, label: "المنافسون", desc: "اعرف السوق" },
-        { id: 6 as const, label: "هوية العلامة", desc: "حدد صوتك وألوانك" },
-        { id: 7 as const, label: "أهداف المحتوى", desc: "حدد أهدافك" },
-        { id: 8 as const, label: "المراجعة", desc: "أكمل ملف النشاط" }
-      ],
-      audience: {
-        age: "الفئة العمرية",
-        body: "فهم جمهورك يساعد MARKOS على صياغة رسائل مؤثرة.",
-        demographics: "صف جمهورك الأساسي *",
-        gender: "تركيز الجنس",
-        interests: "الاهتمامات * (افصل بينها بفواصل)",
-        location: "مواقع الجمهور (افصل بينها بفواصل)",
-        motivations: "الدوافع (افصل بينها بفواصل)",
-        painPoints: "نقاط ألم العملاء * (افصل بينها بفواصل)",
-        title: "من هو جمهورك؟"
-      },
-      validation: {
-        audience: "أضف وصفاً للجمهور واهتماماً واحداً ونقطة ألم واحدة على الأقل.",
-        brand: "اختر لوناً أساسياً ونبرة صوت للعلامة.",
-        company: "أدخل اسم الشركة والقطاع والموقع ولغة عمل واحدة على الأقل.",
-        competitors: "أضف منافساً واحداً على الأقل لإكمال هذا القسم.",
-        objectives: "اختر هدف محتوى واحداً على الأقل.",
-        objectivesLength: "اجعل نطاق الميزانية وخبرة إنستغرام ضمن 120 حرفاً، وهدف 90 يوماً ضمن 1000 حرف.",
-        products: "أضف منتجاً أو خدمة واحدة على الأقل.",
-        story: "أدخل الرسالة وعرض القيمة وقيمة واحدة على الأقل."
-      }
+      saveContinue: "حفظ ومتابعة",
+      skip: "تخطي الآن",
+      step: (current: number, total: number) => `الخطوة ${current} من ${total}`,
+      suggestions: "اقتراحات",
+      steps: arabicSteps()
     };
   }
 
   return {
-    add: "Add",
-    addCompetitorPlaceholder: "Add competitor name...",
-    addProduct: "Add product or service",
     attention: "Attention",
-    aiCardBody: "Your answers become the working context MARKOS uses for Strategy and content.",
-    aiCardTitle: "Built around your business",
     back: "Back",
-    brand: {
-      color: "Primary Brand Color",
-      fonts: "Brand fonts (comma-separated)",
-      tone: "Brand Tone of Voice *",
-      visualWords: "Visual identity words (comma-separated)",
-      voiceNotes: "Additional writing-style notes",
-      title: "Define your brand identity",
-      body: "Choose values that genuinely represent your brand. You can add files from the Vault later."
-    },
-    build: "Review profile",
-    company: {
-      body: "This helps MARKOS create content that truly represents your brand.",
-      industry: "Industry *",
-      language: "Business languages *",
-      location: "Business location *",
-      name: "Company Name *",
-      title: "Tell us about your company",
-      website: "Website"
-    },
-    complete: "complete",
-    competitors: {
-      advantage: "What is your competitive advantage?",
-      body: "Your answers help MARKOS understand your position in the market.",
-      hint: "You can always add more later from Settings.",
-      difference: "What do you want to do differently?",
-      title: "Who are your competitors?"
-    },
-    continue: "Continue",
     dismiss: "Dismiss notification",
+    edit: "Edit",
+    essential: "Essential",
     errors: {
       approve: "Could not approve the business profile yet.",
-      complete: "Could not complete onboarding yet.",
-      generate: "Could not create the business profile yet. Your answers are safe, so you can try again.",
+      company: "Add a business name with at least two characters.",
+      generate: "Could not create the business profile yet. Your answers are saved, so you can try again.",
+      products: "Describe at least one product or service.",
       save: "Could not save this step yet.",
-      session: "We are still checking your session. Try again in a moment."
+      session: "We are still checking your session. Try again in a moment.",
+      tone: "Use no more than four words to describe the tone."
     },
-    goals: {
-      body: "Select all that apply. MARKOS will optimize your content strategy accordingly.",
-      budget: "Optional budget range",
-      instagramExperience: "Current Instagram experience (120 characters max)",
-      success90Days: "What would success look like in 90 days?",
-      title: "What are your content goals?"
+    greeting: {
+      eyebrow: "Welcome to MARKOS",
+      start: "Set up my business",
+      title: "Your marketing starts with understanding your business.",
+      journey: ["Share what you know", "MARKOS organizes it", "Review before it is used"]
     },
-    launch: "Complete onboarding",
+    helpTitle: "Why this helps",
+    informationCheck: "Information check",
+    next: "Next",
+    notAdded: "Not added",
+    optional: "Optional",
+    previous: "Previous",
     profile: {
       approve: "Approve profile & continue",
-      back: "Review my answers",
+      back: "Back to information check",
+      body: "Review the wording and edit anything that does not represent your business. MARKOS will use the approved version as its working memory.",
       businessName: "Business name",
-      draftBody: "Review the wording and make it sound exactly like your business. MARKOS will use the approved version as its core memory.",
-      draftEyebrow: "Resolved by MARKOS",
-      draftTitle: "This is your business identity",
-      editHint: "Everything is editable. Review both languages before you approve.",
+      editHint: "Review both Arabic and English before approval. Every field can be edited.",
+      eyebrow: "Prepared by MARKOS",
       fields: {
-        tagline: "Short description",
+        tagline: "Tagline",
         overview: "Business overview",
         uniqueValue: "Unique value",
         offerSummary: "Products and services",
@@ -274,199 +204,357 @@ function onboardingCopy(locale: Locale) {
         brandVoice: "Brand voice",
         marketingFocus: "Marketing focus"
       },
-      generate: "Generate my business profile",
-      generateBody: "MARKOS will turn your answers into a bilingual profile you can review and edit before anything is finalized.",
-      generateTitle: "Turn your knowledge into a clear identity",
-      generatingBody: "We are resolving your story, offers, audience, and brand voice in Arabic and English.",
+      generatingBody: "Turning your confirmed information into a bilingual profile you can review.",
       generatingTitle: "MARKOS is building your profile",
-      languageAr: "العربية",
-      languageEn: "English",
-      regenerate: "Generate a new version"
+      regenerate: "Generate new wording",
+      title: "Review your business profile"
     },
-    products: {
-      body: "Add at least one product or service so MARKOS understands what you sell.",
-      category: "Category",
-      description: "Short description",
-      differentiators: "Differentiators (comma-separated)",
-      empty: "No products or services added yet.",
-      name: "Product or service name *",
-      priceRange: "Optional price range",
-      salesChannels: "Sales channels (comma-separated)",
-      title: "What do you offer?"
+    recommended: "Recommended",
+    review: {
+      body: "Your business name and what you offer are enough for a starting profile. More detail will make MARKOS’s first suggestions more specific.",
+      create: "Create my business profile",
+      missingEssential: "Add the essentials first",
+      ready: "Ready",
+      rows: [
+        ["Business name", "Essential"],
+        ["Products and services", "Essential"],
+        ["Customers", "Helps personalize results"],
+        ["Story and strengths", "Improves positioning"],
+        ["Market context", "Optional"],
+        ["Tone of voice", "Up to four words"],
+        ["Current priority", "Strategy confirms it later"]
+      ],
+      title: "Review what MARKOS will know"
     },
-    progress: (step: StepId, total: number) => `Step ${step} of ${total}`,
-    saved: "Saved to Vault",
-    status: "Saved",
-    setup: {
-      body: "Review that all seven sections describe your real business. Completing onboarding saves the profile to your workspace Vault.",
-      readyTitle: "Your business profile is ready to save"
+    saveContinue: "Save & continue",
+    skip: "Skip for now",
+    step: (current: number, total: number) => `Step ${current} of ${total}`,
+    suggestions: "Suggestions",
+    steps: englishSteps()
+  };
+}
+
+function englishSteps(): StepDefinition[] {
+  return [
+    {
+      id: 1,
+      module: "company",
+      label: "Business basics",
+      description: "Name and main market",
+      title: "Let’s start with the basics",
+      intro: "Confirm the identity MARKOS should use. Keep this factual and short.",
+      help: "The business name grounds your profile. Business type and market help Strategy avoid generic or geographically irrelevant suggestions.",
+      icon: Building2,
+      skippable: false,
+      fields: [
+        { key: "businessName", label: "Business name", placeholder: "Example: Sunlit Bakery", maxLength: 160 },
+        { key: "industry", label: "Business type", placeholder: "Example: Bakery, salon, consulting studio", recommended: true, maxLength: 120 },
+        { key: "market", label: "Main market", placeholder: "Example: Bahrain, GCC, or online worldwide", recommended: true, maxLength: 120 }
+      ]
     },
-    story: {
-      body: "Help MARKOS understand why your business exists and what makes it different.",
-      mission: "Business mission *",
-      origin: "Origin story",
-      problemSolved: "Problem you solve",
-      title: "Tell your business story",
-      usp: "Unique value proposition *",
-      values: "Business values * (comma-separated)",
-      vision: "Vision"
+    {
+      id: 2,
+      module: "story",
+      label: "What makes you different",
+      description: "Story and strengths",
+      title: "Why should customers choose you?",
+      intro: "A rough answer is useful. It does not need to sound like marketing copy.",
+      help: "A differentiator and the problem you solve improve positioning, profile resolution, and Strategy rationale.",
+      icon: Sparkles,
+      skippable: true,
+      fields: [
+        {
+          key: "difference",
+          label: "What makes you different?",
+          placeholder: "Write it in your own words. One or two sentences is enough.",
+          area: true,
+          full: true,
+          recommended: true,
+          maxLength: 1000
+        },
+        { key: "problem", label: "Customer problem", placeholder: "What problem do you help customers solve?", area: true, maxLength: 1000 },
+        { key: "story", label: "Story, mission, or values", placeholder: "Add only what already exists", area: true, maxLength: 2000 }
+      ]
     },
-    steps: [
-      { id: 1 as const, label: "Company Info", desc: "Tell us about your business" },
-      { id: 2 as const, label: "Business Story", desc: "Explain your mission and values" },
-      { id: 3 as const, label: "Products & Services", desc: "What do you offer?" },
-      { id: 4 as const, label: "Target Audience", desc: "Who do you serve?" },
-      { id: 5 as const, label: "Competitors", desc: "Know your market" },
-      { id: 6 as const, label: "Brand Identity", desc: "Define your voice and colors" },
-      { id: 7 as const, label: "Content Goals", desc: "Set your objectives" },
-      { id: 8 as const, label: "Review", desc: "Complete the business profile" }
-    ],
-    audience: {
-      age: "Age Range",
-      body: "Understanding your audience helps MARKOS craft messages that resonate.",
-      demographics: "Describe your primary audience *",
-      gender: "Gender Focus",
-      interests: "Interests * (comma-separated)",
-      location: "Audience locations (comma-separated)",
-      motivations: "Motivations (comma-separated)",
-      painPoints: "Customer pain points * (comma-separated)",
-      title: "Who is your audience?"
+    {
+      id: 3,
+      module: "products",
+      label: "What you offer",
+      description: "Products or services",
+      title: "What do you sell or provide?",
+      intro: "Use one open field for everything you offer. Names, descriptions, and prices can all live together.",
+      help: "This is the minimum grounding MARKOS needs to describe the business and create relevant Strategy and content.",
+      icon: Layers3,
+      skippable: false,
+      fields: [
+        {
+          key: "offer",
+          label: "Products and services",
+          placeholder: "Names, descriptions, prices, or any other useful details — write as much or as little as you know.",
+          area: true,
+          full: true,
+          maxLength: 4000
+        }
+      ]
     },
-    validation: {
-      audience: "Add an audience description, at least one interest, and at least one pain point.",
-      brand: "Choose a primary brand color and tone of voice.",
-      company: "Enter the company name, industry, location, and at least one business language.",
-      competitors: "Add at least one competitor to complete this section.",
-      objectives: "Choose at least one content goal.",
-      objectivesLength: "Keep the budget and Instagram experience within 120 characters, and the 90-day goal within 1,000 characters.",
-      products: "Add at least one product or service.",
-      story: "Enter a mission, a unique value proposition, and at least one business value."
+    {
+      id: 4,
+      module: "audience",
+      label: "Your customers",
+      description: "Who you want to reach",
+      title: "Who usually buys from you?",
+      intro: "Describe real customers in everyday language. Exact demographics are unnecessary unless they genuinely affect the work.",
+      help: "Customer context helps Strategy and Create choose more relevant messages, needs, and calls to action.",
+      icon: Users,
+      skippable: true,
+      fields: [
+        {
+          key: "audience",
+          label: "Main customers",
+          placeholder: "Example: Busy parents in Bahrain ordering cakes for family celebrations.",
+          area: true,
+          full: true,
+          recommended: true,
+          maxLength: 1000
+        },
+        { key: "needs", label: "Customer needs", placeholder: "What do they need or struggle with?", area: true, maxLength: 1000 },
+        { key: "motivations", label: "What matters to them?", placeholder: "Example: reliability, delivery speed, personalization", maxLength: 1000 }
+      ]
+    },
+    {
+      id: 5,
+      module: "competitors",
+      label: "Market context",
+      description: "Completely optional",
+      title: "Who do customers compare you with?",
+      intro: "Skip this if you do not know. A named competitor is not required, and MARKOS will not pretend to verify one.",
+      help: "Confirmed comparisons can improve positioning. MARKOS stores only the market observations you provide.",
+      icon: Compass,
+      skippable: true,
+      fields: [
+        { key: "competitors", label: "Competitors or alternatives", placeholder: "Optional — leave blank if you do not know", area: true, maxLength: 2000 },
+        { key: "avoid", label: "What to avoid", placeholder: "Anything MARKOS should avoid copying?", area: true, maxLength: 1000 }
+      ]
+    },
+    {
+      id: 6,
+      module: "brand",
+      label: "How you sound",
+      description: "Tone used by Create",
+      title: "How should the business sound?",
+      intro: "Describe the voice in up to four tone words. Use a suggestion, combine a few, or write your own.",
+      help: "Tone words and writing guidance are used directly to keep AI-generated content consistent.",
+      icon: MessageCircleMore,
+      skippable: true,
+      suggestions: ["Warm", "Clear", "Confident", "Playful", "Professional", "Direct", "Educational", "Premium"],
+      suggestionTarget: "toneWords",
+      suggestionMode: "multi",
+      fields: [
+        {
+          key: "toneWords",
+          label: "Tone of voice",
+          placeholder: "Example: warm, clear, confident",
+          helper: "Separate words with commas. Suggestions can be removed.",
+          recommended: true,
+          maxLength: 320
+        },
+        { key: "voice", label: "Writing guidance", placeholder: "Example: clear and warm; avoid slang and exaggerated promises", area: true, maxLength: 1000 }
+      ]
+    },
+    {
+      id: 7,
+      module: "objectives",
+      label: "Current priority",
+      description: "Strategy confirms it later",
+      title: "What should MARKOS help with first?",
+      intro: "This gives the profile useful context. Strategy will still ask you to confirm or change the objective and duration.",
+      help: "A current priority can guide the profile’s marketing focus without locking the future Strategy plan.",
+      icon: Target,
+      skippable: true,
+      suggestions: ["Build awareness", "Generate leads", "Increase sales", "Promote an offer", "Build community", "Launch something new"],
+      suggestionTarget: "priority",
+      suggestionMode: "single",
+      fields: [
+        {
+          key: "priority",
+          label: "Current priority",
+          placeholder: "Example: Introduce our new catering service to offices in Manama.",
+          area: true,
+          maxLength: 1000
+        }
+      ]
     }
-  };
-}
-
-function industryOptions(locale: Locale): SelectOption[] {
-  const labels =
-    locale === "ar"
-      ? [
-          "التجزئة والتجارة الإلكترونية",
-          "المطاعم والمقاهي",
-          "العقارات",
-          "الرعاية الصحية",
-          "التعليم",
-          "السيارات",
-          "الأزياء والجمال",
-          "التقنية",
-          "المالية",
-          "الضيافة"
-        ]
-      : [
-          "Retail & E-commerce",
-          "Food & Beverage",
-          "Real Estate",
-          "Healthcare",
-          "Education",
-          "Automotive",
-          "Fashion & Beauty",
-          "Technology",
-          "Finance",
-          "Hospitality"
-        ];
-  const values = [
-    "Retail & E-commerce",
-    "Food & Beverage",
-    "Real Estate",
-    "Healthcare",
-    "Education",
-    "Automotive",
-    "Fashion & Beauty",
-    "Technology",
-    "Finance",
-    "Hospitality"
-  ];
-
-  return values.map((value, index) => ({ value, label: labels[index] ?? value }));
-}
-
-function toneLabel(locale: Locale, toneId: string) {
-  const ar: Record<string, string> = {
-    professional: "احترافية",
-    friendly: "ودودة",
-    bold: "جريئة ونشطة",
-    luxury: "فاخرة",
-    playful: "مرحة",
-    informative: "معلوماتية"
-  };
-  const en: Record<string, string> = {
-    professional: "Professional",
-    friendly: "Friendly",
-    bold: "Bold & Energetic",
-    luxury: "Luxury",
-    playful: "Playful",
-    informative: "Informative"
-  };
-
-  return locale === "ar" ? ar[toneId] : en[toneId];
-}
-
-function goalOptions(locale: Locale): SelectOption[] {
-  const ar = ["زيادة الوعي بالعلامة", "زيادة زيارات الموقع", "توليد العملاء المحتملين", "رفع المبيعات", "بناء مجتمع", "الاحتفاظ بالعملاء"];
-  return goalValues.map((value, index) => ({ value, label: locale === "ar" ? (ar[index] ?? value) : value }));
-}
-
-function genderOptions(locale: Locale): SelectOption[] {
-  return [
-    { value: "All", label: locale === "ar" ? "الكل" : "All" },
-    { value: "Male", label: locale === "ar" ? "ذكور" : "Male" },
-    { value: "Female", label: locale === "ar" ? "إناث" : "Female" }
   ];
 }
 
-function languageOptions(locale: Locale): SelectOption[] {
+function arabicSteps(): StepDefinition[] {
+  const steps = englishSteps();
   return [
-    { value: "Arabic", label: locale === "ar" ? "العربية" : "Arabic" },
-    { value: "English", label: locale === "ar" ? "الإنجليزية" : "English" },
-    { value: "Both", label: locale === "ar" ? "اللغتان" : "Both" }
+    {
+      ...steps[0]!,
+      label: "أساسيات النشاط",
+      description: "الاسم والسوق الرئيسي",
+      title: "لنبدأ بالأساسيات",
+      intro: "أكد الهوية التي ينبغي أن يستخدمها MARKOS. اجعل المعلومات واقعية ومختصرة.",
+      help: "يؤسس اسم النشاط للملف. ويساعد نوع النشاط والسوق الاستراتيجية على تجنب الاقتراحات العامة أو غير الملائمة جغرافياً.",
+      fields: [
+        { key: "businessName", label: "اسم النشاط", placeholder: "مثال: مخبز صن لايت", maxLength: 160 },
+        { key: "industry", label: "نوع النشاط", placeholder: "مثال: مخبز، صالون، استشارات", recommended: true, maxLength: 120 },
+        { key: "market", label: "السوق الرئيسي", placeholder: "مثال: البحرين، الخليج، أو عبر الإنترنت عالمياً", recommended: true, maxLength: 120 }
+      ]
+    },
+    {
+      ...steps[1]!,
+      label: "ما الذي يميزك؟",
+      description: "القصة ونقاط القوة",
+      title: "لماذا يختارك العملاء؟",
+      intro: "تكفي إجابة أولية، ولا يلزم أن تبدو كنص تسويقي.",
+      help: "يساعد عامل التميز والمشكلة التي تحلها على تحسين الموقع التسويقي وملف النشاط ومبررات الاستراتيجية.",
+      fields: [
+        {
+          key: "difference",
+          label: "ما الذي يميزك؟",
+          placeholder: "اكتبها بطريقتك. تكفي جملة أو جملتان.",
+          area: true,
+          full: true,
+          recommended: true,
+          maxLength: 1000
+        },
+        { key: "problem", label: "مشكلة العميل", placeholder: "ما المشكلة التي تساعد العملاء على حلها؟", area: true, maxLength: 1000 },
+        { key: "story", label: "القصة أو الرسالة أو القيم", placeholder: "أضف ما هو موجود فعلاً فقط", area: true, maxLength: 2000 }
+      ]
+    },
+    {
+      ...steps[2]!,
+      label: "ما الذي تقدمه؟",
+      description: "المنتجات أو الخدمات",
+      title: "ماذا تبيع أو تقدم؟",
+      intro: "استخدم حقلاً مفتوحاً واحداً لكل ما تقدمه. يمكن جمع الأسماء والأوصاف والأسعار فيه.",
+      help: "هذه أقل معرفة يحتاجها MARKOS لوصف النشاط وإنشاء استراتيجية ومحتوى مرتبطين به.",
+      fields: [
+        {
+          key: "offer",
+          label: "المنتجات والخدمات",
+          placeholder: "الأسماء أو الأوصاف أو الأسعار أو أي تفاصيل مفيدة — اكتب قدر ما تعرفه.",
+          area: true,
+          full: true,
+          maxLength: 4000
+        }
+      ]
+    },
+    {
+      ...steps[3]!,
+      label: "عملاؤك",
+      description: "من تريد الوصول إليه؟",
+      title: "من يشتري منك عادة؟",
+      intro: "صف العملاء الحقيقيين بلغة يومية. لا حاجة إلى تفاصيل ديموغرافية دقيقة إلا إذا أثرت فعلاً على العمل.",
+      help: "يساعد سياق العملاء الاستراتيجية والإنشاء على اختيار رسائل واحتياجات ودعوات إلى الإجراء أكثر ملاءمة.",
+      fields: [
+        {
+          key: "audience",
+          label: "العملاء الرئيسيون",
+          placeholder: "مثال: أهالٍ مشغولون في البحرين يطلبون كعكات للمناسبات العائلية.",
+          area: true,
+          full: true,
+          recommended: true,
+          maxLength: 1000
+        },
+        { key: "needs", label: "احتياجات العملاء", placeholder: "ماذا يحتاجون أو ما الصعوبات التي يواجهونها؟", area: true, maxLength: 1000 },
+        { key: "motivations", label: "ما الذي يهمهم؟", placeholder: "مثال: الموثوقية وسرعة التوصيل والتخصيص", maxLength: 1000 }
+      ]
+    },
+    {
+      ...steps[4]!,
+      label: "سياق السوق",
+      description: "اختياري بالكامل",
+      title: "بمن يقارنك العملاء؟",
+      intro: "تخط هذه الخطوة إن لم تكن متأكداً. لا يشترط منافس محدد، ولن يدّعي MARKOS التحقق منه.",
+      help: "قد تحسن المقارنات المؤكدة الموقع التسويقي. لا يحفظ MARKOS إلا ملاحظات السوق التي تقدمها.",
+      fields: [
+        { key: "competitors", label: "المنافسون أو البدائل", placeholder: "اختياري — اتركه فارغاً إن لم تكن تعرف", area: true, maxLength: 2000 },
+        { key: "avoid", label: "ما ينبغي تجنبه", placeholder: "هل هناك ما ينبغي ألا يقلده MARKOS؟", area: true, maxLength: 1000 }
+      ]
+    },
+    {
+      ...steps[5]!,
+      label: "كيف يبدو صوتك؟",
+      description: "نبرة يستخدمها الإنشاء",
+      title: "كيف ينبغي أن يتحدث النشاط؟",
+      intro: "صف الصوت بأربع كلمات على الأكثر. استخدم اقتراحاً أو اكتب كلماتك الخاصة.",
+      help: "تُستخدم كلمات النبرة وإرشادات الكتابة مباشرة للحفاظ على اتساق المحتوى الذي ينشئه الذكاء الاصطناعي.",
+      suggestions: ["دافئ", "واضح", "واثق", "مرح", "احترافي", "مباشر", "تعليمي", "راقٍ"],
+      fields: [
+        {
+          key: "toneWords",
+          label: "نبرة الصوت",
+          placeholder: "مثال: دافئ، واضح، واثق",
+          helper: "افصل الكلمات بفواصل. يمكن إزالة الاقتراحات.",
+          recommended: true,
+          maxLength: 320
+        },
+        { key: "voice", label: "إرشادات الكتابة", placeholder: "مثال: واضح ودافئ، من دون مبالغة أو وعود كبيرة", area: true, maxLength: 1000 }
+      ]
+    },
+    {
+      ...steps[6]!,
+      label: "الأولوية الحالية",
+      description: "تؤكدها الاستراتيجية لاحقاً",
+      title: "بماذا تريد من MARKOS أن يساعد أولاً؟",
+      intro: "يمنح هذا ملف النشاط سياقاً مفيداً. ستطلب منك الاستراتيجية تأكيد الهدف والمدة أو تغييرهما.",
+      help: "يمكن للأولوية الحالية توجيه التركيز التسويقي في الملف دون تقييد خطة الاستراتيجية لاحقاً.",
+      suggestions: ["زيادة الوعي", "توليد عملاء محتملين", "زيادة المبيعات", "الترويج لعرض", "بناء مجتمع", "إطلاق شيء جديد"],
+      fields: [{ key: "priority", label: "الأولوية الحالية", placeholder: "مثال: تعريف مكاتب المنامة بخدمة الضيافة الجديدة.", area: true, maxLength: 1000 }]
+    }
   ];
 }
 
 type OnboardingCopy = ReturnType<typeof onboardingCopy>;
 
-export function OnboardingPanel({ editMode, initialDraft, locale }: { editMode: boolean; initialDraft?: OnboardingDraft; locale: Locale }) {
-  const copy = onboardingCopy(locale);
-  const isRtl = locale === "ar";
+export function OnboardingPanel({
+  editMode,
+  initialDraft,
+  initialState,
+  locale
+}: {
+  editMode: boolean;
+  initialDraft?: OnboardingDraft;
+  initialState: OnboardingState;
+  locale: Locale;
+}) {
+  const copy = useMemo(() => onboardingCopy(locale), [locale]);
   const steps = copy.steps;
-  const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft);
-  const [draftHydrated, setDraftHydrated] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageTone, setMessageTone] = useState<"error" | "success">("success");
-  const [profileDraft, setProfileDraft] = useState<BusinessProfile | null>(null);
-  const [profileInteractionId, setProfileInteractionId] = useState<string | null>(null);
-  const [profileLanguage, setProfileLanguage] = useState<Locale>(locale);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const session = useMarkosSession();
-  const [step, setStep] = useState<StepId>(1);
+  const reducedMotion = useReducedMotion();
+  const isRtl = locale === "ar";
+  const client = useMarkosClient(locale);
   const router = useRouter();
+  const session = useMarkosSession();
+  const [draft, setDraft] = useState<OnboardingDraft>(() => initialDraft ?? createEmptyOnboardingDraft());
+  const [screen, setScreen] = useState<Screen>(() => initialScreen(initialState, editMode));
+  const [step, setStep] = useState<OnboardingStepId>(() => initialStep(initialState));
+  const [runtimeState, setRuntimeState] = useState(initialState);
+  const [editingFromReview, setEditingFromReview] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<BusinessProfile | null>(initialState.businessProfile.profile);
+  const [profileInteractionId, setProfileInteractionId] = useState<string | null>(initialState.businessProfile.interactionId);
+  const [profileLanguage, setProfileLanguage] = useState<Locale>(locale);
   const workspaceNameApplied = useRef(false);
 
-  const client = useMarkosClient(locale);
-  const dismissMessage = useCallback(() => setMessage(""), []);
-  const applyBusinessProfileState = useCallback((state: OnboardingBusinessProfileState) => {
-    setProfileDraft(state.profile);
-    setProfileInteractionId(state.interactionId);
+  const showError = useCallback((body: string) => {
+    setMessage(body);
   }, []);
 
   useEffect(() => {
     window.localStorage.removeItem(legacyOnboardingDraftKey);
+    window.localStorage.removeItem(previousOnboardingDraftKey);
     const baseDraft = initialDraft ?? createEmptyOnboardingDraft();
-    const storedDraft = window.localStorage.getItem(onboardingDraftKey);
+    const stored = editMode ? null : window.localStorage.getItem(onboardingDraftKey);
 
-    if (storedDraft) {
+    if (stored) {
       try {
-        const parsed = JSON.parse(storedDraft) as Partial<OnboardingDraft>;
-        setDraft({ ...baseDraft, ...parsed });
+        setDraft({ ...baseDraft, ...(JSON.parse(stored) as Partial<OnboardingDraft>) });
       } catch {
         window.localStorage.removeItem(onboardingDraftKey);
         setDraft(baseDraft);
@@ -475,157 +563,169 @@ export function OnboardingPanel({ editMode, initialDraft, locale }: { editMode: 
       setDraft(baseDraft);
     }
 
-    workspaceNameApplied.current = false;
-    setProfileDraft(null);
-    setProfileInteractionId(null);
-    setProfileLanguage(locale);
-    setProfileLoaded(false);
-    setProfileLoading(false);
-    setStep(getInitialStep());
-    setDraftHydrated(true);
-  }, [initialDraft, locale]);
+    setHydrated(true);
+  }, [editMode, initialDraft]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(onboardingDraftKey, JSON.stringify(draft));
+  }, [draft, hydrated]);
 
   useEffect(() => {
     if (session) return;
-
-    void initializeBrowserSession(locale).catch(() => {
-      setMessageTone("error");
-      setMessage(
-        locale === "ar"
-          ? "تعذر تجديد الجلسة مؤقتاً. حاول مجدداً بعد التحقق من الاتصال."
-          : "Your session could not be renewed temporarily. Check your connection and try again."
-      );
-    });
-  }, [locale, session]);
-
-  useEffect(() => {
-    if (step !== 8 || !session || profileLoaded) return;
-
-    let active = true;
-    setProfileLoading(true);
-
-    void client
-      .onboarding()
-      .then((state) => {
-        if (!active) return;
-
-        if (!editMode && state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
-          router.replace(`/${locale}/app/strategy`);
-          return;
-        }
-
-        applyBusinessProfileState(state.businessProfile);
-        setProfileLoaded(true);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setMessageTone("error");
-        setMessage(error instanceof Error ? error.message : copy.errors.generate);
-      })
-      .finally(() => {
-        if (active) setProfileLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [applyBusinessProfileState, client, copy.errors.generate, editMode, locale, profileLoaded, router, session, step]);
-
-  useEffect(() => {
-    if (!draftHydrated) return;
-    window.localStorage.setItem(onboardingDraftKey, JSON.stringify(draft));
-  }, [draft, draftHydrated]);
+    void initializeBrowserSession(locale).catch(() => showError(copy.errors.session));
+  }, [copy.errors.session, locale, session, showError]);
 
   useEffect(() => {
     const workspaceName = session?.workspace.name.trim();
-    if (!draftHydrated || !workspaceName || workspaceNameApplied.current) return;
-
+    if (!hydrated || !workspaceName || workspaceNameApplied.current) return;
     workspaceNameApplied.current = true;
-    setDraft((current) => (current.companyName.trim() ? current : { ...current, companyName: workspaceName }));
-  }, [draftHydrated, session]);
+    setDraft((current) => (current.businessName.trim() ? current : { ...current, businessName: workspaceName }));
+  }, [hydrated, session]);
 
-  const progress = Math.round((step / steps.length) * 100);
+  const activeStep = steps[step - 1]!;
+  const validationIssue = validateOnboardingStep(step, draft);
+  const canSave = hasOnboardingStepData(step, draft) && validationIssue === null;
+  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
+  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
+  const transition = reducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
 
-  async function next() {
-    const saved = await persistStep(step);
-    if (!saved) return;
-
-    if (step === 7) {
-      setProfileLoaded(true);
-      setStep(8);
-      await generateProfile();
-      return;
-    }
-
-    if (step < 8) {
-      setStep((current) => (current + 1) as StepId);
-    }
-  }
-
-  function selectStep(target: StepId) {
-    if (target === 8 && step === 7) {
-      void next();
-      return;
-    }
-
-    if (target !== 8) {
-      setStep(target);
-      setMessage("");
-    }
-  }
-
-  function back() {
-    setStep((current) => Math.max(1, current - 1) as StepId);
+  function update<K extends DraftFieldKey>(key: K, value: OnboardingDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
+  }
+
+  function startSetup() {
+    setScreen("step");
+    setStep(initialStep(runtimeState));
+  }
+
+  async function saveAndContinue() {
+    if (!session) {
+      showError(copy.errors.session);
+      return;
+    }
+
+    const issue = validateOnboardingStep(step, draft);
+    if (issue) {
+      showError(copy.errors[issue]);
+      return;
+    }
+
+    if (!hasOnboardingStepData(step, draft)) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const payload = payloadForOnboardingStep(step, draft);
+      const state = await client.saveOnboardingModule(payload.module, payload.body);
+      setRuntimeState(state);
+      advanceAfterStep();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function skipStep() {
+    if (!session || !activeStep.skippable) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const state = await client.skipOnboardingModule(activeStep.module);
+      setRuntimeState(state);
+      advanceAfterStep();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function advanceAfterStep() {
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setScreen("review");
+      return;
+    }
+
+    if (step < 7) {
+      setStep((step + 1) as OnboardingStepId);
+    } else {
+      setScreen("review");
+    }
+  }
+
+  function goBack() {
+    setMessage("");
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setScreen("review");
+      return;
+    }
+    if (step > 1) {
+      setStep((step - 1) as OnboardingStepId);
+      return;
+    }
+    if (!editMode) setScreen("greeting");
+  }
+
+  function editReviewStep(target: OnboardingStepId) {
+    setStep(target);
+    setEditingFromReview(true);
+    setScreen("step");
+    setMessage("");
+  }
+
+  function toggleSuggestion(value: string) {
+    const target = activeStep.suggestionTarget;
+    if (!target) return;
+
+    if (activeStep.suggestionMode === "single") {
+      update(target, (draft[target] === value ? "" : value) as OnboardingDraft[typeof target]);
+      return;
+    }
+
+    const current = splitOnboardingList(String(draft[target]));
+    const next = current.includes(value) ? current.filter((item) => item !== value) : current.length < 4 ? [...current, value] : current;
+    update(target, next.join(", ") as OnboardingDraft[typeof target]);
   }
 
   async function generateProfile() {
     if (!session) {
-      setMessageTone("error");
-      setMessage(copy.errors.session);
+      showError(copy.errors.session);
       return;
     }
 
+    setScreen("profile");
     setProfileLoading(true);
     setMessage("");
     try {
       const state = await client.generateBusinessProfile();
-      applyBusinessProfileState(state.businessProfile);
-      setProfileLoaded(true);
+      setRuntimeState(state);
+      setProfileDraft(state.businessProfile.profile);
+      setProfileInteractionId(state.businessProfile.interactionId);
     } catch (error) {
-      setMessageTone("error");
-      setMessage(error instanceof Error ? error.message : copy.errors.generate);
+      showError(error instanceof Error ? error.message : copy.errors.generate);
     } finally {
       setProfileLoading(false);
     }
   }
 
   async function approveProfile() {
-    if (!session) {
-      setMessageTone("error");
-      setMessage(copy.errors.session);
-      return;
-    }
-
-    if (!profileDraft || !profileInteractionId) {
-      setMessageTone("error");
-      setMessage(copy.errors.generate);
+    if (!profileDraft || !profileInteractionId || !session) {
+      showError(copy.errors.approve);
       return;
     }
 
     setSaving(true);
     setMessage("");
-
     try {
-      await client.approveBusinessProfile({
-        interactionId: profileInteractionId,
-        profile: profileDraft
-      });
+      await client.approveBusinessProfile({ interactionId: profileInteractionId, profile: profileDraft });
       window.localStorage.removeItem(onboardingDraftKey);
       router.push(`/${locale}/app/strategy`);
     } catch (error) {
-      setMessageTone("error");
-      setMessage(error instanceof Error ? error.message : copy.errors.approve);
+      showError(error instanceof Error ? error.message : copy.errors.approve);
       setSaving(false);
     }
   }
@@ -635,889 +735,639 @@ export function OnboardingPanel({ editMode, initialDraft, locale }: { editMode: 
   }
 
   function updateProfileField(field: ProfileFieldKey, language: Locale, value: string) {
-    setProfileDraft((current) =>
-      current
-        ? {
-            ...current,
-            [field]: {
-              ...current[field],
-              [language]: value
-            }
-          }
-        : current
-    );
+    setProfileDraft((current) => (current ? { ...current, [field]: { ...current[field], [language]: value } } : current));
   }
-
-  async function persistStep(stepToSave: StepId): Promise<boolean> {
-    if (!session) {
-      setMessageTone("error");
-      setMessage(copy.errors.session);
-      return false;
-    }
-
-    const validationIssue = validateOnboardingStep(stepToSave, draft);
-    if (validationIssue) {
-      setMessageTone("error");
-      setMessage(copy.validation[validationIssue]);
-      return false;
-    }
-
-    setSaving(true);
-    setMessage("");
-
-    try {
-      const payload = payloadForOnboardingStep(stepToSave, draft);
-      if (!payload) return false;
-      await client.saveOnboardingModule(payload.module, payload.body);
-      setMessageTone("success");
-      setMessage(copy.saved);
-      return true;
-    } catch (error) {
-      setMessageTone("error");
-      setMessage(error instanceof Error ? error.message : copy.errors.save);
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function update<K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  function addCompetitor() {
-    const name = draft.newCompetitor.trim();
-    if (!name) return;
-    setDraft((current) => ({ ...current, competitors: [...current.competitors, name], newCompetitor: "" }));
-  }
-
-  function removeCompetitor(index: number) {
-    setDraft((current) => ({ ...current, competitors: current.competitors.filter((_, itemIndex) => itemIndex !== index) }));
-  }
-
-  function addProduct() {
-    if (!draft.newProduct.name.trim()) {
-      setMessageTone("error");
-      setMessage(copy.validation.products);
-      return;
-    }
-
-    const product: OnboardingProductDraft = {
-      category: draft.newProduct.category.trim(),
-      description: draft.newProduct.description.trim(),
-      name: draft.newProduct.name.trim()
-    };
-    setDraft((current) => ({
-      ...current,
-      newProduct: { category: "", description: "", name: "" },
-      products: [...current.products, product]
-    }));
-    setMessage("");
-  }
-
-  function removeProduct(index: number) {
-    setDraft((current) => ({
-      ...current,
-      products: current.products.filter((_, itemIndex) => itemIndex !== index)
-    }));
-  }
-
-  function toggleGoal(goal: string) {
-    setDraft((current) => ({
-      ...current,
-      goals: current.goals.includes(goal) ? current.goals.filter((item) => item !== goal) : [...current.goals, goal]
-    }));
-  }
-
-  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
-  const NextIcon = isRtl ? ArrowLeft : ArrowRight;
 
   return (
-    <section className="sunlit-theme sunlit-app flex min-h-screen text-[var(--sunlit-ink)]" dir={isRtl ? "rtl" : "ltr"}>
-      <NotificationToast
-        body={message}
-        dismissLabel={copy.dismiss}
-        onDismiss={dismissMessage}
-        title={messageTone === "error" ? copy.attention : copy.status}
-        tone={messageTone}
-      />
-      <aside
-        className={
-          isRtl
-            ? "sticky top-0 hidden h-screen w-[19rem] shrink-0 flex-col justify-between border-l border-[var(--sunlit-line)] bg-white/78 p-7 backdrop-blur-xl lg:flex xl:w-[21rem] xl:p-9"
-            : "sticky top-0 hidden h-screen w-[19rem] shrink-0 flex-col justify-between border-r border-[var(--sunlit-line)] bg-white/78 p-7 backdrop-blur-xl lg:flex xl:w-[21rem] xl:p-9"
-        }
-      >
-        <div>
-          <a className="mb-10 flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_12px_28px_rgb(32_33_43_/_18%)]">
-              <Sparkles size={20} strokeWidth={2.4} />
-            </span>
-            <span>
-              <span className="block font-display text-xl font-bold tracking-tight">MARKOS AI</span>
-              <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{copy.progress(step, steps.length)}</span>
-            </span>
-          </a>
+    <main className="sunlit-theme onboarding-stage relative min-h-screen overflow-hidden text-[var(--sunlit-ink)]" dir={isRtl ? "rtl" : "ltr"}>
+      <div aria-hidden="true" className="onboarding-orb onboarding-orb-one" />
+      <div aria-hidden="true" className="onboarding-orb onboarding-orb-two" />
 
-          <nav className="grid gap-1.5" aria-label="Onboarding steps">
-            {steps.map((item) => {
-              const active = step === item.id;
-              const complete = step > item.id;
+      <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
+        <a className="flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_14px_30px_rgb(32_33_43_/_18%)]">
+            <Sparkles size={21} strokeWidth={2.35} />
+          </span>
+          <strong className="text-[16px] font-bold tracking-tight">MARKOS AI</strong>
+        </a>
+        {screen !== "greeting" ? (
+          <span className="rounded-full border border-[var(--sunlit-line)] bg-white/75 px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-muted)] backdrop-blur">
+            {screen === "step" ? copy.step(step, 7) : screen === "review" ? copy.informationCheck : copy.profile.eyebrow}
+          </span>
+        ) : null}
+      </header>
 
-              return (
-                <button
-                  className={
-                    active
-                      ? "flex w-full items-center gap-3 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2.5 text-start"
-                      : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition hover:bg-white disabled:cursor-not-allowed"
-                  }
-                  disabled={saving || (item.id === 8 && step < 7)}
-                  key={item.id}
-                  onClick={() => selectStep(item.id)}
-                  type="button"
-                >
-                  <span
-                    className={
-                      complete
-                        ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-aqua)] text-white"
-                        : active
-                          ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-coral)] text-xs font-extrabold text-white"
-                          : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--sunlit-line)] bg-white text-xs font-extrabold text-[var(--sunlit-muted)]"
-                    }
-                  >
-                    {complete ? <CheckCircle2 size={14} /> : item.id}
-                  </span>
-                  <span>
-                    <span
-                      className={
-                        active || complete
-                          ? "block text-[13px] font-extrabold text-[var(--sunlit-ink)]"
-                          : "block text-[13px] font-semibold text-[var(--sunlit-muted)]"
-                      }
-                    >
-                      {item.label}
-                    </span>
-                    <span className="block text-[11px] leading-4 text-[var(--sunlit-muted)]">{item.desc}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="sunlit-panel-dark rounded-2xl p-5">
-          <div className="mb-2 flex items-center gap-2 text-xs font-extrabold text-[var(--sunlit-yellow)]">
-            <Sparkles size={14} />
-            {copy.aiCardTitle}
-          </div>
-          <p className="text-xs leading-5 text-white/70">{copy.aiCardBody}</p>
-        </div>
-      </aside>
-
-      <main className="flex min-w-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto px-5 py-7 sm:p-8 xl:px-12 xl:py-10 2xl:px-16">
-        <div className={step === 8 ? "w-full min-w-0 max-w-[1220px]" : "w-full min-w-0 max-w-[1060px]"}>
-          <div className="mb-6 flex items-end justify-between gap-6">
-            <div>
-              <p className="sunlit-eyebrow">{locale === "ar" ? "تأسيس ملف نشاطك" : "Build your business profile"}</p>
-              <p className="mt-1 text-sm font-semibold text-[var(--sunlit-muted)]">{copy.progress(step, steps.length)}</p>
+      {message ? (
+        <div className="relative z-10 mx-auto mb-4 w-full max-w-6xl px-5 sm:px-8" role="alert">
+          <div className="flex items-start gap-3 rounded-2xl border border-[rgb(199_53_80_/_20%)] bg-[rgb(255_244_246_/_96%)] px-4 py-3 text-[15px] text-[var(--sunlit-ink-soft)] shadow-sm">
+            <Info className="mt-0.5 shrink-0 text-[var(--sunlit-danger)]" size={18} />
+            <div className="min-w-0 flex-1">
+              <strong className="block font-bold text-[var(--sunlit-danger)]">{copy.attention}</strong>
+              <span className="mt-0.5 block leading-6">{message}</span>
             </div>
-            <span className="text-sm font-extrabold text-[var(--sunlit-aqua-dark)]">
-              {progress}%<span className="hidden sm:inline"> {copy.complete}</span>
-            </span>
+            <button
+              aria-label={copy.dismiss}
+              className="rounded-lg p-1 text-[var(--sunlit-muted)] hover:bg-white hover:text-[var(--sunlit-ink)]"
+              onClick={() => setMessage("")}
+              type="button"
+            >
+              <X size={17} />
+            </button>
           </div>
-          <div className="mb-7">
-            <div className="sr-only">
-              <span>{copy.progress(step, steps.length)}</span>
-              <span>
-                {progress}%<span className="hidden sm:inline"> {copy.complete}</span>
+        </div>
+      ) : null}
+
+      <AnimatePresence initial={false} mode="wait">
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-[1]"
+          exit={{ opacity: 0, y: reducedMotion ? 0 : -10 }}
+          initial={{ opacity: 0, y: reducedMotion ? 0 : 14 }}
+          key={`${screen}-${screen === "step" ? step : "screen"}`}
+          transition={transition}
+        >
+          {screen === "greeting" ? <Greeting copy={copy} onStart={startSetup} /> : null}
+          {screen === "step" ? (
+            <StepScreen
+              BackIcon={BackIcon}
+              NextIcon={NextIcon}
+              canSave={canSave}
+              copy={copy}
+              draft={draft}
+              onBack={goBack}
+              onSave={() => void saveAndContinue()}
+              onSkip={() => void skipStep()}
+              onSuggestion={toggleSuggestion}
+              saving={saving}
+              step={activeStep}
+              steps={steps}
+              update={update}
+              validationIssue={validationIssue}
+            />
+          ) : null}
+          {screen === "review" ? (
+            <ReviewScreen
+              copy={copy}
+              draft={draft}
+              onBack={() => {
+                setStep(7);
+                setScreen("step");
+              }}
+              onCreate={() => void generateProfile()}
+              onEdit={editReviewStep}
+              readyForProfile={runtimeState.readyForProfile || (draft.businessName.trim().length >= 2 && draft.offer.trim().length >= 2)}
+              saving={profileLoading}
+            />
+          ) : null}
+          {screen === "profile" ? (
+            <ProfileScreen
+              copy={copy}
+              language={profileLanguage}
+              loading={profileLoading}
+              onApprove={() => void approveProfile()}
+              onBack={() => setScreen("review")}
+              onRegenerate={() => void generateProfile()}
+              profile={profileDraft}
+              saving={saving}
+              setLanguage={setProfileLanguage}
+              updateBusinessName={updateBusinessName}
+              updateProfileField={updateProfileField}
+            />
+          ) : null}
+        </motion.div>
+      </AnimatePresence>
+    </main>
+  );
+}
+
+function Greeting({ copy, onStart }: { copy: OnboardingCopy; onStart: () => void }) {
+  return (
+    <section className="mx-auto grid min-h-[calc(100vh-96px)] w-full max-w-6xl place-items-center px-5 pb-12 sm:px-8">
+      <div className="w-full max-w-5xl text-center">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_22px_48px_rgb(32_33_43_/_22%)]">
+          <Sparkles size={28} />
+        </span>
+        <p className="mt-6 text-[13px] font-bold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">{copy.greeting.eyebrow}</p>
+        <h1 className="mx-auto mt-3 max-w-4xl font-display text-[clamp(42px,5vw,68px)] font-bold leading-[1.03] tracking-[-0.05em] text-[var(--sunlit-ink)] rtl:tracking-normal">
+          {copy.greeting.title}
+        </h1>
+
+        <div className="mt-8 grid gap-3 text-start md:grid-cols-3">
+          {copy.greeting.journey.map((title, index) => (
+            <article className="sunlit-panel flex items-center gap-3 rounded-2xl bg-white/82 p-4 backdrop-blur" key={title}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[13px] font-bold text-[var(--sunlit-aqua-dark)]">
+                {index + 1}
               </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white shadow-[inset_0_0_0_1px_var(--sunlit-line)]">
-              <div
-                className="h-full rounded-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-
-          <section className="sunlit-panel w-full min-w-0 overflow-hidden rounded-[2rem] p-6 sm:p-8 xl:p-10">
-            {step === 1 ? <CompanyStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 2 ? <StoryStep copy={copy} draft={draft} update={update} /> : null}
-            {step === 3 ? <ProductsStep addProduct={addProduct} copy={copy} draft={draft} removeProduct={removeProduct} update={update} /> : null}
-            {step === 4 ? <AudienceStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 5 ? (
-              <CompetitorsStep addCompetitor={addCompetitor} copy={copy} draft={draft} removeCompetitor={removeCompetitor} update={update} />
-            ) : null}
-            {step === 6 ? <BrandStep copy={copy} draft={draft} locale={locale} update={update} /> : null}
-            {step === 7 ? <GoalsStep copy={copy} draft={draft} locale={locale} toggleGoal={toggleGoal} update={update} /> : null}
-            {step === 8 ? (
-              <ReviewStep
-                approveProfile={approveProfile}
-                back={back}
-                copy={copy}
-                generateProfile={generateProfile}
-                language={profileLanguage}
-                loading={profileLoading}
-                profile={profileDraft}
-                saving={saving}
-                setLanguage={setProfileLanguage}
-                updateBusinessName={updateBusinessName}
-                updateProfileField={updateProfileField}
-              />
-            ) : null}
-
-            {step < 8 ? (
-              <div className="mt-8 flex items-center justify-between border-t border-[var(--sunlit-line)] pt-6">
-                <button
-                  className="sunlit-secondary flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold disabled:border-transparent disabled:bg-transparent disabled:text-[rgb(98_91_102_/_35%)]"
-                  disabled={step === 1 || saving}
-                  onClick={back}
-                  type="button"
-                >
-                  <BackIcon size={16} />
-                  {copy.back}
-                </button>
-                <button
-                  className="sunlit-primary flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-extrabold disabled:opacity-60"
-                  disabled={saving}
-                  onClick={next}
-                  type="button"
-                >
-                  {step === 7 ? copy.build : copy.continue}
-                  <NextIcon size={16} />
-                </button>
-              </div>
-            ) : null}
-          </section>
+              <h2 className="text-[15px] font-bold leading-6">{title}</h2>
+            </article>
+          ))}
         </div>
-      </main>
+
+        <button
+          className="sunlit-primary mt-8 inline-flex min-w-56 items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-[15px] font-bold"
+          onClick={onStart}
+          type="button"
+        >
+          {copy.greeting.start}
+          <ArrowRight className="rtl:rotate-180" size={17} />
+        </button>
+      </div>
     </section>
   );
 }
 
-function CompanyStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
-  return (
-    <div>
-      <StepHeading body={copy.company.body} title={copy.company.title} />
-      <div className="grid gap-5 md:grid-cols-2">
-        <DarkField label={copy.company.name} onChange={(value) => update("companyName", value)} value={draft.companyName} />
-        <DarkSelect
-          label={copy.company.industry}
-          onChange={(value) => update("industry", value)}
-          options={industryOptions(locale)}
-          placeholder={copy.company.industry}
-          value={draft.industry}
-        />
-        <DarkField label={copy.company.location} onChange={(value) => update("location", value)} value={draft.location} />
-        <DarkField label={copy.company.website} onChange={(value) => update("website", value)} value={draft.website} />
-        <section className="md:col-span-2">
-          <Label>{copy.company.language}</Label>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            {languageOptions(locale).map((language) => (
-              <button
-                className={
-                  draft.languagePreference === language.value
-                    ? "rounded-xl border border-[rgb(33_191_174_/_35%)] bg-[var(--sunlit-aqua-soft)] px-4 py-2.5 text-sm font-extrabold text-[var(--sunlit-aqua-dark)]"
-                    : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sunlit-muted)]"
-                }
-                key={language.value}
-                onClick={() => update("languagePreference", language.value)}
-                type="button"
-              >
-                {language.label}
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-function StoryStep({ copy, draft, update }: StepProps & { copy: OnboardingCopy }) {
-  return (
-    <div>
-      <StepHeading body={copy.story.body} title={copy.story.title} />
-      <div className="grid gap-5 md:grid-cols-2">
-        <DarkField area label={copy.story.mission} onChange={(value) => update("mission", value)} value={draft.mission} />
-        <DarkField area label={copy.story.usp} onChange={(value) => update("usp", value)} value={draft.usp} />
-        <DarkField label={copy.story.values} onChange={(value) => update("values", value)} value={draft.values} />
-        <DarkField area label={copy.story.origin} onChange={(value) => update("origin", value)} value={draft.origin} />
-        <DarkField area label={copy.story.problemSolved} onChange={(value) => update("problemSolved", value)} value={draft.problemSolved} />
-        <DarkField area label={copy.story.vision} onChange={(value) => update("vision", value)} value={draft.vision} />
-      </div>
-    </div>
-  );
-}
-
-function ProductsStep({
-  addProduct,
+function StepScreen({
+  BackIcon,
+  NextIcon,
+  canSave,
   copy,
   draft,
-  removeProduct,
-  update
-}: StepProps & {
-  addProduct: () => void;
+  onBack,
+  onSave,
+  onSkip,
+  onSuggestion,
+  saving,
+  step,
+  steps,
+  update,
+  validationIssue
+}: {
+  BackIcon: Icon;
+  NextIcon: Icon;
+  canSave: boolean;
   copy: OnboardingCopy;
-  removeProduct: (index: number) => void;
+  draft: OnboardingDraft;
+  onBack: () => void;
+  onSave: () => void;
+  onSkip: () => void;
+  onSuggestion: (value: string) => void;
+  saving: boolean;
+  step: StepDefinition;
+  steps: StepDefinition[];
+  update: <K extends DraftFieldKey>(key: K, value: OnboardingDraft[K]) => void;
+  validationIssue: ReturnType<typeof validateOnboardingStep>;
 }) {
-  function updateNewProduct(key: keyof OnboardingProductDraft, value: string) {
-    update("newProduct", { ...draft.newProduct, [key]: value });
-  }
+  const StepIcon = step.icon;
+  const previous = step.id > 1 ? steps[step.id - 2] : null;
+  const next = step.id < 7 ? steps[step.id] : null;
 
   return (
-    <div>
-      <StepHeading body={copy.products.body} title={copy.products.title} />
-      <div className="grid gap-3">
-        {draft.products.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-4 text-sm font-semibold text-[var(--sunlit-muted)]">
-            {copy.products.empty}
-          </p>
-        ) : null}
-        {draft.products.map((product, index) => (
-          <article
-            className="flex items-start gap-3 rounded-xl border border-[var(--sunlit-line)] bg-white p-4 shadow-[0_8px_24px_rgb(75_47_36_/_5%)]"
-            key={`${product.name}-${index}`}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="font-extrabold text-[var(--sunlit-ink)]">{product.name}</p>
-              {product.category ? <p className="mt-1 text-xs font-semibold text-[var(--sunlit-pink)]">{product.category}</p> : null}
-              {product.description ? <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{product.description}</p> : null}
+    <section className="mx-auto w-full max-w-6xl px-5 pb-8 sm:px-8 lg:pb-6">
+      <div className="mb-4 grid grid-cols-[1fr_1.25fr_1fr] gap-2 sm:gap-3">
+        <ContextItem label={copy.previous} muted title={previous?.label ?? ""} />
+        <ContextItem current label={copy.step(step.id, 7)} title={step.label} />
+        <ContextItem label={copy.next} muted title={next?.label ?? copy.informationCheck} />
+      </div>
+
+      <section className="sunlit-panel overflow-hidden rounded-[2rem] bg-white/90 backdrop-blur-xl">
+        <div className="h-1.5 bg-[var(--sunlit-paper-deep)]">
+          <div
+            className="h-full rounded-e-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-[width] duration-300"
+            style={{ width: `${(step.id / 7) * 100}%` }}
+          />
+        </div>
+        <div className="grid gap-8 p-6 sm:p-8 lg:min-h-[510px] lg:grid-cols-[minmax(0,1.65fr)_minmax(250px,.75fr)] lg:p-10">
+          <div className="min-w-0">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
+                <StepIcon size={22} />
+              </span>
+              <div>
+                <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight sm:text-[32px]">{step.title}</h1>
+                <p className="mt-2 max-w-2xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{step.intro}</p>
+              </div>
             </div>
+
+            {step.suggestions ? (
+              <div className="mt-7">
+                <p className="text-[13px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{copy.suggestions}</p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {step.suggestions.map((suggestion) => {
+                    const target = step.suggestionTarget;
+                    const current = target ? String(draft[target]) : "";
+                    const active = step.suggestionMode === "single" ? current === suggestion : splitOnboardingList(current).includes(suggestion);
+                    return (
+                      <button
+                        aria-pressed={active}
+                        className={
+                          active
+                            ? "rounded-full border border-[rgb(33_191_174_/_35%)] bg-[var(--sunlit-aqua-soft)] px-3.5 py-2 text-[14px] font-bold text-[var(--sunlit-aqua-dark)]"
+                            : "rounded-full border border-[var(--sunlit-line)] bg-white px-3.5 py-2 text-[14px] font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
+                        }
+                        key={suggestion}
+                        onClick={() => onSuggestion(suggestion)}
+                        type="button"
+                      >
+                        {active ? <Check className="me-1 inline" size={13} /> : null}
+                        {suggestion}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-7 grid gap-5 sm:grid-cols-2">
+              {step.fields.map((field, index) => (
+                <OnboardingField
+                  copy={copy}
+                  field={field}
+                  full={
+                    field.full ||
+                    step.fields.length === 1 ||
+                    (!step.fields.some((item) => item.full) && index === step.fields.length - 1 && step.fields.length % 2 === 1)
+                  }
+                  key={field.key}
+                  onChange={(value) => update(field.key, value)}
+                  value={String(draft[field.key])}
+                />
+              ))}
+            </div>
+
+            {validationIssue ? <p className="mt-4 text-[14px] font-semibold text-[var(--sunlit-danger)]">{copy.errors[validationIssue]}</p> : null}
+          </div>
+
+          <aside className="self-start rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/70 p-5">
+            <div className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-aqua-dark)]">
+              <Info size={17} />
+              {copy.helpTitle}
+            </div>
+            <p className="mt-3 text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{step.help}</p>
+            <div className="mt-5 flex items-center gap-2 border-t border-[rgb(33_191_174_/_18%)] pt-4 text-[13px] font-bold text-[var(--sunlit-muted)]">
+              {step.skippable ? <CheckCircle2 size={15} /> : <ShieldCheck size={15} />}
+              {step.skippable ? copy.optional : copy.essential}
+            </div>
+          </aside>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-white/65 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+          <button
+            className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+            disabled={saving}
+            onClick={onBack}
+            type="button"
+          >
+            <BackIcon size={16} />
+            {copy.back}
+          </button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+            {step.skippable ? (
+              <button
+                className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
+                disabled={saving}
+                onClick={onSkip}
+                type="button"
+              >
+                {copy.skip}
+              </button>
+            ) : null}
             <button
-              aria-label={`Remove ${product.name}`}
-              className="text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-coral-deep)]"
-              onClick={() => removeProduct(index)}
+              className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+              disabled={saving || !canSave}
+              onClick={onSave}
               type="button"
             >
-              <Trash2 size={15} />
+              {saving ? <LoaderCircle className="animate-spin" size={16} /> : null}
+              {copy.saveContinue}
+              <NextIcon size={16} />
             </button>
-          </article>
-        ))}
-      </div>
-      <div className="sunlit-panel-soft mt-5 grid gap-4 rounded-2xl p-5 md:grid-cols-2">
-        <DarkField label={copy.products.name} onChange={(value) => updateNewProduct("name", value)} value={draft.newProduct.name} />
-        <DarkField label={copy.products.category} onChange={(value) => updateNewProduct("category", value)} value={draft.newProduct.category} />
-        <div className="md:col-span-2">
-          <DarkField area label={copy.products.description} onChange={(value) => updateNewProduct("description", value)} value={draft.newProduct.description} />
+          </div>
         </div>
-        <button
-          className="sunlit-primary flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold md:col-span-2 md:justify-self-end"
-          onClick={addProduct}
-          type="button"
-        >
-          <Plus size={16} />
-          {copy.addProduct}
-        </button>
-      </div>
-      <div className="mt-5 grid gap-5 md:grid-cols-3">
-        <DarkField label={copy.products.differentiators} onChange={(value) => update("differentiators", value)} value={draft.differentiators} />
-        <DarkField label={copy.products.priceRange} onChange={(value) => update("priceRange", value)} value={draft.priceRange} />
-        <DarkField label={copy.products.salesChannels} onChange={(value) => update("salesChannels", value)} value={draft.salesChannels} />
-      </div>
+      </section>
+    </section>
+  );
+}
+
+function ContextItem({ current = false, label, muted = false, title }: { current?: boolean; label: string; muted?: boolean; title: string }) {
+  return (
+    <div
+      className={
+        current
+          ? "rounded-2xl border border-[rgb(217_63_122_/_20%)] bg-white/90 px-3 py-3 text-center shadow-sm"
+          : "rounded-2xl border border-white/55 bg-white/45 px-3 py-3 text-center backdrop-blur"
+      }
+    >
+      <span className="block text-[12px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{label}</span>
+      <strong
+        className={
+          muted ? "mt-1 block min-h-5 truncate text-[14px] text-[rgb(98_91_102_/_72%)]" : "mt-1 block min-h-5 truncate text-[14px] text-[var(--sunlit-ink)]"
+        }
+      >
+        {title || <span aria-hidden="true">&nbsp;</span>}
+      </strong>
     </div>
   );
 }
 
-function BrandStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
+function OnboardingField({
+  copy,
+  field,
+  full,
+  onChange,
+  value
+}: {
+  copy: OnboardingCopy;
+  field: FieldDefinition;
+  full: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const inputClass = "sunlit-field mt-2 rounded-xl px-4 py-3 text-[15px] leading-6 outline-none";
   return (
-    <div>
-      <StepHeading body={copy.brand.body} title={copy.brand.title} />
-      <section>
-        <Label>{copy.brand.tone}</Label>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {toneMeta.map((tone) => {
-            const Icon = tone.icon;
-            const active = draft.tone === tone.id;
+    <label className={full ? "sm:col-span-2" : ""}>
+      <span className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-ink-soft)]">
+        {field.label}
+        {field.recommended ? (
+          <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2 py-0.5 text-[12px] font-bold text-[var(--sunlit-pink)]">{copy.recommended}</span>
+        ) : null}
+      </span>
+      {field.area ? (
+        <textarea
+          className={`${inputClass} min-h-24 w-full resize-y`}
+          dir="auto"
+          maxLength={field.maxLength}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={field.placeholder}
+          value={value}
+        />
+      ) : (
+        <input
+          className={`${inputClass} min-h-12 w-full`}
+          dir="auto"
+          maxLength={field.maxLength}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={field.placeholder}
+          value={value}
+        />
+      )}
+      {field.helper ? <span className="mt-1.5 block text-[14px] leading-5 text-[var(--sunlit-muted)]">{field.helper}</span> : null}
+    </label>
+  );
+}
+
+function ReviewScreen({
+  copy,
+  draft,
+  onBack,
+  onCreate,
+  onEdit,
+  readyForProfile,
+  saving
+}: {
+  copy: OnboardingCopy;
+  draft: OnboardingDraft;
+  onBack: () => void;
+  onCreate: () => void;
+  onEdit: (step: OnboardingStepId) => void;
+  readyForProfile: boolean;
+  saving: boolean;
+}) {
+  const targets: OnboardingStepId[] = [1, 3, 4, 2, 5, 6, 7];
+  return (
+    <section className="mx-auto w-full max-w-5xl px-5 pb-12 sm:px-8">
+      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-9 lg:p-10">
+        <div className="max-w-3xl">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
+            <ShieldCheck size={23} />
+          </span>
+          <h1 className="mt-5 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.review.title}</h1>
+          <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.review.body}</p>
+        </div>
+
+        <div className="mt-7 grid gap-3">
+          {copy.review.rows.map(([title, note], index) => {
+            const target = targets[index]!;
+            const ready = hasOnboardingStepData(target, draft) && validateOnboardingStep(target, draft) === null;
+            const required = target === 1 || target === 3;
             return (
               <button
-                className={
-                  active
-                    ? "rounded-xl border border-[rgb(217_63_122_/_30%)] bg-[var(--sunlit-paper-deep)] p-3 text-center text-[var(--sunlit-pink)]"
-                    : "rounded-xl border border-[var(--sunlit-line)] bg-white p-3 text-center text-[var(--sunlit-muted)] transition hover:border-[rgb(217_63_122_/_24%)] hover:text-[var(--sunlit-ink)]"
-                }
-                key={tone.id}
-                onClick={() => update("tone", tone.id)}
+                className="group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[rgb(33_191_174_/_32%)] hover:bg-white hover:shadow-sm"
+                key={title}
+                onClick={() => onEdit(target)}
                 type="button"
               >
-                <Icon className="mx-auto" size={18} />
-                <span className="mt-2 block text-xs font-semibold">{toneLabel(locale, tone.id)}</span>
+                <span className="min-w-0">
+                  <strong className="block text-[16px] font-bold">{title}</strong>
+                  <span className="mt-1 block text-[14px] text-[var(--sunlit-muted)]">{note}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span
+                    className={
+                      ready
+                        ? "rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-aqua-dark)]"
+                        : required
+                          ? "rounded-full bg-[rgb(199_53_80_/_10%)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-danger)]"
+                          : "rounded-full bg-[rgb(98_91_102_/_8%)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-muted)]"
+                    }
+                  >
+                    {ready ? copy.review.ready : required ? copy.essential : copy.notAdded}
+                  </span>
+                  <span className="hidden items-center gap-1 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] group-hover:flex sm:flex">
+                    <Pencil size={13} />
+                    {copy.edit}
+                  </span>
+                </span>
               </button>
             );
           })}
         </div>
-      </section>
 
-      <section className="mt-5 sm:mt-6">
-        <Label>{copy.brand.color}</Label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {["#E94560", "#0F3460", "#22C55E", "#F59E0B", "#6366F1", "#EC4899", "#111827"].map((color) => (
-            <button
-              aria-label={`${copy.brand.color} ${color}`}
-              className={
-                draft.brandColor === color
-                  ? "h-9 w-9 rounded-xl border-[3px] border-[var(--sunlit-ink)] shadow-[0_0_0_2px_white]"
-                  : "h-9 w-9 rounded-xl border-[3px] border-transparent"
-              }
-              key={color}
-              onClick={() => update("brandColor", color)}
-              style={{ background: color }}
-              type="button"
-            />
-          ))}
+        <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" onClick={onBack} type="button">
+            {copy.back}
+          </button>
+          <button
+            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+            disabled={!readyForProfile || saving}
+            onClick={onCreate}
+            type="button"
+          >
+            {saving ? <LoaderCircle className="animate-spin" size={17} /> : <WandSparkles size={17} />}
+            {readyForProfile ? copy.review.create : copy.review.missingEssential}
+          </button>
         </div>
       </section>
-      <div className="mt-5 grid gap-5 sm:mt-6 md:grid-cols-2">
-        <DarkField label={copy.brand.visualWords} onChange={(value) => update("brandVisualWords", value)} value={draft.brandVisualWords} />
-        <DarkField label={copy.brand.fonts} onChange={(value) => update("brandFonts", value)} value={draft.brandFonts} />
-        <div className="md:col-span-2">
-          <DarkField area label={copy.brand.voiceNotes} onChange={(value) => update("brandVoiceNotes", value)} value={draft.brandVoiceNotes} />
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
 
-function AudienceStep({ copy, draft, locale, update }: StepProps & { copy: OnboardingCopy; locale: Locale }) {
-  return (
-    <div>
-      <StepHeading body={copy.audience.body} title={copy.audience.title} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <DarkSelect
-          label={copy.audience.age}
-          onChange={(value) => update("ageRange", value)}
-          options={["18-24", "25-34", "35-44", "45+"].map((value) => ({ label: value, value }))}
-          placeholder={copy.audience.age}
-          value={draft.ageRange}
-        />
-        <DarkSelect
-          label={copy.audience.gender}
-          onChange={(value) => update("genderFocus", value)}
-          options={genderOptions(locale)}
-          placeholder={copy.audience.gender}
-          value={draft.genderFocus}
-        />
-        <div className="sm:col-span-2">
-          <DarkField area label={copy.audience.demographics} onChange={(value) => update("audienceDescription", value)} value={draft.audienceDescription} />
-        </div>
-        <div className="sm:col-span-2">
-          <DarkField area label={copy.audience.painPoints} onChange={(value) => update("painPoints", value)} value={draft.painPoints} />
-        </div>
-        <div className="sm:col-span-2">
-          <DarkField label={copy.audience.interests} onChange={(value) => update("interests", value)} value={draft.interests} />
-        </div>
-        <DarkField label={copy.audience.location} onChange={(value) => update("audienceLocations", value)} value={draft.audienceLocations} />
-        <DarkField label={copy.audience.motivations} onChange={(value) => update("motivations", value)} value={draft.motivations} />
-      </div>
-    </div>
-  );
-}
-
-function CompetitorsStep({
-  addCompetitor,
+function ProfileScreen({
   copy,
-  draft,
-  removeCompetitor,
-  update
-}: StepProps & {
-  addCompetitor: () => void;
-  copy: OnboardingCopy;
-  removeCompetitor: (index: number) => void;
-}) {
-  return (
-    <div>
-      <StepHeading body={copy.competitors.body} title={copy.competitors.title} />
-      <div className="grid gap-3">
-        {draft.competitors.map((competitor, index) => (
-          <div className="flex items-center gap-3 rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3" key={competitor}>
-            <Target className="text-[var(--sunlit-pink)]" size={16} />
-            <span className="flex-1 text-sm font-extrabold text-[var(--sunlit-ink)]">{competitor}</span>
-            <button
-              aria-label={`Remove ${competitor}`}
-              className="text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-coral-deep)]"
-              onClick={() => removeCompetitor(index)}
-              type="button"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex gap-2">
-        <input
-          className="sunlit-field min-w-0 flex-1 rounded-xl px-4 py-3 text-sm outline-none"
-          onChange={(event) => update("newCompetitor", event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") addCompetitor();
-          }}
-          placeholder={copy.addCompetitorPlaceholder}
-          value={draft.newCompetitor}
-        />
-        <button className="sunlit-primary flex items-center gap-1 rounded-xl px-5 text-sm font-extrabold" onClick={addCompetitor} type="button">
-          <Plus size={16} />
-          {copy.add}
-        </button>
-      </div>
-      <p className="mt-2 text-xs font-semibold text-[var(--sunlit-muted)]">{copy.competitors.hint}</p>
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <DarkField area label={copy.competitors.advantage} onChange={(value) => update("competitiveAdvantage", value)} value={draft.competitiveAdvantage} />
-        <DarkField area label={copy.competitors.difference} onChange={(value) => update("competitorDifference", value)} value={draft.competitorDifference} />
-      </div>
-    </div>
-  );
-}
-
-function GoalsStep({ copy, draft, locale, toggleGoal, update }: StepProps & { copy: OnboardingCopy; locale: Locale; toggleGoal: (goal: string) => void }) {
-  return (
-    <div>
-      <StepHeading body={copy.goals.body} title={copy.goals.title} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {goalOptions(locale).map((goal) => {
-          const active = draft.goals.includes(goal.value);
-          return (
-            <button
-              className={
-                active
-                  ? "rounded-xl border border-[rgb(33_191_174_/_36%)] bg-[var(--sunlit-aqua-soft)] p-4 text-start"
-                  : "rounded-xl border border-[var(--sunlit-line)] bg-white p-4 text-start transition hover:border-[rgb(217_63_122_/_24%)]"
-              }
-              key={goal.value}
-              onClick={() => toggleGoal(goal.value)}
-              type="button"
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className={
-                    active
-                      ? "flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--sunlit-aqua)] text-white"
-                      : "h-[18px] w-[18px] rounded-full border border-[var(--sunlit-line-strong)] bg-white"
-                  }
-                >
-                  {active ? <CheckCircle2 size={12} /> : null}
-                </span>
-                <span className={active ? "text-sm font-extrabold text-[var(--sunlit-aqua-dark)]" : "text-sm font-bold text-[var(--sunlit-muted)]"}>
-                  {goal.label}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <DarkField
-          label={copy.goals.budget}
-          maxLength={onboardingObjectiveFieldLimits.budgetRange}
-          onChange={(value) => update("budgetRange", value)}
-          value={draft.budgetRange}
-        />
-        <DarkField
-          label={copy.goals.instagramExperience}
-          maxLength={onboardingObjectiveFieldLimits.instagramExperience}
-          onChange={(value) => update("instagramExperience", value)}
-          value={draft.instagramExperience}
-        />
-        <div className="md:col-span-2">
-          <DarkField
-            area
-            label={copy.goals.success90Days}
-            maxLength={onboardingObjectiveFieldLimits.success90Days}
-            onChange={(value) => update("success90Days", value)}
-            value={draft.success90Days}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReviewStep({
-  approveProfile,
-  back,
-  copy,
-  generateProfile,
   language,
   loading,
+  onApprove,
+  onBack,
+  onRegenerate,
   profile,
   saving,
   setLanguage,
   updateBusinessName,
   updateProfileField
 }: {
-  approveProfile: () => void;
-  back: () => void;
   copy: OnboardingCopy;
-  generateProfile: () => void;
   language: Locale;
   loading: boolean;
+  onApprove: () => void;
+  onBack: () => void;
+  onRegenerate: () => void;
   profile: BusinessProfile | null;
   saving: boolean;
-  setLanguage: (language: Locale) => void;
+  setLanguage: (locale: Locale) => void;
   updateBusinessName: (value: string) => void;
-  updateProfileField: (field: ProfileFieldKey, language: Locale, value: string) => void;
+  updateProfileField: (field: ProfileFieldKey, locale: Locale, value: string) => void;
 }) {
   if (loading) {
     return (
-      <div className="py-8 text-center sm:py-14">
-        <div className="relative mx-auto mb-8 flex h-24 w-24 items-center justify-center">
-          <span className="absolute inset-0 animate-ping rounded-full bg-[rgb(33_191_174_/_12%)]" />
-          <span className="absolute inset-2 animate-pulse rounded-3xl border border-[rgb(33_191_174_/_28%)] bg-[var(--sunlit-aqua-soft)]" />
-          <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} strokeWidth={1.8} />
+      <section className="mx-auto grid min-h-[calc(100vh-110px)] max-w-4xl place-items-center px-5 pb-12 text-center">
+        <div>
+          <span className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)]">
+            <span className="absolute inset-0 animate-ping rounded-[2rem] bg-[rgb(33_191_174_/_10%)]" />
+            <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} />
+          </span>
+          <h1 className="mt-7 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.profile.generatingTitle}</h1>
+          <p className="mx-auto mt-3 max-w-xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.profile.generatingBody}</p>
         </div>
-        <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.generatingTitle}</h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--sunlit-muted)] sm:text-base">{copy.profile.generatingBody}</p>
-        <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
-          {[copy.story.title, copy.audience.title, copy.brand.title].map((label, index) => (
-            <div className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-4 py-3" key={label}>
-              <span className="mb-2 block h-1 rounded-full bg-white">
-                <span
-                  className="block h-full animate-pulse rounded-full bg-[var(--sunlit-aqua)]"
-                  style={{ animationDelay: `${index * 180}ms`, width: `${70 + index * 10}%` }}
-                />
-              </span>
-              <span className="text-xs font-semibold text-[var(--sunlit-muted)]">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      </section>
     );
   }
 
   if (!profile) {
     return (
-      <div className="py-5 text-center sm:px-8 sm:py-12">
-        <BrandAiMark />
-        <StepHeading center body={copy.profile.generateBody} title={copy.profile.generateTitle} />
-        <button
-          className="sunlit-primary mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-extrabold"
-          onClick={generateProfile}
-          type="button"
-        >
-          <WandSparkles size={19} />
-          {copy.profile.generate}
-        </button>
-        <button className="mt-5 text-sm font-bold text-[var(--sunlit-muted)] transition hover:text-[var(--sunlit-ink)]" onClick={back} type="button">
-          {copy.profile.back}
-        </button>
-      </div>
+      <section className="mx-auto grid min-h-[calc(100vh-110px)] max-w-4xl place-items-center px-5 pb-12 text-center">
+        <div className="sunlit-panel rounded-[2rem] bg-white/90 p-9">
+          <h1 className="font-display text-[32px] font-bold leading-tight">{copy.errors.generate}</h1>
+          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 text-[14px] font-bold" onClick={onRegenerate} type="button">
+            {copy.profile.regenerate}
+          </button>
+        </div>
+      </section>
     );
   }
 
+  const valid = businessProfileIsComplete(profile);
   return (
-    <div>
-      <div className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-6 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-2xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[rgb(217_63_122_/_24%)] bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-pink)]">
-            <Sparkles size={13} />
-            {copy.profile.draftEyebrow}
-          </span>
-          <h2 className="mt-4 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{copy.profile.draftTitle}</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.profile.draftBody}</p>
-        </div>
-        <div className="inline-flex shrink-0 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1" aria-label="Profile language">
-          <button
-            className={
-              language === "en"
-                ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-xs font-extrabold text-white shadow-sm"
-                : "rounded-lg px-4 py-2 text-xs font-bold text-[var(--sunlit-muted)]"
-            }
-            onClick={() => setLanguage("en")}
-            type="button"
+    <section className="mx-auto w-full max-w-6xl px-5 pb-12 sm:px-8">
+      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-9 lg:p-10">
+        <div className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-3xl">
+            <span className="sunlit-eyebrow inline-flex items-center gap-2">
+              <Sparkles size={14} />
+              {copy.profile.eyebrow}
+            </span>
+            <h1 className="mt-3 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.profile.title}</h1>
+            <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.profile.body}</p>
+          </div>
+          <div
+            className="inline-flex shrink-0 self-start rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1"
+            aria-label="Profile language"
           >
-            {copy.profile.languageEn}
-          </button>
-          <button
-            className={
-              language === "ar"
-                ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-xs font-extrabold text-white shadow-sm"
-                : "rounded-lg px-4 py-2 text-xs font-bold text-[var(--sunlit-muted)]"
-            }
-            onClick={() => setLanguage("ar")}
-            type="button"
-          >
-            {copy.profile.languageAr}
-          </button>
+            <LanguageButton active={language === "en"} onClick={() => setLanguage("en")}>
+              English
+            </LanguageButton>
+            <LanguageButton active={language === "ar"} onClick={() => setLanguage("ar")}>
+              العربية
+            </LanguageButton>
+          </div>
         </div>
-      </div>
 
-      <div className="mt-6 rounded-2xl border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-5">
-        <label>
-          <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-aqua-dark)]">
-            <BriefcaseBusiness size={14} />
-            {copy.profile.businessName}
-          </span>
+        <label className="mt-6 block rounded-2xl border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-5">
+          <span className="text-[13px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-aqua-dark)]">{copy.profile.businessName}</span>
           <input
-            className="mt-2 w-full bg-transparent font-display text-2xl font-bold text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
+            className="mt-2 w-full bg-transparent font-display text-2xl font-bold outline-none"
             dir="auto"
             onChange={(event) => updateBusinessName(event.target.value)}
             value={profile.businessName}
           />
         </label>
-      </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {profileFieldKeys.map((field, index) => (
-          <label
-            className={
-              index === 1
-                ? "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5 sm:col-span-2"
-                : "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5"
-            }
-            key={field}
-          >
-            <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[.07em] text-[var(--sunlit-muted)]">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[10px] text-[var(--sunlit-pink)] shadow-[0_5px_14px_rgb(75_47_36_/_7%)]">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              {copy.profile.fields[field]}
-            </span>
-            <textarea
-              className="mt-3 min-h-24 w-full resize-y bg-transparent text-[15px] leading-7 text-[var(--sunlit-ink)] outline-none placeholder:text-[rgb(98_91_102_/_45%)]"
-              dir={language === "ar" ? "rtl" : "ltr"}
-              onChange={(event) => updateProfileField(field, language, event.target.value)}
-              value={profile[field][language]}
-            />
-          </label>
-        ))}
-      </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {profileFieldKeys.map((field, index) => (
+            <label
+              className={
+                index === 1
+                  ? "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5 md:col-span-2"
+                  : "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5"
+              }
+              key={field}
+            >
+              <span className="text-[13px] font-bold uppercase tracking-[.07em] text-[var(--sunlit-muted)]">{copy.profile.fields[field]}</span>
+              <textarea
+                className="mt-3 min-h-24 w-full resize-y bg-transparent text-[16px] leading-7 outline-none"
+                dir={language === "ar" ? "rtl" : "ltr"}
+                onChange={(event) => updateProfileField(field, language, event.target.value)}
+                value={profile[field][language]}
+              />
+            </label>
+          ))}
+        </div>
 
-      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[rgb(246_196_83_/_38%)] bg-[rgb(246_196_83_/_16%)] p-4 text-start">
-        <Languages className="mt-0.5 shrink-0 text-[var(--sunlit-warning)]" size={18} />
-        <p className="text-sm leading-6 text-[var(--sunlit-ink-soft)]">{copy.profile.editHint}</p>
-      </div>
+        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[rgb(246_196_83_/_38%)] bg-[rgb(246_196_83_/_14%)] p-4">
+          <Languages className="mt-0.5 shrink-0 text-[var(--sunlit-warning)]" size={18} />
+          <p className="text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.profile.editHint}</p>
+        </div>
 
-      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          <button className="sunlit-secondary rounded-xl px-5 py-3 text-sm font-bold" disabled={saving} onClick={back} type="button">
-            {copy.profile.back}
-          </button>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" disabled={saving} onClick={onBack} type="button">
+              {copy.profile.back}
+            </button>
+            <button
+              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+              disabled={saving}
+              onClick={onRegenerate}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {copy.profile.regenerate}
+            </button>
+          </div>
           <button
-            className="sunlit-secondary flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold disabled:opacity-50"
-            disabled={saving}
-            onClick={generateProfile}
+            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+            disabled={saving || !valid}
+            onClick={onApprove}
             type="button"
           >
-            <RefreshCw size={15} />
-            {copy.profile.regenerate}
+            {saving ? <LoaderCircle className="animate-spin" size={17} /> : <CheckCircle2 size={17} />}
+            {copy.profile.approve}
           </button>
         </div>
-        <button
-          className="sunlit-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-extrabold disabled:translate-y-0 disabled:opacity-60"
-          disabled={saving}
-          onClick={approveProfile}
-          type="button"
-        >
-          {saving ? <LoaderCircle className="animate-spin" size={17} /> : <CheckCircle2 size={17} />}
-          {copy.profile.approve}
-        </button>
-      </div>
-    </div>
+      </section>
+    </section>
   );
 }
 
-interface StepProps {
-  draft: OnboardingDraft;
-  update: <K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) => void;
-}
-
-function StepHeading({ body, center = false, title }: { body: string; center?: boolean; title: string }) {
+function LanguageButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
   return (
-    <div className={center ? "mb-6 text-center sm:mb-8" : "mb-6 sm:mb-8"}>
-      <h2 className="font-display text-[26px] font-bold tracking-tight text-[var(--sunlit-ink)] sm:text-3xl">{title}</h2>
-      <p className="mt-2 max-w-3xl text-[15px] leading-7 text-[var(--sunlit-muted)]">{body}</p>
-    </div>
+    <button
+      className={
+        active
+          ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-[14px] font-bold text-white shadow-sm"
+          : "rounded-lg px-4 py-2 text-[14px] font-bold text-[var(--sunlit-muted)]"
+      }
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 
-function BrandAiMark() {
-  return (
-    <div className="mb-6 flex justify-center">
-      <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-[rgb(217_63_122_/_24%)] bg-[var(--sunlit-paper-deep)] shadow-[0_16px_36px_rgb(255_102_90_/_12%)]">
-        <Sparkles className="text-[var(--sunlit-pink)]" size={32} />
-      </div>
-    </div>
-  );
+function businessProfileIsComplete(profile: BusinessProfile): boolean {
+  return Boolean(profile.businessName.trim() && profileFieldKeys.every((field) => profile[field].en.trim() && profile[field].ar.trim()));
 }
 
-function DarkField({
-  area,
-  label,
-  maxLength,
-  onChange,
-  value
-}: {
-  area?: boolean;
-  label: string;
-  maxLength?: number;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <label>
-      <Label>{label}</Label>
-      {area ? (
-        <textarea
-          className="sunlit-field mt-2 min-h-28 w-full resize-y rounded-xl px-4 py-3 text-[15px] leading-6 outline-none"
-          maxLength={maxLength}
-          onChange={(event) => onChange(event.target.value)}
-          value={value}
-        />
-      ) : (
-        <input
-          className="sunlit-field mt-2 min-h-12 rounded-xl px-4 py-3 text-[15px] outline-none"
-          maxLength={maxLength}
-          onChange={(event) => onChange(event.target.value)}
-          value={value}
-        />
-      )}
-      {maxLength ? (
-        <span className="mt-1.5 block text-end text-[11px] font-semibold text-[var(--sunlit-muted)]">
-          {value.length}/{maxLength}
-        </span>
-      ) : null}
-    </label>
-  );
+function initialScreen(state: OnboardingState, editMode: boolean): Screen {
+  if (editMode) return "review";
+  if (state.businessProfile.status === "DRAFT") return "profile";
+  if (state.status === "NOT_STARTED" && !state.modules.some((module) => module.completed || module.skipped)) return "greeting";
+  if (state.modules.every((module) => module.completed || module.skipped)) return "review";
+  return "step";
 }
 
-function DarkSelect({
-  label,
-  onChange,
-  options,
-  placeholder,
-  value
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  options: SelectOption[];
-  placeholder: string;
-  value: string;
-}) {
-  return (
-    <label>
-      <Label>{label}</Label>
-      <select
-        className="sunlit-field mt-2 min-h-12 rounded-xl px-4 py-3 text-[15px] outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        <option disabled value="">
-          {placeholder}
-        </option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function Label({ children }: { children: ReactNode }) {
-  return <span className="text-xs font-extrabold uppercase tracking-[.06em] text-[var(--sunlit-ink-soft)]">{children}</span>;
-}
-
-function getInitialStep(): StepId {
-  if (typeof window === "undefined") return 1;
-  const value = Number(new URLSearchParams(window.location.search).get("step") ?? "1");
-  return value >= 1 && value <= 8 ? (value as StepId) : 1;
+function initialStep(state: OnboardingState): OnboardingStepId {
+  const index = moduleOrder.findIndex((module) => {
+    const moduleState = state.modules.find((item) => item.module === module);
+    return !moduleState || (!moduleState.completed && !moduleState.skipped);
+  });
+  return (Math.min(7, Math.max(1, index + 1)) || 1) as OnboardingStepId;
 }

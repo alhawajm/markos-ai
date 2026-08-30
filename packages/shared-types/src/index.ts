@@ -208,6 +208,7 @@ export interface AgentRunRecord {
 export interface OnboardingModuleState {
   module: string;
   completed: boolean;
+  skipped: boolean;
   sections: VaultSection[];
 }
 
@@ -238,6 +239,7 @@ export interface OnboardingBusinessProfileState {
 export interface OnboardingState {
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
   onboardingScore: number;
+  readyForProfile: boolean;
   vaultScore: VaultCompletenessScore;
   modules: OnboardingModuleState[];
   businessProfile: OnboardingBusinessProfileState;
