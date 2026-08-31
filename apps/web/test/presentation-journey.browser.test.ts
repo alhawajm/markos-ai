@@ -659,14 +659,14 @@ describe("presentation journey", () => {
     await page.getByLabel("Choose a new time").fill(rescheduleInput);
     await page.getByRole("button", { name: "Save new time" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
-    await page.getByRole("button", { name: "Cancel schedule" }).click();
+    const cancelScheduleButton = page.getByRole("button", { name: "Cancel schedule" });
+    await cancelScheduleButton.click();
     const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
     await expect(dialog.isVisible()).resolves.toBe(true);
     await page.keyboard.press("Escape");
     await expect(dialog.isVisible()).resolves.toBe(false);
-    await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Cancel schedule");
-    await expect(page.getByRole("button", { name: "Cancel schedule" }).evaluate((element) => document.activeElement === element)).resolves.toBe(true);
-    await page.getByRole("button", { name: "Cancel schedule" }).click();
+    await expect.poll(() => cancelScheduleButton.evaluate((element) => document.activeElement === element)).toBe(true);
+    await cancelScheduleButton.click();
     await dialog.getByRole("button", { name: "Cancel schedule" }).click();
     const cancellationNotice = page.getByText("Schedule cancelled. The post is Ready and has moved to Unscheduled.", { exact: true });
     await cancellationNotice.waitFor();
