@@ -10,6 +10,31 @@ import { decryptCredential } from "../src/security/credential-encryption";
 import { env } from "../src/config/env";
 
 describe("maintenance worker", () => {
+  it("expires temporary offering document analyses", async () => {
+    const workspace = await createWorkspace("worker-document-cleanup");
+    const analysis = await prisma.offeringDocumentAnalysis.create({
+      data: {
+        workspaceId: workspace.id,
+        status: "FAILED",
+        expiresAt: new Date("2026-01-01T00:00:00.000Z")
+      }
+    });
+
+    const result = await runMaintenanceWorkerTick({
+      now: new Date("2026-01-02T00:00:00.000Z"),
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
+      runPublishing: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+
+    expect(result.documentCleanup).toEqual({ expired: 1, failed: 0 });
+    await expect(prisma.offeringDocumentAnalysis.findUniqueOrThrow({ where: { id: analysis.id } })).resolves.toMatchObject({
+      status: "EXPIRED"
+    });
+  });
+
   it("publishes due content across workspaces", async () => {
     const now = new Date(Date.UTC(2026, 0, 1, 12));
     await prisma.contentItem.updateMany({

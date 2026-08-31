@@ -252,6 +252,64 @@ describe("workspace routes", () => {
         workspaceId: first.workspace.id
       }
     });
+    const firstCatalog = await prisma.offeringCatalog.create({
+      data: {
+        summary: "First workspace offerings",
+        workspaceId: first.workspace.id
+      }
+    });
+    const firstOffering = await prisma.offering.create({
+      data: {
+        catalogId: firstCatalog.id,
+        name: "First workspace service",
+        normalizedName: "first workspace service",
+        workspaceId: first.workspace.id
+      }
+    });
+    await prisma.offeringCatalogRevision.create({
+      data: {
+        catalogId: firstCatalog.id,
+        snapshot: { summary: firstCatalog.summary },
+        sourceType: "OWNER",
+        version: 1,
+        workspaceId: first.workspace.id
+      }
+    });
+    await prisma.offeringRevision.create({
+      data: {
+        offeringId: firstOffering.id,
+        snapshot: { name: firstOffering.name },
+        sourceType: "OWNER",
+        version: 1,
+        workspaceId: first.workspace.id
+      }
+    });
+    const documentAnalysis = await prisma.offeringDocumentAnalysis.create({
+      data: {
+        workspaceId: first.workspace.id,
+        status: "APPROVED",
+        result: { catalog: { summary: "First workspace offerings", items: [], differentiators: [], salesChannels: [] }, issues: [] },
+        expiresAt: new Date(Date.now() + 60_000),
+        approvedAt: new Date()
+      }
+    });
+    const documentFile = await prisma.offeringDocumentFile.create({
+      data: {
+        workspaceId: first.workspace.id,
+        analysisId: documentAnalysis.id,
+        filename: "offerings.txt",
+        mimeType: "text/plain",
+        sizeBytes: 20,
+        checksumSha256: "a".repeat(64),
+        removedAt: new Date()
+      }
+    });
+    await prisma.offeringCatalog.create({
+      data: {
+        summary: "Second workspace offerings",
+        workspaceId: second.workspace.id
+      }
+    });
 
     const response = await app.inject({
       method: "GET",
@@ -279,6 +337,30 @@ describe("workspace routes", () => {
         })
       ])
     );
+    expect(response.json().data.records.offeringCatalogs).toEqual([
+      expect.objectContaining({
+        id: firstCatalog.id,
+        workspaceId: first.workspace.id
+      })
+    ]);
+    expect(response.json().data.records.offeringCatalogRevisions).toHaveLength(1);
+    expect(response.json().data.records.offerings).toEqual([
+      expect.objectContaining({
+        id: firstOffering.id,
+        workspaceId: first.workspace.id
+      })
+    ]);
+    expect(response.json().data.records.offeringRevisions).toHaveLength(1);
+    expect(response.json().data.records.offeringDocumentAnalyses).toEqual([
+      expect.objectContaining({ id: documentAnalysis.id, workspaceId: first.workspace.id })
+    ]);
+    const exportedOfferingDocumentFiles = response.json().data.records.offeringDocumentFiles;
+    expect(exportedOfferingDocumentFiles).toHaveLength(1);
+    expect(exportedOfferingDocumentFiles[0]).toMatchObject({
+      id: documentFile.id,
+      analysisId: documentAnalysis.id
+    });
+    expect(exportedOfferingDocumentFiles[0]).not.toHaveProperty("storageKey");
     expect(JSON.stringify(response.json().data)).not.toContain(second.workspace.id);
     expect(JSON.stringify(response.json().data)).not.toContain("Second workspace");
 
@@ -372,6 +454,57 @@ describe("workspace routes", () => {
         workspaceId: session.workspace.id
       }
     });
+    const offeringCatalog = await prisma.offeringCatalog.create({
+      data: {
+        summary: "Erase these offerings",
+        workspaceId: session.workspace.id
+      }
+    });
+    const offering = await prisma.offering.create({
+      data: {
+        catalogId: offeringCatalog.id,
+        name: "Erase this service",
+        normalizedName: "erase this service",
+        workspaceId: session.workspace.id
+      }
+    });
+    await prisma.offeringCatalogRevision.create({
+      data: {
+        catalogId: offeringCatalog.id,
+        snapshot: { summary: offeringCatalog.summary },
+        sourceType: "OWNER",
+        version: 1,
+        workspaceId: session.workspace.id
+      }
+    });
+    await prisma.offeringRevision.create({
+      data: {
+        offeringId: offering.id,
+        snapshot: { name: offering.name },
+        sourceType: "OWNER",
+        version: 1,
+        workspaceId: session.workspace.id
+      }
+    });
+    const documentAnalysis = await prisma.offeringDocumentAnalysis.create({
+      data: {
+        workspaceId: session.workspace.id,
+        status: "FAILED",
+        failureCode: "AI_PROVIDER_TIMEOUT",
+        expiresAt: new Date(Date.now() + 60_000)
+      }
+    });
+    await prisma.offeringDocumentFile.create({
+      data: {
+        workspaceId: session.workspace.id,
+        analysisId: documentAnalysis.id,
+        filename: "erase.txt",
+        mimeType: "text/plain",
+        sizeBytes: 12,
+        checksumSha256: "b".repeat(64),
+        removedAt: new Date()
+      }
+    });
 
     const invalidConfirmation = await app.inject({
       method: "POST",
@@ -403,6 +536,12 @@ describe("workspace routes", () => {
       knowledgeVaultHistory: 1,
       mediaAssets: 1,
       notifications: 1,
+      offeringCatalogRevisions: 1,
+      offeringCatalogs: 1,
+      offeringDocumentAnalyses: 1,
+      offeringDocumentFiles: 1,
+      offeringRevisions: 1,
+      offerings: 1,
       usageCounters: 1,
       workspaceMembers: 1,
       workspaces: 1
@@ -420,6 +559,16 @@ describe("workspace routes", () => {
     });
     await expect(prisma.usageCounter.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
     await expect(prisma.knowledgeVaultHistory.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.offeringCatalogRevision.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.offeringRevision.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.offeringDocumentAnalysis.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.offeringDocumentFile.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(0);
+    await expect(prisma.offeringCatalog.findUniqueOrThrow({ where: { workspaceId: session.workspace.id } })).resolves.toMatchObject({
+      deletedAt: expect.any(Date)
+    });
+    await expect(prisma.offering.findUniqueOrThrow({ where: { id: offering.id } })).resolves.toMatchObject({
+      deletedAt: expect.any(Date)
+    });
     await expect(
       prisma.auditLog.findFirstOrThrow({
         where: {

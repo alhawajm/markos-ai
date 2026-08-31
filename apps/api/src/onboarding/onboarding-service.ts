@@ -13,6 +13,7 @@ import {
 } from "@markos/validation";
 import type { z } from "zod";
 import { prisma } from "../db/prisma";
+import { saveOfferingCatalog } from "../offerings/offering-catalog-service";
 import { getVaultScore, upsertVaultSection } from "../vault/vault-service";
 import { getBusinessProfileState, invalidateBusinessProfile } from "./business-profile-service";
 
@@ -92,8 +93,12 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
 }
 
 export async function saveOnboardingModule(workspaceId: string, module: OnboardingModuleInput, payload: OnboardingPayload): Promise<OnboardingState> {
-  for (const write of toVaultWrites(module, payload)) {
-    await upsertVaultSection(workspaceId, write.section, write.input);
+  if (module === "products") {
+    await saveOfferingCatalog(workspaceId, payload as z.infer<typeof productsOnboardingSchema>);
+  } else {
+    for (const write of toVaultWrites(module, payload)) {
+      await upsertVaultSection(workspaceId, write.section, write.input);
+    }
   }
 
   const vaultScore = await getVaultScore(workspaceId);
@@ -168,7 +173,7 @@ function toVaultWrites(module: OnboardingModuleInput, payload: OnboardingPayload
     case "story":
       return [{ section: "STORY", input: { entries: [{ key: "story", value: payload as Record<string, unknown> }] } }];
     case "products":
-      return [{ section: "PRODUCTS", input: { entries: [{ key: "catalog", value: payload as Record<string, unknown> }] } }];
+      return [];
     case "audience":
       return [{ section: "AUDIENCE", input: { entries: [{ key: "primary-audience", value: payload as Record<string, unknown> }] } }];
     case "competitors":

@@ -140,6 +140,7 @@ export const productsOnboardingSchema = z
     items: z
       .array(
         z.object({
+          kind: z.enum(["PRODUCT", "SERVICE", "UNSPECIFIED"]).optional(),
           name: z.string().min(1).max(160),
           category: z.string().max(120).optional(),
           priceMinor: z.number().int().nonnegative().optional(),
@@ -148,14 +149,47 @@ export const productsOnboardingSchema = z
         })
       )
       .max(30)
-      .default([]),
-    differentiators: z.array(z.string().min(1).max(160)).max(20).default([]),
+      .optional(),
+    differentiators: z.array(z.string().min(1).max(160)).max(20).optional(),
     priceRange: z.string().max(120).optional(),
-    salesChannels: z.array(z.string().min(1).max(80)).max(12).default([])
+    salesChannels: z.array(z.string().min(1).max(80)).max(12).optional()
   })
-  .refine((value) => Boolean(value.summary?.trim() || value.items.length), {
+  .refine((value) => Boolean(value.summary?.trim() || value.items?.length), {
     message: "Add a products and services summary or at least one item"
+  })
+  .superRefine((value, context) => {
+    const names = new Set<string>();
+    for (const [index, item] of (value.items ?? []).entries()) {
+      const normalized = item.name.normalize("NFKC").trim().toLocaleLowerCase();
+      if (names.has(normalized)) {
+        context.addIssue({
+          code: "custom",
+          message: "Product and service names must be unique",
+          path: ["items", index, "name"]
+        });
+      }
+      names.add(normalized);
+    }
   });
+
+const offeringDocumentMimeTypeSchema = z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
+
+export const createOfferingDocumentAnalysisSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(180),
+        mimeType: offeringDocumentMimeTypeSchema,
+        base64Data: z.string().min(4).max(11_200_000)
+      })
+    )
+    .min(1)
+    .max(2)
+});
+
+export const approveOfferingDocumentAnalysisSchema = z.object({
+  catalog: productsOnboardingSchema
+});
 
 export const audienceOnboardingSchema = z
   .object({
@@ -591,6 +625,8 @@ export type VaultRagSearchInput = z.infer<typeof vaultRagSearchSchema>;
 export type OnboardingModuleInput = z.infer<typeof onboardingModuleSchema>;
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 export type ApproveBusinessProfileInput = z.infer<typeof approveBusinessProfileSchema>;
+export type CreateOfferingDocumentAnalysisInput = z.infer<typeof createOfferingDocumentAnalysisSchema>;
+export type ApproveOfferingDocumentAnalysisInput = z.infer<typeof approveOfferingDocumentAnalysisSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;

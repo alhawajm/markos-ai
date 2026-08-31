@@ -88,10 +88,14 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] RAG search exists and is used by strategy/content calls.
 - [x] One locally grounded Strategy path returns workspace Vault context.
 - [x] Seven-area onboarding wizard is mounted; Company and Products are the two profile-readiness essentials, while the other five areas can be explicitly skipped and remain visible as Vault gaps.
+- [x] Products and services have a canonical workspace-scoped Offering Catalog with stable identities, revisions, archival, RLS, PDPL export/erasure, and compatible Vault projections.
+  - Note: existing Products Vault catalogs are migrated where possible. The focused document-assisted Products/Services path is implemented with temporary files, editable extraction/issues, owner confirmation, and focused local tests. Extraction now requires configured provider-backed AI; the deterministic local parser is not a product fallback. Railway success proof and Instagram evidence reconciliation remain open.
+- [x] Products/Services onboarding supports an optional owner-confirmed PDF, DOCX, or TXT extraction path without replacing the manual editor.
+  - Note: raw files expire within 24 hours and are removed on approval; extracted claims do not reach the canonical catalog or Vault projection before approval. Provider/configuration failures remain sanitized and recoverable through discard/manual entry, while retry is reserved for temporary failures. OCR, the focused Document Analyst UI, and broader business-document onboarding are not part of this slice.
 - [ ] Vault versioning UX and history are complete in the mounted Sunlit Business Profile.
   - Note: history APIs exist, but the current Sunlit panel is a summary and does not mount the full editor/history workflow.
 - [ ] Brand upload flow is complete in the active onboarding/Vault UI.
-  - Note: media upload APIs exist, but onboarding intentionally exposes no file control until a focused upload, extraction, issue-reporting, field-mapping, and owner-confirmation path is implemented. The next scoped document pass begins with Products/Services rather than claiming a complete brand-file flow.
+  - Note: the new Products/Services document control is a temporary extraction path, not a permanent logo, media, or brand-guideline upload library.
 - [x] Completeness gaps are surfaced in the expected UX.
 - [ ] M1 acceptance gate fully passed with a live provider interface.
   - Note: local deterministic grounding is covered, but provider-backed embeddings/generation and deployed cross-service behavior remain unverified.

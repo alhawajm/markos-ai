@@ -42,6 +42,9 @@ import type {
   MfaStatus,
   MfaTotpSetup,
   OnboardingState,
+  OfferingCatalogUpdate,
+  OfferingDocumentAnalysisRecord,
+  ApproveOfferingDocumentAnalysisResult,
   PromptTemplateRecord,
   PromptVariantSelection,
   PublishAttemptRecord,
@@ -197,6 +200,48 @@ export class MarkosApiClient {
     const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip`, {
       body: {},
       method: "POST"
+    });
+    return response.data;
+  }
+
+  async offeringDocumentAnalysis(): Promise<OfferingDocumentAnalysisRecord | null> {
+    const response = await this.request<OfferingDocumentAnalysisRecord | null>("/v1/onboarding/products/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOfferingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain";
+      base64Data: string;
+    }>
+  ): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>("/v1/onboarding/products/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOfferingDocumentAnalysis(analysisId: string, catalog: OfferingCatalogUpdate): Promise<ApproveOfferingDocumentAnalysisResult> {
+    const response = await this.request<ApproveOfferingDocumentAnalysisResult>(
+      `/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/approve`,
+      { body: { catalog }, method: "POST" }
+    );
+    return response.data;
+  }
+
+  async discardOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
     });
     return response.data;
   }

@@ -105,6 +105,32 @@ def test_business_profile_generation_contract() -> None:
     assert body["profile"]["overview"]["ar"]
 
 
+def test_offering_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/offerings/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "offers.txt",
+                    "mime_type": "text/plain",
+                    "base64_data": base64.b64encode(
+                        "Espresso: Rich house blend\nOffice plan - Weekly delivery".encode()
+                    ).decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
+
+
 def test_content_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(

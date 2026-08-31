@@ -245,6 +245,137 @@ export interface OnboardingState {
   businessProfile: OnboardingBusinessProfileState;
 }
 
+export const offeringKinds = ["PRODUCT", "SERVICE", "UNSPECIFIED"] as const;
+export type OfferingKind = (typeof offeringKinds)[number];
+
+export const offeringStatuses = ["ACTIVE", "PAUSED", "ARCHIVED"] as const;
+export type OfferingStatus = (typeof offeringStatuses)[number];
+
+export const offeringPriceTypes = ["UNSPECIFIED", "FIXED", "FROM", "RANGE", "QUOTE"] as const;
+export type OfferingPriceType = (typeof offeringPriceTypes)[number];
+
+export interface OfferingRecord {
+  id: string;
+  workspaceId: string;
+  catalogId: string;
+  kind: OfferingKind;
+  name: string;
+  nameEn?: string;
+  nameAr?: string;
+  category?: string;
+  description?: string;
+  priceType: OfferingPriceType;
+  priceMinor?: number;
+  minPriceMinor?: number;
+  maxPriceMinor?: number;
+  currency: string;
+  status: OfferingStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferingCatalogRecord {
+  id: string;
+  workspaceId: string;
+  summary?: string;
+  differentiators: string[];
+  priceRange?: string;
+  salesChannels: string[];
+  version: number;
+  projectionStatus: "PENDING" | "READY" | "FAILED";
+  projectedVersion: number;
+  offerings: OfferingRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferingCatalogUpdate {
+  summary?: string;
+  items?: Array<{
+    kind?: OfferingKind;
+    name: string;
+    category?: string;
+    description?: string;
+    priceMinor?: number;
+    currency: string;
+  }>;
+  differentiators?: string[];
+  priceRange?: string;
+  salesChannels?: string[];
+}
+
+export const offeringDocumentAnalysisStatuses = ["PROCESSING", "READY", "FAILED", "APPROVED", "DISCARDED", "EXPIRED"] as const;
+export type OfferingDocumentAnalysisStatus = (typeof offeringDocumentAnalysisStatuses)[number];
+
+export interface OfferingDocumentCandidate {
+  kind: OfferingKind;
+  name: string;
+  category?: string;
+  description?: string;
+  priceMinor?: number;
+  currency: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  sourceFiles: string[];
+}
+
+export interface OfferingDocumentIssue {
+  code:
+    | "NO_OFFERINGS_FOUND"
+    | "AMBIGUOUS_OFFERING"
+    | "MISSING_DESCRIPTION"
+    | "MISSING_PRICE"
+    | "CONFLICTING_INFORMATION"
+    | "POSSIBLE_NON_OFFERING"
+    | "REVIEW_REQUIRED"
+    | "SOURCE_TRUNCATED";
+  severity: "INFO" | "WARNING";
+  message: string;
+  field?: string;
+  offeringName?: string;
+  sourceFiles: string[];
+}
+
+export interface OfferingDocumentExtraction {
+  catalog: {
+    summary?: string;
+    items: OfferingDocumentCandidate[];
+    differentiators: string[];
+    priceRange?: string;
+    salesChannels: string[];
+  };
+  issues: OfferingDocumentIssue[];
+}
+
+export interface OfferingDocumentAnalysisRecord {
+  id: string;
+  workspaceId: string;
+  status: OfferingDocumentAnalysisStatus;
+  files: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    removed: boolean;
+  }>;
+  result?: OfferingDocumentExtraction;
+  failureCode?: string;
+  expiresAt: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApproveOfferingDocumentAnalysisResult {
+  analysis: OfferingDocumentAnalysisRecord;
+  onboarding: OnboardingState;
+}
+
+export interface OfferingDocumentCleanupResult {
+  expired: number;
+  failed: number;
+}
+
 export interface StrategyPillar {
   name: string;
   rationale: string;

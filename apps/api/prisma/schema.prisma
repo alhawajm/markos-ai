@@ -129,6 +129,47 @@ enum InstagramConnectionStatus {
   ERROR
 }
 
+enum OfferingKind {
+  PRODUCT
+  SERVICE
+  UNSPECIFIED
+}
+
+enum OfferingStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum OfferingPriceType {
+  UNSPECIFIED
+  FIXED
+  FROM
+  RANGE
+  QUOTE
+}
+
+enum OfferingSourceType {
+  OWNER
+  DOCUMENT
+  INSTAGRAM
+}
+
+enum OfferingProjectionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum OfferingDocumentAnalysisStatus {
+  PROCESSING
+  READY
+  FAILED
+  APPROVED
+  DISCARDED
+  EXPIRED
+}
+
 model User {
   id           String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   email        String     @unique
@@ -151,20 +192,20 @@ model User {
 }
 
 model Workspace {
-  id                      String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  ownerUserId             String           @db.Uuid
-  name                    String
-  slug                    String           @unique
-  instagramAccountId      String?
-  instagramAccessToken    String?
-  instagramTokenExpiresAt DateTime?
-  onboardingStatus        OnboardingStatus @default(NOT_STARTED)
-  onboardingScore         Int              @default(0)
+  id                       String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  ownerUserId              String           @db.Uuid
+  name                     String
+  slug                     String           @unique
+  instagramAccountId       String?
+  instagramAccessToken     String?
+  instagramTokenExpiresAt  DateTime?
+  onboardingStatus         OnboardingStatus @default(NOT_STARTED)
+  onboardingScore          Int              @default(0)
   onboardingSkippedModules String[]         @default([])
-  vatPricingMode          VatMode          @default(EXCLUSIVE)
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
-  deletedAt               DateTime?
+  vatPricingMode           VatMode          @default(EXCLUSIVE)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  deletedAt                DateTime?
 
   @@index([ownerUserId])
   @@map("workspaces")
@@ -204,23 +245,23 @@ model InstagramConnectionCredential {
   updatedAt               DateTime                  @updatedAt
   deletedAt               DateTime?
 
-  @@index([workspaceId, status])
   @@unique([provider, providerAccountId])
+  @@index([workspaceId, status])
   @@map("instagram_connection_credentials")
 }
 
 model InstagramRecentMedia {
-  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId    String   @db.Uuid
-  connectionId   String   @db.Uuid
-  providerMediaId String
-  mediaType      String
-  caption        String?
-  mediaUrl       String?
-  thumbnailUrl   String?
-  permalink      String?
+  id                String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId       String    @db.Uuid
+  connectionId      String    @db.Uuid
+  providerMediaId   String
+  mediaType         String
+  caption           String?
+  mediaUrl          String?
+  thumbnailUrl      String?
+  permalink         String?
   providerTimestamp DateTime?
-  syncedAt       DateTime @default(now())
+  syncedAt          DateTime  @default(now())
 
   @@unique([connectionId, providerMediaId])
   @@index([workspaceId, connectionId])
@@ -241,15 +282,15 @@ model OAuthStateNonce {
 }
 
 model KnowledgeVault {
-  id          String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String                   @db.Uuid
+  id          String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                       @db.Uuid
   section     VaultSection
   key         String
   value       Json
   embedding   Unsupported("vector(1536)")?
-  version     Int                      @default(1)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  version     Int                          @default(1)
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
   deletedAt   DateTime?
 
   @@index([workspaceId, section])
@@ -269,6 +310,118 @@ model KnowledgeVaultHistory {
   @@unique([knowledgeVaultId, version])
   @@index([workspaceId, section, key])
   @@map("knowledge_vault_history")
+}
+
+model OfferingCatalog {
+  id               String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId      String                   @unique @db.Uuid
+  summary          String?
+  differentiators  String[]                 @default([])
+  priceRange       String?
+  salesChannels    String[]                 @default([])
+  version          Int                      @default(1)
+  sourceType       OfferingSourceType       @default(OWNER)
+  projectionStatus OfferingProjectionStatus @default(PENDING)
+  projectedVersion Int                      @default(0)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  deletedAt        DateTime?
+
+  @@index([workspaceId])
+  @@map("offering_catalogs")
+}
+
+model OfferingCatalogRevision {
+  id          String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String             @db.Uuid
+  catalogId   String             @db.Uuid
+  version     Int
+  snapshot    Json
+  sourceType  OfferingSourceType
+  sourceRef   String?
+  createdAt   DateTime           @default(now())
+
+  @@unique([catalogId, version])
+  @@index([workspaceId, catalogId])
+  @@map("offering_catalog_revisions")
+}
+
+model Offering {
+  id             String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String             @db.Uuid
+  catalogId      String             @db.Uuid
+  kind           OfferingKind       @default(UNSPECIFIED)
+  name           String
+  normalizedName String
+  nameEn         String?
+  nameAr         String?
+  category       String?
+  description    String?
+  priceType      OfferingPriceType  @default(UNSPECIFIED)
+  priceMinor     Int?
+  minPriceMinor  Int?
+  maxPriceMinor  Int?
+  currency       String             @default("BHD") @db.VarChar(3)
+  status         OfferingStatus     @default(ACTIVE)
+  version        Int                @default(1)
+  sourceType     OfferingSourceType @default(OWNER)
+  sourceRef      String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([workspaceId, normalizedName])
+  @@index([workspaceId, catalogId, status])
+  @@map("offerings")
+}
+
+model OfferingRevision {
+  id          String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String             @db.Uuid
+  offeringId  String             @db.Uuid
+  version     Int
+  snapshot    Json
+  sourceType  OfferingSourceType
+  sourceRef   String?
+  createdAt   DateTime           @default(now())
+
+  @@unique([offeringId, version])
+  @@index([workspaceId, offeringId])
+  @@map("offering_revisions")
+}
+
+model OfferingDocumentAnalysis {
+  id            String                         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                         @db.Uuid
+  status        OfferingDocumentAnalysisStatus @default(PROCESSING)
+  result        Json?
+  failureCode   String?
+  interactionId String?                        @db.Uuid
+  expiresAt     DateTime
+  approvedAt    DateTime?
+  discardedAt   DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([status, expiresAt])
+  @@map("offering_document_analyses")
+}
+
+model OfferingDocumentFile {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String    @db.Uuid
+  analysisId     String    @db.Uuid
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String    @db.VarChar(64)
+  storageKey     String?
+  removedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([workspaceId, analysisId])
+  @@map("offering_document_files")
 }
 
 model Strategy {
@@ -381,8 +534,8 @@ model InstagramAnalytics {
 }
 
 model AiInteraction {
-  id            String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId   String                   @db.Uuid
+  id            String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                       @db.Uuid
   agent         String
   promptVersion String
   prompt        Json
@@ -393,11 +546,11 @@ model AiInteraction {
   tokensIn      Int
   tokensOut     Int
   costMinor     Int
-  currency      String                   @default("BHD") @db.VarChar(3)
+  currency      String                       @default("BHD") @db.VarChar(3)
   model         String
   embedding     Unsupported("vector(1536)")?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
   deletedAt     DateTime?
 
   @@index([workspaceId, agent])
@@ -494,17 +647,17 @@ model UsageCounter {
 }
 
 model PromptTemplate {
-  id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid
-  agent      String
-  version    String
-  body       String
-  variantOf  String?   @db.Uuid
-  trafficPct Int       @default(100)
-  active     Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+  agent       String
+  version     String
+  body        String
+  variantOf   String?   @db.Uuid
+  trafficPct  Int       @default(100)
+  active      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   @@unique([workspaceId, agent, version])
   @@index([workspaceId, agent, active])
@@ -539,14 +692,14 @@ model Notification {
 }
 
 model AuditLog {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  actorId     String?   @db.Uuid
-  workspaceId String?   @db.Uuid
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  actorId     String?  @db.Uuid
+  workspaceId String?  @db.Uuid
   action      String
   targetType  String
   targetId    String?
   metadata    Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([workspaceId, action])
   @@index([actorId])

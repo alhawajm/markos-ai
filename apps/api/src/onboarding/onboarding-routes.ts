@@ -5,14 +5,27 @@ import {
   brandOnboardingSchema,
   companyOnboardingSchema,
   competitorsOnboardingSchema,
+  createOfferingDocumentAnalysisSchema,
   objectivesOnboardingSchema,
   onboardingModuleSchema,
   productsOnboardingSchema,
-  storyOnboardingSchema
+  storyOnboardingSchema,
+  approveOfferingDocumentAnalysisSchema
 } from "@markos/validation";
-import { type z } from "zod";
+import { z } from "zod";
 import { AiServiceRequestError } from "../ai/request";
 import { errorEnvelope, ok } from "../http/envelope";
+import { MediaStorageError } from "../media/storage-service";
+import {
+  approveOfferingDocumentAnalysis,
+  createOfferingDocumentAnalysis,
+  discardOfferingDocumentAnalysis,
+  getActiveOfferingDocumentAnalysis,
+  OfferingDocumentAnalysisConflictError,
+  OfferingDocumentAnalysisNotFoundError,
+  OfferingDocumentInvalidError,
+  retryOfferingDocumentAnalysis
+} from "../offerings/offering-document-service";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
@@ -41,6 +54,9 @@ const moduleSchemas = {
   objectives: objectivesOnboardingSchema
 };
 
+const offeringDocumentAnalysisIdSchema = z.string().uuid();
+const maxOfferingDocumentBodyBytes = 18 * 1024 * 1024;
+
 type ModuleSchema = (typeof moduleSchemas)[keyof typeof moduleSchemas];
 
 export async function registerOnboardingRoutes(app: FastifyInstance): Promise<void> {
@@ -55,6 +71,120 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await getOnboardingState(workspaceId));
+    }
+  );
+
+  app.get(
+    "/v1/onboarding/products/document-analysis",
+    {
+      config: {
+        workspaceRequired: true,
+        permissions: ["onboarding:read"]
+      }
+    },
+    async () => {
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await getActiveOfferingDocumentAnalysis(workspaceId));
+    }
+  );
+
+  app.post(
+    "/v1/onboarding/products/document-analysis",
+    {
+      bodyLimit: maxOfferingDocumentBodyBytes,
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["onboarding:write"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = createOfferingDocumentAnalysisSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid offering documents", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await createOfferingDocumentAnalysis(workspaceId, parsed.data));
+      } catch (error) {
+        return handleOfferingDocumentError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/v1/onboarding/products/document-analysis/:analysisId/retry",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["onboarding:write"]
+      }
+    },
+    async (request, reply) => {
+      const analysisId = offeringDocumentAnalysisIdSchema.safeParse((request.params as { analysisId?: string }).analysisId);
+      if (!analysisId.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Document analysis id is invalid"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await retryOfferingDocumentAnalysis(workspaceId, analysisId.data));
+      } catch (error) {
+        return handleOfferingDocumentError(error, reply);
+      }
+    }
+  );
+
+  app.post(
+    "/v1/onboarding/products/document-analysis/:analysisId/approve",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["onboarding:write"]
+      }
+    },
+    async (request, reply) => {
+      const analysisId = offeringDocumentAnalysisIdSchema.safeParse((request.params as { analysisId?: string }).analysisId);
+      const parsed = approveOfferingDocumentAnalysisSchema.safeParse(request.body ?? {});
+      if (!analysisId.success || !parsed.success) {
+        return reply
+          .status(400)
+          .send(errorEnvelope("VALIDATION_ERROR", "Invalid document analysis approval", parsed.success ? undefined : parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await approveOfferingDocumentAnalysis(workspaceId, analysisId.data, parsed.data));
+      } catch (error) {
+        return handleOfferingDocumentError(error, reply);
+      }
+    }
+  );
+
+  app.delete(
+    "/v1/onboarding/products/document-analysis/:analysisId",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["onboarding:write"]
+      }
+    },
+    async (request, reply) => {
+      const analysisId = offeringDocumentAnalysisIdSchema.safeParse((request.params as { analysisId?: string }).analysisId);
+      if (!analysisId.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Document analysis id is invalid"));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await discardOfferingDocumentAnalysis(workspaceId, analysisId.data));
+      } catch (error) {
+        return handleOfferingDocumentError(error, reply);
+      }
     }
   );
 
@@ -211,4 +341,36 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       }
     }
   );
+}
+
+function handleOfferingDocumentError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {
+  if (error instanceof OfferingDocumentInvalidError) {
+    return reply.status(400).send(errorEnvelope("OFFERING_DOCUMENT_INVALID", error.message));
+  }
+
+  if (error instanceof OfferingDocumentAnalysisNotFoundError) {
+    return reply.status(404).send(errorEnvelope("OFFERING_DOCUMENT_ANALYSIS_NOT_FOUND", error.message));
+  }
+
+  if (error instanceof OfferingDocumentAnalysisConflictError) {
+    return reply.status(409).send(errorEnvelope("OFFERING_DOCUMENT_ANALYSIS_CONFLICT", error.message));
+  }
+
+  if (error instanceof UsageQuotaExceededError) {
+    return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+  }
+
+  if (error instanceof UsagePlanInactiveError) {
+    return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+  }
+
+  if (error instanceof AiServiceRequestError) {
+    return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message, [{ retryable: error.retryable }]));
+  }
+
+  if (error instanceof MediaStorageError) {
+    return reply.status(503).send(errorEnvelope(error.code, "Temporary document storage is unavailable"));
+  }
+
+  throw error;
 }

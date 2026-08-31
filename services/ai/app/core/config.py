@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     ai_image_provider: Literal["local", "openai"] = "local"
     ai_strategy_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    ai_document_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_image_timeout_seconds: float = Field(default=120, gt=0, le=180)
     openai_api_key: SecretStr | None = None

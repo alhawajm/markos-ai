@@ -8,24 +8,29 @@ import {
   Check,
   CheckCircle2,
   Compass,
+  FileText,
   Info,
   Languages,
   Layers3,
   LoaderCircle,
   MessageCircleMore,
   Pencil,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Sparkles,
   Target,
+  Trash2,
+  UploadCloud,
   Users,
   WandSparkles,
   X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { BusinessProfile, Locale, OnboardingState } from "@markos/shared-types";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type DragEvent, type ReactNode } from "react";
+import type { BusinessProfile, Locale, OfferingCatalogUpdate, OfferingDocumentAnalysisRecord, OnboardingState } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import {
   createEmptyOnboardingDraft,
   hasOnboardingStepData,
@@ -101,6 +106,43 @@ function onboardingCopy(locale: Locale) {
         session: "ما زلنا نتحقق من جلستك. حاول مرة أخرى بعد لحظة.",
         tone: "استخدم أربع كلمات أو أقل لوصف نبرة الصوت."
       },
+      documents: {
+        add: "إضافة منتج أو خدمة",
+        analyze: "تحليل المستندات",
+        analyzing: "يحلل MARKOS المستندات…",
+        body: "ارفع ملفاً أو ملفين، وسنستخرج ما تقدمه لتراجعه قبل الحفظ. يمكنك دائماً استخدام الحقل اليدوي أعلاه.",
+        choose: "اختر PDF أو Word أو TXT",
+        discard: "حذف التحليل",
+        duplicate: "يجب أن يكون لكل منتج أو خدمة اسم مختلف.",
+        expires: "تحذف الملفات الأصلية بعد الاعتماد أو خلال 24 ساعة كحد أقصى.",
+        failed: "تعذر تحليل هذه الملفات. يمكنك المحاولة مجدداً أو حذفها ورفع ملفات أخرى.",
+        invalid: "اختر ملفاً أو ملفين من نوع PDF أو DOCX أو TXT، بحد أقصى 8 ميجابايت للملف و12 ميجابايت إجمالاً.",
+        itemDescription: "الوصف",
+        itemName: "الاسم",
+        issue: (code: string, fallback: string) =>
+          ({
+            NO_OFFERINGS_FOUND: "لم نجد قائمة واضحة للمنتجات أو الخدمات. راجع الملخص أو أضفها يدوياً.",
+            AMBIGUOUS_OFFERING: "بعض العناصر غير واضحة وتحتاج إلى تأكيدك.",
+            MISSING_DESCRIPTION: "بعض العناصر لا تحتوي وصفاً.",
+            MISSING_PRICE: "لم نجد سعراً مؤكداً لبعض العناصر.",
+            CONFLICTING_INFORMATION: "توجد معلومات متعارضة في الملفات وتحتاج إلى مراجعتك.",
+            POSSIBLE_NON_OFFERING: "قد لا يكون أحد العناصر منتجاً أو خدمة فعلية.",
+            REVIEW_REQUIRED: "راجع التفاصيل المستخرجة قبل اعتمادها.",
+            SOURCE_TRUNCATED: "تم اختصار جزء من النص لحدود التحليل الآمن."
+          })[code] ?? fallback,
+        kind: "النوع",
+        kindProduct: "منتج",
+        kindService: "خدمة",
+        kindUnknown: "غير محدد",
+        optional: "اختصار اختياري",
+        remove: "إزالة",
+        retry: "إعادة المحاولة",
+        reviewBody: "صحح الأسماء والأوصاف، واحذف أي عنصر غير صحيح. لن يستخدم MARKOS شيئاً قبل اعتمادك.",
+        reviewTitle: "راجع ما وجدناه",
+        summary: "ملخص ما تقدمه",
+        title: "هل لديك قائمة جاهزة؟",
+        use: "اعتماد هذه التفاصيل"
+      },
       greeting: {
         eyebrow: "مرحباً بك في MARKOS",
         start: "ابدأ إعداد نشاطي",
@@ -174,6 +216,33 @@ function onboardingCopy(locale: Locale) {
       save: "Could not save this step yet.",
       session: "We are still checking your session. Try again in a moment.",
       tone: "Use no more than four words to describe the tone."
+    },
+    documents: {
+      add: "Add an offering",
+      analyze: "Analyze documents",
+      analyzing: "MARKOS is analyzing the documents…",
+      body: "Upload one or two files and review what we find before anything is saved. The manual field above always remains available.",
+      choose: "Choose PDF, Word, or TXT",
+      discard: "Discard analysis",
+      duplicate: "Every product or service needs a different name.",
+      expires: "Original files are deleted after approval or within 24 hours at the latest.",
+      failed: "These files could not be analyzed. Retry, or discard them and upload different files.",
+      invalid: "Choose one or two PDF, DOCX, or TXT files, up to 8 MB each and 12 MB combined.",
+      itemDescription: "Description",
+      itemName: "Name",
+      issue: (_code: string, fallback: string) => fallback,
+      kind: "Type",
+      kindProduct: "Product",
+      kindService: "Service",
+      kindUnknown: "Unspecified",
+      optional: "Optional shortcut",
+      remove: "Remove",
+      retry: "Retry",
+      reviewBody: "Correct names and descriptions, and remove anything that is not an offering. MARKOS will not use it until you approve.",
+      reviewTitle: "Review what we found",
+      summary: "Offer summary",
+      title: "Already have a product list?",
+      use: "Use these details"
     },
     greeting: {
       eyebrow: "Welcome to MARKOS",
@@ -540,6 +609,11 @@ export function OnboardingPanel({
   const [profileDraft, setProfileDraft] = useState<BusinessProfile | null>(initialState.businessProfile.profile);
   const [profileInteractionId, setProfileInteractionId] = useState<string | null>(initialState.businessProfile.interactionId);
   const [profileLanguage, setProfileLanguage] = useState<Locale>(locale);
+  const [documentAnalysis, setDocumentAnalysis] = useState<OfferingDocumentAnalysisRecord | null>(null);
+  const [documentCatalog, setDocumentCatalog] = useState<OfferingCatalogUpdate | null>(null);
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const [documentMessage, setDocumentMessage] = useState("");
+  const documentAnalysisLoaded = useRef(false);
   const workspaceNameApplied = useRef(false);
 
   const showError = useCallback((body: string) => {
@@ -583,6 +657,25 @@ export function OnboardingPanel({
     setDraft((current) => (current.businessName.trim() ? current : { ...current, businessName: workspaceName }));
   }, [hydrated, session]);
 
+  useEffect(() => {
+    if (!session || documentAnalysisLoaded.current) return;
+    documentAnalysisLoaded.current = true;
+    let cancelled = false;
+
+    void client
+      .offeringDocumentAnalysis()
+      .then((analysis) => {
+        if (!cancelled) syncDocumentAnalysis(analysis);
+      })
+      .catch(() => {
+        if (!cancelled) documentAnalysisLoaded.current = false;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, session]);
+
   const activeStep = steps[step - 1]!;
   const validationIssue = validateOnboardingStep(step, draft);
   const canSave = hasOnboardingStepData(step, draft) && validationIssue === null;
@@ -593,6 +686,97 @@ export function OnboardingPanel({
   function update<K extends DraftFieldKey>(key: K, value: OnboardingDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
     setMessage("");
+  }
+
+  function syncDocumentAnalysis(analysis: OfferingDocumentAnalysisRecord | null) {
+    setDocumentAnalysis(analysis);
+    setDocumentCatalog(analysis?.status === "READY" && analysis.result ? editableCatalog(analysis) : null);
+  }
+
+  async function analyzeDocumentFiles(files: FileList | File[]) {
+    if (!session) {
+      setDocumentMessage(copy.errors.session);
+      return;
+    }
+
+    const selected = Array.from(files);
+    const prepared = prepareOfferingDocuments(selected);
+    if (!prepared.valid) {
+      setDocumentMessage(copy.documents.invalid);
+      return;
+    }
+
+    setDocumentBusy(true);
+    setDocumentMessage("");
+    try {
+      const payload = await Promise.all(
+        prepared.files.map(async ({ file, mimeType }) => ({
+          filename: file.name,
+          mimeType,
+          base64Data: await fileAsBase64(file)
+        }))
+      );
+      syncDocumentAnalysis(await client.analyzeOfferingDocuments(payload));
+    } catch (error) {
+      setDocumentMessage(error instanceof Error ? error.message : copy.documents.failed);
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+  async function retryDocumentAnalysis() {
+    if (!documentAnalysis) return;
+    setDocumentBusy(true);
+    setDocumentMessage("");
+    try {
+      syncDocumentAnalysis(await client.retryOfferingDocumentAnalysis(documentAnalysis.id));
+    } catch (error) {
+      setDocumentMessage(error instanceof Error ? error.message : copy.documents.failed);
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+  async function discardDocumentAnalysis() {
+    if (!documentAnalysis) return;
+    setDocumentBusy(true);
+    setDocumentMessage("");
+    try {
+      await client.discardOfferingDocumentAnalysis(documentAnalysis.id);
+      syncDocumentAnalysis(null);
+    } catch (error) {
+      setDocumentMessage(error instanceof Error ? error.message : copy.documents.failed);
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+  async function approveDocumentAnalysis() {
+    if (!documentAnalysis || !documentCatalog) return;
+    const catalog = cleanOfferingCatalog(documentCatalog);
+    if (!catalog.summary && !catalog.items?.length) {
+      setDocumentMessage(copy.errors.products);
+      return;
+    }
+    const normalizedNames = (catalog.items ?? []).map((item) => item.name.normalize("NFKC").trim().toLocaleLowerCase());
+    if (new Set(normalizedNames).size !== normalizedNames.length) {
+      setDocumentMessage(copy.documents.duplicate);
+      return;
+    }
+
+    setDocumentBusy(true);
+    setDocumentMessage("");
+    try {
+      const result = await client.approveOfferingDocumentAnalysis(documentAnalysis.id, catalog);
+      setRuntimeState(result.onboarding);
+      setDraft((current) => ({ ...current, offer: offeringCatalogSummary(catalog) }));
+      syncDocumentAnalysis(result.analysis);
+      advanceAfterStep();
+    } catch (error) {
+      setDocumentMessage(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setDocumentBusy(false);
+    }
   }
 
   function startSetup() {
@@ -793,8 +977,21 @@ export function OnboardingPanel({
               NextIcon={NextIcon}
               canSave={canSave}
               copy={copy}
+              documentAnalysis={documentAnalysis}
+              documentBusy={documentBusy}
+              documentCatalog={documentCatalog}
+              documentMessage={documentMessage}
               draft={draft}
+              locale={locale}
+              onAnalyzeDocuments={(files) => void analyzeDocumentFiles(files)}
               onBack={goBack}
+              onCatalogChange={(catalog) => {
+                setDocumentCatalog(catalog);
+                setDocumentMessage("");
+              }}
+              onDiscardDocument={() => void discardDocumentAnalysis()}
+              onApproveDocument={() => void approveDocumentAnalysis()}
+              onRetryDocument={() => void retryDocumentAnalysis()}
               onSave={() => void saveAndContinue()}
               onSkip={() => void skipStep()}
               onSuggestion={toggleSuggestion}
@@ -881,8 +1078,18 @@ function StepScreen({
   NextIcon,
   canSave,
   copy,
+  documentAnalysis,
+  documentBusy,
+  documentCatalog,
+  documentMessage,
   draft,
+  locale,
+  onAnalyzeDocuments,
+  onApproveDocument,
   onBack,
+  onCatalogChange,
+  onDiscardDocument,
+  onRetryDocument,
   onSave,
   onSkip,
   onSuggestion,
@@ -896,8 +1103,18 @@ function StepScreen({
   NextIcon: Icon;
   canSave: boolean;
   copy: OnboardingCopy;
+  documentAnalysis: OfferingDocumentAnalysisRecord | null;
+  documentBusy: boolean;
+  documentCatalog: OfferingCatalogUpdate | null;
+  documentMessage: string;
   draft: OnboardingDraft;
+  locale: Locale;
+  onAnalyzeDocuments: (files: FileList | File[]) => void;
+  onApproveDocument: () => void;
   onBack: () => void;
+  onCatalogChange: (catalog: OfferingCatalogUpdate | null) => void;
+  onDiscardDocument: () => void;
+  onRetryDocument: () => void;
   onSave: () => void;
   onSkip: () => void;
   onSuggestion: (value: string) => void;
@@ -984,6 +1201,22 @@ function StepScreen({
               ))}
             </div>
 
+            {step.id === 3 ? (
+              <OfferingDocumentAssistant
+                analysis={documentAnalysis}
+                busy={documentBusy}
+                catalog={documentCatalog}
+                copy={copy}
+                locale={locale}
+                message={documentMessage}
+                onAnalyze={onAnalyzeDocuments}
+                onApprove={onApproveDocument}
+                onCatalogChange={onCatalogChange}
+                onDiscard={onDiscardDocument}
+                onRetry={onRetryDocument}
+              />
+            ) : null}
+
             {validationIssue ? <p className="mt-4 text-[14px] font-semibold text-[var(--sunlit-danger)]">{copy.errors[validationIssue]}</p> : null}
           </div>
 
@@ -1038,6 +1271,241 @@ function StepScreen({
   );
 }
 
+function OfferingDocumentAssistant({
+  analysis,
+  busy,
+  catalog,
+  copy,
+  locale,
+  message,
+  onAnalyze,
+  onApprove,
+  onCatalogChange,
+  onDiscard,
+  onRetry
+}: {
+  analysis: OfferingDocumentAnalysisRecord | null;
+  busy: boolean;
+  catalog: OfferingCatalogUpdate | null;
+  copy: OnboardingCopy;
+  locale: Locale;
+  message: string;
+  onAnalyze: (files: FileList | File[]) => void;
+  onApprove: () => void;
+  onCatalogChange: (catalog: OfferingCatalogUpdate | null) => void;
+  onDiscard: () => void;
+  onRetry: () => void;
+}) {
+  const items = catalog?.items ?? [];
+
+  function updateItem(index: number, patch: Partial<(typeof items)[number]>) {
+    if (!catalog) return;
+    onCatalogChange({
+      ...catalog,
+      items: items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+    });
+  }
+
+  function removeItem(index: number) {
+    if (!catalog) return;
+    onCatalogChange({ ...catalog, items: items.filter((_item, itemIndex) => itemIndex !== index) });
+  }
+
+  const waiting = busy || analysis?.status === "PROCESSING";
+  const canRetry = canRetryOfferingDocumentFailure(analysis?.failureCode);
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
+      <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
+          <FileText size={19} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[16px] font-bold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
+            <span className="rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-muted)] ring-1 ring-[var(--sunlit-line)]">
+              {copy.documents.optional}
+            </span>
+          </div>
+          <p className="mt-1.5 max-w-3xl text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.documents.body}</p>
+        </div>
+      </div>
+
+      {analysis === null && !busy ? (
+        <label
+          className="mx-4 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-[rgb(33_191_174_/_48%)] bg-white px-4 py-3 hover:border-[var(--sunlit-aqua)] hover:bg-[var(--sunlit-aqua-soft)]/35 sm:mx-5"
+          onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
+          onDrop={(event: DragEvent<HTMLLabelElement>) => {
+            event.preventDefault();
+            onAnalyze(event.dataTransfer.files);
+          }}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <UploadCloud className="shrink-0 text-[var(--sunlit-aqua-dark)]" size={21} />
+            <span>
+              <strong className="block text-[14px] font-bold text-[var(--sunlit-ink)]">{copy.documents.choose}</strong>
+              <span className="mt-0.5 block text-[12px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</span>
+            </span>
+          </span>
+          <span className="sunlit-secondary hidden shrink-0 rounded-lg px-3 py-2 text-[13px] font-bold sm:inline-flex">{copy.documents.analyze}</span>
+          <input
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            className="sr-only"
+            multiple
+            name="offering-documents"
+            onChange={(event) => {
+              if (event.target.files) onAnalyze(event.target.files);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      ) : null}
+
+      {waiting ? (
+        <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-white px-4 py-4 text-[14px] font-bold text-[var(--sunlit-ink-soft)] sm:mx-5">
+          <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={19} />
+          {copy.documents.analyzing}
+        </div>
+      ) : null}
+
+      {analysis?.status === "FAILED" && !busy ? (
+        <div className="mx-4 mb-4 rounded-xl border border-[rgb(199_53_80_/_18%)] bg-white p-4 sm:mx-5">
+          <p className="text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{offeringDocumentFailureMessage(locale, analysis.failureCode)}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canRetry ? (
+              <button className="sunlit-secondary inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-bold" onClick={onRetry} type="button">
+                <RefreshCw size={14} />
+                {copy.documents.retry}
+              </button>
+            ) : null}
+            <button
+              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-bold text-[var(--sunlit-danger)] hover:bg-[rgb(199_53_80_/_7%)]"
+              onClick={onDiscard}
+              type="button"
+            >
+              <Trash2 size={14} />
+              {copy.documents.discard}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {analysis?.status === "READY" && catalog && !busy ? (
+        <div className="border-t border-[var(--sunlit-line)] bg-white px-4 py-5 sm:px-5">
+          <h3 className="text-[17px] font-bold text-[var(--sunlit-ink)]">{copy.documents.reviewTitle}</h3>
+          <p className="mt-1 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.documents.reviewBody}</p>
+
+          <label className="mt-4 block">
+            <span className="text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{copy.documents.summary}</span>
+            <textarea
+              className="sunlit-field mt-2 min-h-24 resize-y rounded-xl px-3.5 py-3 text-[14px] leading-6 outline-none"
+              maxLength={4000}
+              name="offering-document-summary"
+              onChange={(event) => onCatalogChange({ ...catalog, summary: event.target.value })}
+              value={catalog.summary ?? ""}
+            />
+          </label>
+
+          <div className="mt-4 space-y-3">
+            {items.map((item, index) => (
+              <article className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3.5" key={`${index}-${item.name}`}>
+                <div className="grid gap-3 sm:grid-cols-[145px_minmax(0,1fr)_auto]">
+                  <select
+                    aria-label={`${copy.documents.kind} ${index + 1}`}
+                    className="sunlit-field rounded-lg px-3 py-2.5 text-[14px] outline-none"
+                    name={`offering-${index}-kind`}
+                    onChange={(event) => updateItem(index, { kind: event.target.value as "PRODUCT" | "SERVICE" | "UNSPECIFIED" })}
+                    value={item.kind ?? "UNSPECIFIED"}
+                  >
+                    <option value="UNSPECIFIED">{copy.documents.kindUnknown}</option>
+                    <option value="PRODUCT">{copy.documents.kindProduct}</option>
+                    <option value="SERVICE">{copy.documents.kindService}</option>
+                  </select>
+                  <input
+                    aria-label={copy.documents.itemName}
+                    className="sunlit-field rounded-lg px-3 py-2.5 text-[14px] outline-none"
+                    maxLength={160}
+                    name={`offering-${index}-name`}
+                    onChange={(event) => updateItem(index, { name: event.target.value })}
+                    placeholder={copy.documents.itemName}
+                    value={item.name}
+                  />
+                  <button
+                    aria-label={copy.documents.remove}
+                    className="rounded-lg p-2.5 text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_7%)] hover:text-[var(--sunlit-danger)]"
+                    onClick={() => removeItem(index)}
+                    type="button"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+                <textarea
+                  aria-label={copy.documents.itemDescription}
+                  className="sunlit-field mt-3 min-h-20 resize-y rounded-lg px-3 py-2.5 text-[14px] leading-6 outline-none"
+                  maxLength={1000}
+                  name={`offering-${index}-description`}
+                  onChange={(event) => updateItem(index, { description: event.target.value })}
+                  placeholder={copy.documents.itemDescription}
+                  value={item.description ?? ""}
+                />
+              </article>
+            ))}
+          </div>
+
+          <button
+            className="mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
+            onClick={() =>
+              onCatalogChange({
+                ...catalog,
+                items: [...items, { kind: "UNSPECIFIED", name: "", description: "", currency: "BHD" }]
+              })
+            }
+            type="button"
+          >
+            <Plus size={15} />
+            {copy.documents.add}
+          </button>
+
+          {analysis.result?.issues.length ? (
+            <div className="mt-4 space-y-2">
+              {analysis.result.issues.map((issue, index) => (
+                <div
+                  className="flex items-start gap-2 rounded-lg bg-[var(--sunlit-yellow-soft)] px-3 py-2.5 text-[13px] leading-5 text-[var(--sunlit-ink-soft)]"
+                  key={`${issue.code}-${index}`}
+                >
+                  <Info className="mt-0.5 shrink-0 text-[var(--sunlit-warning)]" size={15} />
+                  {copy.documents.issue(issue.code, issue.message)}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-[var(--sunlit-line)] pt-4 sm:flex-row sm:justify-end">
+            <button
+              className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-[var(--sunlit-danger)] hover:bg-[rgb(199_53_80_/_7%)]"
+              onClick={onDiscard}
+              type="button"
+            >
+              {copy.documents.discard}
+            </button>
+            <button
+              className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-bold"
+              onClick={onApprove}
+              type="button"
+            >
+              <Check size={16} />
+              {copy.documents.use}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {message ? <p className="mx-4 mb-4 text-[13px] font-semibold leading-5 text-[var(--sunlit-danger)] sm:mx-5">{message}</p> : null}
+    </section>
+  );
+}
+
 function ContextItem({ current = false, label, muted = false, title }: { current?: boolean; label: string; muted?: boolean; title: string }) {
   return (
     <div
@@ -1086,6 +1554,7 @@ function OnboardingField({
           className={`${inputClass} min-h-24 w-full resize-y`}
           dir="auto"
           maxLength={field.maxLength}
+          name={`onboarding-${field.key}`}
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder}
           value={value}
@@ -1095,6 +1564,7 @@ function OnboardingField({
           className={`${inputClass} min-h-12 w-full`}
           dir="auto"
           maxLength={field.maxLength}
+          name={`onboarding-${field.key}`}
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder}
           value={value}
@@ -1350,6 +1820,92 @@ function LanguageButton({ active, children, onClick }: { active: boolean; childr
       {children}
     </button>
   );
+}
+
+type OfferingDocumentMimeType = "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain";
+
+function prepareOfferingDocuments(files: File[]): { valid: true; files: Array<{ file: File; mimeType: OfferingDocumentMimeType }> } | { valid: false } {
+  if (files.length < 1 || files.length > 2) return { valid: false };
+
+  let totalBytes = 0;
+  const prepared: Array<{ file: File; mimeType: OfferingDocumentMimeType }> = [];
+  for (const file of files) {
+    const extension = file.name.toLocaleLowerCase().match(/\.[^.]+$/)?.[0];
+    const mimeType: OfferingDocumentMimeType | undefined =
+      extension === ".pdf"
+        ? "application/pdf"
+        : extension === ".docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : extension === ".txt"
+            ? "text/plain"
+            : undefined;
+    totalBytes += file.size;
+    if (!mimeType || file.name.length > 180 || file.size < 1 || file.size > 8_000_000) return { valid: false };
+    prepared.push({ file, mimeType });
+  }
+
+  return totalBytes <= 12_000_000 ? { valid: true, files: prepared } : { valid: false };
+}
+
+function fileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the selected document"));
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      const comma = value.indexOf(",");
+      if (comma < 0) {
+        reject(new Error("Could not read the selected document"));
+        return;
+      }
+      resolve(value.slice(comma + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function editableCatalog(analysis: OfferingDocumentAnalysisRecord): OfferingCatalogUpdate | null {
+  const catalog = analysis.result?.catalog;
+  if (!catalog) return null;
+  return {
+    ...(catalog.summary === undefined ? {} : { summary: catalog.summary }),
+    items: catalog.items.map((item) => ({
+      kind: item.kind,
+      name: item.name,
+      ...(item.category === undefined ? {} : { category: item.category }),
+      ...(item.description === undefined ? {} : { description: item.description }),
+      ...(item.priceMinor === undefined ? {} : { priceMinor: item.priceMinor }),
+      currency: item.currency
+    })),
+    differentiators: catalog.differentiators,
+    ...(catalog.priceRange === undefined ? {} : { priceRange: catalog.priceRange }),
+    salesChannels: catalog.salesChannels
+  };
+}
+
+function cleanOfferingCatalog(catalog: OfferingCatalogUpdate): OfferingCatalogUpdate {
+  const items = (catalog.items ?? [])
+    .filter((item) => item.name.trim())
+    .map((item) => ({
+      kind: item.kind ?? "UNSPECIFIED",
+      name: item.name.trim(),
+      ...(item.category?.trim() ? { category: item.category.trim() } : {}),
+      ...(item.description?.trim() ? { description: item.description.trim() } : {}),
+      ...(item.priceMinor === undefined ? {} : { priceMinor: item.priceMinor }),
+      currency: item.currency.toUpperCase()
+    }));
+  return {
+    ...(catalog.summary?.trim() ? { summary: catalog.summary.trim() } : {}),
+    ...(items.length ? { items } : {}),
+    differentiators: (catalog.differentiators ?? []).map((item) => item.trim()).filter(Boolean),
+    ...(catalog.priceRange?.trim() ? { priceRange: catalog.priceRange.trim() } : {}),
+    salesChannels: (catalog.salesChannels ?? []).map((item) => item.trim()).filter(Boolean)
+  };
+}
+
+function offeringCatalogSummary(catalog: OfferingCatalogUpdate): string {
+  const itemLines = (catalog.items ?? []).map((item) => [item.name, item.description].filter(Boolean).join(": "));
+  return [catalog.summary, ...itemLines].filter(Boolean).join("\n").slice(0, 4000);
 }
 
 function businessProfileIsComplete(profile: BusinessProfile): boolean {
