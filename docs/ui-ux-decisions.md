@@ -2,6 +2,7 @@
 
 - Status: active decision register
 - Started: 2026-08-25
+- Last updated: 2026-08-30
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -36,6 +37,40 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 - Keep edits after the first intentional save explicit until the user saves again, marks the item Ready, or chooses Save draft while leaving. Do not introduce background autosave in this pass.
 - Require an already persisted draft before media upload, attachment, or AI image generation. Keep those controls unavailable on a new unsaved working copy and explain why; defer temporary-asset architecture until a later media-first Create redesign demonstrates enough value.
+
+### 2026-08-27 — Daily Create workflow prototype baseline
+
+**Accepted**
+
+- Keep an action hub before the Draft Editor. Remove its permanently empty preview so Start blank, recent work, optional AI drafting, ideas, and Calendar remain the clear starting choices. Introduce the follower-style preview only after an editor exists.
+- Use one media-first composition workspace rather than a tall stack of independently saved cards. Put primary caption work after media, keep optional enhancements behind progressive disclosure, and keep publication intent in a compact adjacent control or review drawer.
+- Replace section-level Save controls with one persistent draft-status and action area. It must distinguish Untouched, Unsaved changes, Saved draft, Ready, and Scheduled without implying background autosave.
+- Permit a manually selected JPEG to remain local in the browser before the first explicit Save. On Save, create the draft, upload the selected file, and attach it through the existing APIs as one recoverable UI operation. This supersedes only the 2026-08-25 persisted-first restriction for **manual media**; AI image generation still requires a persisted content item.
+- Keep Unscheduled, planned Calendar time, Ready, and active scheduling visibly distinct. Reuse a complete planned date/time as the default in the explicit scheduling review, but never treat that planned value as an active queue entry.
+- Use the existing content contracts for the first implementation slice. Do not add a temporary-media backend contract merely to support this browser-local manual selection.
+
+**Still open**
+
+- The exact final placement and supported inventory of Instagram-specific options.
+- Production adoption of the provisional IBM Plex and Tangerine Slate prototype foundation.
+- Complete Carousel, Reel, Story, Media Library, mobile-creation, and collaborative approval compositions.
+
+### 2026-08-27 — Create format and preview feedback pass
+
+**Accepted for the connected prototype**
+
+- Put an explicit Post, Carousel, Reel, or Story selector before media. Do not infer the user's intended format only after upload. Keep the first implementation slice limited to the current standard Post/JPEG contract, and label the other format paths as structural exploration until their workflows are supported.
+- Use one fixed, device-frame-free Instagram preview family. Post and Carousel use the feed-post shell; Reel and Story use the full-screen shell. Source media may be cropped within that shell but must not resize the surrounding preview. Exact mobile chrome, controls, and safe areas remain open pending real Instagram screenshots.
+- Reserve modal dialogs for consequential confirmations. Present AI metering, usage guidance, and generated suggestions through inline helper text, an expandable disclosure, a popover, or another non-blocking contextual surface.
+- Give Ready content an explicit Return to Draft action. Returning preserves the saved content and planned values while removing readiness; it must not schedule or publish anything.
+- Keep one visible Caption section label. Preserve an accessible field label without repeating the same visual heading.
+
+**Still open**
+
+- Whether generated media can be saved directly to a reusable Media Library without first attaching it to a content item. The current attachment contract does not establish this behavior.
+- Final drop-zone size and accepted file rules for each content type.
+- Whether every format should occupy one fixed outer Instagram viewport. The leading option is a device-frame-free, screen-proportioned viewport: Reel and Story fill it, while Post and Carousel render a normal feed card from the top and may reveal the beginning of the next feed item below.
+- Exact Carousel ordering, Reel/Story controls, outer viewport ratio, preview crops, and publishing limitations. Review real Instagram mobile screenshots before fixing these values.
 
 ## Calendar
 

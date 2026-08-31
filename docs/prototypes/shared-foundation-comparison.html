@@ -1,0 +1,1370 @@
+<!doctype html>
+<html lang="en" data-font="plex" data-palette="tangerine" data-preview="lab" data-scale="readable">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Interactive bilingual comparison of proposed MARKOS typography, semantic color, and desktop text-scale foundations." />
+    <title>MARKOS shared foundation comparison</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --radius-sm: 0.55rem;
+        --radius-md: 0.85rem;
+        --radius-lg: 1.25rem;
+        --shadow: 0 1rem 3rem rgb(39 31 25 / 9%);
+        --status-draft: #64748b;
+        --status-draft-soft: #f1f5f9;
+        --status-ready: #2563eb;
+        --status-ready-soft: #eff6ff;
+        --status-scheduled: #ea580c;
+        --status-scheduled-soft: #fff7ed;
+        --status-published: #16a34a;
+        --status-published-soft: #f0fdf4;
+        --status-attention: #e11d48;
+        --status-attention-soft: #fff1f2;
+        --pass-text: #166534;
+        --pass-soft: #dcfce7;
+        --font-ui: Inter, Arial, sans-serif;
+        --font-ar: Arial, sans-serif;
+        --base-size: 16px;
+      }
+
+      :root[data-font="readex"] {
+        --font-ui: "Readex Pro", sans-serif;
+        --font-ar: "Readex Pro", sans-serif;
+      }
+
+      :root[data-font="plex"] {
+        --font-ui: "IBM Plex Sans", sans-serif;
+        --font-ar: "IBM Plex Sans Arabic", sans-serif;
+      }
+
+      :root[data-font="alexandria"] {
+        --font-ui: Alexandria, sans-serif;
+        --font-ar: Alexandria, sans-serif;
+      }
+
+      :root[data-font="cairo"] {
+        --font-ui: Cairo, sans-serif;
+        --font-ar: Cairo, sans-serif;
+      }
+
+      :root[data-font="noto"] {
+        --font-ui: "Noto Sans", sans-serif;
+        --font-ar: "Noto Sans Arabic", sans-serif;
+      }
+
+      :root[data-scale="compact"] {
+        --base-size: 12.5px;
+      }
+
+      :root[data-palette="sunlit"] {
+        --canvas: #fbf3e7;
+        --canvas-glow: #e6faf4;
+        --surface: #fffdf8;
+        --surface-strong: #ffffff;
+        --surface-soft: #fff6ed;
+        --line: #e8ddd2;
+        --line-strong: #d9cbc0;
+        --text: #20212b;
+        --muted: #625b66;
+        --primary: #ff665a;
+        --primary-hover: #eb554b;
+        --on-primary: #20212b;
+        --accent: #21bfae;
+        --accent-soft: #e4f9f4;
+        --focus: #21bfae;
+      }
+
+      :root[data-palette="warm"] {
+        --canvas: #f7f4ef;
+        --canvas-glow: #eaf7f3;
+        --surface: #fffefa;
+        --surface-strong: #ffffff;
+        --surface-soft: #fbf5ef;
+        --line: #e3ddd6;
+        --line-strong: #d2c9c0;
+        --text: #25201e;
+        --muted: #6f625c;
+        --primary: #d43d31;
+        --primary-hover: #bd3228;
+        --on-primary: #ffffff;
+        --accent: #087d71;
+        --accent-soft: #e4f4f1;
+        --focus: #087d71;
+      }
+
+      :root[data-palette="signal"] {
+        --canvas: #f5f6fa;
+        --canvas-glow: #edf0ff;
+        --surface: #fbfcff;
+        --surface-strong: #ffffff;
+        --surface-soft: #f7f8fc;
+        --line: #dde1ea;
+        --line-strong: #cbd1dc;
+        --text: #1f2430;
+        --muted: #626b7d;
+        --primary: #3e63dd;
+        --primary-hover: #3153c7;
+        --on-primary: #ffffff;
+        --accent: #c93f32;
+        --accent-soft: #fff0ed;
+        --focus: #3e63dd;
+      }
+
+      :root[data-palette="linen"] {
+        --canvas: #eee9df;
+        --canvas-glow: #f7eee7;
+        --surface: #f8f4ec;
+        --surface-strong: #fffefa;
+        --surface-soft: #ebe5da;
+        --line: #d8d1c4;
+        --line-strong: #c8beaf;
+        --text: #2e2e2e;
+        --muted: #5e5a52;
+        --primary: #2e2e2e;
+        --primary-hover: #181818;
+        --on-primary: #ffffff;
+        --accent: #b54633;
+        --accent-soft: #f8e8e3;
+        --focus: #b54633;
+      }
+
+      :root[data-palette="mint"] {
+        --canvas: #f4faf7;
+        --canvas-glow: #e5fff3;
+        --surface: #fbfefc;
+        --surface-strong: #ffffff;
+        --surface-soft: #f1f8f4;
+        --line: #d8e6df;
+        --line-strong: #c5d8cf;
+        --text: #17211d;
+        --muted: #53655d;
+        --primary: #51f0a8;
+        --primary-hover: #3bdc94;
+        --on-primary: #17211d;
+        --accent: #117c5a;
+        --accent-soft: #e0f6ec;
+        --focus: #117c5a;
+      }
+
+      :root[data-palette="violet"] {
+        --canvas: #f6f4fb;
+        --canvas-glow: #eee9ff;
+        --surface: #fdfdff;
+        --surface-strong: #ffffff;
+        --surface-soft: #f5f1ff;
+        --line: #e3dff0;
+        --line-strong: #d0c8e2;
+        --text: #252032;
+        --muted: #685e78;
+        --primary: #6d4aff;
+        --primary-hover: #5e3ce9;
+        --on-primary: #ffffff;
+        --accent: #c9436d;
+        --accent-soft: #fbeaf0;
+        --focus: #6d4aff;
+      }
+
+      :root[data-palette="tangerine"] {
+        --canvas: #eef1f3;
+        --canvas-glow: #e3edf6;
+        --surface: #fbfcfd;
+        --surface-strong: #ffffff;
+        --surface-soft: #f4f6f8;
+        --line: #d8dee3;
+        --line-strong: #c6ced5;
+        --text: #20262d;
+        --muted: #5f6b75;
+        --primary: #c64f2e;
+        --primary-hover: #ae4024;
+        --on-primary: #ffffff;
+        --accent: #315a7d;
+        --accent-soft: #e7eff6;
+        --focus: #315a7d;
+      }
+
+      :root[data-palette="tangerine-dark"] {
+        --canvas: #151a20;
+        --canvas-glow: #17293a;
+        --surface: #1b2128;
+        --surface-strong: #202831;
+        --surface-soft: #252e38;
+        --line: #34414c;
+        --line-strong: #465461;
+        --text: #f4f7fa;
+        --muted: #aeb8c2;
+        --primary: #f47a45;
+        --primary-hover: #ff8b58;
+        --on-primary: #181d22;
+        --accent: #78a9d1;
+        --accent-soft: #22394c;
+        --focus: #8fc7f1;
+        --shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+        --status-draft: #b0bbc7;
+        --status-draft-soft: #2a333d;
+        --status-ready: #76aaff;
+        --status-ready-soft: #23364e;
+        --status-scheduled: #ff925c;
+        --status-scheduled-soft: #482a20;
+        --status-published: #5ad88a;
+        --status-published-soft: #203a2c;
+        --status-attention: #ff718b;
+        --status-attention-soft: #49252f;
+        --pass-text: #5ad88a;
+        --pass-soft: #203a2c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        font-size: var(--base-size);
+        color-scheme: light;
+        background: #e9e7e3;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1080px;
+        min-height: 100vh;
+        color: var(--text);
+        background: #e9e7e3;
+        font-family: var(--font-ui);
+        line-height: 1.45;
+        transition:
+          color 160ms ease,
+          background 160ms ease;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      .lab {
+        display: grid;
+        min-height: 100vh;
+        grid-template-rows: auto 1fr;
+      }
+
+      :root[data-preview="focus"] body {
+        overflow: hidden;
+      }
+
+      :root[data-preview="focus"] .lab {
+        display: block;
+        min-height: 100vh;
+      }
+
+      :root[data-preview="focus"] .lab-toolbar {
+        display: none;
+      }
+
+      :root[data-preview="focus"] .stage {
+        min-height: 100vh;
+        padding: 0;
+        background: var(--canvas);
+      }
+
+      :root[data-preview="focus"] .artifact {
+        width: 100%;
+        height: 100vh;
+        min-height: 0;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      :root[data-preview="focus"] .decision-strip {
+        display: none;
+      }
+
+      :root[data-preview="focus"] .main {
+        grid-template-rows: auto 1fr;
+      }
+
+      .lab-toolbar {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: grid;
+        grid-template-columns: minmax(15rem, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.8rem 1.25rem;
+        border-block-end: 1px solid #d5d2cd;
+        color: #20212b;
+        background: rgb(255 255 255 / 94%);
+        backdrop-filter: blur(12px);
+      }
+
+      .lab-title {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .lab-title-mark {
+        display: grid;
+        width: 2.2rem;
+        height: 2.2rem;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 0.7rem;
+        color: #ffd149;
+        background: #20212b;
+        font-size: 1.2rem;
+      }
+
+      .lab-title h1 {
+        margin: 0;
+        font:
+          700 1rem/1.2 Inter,
+          sans-serif;
+      }
+
+      .lab-title p {
+        overflow: hidden;
+        margin: 0.18rem 0 0;
+        color: #69656c;
+        font:
+          500 0.74rem/1.2 Inter,
+          sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .control-groups {
+        display: flex;
+        gap: 0.65rem;
+        align-items: center;
+      }
+
+      .control-group {
+        display: flex;
+        gap: 0.2rem;
+        align-items: center;
+        padding: 0.22rem;
+        border: 1px solid #d8d5d0;
+        border-radius: 0.75rem;
+        background: #f4f3f1;
+      }
+
+      .control-label {
+        padding-inline: 0.45rem 0.3rem;
+        color: #716e69;
+        font:
+          600 0.67rem/1 Inter,
+          sans-serif;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .control-select {
+        min-width: 10.5rem;
+        min-height: 2rem;
+        padding: 0.4rem 1.9rem 0.4rem 0.62rem;
+        border: 0;
+        border-radius: 0.55rem;
+        color: #20212b;
+        background: #ffffff;
+        cursor: pointer;
+        font:
+          600 0.72rem/1 Inter,
+          sans-serif;
+        box-shadow: 0 1px 4px rgb(0 0 0 / 7%);
+      }
+
+      .palette-select {
+        min-width: 11.5rem;
+      }
+
+      .choice {
+        min-height: 2rem;
+        padding: 0.45rem 0.62rem;
+        border: 0;
+        border-radius: 0.55rem;
+        color: #59565b;
+        background: transparent;
+        cursor: pointer;
+        font:
+          600 0.72rem/1 Inter,
+          sans-serif;
+      }
+
+      .choice:hover {
+        color: #20212b;
+        background: #ffffff;
+      }
+
+      .choice[aria-pressed="true"] {
+        color: #ffffff;
+        background: #20212b;
+        box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+      }
+
+      .stage {
+        display: grid;
+        padding: 1.15rem;
+        background:
+          radial-gradient(circle at 10% 0%, var(--canvas) 0, transparent 34%), radial-gradient(circle at 100% 15%, var(--canvas-glow) 0, transparent 28%),
+          #e9e7e3;
+      }
+
+      .artifact {
+        display: grid;
+        width: min(100%, 1480px);
+        min-height: 730px;
+        margin: auto;
+        overflow: hidden;
+        grid-template-columns: 15.5rem minmax(0, 1fr);
+        border: 1px solid var(--line-strong);
+        border-radius: 1.4rem;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        transition:
+          background 160ms ease,
+          border-color 160ms ease;
+      }
+
+      :root[data-palette="tangerine-dark"] .artifact {
+        color-scheme: dark;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1.4rem;
+        padding: 1.3rem 1rem;
+        border-inline-end: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
+      .brand {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        padding-inline: 0.35rem;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 2.65rem;
+        height: 2.65rem;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 0.85rem;
+        color: #ffd149;
+        background: #20212b;
+        box-shadow: 0 0.75rem 1.6rem rgb(32 33 43 / 18%);
+        font-size: 1.35rem;
+      }
+
+      .brand strong,
+      .brand small {
+        display: block;
+      }
+
+      .brand strong {
+        font-size: 1rem;
+        letter-spacing: -0.02em;
+      }
+
+      .brand small {
+        margin-top: 0.08rem;
+        color: var(--muted);
+        font-size: 0.68rem;
+      }
+
+      .nav {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .nav a {
+        display: grid;
+        min-height: 2.8rem;
+        grid-template-columns: 2rem 1fr;
+        gap: 0.65rem;
+        align-items: center;
+        padding: 0.5rem 0.68rem;
+        border: 1px solid transparent;
+        border-radius: 0.8rem;
+        color: var(--muted);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        color: var(--text);
+        background: var(--surface-soft);
+      }
+
+      .nav a[aria-current="page"] {
+        border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
+        color: var(--text);
+        background: color-mix(in srgb, var(--primary) 9%, var(--surface-strong));
+        box-shadow: inset 3px 0 0 var(--primary);
+      }
+
+      [dir="rtl"] .nav a[aria-current="page"] {
+        box-shadow: inset -3px 0 0 var(--primary);
+      }
+
+      .nav-icon {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 0.55rem;
+        font-size: 1.1rem;
+      }
+
+      .nav a[aria-current="page"] .nav-icon {
+        color: var(--primary);
+        background: var(--surface-strong);
+      }
+
+      .sidebar-foot {
+        margin-top: auto;
+      }
+
+      .workspace-card {
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--surface-soft);
+      }
+
+      .workspace-card strong,
+      .workspace-card small {
+        display: block;
+      }
+
+      .workspace-card small {
+        margin-top: 0.18rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .main {
+        display: grid;
+        min-width: 0;
+        grid-template-rows: auto auto 1fr;
+        background: radial-gradient(circle at 100% 0%, var(--canvas-glow), transparent 23rem), var(--canvas);
+      }
+
+      .page-head {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.3rem 1.5rem 0.9rem;
+      }
+
+      .eyebrow {
+        margin: 0 0 0.15rem;
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.55rem;
+        line-height: 1.2;
+        letter-spacing: -0.035em;
+      }
+
+      .head-actions,
+      .calendar-actions,
+      .filter-row,
+      .status-list,
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      .btn {
+        min-height: 2.55rem;
+        padding: 0.58rem 0.82rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.72rem;
+        color: var(--text);
+        background: var(--surface-strong);
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .btn:hover {
+        border-color: var(--accent);
+      }
+
+      .btn.primary {
+        border-color: var(--primary);
+        color: var(--on-primary);
+        background: var(--primary);
+      }
+
+      .btn.primary:hover {
+        border-color: var(--primary-hover);
+        background: var(--primary-hover);
+      }
+
+      .decision-strip {
+        display: grid;
+        grid-template-columns: 1.1fr 1.2fr 0.9fr;
+        gap: 0.55rem;
+        margin-inline: 1.5rem;
+        padding: 0.58rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+      }
+
+      .decision-item {
+        min-width: 0;
+        padding: 0.42rem 0.55rem;
+        border-inline-start: 2px solid var(--accent);
+      }
+
+      .decision-item b,
+      .decision-item span {
+        display: block;
+      }
+
+      .decision-item b {
+        overflow: hidden;
+        font-size: 0.76rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .decision-item span {
+        margin-top: 0.08rem;
+        color: var(--muted);
+        font-size: 0.65rem;
+      }
+
+      .workspace {
+        display: grid;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.8fr);
+        gap: 0.8rem;
+        padding: 0.8rem 1.5rem 1.5rem;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--surface-strong);
+        box-shadow: 0 0.35rem 1.2rem rgb(37 32 30 / 5%);
+      }
+
+      .calendar-panel {
+        display: grid;
+        min-height: 0;
+        grid-template-rows: auto auto 1fr;
+        overflow: hidden;
+      }
+
+      .calendar-head {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.85rem 0.95rem 0.65rem;
+      }
+
+      h3 {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.25;
+      }
+
+      .filter-row {
+        padding: 0 0.95rem 0.65rem;
+        border-block-end: 1px solid var(--line);
+      }
+
+      .chip {
+        display: inline-flex;
+        min-height: 2rem;
+        gap: 0.38rem;
+        align-items: center;
+        padding: 0.36rem 0.58rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--surface-strong);
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .chip.selected {
+        border-color: var(--text);
+        color: var(--surface-strong);
+        background: var(--text);
+      }
+
+      .dot {
+        width: 0.48rem;
+        height: 0.48rem;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .draft {
+        color: var(--status-draft);
+      }
+      .ready {
+        color: var(--status-ready);
+      }
+      .scheduled {
+        color: var(--status-scheduled);
+      }
+      .published {
+        color: var(--status-published);
+      }
+      .attention {
+        color: var(--status-attention);
+      }
+
+      .month {
+        display: grid;
+        min-height: 0;
+        grid-template-columns: repeat(7, 1fr);
+        grid-template-rows: auto repeat(6, minmax(3.2rem, 1fr));
+        padding: 0.7rem;
+      }
+
+      .weekday {
+        padding: 0.25rem 0.4rem 0.45rem;
+        color: var(--muted);
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .day {
+        position: relative;
+        min-width: 0;
+        padding: 0.45rem;
+        border-block-start: 1px solid var(--line);
+        border-inline-start: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
+      .day:nth-child(7n + 7) {
+        border-inline-end: 1px solid var(--line);
+      }
+
+      .day:nth-last-child(-n + 7) {
+        border-block-end: 1px solid var(--line);
+      }
+
+      .day.today {
+        z-index: 1;
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+        background: var(--accent-soft);
+      }
+
+      .day.outside {
+        color: var(--muted);
+        background: var(--surface-soft);
+      }
+
+      .day-number {
+        display: inline-grid;
+        min-width: 1.45rem;
+        min-height: 1.45rem;
+        place-items: center;
+        border-radius: 50%;
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .today .day-number {
+        color: var(--surface-strong);
+        background: var(--accent);
+      }
+
+      .day-dots {
+        display: flex;
+        gap: 0.24rem;
+        margin-top: 0.48rem;
+      }
+
+      .day-dots .dot {
+        width: 0.56rem;
+        height: 0.56rem;
+      }
+
+      .day-total {
+        position: absolute;
+        inset-inline-end: 0.45rem;
+        top: 0.48rem;
+        color: var(--muted);
+        font-size: 0.62rem;
+        font-weight: 600;
+      }
+
+      .quiet-panel {
+        display: grid;
+        align-content: start;
+        gap: 0.8rem;
+        padding: 1rem;
+      }
+
+      .locale-block {
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--surface-soft);
+      }
+
+      .locale-block[lang="ar"] {
+        direction: rtl;
+        font-family: var(--font-ar);
+        text-align: start;
+      }
+
+      .locale-block h3 {
+        font-size: 1rem;
+      }
+
+      .locale-block p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .field {
+        display: grid;
+        gap: 0.28rem;
+      }
+
+      .field-pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .field[lang="ar"] {
+        direction: rtl;
+        font-family: var(--font-ar);
+      }
+
+      .field label {
+        font-size: 0.7rem;
+        font-weight: 650;
+      }
+
+      .field input {
+        min-width: 0;
+        width: 100%;
+        min-height: 2.55rem;
+        padding: 0.58rem 0.68rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.68rem;
+        color: var(--text);
+        background: var(--surface-strong);
+      }
+
+      .field[lang="ar"] input {
+        font-family: var(--font-ar);
+        text-align: start;
+      }
+
+      .status-card {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.65rem;
+        align-items: start;
+        padding: 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+      }
+
+      .status-icon {
+        display: grid;
+        width: 2.1rem;
+        height: 2.1rem;
+        place-items: center;
+        border-radius: 0.65rem;
+        color: var(--status-ready);
+        background: var(--status-ready-soft);
+        font-weight: 700;
+      }
+
+      .status-card p {
+        margin: 0.18rem 0 0;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .contrast-note {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.65rem;
+      }
+
+      .pass {
+        padding: 0.22rem 0.4rem;
+        border-radius: 999px;
+        color: var(--pass-text);
+        background: var(--pass-soft);
+        font-weight: 700;
+      }
+
+      @media (max-height: 830px) {
+        .lab-toolbar {
+          padding-block: 0.55rem;
+        }
+
+        .stage {
+          padding: 0.7rem;
+        }
+
+        .artifact {
+          min-height: 650px;
+        }
+
+        .decision-strip {
+          display: none;
+        }
+
+        .main {
+          grid-template-rows: auto 1fr;
+        }
+
+        .workspace {
+          padding-top: 0.45rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="lab">
+      <header class="lab-toolbar">
+        <div class="lab-title">
+          <div class="lab-title-mark" aria-hidden="true">✦</div>
+          <div>
+            <h1>MARKOS shared foundation lab</h1>
+            <p>One composition · independent typography, palette, and scale decisions · no production code</p>
+          </div>
+        </div>
+
+        <div class="control-groups" aria-label="Foundation comparison controls">
+          <label class="control-group">
+            <span class="control-label">Type</span>
+            <select class="control-select" name="font-candidate" data-select-option="font" aria-label="Typography candidate">
+              <option value="current">Current · Inter</option>
+              <option value="readex">Readex Pro</option>
+              <option value="plex">IBM Plex</option>
+              <option value="alexandria">Alexandria</option>
+              <option value="cairo">Cairo</option>
+              <option value="noto">Noto Sans</option>
+            </select>
+          </label>
+          <label class="control-group">
+            <span class="control-label">Color</span>
+            <select class="control-select palette-select" name="palette-candidate" data-select-option="palette" aria-label="Palette candidate">
+              <option value="sunlit">Current Sunlit</option>
+              <option value="warm">Refined Sunlit</option>
+              <option value="signal">Editorial Signal</option>
+              <option value="linen">Linen Ink</option>
+              <option value="mint">Mint Signal</option>
+              <option value="violet">Violet Bloom</option>
+              <option value="tangerine">Tangerine Slate</option>
+              <option value="tangerine-dark">Tangerine Slate · Dark</option>
+            </select>
+          </label>
+          <div class="control-group" aria-label="Base scale">
+            <span class="control-label">Scale</span>
+            <button class="choice" type="button" data-option="scale" data-value="compact">12.5</button>
+            <button class="choice" type="button" data-option="scale" data-value="readable">16</button>
+          </div>
+          <div class="control-group" aria-label="Preview mode">
+            <span class="control-label">View</span>
+            <button
+              class="choice"
+              type="button"
+              data-preview-toggle
+              aria-label="Enter viewport-accurate focus preview. Press Escape to return to Lab view."
+              aria-pressed="false"
+            >
+              Focus
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="stage">
+        <section class="artifact" aria-label="Representative MARKOS desktop shell">
+          <aside class="sidebar">
+            <div class="brand">
+              <div class="brand-mark" aria-hidden="true">✦</div>
+              <div>
+                <strong>MARKOS AI</strong>
+                <small>Marketing studio</small>
+              </div>
+            </div>
+
+            <nav class="nav" aria-label="Main navigation">
+              <a href="#"><span class="nav-icon" aria-hidden="true">⌂</span><span>Overview</span></a>
+              <a href="#"><span class="nav-icon" aria-hidden="true">◎</span><span>Strategy</span></a>
+              <a href="#"><span class="nav-icon" aria-hidden="true">✣</span><span>Create</span></a>
+              <a href="#" aria-current="page"><span class="nav-icon" aria-hidden="true">▦</span><span>Calendar</span></a>
+              <a href="#"><span class="nav-icon" aria-hidden="true">▥</span><span>Insights</span></a>
+              <a href="#"><span class="nav-icon" aria-hidden="true">◉</span><span>Business profile</span></a>
+            </nav>
+
+            <div class="sidebar-foot">
+              <div class="workspace-card">
+                <strong>Sunlit Studio</strong>
+                <small>1 Instagram account · Pro plan</small>
+              </div>
+            </div>
+          </aside>
+
+          <div class="main">
+            <div class="page-head">
+              <div>
+                <p class="eyebrow">Sunlit Studio · August 2026</p>
+                <h2>Content calendar</h2>
+              </div>
+              <div class="head-actions">
+                <button class="btn" type="button">↻&nbsp; Refresh</button>
+                <button class="btn primary" type="button">＋ Create content</button>
+              </div>
+            </div>
+
+            <div class="decision-strip" aria-live="polite">
+              <div class="decision-item">
+                <b id="font-name">Readex Pro · unified scripts</b>
+                <span id="font-note">Warm and approachable; one family for English and Arabic.</span>
+              </div>
+              <div class="decision-item">
+                <b id="palette-name">Refined Sunlit · warm studio</b>
+                <span id="palette-note">Keeps the character, adds white, and strengthens action/focus contrast.</span>
+              </div>
+              <div class="decision-item">
+                <b id="scale-name">16px readable baseline</b>
+                <span id="scale-note">Restores normal rem sizing while preserving dense components deliberately.</span>
+              </div>
+            </div>
+
+            <div class="workspace">
+              <section class="panel calendar-panel">
+                <div class="calendar-head">
+                  <h3>August 2026</h3>
+                  <div class="calendar-actions">
+                    <button class="btn" type="button">Today</button>
+                    <button class="btn" type="button" aria-label="Previous month">‹</button>
+                    <button class="btn" type="button" aria-label="Next month">›</button>
+                    <button class="btn" type="button">Month</button>
+                  </div>
+                </div>
+
+                <div class="filter-row" aria-label="Content status filters">
+                  <span class="chip selected">All&nbsp; 14</span>
+                  <span class="chip"><span class="dot draft"></span>Draft&nbsp; 3</span>
+                  <span class="chip"><span class="dot ready"></span>Ready&nbsp; 4</span>
+                  <span class="chip"><span class="dot scheduled"></span>Scheduled&nbsp; 5</span>
+                  <span class="chip"><span class="dot published"></span>Published&nbsp; 2</span>
+                  <span class="chip"><span class="dot attention"></span>Attention&nbsp; 1</span>
+                </div>
+
+                <div class="month" aria-label="Month calendar sample">
+                  <div class="weekday">Sun</div>
+                  <div class="weekday">Mon</div>
+                  <div class="weekday">Tue</div>
+                  <div class="weekday">Wed</div>
+                  <div class="weekday">Thu</div>
+                  <div class="weekday">Fri</div>
+                  <div class="weekday">Sat</div>
+                  <div class="day outside"><span class="day-number">26</span></div>
+                  <div class="day outside"><span class="day-number">27</span></div>
+                  <div class="day outside"><span class="day-number">28</span></div>
+                  <div class="day outside"><span class="day-number">29</span></div>
+                  <div class="day outside"><span class="day-number">30</span></div>
+                  <div class="day outside"><span class="day-number">31</span></div>
+                  <div class="day"><span class="day-number">1</span></div>
+                  <div class="day"><span class="day-number">2</span></div>
+                  <div class="day">
+                    <span class="day-number">3</span><span class="day-total">2 items</span>
+                    <div class="day-dots"><span class="dot ready"></span><span class="dot scheduled"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">4</span></div>
+                  <div class="day">
+                    <span class="day-number">5</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot published"></span></div>
+                  </div>
+                  <div class="day">
+                    <span class="day-number">6</span><span class="day-total">3 items</span>
+                    <div class="day-dots"><span class="dot scheduled"></span><span class="dot ready"></span><span class="dot draft"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">7</span></div>
+                  <div class="day"><span class="day-number">8</span></div>
+                  <div class="day">
+                    <span class="day-number">9</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot draft"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">10</span></div>
+                  <div class="day">
+                    <span class="day-number">11</span><span class="day-total">2 items</span>
+                    <div class="day-dots"><span class="dot ready"></span><span class="dot attention"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">12</span></div>
+                  <div class="day">
+                    <span class="day-number">13</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot published"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">14</span></div>
+                  <div class="day">
+                    <span class="day-number">15</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot scheduled"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">16</span></div>
+                  <div class="day">
+                    <span class="day-number">17</span><span class="day-total">2 items</span>
+                    <div class="day-dots"><span class="dot ready"></span><span class="dot scheduled"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">18</span></div>
+                  <div class="day"><span class="day-number">19</span></div>
+                  <div class="day today">
+                    <span class="day-number">20</span><span class="day-total">4 items</span>
+                    <div class="day-dots"><span class="dot scheduled"></span><span class="dot ready"></span><span class="dot published"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">21</span></div>
+                  <div class="day">
+                    <span class="day-number">22</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot ready"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">23</span></div>
+                  <div class="day">
+                    <span class="day-number">24</span><span class="day-total">2 items</span>
+                    <div class="day-dots"><span class="dot attention"></span><span class="dot draft"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">25</span></div>
+                  <div class="day"><span class="day-number">26</span></div>
+                  <div class="day">
+                    <span class="day-number">27</span><span class="day-total">1 item</span>
+                    <div class="day-dots"><span class="dot scheduled"></span></div>
+                  </div>
+                  <div class="day"><span class="day-number">28</span></div>
+                  <div class="day"><span class="day-number">29</span></div>
+                  <div class="day"><span class="day-number">30</span></div>
+                  <div class="day"><span class="day-number">31</span></div>
+                  <div class="day outside"><span class="day-number">1</span></div>
+                  <div class="day outside"><span class="day-number">2</span></div>
+                  <div class="day outside"><span class="day-number">3</span></div>
+                  <div class="day outside"><span class="day-number">4</span></div>
+                  <div class="day outside"><span class="day-number">5</span></div>
+                </div>
+              </section>
+
+              <aside class="panel quiet-panel" aria-label="Bilingual quiet surface sample">
+                <div class="locale-block">
+                  <h3>Plan the next campaign</h3>
+                  <p>Review timing, audience, and content before marking the campaign ready.</p>
+                </div>
+
+                <div class="locale-block" lang="ar" dir="rtl">
+                  <h3>خطّط للحملة القادمة</h3>
+                  <p>راجع التوقيت والجمهور والمحتوى قبل وضع علامة «جاهز» على الحملة.</p>
+                </div>
+
+                <div class="field-pair">
+                  <div class="field" lang="en">
+                    <label for="campaign-en">Campaign name</label>
+                    <input id="campaign-en" value="Summer launch" />
+                  </div>
+
+                  <div class="field" lang="ar" dir="rtl">
+                    <label for="campaign-ar">اسم الحملة</label>
+                    <input id="campaign-ar" value="إطلاق عطلة الصيف" />
+                  </div>
+                </div>
+
+                <div class="status-card">
+                  <div class="status-icon" aria-hidden="true">✓</div>
+                  <div>
+                    <h3>Ready to schedule</h3>
+                    <p>4 posts are complete and waiting for a publication time.</p>
+                  </div>
+                </div>
+
+                <div class="button-row">
+                  <button class="btn primary" type="button">Mark as ready</button>
+                  <button class="btn" type="button">Save draft</button>
+                </div>
+
+                <div class="contrast-note">
+                  <span class="pass">AA</span>
+                  <span id="contrast-note">Primary action: 4.66:1 · Focus accent: 5.02:1 against white</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const copy = {
+        font: {
+          current: ["Current · Inter plus OS Arabic fallback", "Familiar Latin UI; Arabic shape and metrics vary by operating system."],
+          readex: ["Readex Pro · unified scripts", "Warm and approachable; one family for English and Arabic."],
+          plex: ["IBM Plex Sans · coordinated script pair", "More operational and compact; dedicated Arabic and Latin cuts."],
+          alexandria: ["Alexandria · unified scripts", "Geometric and expressive; the strongest branded option, with wider UI texture."],
+          cairo: ["Cairo · unified scripts", "Contemporary Arabic-first character with clear Latin support and confident headings."],
+          noto: ["Noto Sans · coordinated script pair", "Neutral, highly robust, and least stylistically opinionated across both scripts."]
+        },
+        palette: {
+          sunlit: [
+            "Current Sunlit · control",
+            "Recognizable and energetic; primary and focus accents need clearer role separation.",
+            "Primary action: 5.56:1 with dark text · Current focus accent: 2.30:1 against white"
+          ],
+          warm: [
+            "Refined Sunlit · warm studio",
+            "Keeps the character, adds white, and strengthens action/focus contrast.",
+            "Primary action: 4.66:1 · Focus accent: 5.02:1 against white"
+          ],
+          signal: [
+            "Editorial signal · operational",
+            "Uses indigo for work and coral as emphasis; calmer and more mature, but a larger identity shift.",
+            "Primary action: 5.21:1 · Supporting coral: 4.95:1 against white"
+          ],
+          linen: [
+            "Linen ink · quiet editorial",
+            "Tactile neutrals, near-black actions, and restrained coral emphasis; adapted from Zen Linen.",
+            "Primary action: 13.58:1 · Focus accent: 5.35:1 against its surface"
+          ],
+          mint: [
+            "Mint signal · optimistic",
+            "White product surfaces, vivid mint actions, and deep green focus; adapted from Mint Signal.",
+            "Primary action: 11.31:1 with dark text · Focus accent: 5.18:1 against white"
+          ],
+          violet: [
+            "Violet bloom · creative",
+            "A clean lavender-white canvas with vivid violet actions and restrained coral support.",
+            "Primary action and focus: 5.15:1 against white"
+          ],
+          tangerine: [
+            "Tangerine slate · composed",
+            "Cool slate surfaces with grounded tangerine actions and blue-gray support.",
+            "Primary action: 4.61:1 · Focus accent: 7.27:1 against white"
+          ],
+          "tangerine-dark": [
+            "Tangerine slate · dark companion",
+            "Layered charcoal-slate surfaces preserve the light theme's hierarchy without flattening it into black.",
+            "Primary action: 6.23:1 with dark text · Focus accent: 8.24:1 against the main surface"
+          ]
+        },
+        scale: {
+          compact: ["12.5px current desktop baseline", "Fits more by shrinking every rem-based label and control at 1440px."],
+          readable: ["16px readable baseline", "Restores normal rem sizing while preserving dense components deliberately."]
+        }
+      };
+
+      const targets = {
+        font: [document.querySelector("#font-name"), document.querySelector("#font-note")],
+        palette: [document.querySelector("#palette-name"), document.querySelector("#palette-note")],
+        scale: [document.querySelector("#scale-name"), document.querySelector("#scale-note")]
+      };
+
+      function select(option, value) {
+        document.documentElement.dataset[option] = value;
+        document.querySelectorAll(`[data-option="${option}"]`).forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.value === value));
+        });
+        document.querySelectorAll(`[data-select-option="${option}"]`).forEach((control) => {
+          control.value = value;
+        });
+
+        const details = copy[option][value];
+        targets[option][0].textContent = details[0];
+        targets[option][1].textContent = details[1];
+        if (option === "palette") {
+          document.querySelector("#contrast-note").textContent = details[2];
+        }
+      }
+
+      document.querySelectorAll("[data-option]").forEach((button) => {
+        button.addEventListener("click", () => select(button.dataset.option, button.dataset.value));
+      });
+
+      document.querySelectorAll("[data-select-option]").forEach((control) => {
+        control.addEventListener("change", () => select(control.dataset.selectOption, control.value));
+      });
+
+      const previewToggle = document.querySelector("[data-preview-toggle]");
+
+      function setPreviewMode(mode, { updateUrl = true } = {}) {
+        const nextMode = mode === "focus" ? "focus" : "lab";
+        document.documentElement.dataset.preview = nextMode;
+        previewToggle.setAttribute("aria-pressed", String(nextMode === "focus"));
+        previewToggle.textContent = nextMode === "focus" ? "Press Esc" : "Focus";
+
+        if (updateUrl) {
+          const url = new URL(window.location.href);
+          if (nextMode === "focus") {
+            url.searchParams.set("preview", "focus");
+          } else {
+            url.searchParams.delete("preview");
+          }
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+      }
+
+      previewToggle.addEventListener("click", () => setPreviewMode("focus"));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && document.documentElement.dataset.preview === "focus") {
+          setPreviewMode("lab");
+          previewToggle.focus();
+        }
+      });
+
+      select("font", document.documentElement.dataset.font);
+      select("palette", document.documentElement.dataset.palette);
+      select("scale", document.documentElement.dataset.scale);
+      setPreviewMode(new URLSearchParams(window.location.search).get("preview"), { updateUrl: false });
+    </script>
+  </body>
+</html>

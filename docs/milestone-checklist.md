@@ -87,11 +87,11 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] Vault completeness score exists.
 - [x] RAG search exists and is used by strategy/content calls.
 - [x] One locally grounded Strategy path returns workspace Vault context.
-- [x] Seven-module onboarding wizard is complete against the spec.
+- [x] Seven-area onboarding wizard is mounted; Company and Products are the two profile-readiness essentials, while the other five areas can be explicitly skipped and remain visible as Vault gaps.
 - [ ] Vault versioning UX and history are complete in the mounted Sunlit Business Profile.
   - Note: history APIs exist, but the current Sunlit panel is a summary and does not mount the full editor/history workflow.
 - [ ] Brand upload flow is complete in the active onboarding/Vault UI.
-  - Note: media upload APIs exist, but onboarding currently collects brand values and explicitly defers files to a later Vault flow.
+  - Note: media upload APIs exist, but onboarding intentionally exposes no file control until a focused upload, extraction, issue-reporting, field-mapping, and owner-confirmation path is implemented. The next scoped document pass begins with Products/Services rather than claiming a complete brand-file flow.
 - [x] Completeness gaps are surfaced in the expected UX.
 - [ ] M1 acceptance gate fully passed with a live provider interface.
   - Note: local deterministic grounding is covered, but provider-backed embeddings/generation and deployed cross-service behavior remain unverified.

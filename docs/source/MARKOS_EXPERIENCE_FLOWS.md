@@ -1,6 +1,6 @@
 # MARKOS AI — Experience and Behavioral Flows
 
-Status date: 2026-08-16.
+Status date: 2026-08-30.
 
 > **Purpose:** explain how MARKOS moves end to end: what the user does, what the interface shows, which application boundary acts, what changes, what comes next, and how failure is recovered.
 >

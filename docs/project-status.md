@@ -1,6 +1,6 @@
 # MARKOS AI Current Status, Roadmap, and Ownership
 
-Status date: 2026-08-17.
+Status date: 2026-08-30.
 
 This document is the current implementation and operating overlay for MARKOS AI. It does not replace the structural source of truth in `source/MARKOS_BUILD_SPEC. 2.pdf` or the behavioral source of truth in `source/MARKOS_EXPERIENCE_FLOWS.md`. Use it to avoid treating target architecture, implemented code, automated tests, and external production evidence as the same thing.
 
@@ -8,7 +8,7 @@ Detailed milestone gates remain in `milestone-checklist.md`. Durable engineering
 
 ## Status language
 
-- **Implemented:** the behavior exists in the current `main` source. This does not prove a real external provider or production environment.
+- **Implemented:** the behavior exists in the reviewed repository source at the status date. This does not prove a real external provider or production environment or imply that the branch is deployed.
 - **Locally/CI verified:** automated tests or repository gates exercised the behavior with local, fake, or disposable dependencies.
 - **Production-verified:** the project team observed the behavior against the deployed application and a real external provider. The date and narrow scope must be stated.
 - **Planned:** an accepted near-term outcome without completion evidence.
@@ -28,7 +28,7 @@ The confirmed first-release Instagram outcomes are:
 
 Messaging and comment management are not confirmed first-release requirements. A Meta use-case selection that exposes those capabilities does not add them to MARKOS scope by itself.
 
-The intended final Strategy choices are 30, 60, and 90 days. Which choices belong to which plans is unresolved, and a possible 7-day option is not yet an accepted contract. Current `main` offers 30/60/90 in the Sunlit UI, defaults that UI to 30, and accepts any integer from 30 through 180 at the shared API boundary.
+The intended final Strategy choices are 30, 60, and 90 days. Which choices belong to which plans is unresolved, and shorter choices such as one week, two weeks, or a multiple of days have not yet been accepted as a contract. Current source offers 30/60/90 in the Sunlit UI, defaults that UI to 30, and accepts any integer from 30 through 180 at the shared API boundary.
 
 ## Current architecture overlay
 
@@ -55,15 +55,15 @@ Repository runtime requirements are Node.js `>=20.16.0 <21 || >=22.3.0`, pnpm 11
 | Instagram publishing                                                                             | **Milestone A application implemented and locally verified; not production-verified** | The working implementation uses Instagram Login on `graph.instagram.com/v25.0`, constrains the live proof to one JPEG, adds an item-specific operator route and process-local duplicate guard, requires an S3-backed key, and signs the provider GET just in time without returning or persisting it. Dashboard completion is user-confirmed; bucket provisioning, deployment/reconnect, external fetch, and one real publish remain open. |
 | Instagram insights/analytics                                                                     | **Milestone A application implemented and locally verified; not production-verified** | The working implementation uses separate account `reach,profile_views` and media `shares,comments` insight calls, preserves unavailable versus zero, and guards workspace content attachment. Focused and disposable-PostgreSQL tests pass; deployment and live provider evidence remain open. |
 | Meta App Review                                                                                  | **Externally managed; not repository-proven**                    | Preparation documentation exists. Submission or approval must be verified in the Meta dashboard.                                                                                                                                         |
-| Account-verification email                                                                       | **Implemented on current `main`; production delivery pending** | Current source has bilingual verification UI, Redis-backed expiring single-use tokens, local and SendGrid providers, production fail-fast configuration, and verified-user gates for onboarding, AI generation, and Instagram credential actions. Focused tests are recorded; real delivery and the deployed link remain unverified. |
-| MFA and browser bearer-token lifecycle                                                           | **Implemented on current `main`; production journey pending** | TOTP, access/refresh issuance, rotation, and reuse detection have focused tests. Enrollment renders the API-provided `otpauth://` value locally with a manual-key fallback. Instagram credential changes require a fixed, non-sliding 15-minute MFA step-up that survives refresh and the OAuth round trip; a deployed authenticator journey remains pending. |
-| Seven-module onboarding and resolved business profile                                            | **Implemented and locally verified; deployment and live journey review pending** | The active wizard collects Company, Story, Products, Audience, Competitors, Brand, and Objectives, persists only disclosed answers, and blocks advancement on validation/API failure. At 100% completeness, a verified user can generate, edit in English and Arabic, regenerate, and approve a workspace-scoped business profile before onboarding becomes complete. Focused API, browser, isolation, and responsive-layout tests pass; the provider-backed deployed journey is not yet verified. |
+| Account-verification email                                                                       | **Implemented; production delivery pending** | Current source has bilingual verification UI, Redis-backed expiring single-use tokens, local and SendGrid providers, production fail-fast configuration, and verified-user gates for onboarding, AI generation, and Instagram credential actions. Focused tests are recorded; real delivery and the deployed link remain unverified. |
+| MFA and browser bearer-token lifecycle                                                           | **Implemented; production journey pending** | TOTP, access/refresh issuance, rotation, and reuse detection have focused tests. Enrollment renders the API-provided `otpauth://` value locally with a manual-key fallback. Instagram credential changes require a fixed, non-sliding 15-minute MFA step-up that survives refresh and the OAuth round trip; a deployed authenticator journey remains pending. |
+| Reduced-effort onboarding and resolved business profile                                          | **Implemented and locally/CI verified; deployment and live journey review pending** | The greeting and seven-area wizard keep Company and Products as the two essentials. Story, Audience, Competitors, Brand/Tone, and Objectives can be explicitly skipped and resumed without presenting Vault completeness as a completion gate. The information check links directly back to each area; profile generation, bilingual editing, regeneration, and explicit approval remain required before onboarding completes. Document-assisted extraction is not implemented. Focused API/web tests and the full CI-equivalent local gate passed on 2026-08-30; the provider-backed deployed journey remains unverified. |
 | AI provider inference                                                                            | **Provider connectivity verified; application paths require renewed live verification** | A controlled direct Responses API request from the deployed AI container completed on 2026-08-06 and appeared in the OpenAI project logs, proving the project key, model access, billing, and outbound connectivity for that request. The then-deployed Strategy adapter still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaces its parsed-response dependency with a shared strict JSON Schema `responses.create` path used by Strategy and onboarding profile resolution, with bounded timeouts/retries, sanitized diagnostics, and provider token metering. Local and fake-client tests pass; the new application path is not yet deployed or live-verified. Other AI routes remain deterministic. |
 | Railway production topology                                                                      | **Partly externally evidenced**                                  | The 2026-08-03 connection proves a reachable web/API/database path for that attempt. User-supplied 2026-08-16 Railway screenshots show variable panels for web, API, AI, pgvector, and Redis services; redacted API captures supplied on 2026-08-17 show existing API/Instagram names and no bucket names. They do not prove values, deployments, networking, worker/OpenSearch or Bucket existence, or health. The exact topology still requires an operator audit. |
 | AI service on Railway                                                                            | **Deployed and reachable; provider-backed application response pending** | On 2026-08-06, API deep health reported the Railway AI dependency `ok`, and the protected Strategy request reached the AI provider layer. A direct provider request from the same container succeeded, but the application Strategy request returned 503 under the prior adapter. Deploy and verify the current shared adapter before calling the path complete. |
 | Durable media storage/CDN                                                                        | **Design confirmed; repository implemented and locally verified; Railway pending** | D-02 locks a private Railway Bucket with a fresh presigned GET immediately before container creation. Local tests cover conditional configuration, immutable workspace-prefixed keys, S3 upload/read/sign behavior, ownership rejection, and signed-URL redaction. Bucket provisioning, variable references, external fetch/delete, deployment, and Meta fetch remain externally managed gates. |
 | Launch readiness                                                                                 | **Not complete**                                                 | Production connection is one completed milestone, not proof of publishing, analytics, payments, AI, App Review, or the complete M6 gate.                                                                                                 |
-| Sunlit browser journey                                                                           | **Partially implemented and locally/browser tested**             | The canonical public/auth/onboarding/primary-app routes are mounted. PR #19 also removed old queue, full analytics, full Vault, AI consultant, and admin panels before complete Sunlit replacements existed; their final-system capabilities remain deferred restoration work.                              |
+| Sunlit browser journey                                                                           | **Partially implemented and locally/browser tested**             | The canonical public/auth/onboarding/primary-app routes are mounted. Calendar and the reduced-effort Onboarding checkpoint are implemented in reviewed source. The redesigned Create workflow and IBM Plex/Tangerine Slate foundation remain prototype references rather than mounted production behavior. PR #19 also removed old queue, full analytics, full Vault, AI consultant, and admin panels before complete Sunlit replacements existed; their final-system capabilities remain deferred restoration work. |
 
 ## Production Instagram connection record
 
@@ -100,15 +100,15 @@ This production result does **not** establish:
 
 These are current priorities, not claims that each item is already in progress:
 
-1. Perfect the complete user journey and restore the final-system operational surfaces that did not receive Sunlit replacements in PR #19.
-2. Validate, deploy, and production-verify account-verification email delivery.
-3. Deploy and production-verify the completed browser session renewal journey, including one required login for sessions created before the cookie contract.
-4. Fix UI issues with Mohamed involved in UI review and consequential direction.
-5. Continue security, sanitized logging, and API-process hardening.
-6. Deploy and live-verify the shared provider-backed Strategy and onboarding-profile response path.
-7. Strengthen Railway, database, networking, environment-variable, secret, and deployment operations.
-8. Confirm and implement the Milestone A private-bucket storage contract without moving Railway ownership from Sarah.
-9. Complete, review, deploy, reconnect, and live-verify `instagram_business_content_publish` and `instagram_business_manage_insights` through the controlled Milestone A proof.
+1. Design and validate one focused document-assisted Products/Services onboarding pipeline: upload, extraction, issue reporting, field mapping, owner confirmation, and manual correction. Do not write extracted claims to the Vault before confirmation.
+2. Implement the reviewed Create prototype as one honest standard Post/JPEG vertical slice; keep Carousel, Reel, Story, Media Library, and production font/palette adoption explicitly outside that slice until separately supported.
+3. Refine Strategy duration choices, incremental review/approval, and the handoff into Create without collecting inputs the current AI cannot consume.
+4. Preserve the accepted Calendar and Onboarding checkpoints while completing focused browser QA and deployed-journey proof; do not reopen deferred drag-and-drop or broad onboarding optionality incidentally.
+5. Validate, deploy, and production-verify account-verification email delivery and browser-session renewal.
+6. Continue security, sanitized logging, API-process hardening, and the restoration of final-system Sunlit operational surfaces.
+7. Deploy and live-verify the shared provider-backed Strategy and onboarding-profile response path.
+8. Strengthen Railway, database, networking, environment-variable, secret, and deployment operations without moving Sarah's infrastructure ownership.
+9. Complete the private-bucket and controlled Instagram publishing/insights evidence gates.
 
 Each permission keeps its own application, Meta dashboard/App Review, environment, reconnect, test, and external-evidence gate. Neither has live acceptance evidence today. The working Milestone A implementation makes `INSTAGRAM_OAUTH_SCOPES` the canonical allowlisted request source, but deployment and a fresh connection are still required before any new token can carry the expanded request.
 
@@ -124,7 +124,7 @@ An OpenAI API Platform project and project-authorized credential are separate fr
 
 ### Phase 2: first onboarding behavior
 
-Current source uses the user's seven onboarding modules to generate a bilingual draft business profile, preserves the raw answers and generation history, supports editing and regeneration, and marks onboarding complete only after user approval. Khalid owns the product behavior and integration; Sarah owns deployment, networking, availability, and secret configuration. Local tests and responsive browser review pass; deployment and one controlled provider-backed end-to-end approval remain open.
+Current source can generate a bilingual draft business profile after Company and Products are saved. The other five onboarding areas remain available business context but may be explicitly skipped; their absence stays visible as a Vault gap rather than blocking profile review. Raw answers, skip state, and generation history are preserved, and onboarding completes only after the owner reviews and approves the editable profile. Khalid owns product behavior and integration; Sarah owns deployment, networking, availability, and secret configuration. Local/CI-equivalent checks pass; deployment and one controlled provider-backed end-to-end approval remain open.
 
 ### Phase 3: grounded AI maturity
 
@@ -162,9 +162,11 @@ The old 2026-08-06 assignment list is no longer presented as a current deadline.
 | Full AI retry/cost/governance system            | Broader build-spec target; defer non-critical complexity until the first provider connection, while retaining current quota/metering invariants. |
 | Publishing and insights permissions             | Accepted first-release scope; Milestone A application behavior is locally verified, while deployment, reconnect, live-call, and App Review evidence gates remain independent. |
 | Messaging/comments                              | Deferred unless separately approved as product scope.                                                                                            |
-| Graph transport/version                         | Official Instagram Login examples and the Milestone A contract support fixed `graph.instagram.com/v25.0` versioned account, publishing, and insights calls. The live Meta dashboard and controlled provider calls remain separate evidence gates. |
-| Strategy plan entitlement                       | 30/60/90 are the final target choices; plan mapping is undecided and 7 days remains a possible future option.                                      |
+| Graph transport/version                         | Current source remains fixed to `graph.instagram.com/v25.0`. A bounded v26 compatibility migration is accepted before new Create provider fields or the next controlled live proof; it does not expand permissions or prove provider acceptance. |
+| Strategy plan entitlement                       | 30/60/90 are the current product choices; plan mapping is undecided. One week, two weeks, and other shorter day multiples require a focused contract/quality decision before implementation. |
 | Missing Sunlit operational pages                | Deferred restoration/reimplementation, not removed product scope; see `ui-design-foundation.md`.                                                  |
+| Document-assisted onboarding                    | Next focused product/data pipeline. File policy, accepted formats and limits, retention, extraction, issue reporting, confirmation, retries, and whether use is one-time or repeatable must be decided together. No visible upload control is implemented yet. |
+| Create redesign and Media Library                | The connected lab is an accepted design reference, not production implementation. The first production slice remains standard Post/JPEG; reusable generated-media storage and a standalone Media Library require explicit contracts. |
 
 ## External state to verify manually
 

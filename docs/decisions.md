@@ -453,6 +453,22 @@ Calendar placement follows lifecycle timestamps rather than record creation time
 
 Return the placed records, only the referenced media assets needed to render them, the filtered Unscheduled page with its total and next offset, and the Calendar summary in one response. Status filters apply to the content collections; the summary remains a stable workspace overview while a status filter is active. Content-type filtering applies to both collections and the summary. Offset pagination is the smallest conventional option for the expected initial volume; revisit cursor pagination only if concurrent queue churn or substantially larger workspaces make stable traversal necessary.
 
+## 2026-08-27: Graph v26 migration is a provider-integration gate, not a Create prototype prerequisite
+
+Continue the Create workflow audit and browser prototype against the existing application contracts without first changing the Instagram Graph version. Meta introduced Graph API v26.0 on July 29, 2026, but its versioned changelog does not change the organic Instagram Login publishing, account, or insights endpoints currently used by MARKOS. The recent Instagram AI-label, audio, and media-protection changes relevant to Create are documented separately as applying to all versions; moving to v26.0 does not make the Facebook-Login-only Audio API available to the current Instagram Login architecture. Graph v25.0 remains supported until July 29, 2028.
+
+Before new Create controls are wired to Meta requests—or before the next controlled live publishing and insights proof—run one bounded v26.0 compatibility pass. Update the canonical version constant, strict environment validation, focused Instagram client fixtures, and current operational documentation together. Coordinate the Railway `INSTAGRAM_GRAPH_VERSION` value with the deployment because the application intentionally rejects a runtime version that differs from its reviewed contract.
+
+The migration does not itself expand permissions, change login architecture, prove provider acceptance, or authorize newly documented fields. Re-run the focused account, publishing, analytics, environment, and security-contract checks, then apply the existing staging and live-provider evidence gates. Keep audio-library access, comment-management permission expansion, and any other login or scope change as separate reviewed decisions.
+
+## 2026-08-27: First-save orchestration may include a browser-local manual JPEG
+
+Supersede the August 25 persisted-first restriction for manual media only. A user may select and preview one validated JPEG while working in a new unpersisted browser draft. Selection counts as a meaningful change, remains local, consumes no AI quota, and makes an in-app exit use the accepted Save draft, Discard changes, or Keep editing boundary. Leaving an untouched editor still creates nothing; discarding releases the browser-local selection without an API write.
+
+On the first explicit Save, use the existing contracts as one recoverable client workflow: create the workspace `DRAFT`, upload the JPEG, then attach the resulting workspace media asset. Do not introduce a temporary-media backend contract for this pass. If draft creation fails, retain the local working copy and file selection where the browser permits. If creation succeeds but upload or attachment fails, report the saved draft truthfully, preserve confirmed writes, and offer the appropriate upload or attachment retry rather than claiming that the whole operation rolled back.
+
+AI image generation remains unavailable until the content item is persisted because its quota, interaction, storage, and attachment contracts require a workspace content ID. This decision does not add a Media Library, carousel/reel asset workflow, durable browser-file recovery after reload, or background autosave.
+
 ## 2026-08-30: Onboarding readiness is separate from Vault completeness
 
 Keep the build specification's seven canonical onboarding areas, but require only Company and Products before MARKOS can prepare the first bilingual business profile. Story, Audience, Competitors, Brand/Tone, and Objectives remain useful workspace knowledge; the user may explicitly skip them, and that skip is persisted so resume behavior does not repeatedly block on the same optional question. The information check exposes every area as a direct edit action before generation.

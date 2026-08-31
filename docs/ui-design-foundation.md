@@ -2,7 +2,7 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-23
+- Last updated: 2026-08-30
 
 This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
 
@@ -80,6 +80,8 @@ Use semantic roles in shared production tokens instead of copying these raw valu
 
 Calendar currently establishes the first explicit lifecycle-status token set: Draft slate, Ready blue, Scheduled orange, Published green, Needs attention rose, and review violet. These colors support labels, icons, counts, and accessible names; they never replace those cues. Treat them as semantic status roles rather than additions to the brand-accent palette.
 
+The IBM Plex plus Tangerine Slate light/dark compositions under `docs/prototypes/` are reviewed experiments, not production tokens. The current Sunlit palette above remains the runtime truth until a separate shared-foundation implementation deliberately replaces it.
+
 ### Runtime token scope
 
 The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the `.sunlit-theme` class. Every migrated Sunlit surface opts into that class. Keep the variables scoped and do not reuse the legacy `luxury-*` names, because admin and any still-unmigrated surfaces may retain independent presentation until deliberately updated.
@@ -100,6 +102,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - Small utility text must retain sufficient size and contrast; muted gray text must not disappear beside large headings.
 - Keep readable line lengths, generally around 45–70 characters for explanatory copy.
 - A separate display typeface is not yet part of the approved foundation.
+- IBM Plex Sans plus IBM Plex Sans Arabic is the leading lab candidate, not the current application font. Do not describe the prototype pairing as mounted until the production font-loading and token migration are implemented and verified.
 
 ### Shape and spacing
 
@@ -234,11 +237,11 @@ PR #19 deliberately removed the preview route family and replaced the old visual
 | Final-system area | Current Sunlit implementation | Required restoration or completion |
 | --- | --- | --- |
 | Authentication (`AUTH-01`–`AUTH-05`) | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable. | Complete and mount approved provider login and password-recovery contracts before calling those paths live. |
-| Onboarding (`OB-01`–`OB-10`) | Seven real workspace modules, completeness, bilingual resolved-profile generation/edit/approval, and Strategy handoff are mounted. | Restore plan/trial placement if still required; add real brand-file upload and any approved competitor verification or recovery refinements. |
+| Onboarding (`OB-01`–`OB-10`) | A concise greeting and seven real workspace areas are mounted. Company and Products are the two essentials; the other five areas can be explicitly skipped and resumed. The information check links directly to focused editing, and bilingual profile review/approval completes the journey without claiming 100% Vault completeness. | Build the focused document extraction, issue-reporting, mapping, and owner-confirmation path before exposing upload; restore plan/trial placement if still required and add any approved competitor verification or recovery refinements. |
 | Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view. | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen. |
 | Strategy (`STRAT-01`–`STRAT-03`) | Strategy list/generation is API-backed, defaults to 30 days, and offers 30/60/90-day choices. | Complete version/detail navigation, parameter refinement, and mount the existing PDF export contract. A possible 7-day option remains undecided and unimplemented. |
-| Content and calendar (`CONT-01`–`CONT-06`) | Create and Campaign Builder can generate workspace drafts, edit paired captions and core fields, approve explicitly, schedule, and cancel a schedule. Calendar is a primary bilingual/RTL destination with week/month views, next-action and unscheduled queues, item detail, editor handoff, atomic rescheduling, and confirmed cancellation over existing records. | Add the pre-draft monthly plan/slot contract, complete content history/comments and section regeneration, and build the final carousel/reel editing and queue-recovery states. |
-| Media (`MEDIA-01`–`MEDIA-04`) | Create mounts authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and build the standalone media library, asset-detail flows, brand-asset management, storage meter, and richer transformations. |
+| Content and calendar (`CONT-01`–`CONT-06`) | The mounted Create surface can generate workspace drafts, edit paired captions and core fields, approve explicitly, schedule, and cancel a schedule. Calendar is a primary bilingual/RTL destination with viewport-fitted week/month views, semantic lifecycle colors, URL-backed Day/Post Focus, short Motion transitions, unscheduled handling, editor handoff, atomic rescheduling, and confirmed cancellation. The redesigned media-first Create lab is not mounted production behavior. | Implement one reviewed standard Post/JPEG Create slice, then add the pre-draft monthly plan/slot contract, content history/comments, section regeneration, and separately supported Carousel/Reel/Story and queue-recovery states. |
+| Media (`MEDIA-01`–`MEDIA-04`) | The mounted Create surface supports authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and define the standalone Media Library, reusable generated-media ownership, asset-detail flows, brand-asset management, storage meter, and richer transformations. A prototype gallery is not implementation proof. |
 | Instagram scheduling (`SCHED-01`–`SCHED-04`) | Settings mounts the secure Instagram connection. Create requires explicit approval before scheduling and can return a scheduled item to `APPROVED`; Calendar manages saved times and exposes safe failure detail/recovery. Publishing/readiness and operator queue APIs exist. | Build the durable publishing queue/worker surface, evidence-based time and live-cap guidance, attempt history, close-race cancellation, and complete per-format live-publish behavior. |
 | Analytics (`AN-01`–`AN-06`) | Insights mounts an API-backed 7/30-day summary, top-content list, empty/loading/error states, and monthly PDF download. | Restore the full overview, posts, post detail, audience, stories, and reels views; add the intended 28/90-day comparisons and real provider-backed interpretation once permission evidence exists. |
 | AI consultant (`AI-01`–`AI-04`) | Digest/chat/report API foundations and deterministic agent-shaped responses exist; no complete consultant surface is mounted. | Restore weekly digest, proactive recommendations, conversational consultant, monthly-report preview, and approved competitor analysis with provider-backed behavior. |
@@ -262,16 +265,17 @@ Universal obligations from the retired design source still apply to every restor
 Migration sequence:
 
 1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
-2. App shell, onboarding, Overview, Business Profile summary, and first Strategy handoff — mounted on current `main`.
-3. Create and the current Insights summary — mounted on current `main`, using real APIs or explicit empty states.
-4. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
-5. Revisit each migrated page individually as product features and configuration needs become final.
-6. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
+2. App shell, Overview, Business Profile summary, and first Strategy handoff — mounted in current reviewed source.
+3. Calendar and the reduced-effort greeting/Onboarding journey — implemented as the current working checkpoints; document-assisted extraction remains separate.
+4. The current Create and Insights summaries — mounted using real APIs or explicit empty states. The reviewed Create redesign remains a lab reference awaiting a focused production slice.
+5. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
+6. Revisit each migrated page individually as product features and configuration needs become final.
+7. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
 
 ## Deferred decisions
 
 - Detailed mobile and tablet composition beyond basic functional layouts.
-- Final onboarding grouping, document-assisted import, field requirements, and recovery behavior after prototype and product review.
+- Document-assisted Products/Services file policy, extraction, issue reporting, field mapping, confirmation, and recovery. Making business onboarding wholly optional or relocating major areas requires Mohamed's product approval and is not part of the current checkpoint.
 - Plans page structure and commercial copy.
 - Advanced Insights comparisons and recommendations beyond the current API-backed summary.
 - Final Terms and Privacy content and scroll-navigation tuning.
