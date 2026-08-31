@@ -1639,7 +1639,7 @@ function CalendarDayColumn({
             {records.slice(0, 4).map((record) => (
               <m.button
                 aria-label={`${statusLabel(record.status, locale)}: ${contentTitle(record, locale)} · ${contentTypeLabel(record, locale)} · ${formatCalendarTime(calendarPlacementInstant(record) ?? record.updatedAt, locale)}`}
-                className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-white/85 px-2.5 py-2 text-start outline-none transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--sunlit-aqua)]"
+                className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-white/85 px-2.5 py-2 text-start outline-none transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--sunlit-aqua)] motion-reduce:transition-none"
                 key={record.id}
                 layoutId={calendarRecordLayoutId(record.id)}
                 onClick={(event) => onChooseRecord(record, event.currentTarget)}
@@ -1814,7 +1814,7 @@ function CalendarDayRecordButton({
 }) {
   return (
     <button
-      className={`group min-w-0 rounded-2xl border p-3 text-start transition hover:-translate-y-0.5 hover:shadow-md ${statusCardClass(record.status)}`}
+      className={`group min-w-0 rounded-2xl border p-3 text-start transition hover:-translate-y-0.5 hover:shadow-md motion-reduce:transition-none ${statusCardClass(record.status)}`}
       onClick={(event) => onClick(event.currentTarget)}
       type="button"
     >
@@ -1836,7 +1836,7 @@ function CalendarDayRecordButton({
           <span className="mt-2 block min-w-0 text-sm font-bold leading-5 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
           <span className="mt-1.5 block text-xs font-bold text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
         </span>
-        <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)]">
+        <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)] motion-reduce:transition-none">
           {locale === "ar" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </span>
       </span>

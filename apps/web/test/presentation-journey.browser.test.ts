@@ -39,12 +39,7 @@ describe("presentation journey", () => {
     await page.addInitScript(() => localStorage.setItem("markos.onboarding.draft.v2", JSON.stringify({ companyName: "stale" })));
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(
-          json({
-            status: "COMPLETE",
-            businessProfile: { status: "APPROVED", interactionId: "profile-1", profile: null, updatedAt: "2026-08-09T11:30:00.000Z" }
-          })
-        );
+        return route.fulfill(json(approvedOnboardingState("2026-08-09T11:30:00.000Z")));
       }
 
       return route.fulfill(json([]));
@@ -93,12 +88,7 @@ describe("presentation journey", () => {
     const page = await sessionPage();
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(
-          json({
-            status: "COMPLETE",
-            businessProfile: { status: "APPROVED", interactionId: "profile-1", profile: null, updatedAt: "2026-08-20T06:00:00.000Z" }
-          })
-        );
+        return route.fulfill(json(approvedOnboardingState("2026-08-20T06:00:00.000Z")));
       }
 
       if (pathname === "/v1/vault/score") {
@@ -114,12 +104,14 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     const editLink = page.getByRole("link", { name: "Review and edit profile" });
     await expect(editLink.getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
-    await editLink.click();
-    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`);
-    await page.getByRole("heading", { name: "Tell us about your company" }).waitFor();
-    await expect(page.getByLabel("Company Name *").inputValue()).resolves.toBe("SnackLab");
-    await expect(page.getByLabel("Industry *").inputValue()).resolves.toBe("Food & Beverage");
-    await expect(page.getByLabel("Business location *").inputValue()).resolves.toBe("Manama, Bahrain");
+    await editLink.click({ timeout: 10_000 });
+    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`, { timeout: 10_000 });
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^Business name/ }).click({ timeout: 10_000 });
+    await page.getByRole("heading", { name: "Let’s start with the basics" }).waitFor({ timeout: 10_000 });
+    await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("SnackLab");
+    await expect(page.getByLabel("Business type").inputValue()).resolves.toBe("Food & Beverage");
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
     await page.close();
   });
 
@@ -648,10 +640,11 @@ describe("presentation journey", () => {
     await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
     await page.goForward();
     await page.getByRole("button", { name: "Back to day" }).waitFor();
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
 
     const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
-    await page.getByLabel("Choose publishing time").fill(readyScheduleInput);
-    await page.getByRole("button", { name: "Schedule content" }).click();
+    await focusSurface.getByLabel("Choose publishing time").fill(readyScheduleInput);
+    await focusSurface.getByRole("button", { name: "Schedule content" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
     await page.getByRole("button", { name: "Close" }).click();
@@ -773,6 +766,30 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
     await handler(route, pathname);
   });
+}
+
+function approvedOnboardingState(updatedAt: string) {
+  const modules = ["company", "story", "products", "audience", "competitors", "brand", "objectives"].map((module) => ({
+    completed: true,
+    module,
+    sections: module === "brand" ? ["TONE"] : [module.toUpperCase()],
+    skipped: false
+  }));
+
+  return {
+    businessProfile: { interactionId: "profile-1", profile: null, status: "APPROVED", updatedAt },
+    modules,
+    onboardingScore: 100,
+    readyForProfile: true,
+    status: "COMPLETE",
+    vaultScore: {
+      completedSections,
+      entryCount: completedSections.length,
+      missingSections: [],
+      requiredSections: completedSections,
+      score: 100
+    }
+  };
 }
 
 function calendarReadResult(records: Array<Record<string, unknown>>, requestUrl: string) {
