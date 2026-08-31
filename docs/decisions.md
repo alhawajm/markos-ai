@@ -496,3 +496,9 @@ Treat extracted offerings, summaries, and issues as an editable proposal. Nothin
 Offering-document extraction requires a configured provider-backed AI path. Do not expose the deterministic line parser as a user-facing fallback: incomplete local guesses create more risk than an honest unavailable state. If the provider, credential, or model is unavailable, store only a sanitized failure code, keep the temporary files available for the existing retention window, preserve the manual Products/Services field, and tell the owner whether retry can help. Do not show Retry for configuration, authentication, unreadable-input, unsupported-input, refusal, or missing-usage failures.
 
 The next experience pass may replace the compact Step 3 uploader with a focused Document Analyst panel that guides upload, analysis, clarification, and owner approval. Keep it limited to Products/Services initially while designing its boundary for later business-wide document assistance. This provider-boundary pass does not implement that conversational UI.
+
+## 2026-08-31: Onboarding Back protects only the active step's unsaved work
+
+Treat each onboarding step as its own editing boundary in both first-run and profile-edit mode. Back leaves an untouched step immediately. If the active step contains meaningful changes, Back opens a focused choice to **Discard changes** or **Keep editing**; discarding restores only that step's entry state and must not undo previously saved or edited steps.
+
+An active ready or failed offering-document analysis also counts as step work because its temporary files and proposal require an explicit disposition. Discarding from the Products/Services step removes that temporary analysis before leaving. Processing cannot be interrupted through Back, and an API failure keeps the user on the step with an honest error instead of claiming the analysis was discarded.

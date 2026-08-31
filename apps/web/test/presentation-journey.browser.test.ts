@@ -112,6 +112,21 @@ describe("presentation journey", () => {
     await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("SnackLab");
     await expect(page.getByLabel("Business type").inputValue()).resolves.toBe("Food & Beverage");
     await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("dialog", { name: "Leave this step?" }).count()).resolves.toBe(0);
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: /^Business name/ }).click();
+    await page.getByLabel("Main market").fill("Muharraq, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
+    await expect(backGuard.isVisible()).resolves.toBe(true);
+    await backGuard.getByRole("button", { name: "Keep editing" }).click();
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Muharraq, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: /^Business name/ }).click();
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
     await page.close();
   });
 

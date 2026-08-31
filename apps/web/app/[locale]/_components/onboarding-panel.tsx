@@ -35,9 +35,11 @@ import {
   createEmptyOnboardingDraft,
   hasOnboardingStepData,
   legacyOnboardingDraftKey,
+  onboardingStepHasChanges,
   onboardingDraftKey,
   payloadForOnboardingStep,
   previousOnboardingDraftKey,
+  restoreOnboardingStep,
   splitOnboardingList,
   validateOnboardingStep,
   type OnboardingDraft,
@@ -94,6 +96,13 @@ function onboardingCopy(locale: Locale) {
     return {
       attention: "تنبيه",
       back: "السابق",
+      backGuard: {
+        description: "لديك تغييرات لم تُحفظ في هذه الخطوة. يمكنك تجاهلها والعودة، أو متابعة التعديل.",
+        discard: "تجاهل التغييرات",
+        eyebrow: "تغييرات غير محفوظة",
+        keep: "متابعة التعديل",
+        title: "هل تريد مغادرة هذه الخطوة؟"
+      },
       dismiss: "إغلاق الإشعار",
       edit: "تعديل",
       essential: "أساسي",
@@ -205,6 +214,13 @@ function onboardingCopy(locale: Locale) {
   return {
     attention: "Attention",
     back: "Back",
+    backGuard: {
+      description: "You have unsaved changes in this step. Discard them to go back, or keep editing.",
+      discard: "Discard changes",
+      eyebrow: "Unsaved changes",
+      keep: "Keep editing",
+      title: "Leave this step?"
+    },
     dismiss: "Dismiss notification",
     edit: "Edit",
     essential: "Essential",
@@ -613,8 +629,12 @@ export function OnboardingPanel({
   const [documentCatalog, setDocumentCatalog] = useState<OfferingCatalogUpdate | null>(null);
   const [documentBusy, setDocumentBusy] = useState(false);
   const [documentMessage, setDocumentMessage] = useState("");
+  const [backGuardOpen, setBackGuardOpen] = useState(false);
+  const [backGuardBusy, setBackGuardBusy] = useState(false);
   const documentAnalysisLoaded = useRef(false);
   const workspaceNameApplied = useRef(false);
+  const draftRef = useRef(draft);
+  const stepEntryRef = useRef<{ draft: OnboardingDraft; step: OnboardingStepId } | null>(null);
 
   const showError = useCallback((body: string) => {
     setMessage(body);
@@ -644,6 +664,15 @@ export function OnboardingPanel({
     if (!hydrated) return;
     window.localStorage.setItem(onboardingDraftKey, JSON.stringify(draft));
   }, [draft, hydrated]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    if (!hydrated || screen !== "step") return;
+    stepEntryRef.current = { draft: draftRef.current, step };
+  }, [hydrated, screen, step]);
 
   useEffect(() => {
     if (session) return;
@@ -840,7 +869,7 @@ export function OnboardingPanel({
     }
   }
 
-  function goBack() {
+  function performBack() {
     setMessage("");
     if (editingFromReview) {
       setEditingFromReview(false);
@@ -852,6 +881,39 @@ export function OnboardingPanel({
       return;
     }
     if (!editMode) setScreen("greeting");
+  }
+
+  function goBack() {
+    const entry = stepEntryRef.current;
+    const changed = entry?.step === step && onboardingStepHasChanges(step, entry.draft, draft);
+    const containsData = hasOnboardingStepData(step, draft) || (entry?.step === step && hasOnboardingStepData(step, entry.draft));
+    const hasOpenDocumentAnalysis = step === 3 && (documentAnalysis?.status === "READY" || documentAnalysis?.status === "FAILED");
+
+    if ((changed && containsData) || hasOpenDocumentAnalysis) {
+      setBackGuardOpen(true);
+      return;
+    }
+    performBack();
+  }
+
+  async function discardStepChanges() {
+    const entry = stepEntryRef.current;
+    setBackGuardBusy(true);
+    setMessage("");
+    try {
+      if (step === 3 && documentAnalysis && (documentAnalysis.status === "READY" || documentAnalysis.status === "FAILED")) {
+        await client.discardOfferingDocumentAnalysis(documentAnalysis.id);
+        syncDocumentAnalysis(null);
+      }
+      if (entry?.step === step) setDraft((current) => restoreOnboardingStep(step, entry.draft, current));
+      setBackGuardOpen(false);
+      performBack();
+    } catch (error) {
+      setBackGuardOpen(false);
+      showError(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setBackGuardBusy(false);
+    }
   }
 
   function editReviewStep(target: OnboardingStepId) {
@@ -1033,6 +1095,10 @@ export function OnboardingPanel({
           ) : null}
         </motion.div>
       </AnimatePresence>
+
+      {backGuardOpen ? (
+        <OnboardingBackGuard busy={backGuardBusy} copy={copy} onDiscard={() => void discardStepChanges()} onKeepEditing={() => setBackGuardOpen(false)} />
+      ) : null}
     </main>
   );
 }
@@ -1070,6 +1136,65 @@ function Greeting({ copy, onStart }: { copy: OnboardingCopy; onStart: () => void
         </button>
       </div>
     </section>
+  );
+}
+
+function OnboardingBackGuard({
+  busy,
+  copy,
+  onDiscard,
+  onKeepEditing
+}: {
+  busy: boolean;
+  copy: OnboardingCopy;
+  onDiscard: () => void;
+  onKeepEditing: () => void;
+}) {
+  useEffect(() => {
+    function keepEditingOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onKeepEditing();
+    }
+
+    document.addEventListener("keydown", keepEditingOnEscape);
+    return () => document.removeEventListener("keydown", keepEditingOnEscape);
+  }, [busy, onKeepEditing]);
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-[rgb(32_33_43_/_58%)] p-5 backdrop-blur-sm">
+      <article
+        aria-describedby="onboarding-back-guard-description"
+        aria-labelledby="onboarding-back-guard-title"
+        aria-modal="true"
+        className="sunlit-panel w-full max-w-lg rounded-[1.75rem] p-6 shadow-2xl"
+        role="dialog"
+      >
+        <p className="sunlit-eyebrow">{copy.backGuard.eyebrow}</p>
+        <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="onboarding-back-guard-title">
+          {copy.backGuard.title}
+        </h2>
+        <p className="mt-4 text-[15px] leading-6 text-[var(--sunlit-muted)]" id="onboarding-back-guard-description">
+          {copy.backGuard.description}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            className="sunlit-secondary min-h-11 rounded-xl px-5 text-[14px] font-bold disabled:opacity-50"
+            disabled={busy}
+            onClick={onKeepEditing}
+            type="button"
+          >
+            {copy.backGuard.keep}
+          </button>
+          <button
+            className="min-h-11 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-[14px] font-bold text-[var(--sunlit-pink)] disabled:opacity-50"
+            disabled={busy}
+            onClick={onDiscard}
+            type="button"
+          >
+            {copy.backGuard.discard}
+          </button>
+        </div>
+      </article>
+    </div>
   );
 }
 
@@ -1236,7 +1361,7 @@ function StepScreen({
         <div className="flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-white/65 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
           <button
             className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
-            disabled={saving}
+            disabled={saving || documentBusy || documentAnalysis?.status === "PROCESSING"}
             onClick={onBack}
             type="button"
           >

@@ -1,4 +1,5 @@
 import asyncio
+from typing import cast
 
 import pytest
 
@@ -121,6 +122,11 @@ def test_openai_provider_uses_strict_schema_and_validates_output() -> None:
     assert result.tokens_in == 80
     assert result.tokens_out == 120
 
+    text = cast(dict[str, object], kwargs["text"])
+    response_format = cast(dict[str, object], text["format"])
+    response_schema = cast(dict[str, object], response_format["schema"])
+    assert_strict_schema(response_schema)
+
 
 def test_local_configuration_reports_that_ai_is_not_configured(
     monkeypatch: pytest.MonkeyPatch,
@@ -152,3 +158,19 @@ def test_document_prompt_marks_source_text_as_untrusted_and_omits_workspace_id()
     assert "untrusted" in build_offering_document_instructions().casefold()
     assert "workspace-private-id" not in prompt
     assert "Ignore prior instructions" in prompt
+
+
+def assert_strict_schema(value: object) -> None:
+    if isinstance(value, dict):
+        assert not ("default" in value and value["default"] is None)
+        properties = value.get("properties")
+        if isinstance(properties, dict):
+            assert value.get("additionalProperties") is False
+            assert value.get("required") == list(properties)
+        for child in value.values():
+            assert_strict_schema(child)
+        return
+
+    if isinstance(value, list):
+        for child in value:
+            assert_strict_schema(child)

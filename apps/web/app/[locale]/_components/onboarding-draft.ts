@@ -26,6 +26,16 @@ export const legacyOnboardingDraftKey = "markos.onboarding.draft";
 export const previousOnboardingDraftKey = "markos.onboarding.draft.v2";
 export const onboardingDraftKey = "markos.onboarding.draft.v3";
 
+const onboardingStepFields = {
+  1: ["businessName", "industry", "market"],
+  2: ["difference", "problem", "story"],
+  3: ["offer"],
+  4: ["audience", "needs", "motivations"],
+  5: ["competitors", "avoid"],
+  6: ["toneWords", "voice"],
+  7: ["priority"]
+} as const satisfies Record<OnboardingStepId, readonly (keyof OnboardingDraft)[]>;
+
 export function createEmptyOnboardingDraft(): OnboardingDraft {
   return {
     audience: "",
@@ -104,6 +114,16 @@ export function hasOnboardingStepData(step: OnboardingStepId, draft: OnboardingD
     case 7:
       return Boolean(draft.priority.trim());
   }
+}
+
+export function onboardingStepHasChanges(step: OnboardingStepId, baseline: OnboardingDraft, draft: OnboardingDraft): boolean {
+  return onboardingStepFields[step].some((field) => baseline[field] !== draft[field]);
+}
+
+export function restoreOnboardingStep(step: OnboardingStepId, baseline: OnboardingDraft, draft: OnboardingDraft): OnboardingDraft {
+  const restored = { ...draft };
+  for (const field of onboardingStepFields[step]) restored[field] = baseline[field];
+  return restored;
 }
 
 export function validateOnboardingStep(step: OnboardingStepId, draft: OnboardingDraft): OnboardingValidationIssue | null {

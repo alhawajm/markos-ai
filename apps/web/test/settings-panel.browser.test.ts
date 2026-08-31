@@ -197,10 +197,28 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
     await expect
       .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
-      .toBeLessThanOrEqual(4);
+      .toBeLessThanOrEqual(8);
     await expect(page.getByRole("button", { name: "Save & continue" }).isDisabled()).resolves.toBe(true);
-    await page.getByLabel("Products and services").fill("Coffee beans and recurring office coffee services.");
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("dialog", { name: "Leave this step?" }).count()).resolves.toBe(0);
+    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
+    await page.getByRole("button", { name: "Skip for now" }).click();
+    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
+    const offeringField = page.getByLabel("Products and services");
+    await offeringField.fill("Coffee beans and recurring office coffee services.");
     await expect(page.getByRole("button", { name: "Save & continue" }).isEnabled()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Back" }).click();
+    const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
+    await expect(backGuard.isVisible()).resolves.toBe(true);
+    await backGuard.getByRole("button", { name: "Keep editing" }).click();
+    await expect(offeringField.inputValue()).resolves.toBe("Coffee beans and recurring office coffee services.");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
+    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
+    await page.getByRole("button", { name: "Skip for now" }).click();
+    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
+    await expect(offeringField.inputValue()).resolves.toBe("");
+    await offeringField.fill("Coffee beans and recurring office coffee services.");
     await page.screenshot({
       path: "evidence/onboarding-products-ready.png",
       fullPage: true

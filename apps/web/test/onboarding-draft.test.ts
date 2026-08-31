@@ -5,9 +5,11 @@ import {
   createOnboardingDraftFromVault,
   hasOnboardingStepData,
   legacyOnboardingDraftKey,
+  onboardingStepHasChanges,
   onboardingDraftKey,
   payloadForOnboardingStep,
   previousOnboardingDraftKey,
+  restoreOnboardingStep,
   validateOnboardingStep,
   type OnboardingDraft
 } from "../app/[locale]/_components/onboarding-draft";
@@ -105,6 +107,19 @@ describe("onboarding draft contract", () => {
 
     draft.toneWords = "warm، clear, confident, direct";
     expect(validateOnboardingStep(6, draft)).toBeNull();
+  });
+
+  it("detects and restores changes only within the active step", () => {
+    const baseline = completedDraft();
+    const edited = { ...baseline, businessName: "Edited Coffee", offer: "A changed offer" };
+
+    expect(onboardingStepHasChanges(1, baseline, edited)).toBe(true);
+    expect(onboardingStepHasChanges(2, baseline, edited)).toBe(false);
+    expect(onboardingStepHasChanges(3, baseline, edited)).toBe(true);
+    expect(restoreOnboardingStep(1, baseline, edited)).toMatchObject({
+      businessName: baseline.businessName,
+      offer: "A changed offer"
+    });
   });
 
   it("maps the concise fields onto all seven workspace-scoped Vault modules", () => {
