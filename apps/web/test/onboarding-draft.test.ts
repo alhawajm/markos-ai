@@ -26,7 +26,16 @@ function completedDraft(): OnboardingDraft {
     market: "Bahrain",
     motivations: "quality, convenience",
     needs: "Reliable office coffee without generic distributor quality",
-    offer: "Pearl Blend coffee beans and recurring office coffee setup services.",
+    offer: "",
+    offerings: [
+      {
+        currency: "BHD",
+        description: "Recurring office coffee setup service.",
+        kind: "SERVICE",
+        name: "Office coffee setup",
+        priceMinor: 75_000
+      }
+    ],
     priority: "Generate more qualified office leads",
     problem: "Inconsistent coffee supply for small teams",
     story: "Started as a family espresso cart.",
@@ -89,15 +98,50 @@ describe("onboarding draft contract", () => {
     expect(createOnboardingDraftFromVault(vault).offer).toBe("Pearl Blend: Medium roast blend.\nOffice setup");
   });
 
-  it("requires only business name and the offer summary", () => {
+  it("requires only a business name and one named offering", () => {
     const empty = createEmptyOnboardingDraft();
-    expect(([1, 2, 3, 4, 5, 6, 7] as const).map((step) => validateOnboardingStep(step, empty))).toEqual(["company", null, "products", null, null, null, null]);
+    expect(([1, 2, 3, 4, 5, 6, 7] as const).map((step) => validateOnboardingStep(step, empty))).toEqual(["company", "products", null, null, null, null, null]);
 
     const complete = completedDraft();
     for (const step of [1, 2, 3, 4, 5, 6, 7] as const) {
       expect(validateOnboardingStep(step, complete)).toBeNull();
       expect(hasOnboardingStepData(step, complete)).toBe(true);
     }
+  });
+
+  it("accepts a structured offering without requiring prose and stores BHD as integer fils", () => {
+    const draft = createEmptyOnboardingDraft();
+    draft.offerings = [
+      {
+        currency: "BHD",
+        description: "Monthly bilingual content planning.",
+        kind: "SERVICE",
+        name: "Content planning",
+        priceMinor: 125_500
+      },
+      {
+        currency: "BHD",
+        description: "",
+        kind: "UNSPECIFIED",
+        name: ""
+      }
+    ];
+
+    expect(validateOnboardingStep(2, draft)).toBeNull();
+    expect(payloadForOnboardingStep(2, draft)).toEqual({
+      module: "products",
+      body: {
+        items: [
+          {
+            currency: "BHD",
+            description: "Monthly bilingual content planning.",
+            kind: "SERVICE",
+            name: "Content planning",
+            priceMinor: 125_500
+          }
+        ]
+      }
+    });
   });
 
   it("limits tone to four removable words", () => {
@@ -111,14 +155,18 @@ describe("onboarding draft contract", () => {
 
   it("detects and restores changes only within the active step", () => {
     const baseline = completedDraft();
-    const edited = { ...baseline, businessName: "Edited Coffee", offer: "A changed offer" };
+    const edited = {
+      ...baseline,
+      businessName: "Edited Coffee",
+      offerings: baseline.offerings.map((item) => ({ ...item, name: "Edited service" }))
+    };
 
     expect(onboardingStepHasChanges(1, baseline, edited)).toBe(true);
-    expect(onboardingStepHasChanges(2, baseline, edited)).toBe(false);
-    expect(onboardingStepHasChanges(3, baseline, edited)).toBe(true);
+    expect(onboardingStepHasChanges(2, baseline, edited)).toBe(true);
+    expect(onboardingStepHasChanges(3, baseline, edited)).toBe(false);
     expect(restoreOnboardingStep(1, baseline, edited)).toMatchObject({
       businessName: baseline.businessName,
-      offer: "A changed offer"
+      offerings: edited.offerings
     });
   });
 
@@ -126,10 +174,20 @@ describe("onboarding draft contract", () => {
     const draft = completedDraft();
     const payloads = ([1, 2, 3, 4, 5, 6, 7] as const).map((step) => payloadForOnboardingStep(step, draft));
 
-    expect(payloads.map((payload) => payload.module)).toEqual(["company", "story", "products", "audience", "competitors", "brand", "objectives"]);
+    expect(payloads.map((payload) => payload.module)).toEqual(["company", "products", "story", "audience", "competitors", "brand", "objectives"]);
     expect(payloads[0]?.body).toEqual({ industry: "Specialty coffee", location: "Bahrain", name: "Pearl Coffee" });
-    expect(payloads[1]?.body).toEqual({ origin: draft.story, problemSolved: draft.problem, usp: draft.difference });
-    expect(payloads[2]?.body).toEqual({ summary: draft.offer });
+    expect(payloads[1]?.body).toEqual({
+      items: [
+        {
+          currency: "BHD",
+          description: "Recurring office coffee setup service.",
+          kind: "SERVICE",
+          name: "Office coffee setup",
+          priceMinor: 75_000
+        }
+      ]
+    });
+    expect(payloads[2]?.body).toEqual({ origin: draft.story, problemSolved: draft.problem, usp: draft.difference });
     expect(payloads[3]?.body).toEqual({ demographics: draft.audience, motivations: ["quality", "convenience"], painPoints: [draft.needs] });
     expect(payloads[4]?.body).toEqual({ doDifferently: draft.avoid, marketContext: draft.competitors });
     expect(payloads[5]?.body).toEqual({ toneWords: ["warm", "clear", "confident"], voiceNotes: draft.voice });

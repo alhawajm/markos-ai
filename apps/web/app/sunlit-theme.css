@@ -213,6 +213,41 @@
   color: rgb(98 91 102 / 60%);
 }
 
+.onboarding-prose-field,
+.onboarding-offering-table {
+  scrollbar-color: rgb(98 91 102 / 42%) transparent;
+  scrollbar-width: thin;
+}
+
+.onboarding-prose-field {
+  overflow: auto;
+  resize: none;
+}
+
+.onboarding-prose-field::-webkit-scrollbar {
+  width: 6px;
+}
+
+.onboarding-offering-table::-webkit-scrollbar {
+  height: 6px;
+}
+
+.onboarding-prose-field::-webkit-scrollbar-track,
+.onboarding-offering-table::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.onboarding-prose-field::-webkit-scrollbar-thumb,
+.onboarding-offering-table::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(98 91 102 / 34%);
+}
+
+.onboarding-prose-field::-webkit-scrollbar-thumb:hover,
+.onboarding-offering-table::-webkit-scrollbar-thumb:hover {
+  background: rgb(33 191 174 / 62%);
+}
+
 .sunlit-theme :is(button, a, input, textarea, select):focus-visible {
   outline: 3px solid rgb(33 191 174 / 32%);
   outline-offset: 2px;

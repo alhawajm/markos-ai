@@ -157,7 +157,11 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
 
       const { workspaceId } = requireWorkspaceContext();
       try {
-        return ok(await approveOfferingDocumentAnalysis(workspaceId, analysisId.data, parsed.data));
+        return ok(
+          await approveOfferingDocumentAnalysis(workspaceId, analysisId.data, parsed.data, {
+            preserveApprovedProfile: editModePreservesApprovedProfile(request.query)
+          })
+        );
       } catch (error) {
         return handleOfferingDocumentError(error, reply);
       }
@@ -212,7 +216,11 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       }
 
       const { workspaceId } = requireWorkspaceContext();
-      return ok(await saveOnboardingModule(workspaceId, module.data, parsed.data as z.infer<ModuleSchema>));
+      return ok(
+        await saveOnboardingModule(workspaceId, module.data, parsed.data as z.infer<ModuleSchema>, {
+          preserveApprovedProfile: editModePreservesApprovedProfile(request.query)
+        })
+      );
     }
   );
 
@@ -235,7 +243,11 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await skipOnboardingModule(workspaceId, module.data));
+        return ok(
+          await skipOnboardingModule(workspaceId, module.data, {
+            preserveApprovedProfile: editModePreservesApprovedProfile(request.query)
+          })
+        );
       } catch (error) {
         if (error instanceof RequiredOnboardingModuleError) {
           return reply.status(409).send(errorEnvelope("ONBOARDING_MODULE_REQUIRED", error.message));
@@ -341,6 +353,10 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       }
     }
   );
+}
+
+function editModePreservesApprovedProfile(query: unknown): boolean {
+  return typeof query === "object" && query !== null && "preserveApprovedProfile" in query && query.preserveApprovedProfile === "true";
 }
 
 function handleOfferingDocumentError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {

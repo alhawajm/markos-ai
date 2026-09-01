@@ -31,6 +31,10 @@ interface VaultWrite {
   input: UpsertVaultSectionInput;
 }
 
+interface SaveOnboardingModuleOptions {
+  preserveApprovedProfile?: boolean;
+}
+
 const moduleSections: Record<OnboardingModuleInput, VaultSection[]> = {
   company: ["COMPANY"],
   story: ["STORY"],
@@ -92,7 +96,14 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
   };
 }
 
-export async function saveOnboardingModule(workspaceId: string, module: OnboardingModuleInput, payload: OnboardingPayload): Promise<OnboardingState> {
+export async function saveOnboardingModule(
+  workspaceId: string,
+  module: OnboardingModuleInput,
+  payload: OnboardingPayload,
+  options: SaveOnboardingModuleOptions = {}
+): Promise<OnboardingState> {
+  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
+
   if (module === "products") {
     await saveOfferingCatalog(workspaceId, payload as z.infer<typeof productsOnboardingSchema>);
   } else {
@@ -102,7 +113,7 @@ export async function saveOnboardingModule(workspaceId: string, module: Onboardi
   }
 
   const vaultScore = await getVaultScore(workspaceId);
-  await invalidateBusinessProfile(workspaceId);
+  if (!preserveApprovedProfile) await invalidateBusinessProfile(workspaceId);
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
     select: { onboardingSkippedModules: true }
@@ -112,7 +123,7 @@ export async function saveOnboardingModule(workspaceId: string, module: Onboardi
       id: workspaceId
     },
     data: {
-      onboardingStatus: "IN_PROGRESS",
+      onboardingStatus: preserveApprovedProfile ? "COMPLETE" : "IN_PROGRESS",
       onboardingScore: vaultScore.score,
       onboardingSkippedModules: {
         set: workspace.onboardingSkippedModules.filter((item) => item !== module)
@@ -123,7 +134,11 @@ export async function saveOnboardingModule(workspaceId: string, module: Onboardi
   return getOnboardingState(workspaceId);
 }
 
-export async function skipOnboardingModule(workspaceId: string, module: OnboardingModuleInput): Promise<OnboardingState> {
+export async function skipOnboardingModule(
+  workspaceId: string,
+  module: OnboardingModuleInput,
+  options: SaveOnboardingModuleOptions = {}
+): Promise<OnboardingState> {
   if (requiredOnboardingModules.has(module)) {
     throw new RequiredOnboardingModuleError();
   }
@@ -132,11 +147,12 @@ export async function skipOnboardingModule(workspaceId: string, module: Onboardi
     where: { id: workspaceId },
     select: { onboardingSkippedModules: true }
   });
+  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
 
   await prisma.workspace.update({
     where: { id: workspaceId },
     data: {
-      onboardingStatus: "IN_PROGRESS",
+      onboardingStatus: preserveApprovedProfile ? "COMPLETE" : "IN_PROGRESS",
       onboardingSkippedModules: {
         set: Array.from(new Set([...workspace.onboardingSkippedModules, module]))
       }

@@ -299,6 +299,28 @@ describe("onboarding routes", () => {
       }
     });
 
+    const edited = await app.inject({
+      method: "PUT",
+      url: "/v1/onboarding/company?preserveApprovedProfile=true",
+      headers,
+      payload: { name: "Pearl Coffee Roasters" }
+    });
+
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json()).toMatchObject({
+      data: {
+        status: "COMPLETE",
+        businessProfile: {
+          status: "APPROVED",
+          interactionId: draft.interactionId,
+          profile: draft.profile
+        }
+      }
+    });
+    await expect(prisma.aiInteraction.findUniqueOrThrow({ where: { id: draft.interactionId }, select: { regenerated: true } })).resolves.toEqual({
+      regenerated: false
+    });
+
     await app.close();
   });
 

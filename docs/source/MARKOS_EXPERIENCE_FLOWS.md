@@ -99,7 +99,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **A3. Seven-module wizard**
 
 - After verification, a short greeting explains that the user will share what they know, MARKOS will organize it, and the owner will review the result before it is used.
-- `OB-03`–`OB-09` collect Company, Story, Products, Audience, Competitors, Brand, and Objectives.
+- `OB-03`–`OB-09` collect Company, Products, Story, Audience, Competitors, Brand, and Objectives. Products follows Company because those two essentials are enough to unlock the first profile; the remaining context stays skippable.
 - Each save calls `PUT /v1/onboarding/:module`, writes the matching Vault section(s), creates deterministic embeddings through the current AI boundary, updates completeness, invalidates any previously resolved profile, and leaves onboarding `IN_PROGRESS`.
 - Company and Products are essential because they identify the business and its offer. Story, Audience, Competitors, Brand/Tone, and Objectives are useful but optional; `POST /v1/onboarding/:module/skip` persists an optional skip so the journey can resume without asking the same question again. Essential modules cannot be skipped.
 - Brand writes `BRAND` only when visual-identity facts are supplied and `TONE` only when voice facts are supplied. Guidance, placeholders, palettes, and options are suggestions only; only selected or entered facts are persisted.

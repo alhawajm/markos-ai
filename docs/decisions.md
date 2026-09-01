@@ -289,7 +289,7 @@ Accept exactly six numeric verification digits in a high-contrast, one-time-code
 
 ## 2026-08-06: Onboarding persists only disclosed business answers
 
-Use the seven canonical onboarding modules in the experience flow—Company, Story, Products, Audience, Competitors, Brand, and Objectives—followed by a non-generative review screen. Prefill only the authenticated workspace name. Choices, examples, placeholders, color palettes, and option lists may guide the user, but they must not become stored business facts until the user selects or enters them.
+Use the seven canonical onboarding modules in the experience flow—Company, Products, Story, Audience, Competitors, Brand, and Objectives—followed by a non-generative review screen. Products appears second because it is the other essential input for the first profile; the module names and persistence contract do not otherwise change. Prefill only the authenticated workspace name. Choices, examples, placeholders, color palettes, and option lists may guide the user, but they must not become stored business facts until the user selects or enters them.
 
 Retire the fixture-backed `markos.onboarding.draft` browser key and begin with the versioned `markos.onboarding.draft.v2` key. This intentionally discards old Zain-based drafts. Remove the simulated social connection screen, generated-content counts, readiness percentage, and hidden payload values. A validation or API failure keeps the draft locally and blocks forward navigation; completing onboarding clears the versioned draft only after the API confirms completion.
 
@@ -495,10 +495,18 @@ Treat extracted offerings, summaries, and issues as an editable proposal. Nothin
 
 Offering-document extraction requires a configured provider-backed AI path. Do not expose the deterministic line parser as a user-facing fallback: incomplete local guesses create more risk than an honest unavailable state. If the provider, credential, or model is unavailable, store only a sanitized failure code, keep the temporary files available for the existing retention window, preserve the manual Products/Services field, and tell the owner whether retry can help. Do not show Retry for configuration, authentication, unreadable-input, unsupported-input, refusal, or missing-usage failures.
 
-The next experience pass may replace the compact Step 3 uploader with a focused Document Analyst panel that guides upload, analysis, clarification, and owner approval. Keep it limited to Products/Services initially while designing its boundary for later business-wide document assistance. This provider-boundary pass does not implement that conversational UI.
+The next experience pass may replace the compact Products/Services uploader with a focused Document Analyst panel that guides upload, analysis, clarification, and owner approval. Keep it limited to Products/Services initially while designing its boundary for later business-wide document assistance. This provider-boundary pass does not implement that conversational UI.
 
 ## 2026-08-31: Onboarding Back protects only the active step's unsaved work
 
 Treat each onboarding step as its own editing boundary in both first-run and profile-edit mode. Back leaves an untouched step immediately. If the active step contains meaningful changes, Back opens a focused choice to **Discard changes** or **Keep editing**; discarding restores only that step's entry state and must not undo previously saved or edited steps.
 
 An active ready or failed offering-document analysis also counts as step work because its temporary files and proposal require an explicit disposition. Discarding from the Products/Services step removes that temporary analysis before leaving. Processing cannot be interrupted through Back, and an API failure keeps the user on the step with an honest error instead of claiming the analysis was discarded.
+
+## 2026-08-31: Approved-profile edits do not spend another AI generation
+
+Supersede the August 20 edit-mode regeneration rule for the current explicit onboarding editor. When a workspace already has an approved Business Profile, owner edits to the seven canonical modules are approved knowledge changes: save them directly, preserve the accepted profile interaction, keep onboarding complete, and return to Business Profile from the final information check. Do not call the onboarding profile resolver or consume another AI generation merely to reword information the owner has already approved.
+
+This is a narrow bridge until Business Profile receives a dedicated knowledge editor. The canonical module records and Offering Catalog remain the current truth used for retrieval; the previously approved bilingual profile can temporarily remain a summarized snapshot. A future knowledge-editor pass must define how bilingual summaries are refreshed without silently inventing facts or forcing an avoidable provider call.
+
+Only the explicit edit-mode request may ask to preserve an approved profile, and the API must verify that an approved profile actually exists. A first-run or incomplete workspace cannot use this flag to bypass profile generation, owner approval, or onboarding completion.

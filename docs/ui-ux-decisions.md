@@ -331,3 +331,22 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 - Document-assisted extraction, upload retention, processing quotas, and a future whole-business automatic path remain a separate pipeline with their own policy and validation pass.
 - The product-wide notification redesign and final shared font and palette selection remain outside this Onboarding checkpoint.
+
+### 2026-08-31 — Bounded fields, structured offerings, and desktop review density
+
+**Accepted**
+
+- Supersede the single combined Products/Services field with compact offering rows for type, name, short description, and BHD price. Do not show a redundant overall-summary field above the primary table. Keep document extraction as an optional accelerator and use the same structured correction surface for its proposal.
+- Store displayed BHD prices as integer fils at the application boundary. Leave price blank when it varies or is unknown; do not imply support for ranges, starting prices, or quotations until the catalog update contract can preserve those meanings.
+- Keep prose fields at a deliberate fixed height. Disable manual resizing and use a narrow, low-contrast vertical scrollbar only when content exceeds the field. Use single-line scrolling for table cells; do not copy Pomelli's horizontal treatment onto ordinary wrapping prose.
+- Put **Why this helps** in a separate desktop rail so it no longer reduces the working width of every field. Keep the primary card and action positions stable across ordinary steps.
+- Place the Products/Services document-analysis entry point directly below that desktop help rail. Keep active analysis review in the wider working area so extracted rows remain practical to inspect and correct.
+- Use a wider two-column information check at desktop reference sizes. Avoid an internal page-sized scroll region for the ordinary review case.
+- In explicit edit mode, label the final action **Save changes** and return to Business Profile without presenting another AI-generation step.
+
+**Deferred**
+
+- The narrow-screen contextual-help disclosure and outside-click behavior.
+- A dedicated Business Profile knowledge editor that replaces the temporary return through onboarding.
+- Rich offering price semantics such as from, range, free, and quotation-required.
+- Decorative card fades or more elaborate overflow animation unless browser evidence shows that the simpler bounded surfaces are insufficient.

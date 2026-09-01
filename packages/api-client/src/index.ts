@@ -188,16 +188,18 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async saveOnboardingModule(module: string, body: Record<string, unknown>): Promise<OnboardingState> {
-    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}`, {
+  async saveOnboardingModule(module: string, body: Record<string, unknown>, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}${query}`, {
       body,
       method: "PUT"
     });
     return response.data;
   }
 
-  async skipOnboardingModule(module: string): Promise<OnboardingState> {
-    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip`, {
+  async skipOnboardingModule(module: string, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip${query}`, {
       body: {},
       method: "POST"
     });
@@ -231,9 +233,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async approveOfferingDocumentAnalysis(analysisId: string, catalog: OfferingCatalogUpdate): Promise<ApproveOfferingDocumentAnalysisResult> {
+  async approveOfferingDocumentAnalysis(
+    analysisId: string,
+    catalog: OfferingCatalogUpdate,
+    options: { preserveApprovedProfile?: boolean } = {}
+  ): Promise<ApproveOfferingDocumentAnalysisResult> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
     const response = await this.request<ApproveOfferingDocumentAnalysisResult>(
-      `/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/approve`,
+      `/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/approve${query}`,
       { body: { catalog }, method: "POST" }
     );
     return response.data;

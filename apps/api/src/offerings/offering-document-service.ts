@@ -12,7 +12,7 @@ import { analyzeOfferingDocuments, offeringDocumentExtractionSchema } from "../a
 import { AiServiceRequestError } from "../ai/request";
 import { prisma } from "../db/prisma";
 import { deleteStoredMedia, MediaStorageError, readStoredMedia, storeWorkspaceMedia } from "../media/storage-service";
-import { businessProfileAgentName } from "../onboarding/business-profile-service";
+import { businessProfileAgentName, getBusinessProfileState } from "../onboarding/business-profile-service";
 import { getOnboardingState } from "../onboarding/onboarding-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore } from "../vault/vault-service";
@@ -124,7 +124,8 @@ export async function retryOfferingDocumentAnalysis(workspaceId: string, analysi
 export async function approveOfferingDocumentAnalysis(
   workspaceId: string,
   analysisId: string,
-  input: ApproveOfferingDocumentAnalysisInput
+  input: ApproveOfferingDocumentAnalysisInput,
+  options: { preserveApprovedProfile?: boolean } = {}
 ): Promise<ApproveOfferingDocumentAnalysisResult> {
   const analysis = await findAnalysis(workspaceId, analysisId);
   if (analysis.status !== "READY" || analysis.interactionId === null) {
@@ -143,6 +144,7 @@ export async function approveOfferingDocumentAnalysis(
   });
   const interactionResponse = readRecord(interaction.response);
   const approvedAt = new Date();
+  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
 
   await prisma.$transaction([
     prisma.offeringDocumentAnalysis.update({
@@ -160,18 +162,22 @@ export async function approveOfferingDocumentAnalysis(
         } as Prisma.InputJsonObject
       }
     }),
-    prisma.aiInteraction.updateMany({
-      where: {
-        workspaceId,
-        agent: businessProfileAgentName,
-        deletedAt: null,
-        OR: [{ regenerated: null }, { regenerated: false }]
-      },
-      data: { regenerated: true }
-    }),
+    ...(preserveApprovedProfile
+      ? []
+      : [
+          prisma.aiInteraction.updateMany({
+            where: {
+              workspaceId,
+              agent: businessProfileAgentName,
+              deletedAt: null,
+              OR: [{ regenerated: null }, { regenerated: false }]
+            },
+            data: { regenerated: true }
+          })
+        ]),
     prisma.workspace.update({
       where: { id: workspaceId },
-      data: { onboardingStatus: "IN_PROGRESS", onboardingScore: vaultScore.score }
+      data: { onboardingStatus: preserveApprovedProfile ? "COMPLETE" : "IN_PROGRESS", onboardingScore: vaultScore.score }
     })
   ]);
 

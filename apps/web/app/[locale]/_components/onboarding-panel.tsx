@@ -33,6 +33,7 @@ import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./b
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import {
   createEmptyOnboardingDraft,
+  emptyOnboardingOffering,
   hasOnboardingStepData,
   legacyOnboardingDraftKey,
   onboardingStepHasChanges,
@@ -43,6 +44,7 @@ import {
   splitOnboardingList,
   validateOnboardingStep,
   type OnboardingDraft,
+  type OnboardingOfferingDraft,
   type OnboardingStepId
 } from "./onboarding-draft";
 
@@ -89,7 +91,7 @@ const profileFieldKeys: ProfileFieldKey[] = [
   "marketingFocus"
 ];
 
-const moduleOrder = ["company", "story", "products", "audience", "competitors", "brand", "objectives"];
+const moduleOrder = ["company", "products", "story", "audience", "competitors", "brand", "objectives"];
 
 function onboardingCopy(locale: Locale) {
   if (locale === "ar") {
@@ -119,7 +121,7 @@ function onboardingCopy(locale: Locale) {
         add: "إضافة منتج أو خدمة",
         analyze: "تحليل المستندات",
         analyzing: "يحلل MARKOS المستندات…",
-        body: "ارفع ملفاً أو ملفين، وسنستخرج ما تقدمه لتراجعه قبل الحفظ. يمكنك دائماً استخدام الحقل اليدوي أعلاه.",
+        body: "ارفع ملفاً أو ملفين، وسنستخرج ما تقدمه لتراجعه قبل الحفظ. يمكنك دائماً إدخال التفاصيل في الجدول بجانب هذه اللوحة.",
         choose: "اختر PDF أو Word أو TXT",
         discard: "حذف التحليل",
         duplicate: "يجب أن يكون لكل منتج أو خدمة اسم مختلف.",
@@ -160,6 +162,18 @@ function onboardingCopy(locale: Locale) {
       },
       helpTitle: "لماذا نطلب هذا؟",
       informationCheck: "فحص المعلومات",
+      offerings: {
+        add: "إضافة منتج أو خدمة",
+        description: "وصف مختصر",
+        kind: "النوع",
+        name: "الاسم",
+        price: "السعر (د.ب)",
+        priceHint: "اتركه فارغاً إن كان السعر متغيراً أو غير معروف.",
+        product: "منتج",
+        remove: "إزالة",
+        service: "خدمة",
+        unspecified: "غير محدد"
+      },
       next: "التالي",
       notAdded: "غير مضاف",
       optional: "اختياري",
@@ -192,6 +206,7 @@ function onboardingCopy(locale: Locale) {
         create: "إنشاء ملف نشاطي",
         missingEssential: "أضف الأساسيات أولاً",
         ready: "جاهز",
+        save: "حفظ التغييرات",
         rows: [
           ["اسم النشاط", "أساسي"],
           ["المنتجات والخدمات", "أساسي"],
@@ -237,7 +252,7 @@ function onboardingCopy(locale: Locale) {
       add: "Add an offering",
       analyze: "Analyze documents",
       analyzing: "MARKOS is analyzing the documents…",
-      body: "Upload one or two files and review what we find before anything is saved. The manual field above always remains available.",
+      body: "Upload one or two files and review what we find before anything is saved. You can always enter details in the table beside this panel.",
       choose: "Choose PDF, Word, or TXT",
       discard: "Discard analysis",
       duplicate: "Every product or service needs a different name.",
@@ -268,6 +283,18 @@ function onboardingCopy(locale: Locale) {
     },
     helpTitle: "Why this helps",
     informationCheck: "Information check",
+    offerings: {
+      add: "Add an offering",
+      description: "Short description",
+      kind: "Type",
+      name: "Name",
+      price: "Price (BHD)",
+      priceHint: "Leave blank when pricing varies or is not known yet.",
+      product: "Product",
+      remove: "Remove",
+      service: "Service",
+      unspecified: "Unspecified"
+    },
     next: "Next",
     notAdded: "Not added",
     optional: "Optional",
@@ -300,6 +327,7 @@ function onboardingCopy(locale: Locale) {
       create: "Create my business profile",
       missingEssential: "Add the essentials first",
       ready: "Ready",
+      save: "Save changes",
       rows: [
         ["Business name", "Essential"],
         ["Products and services", "Essential"],
@@ -339,6 +367,18 @@ function englishSteps(): StepDefinition[] {
     },
     {
       id: 2,
+      module: "products",
+      label: "What you offer",
+      description: "Products or services",
+      title: "What do you sell or provide?",
+      intro: "Add what you offer. A name is enough to start; descriptions and prices are optional.",
+      help: "This is the minimum grounding MARKOS needs to describe the business and create relevant Strategy and content.",
+      icon: Layers3,
+      skippable: false,
+      fields: []
+    },
+    {
+      id: 3,
       module: "story",
       label: "What makes you different",
       description: "Story and strengths",
@@ -359,27 +399,6 @@ function englishSteps(): StepDefinition[] {
         },
         { key: "problem", label: "Customer problem", placeholder: "What problem do you help customers solve?", area: true, maxLength: 1000 },
         { key: "story", label: "Story, mission, or values", placeholder: "Add only what already exists", area: true, maxLength: 2000 }
-      ]
-    },
-    {
-      id: 3,
-      module: "products",
-      label: "What you offer",
-      description: "Products or services",
-      title: "What do you sell or provide?",
-      intro: "Use one open field for everything you offer. Names, descriptions, and prices can all live together.",
-      help: "This is the minimum grounding MARKOS needs to describe the business and create relevant Strategy and content.",
-      icon: Layers3,
-      skippable: false,
-      fields: [
-        {
-          key: "offer",
-          label: "Products and services",
-          placeholder: "Names, descriptions, prices, or any other useful details — write as much or as little as you know.",
-          area: true,
-          full: true,
-          maxLength: 4000
-        }
       ]
     },
     {
@@ -490,6 +509,15 @@ function arabicSteps(): StepDefinition[] {
     },
     {
       ...steps[1]!,
+      label: "ما الذي تقدمه؟",
+      description: "المنتجات أو الخدمات",
+      title: "ماذا تبيع أو تقدم؟",
+      intro: "أضف ما تقدمه. يكفي الاسم للبدء، أما الوصف والسعر فاختياريان.",
+      help: "هذه أقل معرفة يحتاجها MARKOS لوصف النشاط وإنشاء استراتيجية ومحتوى مرتبطين به.",
+      fields: []
+    },
+    {
+      ...steps[2]!,
       label: "ما الذي يميزك؟",
       description: "القصة ونقاط القوة",
       title: "لماذا يختارك العملاء؟",
@@ -507,24 +535,6 @@ function arabicSteps(): StepDefinition[] {
         },
         { key: "problem", label: "مشكلة العميل", placeholder: "ما المشكلة التي تساعد العملاء على حلها؟", area: true, maxLength: 1000 },
         { key: "story", label: "القصة أو الرسالة أو القيم", placeholder: "أضف ما هو موجود فعلاً فقط", area: true, maxLength: 2000 }
-      ]
-    },
-    {
-      ...steps[2]!,
-      label: "ما الذي تقدمه؟",
-      description: "المنتجات أو الخدمات",
-      title: "ماذا تبيع أو تقدم؟",
-      intro: "استخدم حقلاً مفتوحاً واحداً لكل ما تقدمه. يمكن جمع الأسماء والأوصاف والأسعار فيه.",
-      help: "هذه أقل معرفة يحتاجها MARKOS لوصف النشاط وإنشاء استراتيجية ومحتوى مرتبطين به.",
-      fields: [
-        {
-          key: "offer",
-          label: "المنتجات والخدمات",
-          placeholder: "الأسماء أو الأوصاف أو الأسعار أو أي تفاصيل مفيدة — اكتب قدر ما تعرفه.",
-          area: true,
-          full: true,
-          maxLength: 4000
-        }
       ]
     },
     {
@@ -783,7 +793,7 @@ export function OnboardingPanel({
   async function approveDocumentAnalysis() {
     if (!documentAnalysis || !documentCatalog) return;
     const catalog = cleanOfferingCatalog(documentCatalog);
-    if (!catalog.summary && !catalog.items?.length) {
+    if (!catalog.items?.length) {
       setDocumentMessage(copy.errors.products);
       return;
     }
@@ -796,9 +806,13 @@ export function OnboardingPanel({
     setDocumentBusy(true);
     setDocumentMessage("");
     try {
-      const result = await client.approveOfferingDocumentAnalysis(documentAnalysis.id, catalog);
+      const result = await client.approveOfferingDocumentAnalysis(documentAnalysis.id, catalog, { preserveApprovedProfile: editMode });
       setRuntimeState(result.onboarding);
-      setDraft((current) => ({ ...current, offer: offeringCatalogSummary(catalog) }));
+      setDraft((current) => ({
+        ...current,
+        offer: catalog.summary?.trim() || offeringCatalogSummary(catalog),
+        offerings: catalogItemsAsDrafts(catalog.items ?? [])
+      }));
       syncDocumentAnalysis(result.analysis);
       advanceAfterStep();
     } catch (error) {
@@ -830,8 +844,11 @@ export function OnboardingPanel({
     setMessage("");
     try {
       const payload = payloadForOnboardingStep(step, draft);
-      const state = await client.saveOnboardingModule(payload.module, payload.body);
+      const state = await client.saveOnboardingModule(payload.module, payload.body, { preserveApprovedProfile: editMode });
       setRuntimeState(state);
+      if (step === 2) {
+        setDraft((current) => ({ ...current, offerings: current.offerings.filter((item) => item.name.trim()) }));
+      }
       advanceAfterStep();
     } catch (error) {
       showError(error instanceof Error ? error.message : copy.errors.save);
@@ -845,7 +862,7 @@ export function OnboardingPanel({
     setSaving(true);
     setMessage("");
     try {
-      const state = await client.skipOnboardingModule(activeStep.module);
+      const state = await client.skipOnboardingModule(activeStep.module, { preserveApprovedProfile: editMode });
       setRuntimeState(state);
       advanceAfterStep();
     } catch (error) {
@@ -887,7 +904,7 @@ export function OnboardingPanel({
     const entry = stepEntryRef.current;
     const changed = entry?.step === step && onboardingStepHasChanges(step, entry.draft, draft);
     const containsData = hasOnboardingStepData(step, draft) || (entry?.step === step && hasOnboardingStepData(step, entry.draft));
-    const hasOpenDocumentAnalysis = step === 3 && (documentAnalysis?.status === "READY" || documentAnalysis?.status === "FAILED");
+    const hasOpenDocumentAnalysis = step === 2 && (documentAnalysis?.status === "READY" || documentAnalysis?.status === "FAILED");
 
     if ((changed && containsData) || hasOpenDocumentAnalysis) {
       setBackGuardOpen(true);
@@ -901,7 +918,7 @@ export function OnboardingPanel({
     setBackGuardBusy(true);
     setMessage("");
     try {
-      if (step === 3 && documentAnalysis && (documentAnalysis.status === "READY" || documentAnalysis.status === "FAILED")) {
+      if (step === 2 && documentAnalysis && (documentAnalysis.status === "READY" || documentAnalysis.status === "FAILED")) {
         await client.discardOfferingDocumentAnalysis(documentAnalysis.id);
         syncDocumentAnalysis(null);
       }
@@ -972,6 +989,24 @@ export function OnboardingPanel({
       router.push(`/${locale}/app/strategy`);
     } catch (error) {
       showError(error instanceof Error ? error.message : copy.errors.approve);
+      setSaving(false);
+    }
+  }
+
+  async function finishEditMode() {
+    if (!session) {
+      showError(copy.errors.session);
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    try {
+      await client.completeOnboarding();
+      window.localStorage.removeItem(onboardingDraftKey);
+      router.push(`/${locale}/app/knowledge`);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : copy.errors.save);
       setSaving(false);
     }
   }
@@ -1068,14 +1103,15 @@ export function OnboardingPanel({
             <ReviewScreen
               copy={copy}
               draft={draft}
+              editMode={editMode}
               onBack={() => {
                 setStep(7);
                 setScreen("step");
               }}
-              onCreate={() => void generateProfile()}
+              onCreate={() => void (editMode ? finishEditMode() : generateProfile())}
               onEdit={editReviewStep}
-              readyForProfile={runtimeState.readyForProfile || (draft.businessName.trim().length >= 2 && draft.offer.trim().length >= 2)}
-              saving={profileLoading}
+              readyForProfile={runtimeState.readyForProfile || (draft.businessName.trim().length >= 2 && hasOnboardingStepData(2, draft))}
+              saving={profileLoading || saving}
             />
           ) : null}
           {screen === "profile" ? (
@@ -1252,24 +1288,26 @@ function StepScreen({
   const StepIcon = step.icon;
   const previous = step.id > 1 ? steps[step.id - 2] : null;
   const next = step.id < 7 ? steps[step.id] : null;
+  const hasActiveDocumentAnalysis =
+    documentBusy || documentAnalysis?.status === "PROCESSING" || documentAnalysis?.status === "READY" || documentAnalysis?.status === "FAILED";
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-5 pb-8 sm:px-8 lg:pb-6">
+    <section className="mx-auto w-full max-w-[1280px] px-5 pb-8 sm:px-8 lg:pb-6">
       <div className="mb-4 grid grid-cols-[1fr_1.25fr_1fr] gap-2 sm:gap-3">
         <ContextItem label={copy.previous} muted title={previous?.label ?? ""} />
         <ContextItem current label={copy.step(step.id, 7)} title={step.label} />
         <ContextItem label={copy.next} muted title={next?.label ?? copy.informationCheck} />
       </div>
 
-      <section className="sunlit-panel overflow-hidden rounded-[2rem] bg-white/90 backdrop-blur-xl">
-        <div className="h-1.5 bg-[var(--sunlit-paper-deep)]">
-          <div
-            className="h-full rounded-e-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-[width] duration-300"
-            style={{ width: `${(step.id / 7) * 100}%` }}
-          />
-        </div>
-        <div className="grid gap-8 p-6 sm:p-8 lg:min-h-[510px] lg:grid-cols-[minmax(0,1.65fr)_minmax(250px,.75fr)] lg:p-10">
-          <div className="min-w-0">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <section className="sunlit-panel flex min-h-[610px] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-white/90 backdrop-blur-xl">
+          <div className="h-1.5 shrink-0 bg-[var(--sunlit-paper-deep)]">
+            <div
+              className="h-full rounded-e-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-[width] duration-300"
+              style={{ width: `${(step.id / 7) * 100}%` }}
+            />
+          </div>
+          <div className="min-w-0 flex-1 p-6 sm:p-8 lg:p-10">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
                 <StepIcon size={22} />
@@ -1309,24 +1347,26 @@ function StepScreen({
               </div>
             ) : null}
 
-            <div className="mt-7 grid gap-5 sm:grid-cols-2">
-              {step.fields.map((field, index) => (
-                <OnboardingField
-                  copy={copy}
-                  field={field}
-                  full={
-                    field.full ||
-                    step.fields.length === 1 ||
-                    (!step.fields.some((item) => item.full) && index === step.fields.length - 1 && step.fields.length % 2 === 1)
-                  }
-                  key={field.key}
-                  onChange={(value) => update(field.key, value)}
-                  value={String(draft[field.key])}
-                />
-              ))}
-            </div>
+            {step.fields.length ? (
+              <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                {step.fields.map((field, index) => (
+                  <OnboardingField
+                    copy={copy}
+                    field={field}
+                    full={
+                      field.full ||
+                      step.fields.length === 1 ||
+                      (!step.fields.some((item) => item.full) && index === step.fields.length - 1 && step.fields.length % 2 === 1)
+                    }
+                    key={field.key}
+                    onChange={(value) => update(field.key, value)}
+                    value={String(draft[field.key])}
+                  />
+                ))}
+              </div>
+            ) : null}
 
-            {step.id === 3 ? (
+            {step.id === 2 && hasActiveDocumentAnalysis ? (
               <OfferingDocumentAssistant
                 analysis={documentAnalysis}
                 busy={documentBusy}
@@ -1342,56 +1382,317 @@ function StepScreen({
               />
             ) : null}
 
+            {step.id === 2 ? (
+              <div className="mt-7">
+                <OfferingEditor copy={copy} items={draft.offerings} onItemsChange={(items) => update("offerings", items)} />
+              </div>
+            ) : null}
+
             {validationIssue ? <p className="mt-4 text-[14px] font-semibold text-[var(--sunlit-danger)]">{copy.errors[validationIssue]}</p> : null}
           </div>
 
-          <aside className="self-start rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/70 p-5">
-            <div className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-aqua-dark)]">
-              <Info size={17} />
-              {copy.helpTitle}
-            </div>
-            <p className="mt-3 text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{step.help}</p>
-            <div className="mt-5 flex items-center gap-2 border-t border-[rgb(33_191_174_/_18%)] pt-4 text-[13px] font-bold text-[var(--sunlit-muted)]">
-              {step.skippable ? <CheckCircle2 size={15} /> : <ShieldCheck size={15} />}
-              {step.skippable ? copy.optional : copy.essential}
-            </div>
-          </aside>
-        </div>
-
-        <div className="flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-white/65 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
-          <button
-            className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
-            disabled={saving || documentBusy || documentAnalysis?.status === "PROCESSING"}
-            onClick={onBack}
-            type="button"
-          >
-            <BackIcon size={16} />
-            {copy.back}
-          </button>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-            {step.skippable ? (
-              <button
-                className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
-                disabled={saving}
-                onClick={onSkip}
-                type="button"
-              >
-                {copy.skip}
-              </button>
-            ) : null}
+          <div className="mt-auto flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-white/65 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
             <button
-              className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
-              disabled={saving || !canSave}
-              onClick={onSave}
+              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+              disabled={saving || documentBusy || documentAnalysis?.status === "PROCESSING"}
+              onClick={onBack}
               type="button"
             >
-              {saving ? <LoaderCircle className="animate-spin" size={16} /> : null}
-              {copy.saveContinue}
-              <NextIcon size={16} />
+              <BackIcon size={16} />
+              {copy.back}
             </button>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+              {step.skippable ? (
+                <button
+                  className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
+                  disabled={saving}
+                  onClick={onSkip}
+                  type="button"
+                >
+                  {copy.skip}
+                </button>
+              ) : null}
+              <button
+                className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+                disabled={saving || !canSave}
+                onClick={onSave}
+                type="button"
+              >
+                {saving ? <LoaderCircle className="animate-spin" size={16} /> : null}
+                {copy.saveContinue}
+                <NextIcon size={16} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="self-start rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/70 p-5 lg:sticky lg:top-5">
+          <div className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-aqua-dark)]">
+            <Info size={17} />
+            {copy.helpTitle}
+          </div>
+          <p className="mt-3 text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{step.help}</p>
+          <div className="mt-5 flex items-center gap-2 border-t border-[rgb(33_191_174_/_18%)] pt-4 text-[13px] font-bold text-[var(--sunlit-muted)]">
+            {step.skippable ? <CheckCircle2 size={15} /> : <ShieldCheck size={15} />}
+            {step.skippable ? copy.optional : copy.essential}
+          </div>
+          {step.id === 2 ? (
+            <OfferingDocumentLauncher
+              analysis={documentAnalysis}
+              busy={documentBusy}
+              copy={copy}
+              locale={locale}
+              message={documentMessage}
+              onAnalyze={onAnalyzeDocuments}
+            />
+          ) : null}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function OfferingEditor({
+  copy,
+  items,
+  onItemsChange
+}: {
+  copy: OnboardingCopy;
+  items: OnboardingOfferingDraft[];
+  onItemsChange: (items: OnboardingOfferingDraft[]) => void;
+}) {
+  function updateItem(index: number, patch: Partial<OnboardingOfferingDraft>) {
+    onItemsChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }
+
+  function updateItemPrice(index: number, priceMinor: number | undefined) {
+    onItemsChange(
+      items.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        if (priceMinor !== undefined) return { ...item, priceMinor };
+        const { priceMinor: _removed, ...withoutPrice } = item;
+        return withoutPrice;
+      })
+    );
+  }
+
+  function removeItem(index: number) {
+    const next = items.filter((_item, itemIndex) => itemIndex !== index);
+    onItemsChange(next.length ? next : [emptyOnboardingOffering()]);
+  }
+
+  return (
+    <section aria-label={copy.offerings.add} className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 sm:p-5">
+      <div className="onboarding-offering-table overflow-x-auto pb-1">
+        <div className="min-w-[790px]">
+          <div className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] gap-2 px-1 pb-2 text-[12px] font-bold uppercase tracking-[.06em] text-[var(--sunlit-muted)]">
+            <span>{copy.offerings.kind}</span>
+            <span>{copy.offerings.name}</span>
+            <span>{copy.offerings.description}</span>
+            <span>{copy.offerings.price}</span>
+            <span />
+          </div>
+          <div className="space-y-2">
+            {items.map((item, index) => (
+              <div
+                className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2"
+                key={index}
+              >
+                <select
+                  aria-label={`${copy.offerings.kind} ${index + 1}`}
+                  className="sunlit-field min-h-11 rounded-lg px-3 text-[14px] outline-none"
+                  name={`onboarding-offering-${index}-kind`}
+                  onChange={(event) => updateItem(index, { kind: event.target.value as OnboardingOfferingDraft["kind"] })}
+                  value={item.kind}
+                >
+                  <option value="UNSPECIFIED">{copy.offerings.unspecified}</option>
+                  <option value="PRODUCT">{copy.offerings.product}</option>
+                  <option value="SERVICE">{copy.offerings.service}</option>
+                </select>
+                <input
+                  aria-label={`${copy.offerings.name} ${index + 1}`}
+                  className="sunlit-field onboarding-single-line-field min-h-11 rounded-lg px-3 text-[14px] outline-none"
+                  dir="auto"
+                  maxLength={160}
+                  name={`onboarding-offering-${index}-name`}
+                  onChange={(event) => updateItem(index, { name: event.target.value })}
+                  value={item.name}
+                />
+                <input
+                  aria-label={`${copy.offerings.description} ${index + 1}`}
+                  className="sunlit-field onboarding-single-line-field min-h-11 rounded-lg px-3 text-[14px] outline-none"
+                  dir="auto"
+                  maxLength={1000}
+                  name={`onboarding-offering-${index}-description`}
+                  onChange={(event) => updateItem(index, { description: event.target.value })}
+                  value={item.description}
+                />
+                <OfferingPriceInput
+                  ariaLabel={`${copy.offerings.price} ${index + 1}`}
+                  name={`onboarding-offering-${index}-price`}
+                  onChange={(priceMinor) => updateItemPrice(index, priceMinor)}
+                  priceMinor={item.priceMinor}
+                />
+                <button
+                  aria-label={`${copy.offerings.remove} ${item.name || index + 1}`}
+                  className="grid h-10 w-10 place-items-center rounded-lg text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_7%)] hover:text-[var(--sunlit-danger)]"
+                  onClick={() => removeItem(index)}
+                  type="button"
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
-      </section>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <button
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[14px] font-bold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
+          disabled={items.length >= 30}
+          onClick={() => onItemsChange([...items, emptyOnboardingOffering()])}
+          type="button"
+        >
+          <Plus size={16} />
+          {copy.offerings.add}
+        </button>
+        <p className="text-[13px] text-[var(--sunlit-muted)]">{copy.offerings.priceHint}</p>
+      </div>
+    </section>
+  );
+}
+
+function OfferingPriceInput({
+  ariaLabel,
+  name,
+  onChange,
+  priceMinor
+}: {
+  ariaLabel: string;
+  name: string;
+  onChange: (priceMinor: number | undefined) => void;
+  priceMinor: number | undefined;
+}) {
+  const [value, setValue] = useState(() => formatBhdPrice(priceMinor));
+
+  useEffect(() => {
+    const activeName = document.activeElement?.getAttribute("name");
+    if (activeName !== name) setValue(formatBhdPrice(priceMinor));
+  }, [name, priceMinor]);
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      className="sunlit-field onboarding-single-line-field min-h-11 rounded-lg px-3 text-[14px] outline-none"
+      inputMode="decimal"
+      name={name}
+      onBlur={() => setValue(formatBhdPrice(priceMinor))}
+      onChange={(event) => {
+        const next = event.target.value.replace(",", ".");
+        if (!/^\d*(?:\.\d{0,3})?$/.test(next)) return;
+        setValue(next);
+        if (!next || next === ".") {
+          onChange(undefined);
+          return;
+        }
+        const amount = Number(next);
+        if (Number.isFinite(amount)) onChange(Math.round(amount * 1000));
+      }}
+      placeholder="0.000"
+      value={value}
+    />
+  );
+}
+
+function formatBhdPrice(priceMinor: number | undefined): string {
+  if (priceMinor === undefined) return "";
+  return (priceMinor / 1000).toFixed(3);
+}
+
+function catalogItemsAsDrafts(items: NonNullable<OfferingCatalogUpdate["items"]>): OnboardingOfferingDraft[] {
+  if (!items.length) return [emptyOnboardingOffering()];
+  return items.map((item) => ({
+    ...(item.category ? { category: item.category } : {}),
+    currency: "BHD",
+    description: item.description ?? "",
+    kind: item.kind ?? "UNSPECIFIED",
+    name: item.name,
+    ...(item.priceMinor === undefined ? {} : { priceMinor: item.priceMinor })
+  }));
+}
+
+function OfferingDocumentLauncher({
+  analysis,
+  busy,
+  copy,
+  locale,
+  message,
+  onAnalyze
+}: {
+  analysis: OfferingDocumentAnalysisRecord | null;
+  busy: boolean;
+  copy: OnboardingCopy;
+  locale: Locale;
+  message: string;
+  onAnalyze: (files: FileList | File[]) => void;
+}) {
+  const waiting = busy || analysis?.status === "PROCESSING";
+  const active = waiting || analysis?.status === "READY" || analysis?.status === "FAILED";
+
+  return (
+    <section className="mt-5 border-t border-[rgb(33_191_174_/_18%)] pt-5">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
+          <FileText size={17} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-bold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
+          <p className="mt-1 text-[13px] leading-5 text-[var(--sunlit-ink-soft)]">{copy.documents.body}</p>
+        </div>
+      </div>
+
+      {!active ? (
+        <label
+          className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[rgb(33_191_174_/_48%)] bg-white/80 px-3 py-3 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] hover:border-[var(--sunlit-aqua)] hover:bg-white"
+          onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
+          onDrop={(event: DragEvent<HTMLLabelElement>) => {
+            event.preventDefault();
+            onAnalyze(event.dataTransfer.files);
+          }}
+        >
+          <UploadCloud className="shrink-0" size={18} />
+          <span>{copy.documents.choose}</span>
+          <input
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            className="sr-only"
+            multiple
+            name="offering-documents"
+            onChange={(event) => {
+              if (event.target.files) onAnalyze(event.target.files);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      ) : waiting ? (
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/80 px-3 py-3 text-[13px] font-bold text-[var(--sunlit-ink-soft)]">
+          <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={17} />
+          {copy.documents.analyzing}
+        </div>
+      ) : (
+        <button
+          className="sunlit-secondary mt-3 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-start text-[13px] font-bold"
+          onClick={() => document.getElementById("offering-document-review")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          type="button"
+        >
+          <span>{analysis?.status === "READY" ? copy.documents.reviewTitle : offeringDocumentFailureMessage(locale, analysis?.failureCode)}</span>
+          <ArrowRight className="shrink-0 rtl:rotate-180" size={15} />
+        </button>
+      )}
+
+      {!active && message ? <p className="mt-2 text-[12px] font-semibold leading-5 text-[var(--sunlit-danger)]">{message}</p> : null}
+      {!active ? <p className="mt-2 text-[12px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</p> : null}
     </section>
   );
 }
@@ -1423,24 +1724,11 @@ function OfferingDocumentAssistant({
 }) {
   const items = catalog?.items ?? [];
 
-  function updateItem(index: number, patch: Partial<(typeof items)[number]>) {
-    if (!catalog) return;
-    onCatalogChange({
-      ...catalog,
-      items: items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
-    });
-  }
-
-  function removeItem(index: number) {
-    if (!catalog) return;
-    onCatalogChange({ ...catalog, items: items.filter((_item, itemIndex) => itemIndex !== index) });
-  }
-
   const waiting = busy || analysis?.status === "PROCESSING";
   const canRetry = canRetryOfferingDocumentFailure(analysis?.failureCode);
 
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
+    <section className="mt-7 scroll-mt-5 overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]" id="offering-document-review">
       <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
           <FileText size={19} />
@@ -1521,76 +1809,9 @@ function OfferingDocumentAssistant({
           <h3 className="text-[17px] font-bold text-[var(--sunlit-ink)]">{copy.documents.reviewTitle}</h3>
           <p className="mt-1 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.documents.reviewBody}</p>
 
-          <label className="mt-4 block">
-            <span className="text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{copy.documents.summary}</span>
-            <textarea
-              className="sunlit-field mt-2 min-h-24 resize-y rounded-xl px-3.5 py-3 text-[14px] leading-6 outline-none"
-              maxLength={4000}
-              name="offering-document-summary"
-              onChange={(event) => onCatalogChange({ ...catalog, summary: event.target.value })}
-              value={catalog.summary ?? ""}
-            />
-          </label>
-
-          <div className="mt-4 space-y-3">
-            {items.map((item, index) => (
-              <article className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-3.5" key={`${index}-${item.name}`}>
-                <div className="grid gap-3 sm:grid-cols-[145px_minmax(0,1fr)_auto]">
-                  <select
-                    aria-label={`${copy.documents.kind} ${index + 1}`}
-                    className="sunlit-field rounded-lg px-3 py-2.5 text-[14px] outline-none"
-                    name={`offering-${index}-kind`}
-                    onChange={(event) => updateItem(index, { kind: event.target.value as "PRODUCT" | "SERVICE" | "UNSPECIFIED" })}
-                    value={item.kind ?? "UNSPECIFIED"}
-                  >
-                    <option value="UNSPECIFIED">{copy.documents.kindUnknown}</option>
-                    <option value="PRODUCT">{copy.documents.kindProduct}</option>
-                    <option value="SERVICE">{copy.documents.kindService}</option>
-                  </select>
-                  <input
-                    aria-label={copy.documents.itemName}
-                    className="sunlit-field rounded-lg px-3 py-2.5 text-[14px] outline-none"
-                    maxLength={160}
-                    name={`offering-${index}-name`}
-                    onChange={(event) => updateItem(index, { name: event.target.value })}
-                    placeholder={copy.documents.itemName}
-                    value={item.name}
-                  />
-                  <button
-                    aria-label={copy.documents.remove}
-                    className="rounded-lg p-2.5 text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_7%)] hover:text-[var(--sunlit-danger)]"
-                    onClick={() => removeItem(index)}
-                    type="button"
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-                <textarea
-                  aria-label={copy.documents.itemDescription}
-                  className="sunlit-field mt-3 min-h-20 resize-y rounded-lg px-3 py-2.5 text-[14px] leading-6 outline-none"
-                  maxLength={1000}
-                  name={`offering-${index}-description`}
-                  onChange={(event) => updateItem(index, { description: event.target.value })}
-                  placeholder={copy.documents.itemDescription}
-                  value={item.description ?? ""}
-                />
-              </article>
-            ))}
+          <div className="mt-4">
+            <OfferingEditor copy={copy} items={catalogItemsAsDrafts(items)} onItemsChange={(nextItems) => onCatalogChange({ ...catalog, items: nextItems })} />
           </div>
-
-          <button
-            className="mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
-            onClick={() =>
-              onCatalogChange({
-                ...catalog,
-                items: [...items, { kind: "UNSPECIFIED", name: "", description: "", currency: "BHD" }]
-              })
-            }
-            type="button"
-          >
-            <Plus size={15} />
-            {copy.documents.add}
-          </button>
 
           {analysis.result?.issues.length ? (
             <div className="mt-4 space-y-2">
@@ -1676,7 +1897,7 @@ function OnboardingField({
       </span>
       {field.area ? (
         <textarea
-          className={`${inputClass} min-h-24 w-full resize-y`}
+          className={`${inputClass} onboarding-prose-field h-28 w-full resize-none`}
           dir="auto"
           maxLength={field.maxLength}
           name={`onboarding-${field.key}`}
@@ -1703,6 +1924,7 @@ function OnboardingField({
 function ReviewScreen({
   copy,
   draft,
+  editMode,
   onBack,
   onCreate,
   onEdit,
@@ -1711,17 +1933,18 @@ function ReviewScreen({
 }: {
   copy: OnboardingCopy;
   draft: OnboardingDraft;
+  editMode: boolean;
   onBack: () => void;
   onCreate: () => void;
   onEdit: (step: OnboardingStepId) => void;
   readyForProfile: boolean;
   saving: boolean;
 }) {
-  const targets: OnboardingStepId[] = [1, 3, 4, 2, 5, 6, 7];
+  const targets: OnboardingStepId[] = [1, 2, 4, 3, 5, 6, 7];
   return (
-    <section className="mx-auto w-full max-w-5xl px-5 pb-12 sm:px-8">
+    <section className="mx-auto w-full max-w-[1280px] px-5 pb-10 sm:px-8">
       <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-9 lg:p-10">
-        <div className="max-w-3xl">
+        <div className="max-w-4xl">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <ShieldCheck size={23} />
           </span>
@@ -1729,14 +1952,14 @@ function ReviewScreen({
           <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.review.body}</p>
         </div>
 
-        <div className="mt-7 grid gap-3">
+        <div className="mt-7 grid gap-3 md:grid-cols-2">
           {copy.review.rows.map(([title, note], index) => {
             const target = targets[index]!;
             const ready = hasOnboardingStepData(target, draft) && validateOnboardingStep(target, draft) === null;
-            const required = target === 1 || target === 3;
+            const required = target === 1 || target === 2;
             return (
               <button
-                className="group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[rgb(33_191_174_/_32%)] hover:bg-white hover:shadow-sm"
+                className={`group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[rgb(33_191_174_/_32%)] hover:bg-white hover:shadow-sm ${index === copy.review.rows.length - 1 ? "md:col-span-2" : ""}`}
                 key={title}
                 onClick={() => onEdit(target)}
                 type="button"
@@ -1777,8 +2000,8 @@ function ReviewScreen({
             onClick={onCreate}
             type="button"
           >
-            {saving ? <LoaderCircle className="animate-spin" size={17} /> : <WandSparkles size={17} />}
-            {readyForProfile ? copy.review.create : copy.review.missingEssential}
+            {saving ? <LoaderCircle className="animate-spin" size={17} /> : editMode ? <Check size={17} /> : <WandSparkles size={17} />}
+            {readyForProfile ? (editMode ? copy.review.save : copy.review.create) : copy.review.missingEssential}
           </button>
         </div>
       </section>
@@ -1887,7 +2110,7 @@ function ProfileScreen({
             >
               <span className="text-[13px] font-bold uppercase tracking-[.07em] text-[var(--sunlit-muted)]">{copy.profile.fields[field]}</span>
               <textarea
-                className="mt-3 min-h-24 w-full resize-y bg-transparent text-[16px] leading-7 outline-none"
+                className="onboarding-prose-field mt-3 h-28 w-full resize-none bg-transparent text-[16px] leading-7 outline-none"
                 dir={language === "ar" ? "rtl" : "ltr"}
                 onChange={(event) => updateProfileField(field, language, event.target.value)}
                 value={profile[field][language]}
