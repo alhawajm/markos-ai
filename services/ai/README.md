@@ -2,9 +2,9 @@
 
 Status date: 2026-09-01.
 
-This Python 3.11 FastAPI service contains the first provider-capable vertical slices. Strategy, onboarding-profile resolution, focused offering-document analysis, full-business multimodal onboarding analysis, and bilingual content-copy generation can use the OpenAI Responses API when explicitly configured. Image generation can separately use the OpenAI Images API. Deterministic local behavior remains the default for ordinary development, but both document-analysis routes intentionally require the configured OpenAI text provider and return an honest unavailable error otherwise.
+This Python 3.11 FastAPI service contains the first provider-capable vertical slices. Campaign generation, onboarding-profile resolution, focused offering-document analysis, full-business multimodal onboarding analysis, and bilingual content-copy generation can use the OpenAI Responses API when explicitly configured. Image generation can separately use the OpenAI Images API. Deterministic local behavior remains the default for ordinary development, but both document-analysis routes intentionally require the configured OpenAI text provider and return an honest unavailable error otherwise.
 
-External evidence is narrower than the source capability: on 2026-08-06 a controlled direct Responses request from the Railway AI container succeeded and appeared in the OpenAI project logs, proving that request's credential, model access, billing, and outbound connectivity. The then-deployed application Strategy adapter still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaced that adapter path with shared strict JSON Schema handling, but the replacement has not yet been deployed and verified through the browser-to-API-to-AI journey.
+External evidence is narrower than the source capability: on 2026-08-06 a controlled direct Responses request from the Railway AI container succeeded and appeared in the OpenAI project logs, proving that request's credential, model access, billing, and outbound connectivity. The then-deployed application adapter, at the time named Strategy, still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaces that path with the Campaign contract and shared strict JSON Schema handling, but the replacement has not yet been deployed and verified through the browser-to-API-to-AI journey.
 
 ## Current behavior
 
@@ -13,7 +13,7 @@ The service currently provides:
 - `GET /ai/health`: shallow process health returning `ok`;
 - `GET /ai/health/deep`: deliberately returns `degraded` because database, provider, and embedding dependencies are `not_checked`;
 - `POST /ai/vault/embed`: deterministic 1,536-dimension local embeddings;
-- `POST /ai/strategy/generate`: strict, locale-aware Strategy generation through either the local adapter or the OpenAI adapter;
+- `POST /ai/campaigns/generate`: strict, locale-aware Campaign generation through either the local adapter or the OpenAI adapter;
 - `POST /ai/onboarding/profile/generate`: strict bilingual Business Profile resolution from approved onboarding facts through either the local or OpenAI adapter;
 - `POST /ai/onboarding/offerings/analyze`: provider-required structured product/service extraction from PDF, DOCX, or UTF-8 TXT evidence;
 - `POST /ai/onboarding/documents/analyze`: provider-required multimodal extraction across the seven onboarding areas from PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP evidence;
@@ -28,11 +28,11 @@ Important current gaps:
 
 - The current shared provider adapter has no completed deployed browser-to-API-to-AI response and persisted-result evidence yet.
 - Embeddings and the generic eight-agent route remain deterministic scaffolding. The image adapter is implemented but still needs a controlled deployed browser-to-provider proof.
-- Strategy/profile/content interaction rows can record provider token counts, but `costMinor` remains zero until a reviewed pricing calculation exists.
+- Campaign/profile/content interaction rows can record provider token counts, but `costMinor` remains zero until a reviewed pricing calculation exists.
 - The Docker image listens on fixed port 8000. A 2026-08-16 Railway screenshot shows a service-level `PORT` variable, but the current Docker command and Python settings do not consume that name; routing must therefore be verified rather than inferred from variable presence.
 - Deep health cannot support a production-ready claim while every dependency remains `not_checked`.
 
-Describe only the direct 2026-08-06 provider request as externally verified. Do not extend that evidence to Strategy, onboarding approval, RAG, or the eight-agent platform until the current deployed application path is tested.
+Describe only the direct 2026-08-06 provider request as externally verified. Do not extend that evidence to Campaign generation, onboarding approval, RAG, or the eight-agent platform until the current deployed application path is tested.
 
 ## Delivery phases
 
@@ -44,11 +44,11 @@ Sarah owns the Railway service, networking, health, availability, and secret con
 2. Confirm the API reaches the intended deployment through `AI_BASE_URL`.
 3. Keep the same non-default `INTERNAL_SERVICE_TOKEN` in API and AI and verify unauthorized requests fail.
 4. Deploy the current shared structured-output adapter.
-5. Send one synthetic Strategy request through API to AI, confirm a validated persisted result and usage, and retain sanitized evidence.
+5. Send one synthetic Campaign request through API to AI, confirm a validated persisted result and usage, and retain sanitized evidence.
 
 ### Phase 1B: add one real provider-backed response
 
-OpenAI is the initial Strategy/profile/content-copy/image provider behind narrow adapters so other providers remain possible later. The authorized project credential and direct container call are externally evidenced; each application route still needs its own controlled protected-path result before it is called live-verified. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
+OpenAI is the initial Campaign/profile/content-copy/image provider behind narrow adapters so other providers remain possible later. The authorized project credential and direct container call are externally evidenced; each application route still needs its own controlled protected-path result before it is called live-verified. A ChatGPT or Codex subscription is billed and managed separately from API use; it is not application API access.
 
 Prefer a project-owned service-account credential over a personal shared key. Inject the credential only into the AI service through the deployment secret manager. Never commit, print, return, or place it in build arguments, client-side variables, logs, screenshots, or evidence artifacts.
 
@@ -66,7 +66,7 @@ Completion requires one real provider response through the deployed service and 
 
 Khalid owns the product behavior and application integration. The onboarding milestone supports two inputs to the same seven-module knowledge contract: owner-entered answers or an owner-reviewed full-business document extraction. The provider-backed document analyst accepts up to five supported text/visual files, returns structured evidence and issues without inventing missing facts, and never writes canonical business knowledge directly. After extraction approval, the existing resolver produces a bilingual Business Profile for separate review, editing, and approval. These are focused internal onboarding capabilities rather than new public agents, and they are not the complete eight-agent platform.
 
-The local provider remains deterministic for Strategy, profile, and content development. Both document analyzers refuse the local provider because speculative parsing is not an acceptable user-facing fallback. With `AI_TEXT_PROVIDER=openai`, Strategy, onboarding profile resolution, both document analyzers, and bilingual content-copy generation use the Responses API with strict JSON Schema output and sanitized application lifecycle logging. During the current quality-tuning phase, `OPENAI_STORE_RESPONSES=true` keeps provider inputs and outputs available in the OpenAI API dashboard for human review.
+The local provider remains deterministic for Campaign, profile, and content development. Both document analyzers refuse the local provider because speculative parsing is not an acceptable user-facing fallback. With `AI_TEXT_PROVIDER=openai`, Campaign generation, onboarding profile resolution, both document analyzers, and bilingual content-copy generation use the Responses API with strict JSON Schema output and sanitized application lifecycle logging. During the current quality-tuning phase, `OPENAI_STORE_RESPONSES=true` keeps provider inputs and outputs available in the OpenAI API dashboard for human review.
 
 ### Phase 3: mature grounded retrieval and generation
 
@@ -127,9 +127,9 @@ Current FastAPI settings consume these names:
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (enforced on every non-health AI route)
 - `DATABASE_URL` (configured but not used by current request handlers)
-- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy, onboarding profile resolution, both onboarding document analyzers, and content-copy generation)
+- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Campaign generation, onboarding profile resolution, both onboarding document analyzers, and content-copy generation)
 - `AI_IMAGE_PROVIDER` (`local` by default; set to `openai` for provider-backed JPEG generation)
-- `AI_STRATEGY_TIMEOUT_SECONDS`
+- `AI_CAMPAIGN_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
 - `AI_DOCUMENT_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
@@ -172,7 +172,7 @@ corepack pnpm --filter ai test
 corepack pnpm --filter ai build
 ```
 
-Pull-request CI explicitly uses local text and image providers, installs the production and test dependencies, runs the repository gates, builds the AI image, and smoke-tests health, authentication rejection, and one authorized synthetic Strategy response. It does not receive an OpenAI key or make paid provider calls.
+Pull-request CI explicitly uses local text and image providers, installs the production and test dependencies, runs the repository gates, builds the AI image, and smoke-tests health, authentication rejection, and one authorized synthetic Campaign response. It does not receive an OpenAI key or make paid provider calls.
 
 After deployment, verify `/ai/health` directly and then verify `/v1/health/deep` from the API. A reachable shallow health endpoint proves process availability only; it does not prove providers, embeddings, database access, authentication, or onboarding behavior.
 

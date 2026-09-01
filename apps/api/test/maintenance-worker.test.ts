@@ -207,8 +207,8 @@ describe("maintenance worker", () => {
       "AI_IMAGE",
       "AI_TOKENS_IN",
       "AI_TOKENS_OUT",
-      "POST_PUBLISH",
-      "STRATEGY"
+      "CAMPAIGN",
+      "POST_PUBLISH"
     ]);
     expect(currentCounters.every((counter) => counter.used === 0n)).toBe(true);
     expect(previousCounter.used).toBe(7n);
@@ -325,7 +325,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       },
       name: "Test Worker",
@@ -340,7 +340,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       }
     },

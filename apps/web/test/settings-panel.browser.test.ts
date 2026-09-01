@@ -337,7 +337,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       fullPage: true
     });
 
-    await Promise.all([page.waitForURL(/\/en\/app\/strategy$/), page.getByRole("button", { name: "Approve profile & continue" }).click()]);
+    await Promise.all([page.waitForURL(/\/en\/app\/campaigns$/), page.getByRole("button", { name: "Approve profile & continue" }).click()]);
 
     expect(approvalPayload).toMatchObject({
       interactionId,

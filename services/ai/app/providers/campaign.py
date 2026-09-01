@@ -4,56 +4,56 @@ from typing import Protocol, cast
 
 from openai import AsyncOpenAI
 
-from app.contracts.strategy import (
-    GeneratedStrategyContent,
-    StrategyGenerateRequest,
-    StrategyGenerateResponse,
-    StrategyKpi,
-    StrategyPillar,
-    StrategyPlan,
-    StrategyWeek,
+from app.contracts.campaign import (
+    CampaignGenerateRequest,
+    CampaignGenerateResponse,
+    CampaignKpi,
+    CampaignPillar,
+    CampaignPlan,
+    CampaignWeek,
+    GeneratedCampaignContent,
 )
 from app.core.config import settings
 from app.core.errors import AiServiceError
-from app.prompts.strategy import (
-    STRATEGY_PROMPT_VERSION,
-    build_strategy_input,
-    build_strategy_instructions,
+from app.prompts.campaign import (
+    CAMPAIGN_PROMPT_VERSION,
+    build_campaign_input,
+    build_campaign_instructions,
 )
 from app.providers.openai_structured import OpenAIClient, generate_structured
 
 
-class StrategyProvider(Protocol):
-    async def generate_strategy(
+class CampaignProvider(Protocol):
+    async def generate_campaign(
         self,
-        request: StrategyGenerateRequest,
-    ) -> StrategyGenerateResponse: ...
+        request: CampaignGenerateRequest,
+    ) -> CampaignGenerateResponse: ...
 
 
-class LocalStrategyProvider:
-    async def generate_strategy(
+class LocalCampaignProvider:
+    async def generate_campaign(
         self,
-        request: StrategyGenerateRequest,
-    ) -> StrategyGenerateResponse:
-        strategy = build_local_strategy(request)
-        prompt = f"{build_strategy_instructions(request)}\n{build_strategy_input(request)}"
+        request: CampaignGenerateRequest,
+    ) -> CampaignGenerateResponse:
+        campaign = build_local_campaign(request)
+        prompt = f"{build_campaign_instructions(request)}\n{build_campaign_input(request)}"
         model = (
             request.model
             or settings.llm_longform_model
             or settings.llm_primary_model
-            or "local-strategy-generator"
+            or "local-campaign-generator"
         )
 
-        return StrategyGenerateResponse(
+        return CampaignGenerateResponse(
             model=model,
-            prompt_version=f"{STRATEGY_PROMPT_VERSION}.local",
+            prompt_version=f"{CAMPAIGN_PROMPT_VERSION}.local",
             tokens_in=estimate_tokens(prompt),
-            tokens_out=estimate_tokens(strategy.model_dump_json(by_alias=True)),
-            strategy=strategy,
+            tokens_out=estimate_tokens(campaign.model_dump_json(by_alias=True)),
+            campaign=campaign,
         )
 
 
-class OpenAIStrategyProvider:
+class OpenAICampaignProvider:
     def __init__(self, client: OpenAIClient | None = None) -> None:
         if client is not None:
             self._client = client
@@ -76,96 +76,98 @@ class OpenAIStrategyProvider:
             ),
         )
 
-    async def generate_strategy(
+    async def generate_campaign(
         self,
-        request: StrategyGenerateRequest,
-    ) -> StrategyGenerateResponse:
+        request: CampaignGenerateRequest,
+    ) -> CampaignGenerateResponse:
         model = request.model or settings.llm_longform_model or settings.llm_primary_model
 
         if not model:
             raise AiServiceError(
                 code="AI_PROVIDER_NOT_CONFIGURED",
-                message="The strategy model is not configured",
+                message="The campaign model is not configured",
                 status_code=503,
                 retryable=False,
             )
 
         generated = await generate_structured(
             client=self._client,
-            input_text=build_strategy_input(request),
-            instructions=build_strategy_instructions(request),
+            input_text=build_campaign_input(request),
+            instructions=build_campaign_instructions(request),
             model=model,
-            output_label="strategy",
-            schema=GeneratedStrategyContent,
-            schema_name="markos_strategy",
+            output_label="campaign",
+            schema=GeneratedCampaignContent,
+            schema_name="markos_campaign",
         )
 
-        strategy = StrategyPlan.model_validate(
+        campaign = CampaignPlan.model_validate(
             {
                 **generated.content.model_dump(),
-                "horizon_days": request.horizon_days,
+                "duration_days": request.duration_days,
+                "publishes_per_day": request.publishes_per_day,
             }
         )
 
-        return StrategyGenerateResponse(
+        return CampaignGenerateResponse(
             model=generated.model,
-            prompt_version=f"{STRATEGY_PROMPT_VERSION}.openai",
+            prompt_version=f"{CAMPAIGN_PROMPT_VERSION}.openai",
             tokens_in=generated.tokens_in,
             tokens_out=generated.tokens_out,
-            strategy=strategy,
+            campaign=campaign,
         )
 
 
 @lru_cache(maxsize=1)
-def get_strategy_provider() -> StrategyProvider:
+def get_campaign_provider() -> CampaignProvider:
     if settings.ai_text_provider == "openai":
-        return OpenAIStrategyProvider()
+        return OpenAICampaignProvider()
 
-    return LocalStrategyProvider()
+    return LocalCampaignProvider()
 
 
 def estimate_tokens(text: str) -> int:
     return max(1, len(re.findall(r"\S+", text)))
 
 
-def build_local_strategy(request: StrategyGenerateRequest) -> StrategyPlan:
+def build_local_campaign(request: CampaignGenerateRequest) -> CampaignPlan:
     context_summary = summarize_context(request)
 
     if request.locale == "ar":
         objective = request.objective or "زيادة الوعي المؤهل والاستفسارات عبر إنستغرام"
-        return StrategyPlan(
+        return CampaignPlan(
             summary=(
-                f"استراتيجية إنستغرام لمدة {request.horizon_days} يومًا مبنية على "
+                f"حملة إنستغرام لمدة {request.duration_days} يومًا مبنية على "
                 f"سياق خزنة المعرفة: {context_summary}."
             ),
-            horizonDays=request.horizon_days,
+            durationDays=request.duration_days,
+            publishesPerDay=request.publishes_per_day,
             objectives=[
                 objective,
                 "تحويل معرفة النشاط إلى ركائز محتوى قابلة للتكرار.",
                 "بناء إيقاع نشر ثابت وملائم لجمهور البحرين.",
             ],
             pillars=[
-                StrategyPillar(
+                CampaignPillar(
                     name="الثقة والدليل",
                     rationale="استخدام قصة النشاط والعروض واحتياجات العملاء لبناء المصداقية.",
                     contentAngles=["نتائج العملاء", "خلف الكواليس", "قبل وبعد", "رأي المؤسس"],
                 ),
-                StrategyPillar(
+                CampaignPillar(
                     name="تثقيف الجمهور",
                     rationale="شرح المنتجات والخدمات ببساطة لتقليل التردد قبل الشراء.",
                     contentAngles=["شرح المنتج", "مقارنات", "أسئلة شائعة", "كيفية الاختيار"],
                 ),
-                StrategyPillar(
+                CampaignPillar(
                     name="الصلة المحلية",
                     rationale="ربط المحتوى بسياق البحرين والمواسم وسلوك الشراء المحلي.",
                     contentAngles=["مناسبات البحرين", "المجتمع", "قصص عربية", "شراكات محلية"],
                 ),
             ],
-            weeklyCadence=arabic_cadence(),
+            weeklyCadence=arabic_cadence((request.duration_days + 6) // 7),
             kpis=[
-                StrategyKpi(name="استفسارات إنستغرام المؤهلة", target="زيادة شهرية"),
-                StrategyKpi(name="معدل التفاعل", target="اتجاه تصاعدي مستمر"),
-                StrategyKpi(name="استمرارية المحتوى", target="3 إلى 5 منشورات أو ريلز أسبوعيًا"),
+                CampaignKpi(name="استفسارات إنستغرام المؤهلة", target="زيادة خلال الحملة"),
+                CampaignKpi(name="معدل التفاعل", target="اتجاه تصاعدي مستمر"),
+                CampaignKpi(name="استمرارية المحتوى", target=f"{request.publishes_per_day} منشور يوميًا"),
             ],
             risks=[
                 "نشر محتوى عام لا يستخدم سياق خزنة المعرفة.",
@@ -179,19 +181,20 @@ def build_local_strategy(request: StrategyGenerateRequest) -> StrategyPlan:
         )
 
     objective = request.objective or "Grow qualified Instagram awareness and inquiries"
-    return StrategyPlan(
+    return CampaignPlan(
         summary=(
-            f"{request.horizon_days}-day Instagram-first strategy grounded in "
+            f"{request.duration_days}-day Instagram-first campaign grounded in "
             f"Knowledge Vault context: {context_summary}."
         ),
-        horizonDays=request.horizon_days,
+        durationDays=request.duration_days,
+        publishesPerDay=request.publishes_per_day,
         objectives=[
             objective,
             "Turn Knowledge Vault insights into repeatable content pillars.",
             "Build a consistent posting rhythm for Bahrain audiences.",
         ],
         pillars=[
-            StrategyPillar(
+            CampaignPillar(
                 name="Proof and trust",
                 rationale="Use the company story, offers, and customer needs to build credibility.",
                 contentAngles=[
@@ -201,12 +204,12 @@ def build_local_strategy(request: StrategyGenerateRequest) -> StrategyPlan:
                     "founder point of view",
                 ],
             ),
-            StrategyPillar(
+            CampaignPillar(
                 name="Offer education",
                 rationale="Explain products and services simply to reduce buying friction.",
                 contentAngles=["product explainers", "comparisons", "FAQs", "how to choose"],
             ),
-            StrategyPillar(
+            CampaignPillar(
                 name="Local relevance",
                 rationale="Anchor content in Bahrain context, seasonality, and buying behavior.",
                 contentAngles=[
@@ -217,11 +220,11 @@ def build_local_strategy(request: StrategyGenerateRequest) -> StrategyPlan:
                 ],
             ),
         ],
-        weeklyCadence=english_cadence(),
+        weeklyCadence=english_cadence((request.duration_days + 6) // 7),
         kpis=[
-            StrategyKpi(name="qualified Instagram inquiries", target="increase month over month"),
-            StrategyKpi(name="engagement rate", target="maintain an upward trend"),
-            StrategyKpi(name="content consistency", target="3-5 feed posts or reels per week"),
+            CampaignKpi(name="qualified Instagram inquiries", target="increase during the campaign"),
+            CampaignKpi(name="engagement rate", target="maintain an upward trend"),
+            CampaignKpi(name="content consistency", target=f"{request.publishes_per_day} publishes per day"),
         ],
         risks=[
             "Publishing generic content that ignores Vault context.",
@@ -235,7 +238,7 @@ def build_local_strategy(request: StrategyGenerateRequest) -> StrategyPlan:
     )
 
 
-def summarize_context(request: StrategyGenerateRequest) -> str:
+def summarize_context(request: CampaignGenerateRequest) -> str:
     labels: list[str] = []
 
     for chunk in request.context:
@@ -246,51 +249,27 @@ def summarize_context(request: StrategyGenerateRequest) -> str:
     return ", ".join(labels[:5]) if labels else "available workspace context"
 
 
-def english_cadence() -> list[StrategyWeek]:
+def english_cadence(week_count: int) -> list[CampaignWeek]:
+    templates = [
+        ("Message clarity", ["confirm the core offer", "publish an introduction carousel"]),
+        ("Audience learning", ["publish an FAQ reel", "collect recurring objections"]),
+        ("Trust building", ["publish a proof post", "share a process story"]),
+        ("Conversion loop", ["invite qualified inquiries", "review analytics and update the Vault"]),
+    ]
     return [
-        StrategyWeek(
-            week=1,
-            focus="Message clarity",
-            actions=["confirm the core offer", "publish an introduction carousel"],
-        ),
-        StrategyWeek(
-            week=2,
-            focus="Audience learning",
-            actions=["publish an FAQ reel", "collect recurring objections"],
-        ),
-        StrategyWeek(
-            week=3,
-            focus="Trust building",
-            actions=["publish a proof post", "share a process story"],
-        ),
-        StrategyWeek(
-            week=4,
-            focus="Conversion loop",
-            actions=["invite qualified inquiries", "review analytics and update the Vault"],
-        ),
+        CampaignWeek(week=index + 1, focus=templates[index % len(templates)][0], actions=templates[index % len(templates)][1])
+        for index in range(week_count)
     ]
 
 
-def arabic_cadence() -> list[StrategyWeek]:
+def arabic_cadence(week_count: int) -> list[CampaignWeek]:
+    templates = [
+        ("وضوح الرسالة", ["تأكيد العرض الأساسي", "نشر كاروسيل تعريفي"]),
+        ("فهم الجمهور", ["نشر ريل للأسئلة الشائعة", "جمع الاعتراضات المتكررة"]),
+        ("بناء الثقة", ["نشر دليل اجتماعي", "مشاركة قصة من خلف الكواليس"]),
+        ("تحسين التحويل", ["دعوة الجمهور للاستفسار", "مراجعة التحليلات وتحديث الخزنة"]),
+    ]
     return [
-        StrategyWeek(
-            week=1,
-            focus="وضوح الرسالة",
-            actions=["تأكيد العرض الأساسي", "نشر كاروسيل تعريفي"],
-        ),
-        StrategyWeek(
-            week=2,
-            focus="فهم الجمهور",
-            actions=["نشر ريل للأسئلة الشائعة", "جمع الاعتراضات المتكررة"],
-        ),
-        StrategyWeek(
-            week=3,
-            focus="بناء الثقة",
-            actions=["نشر دليل اجتماعي", "مشاركة قصة من خلف الكواليس"],
-        ),
-        StrategyWeek(
-            week=4,
-            focus="تحسين التحويل",
-            actions=["دعوة الجمهور للاستفسار", "مراجعة التحليلات وتحديث الخزنة"],
-        ),
+        CampaignWeek(week=index + 1, focus=templates[index % len(templates)][0], actions=templates[index % len(templates)][1])
+        for index in range(week_count)
     ]

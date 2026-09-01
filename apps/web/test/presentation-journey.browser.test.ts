@@ -46,7 +46,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app/strategy`);
+    await page.waitForURL(`${baseUrl}/en/app/campaigns`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();
@@ -245,38 +245,40 @@ describe("presentation journey", () => {
     await page.close();
   });
 
-  it("exposes Strategy in the authenticated app and sends a real 30-day generation request", async () => {
+  it("exposes Campaigns in the authenticated app and sends a real 30-day generation request", async () => {
     const page = await sessionPage();
     let generationPayload: Record<string, unknown> | undefined;
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/strategy" && route.request().method() === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/strategy/generate" && route.request().method() === "POST") {
+      if (pathname === "/v1/campaigns" && route.request().method() === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/campaigns/generate" && route.request().method() === "POST") {
         generationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json(snackLabStrategy()));
+        return route.fulfill(json(snackLabCampaign()));
       }
 
       return route.fulfill(json([]));
     });
 
-    await page.goto(`${baseUrl}/en/app/strategy`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Strategy", exact: true }).waitFor();
-    await expect(page.getByRole("link", { name: "Strategy" }).getAttribute("aria-current")).resolves.toBe("page");
-    await expect(page.getByLabel("Horizon").inputValue()).resolves.toBe("30");
-    await expect(page.getByText("No strategy generated yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
+    await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
+    await expect(page.getByLabel("Duration").inputValue()).resolves.toBe("30");
+    await expect(page.getByText("No campaign created yet", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
-    await page.getByRole("button", { name: "Create Strategy" }).click();
-    await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Strategy" }).waitFor();
+    await page.getByRole("button", { name: "Create Campaign" }).click();
+    await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Campaign" }).waitFor();
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
     await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByRole("heading", { name: "Your weekly plan" }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
-    await page.screenshot({ path: "evidence/sunlit-strategy.png", fullPage: true });
-    expect(generationPayload).toEqual({
-      horizonDays: 30,
+    await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
+    expect(generationPayload).toMatchObject({
+      durationDays: 30,
       locale: "en",
-      objective: "Increase qualified Instagram inquiries over the next 30 days"
+      objective: "Increase qualified Instagram inquiries over the next 30 days",
+      publishesPerDay: 1,
+      startsAt: expect.any(String)
     });
     await page.close();
   });
@@ -1055,10 +1057,10 @@ function snackLabVault() {
   };
 }
 
-function snackLabStrategy() {
+function snackLabCampaign() {
   return {
     content: {
-      horizonDays: 30,
+      durationDays: 30,
       kpis: [{ name: "Qualified inquiries", target: "30" }],
       nextActions: ["Create the first weekly content batch"],
       objectives: ["Build awareness", "Generate subscription inquiries", "Convert recurring customers"],
@@ -1071,13 +1073,18 @@ function snackLabStrategy() {
       ],
       retrievedContext: [{ id: "ctx-company", key: "company-info", score: 0.98, section: "COMPANY", value: { name: "SnackLab" }, version: 1 }],
       risks: [],
-      summary: "A Vault-grounded 30-day Instagram strategy for SnackLab.",
+      publishesPerDay: 1,
+      summary: "A Vault-grounded 30-day Instagram campaign for SnackLab.",
       weeklyCadence: [{ actions: ["Publish one Reel", "Publish one carousel"], focus: "Launch consistency", week: 1 }]
     },
     createdAt: "2026-08-09T11:35:00.000Z",
-    horizonDays: 30,
-    id: "strategy-snacklab-30",
-    title: "SnackLab 30-Day Instagram Strategy",
+    durationDays: 30,
+    endsAt: "2026-09-08T11:35:00.000Z",
+    id: "campaign-snacklab-30",
+    publishesPerDay: 1,
+    startsAt: "2026-08-09T11:35:00.000Z",
+    status: "REVIEW",
+    title: "SnackLab 30-Day Instagram Campaign",
     updatedAt: "2026-08-09T11:35:00.000Z",
     version: 1,
     workspaceId: session.workspace.id

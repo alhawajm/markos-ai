@@ -52,7 +52,7 @@ export const envSchema = z
     GOOGLE_OAUTH_CLIENT_ID: optionalString,
     GOOGLE_OAUTH_ISSUER: z.string().url().default("https://accounts.google.com"),
     GOOGLE_OAUTH_JWKS_URL: z.string().url().default("https://www.googleapis.com/oauth2/v3/certs"),
-    LLM_PRIMARY_MODEL: z.string().min(1).default("local-strategy-generator"),
+    LLM_PRIMARY_MODEL: z.string().min(1).default("local-markos-generator"),
     LLM_LONGFORM_MODEL: optionalString,
     MEDIA_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     MEDIA_STORAGE_DIR: z.string().min(1).default("var/media"),

@@ -117,8 +117,16 @@ enum UsageMetric {
   AI_TOKENS_IN
   AI_TOKENS_OUT
   POST_PUBLISH
-  STRATEGY
+  CAMPAIGN
   STORAGE_BYTES
+}
+
+enum CampaignStatus {
+  REVIEW
+  APPROVED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
 }
 
 enum InstagramConnectionStatus {
@@ -458,21 +466,6 @@ model OnboardingDocumentFile {
   @@map("onboarding_document_files")
 }
 
-model Strategy {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String    @db.Uuid
-  title       String
-  horizonDays Int
-  content     Json
-  version     Int       @default(1)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  @@index([workspaceId])
-  @@map("strategies")
-}
-
 model ContentCalendar {
   id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid
@@ -487,17 +480,25 @@ model ContentCalendar {
 }
 
 model Campaign {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String    @db.Uuid
-  name        String
-  objective   String?
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id              String         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String         @db.Uuid
+  title           String
+  objective       String?
+  status          CampaignStatus @default(REVIEW)
+  startsAt        DateTime
+  endsAt          DateTime
+  durationDays    Int
+  publishesPerDay Int            @default(1)
+  content         Json
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+  contentItems    ContentItem[]
 
   @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, startsAt])
   @@map("campaigns")
 }
 
@@ -515,6 +516,7 @@ model ContentItem {
   reelScript      Json?
   contentPillar   String?
   campaignId      String?       @db.Uuid
+  campaign        Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   aiPromptUsed    String?
   plannedAt       DateTime?
   scheduledAt     DateTime?
@@ -526,6 +528,7 @@ model ContentItem {
   deletedAt       DateTime?
 
   @@index([workspaceId, status])
+  @@index([workspaceId, campaignId])
   @@index([workspaceId, plannedAt])
   @@index([workspaceId, scheduledAt])
   @@map("content_items")

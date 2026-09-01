@@ -12,8 +12,8 @@ One narrow external milestone is complete: on 2026-08-03, the project team obser
 
 Open application-owned blockers:
 
-- Verify the current shared Strategy/profile provider adapter through the deployed API-to-AI path; a direct provider probe is not sufficient.
-- Verify production email delivery and the complete register -> verify -> browser-session -> onboarding -> Strategy journey.
+- Verify the current shared Campaign/profile provider adapter through the deployed API-to-AI path; a direct provider probe is not sufficient.
+- Verify production email delivery and the complete register -> verify -> browser-session -> onboarding -> Campaigns journey.
 - Verify the mounted full-business document-assisted onboarding path on the deployed provider: staged multi-file submission, editable evidence/issues, explicit extraction approval, temporary-file removal, separate bilingual Business Profile approval, and honest failure/manual recovery.
 - Restore and verify every final-system Sunlit surface included in launch scope. PR #19 removed the prior pages for full Vault editing/history, publishing operations, full analytics, AI assistance, and administration; their product requirements remain active.
 - Provide durable public media delivery for live Instagram publishing.

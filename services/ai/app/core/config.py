@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://markos:markos@localhost:5432/markos"
     ai_text_provider: Literal["local", "openai"] = "local"
     ai_image_provider: Literal["local", "openai"] = "local"
-    ai_strategy_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    ai_campaign_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_document_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)

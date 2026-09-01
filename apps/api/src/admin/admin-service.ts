@@ -271,7 +271,7 @@ function buildBahrainLaunchPlanReadiness(
   }
 
   const limits = normalizeLimits(plan.limits);
-  const requiredLimitKeys = ["aiGenerations", "aiImages", "aiInputTokens", "aiOutputTokens", "posts", "seats", "storageBytes", "strategies"];
+  const requiredLimitKeys = ["aiGenerations", "aiImages", "aiInputTokens", "aiOutputTokens", "campaigns", "posts", "seats", "storageBytes"];
   const missingLimitKeys = requiredLimitKeys.filter((key) => {
     const limit = limits[key];
     return !Number.isInteger(limit) || limit === undefined || limit <= 0;

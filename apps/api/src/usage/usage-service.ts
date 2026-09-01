@@ -10,10 +10,10 @@ const limitKeys: Record<SupportedUsageMetric, string> = {
   AI_TOKENS_OUT: "aiOutputTokens",
   POST_PUBLISH: "posts",
   STORAGE_BYTES: "storageBytes",
-  STRATEGY: "strategies"
+  CAMPAIGN: "campaigns"
 };
 
-const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "STRATEGY"];
+const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "CAMPAIGN"];
 
 export class UsageQuotaExceededError extends Error {
   readonly metric: SupportedUsageMetric;

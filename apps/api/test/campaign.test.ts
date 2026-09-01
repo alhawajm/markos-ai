@@ -11,15 +11,16 @@ vi.mock("../src/ai/embeddings-client", () => ({
   })
 }));
 
-vi.mock("../src/ai/strategy-client", () => ({
-  generateStrategyPlan: async (input: { context: unknown[]; horizonDays: number; objective?: string; workspaceId: string }) => ({
-    model: "test-strategy-model",
-    prompt_version: "strategy.v1.test",
+vi.mock("../src/ai/campaign-client", () => ({
+  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; publishesPerDay: number; workspaceId: string }) => ({
+    model: "test-campaign-model",
+    prompt_version: "campaign.v1.test",
     tokens_in: 101,
     tokens_out: 202,
-    strategy: {
-      summary: `${input.horizonDays}-day plan for ${input.objective ?? "Instagram growth"}`,
-      horizonDays: input.horizonDays,
+    campaign: {
+      summary: `${input.durationDays}-day campaign for ${input.objective ?? "Instagram growth"}`,
+      durationDays: input.durationDays,
+      publishesPerDay: input.publishesPerDay,
       objectives: [input.objective ?? "grow qualified Instagram inquiries"],
       pillars: [
         {
@@ -47,30 +48,31 @@ vi.mock("../src/ai/strategy-client", () => ({
   })
 }));
 
-describe("strategy routes", () => {
-  it("requires Vault context before generating strategy", async () => {
+describe("campaign routes", () => {
+  it("requires Business Profile context before generating a campaign", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const response = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers: authHeaders(session.tokens.accessToken),
       payload: {
-        horizonDays: 90
+        durationDays: 90,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       error: {
-        code: "STRATEGY_CONTEXT_MISSING"
+        code: "CAMPAIGN_CONTEXT_MISSING"
       }
     });
 
     await app.close();
   });
 
-  it("generates a Vault-grounded strategy and meters the interaction", async () => {
+  it("generates a Business Profile-grounded campaign and meters the interaction", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -96,11 +98,13 @@ describe("strategy routes", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
         objective: "increase wholesale cafe leads",
-        horizonDays: 90
+        durationDays: 90,
+        publishesPerDay: 2,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
 
@@ -108,10 +112,12 @@ describe("strategy routes", () => {
     expect(response.json()).toMatchObject({
       data: {
         workspaceId: session.workspace.id,
-        title: "90-day strategy: increase wholesale cafe leads",
-        horizonDays: 90,
+        title: "90-day campaign: increase wholesale cafe leads",
+        durationDays: 90,
+        publishesPerDay: 2,
+        status: "REVIEW",
         content: {
-          summary: "90-day plan for increase wholesale cafe leads",
+          summary: "90-day campaign for increase wholesale cafe leads",
           retrievedContext: [
             expect.objectContaining({
               section: "COMPANY",
@@ -130,24 +136,24 @@ describe("strategy routes", () => {
     });
     const list = await app.inject({
       method: "GET",
-      url: "/v1/strategy",
+      url: "/v1/campaigns",
       headers
     });
 
     expect(interaction).toMatchObject({
-      promptVersion: "strategy.v1.test",
+      promptVersion: "campaign.v1.test",
       tokensIn: 101,
       tokensOut: 202,
       costMinor: 0,
       currency: "BHD",
-      model: "test-strategy-model"
+      model: "test-campaign-model"
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
           workspaceId_metric_periodStart: {
             workspaceId: session.workspace.id,
-            metric: "STRATEGY",
+            metric: "CAMPAIGN",
             periodStart
           }
         }
@@ -198,13 +204,13 @@ describe("strategy routes", () => {
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({
-      title: "90-day strategy: increase wholesale cafe leads"
+      title: "90-day campaign: increase wholesale cafe leads"
     });
 
     await app.close();
   });
 
-  it("exports a saved strategy as a workspace-scoped PDF", async () => {
+  it("exports a saved campaign as a workspace-scoped PDF", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -229,43 +235,50 @@ describe("strategy routes", () => {
 
     const generated = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
         objective: "increase wholesale cafe leads",
-        horizonDays: 90
+        durationDays: 90,
+        publishesPerDay: 2,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
-    const strategyId = generated.json().data.id as string;
+    const campaignId = generated.json().data.id as string;
     const response = await app.inject({
       method: "GET",
-      url: `/v1/strategy/${strategyId}/pdf`,
+      url: `/v1/campaigns/${campaignId}/pdf`,
       headers
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("application/pdf");
-    expect(response.headers["content-disposition"]).toBe('attachment; filename="90-day-strategy-increase-wholesale-cafe-leads.pdf"');
+    expect(response.headers["content-disposition"]).toBe('attachment; filename="90-day-campaign-increase-wholesale-cafe-leads.pdf"');
     expect(response.body.startsWith("%PDF-1.4")).toBe(true);
-    expect(response.body).toContain("MARKOS AI Strategy Export");
-    expect(response.body).toContain("90-day strategy: increase wholesale cafe leads");
+    expect(response.body).toContain("MARKOS AI Campaign Export");
+    expect(response.body).toContain("90-day campaign: increase wholesale cafe leads");
     expect(response.body.trimEnd().endsWith("%%EOF")).toBe(true);
 
     await app.close();
   });
 
-  it("does not export a strategy from another workspace", async () => {
+  it("does not export a campaign from another workspace", async () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);
     const other = await registerTestUser(app);
-    const strategy = await prisma.strategy.create({
+    const startsAt = new Date("2026-09-01T00:00:00.000Z");
+    const campaign = await prisma.campaign.create({
       data: {
         workspaceId: owner.workspace.id,
-        title: "Owner-only strategy",
-        horizonDays: 90,
+        title: "Owner-only campaign",
+        startsAt,
+        endsAt: new Date("2026-11-30T00:00:00.000Z"),
+        durationDays: 90,
+        publishesPerDay: 1,
         content: {
-          summary: "Private strategy",
-          horizonDays: 90,
+          summary: "Private campaign",
+          durationDays: 90,
+          publishesPerDay: 1,
           objectives: ["protect workspace data"],
           pillars: [],
           weeklyCadence: [],
@@ -278,21 +291,21 @@ describe("strategy routes", () => {
     });
     const response = await app.inject({
       method: "GET",
-      url: `/v1/strategy/${strategy.id}/pdf`,
+      url: `/v1/campaigns/${campaign.id}/pdf`,
       headers: authHeaders(other.tokens.accessToken)
     });
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toMatchObject({
       error: {
-        code: "STRATEGY_NOT_FOUND"
+        code: "CAMPAIGN_NOT_FOUND"
       }
     });
 
     await app.close();
   });
 
-  it("blocks strategy generation when the plan quota is exhausted", async () => {
+  it("blocks campaign generation when the plan quota is exhausted", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -318,7 +331,7 @@ describe("strategy routes", () => {
     await prisma.usageCounter.create({
       data: {
         workspaceId: session.workspace.id,
-        metric: "STRATEGY",
+        metric: "CAMPAIGN",
         periodStart,
         periodEnd: monthEnd(periodStart),
         used: 1,
@@ -328,10 +341,11 @@ describe("strategy routes", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
-        horizonDays: 90
+        durationDays: 90,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
     const aiCounter = await prisma.usageCounter.findUnique({
@@ -350,7 +364,7 @@ describe("strategy routes", () => {
         code: "USAGE_QUOTA_EXCEEDED",
         details: [
           {
-            metric: "STRATEGY"
+            metric: "CAMPAIGN"
           }
         ]
       }
@@ -360,7 +374,7 @@ describe("strategy routes", () => {
     await app.close();
   });
 
-  it("blocks strategy generation when the trial has expired", async () => {
+  it("blocks campaign generation when the trial has expired", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -394,10 +408,11 @@ describe("strategy routes", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
-        horizonDays: 90
+        durationDays: 90,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
 
@@ -418,15 +433,15 @@ describe("strategy routes", () => {
 });
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
-  const email = `strategy-${randomUUID()}@markos.test`;
+  const email = `campaign-${randomUUID()}@markos.test`;
   const response = await app.inject({
     method: "POST",
     url: "/v1/auth/register",
     payload: {
       email,
       password: "CorrectHorseBattery99!",
-      fullName: "Strategy User",
-      workspaceName: `Strategy Workspace ${randomUUID()}`,
+      fullName: "Campaign User",
+      workspaceName: `Campaign Workspace ${randomUUID()}`,
       locale: "en"
     }
   });

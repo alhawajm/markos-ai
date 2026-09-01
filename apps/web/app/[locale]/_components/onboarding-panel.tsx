@@ -379,7 +379,7 @@ function onboardingCopy(locale: Locale) {
         ["Story and strengths", "Improves positioning"],
         ["Market context", "Optional"],
         ["Tone of voice", "Up to four words"],
-        ["Current priority", "Strategy confirms it later"]
+        ["Current priority", "Campaigns confirm it later"]
       ],
       title: "Review what MARKOS will know"
     },
@@ -400,7 +400,7 @@ function englishSteps(): StepDefinition[] {
       description: "Name and main market",
       title: "Let’s start with the basics",
       intro: "Confirm the identity MARKOS should use. Keep this factual and short.",
-      help: "The business name grounds your profile. Business type and market help Strategy avoid generic or geographically irrelevant suggestions.",
+      help: "The business name grounds your profile. Business type and market help Campaigns avoid generic or geographically irrelevant suggestions.",
       icon: Building2,
       skippable: false,
       fields: [
@@ -416,7 +416,7 @@ function englishSteps(): StepDefinition[] {
       description: "Products or services",
       title: "What do you sell or provide?",
       intro: "Add what you offer. A name is enough to start; descriptions and prices are optional.",
-      help: "This is the minimum grounding MARKOS needs to describe the business and create relevant Strategy and content.",
+      help: "This is the minimum grounding MARKOS needs to describe the business and create relevant Campaigns and content.",
       icon: Layers3,
       skippable: false,
       fields: []
@@ -428,7 +428,7 @@ function englishSteps(): StepDefinition[] {
       description: "Story and strengths",
       title: "Why should customers choose you?",
       intro: "A rough answer is useful. It does not need to sound like marketing copy.",
-      help: "A differentiator and the problem you solve improve positioning, profile resolution, and Strategy rationale.",
+      help: "A differentiator and the problem you solve improve positioning, profile resolution, and Campaign rationale.",
       icon: Sparkles,
       skippable: true,
       fields: [
@@ -452,7 +452,7 @@ function englishSteps(): StepDefinition[] {
       description: "Who you want to reach",
       title: "Who usually buys from you?",
       intro: "Describe real customers in everyday language. Exact demographics are unnecessary unless they genuinely affect the work.",
-      help: "Customer context helps Strategy and Create choose more relevant messages, needs, and calls to action.",
+      help: "Customer context helps Campaigns and Create choose more relevant messages, needs, and calls to action.",
       icon: Users,
       skippable: true,
       fields: [
@@ -513,10 +513,10 @@ function englishSteps(): StepDefinition[] {
       id: 7,
       module: "objectives",
       label: "Current priority",
-      description: "Strategy confirms it later",
+      description: "Campaigns confirm it later",
       title: "What should MARKOS help with first?",
-      intro: "This gives the profile useful context. Strategy will still ask you to confirm or change the objective and duration.",
-      help: "A current priority can guide the profile’s marketing focus without locking the future Strategy plan.",
+      intro: "This gives the profile useful context. Each Campaign still asks you to confirm or change its objective and duration.",
+      help: "A current priority can guide the profile’s marketing focus without locking future Campaigns.",
       icon: Target,
       skippable: true,
       suggestions: ["Build awareness", "Generate leads", "Increase sales", "Promote an offer", "Build community", "Launch something new"],
@@ -1167,7 +1167,7 @@ export function OnboardingPanel({
     try {
       await client.approveBusinessProfile({ interactionId: profileInteractionId, profile: profileDraft });
       window.localStorage.removeItem(onboardingDraftKey);
-      router.push(`/${locale}/app/strategy`);
+      router.push(`/${locale}/app/campaigns`);
     } catch (error) {
       showError(error instanceof Error ? error.message : copy.errors.approve);
       setSaving(false);

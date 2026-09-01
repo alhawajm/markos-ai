@@ -213,13 +213,20 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.onboardingDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
-    model: "Strategy",
+    model: "Campaign",
     create: (fixture) =>
-      prisma.strategy.create({
-        data: { workspaceId: fixture.workspaceId, title: `Strategy ${randomUUID()}`, horizonDays: 30, content: { pillars: [] } },
+      prisma.campaign.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          title: `Campaign ${randomUUID()}`,
+          startsAt: new Date("2026-09-01T00:00:00.000Z"),
+          endsAt: new Date("2026-10-01T00:00:00.000Z"),
+          durationDays: 30,
+          content: { durationDays: 30, pillars: [], publishesPerDay: 1 }
+        },
         select: { id: true, workspaceId: true }
       }),
-    list: (workspaceId) => prisma.strategy.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+    list: (workspaceId) => prisma.campaign.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "ContentCalendar",
@@ -229,15 +236,6 @@ const isolationCases: IsolationCase[] = [
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.contentCalendar.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
-  },
-  {
-    model: "Campaign",
-    create: (fixture) =>
-      prisma.campaign.create({
-        data: { workspaceId: fixture.workspaceId, name: `Campaign ${randomUUID()}` },
-        select: { id: true, workspaceId: true }
-      }),
-    list: (workspaceId) => prisma.campaign.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "ContentItem",

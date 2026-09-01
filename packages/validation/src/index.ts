@@ -319,9 +319,13 @@ export const approveOnboardingDocumentAnalysisSchema = z.object({
   })
 });
 
-export const generateStrategySchema = z.object({
+const campaignDurationSchema = z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30), z.literal(60), z.literal(90)]);
+
+export const generateCampaignSchema = z.object({
   objective: z.string().min(3).max(500).optional(),
-  horizonDays: z.number().int().min(30).max(180).default(90),
+  durationDays: campaignDurationSchema.default(30),
+  publishesPerDay: z.number().int().min(1).max(5).default(1),
+  startsAt: z.string().datetime(),
   locale: localeSchema.default("en")
 });
 
@@ -371,14 +375,14 @@ export const generateContentSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
   count: z.number().int().min(1).max(5).default(3),
-  strategyId: z.string().uuid().optional()
+  campaignId: z.string().uuid().optional()
 });
 
 export const generateContentForSlotSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
   scheduledAt: z.string().datetime(),
-  strategyId: z.string().uuid().optional()
+  campaignId: z.string().uuid().optional()
 });
 
 export const runAgentSchema = z.object({
@@ -662,7 +666,7 @@ export type CreateOfferingDocumentAnalysisInput = z.infer<typeof createOfferingD
 export type ApproveOfferingDocumentAnalysisInput = z.infer<typeof approveOfferingDocumentAnalysisSchema>;
 export type CreateOnboardingDocumentAnalysisInput = z.infer<typeof createOnboardingDocumentAnalysisSchema>;
 export type ApproveOnboardingDocumentAnalysisInput = z.infer<typeof approveOnboardingDocumentAnalysisSchema>;
-export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
+export type GenerateCampaignInput = z.infer<typeof generateCampaignSchema>;
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;

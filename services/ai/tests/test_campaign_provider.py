@@ -1,27 +1,28 @@
 import asyncio
+from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
 
-from app.contracts.strategy import (
-    GeneratedStrategyContent,
-    StrategyContextChunk,
-    StrategyGenerateRequest,
-    StrategyKpi,
-    StrategyPillar,
-    StrategyPromptTemplate,
-    StrategyWeek,
+from app.contracts.campaign import (
+    CampaignGenerateRequest,
+    CampaignKpi,
+    CampaignPillar,
+    CampaignPromptTemplate,
+    CampaignWeek,
+    GeneratedCampaignContent,
+    VaultContextChunk,
 )
 from app.core.errors import AiServiceError
+from app.providers.campaign import (
+    LocalCampaignProvider,
+    OpenAICampaignProvider,
+)
 from app.providers.openai_structured import (
     OpenAIClient,
     RawStructuredResponse,
     ResponsesApi,
     ResponseUsage,
-)
-from app.providers.strategy import (
-    LocalStrategyProvider,
-    OpenAIStrategyProvider,
 )
 
 
@@ -66,38 +67,40 @@ class FakeClient:
         self.responses: ResponsesApi = self.fake_responses
 
 
-def generated_content() -> GeneratedStrategyContent:
-    return GeneratedStrategyContent(
-        summary="A grounded Bahrain Instagram strategy.",
+def generated_content() -> GeneratedCampaignContent:
+    return GeneratedCampaignContent(
+        summary="A grounded Bahrain Instagram campaign.",
         objectives=["Increase qualified inquiries"],
         pillars=[
-            StrategyPillar(
+            CampaignPillar(
                 name="Proof and trust",
                 rationale="Use real business evidence.",
                 contentAngles=["customer outcomes"],
             )
         ],
         weeklyCadence=[
-            StrategyWeek(
+            CampaignWeek(
                 week=1,
                 focus="Clarify the offer",
                 actions=["publish an introduction carousel"],
             )
         ],
-        kpis=[StrategyKpi(name="qualified inquiries", target="increase")],
+        kpis=[CampaignKpi(name="qualified inquiries", target="increase")],
         risks=["Generic content"],
         nextActions=["Review the first calendar"],
     )
 
 
-def strategy_request(*, locale: Literal["ar", "en"] = "en") -> StrategyGenerateRequest:
-    return StrategyGenerateRequest(
+def campaign_request(*, locale: Literal["ar", "en"] = "en") -> CampaignGenerateRequest:
+    return CampaignGenerateRequest(
         workspace_id="workspace-secret-id",
         objective="Increase wholesale leads",
-        horizon_days=90,
+        duration_days=90,
+        publishes_per_day=2,
+        starts_at=datetime(2026, 9, 1, tzinfo=UTC),
         locale=locale,
         context=[
-            StrategyContextChunk(
+            VaultContextChunk(
                 section="COMPANY",
                 key="profile",
                 value={
@@ -107,9 +110,9 @@ def strategy_request(*, locale: Literal["ar", "en"] = "en") -> StrategyGenerateR
                 score=0.92,
             )
         ],
-        prompt_template=StrategyPromptTemplate(
+        prompt_template=CampaignPromptTemplate(
             body="Prioritize wholesale cafe buyers.",
-            version="strategy.workspace.v3",
+            version="campaign.workspace.v1",
         ),
         model="gpt-test-configured-model",
     )
@@ -118,9 +121,9 @@ def strategy_request(*, locale: Literal["ar", "en"] = "en") -> StrategyGenerateR
 def test_openai_provider_stores_structured_request_and_reports_real_usage() -> None:
     response = FakeResponse(output_text=generated_content().model_dump_json(by_alias=True))
     client = FakeClient(response)
-    provider = OpenAIStrategyProvider(client=client)
+    provider = OpenAICampaignProvider(client=client)
 
-    result = asyncio.run(provider.generate_strategy(strategy_request()))
+    result = asyncio.run(provider.generate_campaign(campaign_request()))
     kwargs = client.fake_responses.last_kwargs
 
     assert kwargs is not None
@@ -131,7 +134,7 @@ def test_openai_provider_stores_structured_request_and_reports_real_usage() -> N
     output_format = text["format"]
     assert isinstance(output_format, dict)
     assert output_format["type"] == "json_schema"
-    assert output_format["name"] == "markos_strategy"
+    assert output_format["name"] == "markos_campaign"
     assert output_format["strict"] is True
     assert kwargs["reasoning"] == {"effort": "low"}
     assert "workspace-secret-id" not in str(kwargs["instructions"])
@@ -142,7 +145,8 @@ def test_openai_provider_stores_structured_request_and_reports_real_usage() -> N
     assert result.model == "gpt-test-returned-model"
     assert result.tokens_in == 321
     assert result.tokens_out == 654
-    assert result.strategy.horizon_days == 90
+    assert result.campaign.duration_days == 90
+    assert result.campaign.publishes_per_day == 2
 
 
 def test_openai_provider_surfaces_refusal_without_raw_provider_content(
@@ -152,10 +156,10 @@ def test_openai_provider_surfaces_refusal_without_raw_provider_content(
         dump={"output": [{"content": [{"type": "refusal", "refusal": "raw refusal"}]}]},
         output_text="{}",
     )
-    provider = OpenAIStrategyProvider(client=FakeClient(response))
+    provider = OpenAICampaignProvider(client=FakeClient(response))
 
     with pytest.raises(AiServiceError) as raised:
-        asyncio.run(provider.generate_strategy(strategy_request()))
+        asyncio.run(provider.generate_campaign(campaign_request()))
 
     assert raised.value.code == "AI_OUTPUT_REFUSED"
     assert "raw refusal" not in raised.value.message
@@ -165,32 +169,33 @@ def test_openai_provider_surfaces_refusal_without_raw_provider_content(
 
 
 def test_openai_provider_rejects_invalid_structured_output() -> None:
-    provider = OpenAIStrategyProvider(client=FakeClient(FakeResponse(output_text='{"summary":true}')))
+    provider = OpenAICampaignProvider(client=FakeClient(FakeResponse(output_text='{"summary":true}')))
 
     with pytest.raises(AiServiceError) as raised:
-        asyncio.run(provider.generate_strategy(strategy_request()))
+        asyncio.run(provider.generate_campaign(campaign_request()))
 
     assert raised.value.code == "AI_OUTPUT_INVALID"
     assert raised.value.retryable is True
 
 
 def test_local_provider_generates_natural_arabic_without_a_key() -> None:
-    provider = LocalStrategyProvider()
-    result = asyncio.run(provider.generate_strategy(strategy_request(locale="ar")))
+    provider = LocalCampaignProvider()
+    result = asyncio.run(provider.generate_campaign(campaign_request(locale="ar")))
 
-    assert result.prompt_version == "strategy.v2.local"
-    assert "استراتيجية" in result.strategy.summary
-    assert result.strategy.pillars[0].name == "الثقة والدليل"
+    assert result.prompt_version == "campaign.v1.local"
+    assert "حملة" in result.campaign.summary
+    assert result.campaign.pillars[0].name == "الثقة والدليل"
     assert result.tokens_in > 0
     assert result.tokens_out > 0
 
 
-def test_strategy_request_rejects_unknown_fields() -> None:
+def test_campaign_request_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError):
-        StrategyGenerateRequest.model_validate(
+        CampaignGenerateRequest.model_validate(
             {
                 "workspace_id": "workspace-1",
-                "horizon_days": 90,
+                "duration_days": 90,
+                "starts_at": "2026-09-01T00:00:00Z",
                 "locale": "en",
                 "context": [],
                 "unexpected": "discarded before this change",

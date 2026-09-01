@@ -136,7 +136,7 @@ def validate_generated_batch(batch: ContentDraftBatch, request: ContentGenerateR
 
 def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
     context_summary = summarize_context(request)
-    pillar = first_strategy_pillar(request.strategy)
+    pillar = first_campaign_pillar(request.campaign)
     tone_summary = summarize_tone_lock(request)
     angles = ["educational", "proof-led", "invitation", "comparison", "behind-the-scenes"]
     drafts: list[ContentDraft] = []
@@ -197,11 +197,11 @@ def summarize_context(request: ContentGenerateRequest) -> str:
     return ", ".join(labels[:5]) if labels else "the available workspace context"
 
 
-def first_strategy_pillar(strategy: dict[str, object] | None) -> str:
-    if not strategy:
+def first_campaign_pillar(campaign: dict[str, object] | None) -> str:
+    if not campaign:
         return "Vault-grounded content"
 
-    pillars = strategy.get("pillars")
+    pillars = campaign.get("pillars")
     if not isinstance(pillars, list) or not pillars:
         return "Vault-grounded content"
 

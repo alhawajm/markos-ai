@@ -1,5 +1,5 @@
 import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
-import type { ContentRecord, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import type { CampaignPlan, ContentRecord, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
 import type {
   CreateContentInput,
   GenerateContentForSlotInput,
@@ -21,6 +21,12 @@ const localCurrency = "BHD";
 export class ContentContextMissingError extends Error {
   constructor() {
     super("Complete at least one Vault section before generating content");
+  }
+}
+
+export class ContentCampaignNotFoundError extends Error {
+  constructor() {
+    super("Campaign was not found");
   }
 }
 
@@ -100,7 +106,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
     throw new ContentContextMissingError();
   }
 
-  const strategy = await findStrategy(workspaceId, input.strategyId);
+  const campaign = await findCampaign(workspaceId, input.campaignId);
   const context = await searchVaultContext(workspaceId, {
     query: input.topic,
     topK: 8
@@ -110,7 +116,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:${input.count}:${input.campaignId ?? "orphan"}`
   );
   const generationCount = input.count;
   const usagePeriodDate = new Date();
@@ -125,7 +131,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
       context: lockedContext,
       toneLock: toneLock.lock,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(strategy === undefined ? {} : { strategy })
+      ...(campaign === undefined ? {} : { campaign })
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
@@ -147,6 +153,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
               ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
               ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
               ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
+              ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
               aiPromptUsed: promptVersion
             }
           })
@@ -162,7 +169,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
             topic: input.topic,
             contentType: input.contentType,
             count: input.count,
-            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
             retrievedContext: lockedContext
@@ -204,7 +211,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
     throw new ContentContextMissingError();
   }
 
-  const strategy = await findStrategy(workspaceId, input.strategyId);
+  const campaign = await findCampaign(workspaceId, input.campaignId);
   const context = await searchVaultContext(workspaceId, {
     query: input.topic,
     topK: 8
@@ -214,7 +221,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.strategyId ?? "latest"}`
+    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.campaignId ?? "orphan"}`
   );
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
@@ -228,7 +235,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
       context: lockedContext,
       toneLock: toneLock.lock,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(strategy === undefined ? {} : { strategy })
+      ...(campaign === undefined ? {} : { campaign })
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
     const [draft] = generated.drafts;
@@ -252,6 +259,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
           ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
           ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
           ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
+          ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
           aiPromptUsed: promptVersion
         }
       });
@@ -267,7 +275,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
             contentType: input.contentType,
             count: 1,
             scheduledAt: input.scheduledAt,
-            ...(input.strategyId === undefined ? {} : { strategyId: input.strategyId }),
+            ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             toneLock: toneLock.lock,
             retrievedContext: lockedContext
@@ -669,23 +677,24 @@ function isAllowedContentTransition(current: ContentStatus, next: UpdateContentS
   return allowed[current as UpdateContentStatusInput["status"]]?.includes(next) ?? false;
 }
 
-async function findStrategy(workspaceId: string, strategyId: string | undefined): Promise<StrategyPlan | undefined> {
-  const row = await prisma.strategy.findFirst({
+async function findCampaign(workspaceId: string, campaignId: string | undefined): Promise<CampaignPlan | undefined> {
+  if (campaignId === undefined) {
+    return undefined;
+  }
+
+  const row = await prisma.campaign.findFirst({
     where: {
       workspaceId,
       deletedAt: null,
-      ...(strategyId === undefined ? {} : { id: strategyId })
-    },
-    orderBy: {
-      createdAt: "desc"
+      id: campaignId
     }
   });
 
   if (!row) {
-    return undefined;
+    throw new ContentCampaignNotFoundError();
   }
 
-  return row.content as unknown as StrategyPlan;
+  return row.content as unknown as CampaignPlan;
 }
 
 export function toContentRecord(row: {

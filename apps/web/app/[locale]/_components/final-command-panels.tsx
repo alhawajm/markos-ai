@@ -537,10 +537,8 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           openAll: "عرض الكل",
           profileReady: "جاهزية الملف",
           scheduled: "المجدول",
-          strategy: "فتح الاستراتيجية",
-          subtitle: topContent
-            ? `لديك محتوى ${statusLabel(topContent.status)} جاهز للخطوة التالية.`
-            : "ابدأ من الاستراتيجية أو أنشئ أول مسودة عندما تكون جاهزاً.",
+          campaigns: "فتح الحملات",
+          subtitle: topContent ? `لديك محتوى ${statusLabel(topContent.status)} جاهز للخطوة التالية.` : "ابدأ بحملة أو أنشئ أول مسودة عندما تكون جاهزاً.",
           today: "اليوم في",
           workspaceContent: "عناصر مساحة العمل"
         }
@@ -557,10 +555,10 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           openAll: "View all",
           profileReady: "Profile readiness",
           scheduled: "Scheduled",
-          strategy: "Open Strategy",
+          campaigns: "Open Campaigns",
           subtitle: topContent
             ? `${recordTitle(topContent)} is ${statusLabel(topContent.status).toLowerCase()} and ready for its next step.`
-            : "Start with your Strategy, or create the first draft when you are ready.",
+            : "Start with a Campaign, or create the first draft when you are ready.",
           today: "Today in",
           workspaceContent: "Workspace items"
         };
@@ -619,8 +617,8 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
               {missionCta} <ArrowRight size={17} />
             </a>
-            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/strategy`}>
-              {copy.strategy}
+            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/campaigns`}>
+              {copy.campaigns}
             </a>
           </div>
         </div>
@@ -2904,7 +2902,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "أقسام الملف",
           refresh: "تحديث",
           refreshing: "جارٍ التحديث...",
-          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لفهم نشاطك وتوجيه الاستراتيجية والمحتوى.",
+          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لتوجيه استراتيجية النشاط والحملات والمحتوى.",
           updated: "آخر تحديث"
         }
       : {
@@ -2915,7 +2913,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "Profile sections",
           refresh: "Refresh",
           refreshing: "Refreshing...",
-          subtitle: "The approved business context MARKOS uses to guide Strategy and content.",
+          subtitle: "The approved business context MARKOS uses to guide business strategy, Campaigns, and content.",
           updated: "Last updated"
         };
 
@@ -3021,8 +3019,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
         <div>
           <h2 className="font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--sunlit-muted)]">
-            Changes to approved business context can influence future Strategy and content. Existing saved work remains unchanged until you create a new
-            version.
+            Changes to approved business context can influence future business strategy, Campaigns, and content. Existing saved work remains unchanged until you
+            create a new version.
           </p>
         </div>
       </article>

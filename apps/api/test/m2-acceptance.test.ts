@@ -24,15 +24,16 @@ vi.mock("../src/ai/embeddings-client", () => ({
   })
 }));
 
-vi.mock("../src/ai/strategy-client", () => ({
-  generateStrategyPlan: async (input: { context: unknown[]; horizonDays: number; objective?: string; workspaceId: string }) => ({
-    model: "test-strategy-model",
-    prompt_version: "strategy.v1.m2",
+vi.mock("../src/ai/campaign-client", () => ({
+  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; publishesPerDay: number; workspaceId: string }) => ({
+    model: "test-campaign-model",
+    prompt_version: "campaign.v1.m2",
     tokens_in: 100,
     tokens_out: 200,
-    strategy: {
-      summary: `${input.horizonDays}-day M2 plan for ${input.objective ?? "Instagram growth"}`,
-      horizonDays: input.horizonDays,
+    campaign: {
+      summary: `${input.durationDays}-day M2 campaign for ${input.objective ?? "Instagram growth"}`,
+      durationDays: input.durationDays,
+      publishesPerDay: input.publishesPerDay,
       objectives: [input.objective ?? "grow qualified Instagram inquiries"],
       pillars: [
         {
@@ -93,7 +94,7 @@ vi.mock("../src/ai/image-client", () => ({
 }));
 
 describe("M2 acceptance", () => {
-  it("turns a calendar slot into bilingual tone-locked content with an AI image, workflow movement, and strategy PDF export", async () => {
+  it("turns a Campaign-linked calendar slot into bilingual tone-locked content with an AI image, workflow movement, and Campaign PDF export", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -103,16 +104,18 @@ describe("M2 acceptance", () => {
 
     await seedVault(app, headers);
 
-    const strategy = await app.inject({
+    const campaign = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
         objective: "increase wholesale office coffee leads",
-        horizonDays: 90
+        durationDays: 90,
+        publishesPerDay: 1,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
-    const strategyId = strategy.json().data.id as string;
+    const campaignId = campaign.json().data.id as string;
 
     const generated = await app.inject({
       method: "POST",
@@ -121,7 +124,7 @@ describe("M2 acceptance", () => {
       payload: {
         topic: "wholesale office coffee leads",
         contentType: "POST",
-        strategyId,
+        campaignId,
         scheduledAt
       }
     });
@@ -178,7 +181,7 @@ describe("M2 acceptance", () => {
     });
     const pdf = await app.inject({
       method: "GET",
-      url: `/v1/strategy/${strategyId}/pdf`,
+      url: `/v1/campaigns/${campaignId}/pdf`,
       headers
     });
     const calendar = await prisma.contentCalendar.findFirstOrThrow({
@@ -188,7 +191,7 @@ describe("M2 acceptance", () => {
       }
     });
 
-    expect(strategy.statusCode).toBe(200);
+    expect(campaign.statusCode).toBe(200);
     expect(generated.statusCode).toBe(200);
     expect(generated.json()).toMatchObject({
       data: {
@@ -247,8 +250,8 @@ describe("M2 acceptance", () => {
     });
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers["content-type"]).toContain("application/pdf");
-    expect(pdf.body).toContain("MARKOS AI Strategy Export");
-    expect(pdf.body).toContain("90-day strategy: increase wholesale office coffee leads");
+    expect(pdf.body).toContain("MARKOS AI Campaign Export");
+    expect(pdf.body).toContain("90-day campaign: increase wholesale office coffee leads");
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {

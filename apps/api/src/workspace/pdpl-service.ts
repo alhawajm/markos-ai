@@ -47,7 +47,6 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     offeringDocumentFiles,
     onboardingDocumentAnalyses,
     onboardingDocumentFiles,
-    strategies,
     calendars,
     campaigns,
     contentItems,
@@ -73,7 +72,6 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     prisma.offeringDocumentFile.findMany({ where: { workspaceId } }),
     prisma.onboardingDocumentAnalysis.findMany({ where: { workspaceId } }),
     prisma.onboardingDocumentFile.findMany({ where: { workspaceId } }),
-    prisma.strategy.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.contentCalendar.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.campaign.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.contentItem.findMany({ where: { deletedAt: null, workspaceId } }),
@@ -123,7 +121,6 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
       offeringRevisions: toJsonRows(offeringRevisions),
       payments: toJsonRows(payments),
       promptTemplates: toJsonRows(promptTemplates),
-      strategies: toJsonRows(strategies),
       subscriptions: toJsonRows(subscriptions),
       usageCounters: toJsonRows(usageCounters),
       vault: toJsonRows(vault),
@@ -176,7 +173,6 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
     counts.onboardingDocumentAnalyses = (await tx.onboardingDocumentAnalysis.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.offerings = (await tx.offering.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.offeringCatalogs = (await tx.offeringCatalog.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
-    counts.strategies = (await tx.strategy.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentCalendars = (await tx.contentCalendar.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.campaigns = (await tx.campaign.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentItems = (await tx.contentItem.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;

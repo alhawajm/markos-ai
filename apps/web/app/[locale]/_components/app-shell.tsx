@@ -13,7 +13,7 @@ import {
   FinalVaultPanel,
   OpportunitiesPanel
 } from "./final-command-panels";
-import { StrategyPanel } from "./strategy-panel";
+import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
 import { initializeBrowserSession, watchBrowserSession } from "./browser-session";
 
@@ -22,12 +22,12 @@ export type SectionSlug =
   | "briefing"
   | "calendar"
   | "campaign-builder"
+  | "campaigns"
   | "content-studio"
   | "dashboard"
   | "knowledge"
   | "opportunities"
-  | "settings"
-  | "strategy";
+  | "settings";
 
 type NavItem = {
   icon: LucideIcon;
@@ -36,7 +36,7 @@ type NavItem = {
 
 const primaryNavItems: NavItem[] = [
   { icon: Home, slug: "dashboard" },
-  { icon: Target, slug: "strategy" },
+  { icon: Target, slug: "campaigns" },
   { icon: Palette, slug: "content-studio" },
   { icon: CalendarDays, slug: "calendar" },
   { icon: BarChart3, slug: "analytics" },
@@ -235,7 +235,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           >
             {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
-            {activeSection === "strategy" ? <StrategyPanel locale={locale} /> : null}
+            {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
             {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
             {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
             {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
@@ -304,24 +304,24 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
       briefing: "الموجز اليومي",
       calendar: "التقويم",
       "campaign-builder": "منشئ الحملات",
+      campaigns: "الحملات",
       "content-studio": "إنشاء المحتوى",
       dashboard: "نظرة عامة",
       knowledge: "ملف النشاط",
       opportunities: "الفرص",
-      settings: "الإعدادات",
-      strategy: "الاستراتيجية"
+      settings: "الإعدادات"
     },
     en: {
       analytics: "Insights",
       briefing: "Daily briefing",
       calendar: "Calendar",
       "campaign-builder": "Campaign builder",
+      campaigns: "Campaigns",
       "content-studio": "Create",
       dashboard: "Overview",
       knowledge: "Business profile",
       opportunities: "Opportunities",
-      settings: "Settings",
-      strategy: "Strategy"
+      settings: "Settings"
     }
   };
 

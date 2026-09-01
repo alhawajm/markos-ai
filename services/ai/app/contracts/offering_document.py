@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.contracts.strategy import StrictContract
+from app.contracts.campaign import StrictContract
 
 OfferingKind = Literal["PRODUCT", "SERVICE", "UNSPECIFIED"]
 Confidence = Literal["HIGH", "MEDIUM", "LOW"]

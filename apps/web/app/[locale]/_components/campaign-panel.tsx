@@ -2,24 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { CalendarDays, FileText, RefreshCcw, Sparkles, Target, Zap } from "lucide-react";
-import type { Locale, StrategyRecord } from "@markos/shared-types";
+import { campaignDurations, type CampaignDurationDays, type CampaignRecord, type Locale } from "@markos/shared-types";
 import { quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
 import { useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 
-export function StrategyPanel({ locale }: { locale: Locale }) {
+export function CampaignPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
-  const [strategies, setStrategies] = useState<StrategyRecord[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [objective, setObjective] = useState(text(locale, "defaultObjective"));
-  const [horizonDays, setHorizonDays] = useState(30);
+  const [durationDays, setDurationDays] = useState<CampaignDurationDays>(30);
+  const [publishesPerDay, setPublishesPerDay] = useState(1);
+  const [startsAt, setStartsAt] = useState(todayForDateInput);
   const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  const vaultGrounding = useVaultGroundingState({ area: "strategy", locale });
-  const strategyUsage = useMeteredActionState({
+  const vaultGrounding = useVaultGroundingState({ area: "campaigns", locale });
+  const campaignUsage = useMeteredActionState({
     fallbackTotal: 3,
     fallbackUsed: 1,
-    label: locale === "ar" ? "الاستراتيجيات" : "Strategies",
-    metric: "STRATEGY"
+    label: locale === "ar" ? "الحملات" : "Campaigns",
+    metric: "CAMPAIGN"
   });
 
   const client = useMarkosClient(locale);
@@ -29,13 +31,13 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
       return;
     }
 
-    void refreshStrategies();
+    void refreshCampaigns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  async function refreshStrategies() {
+  async function refreshCampaigns() {
     if (!session) {
-      setStrategies([]);
+      setCampaigns([]);
       return;
     }
 
@@ -43,8 +45,8 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     setMessage("");
 
     try {
-      const nextStrategies = await client.strategies();
-      setStrategies(nextStrategies);
+      const nextCampaigns = await client.campaigns();
+      setCampaigns(nextCampaigns);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : text(locale, "failed"));
     } finally {
@@ -58,7 +60,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
       return;
     }
 
-    if (strategyUsage.blocked) {
+    if (campaignUsage.blocked) {
       setMessage(quotaBlockedMessage(locale));
       return;
     }
@@ -72,19 +74,23 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     setMessage("");
 
     try {
-      const strategy = await client.generateStrategy(
+      const campaign = await client.generateCampaign(
         objective.trim()
           ? {
-              horizonDays,
+              durationDays,
               locale,
-              objective: objective.trim()
+              objective: objective.trim(),
+              publishesPerDay,
+              startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString()
             }
           : {
-              horizonDays,
-              locale
+              durationDays,
+              locale,
+              publishesPerDay,
+              startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString()
             }
       );
-      setStrategies((current) => [strategy, ...current.filter((item) => item.id !== strategy.id)]);
+      setCampaigns((current) => [campaign, ...current.filter((item) => item.id !== campaign.id)]);
       setMessage(text(locale, "generated"));
     } catch (error) {
       setMessage(quotaErrorMessage(locale, error) ?? (error instanceof Error ? error.message : text(locale, "failed")));
@@ -93,7 +99,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
     }
   }
 
-  const active = strategies[0] ?? emptyStrategy(locale, horizonDays);
+  const active = campaigns[0] ?? emptyCampaign(locale, durationDays, publishesPerDay, startsAt);
 
   return (
     <section className="grid gap-6">
@@ -108,18 +114,18 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
               </span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{text(locale, "subtitle")}</p>
-            {strategies.length > 0 ? (
+            {campaigns.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
-                <HeroStat color="#21BFAE" label={text(locale, "horizon")} value={`${active.content.horizonDays} ${text(locale, "days")}`} />
+                <HeroStat color="#21BFAE" label={text(locale, "duration")} value={`${active.durationDays} ${text(locale, "days")}`} />
                 <HeroStat color="#F6C453" label={text(locale, "weeks")} value={active.content.weeklyCadence.length.toString()} />
-                <HeroStat color="#FF665A" label={text(locale, "priorityActions")} value={Math.min(active.content.nextActions.length, 3).toString()} />
+                <HeroStat color="#FF665A" label={text(locale, "intensity")} value={`${active.publishesPerDay} ${text(locale, "perDay")}`} />
               </div>
             ) : null}
           </div>
           <button
             className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
             disabled={isBusy}
-            onClick={refreshStrategies}
+            onClick={refreshCampaigns}
             type="button"
           >
             <RefreshCcw size={15} />
@@ -150,17 +156,47 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
           </label>
 
           <label className="mt-4 block">
-            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "horizon")}</span>
+            <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "duration")}</span>
             <select
               className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-extrabold outline-none"
-              onChange={(event) => setHorizonDays(Number(event.target.value))}
-              value={horizonDays}
+              onChange={(event) => setDurationDays(Number(event.target.value) as CampaignDurationDays)}
+              value={durationDays}
             >
-              <option value={30}>30 {text(locale, "days")}</option>
-              <option value={60}>60 {text(locale, "days")}</option>
-              <option value={90}>90 {text(locale, "days")}</option>
+              {campaignDurations.map((days) => (
+                <option key={days} value={days}>
+                  {days} {text(locale, "days")}
+                </option>
+              ))}
             </select>
           </label>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <label className="block">
+              <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "startDate")}</span>
+              <input
+                className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-bold outline-none"
+                min={todayForDateInput()}
+                onChange={(event) => setStartsAt(event.target.value)}
+                type="date"
+                value={startsAt}
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-extrabold uppercase tracking-[.08em] text-[var(--sunlit-ink-soft)]">{text(locale, "intensity")}</span>
+              <select
+                className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-extrabold outline-none"
+                onChange={(event) => setPublishesPerDay(Number(event.target.value))}
+                value={publishesPerDay}
+              >
+                {[1, 2, 3, 4, 5].map((count) => (
+                  <option key={count} value={count}>
+                    {count} {text(locale, "perDay")}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <button
             className="sunlit-primary mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
@@ -181,7 +217,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
             <p className="mt-4 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">{active.content.summary}</p>
           </div>
 
-          {strategies.length > 0 && active.content.nextActions.length > 0 ? (
+          {campaigns.length > 0 && active.content.nextActions.length > 0 ? (
             <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
@@ -207,7 +243,7 @@ export function StrategyPanel({ locale }: { locale: Locale }) {
         </article>
       </section>
 
-      {strategies.length > 0 ? (
+      {campaigns.length > 0 ? (
         <>
           <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
             <h3 className="text-xl font-bold text-[var(--sunlit-ink)]">{text(locale, "cadence")}</h3>
@@ -301,23 +337,32 @@ function HeroStat({ color, label, value }: { color: string; label: string; value
   );
 }
 
-function emptyStrategy(locale: Locale, horizonDays: number): StrategyRecord {
+function emptyCampaign(locale: Locale, durationDays: CampaignDurationDays, publishesPerDay: number, startsAt: string): CampaignRecord {
   const now = new Date().toISOString();
+  const startDate = new Date(`${startsAt}T00:00:00.000Z`);
+  const endDate = new Date(startDate);
+  endDate.setUTCDate(endDate.getUTCDate() + durationDays);
+
   return {
     content: {
-      horizonDays,
+      durationDays,
       kpis: [],
       nextActions: [],
       objectives: [],
       pillars: [],
+      publishesPerDay,
       retrievedContext: [],
       risks: [],
       summary: text(locale, "emptyBody"),
       weeklyCadence: []
     },
     createdAt: now,
-    horizonDays,
-    id: "empty-strategy",
+    durationDays,
+    endsAt: endDate.toISOString(),
+    id: "empty-campaign",
+    publishesPerDay,
+    startsAt: startDate.toISOString(),
+    status: "REVIEW",
     title: text(locale, "emptyTitle"),
     updatedAt: now,
     version: 0,
@@ -336,25 +381,28 @@ function text(locale: Locale, key: string): string {
       contentPillars: "ركائز المحتوى",
       days: "يوم",
       defaultObjective: "زيادة الاستفسارات المؤهلة من إنستغرام خلال 30 يوماً",
-      emptyBody: "حدد هدفاً واختر مدة الخطة، ثم ولّد أول استراتيجية لنشاطك.",
-      emptyTitle: "لم يتم توليد استراتيجية بعد",
+      duration: "المدة",
+      emptyBody: "حدد هدفاً ومدة وتاريخ بداية، ثم أنشئ أول حملة لنشاطك.",
+      emptyTitle: "لم يتم إنشاء حملة بعد",
       failed: "فشل الطلب",
-      generate: "توليد استراتيجية",
-      generateCta: "إنشاء الاستراتيجية",
+      generate: "إنشاء حملة",
+      generateCta: "إنشاء الحملة",
       generateSub: "مبنية على ملف النشاط المعتمد",
-      generated: "تم توليد الاستراتيجية",
-      horizon: "الأفق",
-      latest: "أحدث استراتيجية",
+      generated: "تم إنشاء الحملة",
+      intensity: "كثافة النشر",
+      latest: "أحدث حملة",
       nextActions: "أهم الخطوات",
       nextActionsSub: "ابدأ بهذه الخطوات الثلاث",
       pillarsSub: "رسائل قابلة للتنفيذ",
       previewMode: "معاينة",
       priorityActions: "الخطوات الرئيسية",
       profileSource: "ملف النشاط المعتمد",
+      perDay: "منشور يومياً",
       refresh: "تحديث",
-      sessionRequired: "سجّل الدخول قبل توليد الاستراتيجية.",
-      subtitle: "حوّل ما يعرفه MARKOS عن نشاطك إلى خطة عمل واضحة.",
-      title: "الاستراتيجية",
+      sessionRequired: "سجّل الدخول قبل إنشاء حملة.",
+      startDate: "تاريخ البداية",
+      subtitle: "حوّل ما يعرفه MARKOS عن نشاطك إلى حملة واضحة ومحددة المدة.",
+      title: "الحملات",
       week: "الأسبوع",
       weeks: "الأسابيع",
       whyBody: "استخدم MARKOS ملف نشاطك المعتمد، وجمهورك، وعروضك، وصوت علامتك، والهدف الذي حددته لبناء هذه الخطة.",
@@ -371,25 +419,28 @@ function text(locale: Locale, key: string): string {
       contentPillars: "Content Pillars",
       days: "days",
       defaultObjective: "Increase qualified Instagram inquiries over the next 30 days",
-      emptyBody: "Set an objective and horizon, then generate the first Strategy for your business.",
-      emptyTitle: "No strategy generated yet",
+      duration: "Duration",
+      emptyBody: "Set an objective, duration, and start date, then create your first campaign.",
+      emptyTitle: "No campaign created yet",
       failed: "Request failed",
-      generate: "Generate Strategy",
-      generateCta: "Create Strategy",
+      generate: "Create a campaign",
+      generateCta: "Create Campaign",
       generateSub: "Based on your approved Business Profile",
-      generated: "Strategy generated",
-      horizon: "Horizon",
-      latest: "Latest Strategy",
+      generated: "Campaign created",
+      intensity: "Publishing intensity",
+      latest: "Latest Campaign",
       nextActions: "Priority actions",
       nextActionsSub: "Start with these three moves",
       pillarsSub: "Actionable message territories",
       previewMode: "Preview mode",
       priorityActions: "Priority actions",
       profileSource: "Approved Business Profile",
+      perDay: "per day",
       refresh: "Refresh",
-      sessionRequired: "Sign in before generating a strategy.",
-      subtitle: "Turn what MARKOS knows about your business into a clear action plan.",
-      title: "Strategy",
+      sessionRequired: "Sign in before creating a campaign.",
+      startDate: "Start date",
+      subtitle: "Turn what MARKOS knows about your business into a clear, time-bound campaign.",
+      title: "Campaigns",
       week: "Week",
       weeks: "Weeks",
       whyBody: "MARKOS used your approved Business Profile, audience, offers, brand voice, and stated goal to build this plan.",
@@ -400,4 +451,8 @@ function text(locale: Locale, key: string): string {
   };
 
   return dictionary[locale][key] ?? key;
+}
+
+function todayForDateInput(): string {
+  return new Date().toISOString().slice(0, 10);
 }

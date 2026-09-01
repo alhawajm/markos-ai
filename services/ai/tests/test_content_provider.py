@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from app.contracts.campaign import VaultContextChunk
 from app.contracts.content import (
     ContentDraft,
     ContentDraftBatch,
@@ -9,7 +10,6 @@ from app.contracts.content import (
     ContentPromptTemplate,
     ContentToneLock,
 )
-from app.contracts.strategy import StrategyContextChunk
 from app.core.errors import AiServiceError
 from app.providers.content import LocalContentProvider, OpenAIContentProvider
 from app.providers.openai_structured import RawStructuredResponse, ResponsesApi, ResponseUsage
@@ -55,7 +55,7 @@ def content_request(*, count: int = 1) -> ContentGenerateRequest:
         content_type="POST",
         count=count,
         context=[
-            StrategyContextChunk(
+            VaultContextChunk(
                 section="COMPANY",
                 key="profile",
                 value={
@@ -72,7 +72,7 @@ def content_request(*, count: int = 1) -> ContentGenerateRequest:
             voice_notes="Sound helpful and confident.",
             brand_hints={"audience": "independent cafes"},
         ),
-        strategy={
+        campaign={
             "summary": "Grow qualified wholesale inquiries.",
             "pillars": [{"name": "Proof and trust"}],
             "retrievedContext": [{"workspaceId": "must-not-be-forwarded"}],

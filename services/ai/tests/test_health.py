@@ -24,7 +24,7 @@ def test_health() -> None:
 
 def test_ai_route_requires_internal_service_token() -> None:
     client = TestClient(app)
-    response = client.post("/ai/strategy/generate", json={})
+    response = client.post("/ai/campaigns/generate", json={})
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "AI_SERVICE_UNAUTHORIZED"
@@ -46,15 +46,17 @@ def test_vault_embedding_contract() -> None:
     assert len(body["embeddings"][0]) == 1536
 
 
-def test_strategy_generation_contract() -> None:
+def test_campaign_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(
-        "/ai/strategy/generate",
+        "/ai/campaigns/generate",
         headers=SERVICE_HEADERS,
         json={
             "workspace_id": "workspace-1",
             "objective": "increase wholesale cafe leads",
-            "horizon_days": 90,
+            "duration_days": 90,
+            "publishes_per_day": 2,
+            "starts_at": "2026-09-01T00:00:00Z",
             "context": [
                 {
                     "section": "COMPANY",
@@ -63,18 +65,19 @@ def test_strategy_generation_contract() -> None:
                     "score": 0.82,
                 }
             ],
-            "model": "test-strategy-model",
+            "model": "test-campaign-model",
         },
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model"] == "test-strategy-model"
-    assert body["prompt_version"] == "strategy.v2.local"
+    assert body["model"] == "test-campaign-model"
+    assert body["prompt_version"] == "campaign.v1.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
-    assert body["strategy"]["horizonDays"] == 90
-    assert "COMPANY/profile" in body["strategy"]["summary"]
+    assert body["campaign"]["durationDays"] == 90
+    assert body["campaign"]["publishesPerDay"] == 2
+    assert "COMPANY/profile" in body["campaign"]["summary"]
 
 
 def test_business_profile_generation_contract() -> None:

@@ -31,8 +31,8 @@ export const permissions = [
   "vault:write",
   "onboarding:read",
   "onboarding:write",
-  "strategy:read",
-  "strategy:generate",
+  "campaign:read",
+  "campaign:generate",
   "content:read",
   "content:write",
   "content:schedule",
@@ -486,17 +486,24 @@ export interface ApproveOnboardingDocumentAnalysisResult {
   onboarding: OnboardingState;
 }
 
-export interface StrategyPillar {
+export const campaignDurations = [3, 7, 14, 30, 60, 90] as const;
+export type CampaignDurationDays = (typeof campaignDurations)[number];
+
+export const campaignStatuses = ["REVIEW", "APPROVED", "ACTIVE", "COMPLETED", "ARCHIVED"] as const;
+export type CampaignStatus = (typeof campaignStatuses)[number];
+
+export interface CampaignPillar {
   name: string;
   rationale: string;
   contentAngles: string[];
 }
 
-export interface StrategyPlan {
+export interface CampaignPlan {
   summary: string;
-  horizonDays: number;
+  durationDays: CampaignDurationDays;
+  publishesPerDay: number;
   objectives: string[];
-  pillars: StrategyPillar[];
+  pillars: CampaignPillar[];
   weeklyCadence: Array<{
     week: number;
     focus: string;
@@ -511,12 +518,17 @@ export interface StrategyPlan {
   retrievedContext: VaultRagChunk[];
 }
 
-export interface StrategyRecord {
+export interface CampaignRecord {
   id: string;
   workspaceId: string;
   title: string;
-  horizonDays: number;
-  content: StrategyPlan;
+  objective?: string;
+  status: CampaignStatus;
+  startsAt: string;
+  endsAt: string;
+  durationDays: CampaignDurationDays;
+  publishesPerDay: number;
+  content: CampaignPlan;
   version: number;
   createdAt: string;
   updatedAt: string;

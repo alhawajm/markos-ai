@@ -18,13 +18,13 @@ Status date: 2026-08-30.
 
 ### 1.1 What MARKOS is
 
-A small-business owner teaches MARKOS about the business through onboarding. MARKOS stores that knowledge in a workspace-scoped Knowledge Vault. It then helps the owner plan a strategy, create and approve content, schedule and publish it to Instagram, understand performance, and feed useful learning back into future work. The final system offers eight public AI-agent capabilities, but implementation and provider maturity may advance one typed vertical slice at a time.
+A small-business owner teaches MARKOS about the business through onboarding. MARKOS stores that knowledge in a workspace-scoped Knowledge Vault, where the durable marketing strategy belongs. It then helps the owner plan time-bound Campaigns, create and approve content, schedule and publish it to Instagram, understand performance, and feed useful learning back into future work. The final system offers eight public AI-agent capabilities, but implementation and provider maturity may advance one typed vertical slice at a time.
 
 ### 1.2 The closed loop
 
 ```text
 Onboarding -> Knowledge Vault
-  -> Strategy -> Content plan -> Content creation -> Review and approval
+  -> Campaigns -> Content plan -> Content creation -> Review and approval
   -> Schedule -> Instagram publish -> Analytics sync
   -> Interpretation and learning -> Knowledge Vault -> better next cycle
 ```
@@ -35,7 +35,7 @@ Every feature should strengthen this loop or remove friction from it.
 
 1. **Never leave a non-marketer at a blank dead end.** Offer a starting point, example, useful empty state, or clear next action. Do not store a suggestion as a business fact until the user selects or enters it.
 2. **Ground generative work in the active workspace's Vault.** When context is insufficient, explain the gap and link to the relevant Business Profile/Vault action instead of inventing generic facts.
-3. **Make the whole journey bilingual and RTL-safe.** Content and approved business profiles may contain paired Arabic/English fields. Strategy currently generates in the explicitly requested locale; bilingual product support does not require duplicating every field in one response.
+3. **Make the whole journey bilingual and RTL-safe.** Content and approved business profiles may contain paired Arabic/English fields. Campaigns currently generate in the explicitly requested locale; bilingual product support does not require duplicating every field in one response.
 4. **Check quota before every metered action.** Warn near the limit and block at the limit with a contextual next step. Never charge or consume quota for a failed generation without the documented reservation/refund behavior.
 5. **Nothing publishes without a preview, an explicit approval state, and a clear schedule/publish action.** Provider failures are visible and recoverable, never silent.
 6. **Every consequential surface covers empty, loading, error, success, and limit/blocked states.** Loading copy should describe useful progress; errors must explain what the user can do next.
@@ -46,7 +46,7 @@ Every feature should strengthen this loop or remove friction from it.
 
 - **Web** renders the localized journey and calls the typed API client.
 - **API gateway** owns authentication, workspace context, authorization, data, quota, billing, provider credentials, Vault retrieval, and orchestration.
-- **AI service** receives a bounded, authenticated request and returns a validated result plus usage. Current Strategy and onboarding-profile paths can call OpenAI when explicitly configured; content, image, embedding, and generic-agent paths remain deterministic.
+- **AI service** receives a bounded, authenticated request and returns a validated result plus usage. Current Campaign and onboarding-profile paths can call OpenAI when explicitly configured; content, image, embedding, and generic-agent paths remain deterministic.
 - **Worker** runs API-owned maintenance loops for publishing, analytics sync/email, token refresh, and usage reset. Current interval workers are not evidence of production queue availability or retries.
 
 ## 2. Actors and entry states
@@ -56,20 +56,20 @@ Every feature should strengthen this loop or remove friction from it.
 | Visitor | Localized marketing site | Understand the product and sign up |
 | Newly registered user | Email verification | Verify identity and resume onboarding |
 | Verified new user | Onboarding | Teach MARKOS the real business |
-| Onboarded owner | Overview or Strategy | Generate the first business-specific plan |
+| Onboarded owner | Overview or Campaigns | Generate the first business-specific Campaign |
 | Returning user | Overview | Continue planned work and review performance |
 | Team member | Role-scoped app | Create, review, or observe within permission |
 | Platform staff | Separate admin portal | Operate users, plans, prompts, health, and revenue |
 
-Routing uses the browser session plus verified-user and onboarding state. Instagram connection state comes from the active encrypted credential record, not from legacy workspace token columns. A user who is not verified is sent to verification; an incomplete workspace resumes onboarding; an approved profile proceeds to Strategy.
+Routing uses the browser session plus verified-user and onboarding state. Instagram connection state comes from the active encrypted credential record, not from legacy workspace token columns. A user who is not verified is sent to verification; an incomplete workspace resumes onboarding; an approved profile proceeds to Campaigns.
 
 ### 2.1 Current implementation overlay
 
 | Area | Current `main` | Final-system work still open |
 | --- | --- | --- |
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
-| Onboarding | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before Strategy. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path. |
-| Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
+| Onboarding | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before Campaigns. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path. |
+| Campaigns | The Sunlit UI lists and generates time-bound Campaign records. The owner chooses a 3-, 7-, 14-, 30-, 60-, or 90-day duration, start date, objective, and publishing intensity from one to five publishes per day. | Multiple-Campaign management, week-layered review, high-level overview, per-post approval, Create/Calendar draft registration, lifecycle controls, and mounted PDF export. |
 | Content/media | Create can start a manual or AI-assisted persisted draft, edit bilingual captions and core fields, approve, upload or provider-generate and attach validated JPEGs, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, deployed image-provider proof, and all final content-type states. |
 | Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
 | Insights | An API-backed 7/30-day summary, top-content view, empty/error/loading states, and monthly PDF download are mounted. | Full `AN-01`–`AN-06`, live permission-backed sync, 28/90 comparisons, provider-backed interpretation, digest/chat, and learning evidence. |
@@ -122,30 +122,30 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - `POST /v1/onboarding/profile/generate` produces a bilingual draft from the available raw module entries and records the interaction/usage. It must not invent optional facts; unsupported profile fields use honest, editable wording that indicates they are not defined yet.
 - In the document-assisted path, approving the reviewed extraction first persists its seven-module proposal and removes the temporary files, then invokes the same bilingual profile-generation step. The owner still reviews and approves that profile separately.
-- The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, preserves the real Vault completeness score, clears the browser draft, and routes to `/{locale}/app/strategy`.
-- Approval does **not** automatically generate Strategy. The user sees the Strategy surface and chooses the objective and horizon explicitly.
-- An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Strategy. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
+- The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, preserves the real Vault completeness score, clears the browser draft, and routes to `/{locale}/app/campaigns`.
+- Approval does **not** automatically generate a Campaign. The user sees the Campaigns surface and chooses the objective, duration, start date, and publishing intensity explicitly.
+- An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Campaigns. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
 - In explicit edit mode, saving already approved module changes preserves the approved profile interaction and `COMPLETE` status, does not spend another profile-generation call, and returns to Business Profile. This is an interim editor until the dedicated business-knowledge editor defines how bilingual profile summaries are refreshed.
 
-### Flow B — Generate the first Strategy
+### Flow B — Generate the first Campaign
 
 **Goal:** demonstrate that MARKOS understands this business and give the user a concrete next direction.
 
 **B1. Generate**
 
-- On `STRAT-03`, the user chooses an objective and an available horizon and calls `POST /v1/strategy/generate`.
+- On the Campaigns surface, the user chooses an objective, start date, duration, and publishing intensity and calls `POST /v1/campaigns/generate`.
 - Final product target: 30-, 60-, and 90-day options, with plan availability still undecided. A 7-day option is only under consideration.
 - Current contract: the UI offers 30/60/90 and defaults to 30; the shared API accepts any integer from 30 through 180 and defaults to 90 only when the client omits the value.
-- The API checks the Strategy quota, retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Strategy` and `ai_interaction`, and records provider token use when available.
+- The API checks the Campaign quota, retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Campaign` and `ai_interaction`, and records provider token use when available.
 - The current plan shape is `{ summary, horizonDays, objectives, pillars, weeklyCadence, kpis, risks, nextActions, retrievedContext }`.
 - Provider/schema failure receives only bounded retries and a sanitized recoverable message. A failed attempt follows the quota refund contract.
 
 **B2. Review and export**
 
-- The Strategy surface shows the latest record, source-informed summary, pillars, cadence, KPIs, risks, and next actions.
-- The backend PDF contract is `GET /v1/strategy/:strategyId/pdf`. It is not currently mounted as a Strategy-page control, so the UI must not advertise a dead export action.
+- The Campaigns surface shows the latest record, source-informed summary, pillars, cadence, KPIs, risks, and next actions.
+- The backend PDF contract is `GET /v1/campaigns/:campaignId/pdf`. It is not currently mounted as a Campaigns-page control, so the UI must not advertise a dead export action.
 
-**B3. Turn Strategy into a content plan**
+**B3. Turn a Campaign into a content plan**
 
 - Final target: generate a monthly calendar whose slots map to objectives, pillars, content type, topic, and best time, then allow deliberate rescheduling.
 - Current implementation note: the dedicated Calendar surface reads existing content records and can schedule, atomically reschedule, cancel, and open them for editing. No standalone `/v1/calendar/plan` contract or pre-draft slot model exists; Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call this the complete `CONT-01` calendar.
@@ -236,7 +236,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **F3. Learn**
 
-- Accepted learning should be written to the workspace Vault with traceable source context so future Strategy/content retrieval can use it.
+- Accepted learning should be written to the workspace Vault with traceable source context so future Campaign/content retrieval can use it.
 - A generated PDF, summary, or deterministic test record is not proof that the complete live learning loop has run against real insights.
 
 ### Flow G — Build the weekly habit
@@ -244,7 +244,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **Goal:** make keeping Instagram useful a short, repeatable ritual.
 
 - Overview should summarize the workspace's next meaningful task rather than merely display decorative metrics.
-- Typical loop: review Strategy and upcoming work → generate a small batch → edit/approve → schedule → later review Insights → accept the next recommendation.
+- Typical loop: review Campaigns and upcoming work → generate a small batch → edit/approve → schedule → later review Insights → accept the next recommendation.
 - If there is no upcoming content or no synced data, show a precise action to create/connect/sync instead of a fabricated result.
 
 ### Flow H — Hit a limit and upgrade honestly
@@ -299,7 +299,7 @@ NOT_STARTED
   -> generated profile draft
   -> user edits/regenerates
   -> user approves
-  -> COMPLETE and route to Strategy
+  -> COMPLETE and route to Campaigns
 
 explicit edit mode after approval -> approved module updates -> remain COMPLETE -> Business Profile
 ```
@@ -318,7 +318,7 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 
 1. Web calls `POST /v1/content/generate` through the authenticated API client.
 2. API validates the access token, resolves workspace context, checks permission and Vault presence, and reserves `AI_GENERATION` usage.
-3. API retrieves up to eight relevant Vault chunks, merges the tone lock, and selects the current prompt template and optional Strategy.
+3. API retrieves up to eight relevant Vault chunks, merges the tone lock, and selects the current prompt template and optional Campaign. Content may remain orphaned when no Campaign is selected.
 4. API calls protected `POST /ai/content/generate` with the bounded structured request.
 5. The AI service currently returns deterministic draft shapes and usage; this step is not provider-backed today.
 6. API validates the result, creates workspace-scoped `ContentItem` rows, writes `ai_interaction`, records token usage, and returns the saved records. On failure it follows the quota-refund path.
@@ -329,7 +329,7 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 | Situation | Required behavior | Current limitation to remember |
 | --- | --- | --- |
 | Vault lacks grounding | Explain the missing section and link to Business Profile/Vault | Do not fill missing facts from placeholders or demo content |
-| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, refund reserved quota when required | Only Strategy/profile have provider-capable paths; other routes are deterministic |
+| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, refund reserved quota when required | Campaign/profile/content-copy and document-analysis paths are provider-capable; other routes remain deterministic where documented |
 | Quota is exhausted | Block at the action and explain the relevant plan/period | Never show invented remaining usage |
 | Media generation/upload fails | Preserve content edits and offer retry/manual attachment | Provider image fallback and durable storage are not complete |
 | Instagram credential is missing/expired | Block provider actions and route to secure reconnect | A configuration variable cannot repair an old credential's permissions |

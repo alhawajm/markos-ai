@@ -57,7 +57,7 @@ describe("MARKOS API client session renewal", () => {
       renewAccessToken
     });
 
-    await expect(client.generateStrategy({})).rejects.toMatchObject({
+    await expect(client.generateCampaign({ startsAt: "2026-09-01T00:00:00.000Z" })).rejects.toMatchObject({
       code: "EMAIL_VERIFICATION_REQUIRED",
       status: 403
     });

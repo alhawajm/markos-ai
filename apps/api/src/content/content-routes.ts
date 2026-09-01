@@ -12,6 +12,7 @@ import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import {
   ContentContextMissingError,
+  ContentCampaignNotFoundError,
   ContentItemDeleteError,
   ContentItemLockedError,
   ContentItemNotFoundError,
@@ -89,6 +90,10 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
           return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
         }
 
+        if (error instanceof ContentCampaignNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
+        }
+
         if (error instanceof UsageQuotaExceededError) {
           return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
         }
@@ -125,6 +130,10 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       } catch (error) {
         if (error instanceof ContentContextMissingError) {
           return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof ContentCampaignNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
         }
 
         if (error instanceof ContentScheduleError) {

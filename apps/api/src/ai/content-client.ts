@@ -1,4 +1,4 @@
-import type { ContentDraft, ContentToneLock, StrategyPlan, VaultRagChunk } from "@markos/shared-types";
+import type { CampaignPlan, ContentDraft, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
 import { resolveModelSetting } from "../admin/model-settings-service";
 import { requestAi } from "./request";
 
@@ -16,7 +16,7 @@ export async function generateContentDrafts(input: {
   contentType: string;
   count: number;
   context: VaultRagChunk[];
-  strategy?: StrategyPlan;
+  campaign?: CampaignPlan;
   toneLock: ContentToneLock;
   promptTemplate?: { body: string; version: string };
 }): Promise<ContentGenerateResponse> {
@@ -41,7 +41,7 @@ export async function generateContentDrafts(input: {
     ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
     model
   };
-  const requestBody = input.strategy === undefined ? body : { ...body, strategy: input.strategy };
+  const requestBody = input.campaign === undefined ? body : { ...body, campaign: input.campaign };
 
   return requestAi<ContentGenerateResponse>("/ai/content/generate", { body: requestBody });
 }

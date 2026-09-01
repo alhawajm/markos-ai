@@ -17,7 +17,6 @@ const rlsTables = [
   "offering_document_files",
   "onboarding_document_analyses",
   "onboarding_document_files",
-  "strategies",
   "content_calendars",
   "campaigns",
   "content_items",

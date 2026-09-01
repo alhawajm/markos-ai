@@ -23,6 +23,8 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
+  CampaignDurationDays,
+  CampaignRecord,
   CalendarReadResult,
   ContentRecord,
   ContentStatus,
@@ -54,7 +56,6 @@ import type {
   PublishDueContentResult,
   PublishingLiveReadiness,
   PublishReadiness,
-  StrategyRecord,
   VaultCompletenessScore,
   VaultRagChunk,
   VaultSection,
@@ -359,21 +360,27 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async strategies(): Promise<StrategyRecord[]> {
-    const response = await this.request<StrategyRecord[]>("/v1/strategy");
+  async campaigns(): Promise<CampaignRecord[]> {
+    const response = await this.request<CampaignRecord[]>("/v1/campaigns");
     return response.data;
   }
 
-  async generateStrategy(input: { objective?: string; horizonDays?: number; locale?: Locale }): Promise<StrategyRecord> {
-    const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
+  async generateCampaign(input: {
+    objective?: string;
+    durationDays?: CampaignDurationDays;
+    publishesPerDay?: number;
+    startsAt: string;
+    locale?: Locale;
+  }): Promise<CampaignRecord> {
+    const response = await this.request<CampaignRecord>("/v1/campaigns/generate", {
       body: input,
       method: "POST"
     });
     return response.data;
   }
 
-  async exportStrategyPdf(strategyId: string): Promise<ArrayBuffer> {
-    return this.requestBinary(`/v1/strategy/${strategyId}/pdf`, {
+  async exportCampaignPdf(campaignId: string): Promise<ArrayBuffer> {
+    return this.requestBinary(`/v1/campaigns/${campaignId}/pdf`, {
       accept: "application/pdf"
     });
   }
@@ -524,7 +531,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContent(input: { topic: string; contentType?: ContentType; count?: number; strategyId?: string }): Promise<ContentRecord[]> {
+  async generateContent(input: { topic: string; contentType?: ContentType; count?: number; campaignId?: string }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
       method: "POST"
@@ -532,7 +539,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; strategyId?: string }): Promise<ContentRecord> {
+  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; campaignId?: string }): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
       body: input,
       method: "POST"

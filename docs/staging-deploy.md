@@ -12,7 +12,7 @@ The repository proves Dockerfiles, commands, health endpoints, environment parsi
 
 The handoff reports one repository and an early-stage Railway deployment. On 2026-08-03, one production Instagram connection succeeded, which externally verifies a reachable web/API/database path for that attempt. User-supplied Railway variable screenshots captured on 2026-08-16 show service panels for `web`, `api`, `ai`, `pgvector`, and `redis`; additional redacted API captures supplied on 2026-08-17 show the existing `API_BASE_URL` and Instagram variable names. Later on 2026-08-17, Sarah reported that she provisioned the private Bucket, connected its five credentials to the API, set `AWS_S3_URL_STYLE=virtual`, saw a test image in the Bucket, and observed the baseline API deployment with all listed services online. This is operator-reported configuration evidence; it does not prove the reviewed application commit, deployed SHA, application-path upload/read/delete, external presigned GET, exact public/private networking, worker/OpenSearch existence, or the complete project/environment topology.
 
-PRs #18, #19, and #20 are merged into the current repository `main`. The supplied screenshots do not expose the deployed commit SHA, so repository merge state must not be described as current Railway deployment proof. The shared provider-backed Strategy/onboarding-profile application path still requires a controlled live request and persisted-result review.
+PRs #18, #19, and #20 are merged into the current repository `main`. The supplied screenshots do not expose the deployed commit SHA, so repository merge state must not be described as current Railway deployment proof. The shared provider-backed Campaign/onboarding-profile application path still requires a controlled live request and persisted-result review.
 
 ## Current service contract
 
@@ -172,10 +172,10 @@ Current code consumes:
 
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
-- `AI_TEXT_PROVIDER` (`local` for deterministic Strategy/profile/content development, `openai` for live provider-backed Strategy, onboarding profiles, both onboarding document analyzers, and content copy; document analysis has no local product fallback)
+- `AI_TEXT_PROVIDER` (`local` for deterministic Campaign/profile/content development, `openai` for live provider-backed Campaign generation, onboarding profiles, both onboarding document analyzers, and content copy; document analysis has no local product fallback)
 - `AI_IMAGE_PROVIDER` (`local` for deterministic development JPEGs, `openai` for live provider-backed image generation)
 - `OPENAI_API_KEY` (AI service only; required when either provider selector is `openai`)
-- `AI_STRATEGY_TIMEOUT_SECONDS`
+- `AI_CAMPAIGN_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
 - `AI_IMAGE_TIMEOUT_SECONDS`
@@ -231,7 +231,7 @@ The user supplied screenshots of the Railway variable panels. Values were hidden
 | --- | --- |
 | Web | `RAILWAY_DOCKERFILE_PATH`, `NEXT_PUBLIC_API_BASE_URL` |
 | API | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL`, `REDIS_URL`, `API_BASE_URL`, `WEB_BASE_URL`, `INSTAGRAM_OAUTH_REDIRECT_URI`, `NODE_ENV`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, `INSTAGRAM_OAUTH_STATE_SECRET`, `INSTAGRAM_GRAPH_VERSION`, `INSTAGRAM_OAUTH_SCOPES`, `INSTAGRAM_PUBLISH_MODE`, `INSTAGRAM_ANALYTICS_SYNC_MODE`, `META_WEBHOOK_VERIFY_TOKEN`, `AI_BASE_URL`, `AI_HTTP_TIMEOUT_MS`, `EMAIL_PROVIDER`, `EMAIL_VERIFICATION_TTL`, `INTERNAL_SERVICE_TOKEN`, `LLM_LONGFORM_MODEL`, `MFA_ISSUER`, `SENDGRID_API_KEY`, `FROM_EMAIL` |
-| AI | `INTERNAL_SERVICE_TOKEN`, `AI_TEXT_PROVIDER`, `LLM_LONGFORM_MODEL`, `OPENAI_REASONING_EFFORT`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_RETRIES`, `OPENAI_MAX_OUTPUT_TOKENS`, `AI_STRATEGY_TIMEOUT_SECONDS`, `PORT`, `AI_PROFILE_TIMEOUT_SECONDS`, `OPENAI_API_KEY` |
+| AI | `INTERNAL_SERVICE_TOKEN`, `AI_TEXT_PROVIDER`, `LLM_LONGFORM_MODEL`, `OPENAI_REASONING_EFFORT`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_RETRIES`, `OPENAI_MAX_OUTPUT_TOKENS`, `AI_CAMPAIGN_TIMEOUT_SECONDS`, `PORT`, `AI_PROFILE_TIMEOUT_SECONDS`, `OPENAI_API_KEY` |
 | pgvector | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, `PGPORT`, `DATABASE_URL`, `PGDATA` |
 | Redis | `REDIS_PASSWORD`, `REDIS_URL` |
 
@@ -379,15 +379,15 @@ Record commit/ref, service names, Dockerfile mapping, variable-name inventory, h
 
 Before deploying `services/ai/Dockerfile`, read `../services/ai/README.md` and verify the current contract:
 
-- Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; JPEG generation can use the OpenAI Images API when `AI_IMAGE_PROVIDER=openai`. Embeddings and generic agents remain deterministic.
+- Campaign generation, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when `AI_TEXT_PROVIDER=openai`; JPEG generation can use the OpenAI Images API when `AI_IMAGE_PROVIDER=openai`. Embeddings and generic agents remain deterministic.
 - `OPENAI_API_KEY` is consumed only by the AI service in OpenAI mode.
 - `OPENAI_STORE_RESPONSES=true` is an intentional temporary quality-review setting; confirm the chosen OpenAI project is the one being inspected and do not send secrets or unapproved customer data.
 - `INTERNAL_SERVICE_TOKEN` is enforced on non-health AI routes and sent by the API.
 - `/ai/health/deep` still reports dependencies as `not_checked`/`degraded`.
 - Docker listens on fixed port 8000 even if Railway supplies `PORT`.
-- The 2026-08-06 direct provider request proves only that request. The then-deployed Strategy adapter failed; deploy and verify the current shared strict-output adapter before claiming application success.
+- The 2026-08-06 direct provider request proves only that request. The then-deployed, previously named Strategy adapter failed; deploy and verify the current Campaign adapter before claiming application success.
 
-The immediate infrastructure gate is a healthy protected deployment followed by one synthetic browser/API/AI Strategy request whose validated result, persistence, and usage are confirmed without exposing prompts, provider bodies, credentials, or workspace identities. Do not claim the broader RAG or eight-agent platform production-ready from a successful shallow health or direct provider call.
+The immediate infrastructure gate is a healthy protected deployment followed by one synthetic browser/API/AI Campaign request whose validated result, persistence, and usage are confirmed without exposing prompts, provider bodies, credentials, or workspace identities. Do not claim the broader RAG or eight-agent platform production-ready from a successful shallow health or direct provider call.
 
 ## Instagram OAuth operations
 

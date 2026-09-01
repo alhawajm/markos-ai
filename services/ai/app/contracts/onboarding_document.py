@@ -2,8 +2,8 @@ from typing import Literal
 
 from pydantic import Field
 
+from app.contracts.campaign import StrictContract
 from app.contracts.offering_document import OfferingDocumentCatalog
-from app.contracts.strategy import StrictContract
 
 Confidence = Literal["HIGH", "MEDIUM", "LOW"]
 EvidenceBasis = Literal["EXPLICIT", "VISUAL_INFERENCE"]

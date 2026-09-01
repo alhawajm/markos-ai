@@ -16,6 +16,11 @@ from app.contracts.business_profile import (
     BusinessProfileGenerateRequest,
     BusinessProfileGenerateResponse,
 )
+from app.contracts.campaign import (
+    CampaignGenerateRequest,
+    CampaignGenerateResponse,
+    VaultContextChunk,
+)
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
 from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
 from app.contracts.offering_document import (
@@ -26,21 +31,16 @@ from app.contracts.onboarding_document import (
     OnboardingDocumentAnalysisRequest,
     OnboardingDocumentAnalysisResponse,
 )
-from app.contracts.strategy import (
-    StrategyContextChunk,
-    StrategyGenerateRequest,
-    StrategyGenerateResponse,
-)
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
 from app.documents import extract_documents
 from app.providers.business_profile import get_business_profile_provider
+from app.providers.campaign import get_campaign_provider
 from app.providers.content import get_content_provider
 from app.providers.image import get_image_provider
 from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
-from app.providers.strategy import get_strategy_provider
 
 
 class HealthResponse(BaseModel):
@@ -77,7 +77,7 @@ class AgentRunRequest(BaseModel):
     agent: AgentName
     task: str = Field(min_length=3, max_length=1000)
     locale: Literal["ar", "en"] = "en"
-    context: list[StrategyContextChunk] = Field(default_factory=list, max_length=10)
+    context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
     inputs: dict[str, object] | None = None
     model: str | None = None
 
@@ -186,21 +186,21 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
     )
 
 
-@app.post("/ai/strategy/generate", response_model=StrategyGenerateResponse)
-async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerateResponse:
+@app.post("/ai/campaigns/generate", response_model=CampaignGenerateResponse)
+async def generate_campaign(request: CampaignGenerateRequest) -> CampaignGenerateResponse:
     if not request.context:
         raise AiServiceError(
             code="AI_CONTEXT_MISSING",
-            message="Knowledge Vault context is required for strategy generation",
+            message="Business Profile context is required for campaign generation",
             status_code=422,
             retryable=False,
         )
 
-    provider = get_strategy_provider()
+    provider = get_campaign_provider()
 
     try:
-        async with asyncio.timeout(settings.ai_strategy_timeout_seconds):
-            return await provider.generate_strategy(request)
+        async with asyncio.timeout(settings.ai_campaign_timeout_seconds):
+            return await provider.generate_campaign(request)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",
@@ -348,7 +348,7 @@ def deterministic_embedding(text: str, dimensions: int) -> list[float]:
     return [value / norm for value in vector]
 
 
-def summarize_context(context: list[StrategyContextChunk]) -> str:
+def summarize_context(context: list[VaultContextChunk]) -> str:
     if not context:
         return "the available workspace context"
 

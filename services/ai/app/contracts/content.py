@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
-from app.contracts.strategy import StrategyContextChunk, StrictContract
+from app.contracts.campaign import StrictContract, VaultContextChunk
 
 ContentType = Literal["POST", "CAROUSEL", "STORY", "REEL"]
 ContentLanguage = Literal["ar", "en"]
@@ -70,9 +70,9 @@ class ContentGenerateRequest(StrictContract):
     topic: str = Field(min_length=3, max_length=500)
     content_type: ContentType = "POST"
     count: int = Field(default=3, ge=1, le=5)
-    context: list[StrategyContextChunk] = Field(default_factory=list, max_length=10)
+    context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
     tone_lock: ContentToneLock
-    strategy: dict[str, object] | None = None
+    campaign: dict[str, object] | None = None
     prompt_template: ContentPromptTemplate | None = None
     model: str | None = Field(default=None, min_length=1, max_length=200)
 

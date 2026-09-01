@@ -770,7 +770,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       },
       name: "Test Analytics",

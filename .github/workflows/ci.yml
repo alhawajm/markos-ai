@@ -27,7 +27,7 @@ jobs:
       AI_IMAGE_PROVIDER: local
       AI_IMAGE_TIMEOUT_SECONDS: "120"
       AI_PROFILE_TIMEOUT_SECONDS: "50"
-      AI_STRATEGY_TIMEOUT_SECONDS: "50"
+      AI_CAMPAIGN_TIMEOUT_SECONDS: "50"
       AI_TEXT_PROVIDER: local
       API_BASE_URL: http://localhost:4000
       DATABASE_URL: postgresql://markos:markos@localhost:5432/markos_ci_test
@@ -42,7 +42,7 @@ jobs:
       GOOGLE_OAUTH_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
       JWT_ACCESS_SECRET: ci-access-secret-change-me
       JWT_REFRESH_SECRET: ci-refresh-secret-change-me
-      LLM_LONGFORM_MODEL: ci-strategy-model
+      LLM_LONGFORM_MODEL: ci-campaign-model
       MEDIA_STORAGE_DIR: var/media
       META_WEBHOOK_VERIFY_TOKEN: ci-webhook-verify-token
       NEXT_TELEMETRY_DISABLED: "1"
@@ -165,7 +165,7 @@ jobs:
 
           docker run --detach --name "$container" \
             --env AI_PROFILE_TIMEOUT_SECONDS="$AI_PROFILE_TIMEOUT_SECONDS" \
-            --env AI_STRATEGY_TIMEOUT_SECONDS="$AI_STRATEGY_TIMEOUT_SECONDS" \
+            --env AI_CAMPAIGN_TIMEOUT_SECONDS="$AI_CAMPAIGN_TIMEOUT_SECONDS" \
             --env AI_TEXT_PROVIDER="$AI_TEXT_PROVIDER" \
             --env INTERNAL_SERVICE_TOKEN="$INTERNAL_SERVICE_TOKEN" \
             --env LLM_LONGFORM_MODEL="$LLM_LONGFORM_MODEL" \
@@ -190,7 +190,7 @@ jobs:
               --header "content-type: application/json" \
               --request POST \
               --data '{}' \
-              http://127.0.0.1:8000/ai/strategy/generate
+              http://127.0.0.1:8000/ai/campaigns/generate
           )"
           test "$unauthorized_status" = "401"
 
@@ -198,13 +198,13 @@ jobs:
             --header "Authorization: Bearer $INTERNAL_SERVICE_TOKEN" \
             --header "content-type: application/json" \
             --request POST \
-            --data '{"workspace_id":"ci-workspace","horizon_days":90,"locale":"en","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
-            http://127.0.0.1:8000/ai/strategy/generate \
-            > /tmp/markos-ai-strategy.json
+            --data '{"workspace_id":"ci-workspace","duration_days":90,"publishes_per_day":1,"starts_at":"2026-09-01T00:00:00Z","locale":"en","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
+            http://127.0.0.1:8000/ai/campaigns/generate \
+            > /tmp/markos-ai-campaign.json
 
           jq --exit-status --arg model "$LLM_LONGFORM_MODEL" \
-            '.model == $model and .strategy.horizonDays == 90 and .tokens_in > 0 and .tokens_out > 0' \
-            /tmp/markos-ai-strategy.json >/dev/null
+            '.model == $model and .campaign.durationDays == 90 and .campaign.publishesPerDay == 1 and .tokens_in > 0 and .tokens_out > 0' \
+            /tmp/markos-ai-campaign.json >/dev/null
 
           curl --fail --silent \
             --header "Authorization: Bearer $INTERNAL_SERVICE_TOKEN" \

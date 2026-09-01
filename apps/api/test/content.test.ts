@@ -1334,7 +1334,7 @@ async function assignTokenLimitedPlan(userId: string): Promise<void> {
         posts: 30,
         seats: 1,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       },
       name: "Content Token Limit Plan",

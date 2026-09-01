@@ -7,7 +7,7 @@ This runbook closes the M6 private beta readiness planning gate. It does not clo
 Current evidence is narrower than beta readiness:
 
 - On 2026-08-03, one real professional account completed the production `instagram_business_basic` connection and loaded recent media.
-- On 2026-08-06, a direct request from the Railway AI service reached OpenAI successfully, but the then-deployed Strategy application path returned `503`. The current shared Strategy/profile provider adapter has not yet been verified in the deployed application path.
+- On 2026-08-06, a direct request from the Railway AI service reached OpenAI successfully, but the then-deployed, pre-rename application path returned `503`. The current shared Campaign/profile provider adapter has not yet been verified in the deployed application path.
 - PR #19 mounted the Sunlit UI and intentionally removed the temporary design-preview URLs, but it also removed several browser surfaces that remain in final product scope. See `docs/ui-design-foundation.md` and `docs/decisions.md`.
 - Current reviewed source includes the refined Calendar and closed Onboarding checkpoints. Onboarding now mounts both manual and full-business document-assisted first-run paths, while the connected Create redesign, IBM Plex/Tangerine Slate foundation, and Media Library remain prototype or planned work.
 
@@ -22,7 +22,7 @@ Allowed beta surfaces:
 - Register, verify email, log in with email/password, refresh the browser session, and use MFA for sensitive roles. The Google-auth API exists, but the current Sunlit Google button is intentionally unavailable; password recovery is also not mounted as a working flow.
 - Arabic and English app shell with RTL behavior.
 - Reduced-effort seven-area onboarding: the owner may enter details manually or begin with up to five supported business documents. Company and Products are the two essentials; Story, Audience, Competitors, Brand/Tone, and Objectives may be explicitly skipped or left absent. Document extraction requires its own approval before the owner separately reviews and approves the generated bilingual Business Profile.
-- Vault-grounded Strategy generation only after the selected `AI_TEXT_PROVIDER` path is verified in the deployed application. The 30/60/90-day choices are current; one week, two weeks, and other shorter day multiples require a focused contract and quality decision.
+- Vault-grounded Campaign generation only after the selected `AI_TEXT_PROVIDER` path is verified in the deployed application. The current duration contract is 3/7/14/30/60/90 days, with an explicit start date and one-to-five-publishes-per-day intensity.
 - Current mounted Create flow for content generation, editing, approval, and scheduling, with deterministic/provider limitations explained to testers. Do not demo the separate HTML Create prototype as production behavior.
 - Current Calendar flow for Week/Month planning, Unscheduled content, Day/Post Focus, safe scheduling/rescheduling/cancellation, and editor handoff over existing records.
 - Instagram connection with `instagram_business_basic`, recent-media loading, readiness checks, and dry-run publishing through the API or worker by default.
@@ -49,7 +49,7 @@ All items below must be true before inviting external beta users.
 | Tenant isolation  | Workspace isolation test suite passes, including every Prisma model with `workspaceId`.                                                                                                            |
 | Auth              | Register, verify, email/password login, browser-session refresh, and MFA sensitive-role checks pass. Google login and password recovery are required only if included in the declared beta scope.   |
 | Arabic/RTL        | Arabic routes render with RTL direction and no blocking layout regressions.                                                                                                                        |
-| Vault/RAG         | A grounded Strategy Agent call returns workspace-specific Vault context.                                                                                                                           |
+| Vault/RAG         | A grounded Campaign generation call returns workspace-specific Vault context.                                                                                                                     |
 | AI provider       | The deployed AI service is reachable through a protected backend boundary and the beta scope explicitly states whether responses are deterministic scaffolding or verified provider-backed output. |
 | Billing           | BHD fils, 10 percent VAT, invoice PDF, quotas, and prorated upgrade flows pass in dry-run mode.                                                                                                    |
 | Product surfaces  | Every browser surface promised to beta users is mounted in Sunlit and passes the declared user script; missing final-system surfaces are listed explicitly.                                        |
@@ -90,7 +90,7 @@ Each beta workspace should complete this path once.
 2. Switch between English and Arabic and confirm navigation remains usable.
 3. Complete manual onboarding, then separately test the document-assisted path with a supported mixed-file batch once its Railway provider gate is open. Confirm files are staged before submission, extracted facts remain editable, and source files disappear after extraction approval.
 4. Review the Business Profile summary and resolve at least one onboarding/profile gap if the current UI exposes it.
-5. Generate one 30/60/90-day strategy from Vault context and confirm the response is from the declared provider mode.
+5. Generate one Campaign from Vault context and confirm the response is from the declared provider mode.
 6. Generate and edit one bilingual content item in Create.
 7. Attach or generate one media asset through the currently supported path and verify publish readiness.
 8. Approve and schedule the item.
@@ -108,7 +108,7 @@ For every beta workspace, save in the controlled evidence store:
 - Date invited and current plan.
 - Onboarding completion screenshot or API response.
 - Vault completeness score after onboarding.
-- Strategy generation id and content generation id.
+- Campaign generation id and content generation id.
 - Scheduled content item id and dry-run publish result.
 - Billing invoice id and downloaded PDF evidence.
 - Any support issues, severity, owner, and resolution.

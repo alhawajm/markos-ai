@@ -3,12 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 
-const strategyMock = vi.hoisted(() => ({
+const campaignMock = vi.hoisted(() => ({
   lastInput: undefined as
     | {
         context: Array<{ key: string; section: string; value: Record<string, unknown> }>;
-        horizonDays: number;
+        durationDays: number;
         objective?: string;
+        publishesPerDay: number;
         workspaceId: string;
       }
     | undefined
@@ -22,23 +23,25 @@ vi.mock("../src/ai/embeddings-client", () => ({
   })
 }));
 
-vi.mock("../src/ai/strategy-client", () => ({
-  generateStrategyPlan: async (input: {
+vi.mock("../src/ai/campaign-client", () => ({
+  generateCampaignPlan: async (input: {
     context: Array<{ key: string; section: string; value: Record<string, unknown> }>;
-    horizonDays: number;
+    durationDays: number;
     objective?: string;
+    publishesPerDay: number;
     workspaceId: string;
   }) => {
-    strategyMock.lastInput = input;
+    campaignMock.lastInput = input;
 
     return {
-      model: "test-strategy-model",
-      prompt_version: "strategy.v1.acceptance",
+      model: "test-campaign-model",
+      prompt_version: "campaign.v1.acceptance",
       tokens_in: 144,
       tokens_out: 233,
-      strategy: {
-        summary: `Grounded ${input.horizonDays}-day plan for ${input.objective ?? "Instagram growth"}`,
-        horizonDays: input.horizonDays,
+      campaign: {
+        summary: `Grounded ${input.durationDays}-day campaign for ${input.objective ?? "Instagram growth"}`,
+        durationDays: input.durationDays,
+        publishesPerDay: input.publishesPerDay,
         objectives: [input.objective ?? "grow qualified Instagram inquiries"],
         pillars: [
           {
@@ -73,7 +76,7 @@ vi.mock("../src/ai/business-profile-client", () => ({
 }));
 
 describe("M1 acceptance", () => {
-  it("completes onboarding, clears gaps, retrieves Vault context, and grounds a Strategy Agent call", async () => {
+  it("completes onboarding, clears gaps, retrieves Vault context, and grounds a Campaign generation call", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -175,21 +178,24 @@ describe("M1 acceptance", () => {
       ])
     );
 
-    const strategy = await app.inject({
+    const campaign = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
         objective: "increase wholesale office coffee leads in Bahrain",
-        horizonDays: 90
+        durationDays: 90,
+        publishesPerDay: 1,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
 
-    expect(strategy.statusCode).toBe(200);
-    expect(strategyMock.lastInput).toMatchObject({
+    expect(campaign.statusCode).toBe(200);
+    expect(campaignMock.lastInput).toMatchObject({
       workspaceId: session.workspace.id,
       objective: "increase wholesale office coffee leads in Bahrain",
-      horizonDays: 90,
+      durationDays: 90,
+      publishesPerDay: 1,
       context: expect.arrayContaining([
         expect.objectContaining({
           section: "COMPANY",
@@ -205,8 +211,8 @@ describe("M1 acceptance", () => {
         })
       ])
     });
-    expect(strategy.json().data.content).toMatchObject({
-      summary: "Grounded 90-day plan for increase wholesale office coffee leads in Bahrain",
+    expect(campaign.json().data.content).toMatchObject({
+      summary: "Grounded 90-day campaign for increase wholesale office coffee leads in Bahrain",
       retrievedContext: expect.arrayContaining([
         expect.objectContaining({
           section: "COMPANY",

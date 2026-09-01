@@ -60,7 +60,7 @@ The 2026-08-03 production Instagram connection is narrow provider evidence, not 
 - Verify token refresh, deauthorization, data-deletion delivery, and disconnect across a real provider lifecycle.
 - Keep the FastAPI service behind the intended backend boundary. Current source enforces `INTERNAL_SERVICE_TOKEN` on non-health routes and the API sends it, but deployment configuration, network exposure, and unauthorized-request rejection still require current environment evidence.
 - Production verification-email delivery and the deployed bearer-token/browser-session journey remain unproven even though their current `main` implementation has focused automated coverage.
-- Treat the direct 2026-08-06 provider request as narrow connectivity evidence; the current Strategy/profile application path still needs a deployed security and data-handling review.
+- Treat the direct 2026-08-06 provider request as narrow connectivity evidence; the current Campaign/profile application path still needs a deployed security and data-handling review.
 - Continue to treat publishing, analytics, payment, storage/CDN, and App Review as separate external security/acceptance gates.
 
 See `project-status.md`, `staging-deploy.md`, and `../services/ai/README.md` for current scope and ownership.

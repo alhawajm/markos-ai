@@ -52,12 +52,12 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] RBAC permission catalog with role and permission guards.
 - [x] Shared packages: shared types, validation, API client, i18n, UI tokens.
 - [x] AI HTTP client boundaries and configurable model slots.
-- [x] A real provider interface is implemented for Strategy and onboarding-profile resolution.
+- [x] A real provider interface is implemented for Campaign and onboarding-profile resolution.
   - Note: current source uses the OpenAI Responses API with strict structured output when `AI_TEXT_PROVIDER=openai`; local mode remains the safe default and other AI routes remain deterministic.
 - [ ] A current provider-backed application response is verified end to end through browser, API, deployed AI service, persistence, and metering.
-  - Note: a direct Responses call from the Railway AI container succeeded on 2026-08-06, while the previously deployed Strategy adapter returned 503. The replacement shared adapter is locally/fake-client verified but not yet live-verified.
+  - Note: a direct Responses call from the Railway AI container succeeded on 2026-08-06, while the previously deployed, pre-rename adapter returned 503. The replacement Campaign adapter is locally/fake-client verified but not yet live-verified.
 - [x] AI interaction token metering skeleton.
-- [x] Usage counters and plan quota enforcement for strategy/content AI generation.
+- [x] Usage counters and plan quota enforcement for Campaign/content AI generation.
 - [x] Usage enforcement covers AI image generation, MARKOS post publish caps, storage, and reset rules.
 - [x] Usage enforcement covers billing lifecycle states such as expired trial, past-due, suspended, and cancelled.
 - [x] Usage enforcement covers automated plan reset scheduling.
@@ -85,8 +85,8 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] Vault storage APIs exist.
 - [x] Vault embeddings are generated and stored using the deterministic local embedding contract.
 - [x] Vault completeness score exists.
-- [x] RAG search exists and is used by strategy/content calls.
-- [x] One locally grounded Strategy path returns workspace Vault context.
+- [x] RAG search exists and is used by Campaign/content calls.
+- [x] One locally grounded Campaign path returns workspace Vault context.
 - [x] Seven-area onboarding wizard is mounted; Company and Products are the two profile-readiness essentials, while the other five areas can be explicitly skipped and remain visible as Vault gaps.
 - [x] Products and services have a canonical workspace-scoped Offering Catalog with stable identities, revisions, archival, RLS, PDPL export/erasure, and compatible Vault projections.
   - Note: existing Products Vault catalogs are migrated where possible. The focused document-assisted Products/Services path remains implemented with temporary files, editable extraction/issues, owner confirmation, and focused local tests.
@@ -105,16 +105,16 @@ Gate: A grounded test agent call returns correct business context; completeness 
 
 ## M2 AI Content Engine
 
-Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, moved through workflow; strategy PDF exports.
+Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, moved through workflow; Campaign PDF exports.
 
-- [x] Vault-grounded local strategy generation exists.
+- [x] Vault-grounded local Campaign generation exists.
 - [x] Vault-grounded local content draft generation exists.
 - [x] Content approval workflow exists.
 - [x] Schedule/calendar foundation exists.
 - [ ] All eight agents are provider-backed and satisfy their production contracts.
   - Note: one endpoint returns fixed local output shapes for all eight agent names; that is scaffolding, not mature provider-backed agent implementation.
-- [x] Strategy PDF export API.
-- [ ] Strategy PDF export is mounted in the active Sunlit Strategy page.
+- [x] Campaign PDF export API.
+- [ ] Campaign PDF export is mounted in the active Sunlit Campaigns page.
 - [x] Calendar slot to content generation workflow.
 - [x] Bilingual tone-locked content workflow.
 - [ ] Rich-text/editorial workflow is complete in the active Sunlit Create surface.
@@ -123,7 +123,7 @@ Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, m
   - Note: the source now provides a separately configured OpenAI Images adapter, exact JPEG output contracts, moderation/provider error mapping, pre-request image quota enforcement, provider token metering, and workspace-owned durable storage. A deployed provider call is still required by the acceptance gate.
 - [x] Prompt A/B tooling.
 - [ ] Provider-reported token and image metering is verified end to end.
-  - Note: provider-capable Strategy/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
+  - Note: provider-capable Campaign/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
 - [ ] M2 acceptance gate fully passed.
 
 ## M3 Instagram

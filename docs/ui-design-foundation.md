@@ -147,8 +147,8 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
-- At large breakpoints, keep the desktop sidebar pinned to the viewport while the page canvas scrolls. It starts as a labeled navigation surface and may be collapsed explicitly into a compact icon rail; never make hover the only way to reveal or control it. Preserve accessible link names and keyboard/focus tooltips in the compact state, keep **Settings** anchored separately at the bottom, and store the user's display preference locally. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Strategy**, **Create**, **Calendar**, **Insights**, and **Business Profile**.
-- Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Strategy should put generation controls beside the current strategy; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
+- At large breakpoints, keep the desktop sidebar pinned to the viewport while the page canvas scrolls. It starts as a labeled navigation surface and may be collapsed explicitly into a compact icon rail; never make hover the only way to reveal or control it. Preserve accessible link names and keyboard/focus tooltips in the compact state, keep **Settings** anchored separately at the bottom, and store the user's display preference locally. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Campaigns**, **Create**, **Calendar**, **Insights**, and **Business Profile**.
+- Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Campaigns should put generation controls beside the current time-bound Campaign; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
 - Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
@@ -210,7 +210,7 @@ The authenticated Sunlit journey is mounted at the real application routes:
 | Surface | Route |
 | --- | --- |
 | Overview | `/app` |
-| Strategy | `/app/strategy` |
+| Campaigns | `/app/campaigns` |
 | Create | `/app/content-studio` |
 | Calendar | `/app/calendar` |
 | Insights | `/app/analytics` |
@@ -223,7 +223,7 @@ These routes preserve their existing session, workspace, API, approval, and fail
 ## Current implementation boundary
 
 - `apps/web/app/sunlit-theme.css` and the canonical localized routes are the active visual reference.
-- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Calendar, Insights, Business Profile, and Settings use the adopted UI.
+- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Campaigns, Create, Calendar, Insights, Business Profile, and Settings use the adopted UI.
 - The former `/design-preview` routes and duplicate dark public/authentication components were removed rather than retained as fallbacks.
 - `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
@@ -239,7 +239,7 @@ PR #19 deliberately removed the preview route family and replaced the old visual
 | Authentication (`AUTH-01`–`AUTH-05`) | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable. | Complete and mount approved provider login and password-recovery contracts before calling those paths live. |
 | Onboarding (`OB-01`–`OB-10`) | A concise greeting and seven real workspace areas are mounted. Company and Products are the two essentials; the other five areas can be explicitly skipped and resumed. The information check links directly to focused editing, and bilingual profile review/approval completes the journey without claiming 100% Vault completeness. | Build the focused document extraction, issue-reporting, mapping, and owner-confirmation path before exposing upload; restore plan/trial placement if still required and add any approved competitor verification or recovery refinements. |
 | Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view. | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen. |
-| Strategy (`STRAT-01`–`STRAT-03`) | Strategy list/generation is API-backed, defaults to 30 days, and offers 30/60/90-day choices. | Complete version/detail navigation, parameter refinement, and mount the existing PDF export contract. A possible 7-day option remains undecided and unimplemented. |
+| Campaigns (`CAMP-01`–`CAMP-03`) | Campaign list/generation is API-backed. The duration contract offers 3/7/14/30/60/90 days, with an explicit start date and one-to-five-publishes-per-day intensity. | Add multiple-Campaign management, lifecycle controls, week-layered review, a compact overview, per-post approval into Create/Calendar, and mount the existing PDF export contract. |
 | Content and calendar (`CONT-01`–`CONT-06`) | The mounted Create surface can generate workspace drafts, edit paired captions and core fields, approve explicitly, schedule, and cancel a schedule. Calendar is a primary bilingual/RTL destination with viewport-fitted week/month views, semantic lifecycle colors, URL-backed Day/Post Focus, short Motion transitions, unscheduled handling, editor handoff, atomic rescheduling, and confirmed cancellation. The redesigned media-first Create lab is not mounted production behavior. | Implement one reviewed standard Post/JPEG Create slice, then add the pre-draft monthly plan/slot contract, content history/comments, section regeneration, and separately supported Carousel/Reel/Story and queue-recovery states. |
 | Media (`MEDIA-01`–`MEDIA-04`) | The mounted Create surface supports authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and define the standalone Media Library, reusable generated-media ownership, asset-detail flows, brand-asset management, storage meter, and richer transformations. A prototype gallery is not implementation proof. |
 | Instagram scheduling (`SCHED-01`–`SCHED-04`) | Settings mounts the secure Instagram connection. Create requires explicit approval before scheduling and can return a scheduled item to `APPROVED`; Calendar manages saved times and exposes safe failure detail/recovery. Publishing/readiness and operator queue APIs exist. | Build the durable publishing queue/worker surface, evidence-based time and live-cap guidance, attempt history, close-race cancellation, and complete per-format live-publish behavior. |
@@ -265,7 +265,7 @@ Universal obligations from the retired design source still apply to every restor
 Migration sequence:
 
 1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
-2. App shell, Overview, Business Profile summary, and first Strategy handoff — mounted in current reviewed source.
+2. App shell, Overview, Business Profile summary, and first Campaign handoff — mounted in current reviewed source.
 3. Calendar and the reduced-effort greeting/Onboarding journey — implemented as current working checkpoints; Onboarding now includes separate full-business document-assisted and manual first-run paths plus the focused Products/Services shortcut.
 4. The current Create and Insights summaries — mounted using real APIs or explicit empty states. The reviewed Create redesign remains a lab reference awaiting a focused production slice.
 5. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.

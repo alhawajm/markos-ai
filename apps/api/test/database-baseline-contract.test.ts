@@ -16,6 +16,7 @@ const onboardingDocumentAnalysisMigration = readFileSync(
   new URL("../prisma/migrations/20260901000000_add_onboarding_document_analysis/migration.sql", import.meta.url),
   "utf8"
 );
+const campaignDomainMigration = readFileSync(new URL("../prisma/migrations/20260901160000_reset_campaign_domain/migration.sql", import.meta.url), "utf8");
 const seed = readFileSync(new URL("../prisma/seed.ts", import.meta.url), "utf8");
 
 describe("clean database baseline contract", () => {
@@ -34,7 +35,8 @@ describe("clean database baseline contract", () => {
       "20260830000000_add_onboarding_skipped_modules",
       "20260831000000_add_offering_catalog",
       "20260831010000_add_offering_document_analysis",
-      "20260901000000_add_onboarding_document_analysis"
+      "20260901000000_add_onboarding_document_analysis",
+      "20260901160000_reset_campaign_domain"
     ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);
@@ -49,6 +51,9 @@ describe("clean database baseline contract", () => {
     expect(onboardingSkippedModulesMigration).toContain('ADD COLUMN "onboardingSkippedModules" TEXT[]');
     expect(onboardingDocumentAnalysisMigration).toContain('CREATE TABLE "onboarding_document_analyses"');
     expect(onboardingDocumentAnalysisMigration).toContain('CREATE TABLE "onboarding_document_files"');
+    expect(campaignDomainMigration).toContain('CREATE TABLE "campaigns"');
+    expect(campaignDomainMigration).toContain('"publishesPerDay" INTEGER NOT NULL');
+    expect(campaignDomainMigration).toContain('ADD CONSTRAINT "content_items_campaignId_fkey"');
   });
 
   it("seeds only the runtime plan catalog through idempotent upserts", () => {

@@ -34,7 +34,7 @@ Before private beta, open:
 - `/ar/login` and `/en/login`
 - `/ar/onboarding` and `/en/onboarding`
 - `/ar/app` and `/en/app`
-- `/ar/app/strategy` and `/en/app/strategy`
+- `/ar/app/campaigns` and `/en/app/campaigns`
 - `/ar/app/content-studio` and `/en/app/content-studio`
 - `/ar/app/analytics` and `/en/app/analytics`
 - `/ar/app/knowledge` and `/en/app/knowledge`

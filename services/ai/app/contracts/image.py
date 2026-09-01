@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.contracts.strategy import StrictContract
+from app.contracts.campaign import StrictContract
 
 ImageAspectRatio = Literal["1:1", "4:5", "9:16"]
 

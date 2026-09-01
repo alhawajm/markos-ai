@@ -18,7 +18,7 @@ import { initObservability } from "../observability/sentry";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { registerPromptRoutes } from "../prompts/prompt-routes";
 import { registerPublishingRoutes } from "../publishing/publishing-routes";
-import { registerStrategyRoutes } from "../strategy/strategy-routes";
+import { registerCampaignRoutes } from "../campaign/campaign-routes";
 import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
@@ -77,7 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerBillingRoutes(app);
   await registerCalendarRoutes(app);
   await registerOnboardingRoutes(app);
-  await registerStrategyRoutes(app);
+  await registerCampaignRoutes(app);
   await registerContentRoutes(app);
   await registerMediaRoutes(app);
   await registerMetaRoutes(app);

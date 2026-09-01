@@ -40,7 +40,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
 
         if (!editMode && state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
           window.localStorage.removeItem("markos.onboarding.draft.v2");
-          router.replace(`/${locale}/app/strategy`);
+          router.replace(`/${locale}/app/campaigns`);
           return;
         }
 

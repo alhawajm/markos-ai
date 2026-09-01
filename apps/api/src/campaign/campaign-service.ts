@@ -1,31 +1,31 @@
-import type { Prisma } from "@prisma/client";
-import type { StrategyPlan, StrategyRecord } from "@markos/shared-types";
-import type { GenerateStrategyInput } from "@markos/validation";
+import type { CampaignStatus, Prisma } from "@prisma/client";
+import type { CampaignPlan, CampaignRecord } from "@markos/shared-types";
+import type { GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
-import { generateStrategyPlan } from "../ai/strategy-client";
+import { generateCampaignPlan } from "../ai/campaign-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, searchVaultContext } from "../vault/vault-service";
 
-const strategyAgentName = "STRATEGIST";
+const campaignAgentName = "STRATEGIST";
 const localCurrency = "BHD";
 
-export class StrategyContextMissingError extends Error {
+export class CampaignContextMissingError extends Error {
   constructor() {
-    super("Complete at least one Vault section before generating strategy");
+    super("Complete at least one Business Profile section before generating a campaign");
   }
 }
 
-export class StrategyNotFoundError extends Error {
+export class CampaignNotFoundError extends Error {
   constructor() {
-    super("Strategy was not found");
+    super("Campaign was not found");
   }
 }
 
-export async function listStrategies(workspaceId: string): Promise<StrategyRecord[]> {
-  const rows = await prisma.strategy.findMany({
+export async function listCampaigns(workspaceId: string): Promise<CampaignRecord[]> {
+  const rows = await prisma.campaign.findMany({
     where: {
       workspaceId,
       deletedAt: null
@@ -36,50 +36,52 @@ export async function listStrategies(workspaceId: string): Promise<StrategyRecor
     take: 20
   });
 
-  return rows.map(toStrategyRecord);
+  return rows.map(toCampaignRecord);
 }
 
-export async function exportStrategyPdf(workspaceId: string, strategyId: string): Promise<{ bytes: Buffer; filename: string }> {
-  const row = await prisma.strategy.findFirst({
+export async function exportCampaignPdf(workspaceId: string, campaignId: string): Promise<{ bytes: Buffer; filename: string }> {
+  const row = await prisma.campaign.findFirst({
     where: {
-      id: strategyId,
+      id: campaignId,
       workspaceId,
       deletedAt: null
     }
   });
 
   if (!row) {
-    throw new StrategyNotFoundError();
+    throw new CampaignNotFoundError();
   }
 
-  const strategy = toStrategyRecord(row);
+  const campaign = toCampaignRecord(row);
 
   return {
-    bytes: buildStrategyPdf(strategy),
-    filename: `${slugForFilename(strategy.title)}.pdf`
+    bytes: buildCampaignPdf(campaign),
+    filename: `${slugForFilename(campaign.title)}.pdf`
   };
 }
 
-export async function generateWorkspaceStrategy(workspaceId: string, input: GenerateStrategyInput): Promise<StrategyRecord> {
+export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput): Promise<CampaignRecord> {
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
-    throw new StrategyContextMissingError();
+    throw new CampaignContextMissingError();
   }
 
-  const query =
-    input.objective ??
-    (input.locale === "ar" ? "استراتيجية إنستغرام وركائز المحتوى للشركات الصغيرة في البحرين" : "Instagram strategy content pillars Bahrain SMB");
+  const query = input.objective ?? (input.locale === "ar" ? "حملة تسويق إنستغرام للشركات الصغيرة في البحرين" : "Instagram marketing campaign Bahrain SMB");
   const context = await searchVaultContext(workspaceId, {
     query,
     topK: 10
   });
-  const promptTemplate = await selectPromptTemplateForRun(workspaceId, strategyAgentName, `${workspaceId}:${query}:${input.horizonDays}:${input.locale}`);
+  const promptTemplate = await selectPromptTemplateForRun(
+    workspaceId,
+    campaignAgentName,
+    `${workspaceId}:${query}:${input.durationDays}:${input.publishesPerDay}:${input.startsAt}:${input.locale}`
+  );
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
   try {
-    await reserveWorkspaceUsage({ workspaceId, metric: "STRATEGY", now: usagePeriodDate });
+    await reserveWorkspaceUsage({ workspaceId, metric: "CAMPAIGN", now: usagePeriodDate });
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
     throw error;
@@ -88,12 +90,14 @@ export async function generateWorkspaceStrategy(workspaceId: string, input: Gene
   try {
     const request = {
       workspaceId,
-      horizonDays: input.horizonDays,
+      durationDays: input.durationDays,
+      publishesPerDay: input.publishesPerDay,
+      startsAt: input.startsAt,
       locale: input.locale,
       context,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } })
     };
-    const generated = await generateStrategyPlan(
+    const generated = await generateCampaignPlan(
       input.objective === undefined
         ? request
         : {
@@ -102,7 +106,7 @@ export async function generateWorkspaceStrategy(workspaceId: string, input: Gene
           }
     );
 
-    if (generated.strategy.horizonDays !== input.horizonDays) {
+    if (generated.campaign.durationDays !== input.durationDays || generated.campaign.publishesPerDay !== input.publishesPerDay) {
       throw new AiServiceRequestError({
         code: "AI_SERVICE_RESPONSE_INVALID",
         message: "The AI service returned an invalid response",
@@ -111,36 +115,44 @@ export async function generateWorkspaceStrategy(workspaceId: string, input: Gene
       });
     }
 
-    const strategy: StrategyPlan = {
-      ...generated.strategy,
+    const campaign: CampaignPlan = {
+      ...generated.campaign,
       retrievedContext: context
     };
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
     const saved = await prisma.$transaction(async (tx) => {
-      const row = await tx.strategy.create({
+      const startsAt = new Date(input.startsAt);
+      const row = await tx.campaign.create({
         data: {
           workspaceId,
-          title: titleForStrategy(input.horizonDays, input.objective, input.locale),
-          horizonDays: input.horizonDays,
-          content: strategy as unknown as Prisma.InputJsonValue
+          title: titleForCampaign(input.durationDays, input.objective, input.locale),
+          ...(input.objective === undefined ? {} : { objective: input.objective }),
+          status: "REVIEW",
+          startsAt,
+          endsAt: campaignEnd(startsAt, input.durationDays),
+          durationDays: input.durationDays,
+          publishesPerDay: input.publishesPerDay,
+          content: campaign as unknown as Prisma.InputJsonValue
         }
       });
 
       await tx.aiInteraction.create({
         data: {
           workspaceId,
-          agent: strategyAgentName,
+          agent: campaignAgentName,
           promptVersion,
           prompt: {
             ...(input.objective === undefined ? {} : { objective: input.objective }),
-            horizonDays: input.horizonDays,
+            durationDays: input.durationDays,
+            publishesPerDay: input.publishesPerDay,
+            startsAt: input.startsAt,
             locale: input.locale,
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             retrievedContext: context
           } as unknown as Prisma.InputJsonValue,
           response: {
-            ...strategy,
+            ...campaign,
             providerPromptVersion: generated.prompt_version
           } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
@@ -161,53 +173,65 @@ export async function generateWorkspaceStrategy(workspaceId: string, input: Gene
       return row;
     });
 
-    return toStrategyRecord(saved);
+    return toCampaignRecord(saved);
   } catch (error) {
     await Promise.all([
       refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate }),
-      refundWorkspaceUsage({ workspaceId, metric: "STRATEGY", now: usagePeriodDate })
+      refundWorkspaceUsage({ workspaceId, metric: "CAMPAIGN", now: usagePeriodDate })
     ]);
     throw error;
   }
 }
 
-function titleForStrategy(horizonDays: number, objective: string | undefined, locale: "ar" | "en"): string {
+function titleForCampaign(durationDays: number, objective: string | undefined, locale: "ar" | "en"): string {
   if (locale === "ar") {
-    return objective === undefined ? `استراتيجية إنستغرام لمدة ${horizonDays} يومًا` : `استراتيجية لمدة ${horizonDays} يومًا: ${objective}`;
+    return objective === undefined ? `حملة إنستغرام لمدة ${durationDays} يومًا` : `حملة لمدة ${durationDays} يومًا: ${objective}`;
   }
 
-  return objective === undefined ? `${horizonDays}-day Instagram strategy` : `${horizonDays}-day strategy: ${objective}`;
+  return objective === undefined ? `${durationDays}-day Instagram campaign` : `${durationDays}-day campaign: ${objective}`;
 }
 
-function toStrategyRecord(row: {
+function toCampaignRecord(row: {
   id: string;
   workspaceId: string;
   title: string;
-  horizonDays: number;
+  objective: string | null;
+  status: CampaignStatus;
+  startsAt: Date;
+  endsAt: Date;
+  durationDays: number;
+  publishesPerDay: number;
   content: Prisma.JsonValue;
   version: number;
   createdAt: Date;
   updatedAt: Date;
-}): StrategyRecord {
+}): CampaignRecord {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
     title: row.title,
-    horizonDays: row.horizonDays,
-    content: row.content as unknown as StrategyPlan,
+    ...(row.objective === null ? {} : { objective: row.objective }),
+    status: row.status,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    durationDays: row.durationDays as CampaignRecord["durationDays"],
+    publishesPerDay: row.publishesPerDay,
+    content: row.content as unknown as CampaignPlan,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
 }
 
-function buildStrategyPdf(strategy: StrategyRecord): Buffer {
-  const content = strategy.content;
+function buildCampaignPdf(campaign: CampaignRecord): Buffer {
+  const content = campaign.content;
   const lines = [
-    "MARKOS AI Strategy Export",
-    strategy.title,
-    `Horizon: ${strategy.horizonDays} days`,
-    `Created: ${new Date(strategy.createdAt).toISOString().slice(0, 10)}`,
+    "MARKOS AI Campaign Export",
+    campaign.title,
+    `Duration: ${campaign.durationDays} days`,
+    `Publishing intensity: ${campaign.publishesPerDay} per day`,
+    `Starts: ${campaign.startsAt.slice(0, 10)}`,
+    `Created: ${new Date(campaign.createdAt).toISOString().slice(0, 10)}`,
     "",
     "Summary",
     content.summary,
@@ -265,7 +289,7 @@ function paginatePdfLines(lines: string[], pageSize: number): string[][] {
     pages.push(lines.slice(index, index + pageSize));
   }
 
-  return pages.length === 0 ? [["MARKOS AI Strategy Export"]] : pages;
+  return pages.length === 0 ? [["MARKOS AI Campaign Export"]] : pages;
 }
 
 function buildPdfContentStream(lines: string[]): string {
@@ -320,5 +344,11 @@ function slugForFilename(value: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 
-  return slug.length === 0 ? "strategy-export" : slug;
+  return slug.length === 0 ? "campaign-export" : slug;
+}
+
+function campaignEnd(startsAt: Date, durationDays: number): Date {
+  const endsAt = new Date(startsAt);
+  endsAt.setUTCDate(endsAt.getUTCDate() + durationDays);
+  return endsAt;
 }

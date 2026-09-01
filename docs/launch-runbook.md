@@ -7,7 +7,7 @@ This runbook closes the M6 launch-runbook planning gate. It does not close the e
 Current narrow evidence:
 
 - The production `instagram_business_basic` connection succeeded once on 2026-08-03 and is recorded in `docs/project-status.md`.
-- A direct OpenAI request from the Railway AI service succeeded on 2026-08-06, but the then-deployed Strategy application path returned `503`; the current shared provider adapter still needs deployed end-to-end proof.
+- A direct OpenAI request from the Railway AI service succeeded on 2026-08-06, but the then-deployed, pre-rename application path returned `503`; the current Campaign provider adapter still needs deployed end-to-end proof.
 - Railway is the current early-stage platform. The 2026-08-16 screenshots prove only selected service-variable names and one visible provisional Graph version, not deployments, values, networking, or health.
 
 Publishing, insights access, Meta App Review, a full token lifecycle, provider-backed application behavior, durable public media storage, restored final-system Sunlit surfaces, and broad launch readiness remain open. AWS is only a possible later direction.
@@ -43,7 +43,7 @@ Save this evidence before marking M6 acceptance complete:
 - `corepack pnpm rtl:qa` output.
 - Staging deployment URL and commit SHA.
 - `/v1/health` and `/v1/health/deep` responses from staging.
-- One authenticated, Vault-grounded Strategy/profile response through the deployed API-to-AI path, plus proof that an unauthorized direct AI request is rejected.
+- One authenticated, Vault-grounded Campaign/profile response through the deployed API-to-AI path, plus proof that an unauthorized direct AI request is rejected.
 - Browser-journey evidence for every customer/operator surface included in launch scope, including any final-system surface restored after the Sunlit cutover.
 - Sentry or equivalent project links for web, API, worker, and AI services.
 - `GET /v1/admin/bahrain-launch-readiness` response.
@@ -124,7 +124,7 @@ Complete this path on staging:
 1. Register, verify email, and log in.
 2. Switch Arabic and English routes.
 3. Complete onboarding through the manual path, confirm Company and Products readiness separately from optional Vault gaps, and approve the bilingual Business Profile. Exercise the full-business document path separately with a supported mixed-file batch; confirm owner review and temporary-file removal before treating it as release-ready.
-4. Generate one 30/60/90-day Strategy through the deployed provider mode and confirm its Vault grounding.
+4. Generate one Campaign through the deployed provider mode and confirm its Vault grounding.
 5. Generate one bilingual content item.
 6. Attach media and check publish readiness.
 7. Schedule content and run dry-run publishing through the API or worker; verify the persisted result.
