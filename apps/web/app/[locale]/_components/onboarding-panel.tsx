@@ -993,7 +993,7 @@ export function OnboardingPanel({
     }
   }
 
-  async function finishEditMode() {
+  function finishEditMode() {
     if (!session) {
       showError(copy.errors.session);
       return;
@@ -1001,14 +1001,8 @@ export function OnboardingPanel({
 
     setSaving(true);
     setMessage("");
-    try {
-      await client.completeOnboarding();
-      window.localStorage.removeItem(onboardingDraftKey);
-      router.push(`/${locale}/app/knowledge`);
-    } catch (error) {
-      showError(error instanceof Error ? error.message : copy.errors.save);
-      setSaving(false);
-    }
+    window.localStorage.removeItem(onboardingDraftKey);
+    router.push(`/${locale}/app/knowledge`);
   }
 
   function updateBusinessName(value: string) {

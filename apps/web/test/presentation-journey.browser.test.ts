@@ -86,9 +86,19 @@ describe("presentation journey", () => {
 
   it("opens an approved Business Profile in populated onboarding edit mode", async () => {
     const page = await sessionPage();
+    let completionRequests = 0;
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/onboarding") {
         return route.fulfill(json(approvedOnboardingState("2026-08-20T06:00:00.000Z")));
+      }
+
+      if (pathname === "/v1/onboarding/complete") {
+        completionRequests += 1;
+        return route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "ONBOARDING_INCOMPLETE", message: "Onboarding is incomplete" } })
+        });
       }
 
       if (pathname === "/v1/vault/score") {
@@ -127,6 +137,11 @@ describe("presentation journey", () => {
     await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
     await page.getByRole("button", { name: /^Business name/ }).click();
     await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.waitForURL(`${baseUrl}/en/app/knowledge`, { timeout: 10_000 });
+    expect(completionRequests).toBe(0);
     await page.close();
   });
 
