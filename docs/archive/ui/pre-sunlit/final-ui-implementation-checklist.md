@@ -1,6 +1,6 @@
 # MARKOS AI Final UI Implementation Checklist
 
-> **Historical implementation record:** This checklist tracks the previous dark "AI Marketing Command Center" pass. It was superseded as future design guidance on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](./ui-design-foundation.md). PR #19 subsequently removed or redirected several recorded surfaces. Completed items describe dated pre-Sunlit evidence, not current browser-visible implementation; use the active foundation's restoration register for present status.
+> **Historical implementation record:** This checklist tracks the previous dark "AI Marketing Command Center" pass. It was superseded as future design guidance on 2026-08-11 by the approved [Sunlit Social Studio UI foundation](../../../ui-design-foundation.md). PR #19 subsequently removed or redirected several recorded surfaces. Completed items describe dated pre-Sunlit evidence, not current browser-visible implementation; use the active foundation's restoration register for present status.
 
 Source of truth:
 - Product behavior: `docs/source/MARKOS_BUILD_SPEC. 2.pdf`
@@ -20,7 +20,7 @@ Legend:
 - Historical visual system: luxury dark command center, glass panels, 80px icon sidebar, turquoise/gold/amber accents, Inter typography
 - Superseded visual references: previous white/red dashboard and the older `Design AI Marketing Platform` export
 - Key implementation risk: final export mixes `luxury-*` and older `quantum-*` token names; normalize before porting screens
-- Source inventory: `docs/final-ui-source-inventory.md`
+- Source inventory: `final-ui-source-inventory.md`
 - Historical execution rule: implement by milestone, verify each milestone, then tick items here
 - Latest evidence: `evidence/ui/2026-06-18`
 - Latest responsive evidence: desktop/tablet harness screenshots plus true 390px mobile CDP capture at `evidence/ui/2026-06-18/dashboard-en-mobile-cdp.png`
@@ -36,7 +36,7 @@ Legend:
 - [x] Identify every unresolved token mismatch, especially `quantum-*` versus `luxury-*`.
 - [x] Define target route names and product labels for the command-center navigation.
 - [x] Capture source screenshots from the export for desktop, tablet, and mobile reference.
-- [x] Update `docs/ui-functionality-checklist.md` to point at this final checklist.
+- [x] Update `ui-functionality-checklist.md` to point at this final checklist.
 
 Acceptance gate:
 - [x] Final UI source is documented, route/component inventory exists, and no old Figma export is treated as active.

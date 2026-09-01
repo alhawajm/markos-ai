@@ -38,6 +38,7 @@ describe("onboarding routes", () => {
       data: {
         status: "NOT_STARTED",
         onboardingScore: 0,
+        readyForProfile: false,
         vaultScore: {
           score: 0
         },
@@ -47,8 +48,8 @@ describe("onboarding routes", () => {
           profile: null
         },
         modules: expect.arrayContaining([
-          expect.objectContaining({ module: "company", completed: false }),
-          expect.objectContaining({ module: "brand", completed: false, sections: ["BRAND", "TONE"] })
+          expect.objectContaining({ module: "company", completed: false, skipped: false }),
+          expect.objectContaining({ module: "brand", completed: false, skipped: false, sections: ["TONE"] })
         ])
       }
     });
@@ -220,6 +221,104 @@ describe("onboarding routes", () => {
       model: "test-profile-model",
       tokensIn: 180,
       tokensOut: 320
+    });
+
+    await app.close();
+  });
+
+  it("persists optional skips and completes from the two essential sections", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+
+    const requiredSkip = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/company/skip",
+      headers
+    });
+    expect(requiredSkip.statusCode).toBe(409);
+    expect(requiredSkip.json()).toMatchObject({ error: { code: "ONBOARDING_MODULE_REQUIRED" } });
+
+    const company = await app.inject({
+      method: "PUT",
+      url: "/v1/onboarding/company",
+      headers,
+      payload: { name: "Pearl Coffee" }
+    });
+    const products = await app.inject({
+      method: "PUT",
+      url: "/v1/onboarding/products",
+      headers,
+      payload: { summary: "Coffee beans and recurring office coffee services." }
+    });
+    expect(company.statusCode).toBe(200);
+    expect(products.statusCode).toBe(200);
+
+    for (const module of ["story", "audience", "competitors", "brand", "objectives"]) {
+      const skipped = await app.inject({
+        method: "POST",
+        url: `/v1/onboarding/${module}/skip`,
+        headers
+      });
+      expect(skipped.statusCode).toBe(200);
+    }
+
+    const state = await app.inject({ method: "GET", url: "/v1/onboarding", headers });
+    expect(state.json()).toMatchObject({
+      data: {
+        onboardingScore: 25,
+        readyForProfile: true,
+        modules: expect.arrayContaining([
+          expect.objectContaining({ module: "company", completed: true, skipped: false }),
+          expect.objectContaining({ module: "story", completed: false, skipped: true }),
+          expect.objectContaining({ module: "products", completed: true, skipped: false })
+        ])
+      }
+    });
+
+    const generated = await app.inject({ method: "POST", url: "/v1/onboarding/profile/generate", headers });
+    expect(generated.statusCode).toBe(200);
+    const draft = generated.json().data.businessProfile;
+    const approved = await app.inject({
+      method: "POST",
+      url: "/v1/onboarding/profile/approve",
+      headers,
+      payload: { interactionId: draft.interactionId, profile: draft.profile }
+    });
+
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toMatchObject({
+      data: {
+        status: "COMPLETE",
+        onboardingScore: 25,
+        readyForProfile: true,
+        vaultScore: {
+          score: 25,
+          missingSections: expect.arrayContaining(["STORY", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"])
+        }
+      }
+    });
+
+    const edited = await app.inject({
+      method: "PUT",
+      url: "/v1/onboarding/company?preserveApprovedProfile=true",
+      headers,
+      payload: { name: "Pearl Coffee Roasters" }
+    });
+
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json()).toMatchObject({
+      data: {
+        status: "COMPLETE",
+        businessProfile: {
+          status: "APPROVED",
+          interactionId: draft.interactionId,
+          profile: draft.profile
+        }
+      }
+    });
+    await expect(prisma.aiInteraction.findUniqueOrThrow({ where: { id: draft.interactionId }, select: { regenerated: true } })).resolves.toEqual({
+      regenerated: false
     });
 
     await app.close();

@@ -27,7 +27,7 @@ describe("rendered Sunlit authentication", () => {
   });
 
   it("registers, requests verification, verifies the token, and resumes onboarding", async () => {
-    const context = await browser.newContext({ viewport: { height: 1000, width: 1440 } });
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
     const page = await context.newPage();
     const requests: Array<{ body: unknown; path: string }> = [];
 
@@ -50,7 +50,7 @@ describe("rendered Sunlit authentication", () => {
       }
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(json({ businessProfile: { status: "NOT_GENERATED" }, status: "NOT_STARTED" }));
+        return route.fulfill(json(emptyOnboardingState()));
       }
 
       return route.fulfill(json([]));
@@ -100,7 +100,7 @@ describe("rendered Sunlit authentication", () => {
   }, 90_000);
 
   it("logs a verified user into the canonical app route", async () => {
-    const context = await browser.newContext({ viewport: { height: 900, width: 1280 } });
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
     const page = await context.newPage();
     let loginBody: unknown;
 
@@ -114,12 +114,63 @@ describe("rendered Sunlit authentication", () => {
     });
 
     await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
+    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Open Wednesday 26 August" }).click();
+    await expect(page.locator('[data-login-preview="day"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Open Product spotlight" }).click();
+    await expect(page.locator('[data-login-preview="post"]').isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Wednesday" }).click();
+    await page.getByRole("button", { name: "Week overview" }).click();
+    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
     await page.getByLabel("Email").fill(verifiedSession.user.email);
     await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL(/\/en\/app$/);
 
     expect(loginBody).toEqual({ email: "mariam@example.com", password: "a-secure-passphrase" });
+    await expect(noHorizontalOverflow(page)).resolves.toBe(true);
+    await context.close();
+  });
+
+  it("reveals the optional MFA step only after the API requests it", async () => {
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
+    const page = await context.newPage();
+    const loginBodies: unknown[] = [];
+
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/login") {
+        const body = route.request().postDataJSON();
+        loginBodies.push(body);
+        if (!(body as { totpCode?: string }).totpCode) {
+          return route.fulfill({
+            body: JSON.stringify({ error: { code: "MFA_REQUIRED", message: "MFA is required" } }),
+            contentType: "application/json",
+            status: 401
+          });
+        }
+        return route.fulfill(json(verifiedSession));
+      }
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
+    await page.getByLabel("Email").fill(verifiedSession.user.email);
+    await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
+    await page.getByRole("button", { name: "Log in" }).click();
+
+    const mfaCode = page.getByLabel("MFA code");
+    const mfaStatus = page.getByRole("status");
+    await mfaCode.waitFor();
+    await mfaStatus.getByText(/6-digit code/).waitFor();
+    await mfaCode.fill("123456");
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL(/\/en\/app$/);
+
+    expect(loginBodies).toEqual([
+      { email: "mariam@example.com", password: "a-secure-passphrase" },
+      { email: "mariam@example.com", password: "a-secure-passphrase", totpCode: "123456" }
+    ]);
     await context.close();
   });
 
@@ -159,6 +210,32 @@ function authSession(isVerified: boolean) {
     tokens: { accessToken: isVerified ? "verified-access-token" : "unverified-access-token", expiresIn: 900 },
     user: { email: "mariam@example.com", fullName: "Mariam Ali", id: "user-mariam", isVerified, locale: "en" },
     workspace: { id: "workspace-mariam", name: "Mariam's Workspace", slug: "mariam-workspace" }
+  };
+}
+
+function emptyOnboardingState() {
+  const sections = {
+    company: ["COMPANY"],
+    story: ["STORY"],
+    products: ["PRODUCTS"],
+    audience: ["AUDIENCE"],
+    competitors: ["COMPETITORS"],
+    brand: ["TONE"],
+    objectives: ["OBJECTIVES"]
+  };
+  return {
+    status: "NOT_STARTED",
+    onboardingScore: 0,
+    readyForProfile: false,
+    vaultScore: {
+      score: 0,
+      completedSections: [],
+      missingSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+      requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
+      entryCount: 0
+    },
+    modules: Object.entries(sections).map(([module, moduleSections]) => ({ module, completed: false, skipped: false, sections: moduleSections })),
+    businessProfile: { status: "NOT_GENERATED", interactionId: null, profile: null, updatedAt: null }
   };
 }
 

@@ -78,7 +78,14 @@ export async function createWorkspaceContent(workspaceId: string, input: CreateC
       workspaceId,
       contentType: input.contentType,
       status: "DRAFT",
-      hashtags: [],
+      ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
+      ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
+      hashtags: input.hashtags ?? [],
+      ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
+      ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+      ...(input.carousel == null ? {} : { carousel: input.carousel as Prisma.InputJsonValue }),
+      ...(input.reelScript == null ? {} : { reelScript: input.reelScript as Prisma.InputJsonValue }),
+      ...(input.plannedAt == null ? {} : { plannedAt: new Date(input.plannedAt) }),
       mediaIds: []
     }
   });
@@ -323,7 +330,8 @@ export async function updateContentItem(workspaceId: string, contentItemId: stri
       ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
       ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
       ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
-      ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue })
+      ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
+      ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
     }
   });
 
@@ -494,6 +502,7 @@ export async function unscheduleContentItem(workspaceId: string, contentItemId: 
         id: current.id
       },
       data: {
+        plannedAt: null,
         scheduledAt: null,
         status: "APPROVED"
       }
@@ -694,6 +703,7 @@ export function toContentRecord(row: {
   contentPillar: string | null;
   campaignId: string | null;
   aiPromptUsed: string | null;
+  plannedAt: Date | null;
   scheduledAt: Date | null;
   publishedAt: Date | null;
   instagramPostId: string | null;
@@ -716,6 +726,7 @@ export function toContentRecord(row: {
     ...(row.contentPillar === null ? {} : { contentPillar: row.contentPillar }),
     ...(row.campaignId === null ? {} : { campaignId: row.campaignId }),
     ...(row.aiPromptUsed === null ? {} : { aiPromptUsed: row.aiPromptUsed }),
+    ...(row.plannedAt === null ? {} : { plannedAt: row.plannedAt.toISOString() }),
     ...(row.scheduledAt === null ? {} : { scheduledAt: row.scheduledAt.toISOString() }),
     ...(row.publishedAt === null ? {} : { publishedAt: row.publishedAt.toISOString() }),
     ...(row.instagramPostId === null ? {} : { instagramPostId: row.instagramPostId }),

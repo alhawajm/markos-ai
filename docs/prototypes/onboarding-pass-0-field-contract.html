@@ -1,0 +1,2128 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-locale="en" data-view="walkthrough">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="MARKOS Pass 0 onboarding field-contract prototype. This lab candidate does not change production behavior." />
+    <title>MARKOS onboarding — Pass 0 field contract</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f3f5f6;
+        --paper: #ffffff;
+        --paper-soft: #f8fafb;
+        --paper-warm: #fff8f3;
+        --line: #dbe1e5;
+        --line-strong: #c7d0d6;
+        --ink: #20262d;
+        --muted: #66717b;
+        --quiet: #89939c;
+        --tangerine: #e85b2a;
+        --tangerine-dark: #c8461c;
+        --tangerine-soft: #fff0e8;
+        --slate: #315a7d;
+        --slate-soft: #e9f0f6;
+        --green: #168448;
+        --green-soft: #eaf8f0;
+        --amber: #9a6200;
+        --amber-soft: #fff6dc;
+        --danger: #c83250;
+        --danger-soft: #fff0f3;
+        --radius-sm: 0.65rem;
+        --radius-md: 0.95rem;
+        --radius-lg: 1.35rem;
+        --shadow: 0 1.2rem 3.5rem rgb(36 48 58 / 10%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        position: relative;
+        isolation: isolate;
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 8% 4%, rgb(255 211 166 / 42%), transparent 30rem),
+          radial-gradient(circle at 92% 12%, rgb(180 223 221 / 40%), transparent 34rem), var(--canvas);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 16px;
+      }
+
+      body::before,
+      body::after {
+        position: fixed;
+        z-index: -1;
+        width: 32rem;
+        height: 32rem;
+        border-radius: 50%;
+        content: "";
+        filter: blur(4rem);
+        opacity: 0.24;
+        pointer-events: none;
+        will-change: transform;
+      }
+
+      body::before {
+        top: 12%;
+        left: -10rem;
+        background: #ff9e57;
+        animation: drift-one 18s ease-in-out infinite alternate;
+      }
+
+      body::after {
+        right: -8rem;
+        bottom: -10rem;
+        background: #62c7bd;
+        animation: drift-two 22s ease-in-out infinite alternate;
+      }
+
+      @keyframes drift-one {
+        to {
+          transform: translate3d(8rem, 3rem, 0) scale(1.12);
+        }
+      }
+
+      @keyframes drift-two {
+        to {
+          transform: translate3d(-7rem, -4rem, 0) scale(0.92);
+        }
+      }
+
+      html[dir="rtl"] body {
+        font-family: "IBM Plex Sans Arabic", sans-serif;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid rgb(49 90 125 / 28%);
+        outline-offset: 2px;
+      }
+
+      .lab-bar {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: flex;
+        min-height: 54px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 255 255 / 90%);
+        padding: 0.55rem 1rem;
+        backdrop-filter: blur(16px);
+      }
+
+      .lab-title,
+      .toolbar,
+      .segmented,
+      .field-label-row,
+      .actions,
+      .step-meta,
+      .summary-line,
+      .contract-legend {
+        display: flex;
+        align-items: center;
+      }
+
+      .lab-title {
+        gap: 0.7rem;
+        min-width: 0;
+      }
+
+      .lab-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 10px;
+        background: var(--ink);
+        color: #ffc54d;
+        font-weight: 700;
+      }
+
+      .lab-title strong,
+      .lab-title span {
+        display: block;
+      }
+
+      .lab-title span {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.78rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .toolbar {
+        justify-content: flex-end;
+        gap: 0.55rem;
+      }
+
+      .segmented {
+        gap: 0.2rem;
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        background: var(--paper-soft);
+        padding: 0.2rem;
+      }
+
+      .segmented button,
+      .language-button {
+        min-height: 34px;
+        border: 0;
+        border-radius: 0.55rem;
+        background: transparent;
+        padding: 0.38rem 0.75rem;
+        font-size: 0.84rem;
+        font-weight: 600;
+      }
+
+      .segmented button[aria-pressed="true"],
+      .language-button[aria-pressed="true"] {
+        background: var(--ink);
+        color: white;
+      }
+
+      main {
+        max-width: 1520px;
+        margin: 0 auto;
+        padding: 0.9rem 1rem;
+      }
+
+      .walkthrough {
+        display: flex;
+        width: min(100%, 1080px);
+        min-height: calc(100vh - 90px);
+        margin: 0 auto;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgb(255 255 255 / 92%);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .eyebrow {
+        margin: 0 0 0.35rem;
+        color: var(--tangerine-dark);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      html[dir="rtl"] .eyebrow {
+        letter-spacing: 0;
+      }
+
+      .form-panel {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        padding: clamp(1.4rem, 3vw, 2.5rem);
+      }
+
+      .greeting-panel {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        place-items: center;
+        padding: clamp(2rem, 5vw, 4.5rem);
+      }
+
+      .greeting-inner {
+        width: min(100%, 880px);
+        text-align: center;
+      }
+
+      .greeting-mark {
+        display: grid;
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1.2rem;
+        place-items: center;
+        border-radius: 20px;
+        background: var(--ink);
+        box-shadow: 0 1rem 2.4rem rgb(36 48 58 / 18%);
+        color: #ffc54d;
+        font-size: 1.65rem;
+      }
+
+      .greeting-panel h1 {
+        max-width: 760px;
+        margin: 0 auto;
+        font-size: clamp(2.2rem, 4.2vw, 3.8rem);
+        letter-spacing: -0.05em;
+        line-height: 1.02;
+      }
+
+      html[dir="rtl"] .greeting-panel h1 {
+        letter-spacing: 0;
+      }
+
+      .greeting-body {
+        max-width: 660px;
+        margin: 1rem auto 0;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.5vw, 1.12rem);
+        line-height: 1.65;
+      }
+
+      .greeting-journey {
+        display: grid;
+        margin-top: clamp(1.6rem, 3vw, 2.4rem);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        text-align: start;
+      }
+
+      .greeting-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--paper-soft);
+        padding: 1rem;
+      }
+
+      .greeting-card span {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        margin-bottom: 0.75rem;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--tangerine-soft);
+        color: #b83f18;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .greeting-card strong {
+        display: block;
+        font-size: 0.92rem;
+      }
+
+      .greeting-card p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.79rem;
+        line-height: 1.5;
+      }
+
+      .greeting-actions {
+        display: grid;
+        justify-items: center;
+        gap: 0.7rem;
+        margin-top: 1.6rem;
+      }
+
+      .greeting-actions .button {
+        min-width: 220px;
+        justify-content: center;
+      }
+
+      .greeting-footnote {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .step-context {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+        gap: 0.7rem;
+        margin-top: 0.85rem;
+      }
+
+      .step-context-item {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        background: var(--paper-soft);
+        padding: 0.58rem 0.72rem;
+      }
+
+      .step-context-item.current {
+        border-color: #efb69a;
+        background: var(--tangerine-soft);
+      }
+
+      .step-context-item.empty {
+        opacity: 0.48;
+      }
+
+      .step-context-item span,
+      .step-context-item strong {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .step-context-item span {
+        color: var(--muted);
+        font-size: 0.67rem;
+        font-weight: 650;
+        text-transform: uppercase;
+      }
+
+      .step-context-item.current span {
+        color: #59636c;
+      }
+
+      .step-context-item strong {
+        margin-top: 0.16rem;
+        font-size: 0.82rem;
+      }
+
+      .step-meta {
+        justify-content: space-between;
+        gap: 1rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+
+      .progress-track {
+        width: 100%;
+        height: 5px;
+        margin-top: 0.75rem;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #edf0f2;
+      }
+
+      .progress-bar {
+        width: 12.5%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--tangerine), #f3ad3d);
+        transition: width 180ms ease;
+      }
+
+      .step-content {
+        width: min(100%, 720px);
+        margin: 2rem auto 1rem;
+      }
+
+      .step-content h2 {
+        margin: 0;
+        font-size: clamp(1.65rem, 2.6vw, 2.35rem);
+        letter-spacing: -0.035em;
+        line-height: 1.13;
+      }
+
+      html[dir="rtl"] .step-content h2 {
+        letter-spacing: 0;
+      }
+
+      .step-intro {
+        max-width: 62ch;
+        margin: 0.7rem 0 1.6rem;
+        color: var(--muted);
+        font-size: 0.98rem;
+        line-height: 1.65;
+      }
+
+      .field-stack {
+        display: grid;
+        gap: 1.05rem;
+      }
+
+      .field-label-row {
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.42rem;
+      }
+
+      .field-label-row label {
+        font-size: 0.9rem;
+        font-weight: 650;
+      }
+
+      .field-kind {
+        border-radius: 999px;
+        padding: 0.22rem 0.52rem;
+        font-size: 0.69rem;
+        font-weight: 700;
+      }
+
+      .field-kind.required {
+        background: var(--tangerine-soft);
+        color: #b83f18;
+      }
+
+      .field-kind.recommended {
+        background: var(--slate-soft);
+        color: var(--slate);
+      }
+
+      .field-kind.optional {
+        background: #f0f2f4;
+        color: var(--muted);
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.8rem;
+        background: white;
+        padding: 0.78rem 0.9rem;
+      }
+
+      textarea {
+        min-height: 108px;
+        resize: vertical;
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: #929ca4;
+      }
+
+      .helper {
+        margin: 0.4rem 0 0;
+        color: var(--muted);
+        font-size: 0.77rem;
+        line-height: 1.45;
+      }
+
+      .suggestion-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 240px;
+        gap: 1rem;
+        align-items: start;
+      }
+
+      .suggestion-panel {
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--paper-soft);
+        padding: 0.8rem;
+      }
+
+      .suggestion-panel p {
+        margin: 0 0 0.55rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+        line-height: 1.4;
+      }
+
+      .suggestion-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .suggestion-chip {
+        min-height: 32px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: white;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.74rem;
+        font-weight: 600;
+      }
+
+      .suggestion-chip:hover,
+      .suggestion-chip[aria-pressed="true"] {
+        border-color: var(--slate);
+        background: var(--slate-soft);
+        color: var(--slate);
+      }
+
+      details {
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--paper-soft);
+      }
+
+      summary {
+        cursor: pointer;
+        padding: 0.85rem 1rem;
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+
+      .details-content {
+        display: grid;
+        gap: 0.85rem;
+        border-top: 1px solid var(--line);
+        padding: 1rem;
+      }
+
+      .drop-zone {
+        display: grid;
+        min-height: 110px;
+        place-items: center;
+        border: 1px dashed #9daab3;
+        border-radius: 0.9rem;
+        background: var(--paper-soft);
+        color: var(--muted);
+        padding: 1rem;
+        text-align: center;
+      }
+
+      .drop-zone strong,
+      .drop-zone span {
+        display: block;
+      }
+
+      .drop-zone strong {
+        color: var(--ink);
+        font-size: 0.88rem;
+      }
+
+      .drop-zone span {
+        margin-top: 0.25rem;
+        font-size: 0.74rem;
+      }
+
+      .compact-notice,
+      .field-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55rem;
+        border-radius: 0.7rem;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.76rem;
+        line-height: 1.4;
+      }
+
+      .compact-notice {
+        border: 1px solid #cbdce8;
+        background: var(--slate-soft);
+        color: #294b67;
+      }
+
+      .notice-icon {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--slate);
+        color: white;
+        font-size: 0.67rem;
+        font-weight: 700;
+      }
+
+      .field-error {
+        margin: 0.45rem 0 0;
+        border: 1px solid #edbdc7;
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .actions {
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        padding-top: 1rem;
+      }
+
+      .action-group {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+
+      .button {
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.75rem;
+        background: white;
+        padding: 0.6rem 1rem;
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+
+      .button:hover {
+        background: var(--paper-soft);
+      }
+
+      .button.primary {
+        border-color: var(--tangerine);
+        background: var(--tangerine);
+        color: #111820;
+      }
+
+      .button.primary:hover {
+        background: #f06c3d;
+      }
+
+      .button:disabled,
+      .button:disabled:hover {
+        cursor: not-allowed;
+        border-color: #d8dde1;
+        background: #e8ebed;
+        color: #919aa1;
+        box-shadow: none;
+      }
+
+      .button.quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .contract-view {
+        display: none;
+        min-height: calc(100vh - 90px);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--paper);
+        padding: clamp(1.2rem, 3vw, 2.4rem);
+        box-shadow: var(--shadow);
+      }
+
+      html[data-view="contract"] .walkthrough {
+        display: none;
+      }
+
+      html[data-view="contract"] .contract-view {
+        display: block;
+      }
+
+      .contract-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1.2rem;
+        align-items: end;
+        margin-bottom: 1.4rem;
+      }
+
+      .contract-header h1 {
+        margin: 0;
+        font-size: clamp(1.7rem, 3vw, 2.6rem);
+        letter-spacing: -0.035em;
+      }
+
+      html[dir="rtl"] .contract-header h1 {
+        letter-spacing: 0;
+      }
+
+      .contract-header p {
+        max-width: 72ch;
+        margin: 0.55rem 0 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .contract-legend {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.4rem;
+      }
+
+      .contract-table-wrap {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 980px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 0.82rem 0.9rem;
+        text-align: start;
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--paper-soft);
+        color: var(--muted);
+        font-size: 0.73rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      td {
+        font-size: 0.82rem;
+        line-height: 1.5;
+      }
+
+      td:first-child {
+        font-weight: 650;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .status-pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 0.22rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+      }
+
+      .status-pill.keep {
+        background: var(--tangerine-soft);
+        color: var(--tangerine-dark);
+      }
+
+      .status-pill.recommend {
+        background: var(--slate-soft);
+        color: var(--slate);
+      }
+
+      .status-pill.optional {
+        background: #f0f2f4;
+        color: var(--muted);
+      }
+
+      .status-pill.defer {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .decision-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.8rem;
+        margin-top: 1rem;
+      }
+
+      .decision-card {
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--paper-soft);
+        padding: 1rem;
+      }
+
+      .decision-card h2 {
+        margin: 0 0 0.45rem;
+        font-size: 0.95rem;
+      }
+
+      .decision-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+        line-height: 1.55;
+      }
+
+      .review-list {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .review-item {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--paper);
+        padding: 0.8rem 0.9rem;
+        text-align: start;
+        transition:
+          border-color 150ms ease,
+          background-color 150ms ease,
+          box-shadow 150ms ease;
+      }
+
+      .review-item:hover {
+        border-color: rgb(232 91 42 / 50%);
+        background: var(--paper-warm);
+        box-shadow: 0 0.45rem 1.2rem rgb(36 48 58 / 6%);
+      }
+
+      .review-item strong,
+      .review-item span {
+        display: block;
+      }
+
+      .review-item strong {
+        font-size: 0.85rem;
+      }
+
+      .review-item span {
+        margin-top: 0.15rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .review-state {
+        align-self: center;
+        margin-top: 0;
+        border-radius: 999px;
+        background: #f0f2f4;
+        padding: 0.25rem 0.55rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+      }
+
+      .review-state.ready {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .review-item .review-action {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+      }
+
+      .review-item .review-edit {
+        margin-top: 0;
+        color: var(--slate);
+        font-size: 0.73rem;
+        font-weight: 700;
+      }
+
+      .review-item .review-arrow {
+        display: inline-block;
+        margin-inline-start: 0.15rem;
+      }
+
+      html[dir="rtl"] .review-arrow {
+        transform: scaleX(-1);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 1100px) {
+        .decision-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .lab-bar,
+        .contract-header {
+          align-items: stretch;
+          flex-direction: column;
+          grid-template-columns: 1fr;
+        }
+
+        .lab-bar {
+          position: static;
+        }
+
+        .toolbar {
+          justify-content: flex-start;
+        }
+
+        .form-panel {
+          min-height: 680px;
+        }
+
+        .step-context,
+        .suggestion-layout,
+        .greeting-journey {
+          grid-template-columns: 1fr;
+        }
+
+        .step-context-item:not(.current) {
+          display: none;
+        }
+      }
+
+      @media (max-height: 820px) and (min-width: 761px) {
+        .greeting-panel {
+          padding: 1.5rem 2.5rem;
+        }
+
+        .greeting-mark {
+          width: 52px;
+          height: 52px;
+          margin-bottom: 0.75rem;
+          border-radius: 16px;
+          font-size: 1.35rem;
+        }
+
+        .greeting-panel h1 {
+          font-size: clamp(2.1rem, 3.6vw, 3rem);
+        }
+
+        .greeting-body {
+          margin-top: 0.7rem;
+        }
+
+        .greeting-journey {
+          margin-top: 1.2rem;
+        }
+
+        .greeting-card {
+          padding: 0.8rem;
+        }
+
+        .greeting-card span {
+          margin-bottom: 0.5rem;
+        }
+
+        .greeting-actions {
+          margin-top: 1.1rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body::before,
+        body::after {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="lab-bar">
+      <div class="lab-title">
+        <div class="lab-mark" aria-hidden="true">✦</div>
+        <div>
+          <strong data-copy="labTitle">Onboarding Pass 0</strong>
+          <span data-copy="labSubtitle">Field contract candidate — not production UI</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="segmented" aria-label="Prototype view">
+          <button data-view-button="walkthrough" type="button" aria-pressed="true" data-copy="walkthrough">Walkthrough</button>
+          <button data-view-button="contract" type="button" aria-pressed="false" data-copy="contract">Field rationale</button>
+        </div>
+        <div class="segmented" aria-label="Prototype language">
+          <button class="language-button" data-locale-button="en" type="button" aria-pressed="true">English</button>
+          <button class="language-button" data-locale-button="ar" type="button" aria-pressed="false">العربية</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="walkthrough" aria-label="Onboarding walkthrough">
+        <section class="greeting-panel" id="greeting-panel">
+          <div class="greeting-inner">
+            <div class="greeting-mark" aria-hidden="true">✦</div>
+            <p class="eyebrow" data-copy="greetingEyebrow">Welcome to MARKOS</p>
+            <h1 data-copy="greetingTitle">Your marketing starts with understanding your business.</h1>
+            <p class="greeting-body" data-copy="greetingBody">
+              Give your AI marketing team a reliable starting point. Share what you already have, then review the profile MARKOS prepares.
+            </p>
+
+            <div class="greeting-journey" aria-label="What happens next" data-copy-aria="greetingJourneyLabel">
+              <article class="greeting-card">
+                <span aria-hidden="true">1</span>
+                <strong data-copy="greetingShareTitle">Share what you have</strong>
+                <p data-copy="greetingShareBody">Use existing documents or answer a few short questions.</p>
+              </article>
+              <article class="greeting-card">
+                <span aria-hidden="true">2</span>
+                <strong data-copy="greetingOrganizeTitle">MARKOS organizes it</strong>
+                <p data-copy="greetingOrganizeBody">Your information becomes a clear starting profile.</p>
+              </article>
+              <article class="greeting-card">
+                <span aria-hidden="true">3</span>
+                <strong data-copy="greetingReviewTitle">Review before it is used</strong>
+                <p data-copy="greetingReviewBody">You confirm the details before they guide Strategy and Create.</p>
+              </article>
+            </div>
+
+            <div class="greeting-actions">
+              <button class="button primary" id="start-setup-button" type="button" data-copy="startSetup">Set up my business</button>
+              <p class="greeting-footnote" data-copy="greetingFootnote">You can improve your business profile later.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-panel" id="setup-panel" hidden>
+          <div>
+            <div class="step-meta">
+              <span id="progress-label">Step 1 of 8</span>
+              <span id="save-state" data-copy="notSaved">Not saved</span>
+            </div>
+            <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
+            <div class="step-context" id="step-context" aria-label="Current onboarding position"></div>
+          </div>
+
+          <div class="step-content" id="step-content" aria-live="polite"></div>
+
+          <footer class="actions">
+            <button class="button" id="back-button" type="button" data-copy="back">Back</button>
+            <div class="action-group">
+              <button class="button quiet" id="skip-button" type="button" data-copy="skip">Skip for now</button>
+              <button class="button primary" id="continue-button" type="button" data-copy="continue">Save &amp; continue</button>
+            </div>
+          </footer>
+        </section>
+      </section>
+
+      <section class="contract-view" aria-label="Field contract rationale">
+        <div class="contract-header">
+          <div>
+            <p class="eyebrow" data-copy="contractEyebrow">Pass 0 decision candidate</p>
+            <h1 data-copy="contractTitle">Ask only for information MARKOS can use</h1>
+            <p data-copy="contractBody">
+              Two facts unlock profile generation. Additional answers improve specificity, while unusable fields leave onboarding until the related capability
+              exists.
+            </p>
+          </div>
+          <div class="contract-legend">
+            <span class="status-pill keep" data-copy="required">Required</span>
+            <span class="status-pill recommend" data-copy="recommended">Recommended</span>
+            <span class="status-pill optional" data-copy="optional">Optional</span>
+            <span class="status-pill defer" data-copy="deferred">Deferred</span>
+          </div>
+        </div>
+
+        <div class="contract-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-copy="tableStep">Step</th>
+                <th data-copy="tableAsk">Candidate question</th>
+                <th data-copy="tableStatus">Status</th>
+                <th data-copy="tableUse">Current meaningful use</th>
+                <th data-copy="tableRemove">Removed or hidden for now</th>
+              </tr>
+            </thead>
+            <tbody id="contract-body"></tbody>
+          </table>
+        </div>
+
+        <div class="decision-grid">
+          <article class="decision-card">
+            <h2 data-copy="progressDecisionTitle">Progress is not knowledge</h2>
+            <p data-copy="progressDecisionBody">
+              Submitted and skipped steps need their own workspace-scoped progress state. A skip must never create an empty Vault fact or embedding.
+            </p>
+          </article>
+          <article class="decision-card">
+            <h2 data-copy="readinessDecisionTitle">Readiness has a small hard floor</h2>
+            <p data-copy="readinessDecisionBody">
+              A confirmed business name and offer summary unlock profile generation. Missing recommended context produces a quality warning, not a block.
+            </p>
+          </article>
+          <article class="decision-card">
+            <h2 data-copy="reviewDecisionTitle">The user remains the source of truth</h2>
+            <p data-copy="reviewDecisionBody">
+              AI and document extraction may suggest candidates. Nothing becomes business knowledge until the owner confirms it in review.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const copy = {
+        en: {
+          labTitle: "Onboarding Pass 0",
+          labSubtitle: "Field contract candidate — not production UI",
+          walkthrough: "Walkthrough",
+          contract: "Field rationale",
+          greetingEyebrow: "Welcome to MARKOS",
+          greetingTitle: "Your marketing starts with understanding your business.",
+          greetingBody: "Give your AI marketing team a reliable starting point. Share what you already have, then review the profile MARKOS prepares.",
+          greetingJourneyLabel: "What happens next",
+          greetingShareTitle: "Share what you have",
+          greetingShareBody: "Use existing documents or answer a few short questions.",
+          greetingOrganizeTitle: "MARKOS organizes it",
+          greetingOrganizeBody: "Your information becomes a clear starting profile.",
+          greetingReviewTitle: "Review before it is used",
+          greetingReviewBody: "You confirm the details before they guide Strategy and Create.",
+          startSetup: "Set up my business",
+          greetingFootnote: "You can improve your business profile later.",
+          prototypeNote:
+            "Review target: what MARKOS asks, why it asks, and what blocks completion. Upload and AI extraction are represented only as future handoffs.",
+          eyebrow: "Teach MARKOS once",
+          sideTitle: "Your business profile",
+          sideBody: "Give MARKOS a useful starting point. You can improve the details later.",
+          notSaved: "Not saved",
+          saved: "Saved",
+          skippedState: "Skipped",
+          back: "Back",
+          backToReview: "Back to review",
+          skip: "Skip for now",
+          continue: "Save & continue",
+          finish: "Review candidate",
+          whyEyebrow: "Why this step exists",
+          whyTitle: "Used by MARKOS now",
+          storedTitle: "What is stored",
+          notStoredTitle: "What is not stored",
+          completionTitle: "Completion model",
+          stepsSubmitted: "Steps submitted",
+          coreFacts: "Core facts ready",
+          contractEyebrow: "Pass 0 decision candidate",
+          contractTitle: "Ask only for information MARKOS can use",
+          contractBody:
+            "Two facts unlock profile generation. Additional answers improve specificity, while unusable fields leave onboarding until the related capability exists.",
+          required: "Required",
+          recommended: "Recommended",
+          optional: "Optional",
+          deferred: "Deferred",
+          tableStep: "Step",
+          tableAsk: "Candidate question",
+          tableStatus: "Status",
+          tableUse: "Current meaningful use",
+          tableRemove: "Removed or hidden for now",
+          progressDecisionTitle: "Progress is not knowledge",
+          progressDecisionBody:
+            "Submitted and skipped steps need their own workspace-scoped progress state. A skip must never create an empty Vault fact or embedding.",
+          readinessDecisionTitle: "Readiness has a small hard floor",
+          readinessDecisionBody:
+            "A confirmed business name and offer summary unlock profile generation. Missing recommended context produces a quality warning, not a block.",
+          reviewDecisionTitle: "The user remains the source of truth",
+          reviewDecisionBody: "AI and document extraction may suggest candidates. Nothing becomes business knowledge until the owner confirms it in review.",
+          stepOf: (step, total) => `Step ${step} of ${total}`,
+          requiredField: "Required to continue",
+          recommendedField: "Improves results",
+          optionalField: "Optional",
+          details: "Add more detail (optional)",
+          notSure: "I’m not sure yet",
+          uploadTitle: "Upload a document",
+          uploadBody: "A menu, catalogue, brochure, or service document works. MARKOS will extract suggestions for you to review.",
+          qualityWarning: "You can continue now. Adding the missing details later will help MARKOS give you more specific suggestions.",
+          requiredError: "Add this one essential answer before continuing.",
+          previousStep: "Previous",
+          currentStep: "Current",
+          nextStep: "Next",
+          noPrevious: "Start",
+          noNext: "Profile review",
+          suggestions: "Suggestions — click to add or remove",
+          reviewTitle: "Review what MARKOS will know",
+          reviewIntro:
+            "Your business name and what you offer are enough to create a starting profile. More details will make MARKOS’s first suggestions more specific.",
+          ready: "Ready",
+          missing: "Not added",
+          edit: "Edit",
+          reviewRows: [
+            ["Business name", "Required"],
+            ["Products and services", "Required"],
+            ["Customers", "Helps personalize results"],
+            ["Story and strengths", "Improves positioning"],
+            ["Market context", "Optional"],
+            ["Tone of voice", "Up to four words"],
+            ["Current priority", "Strategy will confirm this later"]
+          ]
+        },
+        ar: {
+          labTitle: "المرحلة صفر من إعداد النشاط",
+          labSubtitle: "مسودة عقد الحقول — ليست واجهة الإنتاج",
+          walkthrough: "استعراض الخطوات",
+          contract: "مبررات الحقول",
+          greetingEyebrow: "مرحباً بك في MARKOS",
+          greetingTitle: "يبدأ تسويقك بفهم نشاطك.",
+          greetingBody: "امنح فريقك التسويقي بالذكاء الاصطناعي نقطة بداية موثوقة. شارك ما لديك، ثم راجع الملف الذي يعدّه MARKOS.",
+          greetingJourneyLabel: "ما الذي سيحدث بعد ذلك؟",
+          greetingShareTitle: "شارك ما لديك",
+          greetingShareBody: "استخدم مستنداتك الحالية أو أجب عن بضعة أسئلة قصيرة.",
+          greetingOrganizeTitle: "ينظم MARKOS المعلومات",
+          greetingOrganizeBody: "يحوّل معلوماتك إلى ملف أولي واضح.",
+          greetingReviewTitle: "راجع قبل الاستخدام",
+          greetingReviewBody: "أكد التفاصيل قبل أن توجه الاستراتيجية والإنشاء.",
+          startSetup: "ابدأ إعداد نشاطي",
+          greetingFootnote: "يمكنك تحسين ملف نشاطك لاحقاً.",
+          prototypeNote:
+            "هدف المراجعة: ما الذي يسأله MARKOS، ولماذا، وما الذي يمنع الإكمال. رفع الملفات والاستخراج بالذكاء الاصطناعي معروضان كخطوات لاحقة فقط.",
+          eyebrow: "عرّف MARKOS على نشاطك مرة واحدة",
+          sideTitle: "ملف نشاطك",
+          sideBody: "امنح MARKOS نقطة بداية مفيدة، ويمكنك تحسين التفاصيل لاحقاً.",
+          notSaved: "غير محفوظ",
+          saved: "محفوظ",
+          skippedState: "تم التخطي",
+          back: "السابق",
+          backToReview: "العودة إلى المراجعة",
+          skip: "تخطي الآن",
+          continue: "حفظ ومتابعة",
+          finish: "مراجعة المسودة",
+          whyEyebrow: "لماذا توجد هذه الخطوة؟",
+          whyTitle: "يستخدمه MARKOS الآن",
+          storedTitle: "ما الذي يُحفظ؟",
+          notStoredTitle: "ما الذي لا يُحفظ؟",
+          completionTitle: "طريقة احتساب الإكمال",
+          stepsSubmitted: "الخطوات المرسلة",
+          coreFacts: "المعلومات الأساسية الجاهزة",
+          contractEyebrow: "مسودة قرار المرحلة صفر",
+          contractTitle: "لا نسأل إلا عما يستطيع MARKOS استخدامه",
+          contractBody: "معلومتان فقط تتيحان إنشاء الملف. تحسّن الإجابات الإضافية دقة النتائج، وتغادر الحقول غير المستخدمة الإعداد حتى تتوفر لها قدرة حقيقية.",
+          required: "مطلوب",
+          recommended: "موصى به",
+          optional: "اختياري",
+          deferred: "مؤجل",
+          tableStep: "الخطوة",
+          tableAsk: "السؤال المقترح",
+          tableStatus: "الحالة",
+          tableUse: "الاستخدام الفعلي الحالي",
+          tableRemove: "محذوف أو مخفي حالياً",
+          progressDecisionTitle: "التقدم ليس معرفة",
+          progressDecisionBody: "تحتاج الخطوات المرسلة والمتخطاة إلى حالة مستقلة ضمن مساحة العمل. التخطي لا ينشئ معلومة فارغة أو تضميناً في الخزنة.",
+          readinessDecisionTitle: "حد الاستعداد الإلزامي صغير",
+          readinessDecisionBody: "اسم نشاط مؤكد ووصف لما يقدمه يتيحان إنشاء الملف. نقص السياق الموصى به ينتج تنبيهاً عن الجودة، لا حظراً.",
+          reviewDecisionTitle: "المستخدم هو مصدر الحقيقة",
+          reviewDecisionBody: "قد يقترح الذكاء الاصطناعي أو تحليل المستند مرشحات. لا تصبح أي منها معرفة عن النشاط قبل تأكيد المالك لها.",
+          stepOf: (step, total) => `الخطوة ${step} من ${total}`,
+          requiredField: "مطلوب للمتابعة",
+          recommendedField: "يحسّن النتائج",
+          optionalField: "اختياري",
+          details: "إضافة تفاصيل أكثر (اختياري)",
+          notSure: "لست متأكداً بعد",
+          uploadTitle: "ارفع مستنداً",
+          uploadBody: "يمكنك رفع قائمة أو كتيب أو مستند خدمات. سيستخرج MARKOS اقتراحات لتراجعها.",
+          qualityWarning: "يمكنك المتابعة الآن. ستساعد إضافة التفاصيل الناقصة لاحقاً MARKOS على تقديم اقتراحات أدق.",
+          requiredError: "أضف هذه الإجابة الأساسية الوحيدة قبل المتابعة.",
+          previousStep: "السابق",
+          currentStep: "الحالي",
+          nextStep: "التالي",
+          noPrevious: "البداية",
+          noNext: "مراجعة الملف",
+          suggestions: "اقتراحات — اضغط للإضافة أو الإزالة",
+          reviewTitle: "راجع ما سيعرفه MARKOS",
+          reviewIntro: "يكفي اسم النشاط وما يقدمه لإنشاء ملف أولي. ستجعل التفاصيل الإضافية اقتراحات MARKOS الأولى أكثر دقة.",
+          ready: "جاهز",
+          missing: "غير مضاف",
+          edit: "تعديل",
+          reviewRows: [
+            ["اسم النشاط", "مطلوب"],
+            ["المنتجات والخدمات", "مطلوب"],
+            ["العملاء", "يساعد على تخصيص النتائج"],
+            ["القصة ونقاط القوة", "يحسّن الموقع التسويقي"],
+            ["سياق السوق", "اختياري"],
+            ["نبرة الصوت", "حتى أربع كلمات"],
+            ["الأولوية الحالية", "ستؤكدها الاستراتيجية لاحقاً"]
+          ]
+        }
+      };
+
+      const steps = {
+        en: [
+          {
+            id: "company",
+            label: "Business basics",
+            description: "Name and main market",
+            title: "Let’s start with the basics",
+            intro: "Confirm the identity MARKOS should use. Keep this factual and short.",
+            skippable: false,
+            why: "The business name identifies the workspace profile. Industry and market help Strategy avoid generic or geographically irrelevant suggestions.",
+            stored: "Only the values you confirm: name, business type, and primary market.",
+            notStored: "No website contents, inferred address, social profiles, or language preference.",
+            fields: [
+              { key: "businessName", label: "Business name", type: "text", kind: "required", placeholder: "Example: Sunlit Bakery" },
+              {
+                key: "industry",
+                label: "Business type",
+                type: "text",
+                kind: "recommended",
+                placeholder: "Example: Bakery, salon, consulting studio"
+              },
+              {
+                key: "market",
+                label: "Main market",
+                type: "text",
+                kind: "recommended",
+                placeholder: "Example: Bahrain, GCC, or online worldwide"
+              }
+            ],
+            detailFields: []
+          },
+          {
+            id: "story",
+            label: "What makes you different",
+            description: "Story and strengths",
+            title: "Why should customers choose you?",
+            intro: "A rough answer is useful. MARKOS can help refine it later, so this does not need to sound like marketing copy.",
+            skippable: true,
+            why: "A differentiator and the problem you solve improve positioning, profile resolution, and Strategy rationale.",
+            stored: "Only the differentiator, customer problem, mission, values, or story you enter.",
+            notStored: "MARKOS will not invent a mission, origin story, values, or vision when you skip them.",
+            fields: [
+              {
+                key: "difference",
+                label: "What makes you different?",
+                type: "textarea",
+                kind: "recommended",
+                placeholder: "Write it in your own words. One or two sentences is enough."
+              }
+            ],
+            detailFields: [
+              { key: "problem", label: "Customer problem", type: "textarea", kind: "optional", placeholder: "What problem do you help customers solve?" },
+              { key: "story", label: "Story, mission, or values", type: "textarea", kind: "optional", placeholder: "Add only what already exists" }
+            ]
+          },
+          {
+            id: "products",
+            label: "What you offer",
+            description: "Products or services",
+            title: "What do you sell or provide?",
+            intro: "Use one open field for everything you offer, or upload a document for MARKOS to extract candidates for your review.",
+            skippable: false,
+            why: "This is the minimum grounding needed for MARKOS to describe the business and create relevant Strategy and content.",
+            stored: "Your confirmed offer summary and any product or service candidates you explicitly accept.",
+            notStored: "Uploaded documents and extracted suggestions are not business truth until you review and confirm them.",
+            fields: [
+              {
+                key: "offer",
+                label: "Products and services",
+                type: "textarea",
+                kind: "required",
+                placeholder: "Names, descriptions, prices, or any other useful details — write as much or as little as you know."
+              }
+            ],
+            detailFields: [],
+            upload: true
+          },
+          {
+            id: "audience",
+            label: "Your customers",
+            description: "Who you want to reach",
+            title: "Who usually buys from you?",
+            intro: "Describe real customers in everyday language. Exact demographics are unnecessary unless they genuinely affect the work.",
+            skippable: true,
+            why: "Audience context helps Strategy and Create choose relevant messages, pain points, and calls to action.",
+            stored: "The customer description, needs, motivations, and markets you choose to provide.",
+            notStored: "No guessed age, gender, interests, or demographic profile.",
+            fields: [
+              {
+                key: "audience",
+                label: "Main customers",
+                type: "textarea",
+                kind: "recommended",
+                placeholder: "Example: Busy parents in Bahrain ordering cakes for family celebrations."
+              }
+            ],
+            detailFields: [
+              { key: "needs", label: "Customer needs", type: "textarea", kind: "optional", placeholder: "What do they need or struggle with?" },
+              {
+                key: "motivations",
+                label: "What matters to them?",
+                type: "text",
+                kind: "optional",
+                placeholder: "Example: reliability, delivery speed, personalization"
+              }
+            ]
+          },
+          {
+            id: "competitors",
+            label: "Market context",
+            description: "Completely optional",
+            title: "Who do customers compare you with?",
+            intro: "Skip this if you do not know. A named competitor is not required, and MARKOS will not pretend to verify one.",
+            skippable: true,
+            why: "Confirmed comparisons can improve positioning, but current MARKOS does not research or verify competitors.",
+            stored: "Only competitor names or market observations you explicitly provide.",
+            notStored: "No inferred competitors, unverified Instagram handles, websites, or external research.",
+            fields: [
+              {
+                key: "competitors",
+                label: "Competitors or alternatives",
+                type: "textarea",
+                kind: "optional",
+                placeholder: "Optional — leave blank if you do not know"
+              }
+            ],
+            detailFields: [{ key: "avoid", label: "What to avoid", type: "textarea", kind: "optional", placeholder: "Anything MARKOS should avoid copying?" }]
+          },
+          {
+            id: "brand",
+            label: "How you sound",
+            description: "Tone used by Create",
+            title: "How should the business sound?",
+            intro: "Describe the voice in up to four tone words. Use a suggestion, combine a few, or write your own.",
+            skippable: true,
+            why: "Tone words and voice notes are directly used to lock AI-generated content to the chosen style.",
+            stored: "The tone choices and writing guidance you select or enter.",
+            notStored: "Colors, fonts, logo, visual aesthetic, and brand guidelines are deferred until media generation can use them.",
+            suggestions: ["Warm", "Clear", "Confident", "Playful", "Professional", "Direct", "Educational", "Premium"],
+            suggestionTarget: "toneWords",
+            suggestionMode: "multi",
+            fields: [
+              {
+                key: "toneWords",
+                label: "Tone of voice",
+                type: "text",
+                kind: "recommended",
+                placeholder: "Example: warm, clear, confident",
+                helper: "Separate tone words with commas. Suggestions are optional and removable."
+              }
+            ],
+            detailFields: [
+              {
+                key: "voice",
+                label: "Writing guidance",
+                type: "textarea",
+                kind: "optional",
+                placeholder: "Example: clear and warm; avoid slang and exaggerated promises"
+              }
+            ]
+          },
+          {
+            id: "objectives",
+            label: "Current priority",
+            description: "Strategy confirms it later",
+            title: "What should MARKOS help with first?",
+            intro: "This gives the profile useful context. Strategy will still ask you to confirm or change the objective and duration.",
+            skippable: true,
+            why: "A current priority can guide the profile’s marketing focus. The Strategy step remains the authoritative choice for a specific plan.",
+            stored: "Only the priority you select or describe.",
+            notStored: "No budget, Instagram-experience score, KPI target, or fixed 90-day commitment.",
+            suggestions: ["Build awareness", "Generate leads", "Increase sales", "Promote an offer", "Build community", "Launch something new"],
+            suggestionTarget: "priority",
+            suggestionMode: "single",
+            fields: [
+              {
+                key: "priority",
+                label: "Current priority",
+                type: "textarea",
+                kind: "optional",
+                placeholder: "Example: Introduce our new catering service to offices in Manama."
+              }
+            ],
+            detailFields: []
+          },
+          {
+            id: "review",
+            label: "Information check",
+            description: "Essentials and quality gaps",
+            title: "Review what MARKOS will know",
+            intro:
+              "Your business name and what you offer are enough to create a starting profile. More details will make MARKOS’s first suggestions more specific.",
+            skippable: false,
+            why: "The review separates a hard readiness floor from quality guidance before AI resolves the bilingual profile.",
+            stored: "Nothing new is stored here. The next action generates an editable profile draft from confirmed Vault facts.",
+            notStored: "Skipped answers, placeholders, candidate document values, and quality warnings are never treated as business facts.",
+            fields: [],
+            detailFields: [],
+            review: true
+          }
+        ],
+        ar: []
+      };
+
+      steps.ar = [
+        {
+          ...steps.en[0],
+          label: "أساسيات النشاط",
+          description: "الاسم والسوق الرئيسي",
+          title: "لنبدأ بالأساسيات",
+          intro: "أكد الهوية التي ينبغي أن يستخدمها MARKOS. اجعل المعلومات واقعية ومختصرة.",
+          why: "يحدد اسم النشاط ملف مساحة العمل. يساعد القطاع والسوق الاستراتيجية على تجنب الاقتراحات العامة أو غير الملائمة جغرافياً.",
+          stored: "القيم التي تؤكدها فقط: الاسم ونوع النشاط والسوق الرئيسي.",
+          notStored: "لا نحفظ محتوى موقع إلكتروني أو عنواناً مستنتجاً أو حسابات اجتماعية أو تفضيل لغة.",
+          fields: [
+            { key: "businessName", label: "اسم النشاط", type: "text", kind: "required", placeholder: "مثال: مخبز صن لايت" },
+            { key: "industry", label: "نوع النشاط", type: "text", kind: "recommended", placeholder: "مثال: مخبز، صالون، استشارات" },
+            {
+              key: "market",
+              label: "السوق الرئيسي",
+              type: "text",
+              kind: "recommended",
+              placeholder: "مثال: البحرين، الخليج، أو عبر الإنترنت عالمياً"
+            }
+          ]
+        },
+        {
+          ...steps.en[1],
+          label: "ما الذي يميزك؟",
+          description: "القصة ونقاط القوة",
+          title: "لماذا يختارك العملاء؟",
+          intro: "تكفي إجابة أولية. يستطيع MARKOS مساعدتك على تحسينها لاحقاً، فلا يلزم أن تبدو كنص تسويقي.",
+          why: "يساعد عامل التميز والمشكلة التي تحلها على تحسين الموقع التسويقي وملف النشاط ومبررات الاستراتيجية.",
+          stored: "عامل التميز ومشكلة العميل والرسالة والقيم والقصة التي تدخلها فقط.",
+          notStored: "لن يخترع MARKOS رسالة أو قصة بداية أو قيماً أو رؤية عند تخطيها.",
+          fields: [
+            {
+              key: "difference",
+              label: "ما الذي يميزك؟",
+              type: "textarea",
+              kind: "recommended",
+              placeholder: "اكتبها بطريقتك. تكفي جملة أو جملتان."
+            }
+          ],
+          detailFields: [
+            { key: "problem", label: "مشكلة العميل", type: "textarea", kind: "optional", placeholder: "ما المشكلة التي تساعد العملاء على حلها؟" },
+            { key: "story", label: "القصة أو الرسالة أو القيم", type: "textarea", kind: "optional", placeholder: "أضف ما هو موجود فعلاً فقط" }
+          ]
+        },
+        {
+          ...steps.en[2],
+          label: "ما الذي تقدمه؟",
+          description: "المنتجات أو الخدمات",
+          title: "ماذا تبيع أو تقدم؟",
+          intro: "استخدم حقلاً مفتوحاً واحداً لكل ما تقدمه، أو ارفع مستنداً ليستخرج MARKOS مرشحات تراجعها بنفسك.",
+          why: "هذه أقل معرفة يحتاجها MARKOS لوصف النشاط وإنشاء استراتيجية ومحتوى مرتبطين به.",
+          stored: "ملخص العرض الذي تؤكده وأي منتجات أو خدمات تقبلها بوضوح.",
+          notStored: "لا تصبح المستندات والاقتراحات المستخرجة حقائق عن النشاط قبل مراجعتك وتأكيدك.",
+          fields: [
+            {
+              key: "offer",
+              label: "المنتجات والخدمات",
+              type: "textarea",
+              kind: "required",
+              placeholder: "الأسماء أو الأوصاف أو الأسعار أو أي تفاصيل مفيدة — اكتب قدر ما تعرفه."
+            }
+          ],
+          detailFields: []
+        },
+        {
+          ...steps.en[3],
+          label: "عملاؤك",
+          description: "من تريد الوصول إليه؟",
+          title: "من يشتري منك عادة؟",
+          intro: "صف العملاء الحقيقيين بلغة يومية. لا حاجة إلى تفاصيل ديموغرافية دقيقة إلا إذا أثرت فعلاً على العمل.",
+          why: "يساعد سياق الجمهور الاستراتيجية والإنشاء على اختيار رسائل واحتياجات ودعوات إلى الإجراء أكثر ملاءمة.",
+          stored: "وصف العملاء واحتياجاتهم ودوافعهم وأسواقهم التي تختار تقديمها.",
+          notStored: "لا نخمن العمر أو الجنس أو الاهتمامات أو الملف الديموغرافي.",
+          fields: [
+            {
+              key: "audience",
+              label: "العملاء الرئيسيون",
+              type: "textarea",
+              kind: "recommended",
+              placeholder: "مثال: أهالٍ مشغولون في البحرين يطلبون كعكات للمناسبات العائلية."
+            }
+          ],
+          detailFields: [
+            { key: "needs", label: "احتياجات العملاء", type: "textarea", kind: "optional", placeholder: "ماذا يحتاجون أو ما الصعوبات التي يواجهونها؟" },
+            { key: "motivations", label: "ما الذي يهمهم؟", type: "text", kind: "optional", placeholder: "مثال: الموثوقية وسرعة التوصيل والتخصيص" }
+          ]
+        },
+        {
+          ...steps.en[4],
+          label: "سياق السوق",
+          description: "اختياري بالكامل",
+          title: "بمن يقارنك العملاء؟",
+          intro: "تخط هذه الخطوة إن لم تكن متأكداً. لا يشترط منافس محدد، ولن يدّعي MARKOS التحقق منه.",
+          why: "قد تحسن المقارنات المؤكدة الموقع التسويقي، لكن MARKOS الحالي لا يبحث عن المنافسين أو يتحقق منهم.",
+          stored: "أسماء المنافسين أو ملاحظات السوق التي تقدمها بوضوح فقط.",
+          notStored: "لا منافسين مستنتجين ولا حسابات إنستغرام أو مواقع غير متحقق منها ولا بحثاً خارجياً.",
+          fields: [
+            {
+              key: "competitors",
+              label: "المنافسون أو البدائل",
+              type: "textarea",
+              kind: "optional",
+              placeholder: "اختياري — اتركه فارغاً إن لم تكن تعرف"
+            }
+          ],
+          detailFields: [{ key: "avoid", label: "ما ينبغي تجنبه", type: "textarea", kind: "optional", placeholder: "هل هناك ما ينبغي ألا يقلده MARKOS؟" }]
+        },
+        {
+          ...steps.en[5],
+          label: "كيف يبدو صوتك؟",
+          description: "نبرة يستخدمها الإنشاء",
+          title: "كيف ينبغي أن يتحدث النشاط؟",
+          intro: "صف الصوت بثلاث أو أربع كلمات. استخدم اقتراحاً أو ادمج عدة اقتراحات أو اكتب كلماتك الخاصة.",
+          why: "تُستخدم كلمات النبرة وملاحظات الصوت مباشرة لضبط المحتوى الذي ينشئه الذكاء الاصطناعي.",
+          stored: "خيارات النبرة وإرشادات الكتابة التي تختارها أو تدخلها.",
+          notStored: "الألوان والخطوط والشعار والهوية البصرية ودليل العلامة مؤجلة حتى يستطيع إنشاء الوسائط استخدامها.",
+          suggestions: ["دافئ", "واضح", "واثق", "مرح", "احترافي", "مباشر", "تعليمي", "راقٍ"],
+          suggestionTarget: "toneWords",
+          suggestionMode: "multi",
+          fields: [
+            {
+              key: "toneWords",
+              label: "نبرة الصوت",
+              type: "text",
+              kind: "recommended",
+              placeholder: "مثال: دافئ، واضح، واثق",
+              helper: "افصل كلمات النبرة بفواصل. الاقتراحات اختيارية ويمكن إزالتها."
+            }
+          ],
+          detailFields: [
+            {
+              key: "voice",
+              label: "إرشادات الكتابة",
+              type: "textarea",
+              kind: "optional",
+              placeholder: "مثال: واضح ودافئ، من دون مبالغة أو وعود كبيرة"
+            }
+          ]
+        },
+        {
+          ...steps.en[6],
+          label: "الأولوية الحالية",
+          description: "تؤكدها الاستراتيجية لاحقاً",
+          title: "بماذا تريد من MARKOS أن يساعد أولاً؟",
+          intro: "يمنح هذا ملف النشاط سياقاً مفيداً. ستطلب منك الاستراتيجية تأكيد الهدف والمدة أو تغييرهما.",
+          why: "يمكن للأولوية الحالية أن توجه التركيز التسويقي في الملف. تبقى خطوة الاستراتيجية هي الاختيار المعتمد للخطة المحددة.",
+          stored: "الأولوية التي تختارها أو تصفها فقط.",
+          notStored: "لا ميزانية ولا تقييم خبرة إنستغرام ولا هدف أداء ولا التزام ثابت لمدة 90 يوماً.",
+          suggestions: ["زيادة الوعي", "توليد عملاء محتملين", "زيادة المبيعات", "الترويج لعرض", "بناء مجتمع", "إطلاق شيء جديد"],
+          suggestionTarget: "priority",
+          suggestionMode: "single",
+          fields: [
+            {
+              key: "priority",
+              label: "الأولوية الحالية",
+              type: "textarea",
+              kind: "optional",
+              placeholder: "مثال: تعريف مكاتب المنامة بخدمة الضيافة الجديدة."
+            }
+          ],
+          detailFields: []
+        },
+        {
+          ...steps.en[7],
+          label: "فحص المعلومات",
+          description: "الأساسيات وفجوات الجودة",
+          title: "راجع ما سيعرفه MARKOS",
+          intro: "يكفي اسم النشاط وما يقدمه لإنشاء ملف أولي. ستجعل التفاصيل الإضافية اقتراحات MARKOS الأولى أكثر دقة.",
+          why: "تفصل المراجعة بين حد الاستعداد الإلزامي وإرشادات الجودة قبل أن ينشئ الذكاء الاصطناعي الملف ثنائي اللغة.",
+          stored: "لا يُحفظ شيء جديد هنا. ينشئ الإجراء التالي مسودة ملف قابلة للتعديل من حقائق الخزنة المؤكدة.",
+          notStored: "لا تعامل الإجابات المتخطاة أو النصوص الإرشادية أو مرشحات المستند أو تحذيرات الجودة كحقائق عن النشاط."
+        }
+      ];
+
+      const contractRows = {
+        en: [
+          ["Business basics", "Business name", "required", "Profile identity and grounding", "Website, languages, company size, social links"],
+          ["Business basics", "Business type and main market", "recommended", "Strategy and profile relevance", "Exact address and inferred geography"],
+          [
+            "What makes you different",
+            "Differentiator in the owner’s words",
+            "recommended",
+            "Positioning and profile resolution",
+            "Mandatory mission, USP, values, origin, and vision"
+          ],
+          [
+            "What you offer",
+            "Plain-language offer summary",
+            "required",
+            "Profile, Strategy, and Create grounding",
+            "Mandatory catalogue rows, category, price, and sales channels"
+          ],
+          [
+            "Your customers",
+            "Plain-language customer description",
+            "recommended",
+            "Messages, pain points, and calls to action",
+            "Mandatory age, gender, and interest tags"
+          ],
+          [
+            "Market context",
+            "Known competitors or alternatives",
+            "optional",
+            "Positioning when the owner has evidence",
+            "Required competitor, handle verification, website research"
+          ],
+          [
+            "How you sound",
+            "Open tone field, supported by suggestions",
+            "recommended",
+            "Direct tone lock in Create",
+            "Colors, fonts, logo, aesthetic, guideline upload"
+          ],
+          [
+            "Current priority",
+            "Open priority field, supported by suggestions",
+            "optional",
+            "Profile focus; Strategy confirms the plan",
+            "Budget, Instagram experience, KPI targets, fixed 90-day answer"
+          ]
+        ],
+        ar: [
+          ["أساسيات النشاط", "اسم النشاط", "required", "هوية الملف وسياق الإنشاء", "الموقع الإلكتروني واللغات وحجم الشركة والحسابات الاجتماعية"],
+          ["أساسيات النشاط", "نوع النشاط والسوق الرئيسي", "recommended", "ملاءمة الاستراتيجية والملف", "العنوان الدقيق أو الموقع الجغرافي المستنتج"],
+          [
+            "ما الذي يميزك؟",
+            "عامل التميز بكلمات المالك",
+            "recommended",
+            "الموقع التسويقي وإنشاء الملف",
+            "إلزامية الرسالة وعرض القيمة والقيم وقصة البداية والرؤية"
+          ],
+          [
+            "ما الذي تقدمه؟",
+            "ملخص بسيط للمنتجات أو الخدمات",
+            "required",
+            "سياق الملف والاستراتيجية والإنشاء",
+            "إلزامية قائمة منتجات منظمة والفئة والسعر وقنوات البيع"
+          ],
+          ["عملاؤك", "وصف بسيط للعملاء", "recommended", "الرسائل والاحتياجات ودعوات الإجراء", "إلزامية العمر والجنس ووسوم الاهتمامات"],
+          [
+            "سياق السوق",
+            "المنافسون أو البدائل المعروفة",
+            "optional",
+            "الموقع التسويقي عندما يملك المستخدم معلومات",
+            "إلزامية منافس أو التحقق من الحساب أو البحث في المواقع"
+          ],
+          [
+            "كيف يبدو صوتك؟",
+            "حقل مفتوح للنبرة تدعمه اقتراحات",
+            "recommended",
+            "ضبط النبرة مباشرة في الإنشاء",
+            "الألوان والخطوط والشعار والهوية البصرية ورفع الدليل"
+          ],
+          [
+            "الأولوية الحالية",
+            "حقل مفتوح للأولوية تدعمه اقتراحات",
+            "optional",
+            "تركيز الملف وتأكيد الخطة في الاستراتيجية",
+            "الميزانية وخبرة إنستغرام وأهداف الأداء وإجابة 90 يوماً"
+          ]
+        ]
+      };
+
+      const state = {
+        locale: "en",
+        screen: "greeting",
+        step: 0,
+        values: {},
+        stepState: {},
+        editingFromReview: false
+      };
+
+      const root = document.documentElement;
+      const greetingPanel = document.querySelector("#greeting-panel");
+      const setupPanel = document.querySelector("#setup-panel");
+      const startSetupButton = document.querySelector("#start-setup-button");
+      const stepContext = document.querySelector("#step-context");
+      const stepContent = document.querySelector("#step-content");
+      const progressLabel = document.querySelector("#progress-label");
+      const progressBar = document.querySelector("#progress-bar");
+      const saveState = document.querySelector("#save-state");
+      const contractBody = document.querySelector("#contract-body");
+      const backButton = document.querySelector("#back-button");
+      const skipButton = document.querySelector("#skip-button");
+      const continueButton = document.querySelector("#continue-button");
+
+      function localCopy() {
+        return copy[state.locale];
+      }
+
+      function localSteps() {
+        return steps[state.locale];
+      }
+
+      function escapeHtml(value) {
+        return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+      }
+
+      function fieldBadge(kind) {
+        const c = localCopy();
+        const labels = {
+          required: c.requiredField,
+          recommended: c.recommendedField,
+          optional: c.optionalField
+        };
+        return `<span class="field-kind ${kind}">${escapeHtml(labels[kind])}</span>`;
+      }
+
+      function renderField(field) {
+        const value = state.values[field.key] ?? "";
+        const control =
+          field.type === "textarea"
+            ? `<textarea id="${field.key}" data-field="${field.key}" placeholder="${escapeHtml(field.placeholder)}">${escapeHtml(value)}</textarea>`
+            : `<input id="${field.key}" data-field="${field.key}" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder)}" />`;
+        const helper = field.helper ? `<p class="helper">${escapeHtml(field.helper)}</p>` : "";
+        return `<div class="field"><div class="field-label-row"><label for="${field.key}">${escapeHtml(field.label)}</label>${fieldBadge(field.kind)}</div>${control}${helper}</div>`;
+      }
+
+      function renderReview() {
+        const c = localCopy();
+        const reviewStepTargets = [0, 2, 3, 1, 4, 5, 6];
+        const ready = {
+          0: Boolean((state.values.businessName ?? "").trim()),
+          1: Boolean((state.values.offer ?? "").trim()),
+          2: Boolean((state.values.audience ?? "").trim()),
+          3: Boolean((state.values.difference ?? "").trim()),
+          4: Boolean((state.values.competitors ?? "").trim()),
+          5: Boolean((state.values.toneWords ?? "").trim() || (state.values.voice ?? "").trim()),
+          6: Boolean((state.values.priority ?? "").trim())
+        };
+        return `<div class="review-list">${c.reviewRows
+          .map(
+            (row, index) =>
+              `<button class="review-item" type="button" data-review-step="${reviewStepTargets[index]}" aria-label="${escapeHtml(`${c.edit}: ${row[0]}`)}"><span><strong>${escapeHtml(row[0])}</strong><span>${escapeHtml(row[1])}</span></span><span class="review-action"><span class="review-state ${ready[index] ? "ready" : ""}">${escapeHtml(ready[index] ? c.ready : c.missing)}</span><span class="review-edit" aria-hidden="true">${escapeHtml(c.edit)} <span class="review-arrow">→</span></span></span></button>`
+          )
+          .join("")}</div><div class="compact-notice"><span class="notice-icon" aria-hidden="true">i</span><span>${escapeHtml(c.qualityWarning)}</span></div>`;
+      }
+
+      function suggestionValues(step) {
+        if (!step.suggestionTarget) return [];
+        const value = String(state.values[step.suggestionTarget] ?? "").trim();
+        if (!value) return [];
+        return step.suggestionMode === "multi"
+          ? value
+              .split(/[،,]/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : [value];
+      }
+
+      function suggestionIsSelected(step, suggestion) {
+        return suggestionValues(step).some((value) => value.toLocaleLowerCase() === suggestion.toLocaleLowerCase());
+      }
+
+      function applySuggestion(step, suggestion) {
+        const current = suggestionValues(step);
+        const selectedIndex = current.findIndex((value) => value.toLocaleLowerCase() === suggestion.toLocaleLowerCase());
+        if (step.suggestionMode === "multi") {
+          if (selectedIndex >= 0) current.splice(selectedIndex, 1);
+          else if (current.length < 4) current.push(suggestion);
+          state.values[step.suggestionTarget] = current.join(state.locale === "ar" ? "، " : ", ");
+        } else {
+          state.values[step.suggestionTarget] = selectedIndex >= 0 ? "" : suggestion;
+        }
+        state.stepState[step.id] = "pending";
+        render();
+      }
+
+      function renderStepContent(step) {
+        const c = localCopy();
+        const suggestions = step.suggestions
+          ? `<aside class="suggestion-panel"><p>${escapeHtml(c.suggestions)}</p><div class="suggestion-list">${step.suggestions
+              .map(
+                (suggestion) =>
+                  `<button class="suggestion-chip" type="button" data-suggestion="${escapeHtml(suggestion)}" aria-pressed="${suggestionIsSelected(step, suggestion)}">${escapeHtml(suggestion)}</button>`
+              )
+              .join("")}</div></aside>`
+          : "";
+        const fields = step.fields.map(renderField).join("");
+        const details = step.detailFields.length
+          ? `<details><summary>${escapeHtml(c.details)}</summary><div class="details-content">${step.detailFields.map(renderField).join("")}</div></details>`
+          : "";
+        const upload = step.upload
+          ? `<div class="drop-zone"><div><strong>${escapeHtml(c.uploadTitle)}</strong><span>${escapeHtml(c.uploadBody)}</span></div></div>`
+          : "";
+        const fieldBody = `<div class="field-stack">${fields}${details}${upload}</div>`;
+        const body = step.review ? renderReview() : suggestions ? `<div class="suggestion-layout">${fieldBody}${suggestions}</div>` : fieldBody;
+        stepContent.innerHTML = `<h2>${escapeHtml(step.title)}</h2><p class="step-intro">${escapeHtml(step.intro)}</p>${body}`;
+
+        document.querySelectorAll("[data-field]").forEach((control) => {
+          control.addEventListener("input", (event) => {
+            state.values[event.target.dataset.field] = event.target.value;
+            state.stepState[step.id] = "pending";
+            saveState.textContent = localCopy().notSaved;
+            event.target.removeAttribute("aria-invalid");
+            event.target.closest(".field")?.querySelector("[data-required-error]")?.remove();
+            updateActionState(step);
+            document.querySelectorAll("[data-suggestion]").forEach((button) => {
+              button.setAttribute("aria-pressed", String(suggestionIsSelected(step, button.dataset.suggestion)));
+            });
+          });
+        });
+        document.querySelectorAll("[data-suggestion]").forEach((control) => {
+          control.addEventListener("click", () => {
+            applySuggestion(step, control.dataset.suggestion);
+          });
+        });
+        document.querySelectorAll("[data-review-step]").forEach((control) => {
+          control.addEventListener("click", () => {
+            state.editingFromReview = true;
+            state.step = Number(control.dataset.reviewStep);
+            render();
+            stepContent.querySelector("input, textarea")?.focus();
+          });
+        });
+      }
+
+      function renderStepContext() {
+        const allSteps = localSteps();
+        const c = localCopy();
+        const items = [
+          { className: "previous", caption: c.previousStep, step: allSteps[state.step - 1], fallback: c.noPrevious },
+          { className: "current", caption: c.currentStep, step: allSteps[state.step], fallback: "" },
+          { className: "next", caption: c.nextStep, step: allSteps[state.step + 1], fallback: c.noNext }
+        ];
+        stepContext.innerHTML = items
+          .map(
+            (item) =>
+              `<div class="step-context-item ${item.className} ${item.step ? "" : "empty"}"><span>${escapeHtml(item.caption)}</span><strong>${escapeHtml(item.step?.label ?? item.fallback)}</strong></div>`
+          )
+          .join("");
+      }
+
+      function stepHasData(step) {
+        const fields = [...step.fields, ...step.detailFields];
+        return fields.some((field) => Boolean(String(state.values[field.key] ?? "").trim()));
+      }
+
+      function stepCanContinue(step) {
+        if (step.review) return hasCoreValue(step);
+        const requiredFields = step.fields.filter((field) => field.kind === "required");
+        if (requiredFields.length > 0) {
+          return requiredFields.every((field) => Boolean(String(state.values[field.key] ?? "").trim()));
+        }
+        return stepHasData(step);
+      }
+
+      function updateActionState(step) {
+        continueButton.disabled = !stepCanContinue(step);
+      }
+
+      function renderContract() {
+        const c = localCopy();
+        const statusLabels = {
+          required: c.required,
+          recommended: c.recommended,
+          optional: c.optional,
+          deferred: c.deferred
+        };
+        contractBody.innerHTML = contractRows[state.locale]
+          .map(
+            (row) =>
+              `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td><td><span class="status-pill ${row[2] === "required" ? "keep" : row[2] === "recommended" ? "recommend" : row[2]}">${escapeHtml(statusLabels[row[2]])}</span></td><td>${escapeHtml(row[3])}</td><td>${escapeHtml(row[4])}</td></tr>`
+          )
+          .join("");
+      }
+
+      function renderStaticCopy() {
+        const c = localCopy();
+        document.querySelectorAll("[data-copy]").forEach((node) => {
+          const key = node.dataset.copy;
+          if (typeof c[key] === "string") node.textContent = c[key];
+        });
+        document.querySelectorAll("[data-copy-aria]").forEach((node) => {
+          const key = node.dataset.copyAria;
+          if (typeof c[key] === "string") node.setAttribute("aria-label", c[key]);
+        });
+      }
+
+      function render() {
+        const c = localCopy();
+        const allSteps = localSteps();
+        const step = allSteps[state.step];
+        renderStaticCopy();
+        renderContract();
+        const isGreeting = state.screen === "greeting";
+        greetingPanel.hidden = !isGreeting;
+        setupPanel.hidden = isGreeting;
+        if (isGreeting) return;
+
+        renderStepContext();
+        renderStepContent(step);
+
+        progressLabel.textContent = c.stepOf(state.step + 1, allSteps.length);
+        progressBar.style.width = `${((state.step + 1) / allSteps.length) * 100}%`;
+        saveState.textContent = state.stepState[step.id] === "complete" ? c.saved : state.stepState[step.id] === "skipped" ? c.skippedState : c.notSaved;
+        backButton.textContent = state.editingFromReview ? c.backToReview : c.back;
+        backButton.disabled = false;
+        skipButton.hidden = !step.skippable || step.review;
+        continueButton.textContent = state.step === allSteps.length - 1 ? c.finish : c.continue;
+        updateActionState(step);
+      }
+
+      function hasCoreValue(step) {
+        if (step.id === "company") return Boolean((state.values.businessName ?? "").trim());
+        if (step.id === "products") return Boolean((state.values.offer ?? "").trim());
+        return true;
+      }
+
+      backButton.addEventListener("click", () => {
+        if (state.editingFromReview) {
+          state.editingFromReview = false;
+          state.step = localSteps().length - 1;
+          render();
+          return;
+        }
+        if (state.step === 0) {
+          state.screen = "greeting";
+          render();
+          return;
+        }
+        if (state.step > 0) {
+          state.step -= 1;
+          render();
+        }
+      });
+
+      startSetupButton.addEventListener("click", () => {
+        state.screen = "setup";
+        render();
+        stepContent.querySelector("input, textarea")?.focus();
+      });
+
+      skipButton.addEventListener("click", () => {
+        const step = localSteps()[state.step];
+        state.stepState[step.id] = "skipped";
+        if (state.editingFromReview) {
+          state.editingFromReview = false;
+          state.step = localSteps().length - 1;
+        } else if (state.step < localSteps().length - 1) state.step += 1;
+        render();
+      });
+
+      continueButton.addEventListener("click", () => {
+        const step = localSteps()[state.step];
+        if (!hasCoreValue(step)) {
+          const firstRequired = stepContent.querySelector(".field-kind.required")?.closest(".field")?.querySelector("input, textarea");
+          firstRequired?.focus();
+          firstRequired?.setAttribute("aria-invalid", "true");
+          const field = firstRequired?.closest(".field");
+          if (field && !field.querySelector("[data-required-error]")) {
+            field.insertAdjacentHTML("beforeend", `<p class="field-error" data-required-error role="alert">${escapeHtml(localCopy().requiredError)}</p>`);
+          }
+          return;
+        }
+        if (!step.review) state.stepState[step.id] = "complete";
+        if (state.editingFromReview) {
+          state.editingFromReview = false;
+          state.step = localSteps().length - 1;
+        } else if (state.step < localSteps().length - 1) state.step += 1;
+        render();
+      });
+
+      document.querySelectorAll("[data-locale-button]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.locale = button.dataset.localeButton;
+          root.dataset.locale = state.locale;
+          root.lang = state.locale;
+          root.dir = state.locale === "ar" ? "rtl" : "ltr";
+          document.querySelectorAll("[data-locale-button]").forEach((candidate) => {
+            candidate.setAttribute("aria-pressed", String(candidate === button));
+          });
+          render();
+        });
+      });
+
+      document.querySelectorAll("[data-view-button]").forEach((button) => {
+        button.addEventListener("click", () => {
+          root.dataset.view = button.dataset.viewButton;
+          document.querySelectorAll("[data-view-button]").forEach((candidate) => {
+            candidate.setAttribute("aria-pressed", String(candidate === button));
+          });
+        });
+      });
+
+      render();
+    </script>
+  </body>
+</html>

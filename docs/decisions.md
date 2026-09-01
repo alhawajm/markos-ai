@@ -289,7 +289,7 @@ Accept exactly six numeric verification digits in a high-contrast, one-time-code
 
 ## 2026-08-06: Onboarding persists only disclosed business answers
 
-Use the seven canonical onboarding modules in the experience flow—Company, Story, Products, Audience, Competitors, Brand, and Objectives—followed by a non-generative review screen. Prefill only the authenticated workspace name. Choices, examples, placeholders, color palettes, and option lists may guide the user, but they must not become stored business facts until the user selects or enters them.
+Use the seven canonical onboarding modules in the experience flow—Company, Products, Story, Audience, Competitors, Brand, and Objectives—followed by a non-generative review screen. Products appears second because it is the other essential input for the first profile; the module names and persistence contract do not otherwise change. Prefill only the authenticated workspace name. Choices, examples, placeholders, color palettes, and option lists may guide the user, but they must not become stored business facts until the user selects or enters them.
 
 Retire the fixture-backed `markos.onboarding.draft` browser key and begin with the versioned `markos.onboarding.draft.v2` key. This intentionally discards old Zain-based drafts. Remove the simulated social connection screen, generated-content counts, readiness percentage, and hidden payload values. A validation or API failure keeps the draft locally and blocks forward navigation; completing onboarding clears the versioned draft only after the API confirms completion.
 
@@ -422,3 +422,103 @@ Reserve the workspace's `AI_IMAGE` allowance before making the paid provider req
 An ordinary visit to onboarding still redirects a workspace whose business profile is complete and approved to Strategy. The **Review and edit profile** action is different: it opens onboarding in explicit edit mode and hydrates the seven modules from the workspace's current Vault values so the user edits existing truth rather than an empty form.
 
 Saving any changed canonical module retains the existing invalidation contract: the resolved profile becomes stale, onboarding returns to `IN_PROGRESS`, and the user reviews and approves a regenerated profile before it becomes the new grounding record. Historical approved interactions remain preserved.
+
+## 2026-08-23: UI feedback is interpreted within the active Sunlit system
+
+Treat meeting notes, screenshots, templates, design exports, and stakeholder suggestions as evidence and prompts for investigation rather than automatic product requirements. Keep raw review notes outside the active repository documentation. Promote only an interpreted problem, proposed direction, decision state, preserved contracts, and observable acceptance criteria. The product team may accept, reframe, defer, or reject a suggestion.
+
+Keep `docs/ui-design-foundation.md` as the active visual and interaction authority beneath the build specification and experience flows. Use `docs/ui-ux-workflow.md` for reference, prototype, implementation, and QA practice, and `docs/ui-ux-improvement-plan.md` for the interpreted working backlog. Archive the superseded light/red and dark command-center checklists, exports, and dated state audits rather than leaving them in the active documentation root.
+
+Prototype consequential navigation, information hierarchy, multi-step journey, and dense workspace changes before implementation when feasible. A Figma file, browser prototype, or annotated screenshot is evidence only after the intended frames and relevant states have been visually reviewed. Preserve application behavior, workspace isolation, approval gates, metering, accessibility, Arabic/RTL, and honest external-provider state throughout visual work.
+
+## 2026-08-25: Draft planning time is distinct from a publishing schedule
+
+Supersede the August 19 assumption that every Draft/Review/Ready item belongs in the unscheduled queue. Add an optional `plannedAt` timestamp to the workspace-owned content item contract. A saved `DRAFT`, `IN_REVIEW`, or `APPROVED` item without `plannedAt` belongs in Unscheduled; one with `plannedAt` appears on the corresponding Calendar date and time. The UI collects the planned date and time together and stores one timezone-safe instant.
+
+`plannedAt` is planning metadata, not publishing state. Setting or changing it must not mark an item Ready, put it in the publishing queue, or cause the worker to publish it. `scheduledAt` remains reserved for the explicit schedule/reschedule contract and `SCHEDULED` or recoverable `FAILED` state; `publishedAt` remains the provider-confirmed publication time. Calendar must never substitute `createdAt` or `updatedAt` for any of these timestamps.
+
+The explicit Schedule action may begin with `plannedAt` as its proposed value, but it must still require confirmation and write `scheduledAt` through the existing scheduling boundary. Scheduling may retain `plannedAt` while the schedule is active, but cancelling the schedule clears both `scheduledAt` and `plannedAt`, returns the item to Ready, and moves it to Unscheduled. In Calendar Post Focus, that transition unwinds one level to the originating Day Focus and reports the move through timed feedback. A planned time that passes without scheduling is an attention state, never permission to publish.
+
+Opening **Start a blank post** now begins with an unpersisted browser working copy rather than immediately inserting an empty `ContentItem`. The planned date/time itself counts as a meaningful edit: saving an otherwise empty working copy with that value creates a legitimate Calendar draft, while leaving a completely untouched working copy creates nothing. In-app navigation away from meaningful unsaved changes offers Save draft, Discard changes, and Keep editing; a confirmed save does not make the item Ready.
+
+Keep the existing least-cost persistence boundary for AI copy generation. Submitting a valid **Generate draft** request is the user's deliberate decision to create a saved workspace `DRAFT`; successful generation persists the content and AI interaction and meters usage. The UI must disclose that boundary before submission. Leaving the generated draft without later local edits needs no save prompt; discarding later edits restores the last saved generated version, while deleting the generated draft remains a separate explicit action and does not refund consumed AI usage.
+
+For the first implementation, manual edits remain explicit-save changes and media actions require an already persisted draft. Keep upload and AI-image controls unavailable on a new unsaved working copy, explain the save-first boundary in the editor, and revisit temporary media only if a later media-first Create redesign proves that extra architecture worthwhile.
+
+## 2026-08-25: Calendar reads use a bounded workspace range and a paginated Unscheduled queue
+
+Add one workspace-scoped `GET /v1/calendar` read contract for the connected Week, Month, Day Focus, and Post Focus experience. The client supplies an inclusive `from` and `to` date range of no more than 63 Bahrain calendar days, optional real content-status and content-type filters, and bounded Unscheduled offset/limit parameters. Every placed item, Unscheduled item, and referenced media asset must belong to the active workspace.
+
+Calendar placement follows lifecycle timestamps rather than record creation time: Draft/Review/Ready items use `plannedAt`, Scheduled and Failed items use `scheduledAt`, and Published items use `publishedAt`. Draft/Review/Ready items without `plannedAt` form the paginated Unscheduled queue. Do not fall back to `createdAt` or return an arbitrary newest-content slice.
+
+Return the placed records, only the referenced media assets needed to render them, the filtered Unscheduled page with its total and next offset, and the Calendar summary in one response. Status filters apply to the content collections; the summary remains a stable workspace overview while a status filter is active. Content-type filtering applies to both collections and the summary. Offset pagination is the smallest conventional option for the expected initial volume; revisit cursor pagination only if concurrent queue churn or substantially larger workspaces make stable traversal necessary.
+
+## 2026-08-27: Graph v26 migration is a provider-integration gate, not a Create prototype prerequisite
+
+Continue the Create workflow audit and browser prototype against the existing application contracts without first changing the Instagram Graph version. Meta introduced Graph API v26.0 on July 29, 2026, but its versioned changelog does not change the organic Instagram Login publishing, account, or insights endpoints currently used by MARKOS. The recent Instagram AI-label, audio, and media-protection changes relevant to Create are documented separately as applying to all versions; moving to v26.0 does not make the Facebook-Login-only Audio API available to the current Instagram Login architecture. Graph v25.0 remains supported until July 29, 2028.
+
+Before new Create controls are wired to Meta requests—or before the next controlled live publishing and insights proof—run one bounded v26.0 compatibility pass. Update the canonical version constant, strict environment validation, focused Instagram client fixtures, and current operational documentation together. Coordinate the Railway `INSTAGRAM_GRAPH_VERSION` value with the deployment because the application intentionally rejects a runtime version that differs from its reviewed contract.
+
+The migration does not itself expand permissions, change login architecture, prove provider acceptance, or authorize newly documented fields. Re-run the focused account, publishing, analytics, environment, and security-contract checks, then apply the existing staging and live-provider evidence gates. Keep audio-library access, comment-management permission expansion, and any other login or scope change as separate reviewed decisions.
+
+## 2026-08-27: First-save orchestration may include a browser-local manual JPEG
+
+Supersede the August 25 persisted-first restriction for manual media only. A user may select and preview one validated JPEG while working in a new unpersisted browser draft. Selection counts as a meaningful change, remains local, consumes no AI quota, and makes an in-app exit use the accepted Save draft, Discard changes, or Keep editing boundary. Leaving an untouched editor still creates nothing; discarding releases the browser-local selection without an API write.
+
+On the first explicit Save, use the existing contracts as one recoverable client workflow: create the workspace `DRAFT`, upload the JPEG, then attach the resulting workspace media asset. Do not introduce a temporary-media backend contract for this pass. If draft creation fails, retain the local working copy and file selection where the browser permits. If creation succeeds but upload or attachment fails, report the saved draft truthfully, preserve confirmed writes, and offer the appropriate upload or attachment retry rather than claiming that the whole operation rolled back.
+
+AI image generation remains unavailable until the content item is persisted because its quota, interaction, storage, and attachment contracts require a workspace content ID. This decision does not add a Media Library, carousel/reel asset workflow, durable browser-file recovery after reload, or background autosave.
+
+## 2026-08-30: Onboarding readiness is separate from Vault completeness
+
+Keep the build specification's seven canonical onboarding areas, but require only Company and Products before MARKOS can prepare the first bilingual business profile. Story, Audience, Competitors, Brand/Tone, and Objectives remain useful workspace knowledge; the user may explicitly skip them, and that skip is persisted so resume behavior does not repeatedly block on the same optional question. The information check exposes every area as a direct edit action before generation.
+
+Do not turn process completion into a false data-quality score. `readyForProfile` means the two essential areas exist; Vault completeness continues to report the sections that are actually present. Approving the editable AI-resolved profile completes the onboarding journey and hands off to Strategy, but it does not force the Vault score to 100 or erase optional gaps. Both provider-backed and deterministic generation must avoid inventing unsupported facts and use honest editable wording when a profile area is not yet defined.
+
+Defer the visible onboarding document-upload control until one focused pipeline can store the file, extract only fields MARKOS currently consumes, report uncertainty and issues, map the result to the existing seven-area contract, and require owner confirmation before Vault writes. The manual wizard remains the fallback and correction surface for that future automatic path; an upload box that only stores unread documents is not a completed onboarding capability.
+
+## 2026-08-31: Offerings are canonical business records and Vault entries are projections
+
+Store the workspace's products and services in one versioned, workspace-scoped Offering Catalog. Preserve stable offering identities across edits, retain catalog and offering revisions, and archive removed offerings instead of erasing their history. Record whether an approved value came from the owner, a document, or Instagram, with an optional source reference, so later import pipelines can present evidence without silently replacing owner-approved truth.
+
+Keep the existing Products onboarding contract as the first editor for this catalog. A summary-only edit preserves structured offerings; supplying an explicit item list replaces the active set after normalized duplicate-name validation. Existing Products Vault records are migrated into the catalog where possible.
+
+Treat `PRODUCTS/catalog` and granular `PRODUCTS/offering:<id>` Vault records as derived AI-retrieval projections, not the canonical source. When canonical data changes, retire the previous Products projection before attempting the replacement. If projection fails, mark the catalog failed and leave no stale active Products knowledge; retry the same catalog version without manufacturing another canonical revision. Document extraction, temporary upload storage, issue resolution, owner confirmation, and Instagram evidence reconciliation remain separate focused passes.
+
+## 2026-08-31: Offering documents are temporary evidence until owner approval
+
+Place document assistance inside the existing Products/Services onboarding step as an optional accelerator. Keep the open manual field available at all times. Accept one or two PDF, DOCX, or UTF-8 TXT files, limited to 8 MB each and 12 MB combined. Do not claim OCR: reject scanned or otherwise textless PDFs with a clear recovery message. Images, presentations, and broader business-profile extraction remain outside this first pass.
+
+Allow only one active analysis per workspace. Store raw files through the existing workspace-scoped storage boundary for no more than 24 hours, then remove them through the maintenance worker. Do not create permanent media records for these temporary files, serve them through the public media route, or retain raw document text in AI interaction metadata. The owner may retry a failed analysis or discard it explicitly; repeated future use is allowed because no current provider or cost constraint requires a one-time opportunity.
+
+Treat extracted offerings, summaries, and issues as an editable proposal. Nothing is written to the canonical Offering Catalog or Products Vault projection before explicit approval. Approval first removes the temporary raw files, then saves the owner-reviewed result as a document-sourced catalog revision and projects it into the Vault. Preserve the analysis identifier as the source reference without keeping the source document. If Instagram later provides product evidence, reconcile it as another attributed source and never silently replace owner-approved catalog truth.
+
+Offering-document extraction requires a configured provider-backed AI path. Do not expose the deterministic line parser as a user-facing fallback: incomplete local guesses create more risk than an honest unavailable state. If the provider, credential, or model is unavailable, store only a sanitized failure code, keep the temporary files available for the existing retention window, preserve the manual Products/Services field, and tell the owner whether retry can help. Do not show Retry for configuration, authentication, unreadable-input, unsupported-input, refusal, or missing-usage failures.
+
+The next experience pass may replace the compact Products/Services uploader with a focused Document Analyst panel that guides upload, analysis, clarification, and owner approval. Keep it limited to Products/Services initially while designing its boundary for later business-wide document assistance. This provider-boundary pass does not implement that conversational UI.
+
+The Products/Services-specific policy in this section remains active for that shortcut. Its limitation against broader business extraction is superseded by the separate full-business path accepted on 2026-09-01 below.
+
+## 2026-08-31: Onboarding Back protects only the active step's unsaved work
+
+Treat each onboarding step as its own editing boundary in both first-run and profile-edit mode. Back leaves an untouched step immediately. If the active step contains meaningful changes, Back opens a focused choice to **Discard changes** or **Keep editing**; discarding restores only that step's entry state and must not undo previously saved or edited steps.
+
+An active ready or failed offering-document analysis also counts as step work because its temporary files and proposal require an explicit disposition. Discarding from the Products/Services step removes that temporary analysis before leaving. Processing cannot be interrupted through Back, and an API failure keeps the user on the step with an honest error instead of claiming the analysis was discarded.
+
+## 2026-08-31: Approved-profile edits do not spend another AI generation
+
+Supersede the August 20 edit-mode regeneration rule for the current explicit onboarding editor. When a workspace already has an approved Business Profile, owner edits to the seven canonical modules are approved knowledge changes: save them directly, preserve the accepted profile interaction, keep onboarding complete, and return to Business Profile from the final information check. Do not call the onboarding profile resolver or consume another AI generation merely to reword information the owner has already approved.
+
+This is a narrow bridge until Business Profile receives a dedicated knowledge editor. The canonical module records and Offering Catalog remain the current truth used for retrieval; the previously approved bilingual profile can temporarily remain a summarized snapshot. A future knowledge-editor pass must define how bilingual summaries are refreshed without silently inventing facts or forcing an avoidable provider call.
+
+Only the explicit edit-mode request may ask to preserve an approved profile, and the API must verify that an approved profile actually exists. A first-run or incomplete workspace cannot use this flag to bypass profile generation, owner approval, or onboarding completion.
+
+## 2026-09-01: Full-business document assistance is a first-run path, not an approval bypass
+
+Supersede the August 30 deferral and the broader-business limitation in the August 31 offering-document decision. Keep the minimal greeting, but present two equally prominent first-run choices: **Use business documents** and **Enter details myself**. The manual path remains the seven-module correction and fallback surface. The full document path fills as much of those same modules as supported evidence allows, then converges on the same information check and editable bilingual Business Profile. It does not make onboarding optional, introduce a second business-knowledge model, or bypass owner approval.
+
+Accept one to five PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP files, limited to 8 MB each and 20 MB combined. Stage the browser selection visibly and send nothing until the owner chooses **Analyze files**. Pass supported files to the provider's native multimodal file and image inputs rather than building a separate backend OCR pipeline. Treat every uploaded file as untrusted evidence: file contents may describe the business but may never supply application instructions. Unknown facts stay empty, visual color inference is explicitly labeled for confirmation, and the owner may add no more than seven business colors through an explicit add action.
+
+Allow only one active full-onboarding analysis per workspace. Store its source files behind the workspace-scoped storage boundary for at most 24 hours, never expose them as permanent media, and remove them on approval, discard, expiry, or workspace erasure. Persist filenames, checksums, sizes, status, structured extraction, evidence, issues, model/token metadata, and the owner-approved result, but do not retain file bytes or raw extracted text in AI interaction metadata. Keep the Products/Services-only analyzer as a separate optional shortcut inside that step with its narrower one-or-two-file policy.
+
+The provider result is an editable proposal, not business truth. Approval writes the reviewed Company and Products modules plus any reviewed optional modules, records document provenance for the Offering Catalog, marks the analysis approved, and removes the temporary files. The browser then invokes the existing bilingual profile resolver; onboarding becomes `COMPLETE` only after the owner separately approves that Business Profile. Provider, model, credential, timeout, and malformed-output failures remain sanitized and recoverable. Do not substitute the deterministic local parser when provider-backed document analysis is unavailable.

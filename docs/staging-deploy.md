@@ -172,7 +172,7 @@ Current code consumes:
 
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
-- `AI_TEXT_PROVIDER` (`local` for deterministic development, `openai` for live provider-backed Strategy, onboarding profiles, and content copy)
+- `AI_TEXT_PROVIDER` (`local` for deterministic Strategy/profile/content development, `openai` for live provider-backed Strategy, onboarding profiles, both onboarding document analyzers, and content copy; document analysis has no local product fallback)
 - `AI_IMAGE_PROVIDER` (`local` for deterministic development JPEGs, `openai` for live provider-backed image generation)
 - `OPENAI_API_KEY` (AI service only; required when either provider selector is `openai`)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
@@ -486,7 +486,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 | OAuth generic failure                                             | One terminal OAuth event and its allowlisted stage/category               | Never request callback URLs, codes, state, tokens, raw provider bodies, or Prisma errors.      |
 | `credential_configuration` / `encryption_key_invalid`             | Canonical Base64 32-byte format check                                     | Variable presence is not validity; do not print it.                                            |
 | Migration mismatch                                                | `prisma migrate status`, `_prisma_migrations`, backup/data classification | Do not apply the clean baseline to valuable inherited history.                                 |
-| AI shallow health passes but API deep health or AI behavior fails | `AI_BASE_URL`, port/routing, AI logs, `/ai/health/deep`                   | Shallow health does not prove auth, providers, embeddings, RAG, or database access.            |
+| AI shallow health passes but API deep health or AI behavior fails | `AI_BASE_URL`, port/routing, AI logs, `/ai/health/deep`                   | Shallow health does not prove auth, providers, document/file handling, embeddings, RAG, or database access. |
 | Publishing media rejected                                         | S3-backed object key, public HTTPS API origin, signing, and external fetch | Local/container filesystem media is intentionally rejected by the Milestone A live-publish gate. |
 
 ## Remaining manual verification
@@ -497,7 +497,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 - Confirm web/API/worker/AI domains, ports, health checks, and restart behavior.
 - Confirm variable names by consumer without inspecting or copying values into documentation.
 - Confirm Meta dashboard URLs, mode, roles, permissions, Graph version, webhooks, and App Review status.
-- Confirm the AI service's current deployed SHA, fixed-port routing, health checks, internal-token pairing, provider mode, and one current application response.
+- Confirm the AI service's current deployed SHA, fixed-port routing, health checks, internal-token pairing, provider mode, one current application response, and one full-business mixed-file onboarding analysis through the browser-to-API-to-AI path.
 - Provision/reference the confirmed private Bucket contract and prove upload, read, delete, and an external just-in-time signed fetch before live publishing.
 
 See `project-status.md` for roadmap/ownership and `instagram-app-review.md` for the Meta boundary.

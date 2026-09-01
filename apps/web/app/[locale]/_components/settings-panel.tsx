@@ -462,7 +462,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               <ShieldCheck size={13} />
               {copy(locale, "eyebrow")}
             </div>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">{copy(locale, "title")}</h1>
+            <h1 className="mt-3 text-4xl font-bold leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">{copy(locale, "title")}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)] sm:text-base">{copy(locale, "subtitle")}</p>
           </div>
         </div>
@@ -596,7 +596,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           </span>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-lg font-black text-[var(--sunlit-ink)]">
+                          <p className="truncate text-lg font-bold text-[var(--sunlit-ink)]">
                             {activeConnection.username ? `@${activeConnection.username}` : (activeConnection.accountId ?? copy(locale, "noAccountConnected"))}
                           </p>
                           <p className="mt-0.5 text-sm font-semibold text-[var(--sunlit-muted)]">
@@ -720,7 +720,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-lg font-black text-[var(--sunlit-ink)]">{copy(locale, "mfaScanTitle")}</p>
+                      <p className="text-lg font-bold text-[var(--sunlit-ink)]">{copy(locale, "mfaScanTitle")}</p>
                       <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaScanBody")}</p>
                       <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">{copy(locale, "manualKey")}</p>
                       <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2">
@@ -818,7 +818,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               </div>
 
               <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
-                <h3 className="text-base font-black text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
+                <h3 className="text-base font-bold text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
                 <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{copy(locale, "auditBody")}</p>
                 {auditLogs.length === 0 ? (
                   <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-sm text-[var(--sunlit-muted)]">
@@ -869,7 +869,7 @@ function Panel({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="sunlit-eyebrow">{kicker}</p>
-          <h2 className="mt-2 break-words text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
+          <h2 className="mt-2 break-words text-xl font-bold text-[var(--sunlit-ink)]">{title}</h2>
           <p className="mt-1 break-words text-sm leading-6 text-[var(--sunlit-muted)]">{body}</p>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[rgb(33_191_174_/_20%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">

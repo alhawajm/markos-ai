@@ -84,6 +84,40 @@ describe("MARKOS API client session renewal", () => {
     });
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the scoped offering-document analysis lifecycle routes", async () => {
+    const requests: Array<{ input: string; init: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        requests.push({ input: String(input), init: init ?? {} });
+        return jsonResponse(null);
+      })
+    );
+    const client = new MarkosApiClient({
+      accessToken: "access-token",
+      baseUrl: "https://api.markos.test",
+      workspaceId: "workspace-1"
+    });
+
+    await client.offeringDocumentAnalysis();
+    await client.analyzeOfferingDocuments([{ filename: "offers.txt", mimeType: "text/plain", base64Data: "dGVzdA==" }]);
+    await client.retryOfferingDocumentAnalysis("analysis-1");
+    await client.approveOfferingDocumentAnalysis("analysis-1", { summary: "Coffee services" });
+    await client.discardOfferingDocumentAnalysis("analysis-1");
+
+    expect(requests.map((request) => [request.init.method ?? "GET", request.input])).toEqual([
+      ["GET", "https://api.markos.test/v1/onboarding/products/document-analysis"],
+      ["POST", "https://api.markos.test/v1/onboarding/products/document-analysis"],
+      ["POST", "https://api.markos.test/v1/onboarding/products/document-analysis/analysis-1/retry"],
+      ["POST", "https://api.markos.test/v1/onboarding/products/document-analysis/analysis-1/approve"],
+      ["DELETE", "https://api.markos.test/v1/onboarding/products/document-analysis/analysis-1"]
+    ]);
+    expect(JSON.parse(String(requests[1]?.init.body))).toEqual({
+      files: [{ filename: "offers.txt", mimeType: "text/plain", base64Data: "dGVzdA==" }]
+    });
+    expect(JSON.parse(String(requests[3]?.init.body))).toEqual({ catalog: { summary: "Coffee services" } });
+  });
 });
 
 function jsonResponse(data: unknown): Response {

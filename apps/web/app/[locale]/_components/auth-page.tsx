@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -64,6 +65,9 @@ const copyByLocale = {
       google: "Continue with Google",
       apple: "Continue with Apple",
       divider: "or continue with email",
+      compactGoogle: "Google",
+      compactApple: "Apple",
+      compactDivider: "or",
       unavailable: (name: string) => `${name} sign-in is not available yet. Use email for now.`
     },
     fields: {
@@ -72,13 +76,16 @@ const copyByLocale = {
       email: "Email",
       emailPlaceholder: "you@example.com",
       password: "Password",
+      passwordPlaceholder: "Enter your password",
       newPassword: "New password",
       confirmPassword: "Confirm new password",
       passwordRequirement: "At least 12 characters",
       mfaCode: "MFA code",
       mfaPlaceholder: "6-digit code",
       showPassword: "Show password",
-      hidePassword: "Hide password"
+      hidePassword: "Hide password",
+      showPasswordShort: "Show",
+      hidePasswordShort: "Hide"
     },
     legal: {
       prefix: "I agree to the",
@@ -98,6 +105,7 @@ const copyByLocale = {
       passwordRequired: "Use a password with at least 12 characters."
     },
     login: {
+      eyebrow: "LOG IN",
       title: "Welcome back",
       body: "Continue to your MARKOS workspace.",
       forgot: "Forgot password?",
@@ -105,7 +113,76 @@ const copyByLocale = {
       switchPrefix: "New to MARKOS?",
       switchAction: "Create an account",
       fieldsRequired: "Enter your email and password.",
-      mfaRequired: "Enter the 6-digit code from your authenticator app."
+      mfaRequired: "Enter the 6-digit code from your authenticator app.",
+      preview: {
+        ariaLabel: "Interactive sample of the MARKOS content calendar",
+        eyebrow: "MARKOS PRODUCT PREVIEW",
+        title: "Your week, ready when you are.",
+        body: "Pick up your plan at a glance—then create, approve, and schedule.",
+        journey: ["Create", "Approve", "Schedule"],
+        week: {
+          label: "Week of 24 August",
+          sample: "SAMPLE PLAN",
+          openDay: "Open Wednesday 26 August",
+          days: [
+            { label: "Mon 24", status: "DRAFT", title: "Behind the scenes", placement: "start" },
+            { label: "Tue 25", status: "", title: "", placement: "start" },
+            { label: "Wed 26", status: "APPROVAL", title: "Product spotlight", placement: "center" },
+            { label: "Thu 27", status: "", title: "", placement: "start" },
+            { label: "Fri 28", status: "SCHEDULED", title: "Weekend story", placement: "end" }
+          ]
+        },
+        day: {
+          back: "Week overview",
+          title: "Wednesday, 26 August",
+          count: "3 planned",
+          guidance: "Select a post to expand its approval and schedule details.",
+          hint: "CLICK A POST TO EXPAND",
+          openPost: (title: string) => `Open ${title}`,
+          posts: [
+            {
+              time: "09:30",
+              title: "Product spotlight",
+              meta: "Instagram feed · Needs approval",
+              status: "Needs approval",
+              mediaEyebrow: "NEW ARRIVALS",
+              mediaTitle: "Made for weekends.",
+              caption: "A closer look at a customer favourite—ready for your final review.",
+              schedule: "Wed · 09:30"
+            },
+            {
+              time: "13:00",
+              title: "Product teaser story",
+              meta: "Instagram story · Draft",
+              status: "Draft",
+              mediaEyebrow: "STORY PREVIEW",
+              mediaTitle: "A closer look.",
+              caption: "A short teaser that introduces the product before the main post.",
+              schedule: "Wed · 13:00"
+            },
+            {
+              time: "18:30",
+              title: "Question prompt",
+              meta: "Instagram story · Scheduled",
+              status: "Scheduled",
+              mediaEyebrow: "COMMUNITY",
+              mediaTitle: "What would you choose?",
+              caption: "Invite followers to share the option they would choose this weekend.",
+              schedule: "Wed · 18:30"
+            }
+          ]
+        },
+        post: {
+          back: "Wednesday",
+          format: "Instagram feed · 1 image",
+          caption: "CAPTION",
+          reserved: "Reserved slot",
+          handoff: "Approve to keep this slot",
+          action: "Approve & schedule",
+          media: "1:1 MEDIA PREVIEW",
+          hint: "BACK RETURNS TO THE DAY VIEW"
+        }
+      }
     },
     forgot: {
       title: "Reset your password",
@@ -164,6 +241,9 @@ const copyByLocale = {
       google: "المتابعة باستخدام Google",
       apple: "المتابعة باستخدام Apple",
       divider: "أو تابع بالبريد الإلكتروني",
+      compactGoogle: "Google",
+      compactApple: "Apple",
+      compactDivider: "أو",
       unavailable: (name: string) => `تسجيل الدخول باستخدام ${name} غير متاح بعد. استخدم البريد الإلكتروني حالياً.`
     },
     fields: {
@@ -172,13 +252,16 @@ const copyByLocale = {
       email: "البريد الإلكتروني",
       emailPlaceholder: "you@example.com",
       password: "كلمة المرور",
+      passwordPlaceholder: "أدخل كلمة المرور",
       newPassword: "كلمة المرور الجديدة",
       confirmPassword: "تأكيد كلمة المرور الجديدة",
       passwordRequirement: "12 حرفًا على الأقل",
       mfaCode: "رمز التحقق بخطوتين",
       mfaPlaceholder: "رمز من 6 أرقام",
       showPassword: "إظهار كلمة المرور",
-      hidePassword: "إخفاء كلمة المرور"
+      hidePassword: "إخفاء كلمة المرور",
+      showPasswordShort: "إظهار",
+      hidePasswordShort: "إخفاء"
     },
     legal: {
       prefix: "أوافق على",
@@ -198,6 +281,7 @@ const copyByLocale = {
       passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل."
     },
     login: {
+      eyebrow: "تسجيل الدخول",
       title: "مرحبًا بعودتك",
       body: "تابع إلى مساحة عمل MARKOS.",
       forgot: "نسيت كلمة المرور؟",
@@ -205,7 +289,76 @@ const copyByLocale = {
       switchPrefix: "جديد في MARKOS؟",
       switchAction: "إنشاء حساب",
       fieldsRequired: "أدخل بريدك الإلكتروني وكلمة المرور.",
-      mfaRequired: "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة."
+      mfaRequired: "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة.",
+      preview: {
+        ariaLabel: "معاينة تفاعلية لنظام تقويم المحتوى في MARKOS",
+        eyebrow: "معاينة منتج MARKOS",
+        title: "أسبوعك جاهز عندما تحتاجه.",
+        body: "اطّلع على خطتك بسرعة، ثم أنشئ المحتوى واعتمده وجدوله.",
+        journey: ["أنشئ", "اعتمد", "جدول"],
+        week: {
+          label: "أسبوع 24 أغسطس",
+          sample: "خطة تجريبية",
+          openDay: "فتح يوم الأربعاء 26 أغسطس",
+          days: [
+            { label: "الاثنين 24", status: "مسودة", title: "خلف الكواليس", placement: "start" },
+            { label: "الثلاثاء 25", status: "", title: "", placement: "start" },
+            { label: "الأربعاء 26", status: "للاعتماد", title: "إبراز المنتج", placement: "center" },
+            { label: "الخميس 27", status: "", title: "", placement: "start" },
+            { label: "الجمعة 28", status: "مجدول", title: "قصة نهاية الأسبوع", placement: "end" }
+          ]
+        },
+        day: {
+          back: "نظرة الأسبوع",
+          title: "الأربعاء، 26 أغسطس",
+          count: "3 منشورات",
+          guidance: "اختر منشورًا لعرض تفاصيل الاعتماد والجدولة.",
+          hint: "اختر منشورًا لعرض التفاصيل",
+          openPost: (title: string) => `فتح ${title}`,
+          posts: [
+            {
+              time: "09:30",
+              title: "إبراز المنتج",
+              meta: "منشور Instagram · يحتاج اعتمادًا",
+              status: "يحتاج اعتمادًا",
+              mediaEyebrow: "وصل حديثًا",
+              mediaTitle: "مصمم لنهاية الأسبوع.",
+              caption: "نظرة أقرب على أحد المنتجات المفضلة لدى العملاء، جاهزة لمراجعتك النهائية.",
+              schedule: "الأربعاء · 09:30"
+            },
+            {
+              time: "13:00",
+              title: "قصة تمهيدية للمنتج",
+              meta: "قصة Instagram · مسودة",
+              status: "مسودة",
+              mediaEyebrow: "معاينة القصة",
+              mediaTitle: "نظرة أقرب.",
+              caption: "تمهيد قصير يعرّف بالمنتج قبل نشر المنشور الرئيسي.",
+              schedule: "الأربعاء · 13:00"
+            },
+            {
+              time: "18:30",
+              title: "سؤال للمتابعين",
+              meta: "قصة Instagram · مجدولة",
+              status: "مجدول",
+              mediaEyebrow: "المجتمع",
+              mediaTitle: "ماذا ستختار؟",
+              caption: "ادعُ المتابعين لمشاركة الخيار الذي يفضلونه في نهاية هذا الأسبوع.",
+              schedule: "الأربعاء · 18:30"
+            }
+          ]
+        },
+        post: {
+          back: "الأربعاء",
+          format: "منشور Instagram · صورة واحدة",
+          caption: "النص",
+          reserved: "موعد محجوز",
+          handoff: "اعتمد المحتوى للحفاظ على الموعد",
+          action: "اعتماد وجدولة",
+          media: "معاينة وسائط 1:1",
+          hint: "العودة تفتح عرض اليوم"
+        }
+      }
     },
     forgot: {
       title: "استعد كلمة المرور",
@@ -554,101 +707,50 @@ export function AuthPage({
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المصادقة" : "Authentication navigation"}>
-          <a className={styles.backLink} href={landingHref}>
-            <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
-            {copy.back}
-          </a>
-          <a className={styles.languageLink} href={languageHref}>
-            <Globe2 aria-hidden="true" size={17} />
-            {copy.language}
-          </a>
+          {mode === "login" ? (
+            <span className={styles.loginLocaleSwitch} dir="ltr">
+              {locale === "en" ? <strong aria-current="page">English</strong> : <Link href="/en/login">English</Link>}
+              <span aria-hidden="true">/</span>
+              {locale === "ar" ? (
+                <strong aria-current="page" lang="ar">
+                  العربية
+                </strong>
+              ) : (
+                <Link href="/ar/login" lang="ar">
+                  العربية
+                </Link>
+              )}
+            </span>
+          ) : (
+            <>
+              <a className={styles.backLink} href={landingHref}>
+                <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
+                {copy.back}
+              </a>
+              <a className={styles.languageLink} href={languageHref}>
+                <Globe2 aria-hidden="true" size={17} />
+                {copy.language}
+              </a>
+            </>
+          )}
         </nav>
       </header>
 
-      <div className={styles.authLayout}>
-        <aside className={styles.authAside} aria-label={copy.aside.title}>
-          <div className={styles.asideGlow} aria-hidden="true" />
-          <p className={styles.asideBrand}>{copy.brand}</p>
-          <h2>{copy.aside.title}</h2>
-          <div className={styles.asideFlow}>
-            {copy.aside.items.map((item, index) => {
-              const Icon = asideIcons[item.icon];
-              return (
-                <div className={styles.asideItem} data-position={index} key={item.label}>
-                  <span aria-hidden="true">
-                    <Icon size={19} />
-                  </span>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <small>{item.value}</small>
-                  </div>
-                  <Check aria-hidden="true" size={17} />
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        <section className={styles.authCard}>
-          {mode === "signup" ? (
-            <>
-              <AuthHeading body={copy.signup.body} title={copy.signup.title} />
-              <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
-              <LegalConsent
-                accepted={acceptedTerms}
-                checkboxRef={legalCheckboxRef}
-                copy={copy.legal}
-                onChange={setAcceptedTerms}
-                privacyHref={privacyHref}
-                termsHref={termsHref}
-              />
-              <Divider label={copy.provider.divider} />
-              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
-                <div className={styles.formStack}>
-                  <Field id="full-name" label={copy.fields.fullName}>
-                    <input
-                      autoComplete="name"
-                      id="full-name"
-                      onChange={(event) => setFullName(event.target.value)}
-                      placeholder={copy.fields.fullNamePlaceholder}
-                      type="text"
-                      value={fullName}
-                    />
-                  </Field>
-                  <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                  <PasswordField
-                    copy={copy.fields}
-                    onChange={setPassword}
-                    password={password}
-                    requirement
-                    show={showPassword}
-                    toggle={() => setShowPassword((current) => !current)}
-                  />
-                </div>
-                <NoticeMessage notice={notice} />
-                <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
-                  {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </button>
-              </form>
-              <AuthSwitch action={copy.signup.switchAction} href={loginHref} prefix={copy.signup.switchPrefix} />
-            </>
-          ) : null}
-
-          {mode === "login" ? (
-            <>
-              <AuthHeading body={copy.login.body} title={copy.login.title} />
-              <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
-              <Divider label={copy.provider.divider} />
-              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitLogin(event)}>
+      <div className={`${styles.authLayout} ${mode === "login" ? styles.loginLayout : ""}`}>
+        {mode === "login" ? (
+          <>
+            <section className={`${styles.authCard} ${styles.loginCard}`} data-login-card>
+              <AuthHeading body={copy.login.body} eyebrow={copy.login.eyebrow} title={copy.login.title} />
+              <form aria-busy={isSubmitting} className={styles.loginForm} noValidate onSubmit={(event) => void submitLogin(event)}>
                 <div className={styles.formStack}>
                   <EmailField copy={copy.fields} email={email} onChange={setEmail} />
                   <PasswordField
-                    action={{ href: forgotHref, label: copy.login.forgot }}
                     autoComplete="current-password"
                     copy={copy.fields}
                     onChange={setPassword}
                     password={password}
+                    placeholder={copy.fields.passwordPlaceholder}
+                    revealVariant="text"
                     show={showPassword}
                     toggle={() => setShowPassword((current) => !current)}
                   />
@@ -669,136 +771,220 @@ export function AuthPage({
                     </Field>
                   ) : null}
                 </div>
+                <div className={styles.forgotRow}>
+                  <a className={styles.inlineAction} href={forgotHref}>
+                    {copy.login.forgot}
+                  </a>
+                </div>
                 <NoticeMessage notice={notice} />
                 <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
                   {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                 </button>
               </form>
+              <Divider label={copy.provider.compactDivider} />
+              <ProviderButtons compact copy={copy.provider} onProvider={handleProvider} />
               <AuthSwitch action={copy.login.switchAction} href={signupHref} prefix={copy.login.switchPrefix} />
-            </>
-          ) : null}
-
-          {mode === "forgot-password" ? (
-            forgotSent ? (
-              <StatusPanel icon={Mail} title={copy.forgot.sentTitle} tone="aqua">
-                <p>{copy.forgot.sentBody}</p>
-                <strong className={styles.statusEmail} dir="ltr">
-                  {email}
-                </strong>
-                <button className={styles.secondaryButton} onClick={() => setForgotSent(false)} type="button">
-                  {copy.forgot.sendAgain}
-                </button>
-                <a className={styles.textLink} href={loginHref}>
-                  {copy.forgot.back}
-                </a>
-              </StatusPanel>
-            ) : (
-              <>
-                <AuthHeading body={copy.forgot.body} icon={KeyRound} title={copy.forgot.title} />
-                <form noValidate onSubmit={submitForgot}>
-                  <div className={styles.formStack}>
-                    <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                  </div>
-                  <NoticeMessage notice={notice} />
-                  <button className={styles.primaryButton} type="submit">
-                    {copy.forgot.action}
-                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                  </button>
-                </form>
-                <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
-                  {copy.forgot.back}
-                </a>
-              </>
-            )
-          ) : null}
-
-          {mode === "reset-password" ? (
-            resetLinkExpired ? (
-              <StatusPanel icon={Lock} title={copy.reset.expiredTitle} tone="coral">
-                <p>{copy.reset.expiredBody}</p>
-                <a className={styles.primaryButton} href={forgotHref}>
-                  {copy.reset.requestNew}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </a>
-              </StatusPanel>
-            ) : resetComplete ? (
-              <StatusPanel icon={CheckCircle2} title={copy.reset.successTitle} tone="aqua">
-                <p>{copy.reset.successBody}</p>
-                <a className={styles.primaryButton} href={loginHref}>
-                  {copy.reset.login}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </a>
-              </StatusPanel>
-            ) : (
-              <>
-                <AuthHeading body={copy.reset.body} icon={Lock} title={copy.reset.title} />
-                <form noValidate onSubmit={submitReset}>
-                  <div className={styles.formStack}>
-                    <PasswordField
-                      copy={copy.fields}
-                      id="new-password"
-                      label={copy.fields.newPassword}
-                      onChange={setPassword}
-                      password={password}
-                      requirement
-                      show={showPassword}
-                      toggle={() => setShowPassword((current) => !current)}
-                    />
-                    <PasswordField
-                      copy={copy.fields}
-                      id="confirm-password"
-                      label={copy.fields.confirmPassword}
-                      onChange={setConfirmPassword}
-                      password={confirmPassword}
-                      show={showConfirmPassword}
-                      toggle={() => setShowConfirmPassword((current) => !current)}
-                    />
-                  </div>
-                  <NoticeMessage notice={notice} />
-                  <button className={styles.primaryButton} type="submit">
-                    {copy.reset.action}
-                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                  </button>
-                </form>
-              </>
-            )
-          ) : null}
-
-          {mode === "verify" ? (
-            <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
-              <p>{copy.verify.body}</p>
-              <strong className={styles.statusEmail} dir="ltr">
-                {email || copy.verify.fallbackEmail}
-              </strong>
-              <p>{copy.verify.instructions}</p>
-              <NoticeMessage notice={notice} />
-              <button
-                className={styles.secondaryButton}
-                disabled={isSubmitting || resendSeconds > 0 || !email}
-                onClick={() => void requestVerification()}
-                type="button"
-              >
-                <Mail aria-hidden="true" size={17} />
-                {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
-              </button>
-              {localVerificationToken ? (
-                <button className={styles.primaryButton} disabled={isSubmitting} onClick={() => void verifyEmailToken(localVerificationToken)} type="button">
-                  {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </button>
-              ) : null}
-              <div className={styles.statusLinks}>
-                <a className={styles.textLink} href={signupHref}>
-                  {copy.verify.changeEmail}
-                </a>
-                <a className={styles.textLink} href={loginHref}>
-                  {copy.verify.back}
-                </a>
+            </section>
+            <LoginProductPreview copy={copy.login.preview} />
+          </>
+        ) : (
+          <>
+            <aside className={styles.authAside} aria-label={copy.aside.title}>
+              <div className={styles.asideGlow} aria-hidden="true" />
+              <p className={styles.asideBrand}>{copy.brand}</p>
+              <h2>{copy.aside.title}</h2>
+              <div className={styles.asideFlow}>
+                {copy.aside.items.map((item, index) => {
+                  const Icon = asideIcons[item.icon];
+                  return (
+                    <div className={styles.asideItem} data-position={index} key={item.label}>
+                      <span aria-hidden="true">
+                        <Icon size={19} />
+                      </span>
+                      <div>
+                        <strong>{item.label}</strong>
+                        <small>{item.value}</small>
+                      </div>
+                      <Check aria-hidden="true" size={17} />
+                    </div>
+                  );
+                })}
               </div>
-            </StatusPanel>
-          ) : null}
-        </section>
+            </aside>
+
+            <section className={styles.authCard}>
+              {mode === "signup" ? (
+                <>
+                  <AuthHeading body={copy.signup.body} title={copy.signup.title} />
+                  <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
+                  <LegalConsent
+                    accepted={acceptedTerms}
+                    checkboxRef={legalCheckboxRef}
+                    copy={copy.legal}
+                    onChange={setAcceptedTerms}
+                    privacyHref={privacyHref}
+                    termsHref={termsHref}
+                  />
+                  <Divider label={copy.provider.divider} />
+                  <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
+                    <div className={styles.formStack}>
+                      <Field id="full-name" label={copy.fields.fullName}>
+                        <input
+                          autoComplete="name"
+                          id="full-name"
+                          onChange={(event) => setFullName(event.target.value)}
+                          placeholder={copy.fields.fullNamePlaceholder}
+                          type="text"
+                          value={fullName}
+                        />
+                      </Field>
+                      <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                      <PasswordField
+                        copy={copy.fields}
+                        onChange={setPassword}
+                        password={password}
+                        requirement
+                        show={showPassword}
+                        toggle={() => setShowPassword((current) => !current)}
+                      />
+                    </div>
+                    <NoticeMessage notice={notice} />
+                    <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                      {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </button>
+                  </form>
+                  <AuthSwitch action={copy.signup.switchAction} href={loginHref} prefix={copy.signup.switchPrefix} />
+                </>
+              ) : null}
+
+              {mode === "forgot-password" ? (
+                forgotSent ? (
+                  <StatusPanel icon={Mail} title={copy.forgot.sentTitle} tone="aqua">
+                    <p>{copy.forgot.sentBody}</p>
+                    <strong className={styles.statusEmail} dir="ltr">
+                      {email}
+                    </strong>
+                    <button className={styles.secondaryButton} onClick={() => setForgotSent(false)} type="button">
+                      {copy.forgot.sendAgain}
+                    </button>
+                    <a className={styles.textLink} href={loginHref}>
+                      {copy.forgot.back}
+                    </a>
+                  </StatusPanel>
+                ) : (
+                  <>
+                    <AuthHeading body={copy.forgot.body} icon={KeyRound} title={copy.forgot.title} />
+                    <form noValidate onSubmit={submitForgot}>
+                      <div className={styles.formStack}>
+                        <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                      </div>
+                      <NoticeMessage notice={notice} />
+                      <button className={styles.primaryButton} type="submit">
+                        {copy.forgot.action}
+                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                      </button>
+                    </form>
+                    <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
+                      {copy.forgot.back}
+                    </a>
+                  </>
+                )
+              ) : null}
+
+              {mode === "reset-password" ? (
+                resetLinkExpired ? (
+                  <StatusPanel icon={Lock} title={copy.reset.expiredTitle} tone="coral">
+                    <p>{copy.reset.expiredBody}</p>
+                    <a className={styles.primaryButton} href={forgotHref}>
+                      {copy.reset.requestNew}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </a>
+                  </StatusPanel>
+                ) : resetComplete ? (
+                  <StatusPanel icon={CheckCircle2} title={copy.reset.successTitle} tone="aqua">
+                    <p>{copy.reset.successBody}</p>
+                    <a className={styles.primaryButton} href={loginHref}>
+                      {copy.reset.login}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </a>
+                  </StatusPanel>
+                ) : (
+                  <>
+                    <AuthHeading body={copy.reset.body} icon={Lock} title={copy.reset.title} />
+                    <form noValidate onSubmit={submitReset}>
+                      <div className={styles.formStack}>
+                        <PasswordField
+                          copy={copy.fields}
+                          id="new-password"
+                          label={copy.fields.newPassword}
+                          onChange={setPassword}
+                          password={password}
+                          requirement
+                          show={showPassword}
+                          toggle={() => setShowPassword((current) => !current)}
+                        />
+                        <PasswordField
+                          copy={copy.fields}
+                          id="confirm-password"
+                          label={copy.fields.confirmPassword}
+                          onChange={setConfirmPassword}
+                          password={confirmPassword}
+                          show={showConfirmPassword}
+                          toggle={() => setShowConfirmPassword((current) => !current)}
+                        />
+                      </div>
+                      <NoticeMessage notice={notice} />
+                      <button className={styles.primaryButton} type="submit">
+                        {copy.reset.action}
+                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                      </button>
+                    </form>
+                  </>
+                )
+              ) : null}
+
+              {mode === "verify" ? (
+                <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
+                  <p>{copy.verify.body}</p>
+                  <strong className={styles.statusEmail} dir="ltr">
+                    {email || copy.verify.fallbackEmail}
+                  </strong>
+                  <p>{copy.verify.instructions}</p>
+                  <NoticeMessage notice={notice} />
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={isSubmitting || resendSeconds > 0 || !email}
+                    onClick={() => void requestVerification()}
+                    type="button"
+                  >
+                    <Mail aria-hidden="true" size={17} />
+                    {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
+                  </button>
+                  {localVerificationToken ? (
+                    <button
+                      className={styles.primaryButton}
+                      disabled={isSubmitting}
+                      onClick={() => void verifyEmailToken(localVerificationToken)}
+                      type="button"
+                    >
+                      {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </button>
+                  ) : null}
+                  <div className={styles.statusLinks}>
+                    <a className={styles.textLink} href={signupHref}>
+                      {copy.verify.changeEmail}
+                    </a>
+                    <a className={styles.textLink} href={loginHref}>
+                      {copy.verify.back}
+                    </a>
+                  </div>
+                </StatusPanel>
+              ) : null}
+            </section>
+          </>
+        )}
       </div>
 
       <footer className={styles.footer}>
@@ -813,7 +999,152 @@ export function AuthPage({
   );
 }
 
-function AuthHeading({ body, icon: Icon, title }: { body: string; icon?: LucideIcon; title: string }) {
+function LoginProductPreview({ copy }: { copy: (typeof copyByLocale)[Locale]["login"]["preview"] }) {
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0);
+  const [view, setView] = useState<"day" | "post" | "week">("week");
+  const selectedPost = copy.day.posts[selectedPostIndex] ?? copy.day.posts[0];
+
+  function openPost(index: number) {
+    setSelectedPostIndex(index);
+    setView("post");
+  }
+
+  return (
+    <aside aria-label={copy.ariaLabel} className={styles.loginPreview}>
+      <div className={styles.previewHeading}>
+        <p className={styles.previewEyebrow}>{copy.eyebrow}</p>
+        <h2>{copy.title}</h2>
+        <p>{copy.body}</p>
+      </div>
+
+      <ol aria-label={copy.body} className={styles.previewJourney}>
+        {copy.journey.map((step, index) => (
+          <li key={step}>
+            <span data-active={index === 0 ? "true" : undefined}>{step}</span>
+            {index < copy.journey.length - 1 ? <ArrowRight aria-hidden="true" className={styles.directionalIcon} size={15} /> : null}
+          </li>
+        ))}
+      </ol>
+
+      <div aria-live="polite" className={styles.previewStage} data-login-preview={view}>
+        {view === "week" ? (
+          <div className={styles.previewWeek}>
+            <div className={styles.previewStageTopbar}>
+              <strong>{copy.week.label}</strong>
+              <span>{copy.week.sample}</span>
+            </div>
+            <div className={styles.previewWeekGrid}>
+              {copy.week.days.map((day, index) => {
+                const content = (
+                  <>
+                    <span className={styles.previewDayLabel}>{day.label}</span>
+                    <span className={styles.previewDayColumn} data-placement={day.placement}>
+                      {day.title ? (
+                        <span className={styles.previewCalendarPost}>
+                          <small>{day.status}</small>
+                          <strong>{day.title}</strong>
+                        </span>
+                      ) : null}
+                    </span>
+                  </>
+                );
+
+                return index === 2 ? (
+                  <button aria-label={copy.week.openDay} className={styles.previewDayGroup} key={day.label} onClick={() => setView("day")} type="button">
+                    {content}
+                  </button>
+                ) : (
+                  <div className={styles.previewDayGroup} key={day.label}>
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {view === "day" ? (
+          <div className={styles.previewDay}>
+            <div className={styles.previewStageTopbar}>
+              <button className={styles.previewBack} onClick={() => setView("week")} type="button">
+                <ArrowLeft aria-hidden="true" className={styles.directionalIcon} size={15} />
+                {copy.day.back}
+              </button>
+              <span className={styles.previewCount}>{copy.day.count}</span>
+            </div>
+            <div className={styles.previewDayIntro}>
+              <h3>{copy.day.title}</h3>
+              <p>{copy.day.guidance}</p>
+            </div>
+            <div className={styles.previewPostList}>
+              {copy.day.posts.map((post, index) => (
+                <button
+                  aria-label={copy.day.openPost(post.title)}
+                  className={styles.previewPostRow}
+                  data-primary={index === 0 ? "true" : undefined}
+                  key={post.time}
+                  onClick={() => openPost(index)}
+                  type="button"
+                >
+                  <bdi className={styles.previewPostTime}>{post.time}</bdi>
+                  <span className={styles.previewPostCopy}>
+                    <strong>{post.title}</strong>
+                    <small>{post.meta}</small>
+                  </span>
+                  <ArrowRight aria-hidden="true" className={styles.directionalIcon} size={17} />
+                </button>
+              ))}
+            </div>
+            <small className={styles.previewHint}>{copy.day.hint}</small>
+          </div>
+        ) : null}
+
+        {view === "post" ? (
+          <div className={styles.previewPostDetail}>
+            <div className={styles.previewStageTopbar}>
+              <button className={styles.previewBack} onClick={() => setView("day")} type="button">
+                <ArrowLeft aria-hidden="true" className={styles.directionalIcon} size={15} />
+                {copy.post.back}
+              </button>
+              <span className={styles.previewCount}>{selectedPost.status}</span>
+            </div>
+            <div className={styles.previewPostDetailBody}>
+              <div className={styles.previewMedia}>
+                <span aria-hidden="true" className={styles.previewMediaHalo} />
+                <span className={styles.previewMediaCard}>
+                  <small>{selectedPost.mediaEyebrow}</small>
+                  <strong>{selectedPost.mediaTitle}</strong>
+                </span>
+                <small className={styles.previewMediaLabel}>{copy.post.media}</small>
+              </div>
+              <div className={styles.previewPostPanel}>
+                <div>
+                  <h3>{selectedPost.title}</h3>
+                  <p>{selectedPost.meta}</p>
+                </div>
+                <div className={styles.previewCaption}>
+                  <small>{copy.post.caption}</small>
+                  <p>{selectedPost.caption}</p>
+                </div>
+                <div className={styles.previewSchedule}>
+                  <span>{copy.post.reserved}</span>
+                  <bdi>{selectedPost.schedule}</bdi>
+                </div>
+                <div className={styles.previewHandoff}>
+                  <span>{copy.post.handoff}</span>
+                  <strong>{copy.post.action}</strong>
+                </div>
+              </div>
+            </div>
+            <small className={styles.previewHint}>{copy.post.hint}</small>
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+function AuthHeading({ body, eyebrow, icon: Icon, title }: { body: string; eyebrow?: string; icon?: LucideIcon; title: string }) {
   return (
     <div className={styles.authHeading}>
       {Icon ? (
@@ -821,24 +1152,33 @@ function AuthHeading({ body, icon: Icon, title }: { body: string; icon?: LucideI
           <Icon size={22} />
         </span>
       ) : null}
+      {eyebrow ? <p className={styles.authEyebrow}>{eyebrow}</p> : null}
       <h1>{title}</h1>
       <p>{body}</p>
     </div>
   );
 }
 
-function ProviderButtons({ copy, onProvider }: { copy: (typeof copyByLocale)[Locale]["provider"]; onProvider: (provider: "Apple" | "Google") => void }) {
+function ProviderButtons({
+  compact = false,
+  copy,
+  onProvider
+}: {
+  compact?: boolean;
+  copy: (typeof copyByLocale)[Locale]["provider"];
+  onProvider: (provider: "Apple" | "Google") => void;
+}) {
   return (
-    <div className={styles.providerStack}>
+    <div className={`${styles.providerStack} ${compact ? styles.providerCompact : ""}`}>
       <button className={styles.providerButton} onClick={() => onProvider("Google")} type="button">
         <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/auth/providers/google-signin.svg" unoptimized width={32} />
-        {copy.google}
+        {compact ? copy.compactGoogle : copy.google}
       </button>
       <button className={styles.providerButton} onClick={() => onProvider("Apple")} type="button">
         <span className={styles.appleLogoFrame} aria-hidden="true">
           <Image alt="" className={styles.appleLogo} height={23} src="/auth/providers/apple-signin.png" unoptimized width={18} />
         </span>
-        {copy.apple}
+        {compact ? copy.compactApple : copy.apple}
       </button>
     </div>
   );
@@ -926,6 +1266,8 @@ function PasswordField({
   label,
   onChange,
   password,
+  placeholder,
+  revealVariant = "icon",
   requirement = false,
   show,
   toggle
@@ -937,6 +1279,8 @@ function PasswordField({
   label?: string;
   onChange: (password: string) => void;
   password: string;
+  placeholder?: string;
+  revealVariant?: "icon" | "text";
   requirement?: boolean;
   show: boolean;
   toggle: () => void;
@@ -955,9 +1299,32 @@ function PasswordField({
     >
       <span className={styles.inputWrap}>
         <Lock aria-hidden="true" size={19} />
-        <input autoComplete={autoComplete} id={id} onChange={(event) => onChange(event.target.value)} type={show ? "text" : "password"} value={password} />
-        <button aria-label={show ? copy.hidePassword : copy.showPassword} className={styles.revealButton} onClick={toggle} type="button">
-          {show ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
+        <input
+          autoComplete={autoComplete}
+          id={id}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          type={show ? "text" : "password"}
+          value={password}
+        />
+        <button
+          aria-label={show ? copy.hidePassword : copy.showPassword}
+          className={styles.revealButton}
+          data-variant={revealVariant}
+          onClick={toggle}
+          type="button"
+        >
+          {revealVariant === "text" ? (
+            show ? (
+              copy.hidePasswordShort
+            ) : (
+              copy.showPasswordShort
+            )
+          ) : show ? (
+            <EyeOff aria-hidden="true" size={19} />
+          ) : (
+            <Eye aria-hidden="true" size={19} />
+          )}
         </button>
       </span>
       {requirement ? (

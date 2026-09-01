@@ -12,7 +12,7 @@ const localCurrency = "BHD";
 
 export class BusinessProfileContextIncompleteError extends Error {
   constructor() {
-    super("Complete all onboarding sections before generating the business profile");
+    super("Add the business name and products or services before generating the business profile");
   }
 }
 
@@ -63,7 +63,7 @@ export async function getBusinessProfileState(workspaceId: string): Promise<Onbo
 export async function generateWorkspaceBusinessProfile(workspaceId: string): Promise<void> {
   const score = await getVaultScore(workspaceId);
 
-  if (score.score < 100) {
+  if (!score.completedSections.includes("COMPANY") || !score.completedSections.includes("PRODUCTS")) {
     throw new BusinessProfileContextIncompleteError();
   }
 
@@ -153,6 +153,7 @@ export async function approveWorkspaceBusinessProfile(workspaceId: string, input
 
   const approvedProfile: BusinessProfile = input.profile;
   const edited = JSON.stringify(generated.data) !== JSON.stringify(approvedProfile);
+  const vaultScore = await getVaultScore(workspaceId);
 
   await upsertVaultSection(workspaceId, "COMPANY", {
     entries: [
@@ -187,7 +188,7 @@ export async function approveWorkspaceBusinessProfile(workspaceId: string, input
       },
       data: {
         onboardingStatus: "COMPLETE",
-        onboardingScore: 100
+        onboardingScore: vaultScore.score
       }
     })
   ]);

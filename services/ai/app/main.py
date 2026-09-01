@@ -18,6 +18,14 @@ from app.contracts.business_profile import (
 )
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
 from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
+from app.contracts.offering_document import (
+    OfferingDocumentAnalysisRequest,
+    OfferingDocumentAnalysisResponse,
+)
+from app.contracts.onboarding_document import (
+    OnboardingDocumentAnalysisRequest,
+    OnboardingDocumentAnalysisResponse,
+)
 from app.contracts.strategy import (
     StrategyContextChunk,
     StrategyGenerateRequest,
@@ -26,9 +34,12 @@ from app.contracts.strategy import (
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
+from app.documents import extract_documents
 from app.providers.business_profile import get_business_profile_provider
 from app.providers.content import get_content_provider
 from app.providers.image import get_image_provider
+from app.providers.offering_document import get_offering_document_provider
+from app.providers.onboarding_document import get_onboarding_document_provider
 from app.providers.strategy import get_strategy_provider
 
 
@@ -208,6 +219,51 @@ async def generate_business_profile(
     try:
         async with asyncio.timeout(settings.ai_profile_timeout_seconds):
             return await provider.generate_profile(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post(
+    "/ai/onboarding/offerings/analyze",
+    response_model=OfferingDocumentAnalysisResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_offering_documents(
+    request: OfferingDocumentAnalysisRequest,
+) -> OfferingDocumentAnalysisResponse:
+    documents = extract_documents(request.files)
+    provider = get_offering_document_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_document_timeout_seconds):
+            return await provider.analyze(request, documents)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post(
+    "/ai/onboarding/documents/analyze",
+    response_model=OnboardingDocumentAnalysisResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_onboarding_documents(
+    request: OnboardingDocumentAnalysisRequest,
+) -> OnboardingDocumentAnalysisResponse:
+    provider = get_onboarding_document_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_document_timeout_seconds):
+            return await provider.analyze(request)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",

@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import type { WorkspaceDataErasureResult, WorkspaceDataExport } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
+import { cleanupWorkspaceOfferingDocuments } from "../offerings/offering-document-service";
+import { cleanupWorkspaceOnboardingDocuments } from "../onboarding/onboarding-document-service";
 
 export class WorkspaceDataExportNotFoundError extends Error {
   constructor() {
@@ -37,6 +39,14 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     members,
     vault,
     vaultHistory,
+    offeringCatalogs,
+    offeringCatalogRevisions,
+    offerings,
+    offeringRevisions,
+    offeringDocumentAnalyses,
+    offeringDocumentFiles,
+    onboardingDocumentAnalyses,
+    onboardingDocumentFiles,
     strategies,
     calendars,
     campaigns,
@@ -55,6 +65,14 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     prisma.workspaceMember.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.knowledgeVault.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.knowledgeVaultHistory.findMany({ where: { workspaceId } }),
+    prisma.offeringCatalog.findMany({ where: { deletedAt: null, workspaceId } }),
+    prisma.offeringCatalogRevision.findMany({ where: { workspaceId } }),
+    prisma.offering.findMany({ where: { deletedAt: null, workspaceId } }),
+    prisma.offeringRevision.findMany({ where: { workspaceId } }),
+    prisma.offeringDocumentAnalysis.findMany({ where: { workspaceId } }),
+    prisma.offeringDocumentFile.findMany({ where: { workspaceId } }),
+    prisma.onboardingDocumentAnalysis.findMany({ where: { workspaceId } }),
+    prisma.onboardingDocumentFile.findMany({ where: { workspaceId } }),
     prisma.strategy.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.contentCalendar.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.campaign.findMany({ where: { deletedAt: null, workspaceId } }),
@@ -95,6 +113,14 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
       mediaAssets: toJsonRows(mediaAssets),
       members: toJsonRows(members),
       notifications: toJsonRows(notifications),
+      offeringCatalogs: toJsonRows(offeringCatalogs),
+      offeringCatalogRevisions: toJsonRows(offeringCatalogRevisions),
+      offeringDocumentAnalyses: toJsonRows(offeringDocumentAnalyses),
+      offeringDocumentFiles: toJsonRows(offeringDocumentFiles.map(({ storageKey: _storageKey, ...file }) => file)),
+      onboardingDocumentAnalyses: toJsonRows(onboardingDocumentAnalyses),
+      onboardingDocumentFiles: toJsonRows(onboardingDocumentFiles.map(({ storageKey: _storageKey, ...file }) => file)),
+      offerings: toJsonRows(offerings),
+      offeringRevisions: toJsonRows(offeringRevisions),
       payments: toJsonRows(payments),
       promptTemplates: toJsonRows(promptTemplates),
       strategies: toJsonRows(strategies),
@@ -120,6 +146,9 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
 export async function eraseWorkspaceData(input: { actorId: string; workspaceId: string }): Promise<WorkspaceDataErasureResult> {
   const erasedAt = new Date();
 
+  await cleanupWorkspaceOfferingDocuments(input.workspaceId);
+  await cleanupWorkspaceOnboardingDocuments(input.workspaceId);
+
   return prisma.$transaction(async (tx) => {
     const workspace = await tx.workspace.findFirst({
       where: {
@@ -139,6 +168,14 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
 
     counts.knowledgeVault = (await tx.knowledgeVault.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.knowledgeVaultHistory = (await tx.knowledgeVaultHistory.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.offeringCatalogRevisions = (await tx.offeringCatalogRevision.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.offeringRevisions = (await tx.offeringRevision.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.offeringDocumentFiles = (await tx.offeringDocumentFile.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.offeringDocumentAnalyses = (await tx.offeringDocumentAnalysis.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.onboardingDocumentFiles = (await tx.onboardingDocumentFile.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.onboardingDocumentAnalyses = (await tx.onboardingDocumentAnalysis.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.offerings = (await tx.offering.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
+    counts.offeringCatalogs = (await tx.offeringCatalog.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.strategies = (await tx.strategy.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentCalendars = (await tx.contentCalendar.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.campaigns = (await tx.campaign.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;

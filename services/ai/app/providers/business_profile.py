@@ -33,10 +33,7 @@ class LocalBusinessProfileProvider:
         request: BusinessProfileGenerateRequest,
     ) -> BusinessProfileGenerateResponse:
         profile = build_local_profile(request)
-        prompt = (
-            f"{build_business_profile_instructions()}\n"
-            f"{build_business_profile_input(request)}"
-        )
+        prompt = f"{build_business_profile_instructions()}\n{build_business_profile_input(request)}"
         model = (
             request.model
             or settings.llm_longform_model
@@ -118,15 +115,11 @@ def get_business_profile_provider() -> BusinessProfileProvider:
 
 
 def build_local_profile(request: BusinessProfileGenerateRequest) -> BusinessProfile:
-    company = next(
-        (chunk.value for chunk in request.context if chunk.section == "COMPANY"),
-        {},
-    )
+    sections = {chunk.section: chunk.value for chunk in request.context}
+    company = sections.get("COMPANY", {})
+    products = sections.get("PRODUCTS", {})
     business_name = str(company.get("name") or "Your business")
-    context_labels = ", ".join(
-        f"{chunk.section}/{chunk.key}" for chunk in request.context[:5]
-    )
-    source_summary = context_labels or "the supplied business details"
+    offer = product_text(products)
 
     return BusinessProfile(
         businessName=business_name,
@@ -135,34 +128,84 @@ def build_local_profile(request: BusinessProfileGenerateRequest) -> BusinessProf
             f"ملف واضح يركّز على عملاء {business_name}.",
         ),
         overview=localized(
-            f"{business_name} is presented using {source_summary}.",
-            f"يتم تقديم {business_name} استناداً إلى معلومات النشاط المحفوظة.",
+            f"{business_name} offers {offer}."
+            if offer
+            else f"{business_name} is described using the confirmed business details.",
+            f"يقدم {business_name}: {offer}."
+            if offer
+            else f"يتم وصف {business_name} استناداً إلى معلومات النشاط المؤكدة.",
         ),
         uniqueValue=localized(
-            "Its value is grounded in the business story and stated differentiators.",
-            "تستند قيمته المميزة إلى قصة النشاط وعوامل التميز المذكورة.",
+            "Its distinct value follows the business story and differentiators provided."
+            if "STORY" in sections
+            else "What makes this business different has not been defined yet.",
+            "تستند قيمته المميزة إلى قصة النشاط وعوامل التميز المذكورة."
+            if "STORY" in sections
+            else "لم يتم تحديد ما يميّز هذا النشاط بعد.",
         ),
         offerSummary=localized(
-            "The offer reflects the products and services supplied during onboarding.",
-            "يعكس العرض المنتجات والخدمات التي أُضيفت أثناء الإعداد.",
+            product_summary(products, "The recorded offer includes: {summary}."),
+            product_summary(products, "يشمل العرض المسجل: {summary}."),
         ),
         idealCustomer=localized(
-            "The ideal customer follows the audience needs and motivations in the Vault.",
-            "يتوافق العميل المثالي مع احتياجات الجمهور ودوافعه في الخزنة.",
+            "The ideal customer follows the audience needs and motivations provided."
+            if "AUDIENCE" in sections
+            else "The ideal customer has not been defined yet.",
+            "يتوافق العميل المثالي مع احتياجات الجمهور ودوافعه المذكورة."
+            if "AUDIENCE" in sections
+            else "لم يتم تحديد العميل المثالي بعد.",
         ),
         marketPosition=localized(
-            "The market position uses the recorded competitors and competitive advantage.",
-            "يعتمد الموقع في السوق على المنافسين والميزة التنافسية المسجلة.",
+            "The market position reflects the competitors and advantages provided."
+            if "COMPETITORS" in sections
+            else "The business's market position has not been defined yet.",
+            "يعكس الموقع في السوق المنافسين والمزايا المذكورة."
+            if "COMPETITORS" in sections
+            else "لم يتم تحديد موقع النشاط في السوق بعد.",
         ),
         brandVoice=localized(
-            "The voice follows the selected tone and brand guidance.",
-            "يتبع أسلوب العلامة النبرة وإرشادات الهوية المختارة.",
+            "The brand voice follows the selected tone and voice guidance."
+            if "TONE" in sections
+            else "The brand voice has not been defined yet.",
+            "يتبع أسلوب العلامة النبرة وإرشادات الأسلوب المختارة."
+            if "TONE" in sections
+            else "لم يتم تحديد أسلوب العلامة بعد.",
         ),
         marketingFocus=localized(
-            "The marketing focus follows the selected goals and 90-day definition of success.",
-            "يتبع التركيز التسويقي الأهداف المختارة وتعريف النجاح خلال 90 يوماً.",
+            "The marketing focus follows the current priority and goals provided."
+            if "OBJECTIVES" in sections
+            else "The current marketing priority has not been defined yet.",
+            "يتبع التركيز التسويقي الأولوية الحالية والأهداف المذكورة."
+            if "OBJECTIVES" in sections
+            else "لم يتم تحديد الأولوية التسويقية الحالية بعد.",
         ),
     )
+
+
+def product_summary(products: dict[str, object], template: str) -> str:
+    summary = product_text(products)
+    if summary:
+        return template.format(summary=summary)
+
+    return "The products and services are recorded but need a clearer summary."
+
+
+def product_text(products: dict[str, object]) -> str | None:
+    summary = products.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        return summary.strip().rstrip(".!?؟")
+
+    items = products.get("items")
+    if isinstance(items, list):
+        names = [
+            str(item.get("name")).strip()
+            for item in items
+            if isinstance(item, dict) and item.get("name")
+        ]
+        if names:
+            return ", ".join(names[:5])
+
+    return None
 
 
 def localized(en: str, ar: str) -> LocalizedBusinessProfileText:

@@ -68,6 +68,151 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.knowledgeVaultHistory.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
+    model: "OfferingCatalog",
+    create: (fixture) =>
+      prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Workspace-owned catalogue" },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.offeringCatalog.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingCatalogRevision",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Revision catalogue" }
+      });
+      return prisma.offeringCatalogRevision.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          version: 1,
+          snapshot: { summary: catalog.summary },
+          sourceType: "OWNER"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringCatalogRevision.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "Offering",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Offering catalogue" }
+      });
+      return prisma.offering.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          name: `Offering ${randomUUID()}`,
+          normalizedName: `offering-${randomUUID()}`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offering.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingRevision",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Offering revision catalogue" }
+      });
+      const offering = await prisma.offering.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          name: `Revision Offering ${randomUUID()}`,
+          normalizedName: `revision-offering-${randomUUID()}`
+        }
+      });
+      return prisma.offeringRevision.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          offeringId: offering.id,
+          version: 1,
+          snapshot: { name: offering.name },
+          sourceType: "OWNER"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringRevision.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingDocumentAnalysis",
+    create: (fixture) =>
+      prisma.offeringDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.offeringDocumentAnalysis.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingDocumentFile",
+    create: async (fixture) => {
+      const analysis = await prisma.offeringDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        }
+      });
+      return prisma.offeringDocumentFile.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          analysisId: analysis.id,
+          filename: "offerings.txt",
+          mimeType: "text/plain",
+          sizeBytes: 12,
+          checksumSha256: "a".repeat(64),
+          storageKey: `local:${fixture.workspaceId}/${randomUUID()}.txt`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OnboardingDocumentAnalysis",
+    create: (fixture) =>
+      prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.onboardingDocumentAnalysis.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OnboardingDocumentFile",
+    create: async (fixture) => {
+      const analysis = await prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        }
+      });
+      return prisma.onboardingDocumentFile.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          analysisId: analysis.id,
+          filename: "business.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 12,
+          checksumSha256: "b".repeat(64),
+          storageKey: `local:${fixture.workspaceId}/${randomUUID()}.pdf`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.onboardingDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "Strategy",
     create: (fixture) =>
       prisma.strategy.create({

@@ -1,6 +1,6 @@
 # M6 Acceptance Evidence Ledger
 
-Status date: 2026-08-16.
+Status date: 2026-09-01.
 
 This ledger is the working checklist for closing M6 Beta + Launch acceptance. It records what is already proven by code/tests/runbooks and what still requires external provider evidence.
 
@@ -14,6 +14,7 @@ Open application-owned blockers:
 
 - Verify the current shared Strategy/profile provider adapter through the deployed API-to-AI path; a direct provider probe is not sufficient.
 - Verify production email delivery and the complete register -> verify -> browser-session -> onboarding -> Strategy journey.
+- Verify the mounted full-business document-assisted onboarding path on the deployed provider: staged multi-file submission, editable evidence/issues, explicit extraction approval, temporary-file removal, separate bilingual Business Profile approval, and honest failure/manual recovery.
 - Restore and verify every final-system Sunlit surface included in launch scope. PR #19 removed the prior pages for full Vault editing/history, publishing operations, full analytics, AI assistance, and administration; their product requirements remain active.
 - Provide durable public media delivery for live Instagram publishing.
 
@@ -42,7 +43,7 @@ Open external blockers:
 | Starter/Growth catalog          | Verified internally            | `GET /v1/admin/bahrain-launch-readiness`, `docs/bahrain-plan-launch-readiness.md`                                                                                                    | Needs `liveReady: true` after local gateway credentials are configured.                                                                                                              |
 | Launch runbook                  | Documented                     | `docs/launch-runbook.md`                                                                                                                                                             | Release owner confirms the go/no-go matrix was followed for the release candidate.                                                                                                  |
 | Deployed AI application path    | Open application               | `services/ai/README.md`, `docs/project-status.md`, current API/AI source                                                                                                             | Attach an authenticated, Vault-grounded provider response through the deployed application plus unauthorized-request rejection evidence.                                            |
-| Sunlit browser coverage         | Open application               | `docs/ui-design-foundation.md`, `docs/ui-state-audit.md`, current web routes                                                                                                         | Restore or explicitly exclude each final-system surface, then attach desktop/mobile Arabic/English journey evidence for every included surface.                                      |
+| Sunlit browser coverage         | Open application               | `docs/ui-design-foundation.md`, `docs/ui-ux-workflow.md`, current web routes                                                                                                         | Restore or explicitly exclude each final-system surface, then attach desktop/mobile Arabic/English journey evidence for every included surface.                                      |
 | Production Instagram connection | Verified externally 2026-08-03 | `docs/project-status.md`, `docs/instagram-app-review.md`, current OAuth source/tests                                                                                                 | Preserve the project-observed status without committing provider identifiers, credentials, callback data, or production records. Re-verify only if the deployed behavior changes.    |
 | Live staging deploy             | Blocked external               | `docs/staging-deploy.md`, `corepack pnpm staging:github-preflight`, `corepack pnpm staging:evidence-download`, `corepack pnpm staging:smoke`, `.github/workflows/deploy-staging.yml` | Configure GitHub `staging` environment, attach image publish evidence, ECS/cloud rollout evidence where applicable, release SHA, public URLs, and successful staging smoke evidence. |
 | Meta App Review                 | Blocked external               | `docs/instagram-app-review.md`                                                                                                                                                       | Submit app review and attach submission/approval evidence.                                                                                                                           |

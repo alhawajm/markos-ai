@@ -2,6 +2,9 @@ import { env } from "../config/env";
 
 const safeAiMessages: Record<string, string> = {
   AI_CONTEXT_MISSING: "Knowledge Vault context is required for AI generation",
+  AI_DOCUMENT_INVALID: "The uploaded document is invalid",
+  AI_DOCUMENT_UNREADABLE: "The uploaded document did not contain readable text",
+  AI_DOCUMENT_UNSUPPORTED: "This document cannot be processed safely",
   AI_OUTPUT_INCOMPLETE: "The AI provider returned an incomplete result",
   AI_OUTPUT_INVALID: "The AI provider returned an invalid result",
   AI_OUTPUT_REFUSED: "The AI provider could not generate this result",

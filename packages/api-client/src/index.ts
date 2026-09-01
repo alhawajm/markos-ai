@@ -23,6 +23,7 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
+  CalendarReadResult,
   ContentRecord,
   ContentStatus,
   ContentType,
@@ -41,6 +42,12 @@ import type {
   MfaStatus,
   MfaTotpSetup,
   OnboardingState,
+  OnboardingDocumentAnalysisRecord,
+  ApprovedOnboardingDocumentProfile,
+  ApproveOnboardingDocumentAnalysisResult,
+  OfferingCatalogUpdate,
+  OfferingDocumentAnalysisRecord,
+  ApproveOfferingDocumentAnalysisResult,
   PromptTemplateRecord,
   PromptVariantSelection,
   PublishAttemptRecord,
@@ -184,10 +191,115 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async saveOnboardingModule(module: string, body: Record<string, unknown>): Promise<OnboardingState> {
-    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}`, {
+  async onboardingDocumentAnalysis(): Promise<OnboardingDocumentAnalysisRecord | null> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord | null>("/v1/onboarding/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOnboardingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType:
+        | "application/pdf"
+        | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        | "text/plain"
+        | "image/jpeg"
+        | "image/png"
+        | "image/webp";
+      base64Data: string;
+    }>
+  ): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>("/v1/onboarding/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOnboardingDocumentAnalysis(analysisId: string, profile: ApprovedOnboardingDocumentProfile): Promise<ApproveOnboardingDocumentAnalysisResult> {
+    const response = await this.request<ApproveOnboardingDocumentAnalysisResult>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/approve`, {
+      body: { profile },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async discardOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
+  async saveOnboardingModule(module: string, body: Record<string, unknown>, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}${query}`, {
       body,
       method: "PUT"
+    });
+    return response.data;
+  }
+
+  async skipOnboardingModule(module: string, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip${query}`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async offeringDocumentAnalysis(): Promise<OfferingDocumentAnalysisRecord | null> {
+    const response = await this.request<OfferingDocumentAnalysisRecord | null>("/v1/onboarding/products/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOfferingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain";
+      base64Data: string;
+    }>
+  ): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>("/v1/onboarding/products/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOfferingDocumentAnalysis(
+    analysisId: string,
+    catalog: OfferingCatalogUpdate,
+    options: { preserveApprovedProfile?: boolean } = {}
+  ): Promise<ApproveOfferingDocumentAnalysisResult> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<ApproveOfferingDocumentAnalysisResult>(
+      `/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/approve${query}`,
+      { body: { catalog }, method: "POST" }
+    );
+    return response.data;
+  }
+
+  async discardOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
     });
     return response.data;
   }
@@ -330,7 +442,36 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async createContent(input: { contentType?: ContentType } = {}): Promise<ContentRecord> {
+  async calendar(input: {
+    from: string;
+    to: string;
+    statuses?: ContentStatus[];
+    contentTypes?: ContentType[];
+    unscheduledOffset?: number;
+    unscheduledLimit?: number;
+  }): Promise<CalendarReadResult> {
+    const search = new URLSearchParams({ from: input.from, to: input.to });
+    if (input.statuses?.length) search.set("statuses", input.statuses.join(","));
+    if (input.contentTypes?.length) search.set("contentTypes", input.contentTypes.join(","));
+    if (input.unscheduledOffset !== undefined) search.set("unscheduledOffset", String(input.unscheduledOffset));
+    if (input.unscheduledLimit !== undefined) search.set("unscheduledLimit", String(input.unscheduledLimit));
+    const response = await this.request<CalendarReadResult>(`/v1/calendar?${search.toString()}`);
+    return response.data;
+  }
+
+  async createContent(
+    input: {
+      contentType?: ContentType;
+      captionEn?: string | null;
+      captionAr?: string | null;
+      hashtags?: string[];
+      callToAction?: string | null;
+      contentPillar?: string | null;
+      carousel?: Record<string, unknown> | null;
+      reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
+    } = {}
+  ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content", {
       body: input,
       method: "POST"
@@ -409,6 +550,7 @@ export class MarkosApiClient {
       contentPillar?: string | null;
       carousel?: Record<string, unknown> | null;
       reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
     }
   ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}`, {

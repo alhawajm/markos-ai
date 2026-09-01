@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { directionForLocale } from "@markos/i18n";
 import type { Locale } from "@markos/shared-types";
+import { LocaleDocument } from "./_components/locale-document";
 
 const supportedLocales = ["ar", "en"] as const;
 
@@ -14,6 +15,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
 
   return (
     <div className="max-w-full overflow-x-hidden" lang={locale} dir={directionForLocale(locale)}>
+      <LocaleDocument locale={locale} />
       {children}
     </div>
   );

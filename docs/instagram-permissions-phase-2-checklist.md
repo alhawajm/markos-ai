@@ -1,6 +1,6 @@
 # Instagram Permissions Phase 2 Working Checklist
 
-Status date: 2026-08-19.
+Status date: 2026-08-30.
 
 Decision status: all five Milestone A decisions are locked. The boundary, temporary operator path, and live Meta dashboard gate were locked on 2026-08-16; the completion target was updated to Wednesday for Thursday's showcase, and Sarah confirmed the private Railway Bucket plus just-in-time presigned-GET design on 2026-08-17.
 
@@ -98,7 +98,7 @@ The Milestone A operator path now performs one immediate container-status check 
 | Insights client | Account data reads `followers_count,media_count` from the account object; media insights request one broad fixed metric list; both use legacy transport. | Make an actual account `/insights` request plus a media `/insights` request using a minimal confirmed metric set. Treat response shape, empty data, and metric availability explicitly. | Khalid |
 | Storage | `storage-service.ts` writes to API-local disk; `MediaAsset` already has `s3Key` and `cdnUrl`. | Add an S3-compatible driver, retain local storage for local development, store stable object keys, and mint signed provider-fetch URLs just in time. No schema change is expected for A. | Khalid builds; Sarah provisions |
 | Database | Existing schema stores requested/confirmed-scope arrays, object keys, published media IDs, and JSON analytics with RLS. | Reuse the existing schema for the single manual proof. Do not rewrite the clean baseline. Any discovered schema need becomes a reviewed forward migration with a workspace-isolation test. | Khalid authors; Sarah applies |
-| Browser path | The functional `SettingsPanel` exists, but `AppShell` does not render a Settings panel. | Add a minimal Sunlit connection/reconnection surface or explicitly approve an operator-only A path. A visible final UI is mandatory before App Review even if A remains operator-driven. | Khalid |
+| Browser path | The localized `/app/settings` route mounts the functional Settings page, including the secure Instagram connection/reconnection surface. | Keep the visible path honest and browser-verify it after deployment and before App Review. Milestone A may remain operator-driven, but operator proof does not replace the final user-visible recovery path. | Khalid |
 | Runtime worker | Worker source and Dockerfile exist; no Railway worker service is present in the current staging service list. | Use the authorized manual run/sync path for A. Provision the worker in B rather than creating it as an accidental deadline dependency. | Khalid + Sarah in B |
 
 ## Khalid's Milestone A checklist
@@ -183,6 +183,7 @@ Feature implementation freezes Wednesday evening. Thursday morning is reserved f
 - [x] **K-S05 — Calendar MVP:** add Calendar as a bilingual/RTL primary destination with a week-first planner, compact month overview, next-action summary, unscheduled Draft/Review/Ready queue, Bahrain-time labels, media/status detail, editor handoff, scheduling, atomic scheduled/failed-item rescheduling, and separately confirmed cancellation. Keep saved MARKOS state distinct from provider-confirmed publication. Focused evidence on 2026-08-19 passed the one rendered Calendar scenario in desktop English and mobile Arabic/RTL; the other five presentation scenarios were deliberately skipped.
 - [x] **K-S06 — Calendar schedule contract:** add workspace-scoped `POST /v1/content/:contentItemId/reschedule` for scheduled or failed content, clear a bounded prior failure on recovery, and move the monthly calendar index atomically without a schema migration. Cover the scheduled, failed, cross-workspace, and month-change boundaries in the focused Content API test.
 - [ ] **K-S07 — Staging Calendar and AI smoke:** deploy the branch, confirm Calendar loads the correct workspace records and completes schedule → reschedule → confirmed cancellation, then generate one real bilingual content draft with `AI_TEXT_PROVIDER=openai`. Inspect the stored response in the correct OpenAI project. Required AI review: `AI_CONTENT_TIMEOUT_SECONDS`, `OPENAI_STORE_RESPONSES`, and `LLM_PRIMARY_MODEL`; Calendar itself adds no variable, migration, or service.
+- [x] **K-S08 — Calendar refinement checkpoint:** fit the complete Week/Month grid in the named desktop viewports, remove duplicated desktop chrome, add explicit persisted sidebar collapse, preserve URL-backed Calendar → Day Focus → Post Focus navigation with short reduced-motion-aware transitions, and keep status/Unscheduled/scheduling semantics intact. The 2026-08-30 CI-equivalent local gate passed all 32 tasks, including 296 API tests, 25 web tests, 27 AI tests, and all 10 RTL checks. This is repository evidence; deployment and K-S07 remain open.
 
 ### Locked Create redesign — Thursday, 2026-08-20
 

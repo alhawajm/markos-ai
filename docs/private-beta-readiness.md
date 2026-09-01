@@ -1,6 +1,6 @@
 # Private Beta Readiness
 
-Status date: 2026-08-16.
+Status date: 2026-09-01.
 
 This runbook closes the M6 private beta readiness planning gate. It does not close live external gates by itself; staging proof, Meta App Review, live Instagram publishing, live analytics, and payment certification remain open until verified with real provider accounts.
 
@@ -9,6 +9,7 @@ Current evidence is narrower than beta readiness:
 - On 2026-08-03, one real professional account completed the production `instagram_business_basic` connection and loaded recent media.
 - On 2026-08-06, a direct request from the Railway AI service reached OpenAI successfully, but the then-deployed Strategy application path returned `503`. The current shared Strategy/profile provider adapter has not yet been verified in the deployed application path.
 - PR #19 mounted the Sunlit UI and intentionally removed the temporary design-preview URLs, but it also removed several browser surfaces that remain in final product scope. See `docs/ui-design-foundation.md` and `docs/decisions.md`.
+- Current reviewed source includes the refined Calendar and closed Onboarding checkpoints. Onboarding now mounts both manual and full-business document-assisted first-run paths, while the connected Create redesign, IBM Plex/Tangerine Slate foundation, and Media Library remain prototype or planned work.
 
 Do not invite users on the promise of provider-backed AI, complete publishing operations, full analytics, or full administration until the corresponding deployed and browser-visible paths are verified.
 
@@ -20,9 +21,10 @@ Allowed beta surfaces:
 
 - Register, verify email, log in with email/password, refresh the browser session, and use MFA for sensitive roles. The Google-auth API exists, but the current Sunlit Google button is intentionally unavailable; password recovery is also not mounted as a working flow.
 - Arabic and English app shell with RTL behavior.
-- Seven-module onboarding, generated/edited/approved bilingual business profile, and the current Business Profile summary.
-- Vault-grounded Strategy generation only after the selected `AI_TEXT_PROVIDER` path is verified in the deployed application. The 30/60/90-day choices are current; a 7-day option is a possible future addition.
-- Current Create flow for content generation, editing, approval, and scheduling, with deterministic/provider limitations explained to testers.
+- Reduced-effort seven-area onboarding: the owner may enter details manually or begin with up to five supported business documents. Company and Products are the two essentials; Story, Audience, Competitors, Brand/Tone, and Objectives may be explicitly skipped or left absent. Document extraction requires its own approval before the owner separately reviews and approves the generated bilingual Business Profile.
+- Vault-grounded Strategy generation only after the selected `AI_TEXT_PROVIDER` path is verified in the deployed application. The 30/60/90-day choices are current; one week, two weeks, and other shorter day multiples require a focused contract and quality decision.
+- Current mounted Create flow for content generation, editing, approval, and scheduling, with deterministic/provider limitations explained to testers. Do not demo the separate HTML Create prototype as production behavior.
+- Current Calendar flow for Week/Month planning, Unscheduled content, Day/Post Focus, safe scheduling/rescheduling/cancellation, and editor handoff over existing records.
 - Instagram connection with `instagram_business_basic`, recent-media loading, readiness checks, and dry-run publishing through the API or worker by default.
 - Current Insights summary for 7/30-day metrics, top content, and monthly PDF generation in the configured mode.
 - Billing and administration APIs only when the beta script explicitly covers them and the operator can support the workflow safely.
@@ -30,7 +32,7 @@ Allowed beta surfaces:
 Excluded from unattended beta until separately approved:
 
 - Google sign-in and password recovery through the current browser UI.
-- Full Vault editor/history, content calendar, media library, failed-publish queue/retry UI, AI consultant, the AN-01 through AN-06 analytics suite, and admin console until their Sunlit surfaces are restored and verified. These remain final-system scope rather than retired requirements.
+- Full Vault editor/history, permanent brand-asset storage, media library, failed-publish queue/retry UI, safeguarded Calendar drag-and-drop, AI consultant, the AN-01 through AN-06 analytics suite, and admin console until their Sunlit surfaces and contracts are implemented and verified. The mounted full-business onboarding document path must remain operator-controlled until its Railway provider and retention behavior is verified.
 - `INSTAGRAM_PUBLISH_MODE=live` outside a controlled verification window.
 - `INSTAGRAM_ANALYTICS_SYNC_MODE=live` outside a controlled verification window.
 - Live CrediMax, BENEFIT, or Stripe payment capture before merchant certification evidence is attached.
@@ -86,7 +88,7 @@ Each beta workspace should complete this path once.
 
 1. Register, verify email, and log in.
 2. Switch between English and Arabic and confirm navigation remains usable.
-3. Complete onboarding.
+3. Complete manual onboarding, then separately test the document-assisted path with a supported mixed-file batch once its Railway provider gate is open. Confirm files are staged before submission, extracted facts remain editable, and source files disappear after extraction approval.
 4. Review the Business Profile summary and resolve at least one onboarding/profile gap if the current UI exposes it.
 5. Generate one 30/60/90-day strategy from Vault context and confirm the response is from the declared provider mode.
 6. Generate and edit one bilingual content item in Create.

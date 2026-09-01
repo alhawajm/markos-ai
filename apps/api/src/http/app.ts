@@ -8,6 +8,7 @@ import { registerAnalyticsRoutes } from "../analytics/analytics-routes";
 import { registerAuthRoutes } from "../auth/auth-routes";
 import { assertVerificationEmailConfiguration } from "../auth/verification-email";
 import { registerBillingRoutes } from "../billing/billing-routes";
+import { registerCalendarRoutes } from "../calendar/calendar-routes";
 import { env } from "../config/env";
 import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
@@ -74,6 +75,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAgentRoutes(app);
   await registerAnalyticsRoutes(app);
   await registerBillingRoutes(app);
+  await registerCalendarRoutes(app);
   await registerOnboardingRoutes(app);
   await registerStrategyRoutes(app);
   await registerContentRoutes(app);

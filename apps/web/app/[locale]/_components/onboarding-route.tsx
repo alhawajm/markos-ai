@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Locale } from "@markos/shared-types";
+import type { Locale, OnboardingState } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { createOnboardingDraftFromVault, type OnboardingDraft } from "./onboarding-draft";
 import { OnboardingPanel } from "./onboarding-panel";
@@ -15,6 +15,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
   const session = useMarkosSession();
   const [attempt, setAttempt] = useState(0);
   const [initialDraft, setInitialDraft] = useState<OnboardingDraft | null>(null);
+  const [initialState, setInitialState] = useState<OnboardingState | null>(null);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<RouteStatus>("checking");
 
@@ -29,6 +30,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
     let active = true;
     setStatus("checking");
     setInitialDraft(null);
+    setInitialState(null);
     setMessage("");
 
     void (async () => {
@@ -42,12 +44,13 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
           return;
         }
 
-        if (editMode) {
+        if (editMode || state.status !== "NOT_STARTED" || state.modules.some((module) => module.completed)) {
           const vault = await client.vault();
           if (!active) return;
           setInitialDraft(createOnboardingDraftFromVault(vault));
         }
 
+        setInitialState(state);
         setStatus("allowed");
       } catch (error) {
         if (!active) return;
@@ -72,15 +75,15 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
 
   useEffect(() => checkOnboarding(), [attempt, checkOnboarding]);
 
-  if (status === "allowed") {
-    return <OnboardingPanel editMode={editMode} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />;
+  if (status === "allowed" && initialState) {
+    return <OnboardingPanel editMode={editMode} initialState={initialState} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />;
   }
 
   return (
     <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
       <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
         <span className="mx-auto block h-16 w-16 animate-pulse rounded-2xl bg-[var(--sunlit-aqua-soft)] shadow-[inset_0_0_0_1px_rgb(33_191_174_/_22%)]" />
-        <h1 className="mt-7 text-3xl font-black text-[var(--sunlit-ink)]">
+        <h1 className="mt-7 text-3xl font-bold text-[var(--sunlit-ink)]">
           {status === "failed"
             ? locale === "ar"
               ? "تعذر فتح الإعداد"
@@ -97,7 +100,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
               : "Checking your workspace before opening the onboarding steps."}
         </p>
         {status === "failed" ? (
-          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-black" onClick={() => setAttempt((current) => current + 1)} type="button">
+          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 font-bold" onClick={() => setAttempt((current) => current + 1)} type="button">
             {locale === "ar" ? "حاول مرة أخرى" : "Try again"}
           </button>
         ) : null}

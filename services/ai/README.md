@@ -1,8 +1,8 @@
 # MARKOS AI Service
 
-Status date: 2026-08-20.
+Status date: 2026-09-01.
 
-This Python 3.11 FastAPI service contains the first provider-capable vertical slices. Strategy, onboarding-profile resolution, and bilingual content-copy generation can use the OpenAI Responses API when explicitly configured. Image generation can separately use the OpenAI Images API. Deterministic local behavior remains the default for development.
+This Python 3.11 FastAPI service contains the first provider-capable vertical slices. Strategy, onboarding-profile resolution, focused offering-document analysis, full-business multimodal onboarding analysis, and bilingual content-copy generation can use the OpenAI Responses API when explicitly configured. Image generation can separately use the OpenAI Images API. Deterministic local behavior remains the default for ordinary development, but both document-analysis routes intentionally require the configured OpenAI text provider and return an honest unavailable error otherwise.
 
 External evidence is narrower than the source capability: on 2026-08-06 a controlled direct Responses request from the Railway AI container succeeded and appeared in the OpenAI project logs, proving that request's credential, model access, billing, and outbound connectivity. The then-deployed application Strategy adapter still returned `AI_PROVIDER_UNAVAILABLE`. Current source replaced that adapter path with shared strict JSON Schema handling, but the replacement has not yet been deployed and verified through the browser-to-API-to-AI journey.
 
@@ -14,12 +14,15 @@ The service currently provides:
 - `GET /ai/health/deep`: deliberately returns `degraded` because database, provider, and embedding dependencies are `not_checked`;
 - `POST /ai/vault/embed`: deterministic 1,536-dimension local embeddings;
 - `POST /ai/strategy/generate`: strict, locale-aware Strategy generation through either the local adapter or the OpenAI adapter;
+- `POST /ai/onboarding/profile/generate`: strict bilingual Business Profile resolution from approved onboarding facts through either the local or OpenAI adapter;
+- `POST /ai/onboarding/offerings/analyze`: provider-required structured product/service extraction from PDF, DOCX, or UTF-8 TXT evidence;
+- `POST /ai/onboarding/documents/analyze`: provider-required multimodal extraction across the seven onboarding areas from PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP evidence;
 - `POST /ai/content/generate`: strict, grounded bilingual content generation through either the local adapter or the OpenAI adapter;
 - `POST /ai/images/generate`: provider-selected JPEG generation with exact Instagram-oriented dimensions, provider usage, and validated bytes;
 - `POST /ai/agents/run`: fixed output shapes for the eight configured MARKOS agent names;
 - every non-health `/ai/*` route requires the shared API-to-AI bearer token.
 
-The API gateway retrieves workspace-scoped Vault context, authenticates the request, selects configured prompt/model inputs, applies bounded timeouts, and validates provider responses at runtime. The OpenAI adapter uses Structured Outputs, stores response application state when `OPENAI_STORE_RESPONSES=true`, and reports the provider-returned model and input/output token counts. The FastAPI service does not retrieve directly from pgvector.
+The API gateway retrieves workspace-scoped Vault context where required, authenticates the request, selects configured prompt/model inputs, applies bounded timeouts, and validates provider responses at runtime. The OpenAI adapter uses Structured Outputs, stores response application state when `OPENAI_STORE_RESPONSES=true`, and reports the provider-returned model and input/output token counts. Full onboarding files are sent as provider-native file/image inputs; file contents are explicitly treated as untrusted evidence rather than instructions. The FastAPI service does not retrieve directly from pgvector.
 
 Important current gaps:
 
@@ -59,11 +62,11 @@ Official references:
 
 Completion requires one real provider response through the deployed service and gateway. Set the relevant provider selector (`AI_TEXT_PROVIDER` or `AI_IMAGE_PROVIDER`) to `openai`, configure its model slot, and provide `OPENAI_API_KEY` only to the AI service; the prior direct request does not by itself prove either path.
 
-### Phase 2: generate the first onboarding draft
+### Phase 2: prepare and approve the first business profile
 
-Khalid owns the product behavior and application integration. The intentionally small milestone takes the user's seven onboarding modules and produces a bilingual draft business profile for review, editing, and approval. It is implemented as onboarding orchestration rather than a ninth public agent, and it is not the complete eight-agent platform.
+Khalid owns the product behavior and application integration. The onboarding milestone supports two inputs to the same seven-module knowledge contract: owner-entered answers or an owner-reviewed full-business document extraction. The provider-backed document analyst accepts up to five supported text/visual files, returns structured evidence and issues without inventing missing facts, and never writes canonical business knowledge directly. After extraction approval, the existing resolver produces a bilingual Business Profile for separate review, editing, and approval. These are focused internal onboarding capabilities rather than new public agents, and they are not the complete eight-agent platform.
 
-The local provider remains deterministic for development. With `AI_TEXT_PROVIDER=openai`, Strategy, onboarding profile resolution, and bilingual content-copy generation use the Responses API with strict JSON Schema output and sanitized application lifecycle logging. During the current quality-tuning phase, `OPENAI_STORE_RESPONSES=true` keeps provider inputs and outputs available in the OpenAI API dashboard for human review.
+The local provider remains deterministic for Strategy, profile, and content development. Both document analyzers refuse the local provider because speculative parsing is not an acceptable user-facing fallback. With `AI_TEXT_PROVIDER=openai`, Strategy, onboarding profile resolution, both document analyzers, and bilingual content-copy generation use the Responses API with strict JSON Schema output and sanitized application lifecycle logging. During the current quality-tuning phase, `OPENAI_STORE_RESPONSES=true` keeps provider inputs and outputs available in the OpenAI API dashboard for human review.
 
 ### Phase 3: mature grounded retrieval and generation
 
@@ -79,23 +82,43 @@ py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-From the repository root, `corepack pnpm dev` also starts the AI service through `scripts/python-runner.mjs` when the local environment is installed.
+From the repository root, MARKOS has two explicit local modes. Both start the AI service through `scripts/python-runner.mjs` when the local environment is installed:
 
-For a controlled local OpenAI smoke test, keep the credential in the ignored `services/ai/.env` file, not the repository-root `.env`. The AI service file needs:
+```powershell
+# Default: deterministic local text and image providers; no OpenAI key required.
+corepack pnpm dev
+# Equivalent explicit name:
+corepack pnpm dev:safe
+
+# OpenAI text generation; image generation remains local.
+corepack pnpm dev:live-ai
+```
+
+The launcher validates the local URLs, database, internal token, email provider, media storage, Instagram modes, provider choice, and model names before starting anything. Run only the preflight when you do not want to start servers:
+
+```powershell
+corepack pnpm local:check:safe
+corepack pnpm local:check:live-ai
+```
+
+Keep the OpenAI credential only in the ignored `services/ai/.env` file. The committed `.env.example` files remain secret-free, and the repository-root `.env` must not contain `OPENAI_API_KEY`. Local live-AI mode currently enables provider-backed text only; email, image generation, media storage, and Instagram publishing/analytics remain local or dry-run.
+
+Use a dedicated local-development OpenAI project and project service-account key. The local AI environment should use:
 
 ```dotenv
-AI_TEXT_PROVIDER=openai
-AI_IMAGE_PROVIDER=openai
-OPENAI_API_KEY=<project-service-account-key>
+AI_TEXT_PROVIDER=local
+AI_IMAGE_PROVIDER=local
+OPENAI_API_KEY=<dedicated-local-project-service-account-key>
 OPENAI_STORE_RESPONSES=true
-LLM_PRIMARY_MODEL=<configured-workhorse-model>
+LLM_PRIMARY_MODEL=gpt-5.6-terra
 LLM_LONGFORM_MODEL=gpt-5.6-sol
 IMAGE_MODEL_PRIMARY=gpt-image-2
+AI_DOCUMENT_TIMEOUT_SECONDS=50
 AI_IMAGE_TIMEOUT_SECONDS=120
 INTERNAL_SERVICE_TOKEN=<same-local-token-as-api>
 ```
 
-The repository-root `.env` should contain the matching `INTERNAL_SERVICE_TOKEN` and `LLM_LONGFORM_MODEL` for the API gateway, but not `OPENAI_API_KEY`. Railway must inject the key only into the AI service.
+The mode launcher overrides `AI_TEXT_PROVIDER` to `openai` only for `dev:live-ai`; keeping the file default at `local` makes accidental direct starts fail safely. The root and AI environment files must agree on the model names and internal token. These local files and values must never be copied to a hosted environment.
 
 ## Current configuration names
 
@@ -104,10 +127,11 @@ Current FastAPI settings consume these names:
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (enforced on every non-health AI route)
 - `DATABASE_URL` (configured but not used by current request handlers)
-- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy, onboarding profile resolution, and content-copy generation)
+- `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Strategy, onboarding profile resolution, both onboarding document analyzers, and content-copy generation)
 - `AI_IMAGE_PROVIDER` (`local` by default; set to `openai` for provider-backed JPEG generation)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
+- `AI_DOCUMENT_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
 - `AI_IMAGE_TIMEOUT_SECONDS`
 - `OPENAI_API_KEY`
@@ -131,7 +155,7 @@ Current FastAPI settings consume these names:
 
 `OPENAI_API_KEY` is required when either provider selector is `openai`. Content generation prefers `LLM_PRIMARY_MODEL`; image generation prefers the gateway-selected `IMAGE_MODEL_PRIMARY` and falls back to the AI service's matching setting when the gateway still supplies a synthetic `local-*` default. Configure both primary model slots deliberately. Never place the key in the API service, web environment, repository, command output, logs, screenshots, or test fixtures.
 
-With `OPENAI_STORE_RESPONSES=true`, the OpenAI project stores the request and response application state so the team can inspect generation quality, latency, and token usage in the API dashboard. This includes the business context deliberately sent to the model, so never send secrets, credentials, raw private identifiers, or production customer data that has not been approved for provider processing. Review and switch this setting to `false` before the dashboard-review phase ends or the privacy/retention policy requires stateless requests. OpenAI Zero Data Retention projects override the value to `false`.
+With `OPENAI_STORE_RESPONSES=true`, the OpenAI project stores the request and response application state so the team can inspect generation quality, latency, and token usage in the API dashboard. This includes the business context deliberately sent to the model, so never send secrets, credentials, or raw private identifiers. Keep storage enabled throughout private development and reassess or disable it as part of the public-launch privacy and retention review. OpenAI Zero Data Retention projects override the value to `false`.
 
 `OPENAI_STORE_RESPONSES` applies to the Responses API text adapters, not the Images API. Image requests still belong to the selected OpenAI project and are visible in its image usage; do not infer prompt-retention behavior from the text setting. The image adapter sends a pseudonymous hash rather than a raw workspace ID and never logs prompts or returned image bytes.
 

@@ -65,7 +65,7 @@ vi.mock("../src/ai/strategy-client", () => ({
 vi.mock("../src/ai/business-profile-client", () => ({
   generateBusinessProfile: async () => ({
     model: "test-profile-model",
-    prompt_version: "onboarding-business-profile.v1.acceptance",
+    prompt_version: "onboarding-business-profile.v2.acceptance",
     tokens_in: 160,
     tokens_out: 280,
     profile: acceptanceBusinessProfile()
@@ -93,7 +93,7 @@ describe("M1 acceptance", () => {
     expect(initial.json().data.modules).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ module: "company", completed: false }),
-        expect.objectContaining({ module: "brand", completed: false, sections: ["BRAND", "TONE"] })
+        expect.objectContaining({ module: "brand", completed: false, sections: ["TONE"] })
       ])
     );
 

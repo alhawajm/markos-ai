@@ -2,7 +2,7 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-16
+- Last updated: 2026-08-30
 
 This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
 
@@ -12,6 +12,8 @@ Product behavior still comes from:
 - `docs/source/MARKOS_EXPERIENCE_FLOWS.md` for journeys, state transitions, and failure behavior.
 
 If this visual document conflicts with either source on product behavior, follow those sources. The mounted components under `apps/web/app/[locale]/_components` are the most accurate coded reference for the adopted visual direction.
+
+Use `docs/ui-ux-workflow.md` for reference gathering, prototyping, implementation, and visual QA. Use `docs/ui-ux-improvement-plan.md` for interpreted design problems that have not yet become durable product decisions. Meeting notes, screenshots, templates, and stakeholder suggestions are challengeable inputs; they become active direction only after the product team records the problem, intended outcome, and decision state.
 
 ## Product idea
 
@@ -63,18 +65,22 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 | Ink | `--ink` | `#20212B` | Primary text, dark surfaces, strong secondary actions |
 | Ink soft | `--ink-soft` | `#4D4853` | Supporting text with strong contrast |
 | Muted | `--muted` | `#625B66` | Secondary metadata; avoid beside oversized headings when too small |
-| Paper | `--paper` | `#FFFAF5` | Main warm page canvas |
-| Paper deep | `--paper-deep` | `#FFF0E5` | Warm secondary surfaces and hover states |
+| Paper | `--paper` | `#FFFDFB` | Near-white warm page canvas |
+| Paper deep | `--paper-deep` | `#FFF4EE` | Warm secondary surfaces and hover states |
 | White | `--white` | `#FFFFFF` | Cards, fields, and high-contrast text on dark surfaces |
 | Coral | `--coral` | `#FF665A` | Primary-action gradients and energetic accents |
 | Coral deep | `--coral-deep` | `#DC3F64` | Strong accent text and gradient depth |
 | Pink | `--pink` | `#D93F7A` | Brand emphasis, links, selected states |
-| Aqua | `--aqua` | `#21BFAE` | Success, progress, focus, and insight accents |
+| Aqua | `--aqua` | `#21BFAE` | Selection, progress, focus, and insight accents |
 | Aqua dark | `--aqua-dark` | `#087D71` | Accessible text on pale aqua surfaces |
 | Aqua soft | `--aqua-soft` | `#DFF8F2` | Success and informational backgrounds |
 | Yellow | `--yellow` | `#F6C453` | Warm highlights, attention, and selected accents |
 
 Use semantic roles in shared production tokens instead of copying these raw values into every component. Warning, error, disabled, border, focus, and overlay roles must also be centralized during migration.
+
+Calendar currently establishes the first explicit lifecycle-status token set: Draft slate, Ready blue, Scheduled orange, Published green, Needs attention rose, and review violet. These colors support labels, icons, counts, and accessible names; they never replace those cues. Treat them as semantic status roles rather than additions to the brand-accent palette.
+
+The IBM Plex plus Tangerine Slate light/dark compositions under `docs/prototypes/` are reviewed experiments, not production tokens. The current Sunlit palette above remains the runtime truth until a separate shared-foundation implementation deliberately replaces it.
 
 ### Runtime token scope
 
@@ -91,11 +97,12 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Typography
 
 - Inter is the current baseline because the preview inherits the application font stack.
-- Headings are bold, compact, and high contrast.
+- Headings are bold, compact, and high contrast. Do not use the 900/`font-black` weight in the active web UI; use 700/`font-bold` and create hierarchy through size, spacing, and color instead.
 - Body copy should normally remain around 1rem with comfortable line height.
 - Small utility text must retain sufficient size and contrast; muted gray text must not disappear beside large headings.
 - Keep readable line lengths, generally around 45–70 characters for explanatory copy.
 - A separate display typeface is not yet part of the approved foundation.
+- IBM Plex Sans plus IBM Plex Sans Arabic is the leading lab candidate, not the current application font. Do not describe the prototype pairing as mounted until the production font-loading and token migration are implemented and verified.
 
 ### Shape and spacing
 
@@ -129,7 +136,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - Settings is a standalone workspace-management route, not a child canvas inside the primary application shell. Its header provides a back action to the last main application page, with Overview as the safe fallback.
 - Use one persistent section menu as the top-level navigation on desktop and a select control on narrow screens.
 - Render one selected section at a time; do not combine this menu with top-level accordions.
-- Keep locale switching in the shared header; language does not need its own settings section.
+- Keep locale switching in the standalone Settings header; language does not need its own settings section or a repeated control above every authenticated page.
 - Order sections by the user's likely job: Account, Connected accounts, Security, Plan and billing, then Data and activity.
 - Keep nested disclosures only for local details such as MFA setup steps or advanced data controls.
 - Show gated sections, such as Instagram connection before MFA, in a visible but clearly locked state.
@@ -140,13 +147,13 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 ### Authenticated application
 
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
-- At large breakpoints, keep the labeled sidebar pinned to the viewport while the page canvas scrolls, with a restrained sticky workspace header. The primary navigation is **Overview**, **Strategy**, **Create**, **Insights**, **Business Profile**, and **Settings**.
+- At large breakpoints, keep the desktop sidebar pinned to the viewport while the page canvas scrolls. It starts as a labeled navigation surface and may be collapsed explicitly into a compact icon rail; never make hover the only way to reveal or control it. Preserve accessible link names and keyboard/focus tooltips in the compact state, keep **Settings** anchored separately at the bottom, and store the user's display preference locally. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Strategy**, **Create**, **Calendar**, **Insights**, and **Business Profile**.
 - Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Strategy should put generation controls beside the current strategy; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
 - Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
 - Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
 - Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.
-- Give each page one authoritative heading. The workspace header may repeat the active destination visually, but it must not introduce a second page-level heading in the accessibility tree.
+- Give each page one authoritative heading. Where the desktop sidebar is unavailable, a compact responsive shell header may identify the active destination without becoming a second page-level heading in the accessibility tree.
 
 ### Legal documents
 
@@ -205,6 +212,7 @@ The authenticated Sunlit journey is mounted at the real application routes:
 | Overview | `/app` |
 | Strategy | `/app/strategy` |
 | Create | `/app/content-studio` |
+| Calendar | `/app/calendar` |
 | Insights | `/app/analytics` |
 | Business Profile | `/app/knowledge` |
 | Settings | `/app/settings` |
@@ -215,12 +223,12 @@ These routes preserve their existing session, workspace, API, approval, and fail
 ## Current implementation boundary
 
 - `apps/web/app/sunlit-theme.css` and the canonical localized routes are the active visual reference.
-- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Insights, Business Profile, and Settings use the adopted UI.
+- Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Strategy, Create, Calendar, Insights, Business Profile, and Settings use the adopted UI.
 - The former `/design-preview` routes and duplicate dark public/authentication components were removed rather than retained as fallbacks.
 - `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
-- Historical Figma inventories and checklists remain only as implementation evidence and are labeled as historical.
+- Historical Figma inventories, dark-theme checklists, state audits, and the completed August presentation runbook live under `docs/archive/ui/` and `docs/archive/presentations/`. They are evidence only, not active instructions.
 
 ### Deferred Sunlit product-surface restoration
 
@@ -229,11 +237,11 @@ PR #19 deliberately removed the preview route family and replaced the old visual
 | Final-system area | Current Sunlit implementation | Required restoration or completion |
 | --- | --- | --- |
 | Authentication (`AUTH-01`–`AUTH-05`) | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable. | Complete and mount approved provider login and password-recovery contracts before calling those paths live. |
-| Onboarding (`OB-01`–`OB-10`) | Seven real workspace modules, completeness, bilingual resolved-profile generation/edit/approval, and Strategy handoff are mounted. | Restore plan/trial placement if still required; add real brand-file upload and any approved competitor verification or recovery refinements. |
+| Onboarding (`OB-01`–`OB-10`) | A concise greeting and seven real workspace areas are mounted. Company and Products are the two essentials; the other five areas can be explicitly skipped and resumed. The information check links directly to focused editing, and bilingual profile review/approval completes the journey without claiming 100% Vault completeness. | Build the focused document extraction, issue-reporting, mapping, and owner-confirmation path before exposing upload; restore plan/trial placement if still required and add any approved competitor verification or recovery refinements. |
 | Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view. | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen. |
 | Strategy (`STRAT-01`–`STRAT-03`) | Strategy list/generation is API-backed, defaults to 30 days, and offers 30/60/90-day choices. | Complete version/detail navigation, parameter refinement, and mount the existing PDF export contract. A possible 7-day option remains undecided and unimplemented. |
-| Content and calendar (`CONT-01`–`CONT-06`) | Create and Campaign Builder can generate workspace drafts, edit paired captions and core fields, approve explicitly, schedule, and cancel a schedule. Calendar is a primary bilingual/RTL destination with week/month views, next-action and unscheduled queues, item detail, editor handoff, atomic rescheduling, and confirmed cancellation over existing records. | Add the pre-draft monthly plan/slot contract, complete content history/comments and section regeneration, and build the final carousel/reel editing and queue-recovery states. |
-| Media (`MEDIA-01`–`MEDIA-04`) | Create mounts authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and build the standalone media library, asset-detail flows, brand-asset management, storage meter, and richer transformations. |
+| Content and calendar (`CONT-01`–`CONT-06`) | The mounted Create surface can generate workspace drafts, edit paired captions and core fields, approve explicitly, schedule, and cancel a schedule. Calendar is a primary bilingual/RTL destination with viewport-fitted week/month views, semantic lifecycle colors, URL-backed Day/Post Focus, short Motion transitions, unscheduled handling, editor handoff, atomic rescheduling, and confirmed cancellation. The redesigned media-first Create lab is not mounted production behavior. | Implement one reviewed standard Post/JPEG Create slice, then add the pre-draft monthly plan/slot contract, content history/comments, section regeneration, and separately supported Carousel/Reel/Story and queue-recovery states. |
+| Media (`MEDIA-01`–`MEDIA-04`) | The mounted Create surface supports authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and define the standalone Media Library, reusable generated-media ownership, asset-detail flows, brand-asset management, storage meter, and richer transformations. A prototype gallery is not implementation proof. |
 | Instagram scheduling (`SCHED-01`–`SCHED-04`) | Settings mounts the secure Instagram connection. Create requires explicit approval before scheduling and can return a scheduled item to `APPROVED`; Calendar manages saved times and exposes safe failure detail/recovery. Publishing/readiness and operator queue APIs exist. | Build the durable publishing queue/worker surface, evidence-based time and live-cap guidance, attempt history, close-race cancellation, and complete per-format live-publish behavior. |
 | Analytics (`AN-01`–`AN-06`) | Insights mounts an API-backed 7/30-day summary, top-content list, empty/loading/error states, and monthly PDF download. | Restore the full overview, posts, post detail, audience, stories, and reels views; add the intended 28/90-day comparisons and real provider-backed interpretation once permission evidence exists. |
 | AI consultant (`AI-01`–`AI-04`) | Digest/chat/report API foundations and deterministic agent-shaped responses exist; no complete consultant surface is mounted. | Restore weekly digest, proactive recommendations, conversational consultant, monthly-report preview, and approved competitor analysis with provider-backed behavior. |
@@ -245,26 +253,29 @@ Universal obligations from the retired design source still apply to every restor
 ## Production migration rules
 
 1. Preserve product behavior, API contracts, session handling, workspace isolation, approval gates, metering, and failure recovery.
-2. Extract shared semantic tokens and components before copying page-specific CSS into multiple product surfaces.
-3. Migrate one coherent surface at a time and keep each pull request reviewable.
-4. Replace fixtures with API-backed data or explicit empty/demo states.
-5. Preserve English and Arabic behavior in the same change.
-6. Verify source tests, browser interaction, typecheck, lint, responsive layouts, keyboard operation, and RTL before retiring the old surface.
-7. Remove an old route only after its replacement covers the real journey and recovery states; do not retain a duplicate route family by default.
+2. Treat visual references as evidence for composition and hierarchy, not as code, data, brand, or behavior contracts.
+3. Prototype consequential navigation, hierarchy, and multi-step journey changes before implementation.
+4. Extract shared semantic tokens and components before copying page-specific CSS into multiple product surfaces.
+5. Migrate one coherent surface at a time and keep each pull request reviewable.
+6. Replace fixtures with API-backed data or explicit empty/demo states.
+7. Preserve English and Arabic behavior in the same change.
+8. Verify focused source tests, browser interaction, responsive layouts, keyboard operation, and RTL before retiring the old surface.
+9. Remove an old route only after its replacement covers the real journey and recovery states; do not retain a duplicate route family by default.
 
 Migration sequence:
 
 1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
-2. App shell, onboarding, Overview, Business Profile summary, and first Strategy handoff — mounted on current `main`.
-3. Create and the current Insights summary — mounted on current `main`, using real APIs or explicit empty states.
-4. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
-5. Revisit each migrated page individually as product features and configuration needs become final.
-6. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
+2. App shell, Overview, Business Profile summary, and first Strategy handoff — mounted in current reviewed source.
+3. Calendar and the reduced-effort greeting/Onboarding journey — implemented as current working checkpoints; Onboarding now includes separate full-business document-assisted and manual first-run paths plus the focused Products/Services shortcut.
+4. The current Create and Insights summaries — mounted using real APIs or explicit empty states. The reviewed Create redesign remains a lab reference awaiting a focused production slice.
+5. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
+6. Revisit each migrated page individually as product features and configuration needs become final.
+7. Complete responsive, keyboard, RTL, and cross-browser hardening before launch.
 
 ## Deferred decisions
 
 - Detailed mobile and tablet composition beyond basic functional layouts.
-- Final onboarding recovery copy and per-step refinement after the presentation journey.
+- Permanent brand-asset storage, a conversational follow-up analyst, and a dedicated post-onboarding business-knowledge editor. Making business onboarding wholly optional or relocating major areas still requires Mohamed's product approval and is not part of the closed checkpoint.
 - Plans page structure and commercial copy.
 - Advanced Insights comparisons and recommendations beyond the current API-backed summary.
 - Final Terms and Privacy content and scroll-navigation tuning.

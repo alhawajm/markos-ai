@@ -99,10 +99,60 @@ def test_business_profile_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-profile-model"
-    assert body["prompt_version"] == "onboarding-business-profile.v1.local"
+    assert body["prompt_version"] == "onboarding-business-profile.v2.local"
     assert body["profile"]["businessName"] == "Pearl Coffee"
     assert body["profile"]["overview"]["en"]
     assert body["profile"]["overview"]["ar"]
+
+
+def test_offering_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/offerings/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "offers.txt",
+                    "mime_type": "text/plain",
+                    "base64_data": base64.b64encode(
+                        "Espresso: Rich house blend\nOffice plan - Weekly delivery".encode()
+                    ).decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
+
+
+def test_full_onboarding_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/documents/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "brand.png",
+                    "mime_type": "image/png",
+                    "base64_data": base64.b64encode(b"\x89PNG-test").decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
 
 
 def test_content_generation_contract() -> None:
