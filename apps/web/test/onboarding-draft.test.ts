@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { KnowledgeVaultEntry, VaultSection } from "@markos/shared-types";
+import type { KnowledgeVaultEntry, OnboardingDocumentProfileDraft, VaultSection } from "@markos/shared-types";
+import { approveOnboardingDocumentAnalysisSchema } from "@markos/validation";
 import {
+  approvedDocumentProfile,
   createEmptyOnboardingDraft,
+  createOnboardingDraftFromDocumentProfile,
   createOnboardingDraftFromVault,
   hasOnboardingStepData,
   legacyOnboardingDraftKey,
@@ -153,6 +156,43 @@ describe("onboarding draft contract", () => {
     expect(validateOnboardingStep(6, draft)).toBeNull();
   });
 
+  it("maps a full document extraction into editable fields and keeps inferred colors reviewable", () => {
+    const extracted = {
+      company: { name: "SnackLab", industry: "Food", socials: [], languages: [] },
+      offerings: {
+        items: [{ kind: "PRODUCT", name: "Protein bites", currency: "BHD", confidence: "HIGH", sourceFiles: ["brand.pdf"] }],
+        differentiators: [],
+        salesChannels: []
+      },
+      story: { values: [] },
+      audience: {
+        interests: [],
+        locations: [],
+        motivations: [],
+        painPoints: ["May need ingredients and a detailed recipe to bake at home", "May want more instruction and cooking support while experimenting"]
+      },
+      competitors: { items: [] },
+      brand: { aestheticWords: [], colors: ["#2B59FF", "#F97316"], fonts: [], toneWords: ["clear"] },
+      objectives: { goals: [] }
+    } satisfies OnboardingDocumentProfileDraft;
+    const draft = createOnboardingDraftFromDocumentProfile(extracted);
+
+    expect(draft).toMatchObject({
+      businessName: "SnackLab",
+      colors: ["#2B59FF", "#F97316"],
+      toneWords: "clear",
+      offerings: [expect.objectContaining({ name: "Protein bites" })]
+    });
+    expect(payloadForOnboardingStep(6, draft).body).toMatchObject({ colors: ["#2B59FF", "#F97316"], toneWords: ["clear"] });
+
+    const approved = approvedDocumentProfile(draft, extracted);
+    expect(approved.audience?.painPoints).toEqual([
+      "May need ingredients and a detailed recipe to bake at home",
+      "May want more instruction and cooking support while experimenting"
+    ]);
+    expect(approveOnboardingDocumentAnalysisSchema.safeParse({ profile: approved }).success).toBe(true);
+  });
+
   it("detects and restores changes only within the active step", () => {
     const baseline = completedDraft();
     const edited = {
@@ -190,7 +230,7 @@ describe("onboarding draft contract", () => {
     expect(payloads[2]?.body).toEqual({ origin: draft.story, problemSolved: draft.problem, usp: draft.difference });
     expect(payloads[3]?.body).toEqual({ demographics: draft.audience, motivations: ["quality", "convenience"], painPoints: [draft.needs] });
     expect(payloads[4]?.body).toEqual({ doDifferently: draft.avoid, marketContext: draft.competitors });
-    expect(payloads[5]?.body).toEqual({ toneWords: ["warm", "clear", "confident"], voiceNotes: draft.voice });
+    expect(payloads[5]?.body).toEqual({ colors: [], toneWords: ["warm", "clear", "confident"], voiceNotes: draft.voice });
     expect(payloads[6]?.body).toEqual({ currentPriority: draft.priority });
     expect(JSON.stringify(payloads)).not.toMatch(/Zain|Batelco|STC|zain_bh/i);
   });

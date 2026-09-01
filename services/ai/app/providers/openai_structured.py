@@ -1,7 +1,7 @@
 import logging
 import re
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, TypeAlias, TypeVar
 
 from openai import (
     APIConnectionError,
@@ -44,6 +44,7 @@ class OpenAIClient(Protocol):
 
 
 ContractT = TypeVar("ContractT", bound=BaseModel)
+StructuredInput: TypeAlias = str | list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -57,13 +58,18 @@ class StructuredResult(Generic[ContractT]):
 async def generate_structured(
     *,
     client: OpenAIClient,
-    input_text: str,
     instructions: str,
     model: str,
     output_label: str,
     schema: type[ContractT],
     schema_name: str,
+    input_text: str | None = None,
+    input_items: list[dict[str, object]] | None = None,
 ) -> StructuredResult[ContractT]:
+    if (input_text is None) == (input_items is None):
+        raise ValueError("Provide exactly one structured input")
+    structured_input: StructuredInput = input_text if input_text is not None else input_items or []
+
     logger.info(
         "openai_structured_request_started schema=%s model=%s store=%s",
         schema_name,
@@ -73,7 +79,7 @@ async def generate_structured(
 
     try:
         response = await client.responses.create(
-            input=input_text,
+            input=structured_input,
             instructions=instructions,
             max_output_tokens=settings.openai_max_output_tokens,
             model=model,

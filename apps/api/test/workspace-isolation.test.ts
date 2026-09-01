@@ -177,6 +177,42 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.offeringDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
+    model: "OnboardingDocumentAnalysis",
+    create: (fixture) =>
+      prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.onboardingDocumentAnalysis.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OnboardingDocumentFile",
+    create: async (fixture) => {
+      const analysis = await prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        }
+      });
+      return prisma.onboardingDocumentFile.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          analysisId: analysis.id,
+          filename: "business.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 12,
+          checksumSha256: "b".repeat(64),
+          storageKey: `local:${fixture.workspaceId}/${randomUUID()}.pdf`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.onboardingDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "Strategy",
     create: (fixture) =>
       prisma.strategy.create({

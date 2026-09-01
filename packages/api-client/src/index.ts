@@ -42,6 +42,9 @@ import type {
   MfaStatus,
   MfaTotpSetup,
   OnboardingState,
+  OnboardingDocumentAnalysisRecord,
+  ApprovedOnboardingDocumentProfile,
+  ApproveOnboardingDocumentAnalysisResult,
   OfferingCatalogUpdate,
   OfferingDocumentAnalysisRecord,
   ApproveOfferingDocumentAnalysisResult,
@@ -185,6 +188,54 @@ export class MarkosApiClient {
 
   async onboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding");
+    return response.data;
+  }
+
+  async onboardingDocumentAnalysis(): Promise<OnboardingDocumentAnalysisRecord | null> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord | null>("/v1/onboarding/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOnboardingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType:
+        | "application/pdf"
+        | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        | "text/plain"
+        | "image/jpeg"
+        | "image/png"
+        | "image/webp";
+      base64Data: string;
+    }>
+  ): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>("/v1/onboarding/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOnboardingDocumentAnalysis(analysisId: string, profile: ApprovedOnboardingDocumentProfile): Promise<ApproveOnboardingDocumentAnalysisResult> {
+    const response = await this.request<ApproveOnboardingDocumentAnalysisResult>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/approve`, {
+      body: { profile },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async discardOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
+    });
     return response.data;
   }
 

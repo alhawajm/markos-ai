@@ -9,6 +9,7 @@ import { ensureCurrentUsagePeriods, type UsagePeriodResetResult } from "../usage
 import { refreshDueInstagramTokens } from "../workspace/instagram-token-service";
 import type { InstagramTokenRefreshResult } from "@markos/shared-types";
 import { cleanupExpiredOfferingDocumentAnalyses } from "../offerings/offering-document-service";
+import { cleanupExpiredOnboardingDocumentAnalyses } from "../onboarding/onboarding-document-service";
 
 export interface MaintenanceWorkerLogger {
   error(message: string, meta?: Record<string, unknown>): void;
@@ -59,7 +60,15 @@ export async function runMaintenanceWorkerTick(
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
-  const documentCleanup = input.runDocumentCleanup === false ? undefined : await cleanupExpiredOfferingDocumentAnalyses({ now });
+  const documentCleanup =
+    input.runDocumentCleanup === false
+      ? undefined
+      : await Promise.all([cleanupExpiredOfferingDocumentAnalyses({ now }), cleanupExpiredOnboardingDocumentAnalyses({ now })]).then(
+          ([offerings, onboarding]) => ({
+            expired: offerings.expired + onboarding.expired,
+            failed: offerings.failed + onboarding.failed
+          })
+        );
   const analyticsEmail =
     input.runAnalyticsEmail === false
       ? undefined

@@ -2,7 +2,7 @@
 
 - Status: interpreted working backlog
 - Started: 2026-08-23
-- Current focus: preserve the Calendar and reduced-effort Onboarding checkpoints, then define the focused document-assisted Products/Services pipeline before implementation
+- Current focus: treat the implemented Onboarding checkpoint as closed except for focused defects and deferred deployment evidence
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
@@ -100,21 +100,21 @@ The palette candidates follow semantic roles rather than a collection of page-sp
 
 ## Onboarding
 
-The current checkpoint reduces effort without pretending optional business context is present. The next pass is a separate document-assisted Products/Services pipeline, not a reason to reopen the whole wizard.
+The current checkpoint reduces effort without pretending optional business context is present. It now supports both a manual seven-area path and a separate full-business document-assisted path; the narrower Products/Services analyzer remains available inside that step.
 
 | Problem or goal | Interpreted direction | State |
 | --- | --- | --- |
 | Seven areas felt like mandatory paperwork | Keep Company and Products as the two essentials. Let the owner explicitly skip Story, Audience, Competitors, Brand/Tone, and Objectives, while preserving those gaps for later improvement. | Implemented checkpoint |
-| Product or service entry is repetitive for businesses with an existing catalogue | Keep one open Products/Services field as the manual path. Add document-assisted extraction only as a complete upload → analyze → report issues → edit → confirm flow; nothing becomes business truth until the owner confirms it. | Provider-backed implementation complete; Railway proof pending |
+| Product or service entry is repetitive for businesses with an existing catalogue | Use compact structured offering rows for the manual and correction paths. Keep the focused Products/Services analyzer as a complete upload → analyze → report issues → edit → confirm flow; nothing becomes business truth until the owner confirms it. | Implemented; focused provider proof obtained, Railway regression proof remains |
 | Tone presets alone are restrictive, while free text alone is demanding | Use an open field with clickable suggestions, allow suggestions to be removed, and limit the saved result to four tone words. | Implemented checkpoint |
 | Wizard navigation looked like a clickable menu and review was difficult to correct | Use a compact Previous/Current/Next context strip. Make every information-check row a direct edit action that returns to the check. | Implemented checkpoint |
 | Optional context could still block or be invented by AI | Keep optional areas skippable, show honest gaps, and require an editable bilingual profile plus explicit approval. Missing facts must not be manufactured during resolution. | Implemented checkpoint |
-| Documents must not become permanent or unreviewed business truth | Accept one or two PDF, DOCX, or TXT files; keep them temporary for at most 24 hours; report unreadable/scanned input honestly; allow retry only for temporary failures, always allow discard/manual recovery, and remove the raw files when the owner approves the editable result. Never substitute speculative local parsing when provider-backed AI is unavailable. | Implemented; Railway proof pending |
-| The compact uploader does not yet provide enough guidance for document-led onboarding | Replace the Step 3 document area with a focused Document Analyst panel for upload, analysis, clarification, editing, and explicit approval. Design the boundary for future business-wide assistance, but expose it only for Products/Services initially. | Accepted next pass; not implemented |
-| Long onboarding text becomes visually clumsy when fields overflow | Keep long fields contained, non-resizable, and free of persistent visible scrollbars while preserving keyboard scrolling and accessible editing. Validate the exact treatment in English and Arabic. | Accepted polish pass; not implemented |
-| Brand colors and fonts need richer controls eventually | Revisit accessible color/font entry only when the active Strategy/Create/brand pipeline can use those details meaningfully. | Later |
+| Owners want to begin from existing business material rather than retype every area | Offer a separate first-run document path for one to five PDF, DOCX, TXT, JPEG, PNG, or WebP files. Stage selections visibly, send only after **Analyze files**, extract across the seven canonical areas, label evidence/issues, and converge on the ordinary information check and Business Profile approval. | Implemented; full Railway proof pending |
+| Documents must not become permanent or unreviewed business truth | Keep full-path files temporary for at most 24 hours, allow retry or discard/manual recovery as appropriate, and remove the raw files when the owner approves the editable extraction. Never substitute speculative local parsing when provider-backed AI is unavailable. The narrower Products analyzer retains its own one-or-two-file policy. | Implemented |
+| Long onboarding text becomes visually clumsy when fields overflow | Keep long fields contained and non-resizable, with restrained overflow treatment that preserves keyboard scrolling and accessible editing. | Implemented checkpoint |
+| Business colors need a compact control that does not save accidental picker changes | Let the picker prepare one pending color and require **Add color** before it joins the saved swatches. Allow up to seven editable/removable colors, including clearly labeled visual inferences from documents. | Implemented checkpoint |
 
-**Checkpoint — 2026-08-31:** The concise greeting, stable seven-step form, two-essential readiness rule, explicit optional skips, open Products/Tone/Priority fields, direct-edit information check, bilingual profile review, and Strategy handoff remain the accepted baseline. The Products/Services step now includes an optional, owner-confirmed document path with a full manual fallback. Successful extraction deliberately requires Railway's configured AI provider; local development presents an honest unavailable state instead of using a speculative parser. Focused source, persistence, isolation, retention, export, erasure, provider-selection, and client checks pass locally; the focused Document Analyst redesign and live Railway provider proof remain open. `docs/prototypes/onboarding-pass-0-field-contract.html` is preserved as historical design evidence; production behavior and the accepted decision registers now supersede it.
+**Checkpoint — 2026-09-01:** Onboarding is closed until explicitly reopened. The minimal greeting offers equal document-assisted and manual CTAs. The manual path keeps seven stable steps, two essentials, explicit optional skips, structured offering rows, bounded fields, contextual help, direct-edit information check, bilingual profile review, and Strategy handoff. The full document path stages up to five supported text/visual files, uses provider-native multimodal analysis, maps an editable proposal into the same seven areas, exposes issues and visual color inferences, and requires extraction approval before the separate Business Profile approval. The focused Products/Services analyzer remains available inside that step. Focused source, provider, persistence, isolation, retention, export, erasure, client, and browser checks pass locally; full Railway proof remains open. `docs/prototypes/onboarding-pass-0-field-contract.html` is historical design evidence and is superseded by production behavior and the decision registers.
 
 ## Overview
 
@@ -258,8 +258,8 @@ The short written review did not capture all useful verbal feedback from the mee
 
 ## Suggested review order
 
-1. Keep the Calendar, shared-shell, and reduced-effort Onboarding checkpoints frozen except for focused defects.
-2. Complete browser and deployed-provider validation for the owner-confirmed Products/Services document path; keep broader business-document onboarding and Instagram evidence reconciliation as separate passes.
+1. Keep the Onboarding checkpoint frozen except for focused defects; its remaining onboarding-specific gate is deployed-provider validation of the full-business document path.
+2. Preserve the independent Products/Services analyzer and keep future Instagram evidence reconciliation separate from onboarding closure.
 3. Implement the reviewed Create action hub and Draft Editor as one standard Post/JPEG production slice; do not present the prototype-only formats or Media Library as live.
 4. Revisit broader shared palette, bilingual typography, and dark-theme adoption as a separate production-foundation decision. IBM Plex and Tangerine Slate remain prototype candidates.
 5. Refine Strategy duration/review and connect approved strategy work into Create.

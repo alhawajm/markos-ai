@@ -52,6 +52,106 @@ describe("presentation journey", () => {
     await page.close();
   });
 
+  it("offers a document-assisted onboarding path and makes extracted colors editable before saving", async () => {
+    const page = await sessionPage();
+    await page.setViewportSize({ height: 900, width: 1440 });
+    let documentAnalysisFileCount = 0;
+    let documentAnalysisPosts = 0;
+    let moduleWrites = 0;
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "POST") {
+        const body = route.request().postDataJSON() as { files?: unknown[] };
+        documentAnalysisFileCount = body.files?.length ?? 0;
+        documentAnalysisPosts += 1;
+        return route.fulfill(json(onboardingDocumentAnalysis()));
+      }
+      if (method === "PUT" && pathname.startsWith("/v1/onboarding/")) {
+        moduleWrites += 1;
+        return route.fulfill(json(emptyOnboardingState()));
+      }
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
+    const documentCta = await page.getByRole("button", { name: "Use business documents" }).boundingBox();
+    const manualCta = await page.getByRole("button", { name: "Enter details myself" }).boundingBox();
+    expect(Math.abs((documentCta?.width ?? 0) - (manualCta?.width ?? 0))).toBeLessThan(1);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-greeting.png", fullPage: true });
+    await page.getByRole("button", { name: "Use business documents" }).click();
+    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
+    await page.locator('input[type="file"]').setInputFiles({ name: "brand.txt", mimeType: "text/plain", buffer: Buffer.from("SnackLab brand information") });
+    await page.locator('input[type="file"]').setInputFiles({ name: "offerings.pdf", mimeType: "application/pdf", buffer: Buffer.from("SnackLab offerings") });
+    await expect(page.getByRole("region", { name: "Selected files" }).getByText("brand", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("region", { name: "Selected files" }).getByText("offerings", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("region", { name: "Selected files" }).getByText("2/5", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-document-selection.png", fullPage: true });
+    expect(documentAnalysisPosts).toBe(0);
+    await page.getByRole("button", { name: "Analyze files" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    expect(documentAnalysisFileCount).toBe(2);
+    expect(documentAnalysisPosts).toBe(1);
+    expect(moduleWrites).toBe(0);
+    await expect(page.getByText("Information found in your files").isVisible()).resolves.toBe(true);
+
+    await page.getByRole("button", { name: /^Tone of voice/ }).click();
+    await page.getByRole("heading", { name: "How should the business sound?" }).waitFor();
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
+    await expect(page.getByRole("code").filter({ hasText: "#2B59FF" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("code").filter({ hasText: "#F97316" }).isVisible()).resolves.toBe(true);
+    await page.getByLabel("Choose color").fill("#123456");
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-color-selection.png", fullPage: true });
+    await page.getByRole("button", { name: "Add selected color" }).click();
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(4);
+    await expect(page.getByRole("code").filter({ hasText: "#123456" }).isVisible()).resolves.toBe(true);
+    expect(moduleWrites).toBe(0);
+    await page.close();
+
+    const arabicPage = await sessionPage();
+    await arabicPage.setViewportSize({ height: 900, width: 1440 });
+    await mockApi(arabicPage, async (route, pathname) => {
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis") return route.fulfill(json(null));
+      return route.fulfill(json([]));
+    });
+    await arabicPage.goto(`${baseUrl}/ar/onboarding`, { waitUntil: "domcontentloaded" });
+    await arabicPage.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
+    await expect(arabicPage.locator("main").getAttribute("dir")).resolves.toBe("rtl");
+    await arabicPage.screenshot({ path: "evidence/sunlit-onboarding-greeting-rtl.png", fullPage: true });
+    await arabicPage.close();
+  });
+
+  it("restores an active document analysis and lets the owner replace it", async () => {
+    const page = await sessionPage();
+    let discarded = false;
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") {
+        return route.fulfill(json(discarded ? null : onboardingDocumentAnalysis()));
+      }
+      if (pathname.endsWith("/v1/onboarding/document-analysis/01a05c25-3efd-7ed2-bdcf-5de2e04be57e") && method === "DELETE") {
+        discarded = true;
+        return route.fulfill(json({ ...onboardingDocumentAnalysis(), status: "DISCARDED" }));
+      }
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: "Discard and choose different files" }).click();
+    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
+    expect(discarded).toBe(true);
+    await page.close();
+  });
+
   it("renders live Vault completion and timestamps instead of the fixed presentation fixture", async () => {
     const page = await sessionPage();
     let scoreRequests = 0;
@@ -819,6 +919,53 @@ function approvedOnboardingState(updatedAt: string) {
       requiredSections: completedSections,
       score: 100
     }
+  };
+}
+
+function emptyOnboardingState() {
+  const sections = ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "TONE", "OBJECTIVES"];
+  const modules = ["company", "story", "products", "audience", "competitors", "brand", "objectives"].map((module, index) => ({
+    completed: false,
+    module,
+    sections: [sections[index]],
+    skipped: false
+  }));
+  return {
+    businessProfile: { interactionId: null, profile: null, status: "MISSING", updatedAt: null },
+    modules,
+    onboardingScore: 0,
+    readyForProfile: false,
+    status: "NOT_STARTED",
+    vaultScore: { completedSections: [], entryCount: 0, missingSections: completedSections, requiredSections: completedSections, score: 0 }
+  };
+}
+
+function onboardingDocumentAnalysis() {
+  return {
+    id: "01a05c25-3efd-7ed2-bdcf-5de2e04be57e",
+    workspaceId: session.workspace.id,
+    status: "READY",
+    files: [{ id: "file-1", filename: "brand.txt", mimeType: "text/plain", sizeBytes: 32, removed: false }],
+    result: {
+      profile: {
+        company: { name: "SnackLab", industry: "Food and beverage", socials: [], languages: [] },
+        offerings: {
+          items: [{ kind: "PRODUCT", name: "Protein bites", currency: "BHD", confidence: "HIGH", sourceFiles: ["brand.txt"] }],
+          differentiators: [],
+          salesChannels: []
+        },
+        story: { values: [] },
+        audience: { interests: [], locations: [], motivations: [], painPoints: [] },
+        competitors: { items: [] },
+        brand: { aestheticWords: [], colors: ["#2B59FF", "#F97316"], fonts: [], toneWords: ["clear"] },
+        objectives: { goals: [] }
+      },
+      evidence: [{ field: "brand.colors", sourceFiles: ["brand.txt"], confidence: "MEDIUM", basis: "VISUAL_INFERENCE" }],
+      issues: [{ code: "VISUAL_INFERENCE", severity: "INFO", message: "Confirm the inferred brand colors.", field: "brand.colors", sourceFiles: ["brand.txt"] }]
+    },
+    expiresAt: "2026-09-02T08:00:00.000Z",
+    createdAt: "2026-09-01T08:00:00.000Z",
+    updatedAt: "2026-09-01T08:00:00.000Z"
   };
 }
 

@@ -15,6 +15,8 @@ const rlsTables = [
   "offering_revisions",
   "offering_document_analyses",
   "offering_document_files",
+  "onboarding_document_analyses",
+  "onboarding_document_files",
   "strategies",
   "content_calendars",
   "campaigns",
@@ -116,7 +118,9 @@ describe("database row-level security", () => {
           'offerings',
           'offering_revisions',
           'offering_document_analyses',
-          'offering_document_files'
+          'offering_document_files',
+          'onboarding_document_analyses',
+          'onboarding_document_files'
         ])
     `;
     const typePrivileges = await prisma.$queryRaw<Array<{ type_name: string; has_usage: boolean }>>`
@@ -137,7 +141,9 @@ describe("database row-level security", () => {
       "offerings",
       "offering_revisions",
       "offering_document_analyses",
-      "offering_document_files"
+      "offering_document_files",
+      "onboarding_document_analyses",
+      "onboarding_document_files"
     ]) {
       expect(
         privileges

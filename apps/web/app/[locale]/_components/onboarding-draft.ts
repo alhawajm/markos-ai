@@ -1,4 +1,4 @@
-import type { KnowledgeVaultEntry, OfferingKind, VaultSection } from "@markos/shared-types";
+import type { ApprovedOnboardingDocumentProfile, KnowledgeVaultEntry, OfferingKind, OnboardingDocumentProfileDraft, VaultSection } from "@markos/shared-types";
 
 export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -15,6 +15,7 @@ export interface OnboardingDraft {
   audience: string;
   avoid: string;
   businessName: string;
+  colors: string[];
   competitors: string;
   difference: string;
   industry: string;
@@ -42,7 +43,7 @@ const onboardingStepFields = {
   3: ["difference", "problem", "story"],
   4: ["audience", "needs", "motivations"],
   5: ["competitors", "avoid"],
-  6: ["toneWords", "voice"],
+  6: ["toneWords", "voice", "colors"],
   7: ["priority"]
 } as const satisfies Record<OnboardingStepId, readonly (keyof OnboardingDraft)[]>;
 
@@ -51,6 +52,7 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     audience: "",
     avoid: "",
     businessName: "",
+    colors: [],
     competitors: "",
     difference: "",
     industry: "",
@@ -74,6 +76,7 @@ export function createOnboardingDraftFromVault(vault: Record<VaultSection, Knowl
   const audience = vaultValue(vault, "AUDIENCE", "primary-audience");
   const competitors = vaultValue(vault, "COMPETITORS", "competitors");
   const tone = vaultValue(vault, "TONE", "voice");
+  const brand = vaultValue(vault, "BRAND", "identity");
   const objectives = vaultValue(vault, "OBJECTIVES", "goals");
 
   return {
@@ -81,6 +84,9 @@ export function createOnboardingDraftFromVault(vault: Record<VaultSection, Knowl
     audience: stringValue(audience.demographics),
     avoid: stringValue(competitors.doDifferently),
     businessName: stringValue(company.name),
+    colors: stringArray(brand.colors)
+      .filter((value) => /^#[0-9A-Fa-f]{6}$/.test(value))
+      .slice(0, 7),
     competitors:
       stringValue(competitors.marketContext) ||
       recordArray(competitors.items)
@@ -99,6 +105,90 @@ export function createOnboardingDraftFromVault(vault: Record<VaultSection, Knowl
     story: stringValue(story.origin) || joinedValue(story.values),
     toneWords: joinedValue(tone.toneWords),
     voice: stringValue(tone.voiceNotes)
+  };
+}
+
+export function createOnboardingDraftFromDocumentProfile(profile: OnboardingDocumentProfileDraft): OnboardingDraft {
+  return {
+    ...createEmptyOnboardingDraft(),
+    audience: [profile.audience.demographics, profile.audience.ageRange, profile.audience.genderBreakdown].filter(Boolean).join(" · "),
+    avoid: profile.competitors.doDifferently ?? "",
+    businessName: profile.company.name ?? "",
+    colors: profile.brand.colors,
+    competitors:
+      profile.competitors.marketContext ??
+      profile.competitors.items
+        .map((item) => item.name)
+        .filter(Boolean)
+        .join(", "),
+    difference: profile.story.usp ?? profile.story.mission ?? "",
+    industry: profile.company.industry ?? "",
+    market: profile.company.location ?? "",
+    motivations: profile.audience.motivations.join(", "),
+    needs: profile.audience.painPoints.join(", "),
+    offer: profile.offerings.summary ?? offeringCatalogSummary(profile.offerings.items),
+    offerings: offeringDrafts(profile.offerings.items),
+    priority: profile.objectives.currentPriority ?? profile.objectives.goals.join(", "),
+    problem: profile.story.problemSolved ?? "",
+    story: profile.story.origin ?? profile.story.values.join(", "),
+    toneWords: profile.brand.toneWords.join(", "),
+    voice: profile.brand.voiceNotes ?? ""
+  };
+}
+
+export function approvedDocumentProfile(draft: OnboardingDraft, extracted: OnboardingDocumentProfileDraft): ApprovedOnboardingDocumentProfile {
+  const company = payloadForOnboardingStep(1, draft).body as ApprovedOnboardingDocumentProfile["company"];
+  const offerings = payloadForOnboardingStep(2, draft).body as ApprovedOnboardingDocumentProfile["offerings"];
+  const { origin: _origin, problemSolved: _problemSolved, usp: _usp, ...storyRest } = extracted.story;
+  const story = {
+    ...storyRest,
+    ...(draft.difference.trim() ? { usp: draft.difference.trim() } : {}),
+    ...(draft.problem.trim() ? { problemSolved: draft.problem.trim() } : {}),
+    ...(draft.story.trim() ? { origin: draft.story.trim() } : {})
+  };
+  const { demographics: _demographics, motivations: _motivations, painPoints: _painPoints, ...audienceRest } = extracted.audience;
+  const audience = {
+    ...audienceRest,
+    ...(draft.audience.trim() ? { demographics: draft.audience.trim() } : {}),
+    motivations: splitOnboardingList(draft.motivations),
+    painPoints: splitOnboardingList(draft.needs)
+  };
+  const { doDifferently: _doDifferently, marketContext: _marketContext, ...competitorsRest } = extracted.competitors;
+  const competitors = {
+    ...competitorsRest,
+    items: extracted.competitors.items.map(({ website, ...item }) => ({ ...item, ...(validUrl(website) ? { website } : {}) })),
+    ...(draft.competitors.trim() ? { marketContext: draft.competitors.trim() } : {}),
+    ...(draft.avoid.trim() ? { doDifferently: draft.avoid.trim() } : {})
+  };
+  const { toneWords: _toneWords, voiceNotes: _voiceNotes, ...brandRest } = extracted.brand;
+  const brand = {
+    ...brandRest,
+    colors: draft.colors,
+    toneWords: splitOnboardingList(draft.toneWords).slice(0, 4),
+    ...(draft.voice.trim() ? { voiceNotes: draft.voice.trim() } : {})
+  };
+  const { currentPriority: _currentPriority, ...objectivesRest } = extracted.objectives;
+  const objectives = { ...objectivesRest, ...(draft.priority.trim() ? { currentPriority: draft.priority.trim() } : {}) };
+  const { website: companyWebsite, ...companyRest } = extracted.company;
+
+  return {
+    company: {
+      ...companyRest,
+      ...company,
+      socials: extracted.company.socials,
+      languages: extracted.company.languages,
+      ...(validUrl(companyWebsite) ? { website: companyWebsite } : {})
+    },
+    offerings: {
+      ...extracted.offerings,
+      ...offerings,
+      items: offerings.items ?? []
+    },
+    ...(hasStory(story) ? { story } : {}),
+    ...(hasAudience(audience) ? { audience } : {}),
+    ...(hasCompetitors(competitors) ? { competitors } : {}),
+    ...(hasBrand(brand) ? { brand } : {}),
+    ...(hasObjectives(objectives) ? { objectives } : {})
   };
 }
 
@@ -122,7 +212,7 @@ export function hasOnboardingStepData(step: OnboardingStepId, draft: OnboardingD
     case 5:
       return Boolean(draft.competitors.trim() || draft.avoid.trim());
     case 6:
-      return Boolean(draft.toneWords.trim() || draft.voice.trim());
+      return Boolean(draft.toneWords.trim() || draft.voice.trim() || draft.colors.length);
     case 7:
       return Boolean(draft.priority.trim());
   }
@@ -143,7 +233,7 @@ export function restoreOnboardingStep(step: OnboardingStepId, baseline: Onboardi
 
   const restored = { ...draft };
   for (const field of onboardingStepFields[step]) {
-    restored[field] = baseline[field];
+    Object.assign(restored, { [field]: baseline[field] });
   }
   return restored;
 }
@@ -200,7 +290,7 @@ export function payloadForOnboardingStep(step: OnboardingStepId, draft: Onboardi
         body: {
           ...(draft.audience.trim() ? { demographics: draft.audience.trim() } : {}),
           motivations: splitOnboardingList(draft.motivations),
-          painPoints: draft.needs.trim() ? [draft.needs.trim()] : []
+          painPoints: splitOnboardingList(draft.needs)
         }
       };
     case 5:
@@ -215,6 +305,7 @@ export function payloadForOnboardingStep(step: OnboardingStepId, draft: Onboardi
       return {
         module: "brand",
         body: {
+          colors: draft.colors,
           toneWords: splitOnboardingList(draft.toneWords).slice(0, 4),
           ...(draft.voice.trim() ? { voiceNotes: draft.voice.trim() } : {})
         }
@@ -254,6 +345,54 @@ function productSummary(value: unknown): string {
     })
     .filter(Boolean)
     .join("\n");
+}
+
+function offeringCatalogSummary(items: OnboardingDocumentProfileDraft["offerings"]["items"]): string {
+  return items
+    .map((item) => [item.name, item.description].filter(Boolean).join(": "))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function hasStory(value: OnboardingDocumentProfileDraft["story"]): boolean {
+  return Boolean(
+    value.mission?.trim() || value.origin?.trim() || value.problemSolved?.trim() || value.values.length || value.usp?.trim() || value.vision?.trim()
+  );
+}
+
+function hasAudience(value: OnboardingDocumentProfileDraft["audience"]): boolean {
+  return Boolean(
+    value.ageRange?.trim() ||
+    value.demographics?.trim() ||
+    value.genderBreakdown?.trim() ||
+    value.interests.length ||
+    value.locations.length ||
+    value.motivations.length ||
+    value.painPoints.length
+  );
+}
+
+function hasCompetitors(value: OnboardingDocumentProfileDraft["competitors"]): boolean {
+  return Boolean(value.marketContext?.trim() || value.items.length || value.competitiveAdvantage?.trim() || value.doDifferently?.trim());
+}
+
+function hasBrand(value: OnboardingDocumentProfileDraft["brand"]): boolean {
+  return Boolean(value.aestheticWords.length || value.colors.length || value.fonts.length || value.toneWords.length || value.voiceNotes?.trim());
+}
+
+function hasObjectives(value: OnboardingDocumentProfileDraft["objectives"]): boolean {
+  return Boolean(
+    value.currentPriority?.trim() || value.goals.length || value.budgetRange?.trim() || value.instagramExperience?.trim() || value.success90Days?.trim()
+  );
+}
+
+function validUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    return /^https?:$/.test(new URL(value).protocol);
+  } catch {
+    return false;
+  }
 }
 
 function offeringDrafts(value: unknown): OnboardingOfferingDraft[] {

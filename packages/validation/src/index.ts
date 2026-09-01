@@ -173,6 +173,14 @@ export const productsOnboardingSchema = z
   });
 
 const offeringDocumentMimeTypeSchema = z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
+const onboardingDocumentMimeTypeSchema = z.enum([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "image/jpeg",
+  "image/png",
+  "image/webp"
+]);
 
 export const createOfferingDocumentAnalysisSchema = z.object({
   files: z
@@ -189,6 +197,19 @@ export const createOfferingDocumentAnalysisSchema = z.object({
 
 export const approveOfferingDocumentAnalysisSchema = z.object({
   catalog: productsOnboardingSchema
+});
+
+export const createOnboardingDocumentAnalysisSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(180),
+        mimeType: onboardingDocumentMimeTypeSchema,
+        base64Data: z.string().min(4).max(11_200_000)
+      })
+    )
+    .min(1)
+    .max(5)
 });
 
 export const audienceOnboardingSchema = z
@@ -285,6 +306,18 @@ export const objectivesOnboardingSchema = z
       message: "Add at least one current priority detail"
     }
   );
+
+export const approveOnboardingDocumentAnalysisSchema = z.object({
+  profile: z.object({
+    company: companyOnboardingSchema,
+    offerings: productsOnboardingSchema,
+    story: storyOnboardingSchema.optional(),
+    audience: audienceOnboardingSchema.optional(),
+    competitors: competitorsOnboardingSchema.optional(),
+    brand: brandOnboardingSchema.optional(),
+    objectives: objectivesOnboardingSchema.optional()
+  })
+});
 
 export const generateStrategySchema = z.object({
   objective: z.string().min(3).max(500).optional(),
@@ -627,6 +660,8 @@ export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 export type ApproveBusinessProfileInput = z.infer<typeof approveBusinessProfileSchema>;
 export type CreateOfferingDocumentAnalysisInput = z.infer<typeof createOfferingDocumentAnalysisSchema>;
 export type ApproveOfferingDocumentAnalysisInput = z.infer<typeof approveOfferingDocumentAnalysisSchema>;
+export type CreateOnboardingDocumentAnalysisInput = z.infer<typeof createOnboardingDocumentAnalysisSchema>;
+export type ApproveOnboardingDocumentAnalysisInput = z.infer<typeof approveOnboardingDocumentAnalysisSchema>;
 export type GenerateStrategyInput = z.infer<typeof generateStrategySchema>;
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;

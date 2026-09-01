@@ -123,7 +123,7 @@ Complete this path on staging:
 
 1. Register, verify email, and log in.
 2. Switch Arabic and English routes.
-3. Complete onboarding and confirm Vault completeness.
+3. Complete onboarding through the manual path, confirm Company and Products readiness separately from optional Vault gaps, and approve the bilingual Business Profile. Exercise the full-business document path separately with a supported mixed-file batch; confirm owner review and temporary-file removal before treating it as release-ready.
 4. Generate one 30/60/90-day Strategy through the deployed provider mode and confirm its Vault grounding.
 5. Generate one bilingual content item.
 6. Attach media and check publish readiness.

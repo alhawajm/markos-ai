@@ -1,6 +1,6 @@
 # M6 Acceptance Evidence Ledger
 
-Status date: 2026-08-16.
+Status date: 2026-09-01.
 
 This ledger is the working checklist for closing M6 Beta + Launch acceptance. It records what is already proven by code/tests/runbooks and what still requires external provider evidence.
 
@@ -14,6 +14,7 @@ Open application-owned blockers:
 
 - Verify the current shared Strategy/profile provider adapter through the deployed API-to-AI path; a direct provider probe is not sufficient.
 - Verify production email delivery and the complete register -> verify -> browser-session -> onboarding -> Strategy journey.
+- Verify the mounted full-business document-assisted onboarding path on the deployed provider: staged multi-file submission, editable evidence/issues, explicit extraction approval, temporary-file removal, separate bilingual Business Profile approval, and honest failure/manual recovery.
 - Restore and verify every final-system Sunlit surface included in launch scope. PR #19 removed the prior pages for full Vault editing/history, publishing operations, full analytics, AI assistance, and administration; their product requirements remain active.
 - Provide durable public media delivery for live Instagram publishing.
 

@@ -68,7 +68,7 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Area | Current `main` | Final-system work still open |
 | --- | --- | --- |
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
-| Onboarding | A greeting introduces seven concise modules that feed the Vault. Company and Products are essential; the other modules can be skipped and resumed. Once the essentials are saved, the user reviews the information and generates, edits, and approves a bilingual business profile; approval completes onboarding and routes to Strategy without pretending the Vault is 100% complete. | Document extraction and confirmation, real brand-file upload, any approved competitor verification, plan placement, and additional recovery refinement. |
+| Onboarding | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before Strategy. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path. |
 | Strategy | The Sunlit UI lists and generates Strategy records, defaults to 30 days, and offers 30/60/90. The shared request schema accepts integers from 30 to 180 and defaults to 90 when omitted. | Plan entitlement rules, richer version/detail controls, mounted PDF export, and a decision before any 7-day option. |
 | Content/media | Create can start a manual or AI-assisted persisted draft, edit bilingual captions and core fields, approve, upload or provider-generate and attach validated JPEGs, preview the selected asset, schedule, and cancel a schedule. Calendar adds a bilingual week/month view, an unscheduled queue, and atomic schedule/reschedule/cancel management over existing content records. | Planned slots before draft creation, full queue/recovery states, deployed image-provider proof, and all final content-type states. |
 | Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
@@ -96,16 +96,21 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - Final target: explain the available plans in BHD, state VAT treatment, and make trial/payment requirements explicit before a paid commitment.
 - Current implementation note: plan/billing foundations exist, but plan selection is not a completed onboarding step. Do not imply that a displayed/default plan is a completed live purchase.
 
-**A3. Seven-module wizard**
+**A3. Choose a document-assisted or manual start**
 
-- After verification, a short greeting explains that the user will share what they know, MARKOS will organize it, and the owner will review the result before it is used.
+- After verification, a minimal greeting offers two equally prominent choices: **Use business documents** or **Enter details myself**. Neither choice changes the seven-module knowledge contract or bypasses owner review.
+- The document-assisted path stages one to five PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP files before the owner explicitly starts analysis. Each file is limited to 8 MB and the batch to 20 MB. Images and image-bearing PDFs are sent through the provider's multimodal file/image inputs; MARKOS does not claim a separate backend OCR implementation.
+- A focused provider-backed document analyst treats uploaded content as untrusted evidence, extracts only supported business facts, records source evidence and review issues, and may infer up to seven prominent brand colors from visual material only when it labels that inference for owner confirmation. Local deterministic parsing is not a user-facing fallback.
+- The extracted result is an editable proposal across Company, Products, Story, Audience, Competitors, Brand/Tone, and Objectives. Nothing becomes canonical business knowledge until the owner reviews the information check and explicitly approves the document analysis. Approval writes the reviewed modules, attributes the Offering Catalog revision to the analysis, and removes the temporary source files; source files also expire within 24 hours if the analysis is not approved.
+- A failed analysis preserves an honest sanitized failure state, temporary files within their retention window, and retry or discard/manual recovery as appropriate. Only one full onboarding analysis may remain active per workspace.
+- The manual path opens the same seven-module wizard without requiring a document upload.
 - `OB-03`–`OB-09` collect Company, Products, Story, Audience, Competitors, Brand, and Objectives. Products follows Company because those two essentials are enough to unlock the first profile; the remaining context stays skippable.
 - Each save calls `PUT /v1/onboarding/:module`, writes the matching Vault section(s), creates deterministic embeddings through the current AI boundary, updates completeness, invalidates any previously resolved profile, and leaves onboarding `IN_PROGRESS`.
 - Company and Products are essential because they identify the business and its offer. Story, Audience, Competitors, Brand/Tone, and Objectives are useful but optional; `POST /v1/onboarding/:module/skip` persists an optional skip so the journey can resume without asking the same question again. Essential modules cannot be skipped.
 - Brand writes `BRAND` only when visual-identity facts are supplied and `TONE` only when voice facts are supplied. Guidance, placeholders, palettes, and options are suggestions only; only selected or entered facts are persisted.
 - The browser keeps the current draft locally until the API confirms saves. Validation or API failure blocks forward progress without discarding the user's typed work.
 - Optional steps offer explicit skip actions; the information-check rows are clickable and return directly to the corresponding step for editing.
-- Current implementation note: the active wizard does not present document or brand-file upload. A visible upload control waits for a complete extraction, issue-reporting, field-mapping, and owner-confirmation path; merely storing an unread file is not onboarding.
+- Products/Services retains its narrower optional document shortcut for one or two PDF, DOCX, or UTF-8 TXT files. It produces the same structured offering correction surface and remains independent from the full-business entry path.
 
 **A4. Completeness and gaps**
 
@@ -116,10 +121,11 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **A5. Resolve, approve, and hand off**
 
 - `POST /v1/onboarding/profile/generate` produces a bilingual draft from the available raw module entries and records the interaction/usage. It must not invent optional facts; unsupported profile fields use honest, editable wording that indicates they are not defined yet.
+- In the document-assisted path, approving the reviewed extraction first persists its seven-module proposal and removes the temporary files, then invokes the same bilingual profile-generation step. The owner still reviews and approves that profile separately.
 - The owner can edit or regenerate the draft. `POST /v1/onboarding/profile/approve` writes the approved result to `COMPANY/business-profile`, preserves generation history, marks the workspace `COMPLETE`, preserves the real Vault completeness score, clears the browser draft, and routes to `/{locale}/app/strategy`.
 - Approval does **not** automatically generate Strategy. The user sees the Strategy surface and chooses the objective and horizon explicitly.
 - An ordinary visit to `/{locale}/onboarding` still redirects a complete, approved workspace to Strategy. The Business Profile's **Review and edit profile** action opens explicit edit mode instead, hydrates the seven onboarding modules from their current workspace Vault entries, and starts with the existing answers rather than an empty wizard.
-- Editing a canonical onboarding module later invalidates the resolved profile and returns the workspace to `IN_PROGRESS` while preserving history.
+- In explicit edit mode, saving already approved module changes preserves the approved profile interaction and `COMPLETE` status, does not spend another profile-generation call, and returns to Business Profile. This is an interim editor until the dedicated business-knowledge editor defines how bilingual profile summaries are refreshed.
 
 ### Flow B — Generate the first Strategy
 
@@ -286,14 +292,16 @@ This is the required behavioral state machine. The exact Story, Reel, carousel, 
 
 ```text
 NOT_STARTED
-  -> IN_PROGRESS after any module save
-  -> 100% complete raw modules
+  -> choose manual entry or document-assisted entry
+  -> document proposal reviewed and approved, or manual module saves
+  -> IN_PROGRESS after canonical module data exists
+  -> Company and Products ready; optional gaps remain explicit
   -> generated profile draft
   -> user edits/regenerates
   -> user approves
   -> COMPLETE and route to Strategy
 
-editing a canonical module after approval -> IN_PROGRESS and profile invalidated
+explicit edit mode after approval -> approved module updates -> remain COMPLETE -> Business Profile
 ```
 
 ### 4.4 Subscription

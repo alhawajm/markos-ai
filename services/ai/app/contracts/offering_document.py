@@ -43,7 +43,7 @@ class OfferingDocumentCandidate(StrictContract):
     price_minor: int | None = Field(default=None, alias="priceMinor", ge=0)
     currency: str = Field(min_length=3, max_length=3)
     confidence: Confidence
-    source_files: list[str] = Field(alias="sourceFiles", min_length=1, max_length=2)
+    source_files: list[str] = Field(alias="sourceFiles", min_length=1, max_length=5)
 
 
 class OfferingDocumentCatalog(StrictContract):

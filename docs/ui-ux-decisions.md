@@ -329,7 +329,7 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 **Deferred**
 
-- Document-assisted extraction, upload retention, processing quotas, and a future whole-business automatic path remain a separate pipeline with their own policy and validation pass.
+- Superseded on 2026-09-01: document-assisted extraction, retention, and the whole-business path required a separate policy and validation pass before implementation.
 - The product-wide notification redesign and final shared font and palette selection remain outside this Onboarding checkpoint.
 
 ### 2026-08-31 — Bounded fields, structured offerings, and desktop review density
@@ -350,3 +350,21 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - A dedicated Business Profile knowledge editor that replaces the temporary return through onboarding.
 - Rich offering price semantics such as from, range, free, and quotation-required.
 - Decorative card fades or more elaborate overflow animation unless browser evidence shows that the simpler bounded surfaces are insufficient.
+
+### 2026-09-01 — Two-path greeting and full-business document assistance
+
+**Accepted**
+
+- Keep the greeting minimal and logo-free in its central content. Present **Use business documents** and **Enter details myself** as equal-size, unmistakable CTA cards beneath the larger, slightly elevated welcome heading.
+- Give business-document assistance its own first-run screen rather than forcing it into one of the seven manual steps. Let the owner stage up to five supported files, see a compact filename/type list, remove individual selections, and explicitly choose **Analyze files**. Selecting another file appends to the staged batch instead of replacing it.
+- Accept PDF, DOCX, UTF-8 TXT, JPEG, PNG, and WebP in this path. Keep source files temporary and describe the result as information MARKOS found, not as approved truth.
+- After analysis, populate the same seven-area draft and take the owner to the ordinary information check. Show review issues and the source-file count, keep every area editable, and retain **Discard and choose different files** until analysis approval.
+- Keep the Products/Services-only analyzer inside that step as a separate optional shortcut. The two document paths have different scopes and limits and must not share ambiguous UI state.
+- Use a deliberate business-color control in the Brand step: selecting a color creates a pending choice, **Add color** commits it, existing swatches remain editable/removable, duplicate colors are rejected, and the saved list is limited to seven.
+- Treat this as the closed Onboarding checkpoint. Future work should be limited to focused defects, deployed-provider evidence, responsive/accessibility hardening, or an explicitly reopened product decision.
+
+**Deferred**
+
+- Permanent logos, brand-guideline files, or a reusable brand asset library.
+- A conversational assistant that asks follow-up questions about ambiguous extraction; the current proposal/issues/review flow is the implemented boundary.
+- The dedicated post-onboarding Business Profile knowledge editor described above.

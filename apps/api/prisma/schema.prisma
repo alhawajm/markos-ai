@@ -424,6 +424,40 @@ model OfferingDocumentFile {
   @@map("offering_document_files")
 }
 
+model OnboardingDocumentAnalysis {
+  id            String                         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                         @db.Uuid
+  status        OfferingDocumentAnalysisStatus @default(PROCESSING)
+  result        Json?
+  failureCode   String?
+  interactionId String?                        @db.Uuid
+  expiresAt     DateTime
+  approvedAt    DateTime?
+  discardedAt   DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([status, expiresAt])
+  @@map("onboarding_document_analyses")
+}
+
+model OnboardingDocumentFile {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String    @db.Uuid
+  analysisId     String    @db.Uuid
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String    @db.VarChar(64)
+  storageKey     String?
+  removedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([workspaceId, analysisId])
+  @@map("onboarding_document_files")
+}
+
 model Strategy {
   id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid

@@ -376,6 +376,116 @@ export interface OfferingDocumentCleanupResult {
   failed: number;
 }
 
+export type OnboardingDocumentAnalysisStatus = OfferingDocumentAnalysisStatus;
+export type OnboardingDocumentConfidence = "HIGH" | "MEDIUM" | "LOW";
+export type OnboardingDocumentEvidenceBasis = "EXPLICIT" | "VISUAL_INFERENCE";
+
+export interface OnboardingDocumentProfileDraft {
+  company: {
+    name?: string;
+    industry?: string;
+    size?: string;
+    location?: string;
+    socials: string[];
+    website?: string;
+    languages: string[];
+  };
+  offerings: OfferingDocumentExtraction["catalog"];
+  story: {
+    mission?: string;
+    origin?: string;
+    problemSolved?: string;
+    values: string[];
+    usp?: string;
+    vision?: string;
+  };
+  audience: {
+    ageRange?: string;
+    demographics?: string;
+    genderBreakdown?: string;
+    interests: string[];
+    locations: string[];
+    motivations: string[];
+    painPoints: string[];
+  };
+  competitors: {
+    marketContext?: string;
+    items: Array<{
+      name: string;
+      instagramHandle?: string;
+      website?: string;
+      notes?: string;
+    }>;
+    competitiveAdvantage?: string;
+    doDifferently?: string;
+  };
+  brand: {
+    aestheticWords: string[];
+    colors: string[];
+    fonts: string[];
+    toneWords: string[];
+    voiceNotes?: string;
+  };
+  objectives: {
+    currentPriority?: string;
+    goals: string[];
+    budgetRange?: string;
+    instagramExperience?: string;
+    success90Days?: string;
+  };
+}
+
+export interface ApprovedOnboardingDocumentProfile {
+  company: OnboardingDocumentProfileDraft["company"] & { name: string };
+  offerings: OfferingCatalogUpdate;
+  story?: OnboardingDocumentProfileDraft["story"];
+  audience?: OnboardingDocumentProfileDraft["audience"];
+  competitors?: OnboardingDocumentProfileDraft["competitors"];
+  brand?: OnboardingDocumentProfileDraft["brand"];
+  objectives?: OnboardingDocumentProfileDraft["objectives"];
+}
+
+export interface OnboardingDocumentExtraction {
+  profile: OnboardingDocumentProfileDraft;
+  evidence: Array<{
+    field: string;
+    sourceFiles: string[];
+    confidence: OnboardingDocumentConfidence;
+    basis: OnboardingDocumentEvidenceBasis;
+  }>;
+  issues: Array<{
+    code: "MISSING_ESSENTIAL" | "AMBIGUOUS_INFORMATION" | "CONFLICTING_INFORMATION" | "VISUAL_INFERENCE" | "REVIEW_REQUIRED" | "UNSUPPORTED_CONTENT";
+    severity: "INFO" | "WARNING";
+    message: string;
+    field?: string;
+    sourceFiles: string[];
+  }>;
+}
+
+export interface OnboardingDocumentAnalysisRecord {
+  id: string;
+  workspaceId: string;
+  status: OnboardingDocumentAnalysisStatus;
+  files: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    removed: boolean;
+  }>;
+  result?: OnboardingDocumentExtraction;
+  failureCode?: string;
+  expiresAt: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApproveOnboardingDocumentAnalysisResult {
+  analysis: OnboardingDocumentAnalysisRecord;
+  onboarding: OnboardingState;
+}
+
 export interface StrategyPillar {
   name: string;
   rationale: string;

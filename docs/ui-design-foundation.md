@@ -266,7 +266,7 @@ Migration sequence:
 
 1. Shared scoped tokens, canonical marketing/authentication routes, legal placeholders, and Settings — complete.
 2. App shell, Overview, Business Profile summary, and first Strategy handoff — mounted in current reviewed source.
-3. Calendar and the reduced-effort greeting/Onboarding journey — implemented as the current working checkpoints; document-assisted extraction remains separate.
+3. Calendar and the reduced-effort greeting/Onboarding journey — implemented as current working checkpoints; Onboarding now includes separate full-business document-assisted and manual first-run paths plus the focused Products/Services shortcut.
 4. The current Create and Insights summaries — mounted using real APIs or explicit empty states. The reviewed Create redesign remains a lab reference awaiting a focused production slice.
 5. Restore the remaining final-system operational modules in small, behavior-preserving Sunlit slices.
 6. Revisit each migrated page individually as product features and configuration needs become final.
@@ -275,7 +275,7 @@ Migration sequence:
 ## Deferred decisions
 
 - Detailed mobile and tablet composition beyond basic functional layouts.
-- Document-assisted Products/Services file policy, extraction, issue reporting, field mapping, confirmation, and recovery. Making business onboarding wholly optional or relocating major areas requires Mohamed's product approval and is not part of the current checkpoint.
+- Permanent brand-asset storage, a conversational follow-up analyst, and a dedicated post-onboarding business-knowledge editor. Making business onboarding wholly optional or relocating major areas still requires Mohamed's product approval and is not part of the closed checkpoint.
 - Plans page structure and commercial copy.
 - Advanced Insights comparisons and recommendations beyond the current API-backed summary.
 - Final Terms and Privacy content and scroll-navigation tuning.

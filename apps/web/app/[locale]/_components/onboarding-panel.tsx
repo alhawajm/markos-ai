@@ -28,11 +28,21 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type DragEvent, type ReactNode } from "react";
-import type { BusinessProfile, Locale, OfferingCatalogUpdate, OfferingDocumentAnalysisRecord, OnboardingState } from "@markos/shared-types";
+import { MarkosApiError } from "@markos/api-client";
+import type {
+  BusinessProfile,
+  Locale,
+  OfferingCatalogUpdate,
+  OfferingDocumentAnalysisRecord,
+  OnboardingDocumentAnalysisRecord,
+  OnboardingState
+} from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import {
   createEmptyOnboardingDraft,
+  createOnboardingDraftFromDocumentProfile,
+  approvedDocumentProfile,
   emptyOnboardingOffering,
   hasOnboardingStepData,
   legacyOnboardingDraftKey,
@@ -48,7 +58,7 @@ import {
   type OnboardingStepId
 } from "./onboarding-draft";
 
-type Screen = "greeting" | "profile" | "review" | "step";
+type Screen = "documents" | "greeting" | "profile" | "review" | "step";
 type ProfileFieldKey = Exclude<keyof BusinessProfile, "businessName">;
 type DraftFieldKey = keyof OnboardingDraft;
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
@@ -154,11 +164,28 @@ function onboardingCopy(locale: Locale) {
         title: "هل لديك قائمة جاهزة؟",
         use: "اعتماد هذه التفاصيل"
       },
+      businessDocuments: {
+        analyze: "تحليل الملفات",
+        analyzing: "يقرأ MARKOS ملفات نشاطك…",
+        body: "ارفع ملفات نشاطك ليملأ MARKOS ما يستطيع العثور عليه. ستراجع كل شيء قبل الحفظ.",
+        choose: "اختر الملفات",
+        discard: "حذف الملفات",
+        failed: "تعذر تحليل هذه الملفات الآن. حاول مجدداً أو ارفع ملفات أخرى.",
+        formats: "PDF أو Word أو TXT أو PNG أو JPG أو WebP — حتى 5 ملفات",
+        invalid: "اختر من ملف إلى 5 ملفات مدعومة، بحد أقصى 8 ميجابايت للملف و20 ميجابايت إجمالاً.",
+        manual: "الإدخال يدوياً",
+        removeSelected: "إزالة الملف",
+        replace: "حذف التحليل واختيار ملفات أخرى",
+        retry: "إعادة المحاولة",
+        selected: "الملفات المختارة",
+        title: "ابدأ من ملفات نشاطك",
+        upload: "استخدام مستندات النشاط"
+      },
       greeting: {
-        eyebrow: "مرحباً بك في MARKOS",
-        start: "ابدأ إعداد نشاطي",
+        eyebrow: "مرحباً بك في MARKOS AI",
+        start: "الإدخال يدوياً",
         title: "يبدأ تسويقك بفهم نشاطك.",
-        journey: ["شارك ما تعرفه", "ينظم MARKOS المعلومات", "راجع قبل الاستخدام"]
+        journey: ["استخدم ملفات نشاطك", "أو أجب خطوة بخطوة"]
       },
       helpTitle: "لماذا نطلب هذا؟",
       informationCheck: "فحص المعلومات",
@@ -275,11 +302,28 @@ function onboardingCopy(locale: Locale) {
       title: "Already have a product list?",
       use: "Use these details"
     },
+    businessDocuments: {
+      analyze: "Analyze files",
+      analyzing: "MARKOS is reading your business files…",
+      body: "Upload business files and MARKOS will fill whatever it can find. You review everything before it is saved.",
+      choose: "Choose files",
+      discard: "Discard files",
+      failed: "These files could not be analyzed right now. Retry, or upload different files.",
+      formats: "PDF, Word, TXT, PNG, JPG, or WebP — up to 5 files",
+      invalid: "Choose one to five supported files, up to 8 MB each and 20 MB combined.",
+      manual: "Enter details myself",
+      removeSelected: "Remove file",
+      replace: "Discard and choose different files",
+      retry: "Retry",
+      selected: "Selected files",
+      title: "Start with your business files",
+      upload: "Use business documents"
+    },
     greeting: {
-      eyebrow: "Welcome to MARKOS",
-      start: "Set up my business",
+      eyebrow: "Welcome to MARKOS AI",
+      start: "Enter details myself",
       title: "Your marketing starts with understanding your business.",
-      journey: ["Share what you know", "MARKOS organizes it", "Review before it is used"]
+      journey: ["Use your business files", "Or answer step by step"]
     },
     helpTitle: "Why this helps",
     informationCheck: "Information check",
@@ -639,9 +683,11 @@ export function OnboardingPanel({
   const [documentCatalog, setDocumentCatalog] = useState<OfferingCatalogUpdate | null>(null);
   const [documentBusy, setDocumentBusy] = useState(false);
   const [documentMessage, setDocumentMessage] = useState("");
+  const [onboardingDocumentAnalysis, setOnboardingDocumentAnalysis] = useState<OnboardingDocumentAnalysisRecord | null>(null);
+  const [onboardingDocumentBusy, setOnboardingDocumentBusy] = useState(false);
+  const [onboardingDocumentMessage, setOnboardingDocumentMessage] = useState("");
   const [backGuardOpen, setBackGuardOpen] = useState(false);
   const [backGuardBusy, setBackGuardBusy] = useState(false);
-  const documentAnalysisLoaded = useRef(false);
   const workspaceNameApplied = useRef(false);
   const draftRef = useRef(draft);
   const stepEntryRef = useRef<{ draft: OnboardingDraft; step: OnboardingStepId } | null>(null);
@@ -649,6 +695,21 @@ export function OnboardingPanel({
   const showError = useCallback((body: string) => {
     setMessage(body);
   }, []);
+
+  const syncOnboardingDocumentAnalysis = useCallback(
+    (analysis: OnboardingDocumentAnalysisRecord) => {
+      setOnboardingDocumentAnalysis(analysis);
+      if (analysis.status === "READY" && analysis.result) {
+        setDraft(createOnboardingDraftFromDocumentProfile(analysis.result.profile));
+        setOnboardingDocumentMessage("");
+        setScreen("review");
+        return;
+      }
+      setOnboardingDocumentMessage(analysis.status === "FAILED" ? copy.businessDocuments.failed : "");
+      setScreen("documents");
+    },
+    [copy.businessDocuments.failed]
+  );
 
   useEffect(() => {
     window.localStorage.removeItem(legacyOnboardingDraftKey);
@@ -697,8 +758,7 @@ export function OnboardingPanel({
   }, [hydrated, session]);
 
   useEffect(() => {
-    if (!session || documentAnalysisLoaded.current) return;
-    documentAnalysisLoaded.current = true;
+    if (!session) return;
     let cancelled = false;
 
     void client
@@ -706,14 +766,28 @@ export function OnboardingPanel({
       .then((analysis) => {
         if (!cancelled) syncDocumentAnalysis(analysis);
       })
-      .catch(() => {
-        if (!cancelled) documentAnalysisLoaded.current = false;
-      });
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
     };
   }, [client, session]);
+
+  useEffect(() => {
+    if (!session || editMode) return;
+    let cancelled = false;
+
+    void client
+      .onboardingDocumentAnalysis()
+      .then((analysis) => {
+        if (!cancelled && analysis !== null) syncOnboardingDocumentAnalysis(analysis);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, editMode, session, syncOnboardingDocumentAnalysis]);
 
   const activeStep = steps[step - 1]!;
   const validationIssue = validateOnboardingStep(step, draft);
@@ -827,6 +901,79 @@ export function OnboardingPanel({
     setStep(initialStep(runtimeState));
   }
 
+  function startDocumentSetup() {
+    setOnboardingDocumentMessage("");
+    setScreen("documents");
+  }
+
+  async function analyzeOnboardingFiles(files: FileList | File[]) {
+    if (!session) {
+      setOnboardingDocumentMessage(copy.errors.session);
+      return;
+    }
+    const prepared = prepareOnboardingDocuments(Array.from(files));
+    if (!prepared.valid) {
+      setOnboardingDocumentMessage(copy.businessDocuments.invalid);
+      return;
+    }
+
+    setOnboardingDocumentBusy(true);
+    setOnboardingDocumentMessage("");
+    try {
+      const payload = await Promise.all(
+        prepared.files.map(async ({ file, mimeType }) => ({ filename: file.name, mimeType, base64Data: await fileAsBase64(file) }))
+      );
+      const analysis = await client.analyzeOnboardingDocuments(payload);
+      syncOnboardingDocumentAnalysis(analysis);
+    } catch (error) {
+      if (error instanceof MarkosApiError && error.code === "ONBOARDING_DOCUMENT_ANALYSIS_CONFLICT") {
+        const existing = await client.onboardingDocumentAnalysis().catch(() => null);
+        if (existing !== null) {
+          syncOnboardingDocumentAnalysis(existing);
+          return;
+        }
+      }
+      setOnboardingDocumentMessage(error instanceof Error ? error.message : copy.businessDocuments.failed);
+    } finally {
+      setOnboardingDocumentBusy(false);
+    }
+  }
+
+  async function retryOnboardingAnalysis() {
+    if (!onboardingDocumentAnalysis) return;
+    setOnboardingDocumentBusy(true);
+    setOnboardingDocumentMessage("");
+    try {
+      const analysis = await client.retryOnboardingDocumentAnalysis(onboardingDocumentAnalysis.id);
+      syncOnboardingDocumentAnalysis(analysis);
+    } catch (error) {
+      setOnboardingDocumentMessage(error instanceof Error ? error.message : copy.businessDocuments.failed);
+    } finally {
+      setOnboardingDocumentBusy(false);
+    }
+  }
+
+  async function discardOnboardingAnalysis(nextScreen: "documents" | "greeting") {
+    if (!onboardingDocumentAnalysis) {
+      setScreen(nextScreen);
+      return;
+    }
+    setOnboardingDocumentBusy(true);
+    setOnboardingDocumentMessage("");
+    try {
+      await client.discardOnboardingDocumentAnalysis(onboardingDocumentAnalysis.id);
+      setOnboardingDocumentAnalysis(null);
+      setDraft(createEmptyOnboardingDraft());
+      setScreen(nextScreen);
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : copy.businessDocuments.failed;
+      setOnboardingDocumentMessage(nextMessage);
+      if (nextScreen === "documents") showError(nextMessage);
+    } finally {
+      setOnboardingDocumentBusy(false);
+    }
+  }
+
   async function saveAndContinue() {
     if (!session) {
       showError(copy.errors.session);
@@ -840,6 +987,11 @@ export function OnboardingPanel({
     }
 
     if (!hasOnboardingStepData(step, draft)) return;
+    if (onboardingDocumentAnalysis?.status === "READY") {
+      if (step === 2) setDraft((current) => ({ ...current, offerings: current.offerings.filter((item) => item.name.trim()) }));
+      advanceAfterStep();
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -859,6 +1011,11 @@ export function OnboardingPanel({
 
   async function skipStep() {
     if (!session || !activeStep.skippable) return;
+    if (onboardingDocumentAnalysis?.status === "READY") {
+      setDraft((current) => restoreOnboardingStep(step, createEmptyOnboardingDraft(), current));
+      advanceAfterStep();
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -975,6 +1132,30 @@ export function OnboardingPanel({
     }
   }
 
+  async function approveOnboardingDocumentsAndGenerateProfile() {
+    const analysis = onboardingDocumentAnalysis;
+    if (!analysis?.result) return;
+    const companyReady = draft.businessName.trim().length >= 2;
+    const offeringsReady = draft.offerings.some((item) => item.name.trim());
+    if (!companyReady || !offeringsReady) {
+      showError(companyReady ? copy.errors.products : copy.errors.company);
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    try {
+      const result = await client.approveOnboardingDocumentAnalysis(analysis.id, approvedDocumentProfile(draft, analysis.result.profile));
+      setRuntimeState(result.onboarding);
+      setOnboardingDocumentAnalysis(result.analysis);
+      await generateProfile();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : copy.errors.save);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function approveProfile() {
     if (!profileDraft || !profileInteractionId || !session) {
       showError(copy.errors.approve);
@@ -1027,7 +1208,13 @@ export function OnboardingPanel({
         </a>
         {screen !== "greeting" ? (
           <span className="rounded-full border border-[var(--sunlit-line)] bg-white/75 px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-muted)] backdrop-blur">
-            {screen === "step" ? copy.step(step, 7) : screen === "review" ? copy.informationCheck : copy.profile.eyebrow}
+            {screen === "step"
+              ? copy.step(step, 7)
+              : screen === "review"
+                ? copy.informationCheck
+                : screen === "documents"
+                  ? copy.businessDocuments.analyze
+                  : copy.profile.eyebrow}
           </span>
         ) : null}
       </header>
@@ -1061,7 +1248,20 @@ export function OnboardingPanel({
           key={`${screen}-${screen === "step" ? step : "screen"}`}
           transition={transition}
         >
-          {screen === "greeting" ? <Greeting copy={copy} onStart={startSetup} /> : null}
+          {screen === "greeting" ? <Greeting copy={copy} onDocuments={startDocumentSetup} onStart={startSetup} /> : null}
+          {screen === "documents" ? (
+            <BusinessDocumentScreen
+              analysis={onboardingDocumentAnalysis}
+              busy={onboardingDocumentBusy}
+              copy={copy}
+              message={onboardingDocumentMessage}
+              onAnalyze={(files) => void analyzeOnboardingFiles(files)}
+              onBack={() => setScreen("greeting")}
+              onDiscard={() => void discardOnboardingAnalysis("documents")}
+              onManual={startSetup}
+              onRetry={() => void retryOnboardingAnalysis()}
+            />
+          ) : null}
           {screen === "step" ? (
             <StepScreen
               BackIcon={BackIcon}
@@ -1098,11 +1298,20 @@ export function OnboardingPanel({
               copy={copy}
               draft={draft}
               editMode={editMode}
+              documentAnalysis={onboardingDocumentAnalysis}
+              locale={locale}
               onBack={() => {
                 setStep(7);
                 setScreen("step");
               }}
-              onCreate={() => void (editMode ? finishEditMode() : generateProfile())}
+              onCreate={() =>
+                void (editMode
+                  ? finishEditMode()
+                  : onboardingDocumentAnalysis?.status === "READY"
+                    ? approveOnboardingDocumentsAndGenerateProfile()
+                    : generateProfile())
+              }
+              onDiscardDocumentAnalysis={() => void discardOnboardingAnalysis("documents")}
               onEdit={editReviewStep}
               readyForProfile={runtimeState.readyForProfile || (draft.businessName.trim().length >= 2 && hasOnboardingStepData(2, draft))}
               saving={profileLoading || saving}
@@ -1133,38 +1342,251 @@ export function OnboardingPanel({
   );
 }
 
-function Greeting({ copy, onStart }: { copy: OnboardingCopy; onStart: () => void }) {
+function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocuments: () => void; onStart: () => void }) {
   return (
-    <section className="mx-auto grid min-h-[calc(100vh-96px)] w-full max-w-6xl place-items-center px-5 pb-12 sm:px-8">
+    <section className="mx-auto grid min-h-[calc(100vh-96px)] w-full max-w-6xl place-items-center px-5 pb-[clamp(5rem,12vh,9rem)] pt-2 sm:px-8">
       <div className="w-full max-w-5xl text-center">
-        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_22px_48px_rgb(32_33_43_/_22%)]">
-          <Sparkles size={28} />
-        </span>
-        <p className="mt-6 text-[13px] font-bold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">{copy.greeting.eyebrow}</p>
-        <h1 className="mx-auto mt-3 max-w-4xl font-display text-[clamp(42px,5vw,68px)] font-bold leading-[1.03] tracking-[-0.05em] text-[var(--sunlit-ink)] rtl:tracking-normal">
+        <p className="text-[15px] font-bold uppercase tracking-[.11em] text-[var(--sunlit-pink)] sm:text-[16px]">{copy.greeting.eyebrow}</p>
+        <h1 className="mx-auto mt-3 max-w-4xl font-display text-[clamp(46px,5.4vw,74px)] font-bold leading-[1.01] tracking-[-0.052em] text-[var(--sunlit-ink)] rtl:tracking-normal">
           {copy.greeting.title}
         </h1>
 
-        <div className="mt-8 grid gap-3 text-start md:grid-cols-3">
-          {copy.greeting.journey.map((title, index) => (
-            <article className="sunlit-panel flex items-center gap-3 rounded-2xl bg-white/82 p-4 backdrop-blur" key={title}>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[13px] font-bold text-[var(--sunlit-aqua-dark)]">
-                {index + 1}
+        <div className="mx-auto mt-10 grid max-w-4xl gap-4 text-start md:grid-cols-2">
+          <button
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--sunlit-ink)] p-6 text-start text-white shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--sunlit-aqua)] sm:p-7"
+            onClick={onDocuments}
+            type="button"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[var(--sunlit-aqua)] opacity-20 blur-2xl rtl:-left-12 rtl:right-auto"
+            />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12 text-[var(--sunlit-yellow)] ring-1 ring-white/15">
+              <UploadCloud size={22} />
+            </span>
+            <span className="relative mt-7 block text-[14px] font-bold text-white/64">{copy.greeting.journey[0]}</span>
+            <span className="relative mt-1 flex items-end justify-between gap-5">
+              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-bold leading-tight tracking-[-0.025em]">{copy.businessDocuments.upload}</strong>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-yellow)] text-[var(--sunlit-ink)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+                <ArrowRight className="rtl:rotate-180" size={20} />
               </span>
-              <h2 className="text-[15px] font-bold leading-6">{title}</h2>
-            </article>
-          ))}
+            </span>
+          </button>
+          <button
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[rgb(255_105_97_/_28%)] bg-[linear-gradient(145deg,rgb(255_255_255_/_94%),rgb(255_240_234_/_92%))] p-6 text-start shadow-[0_20px_50px_rgb(255_105_97_/_14%)] transition duration-200 hover:-translate-y-1 hover:border-[rgb(255_105_97_/_48%)] hover:shadow-[0_28px_64px_rgb(255_105_97_/_19%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--sunlit-pink)] sm:p-7"
+            onClick={onStart}
+            type="button"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-[var(--sunlit-yellow)] opacity-25 blur-2xl rtl:-right-16 rtl:left-auto"
+            />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-pink-soft)] text-[var(--sunlit-pink)] ring-1 ring-[rgb(255_105_97_/_15%)]">
+              <Pencil size={21} />
+            </span>
+            <span className="relative mt-7 block text-[14px] font-bold text-[var(--sunlit-muted)]">{copy.greeting.journey[1]}</span>
+            <span className="relative mt-1 flex items-end justify-between gap-5">
+              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-bold leading-tight tracking-[-0.025em] text-[var(--sunlit-ink)]">
+                {copy.greeting.start}
+              </strong>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-pink)] text-white transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+                <ArrowRight className="rtl:rotate-180" size={20} />
+              </span>
+            </span>
+          </button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function BusinessDocumentScreen({
+  analysis,
+  busy,
+  copy,
+  message,
+  onAnalyze,
+  onBack,
+  onDiscard,
+  onManual,
+  onRetry
+}: {
+  analysis: OnboardingDocumentAnalysisRecord | null;
+  busy: boolean;
+  copy: OnboardingCopy;
+  message: string;
+  onAnalyze: (files: File[]) => void;
+  onBack: () => void;
+  onDiscard: () => void;
+  onManual: () => void;
+  onRetry: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectionMessage, setSelectionMessage] = useState("");
+  const waiting = busy || analysis?.status === "PROCESSING";
+  const failed = analysis?.status === "FAILED";
+  const displayedMessage = selectionMessage || message || (failed ? copy.businessDocuments.failed : "");
+
+  function stageFiles(files: File[]) {
+    const merged = [...selectedFiles];
+    const selectedKeys = new Set(merged.map((file) => stagedFileKey(file)));
+    for (const file of files) {
+      const key = stagedFileKey(file);
+      if (!selectedKeys.has(key)) {
+        merged.push(file);
+        selectedKeys.add(key);
+      }
+    }
+
+    const prepared = prepareOnboardingDocuments(merged);
+    if (!prepared.valid) {
+      setSelectionMessage(copy.businessDocuments.invalid);
+      return;
+    }
+    setSelectedFiles(prepared.files.map(({ file }) => file));
+    setSelectionMessage("");
+  }
+
+  return (
+    <section className="mx-auto grid min-h-[calc(100vh-105px)] w-full max-w-5xl place-items-center px-5 pb-12 sm:px-8">
+      <article className="sunlit-panel w-full max-w-3xl rounded-[2rem] bg-white/92 p-7 backdrop-blur-xl sm:p-10">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
+          <FileText size={23} />
+        </span>
+        <h1 className="mt-5 font-display text-[32px] font-bold tracking-tight sm:text-[38px]">{copy.businessDocuments.title}</h1>
+        <p className="mt-3 max-w-2xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.businessDocuments.body}</p>
 
         <button
-          className="sunlit-primary mt-8 inline-flex min-w-56 items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-[15px] font-bold"
-          onClick={onStart}
+          className="mt-7 flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] px-6 py-8 text-center transition hover:border-[var(--sunlit-aqua-dark)] hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          disabled={waiting || failed}
+          onClick={() => inputRef.current?.click()}
           type="button"
         >
-          {copy.greeting.start}
-          <ArrowRight className="rtl:rotate-180" size={17} />
+          {waiting ? (
+            <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={28} />
+          ) : (
+            <UploadCloud className="text-[var(--sunlit-aqua-dark)]" size={28} />
+          )}
+          <strong className="mt-3 text-[16px]">{waiting ? copy.businessDocuments.analyzing : copy.businessDocuments.choose}</strong>
+          <span className="mt-1 text-[14px] text-[var(--sunlit-muted)]">{copy.businessDocuments.formats}</span>
         </button>
-      </div>
+        <input
+          accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg,image/webp"
+          className="hidden"
+          disabled={waiting || failed}
+          multiple
+          onChange={(event) => {
+            if (event.target.files?.length) stageFiles(Array.from(event.target.files));
+            event.target.value = "";
+          }}
+          ref={inputRef}
+          type="file"
+        />
+
+        {selectedFiles.length && !failed ? (
+          <section aria-label={copy.businessDocuments.selected} className="mt-4 rounded-2xl border border-[var(--sunlit-line)] bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[14px] font-bold text-[var(--sunlit-ink)]">{copy.businessDocuments.selected}</h2>
+              <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-aqua-dark)]">
+                {selectedFiles.length}/5
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {selectedFiles.map((file, index) => (
+                <div
+                  className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-3 py-2.5"
+                  key={`${file.name}-${file.size}-${index}`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--sunlit-aqua-dark)] shadow-sm">
+                    <FileText size={17} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-bold text-[var(--sunlit-ink)]" title={file.name}>
+                      {documentDisplayName(file.name)}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">
+                      {documentTypeLabel(file.name)}
+                    </span>
+                  </span>
+                  <button
+                    aria-label={`${copy.businessDocuments.removeSelected}: ${file.name}`}
+                    className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-white hover:text-[var(--sunlit-danger)] disabled:opacity-50"
+                    disabled={waiting}
+                    onClick={() => {
+                      setSelectedFiles((current) => current.filter((_item, fileIndex) => fileIndex !== index));
+                      setSelectionMessage("");
+                    }}
+                    type="button"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-[var(--sunlit-line)] pt-4">
+              <button
+                className="sunlit-secondary rounded-xl px-4 py-2.5 text-[13px] font-bold"
+                disabled={waiting}
+                onClick={() => inputRef.current?.click()}
+                type="button"
+              >
+                {copy.businessDocuments.choose}
+              </button>
+              <button
+                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={waiting || !selectedFiles.length}
+                onClick={() => onAnalyze(selectedFiles)}
+                type="button"
+              >
+                {waiting ? <LoaderCircle className="animate-spin" size={17} /> : <WandSparkles size={17} />}
+                {waiting ? copy.businessDocuments.analyzing : copy.businessDocuments.analyze}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {displayedMessage ? (
+          <div className="mt-4 rounded-xl border border-[rgb(199_53_80_/_20%)] bg-[rgb(255_244_246_/_88%)] p-4 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">
+            {displayedMessage}
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] pt-5">
+          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" disabled={waiting} onClick={onBack} type="button">
+            {copy.back}
+          </button>
+          {failed ? (
+            <div className="flex gap-2">
+              <button
+                className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+                disabled={busy}
+                onClick={onDiscard}
+                type="button"
+              >
+                <Trash2 size={16} /> {copy.businessDocuments.discard}
+              </button>
+              <button
+                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+                disabled={busy}
+                onClick={onRetry}
+                type="button"
+              >
+                <RefreshCw size={16} /> {copy.businessDocuments.retry}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper)]"
+              disabled={waiting}
+              onClick={onManual}
+              type="button"
+            >
+              {copy.businessDocuments.manual}
+            </button>
+          )}
+        </div>
+      </article>
     </section>
   );
 }
@@ -1360,6 +1782,8 @@ function StepScreen({
               </div>
             ) : null}
 
+            {step.id === 6 ? <BusinessColorEditor colors={draft.colors} locale={locale} onChange={(colors) => update("colors", colors)} /> : null}
+
             {step.id === 2 && hasActiveDocumentAnalysis ? (
               <OfferingDocumentAssistant
                 analysis={documentAnalysis}
@@ -1442,6 +1866,112 @@ function StepScreen({
           ) : null}
         </aside>
       </div>
+    </section>
+  );
+}
+
+function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; locale: Locale; onChange: (colors: string[]) => void }) {
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const [pendingColor, setPendingColor] = useState("#21BFAE");
+  const [hasPendingColor, setHasPendingColor] = useState(false);
+  const label = locale === "ar" ? "ألوان النشاط" : "Business colors";
+  const hint = locale === "ar" ? "اختر حتى 7 ألوان. اضغط على أي لون لتعديله." : "Choose up to 7 colors. Select any swatch to edit it.";
+  const choose = locale === "ar" ? "اختيار لون" : "Choose color";
+  const add = locale === "ar" ? "إضافة اللون المختار" : "Add selected color";
+  const selected = locale === "ar" ? "اللون المختار" : "Selected color";
+  const remove = locale === "ar" ? "إزالة اللون" : "Remove color";
+
+  function replaceColor(index: number, value: string) {
+    const normalized = value.toUpperCase();
+    if (colors.some((color, colorIndex) => colorIndex !== index && color === normalized)) return;
+    onChange(colors.map((color, colorIndex) => (colorIndex === index ? normalized : color)));
+  }
+
+  function addColor(value: string) {
+    const normalized = value.toUpperCase();
+    if (colors.length >= 7 || colors.includes(normalized)) return;
+    onChange([...colors, normalized]);
+    setHasPendingColor(false);
+  }
+
+  return (
+    <section className="mt-5 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-bold text-[var(--sunlit-ink)]">{label}</h2>
+          <p className="mt-1 text-[13px] leading-5 text-[var(--sunlit-muted)]">{hint}</p>
+        </div>
+        {colors.length < 7 ? (
+          <button
+            className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-bold"
+            onClick={() => addInputRef.current?.click()}
+            type="button"
+          >
+            <Plus size={15} /> {choose}
+          </button>
+        ) : null}
+      </div>
+      <input
+        aria-label={choose}
+        className="sr-only"
+        onChange={(event) => {
+          setPendingColor(event.target.value.toUpperCase());
+          setHasPendingColor(true);
+        }}
+        ref={addInputRef}
+        type="color"
+        value={pendingColor}
+      />
+      {hasPendingColor && colors.length < 7 ? (
+        <div aria-live="polite" className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[rgb(33_191_174_/_24%)] bg-white p-3">
+          <button
+            aria-label={choose}
+            className="h-10 w-10 rounded-lg shadow-sm ring-1 ring-black/10"
+            onClick={() => addInputRef.current?.click()}
+            style={{ backgroundColor: pendingColor }}
+            type="button"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{selected}</span>
+            <code className="mt-0.5 block text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{pendingColor}</code>
+          </span>
+          <button
+            className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={colors.includes(pendingColor)}
+            onClick={() => addColor(pendingColor)}
+            type="button"
+          >
+            <Plus size={15} /> {add}
+          </button>
+        </div>
+      ) : null}
+      {colors.length ? (
+        <div className="mt-4 flex flex-wrap gap-3">
+          {colors.map((color, index) => (
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2" key={`${color}-${index}`}>
+              <label className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-lg shadow-sm ring-1 ring-black/10" style={{ backgroundColor: color }}>
+                <span className="sr-only">{color}</span>
+                <input
+                  aria-label={`${label} ${index + 1}`}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  onChange={(event) => replaceColor(index, event.target.value)}
+                  type="color"
+                  value={color}
+                />
+              </label>
+              <code className="text-[13px] font-bold text-[var(--sunlit-ink-soft)]">{color}</code>
+              <button
+                aria-label={remove}
+                className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_8%)] hover:text-[var(--sunlit-danger)]"
+                onClick={() => onChange(colors.filter((_item, colorIndex) => colorIndex !== index))}
+                type="button"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1918,18 +2448,24 @@ function OnboardingField({
 function ReviewScreen({
   copy,
   draft,
+  documentAnalysis,
   editMode,
+  locale,
   onBack,
   onCreate,
+  onDiscardDocumentAnalysis,
   onEdit,
   readyForProfile,
   saving
 }: {
   copy: OnboardingCopy;
   draft: OnboardingDraft;
+  documentAnalysis: OnboardingDocumentAnalysisRecord | null;
   editMode: boolean;
+  locale: Locale;
   onBack: () => void;
   onCreate: () => void;
+  onDiscardDocumentAnalysis: () => void;
   onEdit: (step: OnboardingStepId) => void;
   readyForProfile: boolean;
   saving: boolean;
@@ -1945,6 +2481,43 @@ function ReviewScreen({
           <h1 className="mt-5 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.review.title}</h1>
           <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.review.body}</p>
         </div>
+
+        {documentAnalysis?.status === "READY" && documentAnalysis.result ? (
+          <div className="mt-6 rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/55 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <strong className="text-[15px] text-[var(--sunlit-aqua-dark)]">
+                {locale === "ar" ? "معلومات مستخرجة من ملفاتك" : "Information found in your files"}
+              </strong>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/80 px-3 py-1 text-[12px] font-bold text-[var(--sunlit-muted)]">
+                  {documentAnalysis.files.length} {locale === "ar" ? "ملف" : documentAnalysis.files.length === 1 ? "file" : "files"}
+                </span>
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-bold text-[var(--sunlit-danger)] transition hover:bg-white/80 disabled:opacity-50"
+                  disabled={saving}
+                  onClick={onDiscardDocumentAnalysis}
+                  type="button"
+                >
+                  <Trash2 size={14} /> {copy.businessDocuments.replace}
+                </button>
+              </div>
+            </div>
+            {documentAnalysis.result.issues.length ? (
+              <ul className="mt-3 space-y-1.5 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">
+                {documentAnalysis.result.issues.slice(0, 4).map((issue, index) => (
+                  <li className="flex gap-2" key={`${issue.code}-${index}`}>
+                    <Info className="mt-1 shrink-0 text-[var(--sunlit-warning)]" size={15} />
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">
+                {locale === "ar" ? "راجع الأقسام أدناه وعدّل أي معلومة قبل الحفظ." : "Review each section below and edit anything before it is saved."}
+              </p>
+            )}
+          </div>
+        ) : null}
 
         <div className="mt-7 grid gap-3 md:grid-cols-2">
           {copy.review.rows.map(([title, note], index) => {
@@ -2165,6 +2738,51 @@ function LanguageButton({ active, children, onClick }: { active: boolean; childr
 }
 
 type OfferingDocumentMimeType = "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain";
+type OnboardingDocumentMimeType = OfferingDocumentMimeType | "image/jpeg" | "image/png" | "image/webp";
+
+function prepareOnboardingDocuments(files: File[]): { valid: true; files: Array<{ file: File; mimeType: OnboardingDocumentMimeType }> } | { valid: false } {
+  if (files.length < 1 || files.length > 5) return { valid: false };
+
+  let totalBytes = 0;
+  const prepared: Array<{ file: File; mimeType: OnboardingDocumentMimeType }> = [];
+  for (const file of files) {
+    const extension = file.name.toLocaleLowerCase().match(/\.[^.]+$/)?.[0];
+    const mimeType: OnboardingDocumentMimeType | undefined =
+      extension === ".pdf"
+        ? "application/pdf"
+        : extension === ".docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : extension === ".txt"
+            ? "text/plain"
+            : extension === ".png"
+              ? "image/png"
+              : extension === ".jpg" || extension === ".jpeg"
+                ? "image/jpeg"
+                : extension === ".webp"
+                  ? "image/webp"
+                  : undefined;
+    totalBytes += file.size;
+    if (!mimeType || file.name.length > 180 || file.size < 1 || file.size > 8_000_000) return { valid: false };
+    prepared.push({ file, mimeType });
+  }
+
+  return totalBytes <= 20_000_000 ? { valid: true, files: prepared } : { valid: false };
+}
+
+function documentDisplayName(filename: string): string {
+  return filename.replace(/\.[^.]+$/, "");
+}
+
+function documentTypeLabel(filename: string): string {
+  const extension = filename.toLocaleLowerCase().match(/\.([^.]+)$/)?.[1];
+  if (extension === "docx") return "Word";
+  if (extension === "jpeg") return "JPG";
+  return extension?.toUpperCase() ?? "File";
+}
+
+function stagedFileKey(file: File): string {
+  return `${file.name.toLocaleLowerCase()}-${file.size}-${file.lastModified}`;
+}
 
 function prepareOfferingDocuments(files: File[]): { valid: true; files: Array<{ file: File; mimeType: OfferingDocumentMimeType }> } | { valid: false } {
   if (files.length < 1 || files.length > 2) return { valid: false };

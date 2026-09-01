@@ -11,6 +11,7 @@ import {
   type OnboardingModuleInput,
   type UpsertVaultSectionInput
 } from "@markos/validation";
+import type { OfferingSourceType } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "../db/prisma";
 import { saveOfferingCatalog } from "../offerings/offering-catalog-service";
@@ -32,6 +33,7 @@ interface VaultWrite {
 }
 
 interface SaveOnboardingModuleOptions {
+  offeringSource?: { sourceRef?: string; sourceType: OfferingSourceType };
   preserveApprovedProfile?: boolean;
 }
 
@@ -105,7 +107,7 @@ export async function saveOnboardingModule(
   const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
 
   if (module === "products") {
-    await saveOfferingCatalog(workspaceId, payload as z.infer<typeof productsOnboardingSchema>);
+    await saveOfferingCatalog(workspaceId, payload as z.infer<typeof productsOnboardingSchema>, options.offeringSource);
   } else {
     for (const write of toVaultWrites(module, payload)) {
       await upsertVaultSection(workspaceId, write.section, write.input);

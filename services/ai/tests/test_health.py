@@ -131,6 +131,30 @@ def test_offering_document_analysis_requires_configured_provider() -> None:
     assert body["error"]["details"] == [{"retryable": False}]
 
 
+def test_full_onboarding_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/documents/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "brand.png",
+                    "mime_type": "image/png",
+                    "base64_data": base64.b64encode(b"\x89PNG-test").decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
+
+
 def test_content_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(

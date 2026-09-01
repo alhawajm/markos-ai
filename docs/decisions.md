@@ -497,6 +497,8 @@ Offering-document extraction requires a configured provider-backed AI path. Do n
 
 The next experience pass may replace the compact Products/Services uploader with a focused Document Analyst panel that guides upload, analysis, clarification, and owner approval. Keep it limited to Products/Services initially while designing its boundary for later business-wide document assistance. This provider-boundary pass does not implement that conversational UI.
 
+The Products/Services-specific policy in this section remains active for that shortcut. Its limitation against broader business extraction is superseded by the separate full-business path accepted on 2026-09-01 below.
+
 ## 2026-08-31: Onboarding Back protects only the active step's unsaved work
 
 Treat each onboarding step as its own editing boundary in both first-run and profile-edit mode. Back leaves an untouched step immediately. If the active step contains meaningful changes, Back opens a focused choice to **Discard changes** or **Keep editing**; discarding restores only that step's entry state and must not undo previously saved or edited steps.
@@ -510,3 +512,13 @@ Supersede the August 20 edit-mode regeneration rule for the current explicit onb
 This is a narrow bridge until Business Profile receives a dedicated knowledge editor. The canonical module records and Offering Catalog remain the current truth used for retrieval; the previously approved bilingual profile can temporarily remain a summarized snapshot. A future knowledge-editor pass must define how bilingual summaries are refreshed without silently inventing facts or forcing an avoidable provider call.
 
 Only the explicit edit-mode request may ask to preserve an approved profile, and the API must verify that an approved profile actually exists. A first-run or incomplete workspace cannot use this flag to bypass profile generation, owner approval, or onboarding completion.
+
+## 2026-09-01: Full-business document assistance is a first-run path, not an approval bypass
+
+Supersede the August 30 deferral and the broader-business limitation in the August 31 offering-document decision. Keep the minimal greeting, but present two equally prominent first-run choices: **Use business documents** and **Enter details myself**. The manual path remains the seven-module correction and fallback surface. The full document path fills as much of those same modules as supported evidence allows, then converges on the same information check and editable bilingual Business Profile. It does not make onboarding optional, introduce a second business-knowledge model, or bypass owner approval.
+
+Accept one to five PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP files, limited to 8 MB each and 20 MB combined. Stage the browser selection visibly and send nothing until the owner chooses **Analyze files**. Pass supported files to the provider's native multimodal file and image inputs rather than building a separate backend OCR pipeline. Treat every uploaded file as untrusted evidence: file contents may describe the business but may never supply application instructions. Unknown facts stay empty, visual color inference is explicitly labeled for confirmation, and the owner may add no more than seven business colors through an explicit add action.
+
+Allow only one active full-onboarding analysis per workspace. Store its source files behind the workspace-scoped storage boundary for at most 24 hours, never expose them as permanent media, and remove them on approval, discard, expiry, or workspace erasure. Persist filenames, checksums, sizes, status, structured extraction, evidence, issues, model/token metadata, and the owner-approved result, but do not retain file bytes or raw extracted text in AI interaction metadata. Keep the Products/Services-only analyzer as a separate optional shortcut inside that step with its narrower one-or-two-file policy.
+
+The provider result is an editable proposal, not business truth. Approval writes the reviewed Company and Products modules plus any reviewed optional modules, records document provenance for the Offering Catalog, marks the analysis approved, and removes the temporary files. The browser then invokes the existing bilingual profile resolver; onboarding becomes `COMPLETE` only after the owner separately approves that Business Profile. Provider, model, credential, timeout, and malformed-output failures remain sanitized and recoverable. Do not substitute the deterministic local parser when provider-backed document analysis is unavailable.
