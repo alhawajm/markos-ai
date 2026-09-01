@@ -81,6 +81,7 @@
     },
     "dev": {
       "cache": false,
+      "passThroughEnv": ["AI_IMAGE_PROVIDER", "AI_TEXT_PROVIDER"],
       "persistent": true
     },
     "infra#build": {

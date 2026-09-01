@@ -79,23 +79,43 @@ py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-From the repository root, `corepack pnpm dev` also starts the AI service through `scripts/python-runner.mjs` when the local environment is installed.
+From the repository root, MARKOS has two explicit local modes. Both start the AI service through `scripts/python-runner.mjs` when the local environment is installed:
 
-For a controlled local OpenAI smoke test, keep the credential in the ignored `services/ai/.env` file, not the repository-root `.env`. The AI service file needs:
+```powershell
+# Default: deterministic local text and image providers; no OpenAI key required.
+corepack pnpm dev
+# Equivalent explicit name:
+corepack pnpm dev:safe
+
+# OpenAI text generation; image generation remains local.
+corepack pnpm dev:live-ai
+```
+
+The launcher validates the local URLs, database, internal token, email provider, media storage, Instagram modes, provider choice, and model names before starting anything. Run only the preflight when you do not want to start servers:
+
+```powershell
+corepack pnpm local:check:safe
+corepack pnpm local:check:live-ai
+```
+
+Keep the OpenAI credential only in the ignored `services/ai/.env` file. The committed `.env.example` files remain secret-free, and the repository-root `.env` must not contain `OPENAI_API_KEY`. Local live-AI mode currently enables provider-backed text only; email, image generation, media storage, and Instagram publishing/analytics remain local or dry-run.
+
+Use a dedicated local-development OpenAI project and project service-account key. The local AI environment should use:
 
 ```dotenv
-AI_TEXT_PROVIDER=openai
-AI_IMAGE_PROVIDER=openai
-OPENAI_API_KEY=<project-service-account-key>
+AI_TEXT_PROVIDER=local
+AI_IMAGE_PROVIDER=local
+OPENAI_API_KEY=<dedicated-local-project-service-account-key>
 OPENAI_STORE_RESPONSES=true
-LLM_PRIMARY_MODEL=<configured-workhorse-model>
+LLM_PRIMARY_MODEL=gpt-5.6-terra
 LLM_LONGFORM_MODEL=gpt-5.6-sol
 IMAGE_MODEL_PRIMARY=gpt-image-2
+AI_DOCUMENT_TIMEOUT_SECONDS=50
 AI_IMAGE_TIMEOUT_SECONDS=120
 INTERNAL_SERVICE_TOKEN=<same-local-token-as-api>
 ```
 
-The repository-root `.env` should contain the matching `INTERNAL_SERVICE_TOKEN` and `LLM_LONGFORM_MODEL` for the API gateway, but not `OPENAI_API_KEY`. Railway must inject the key only into the AI service.
+The mode launcher overrides `AI_TEXT_PROVIDER` to `openai` only for `dev:live-ai`; keeping the file default at `local` makes accidental direct starts fail safely. The root and AI environment files must agree on the model names and internal token. These local files and values must never be copied to a hosted environment.
 
 ## Current configuration names
 
@@ -108,6 +128,7 @@ Current FastAPI settings consume these names:
 - `AI_IMAGE_PROVIDER` (`local` by default; set to `openai` for provider-backed JPEG generation)
 - `AI_STRATEGY_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
+- `AI_DOCUMENT_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
 - `AI_IMAGE_TIMEOUT_SECONDS`
 - `OPENAI_API_KEY`
@@ -131,7 +152,7 @@ Current FastAPI settings consume these names:
 
 `OPENAI_API_KEY` is required when either provider selector is `openai`. Content generation prefers `LLM_PRIMARY_MODEL`; image generation prefers the gateway-selected `IMAGE_MODEL_PRIMARY` and falls back to the AI service's matching setting when the gateway still supplies a synthetic `local-*` default. Configure both primary model slots deliberately. Never place the key in the API service, web environment, repository, command output, logs, screenshots, or test fixtures.
 
-With `OPENAI_STORE_RESPONSES=true`, the OpenAI project stores the request and response application state so the team can inspect generation quality, latency, and token usage in the API dashboard. This includes the business context deliberately sent to the model, so never send secrets, credentials, raw private identifiers, or production customer data that has not been approved for provider processing. Review and switch this setting to `false` before the dashboard-review phase ends or the privacy/retention policy requires stateless requests. OpenAI Zero Data Retention projects override the value to `false`.
+With `OPENAI_STORE_RESPONSES=true`, the OpenAI project stores the request and response application state so the team can inspect generation quality, latency, and token usage in the API dashboard. This includes the business context deliberately sent to the model, so never send secrets, credentials, or raw private identifiers. Keep storage enabled throughout private development and reassess or disable it as part of the public-launch privacy and retention review. OpenAI Zero Data Retention projects override the value to `false`.
 
 `OPENAI_STORE_RESPONSES` applies to the Responses API text adapters, not the Images API. Image requests still belong to the selected OpenAI project and are visible in its image usage; do not infer prompt-retention behavior from the text setting. The image adapter sends a pseudonymous hash rather than a raw workspace ID and never logs prompts or returned image bytes.
 
