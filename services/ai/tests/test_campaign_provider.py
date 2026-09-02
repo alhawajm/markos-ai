@@ -5,9 +5,11 @@ from typing import Literal
 import pytest
 
 from app.contracts.campaign import (
+    CampaignDay,
     CampaignGenerateRequest,
     CampaignKpi,
     CampaignPillar,
+    CampaignPostSuggestion,
     CampaignPromptTemplate,
     CampaignWeek,
     GeneratedCampaignContent,
@@ -82,8 +84,43 @@ def generated_content() -> GeneratedCampaignContent:
             CampaignWeek(
                 week=1,
                 focus="Clarify the offer",
-                actions=["publish an introduction carousel"],
-            )
+                days=[
+                    CampaignDay(
+                        day=day,
+                        posts=[
+                            CampaignPostSuggestion(
+                                contentType="CAROUSEL" if post == 0 else "REEL",
+                                title=f"Day {day} idea {post + 1}",
+                                description="Explain one grounded offer detail.",
+                                goal="Increase qualified awareness",
+                                contentPillar="Proof and trust",
+                            )
+                            for post in range(2)
+                        ],
+                    )
+                    for day in range(1, 8)
+                ],
+            ),
+            CampaignWeek(
+                week=2,
+                focus="Build trust",
+                days=[
+                    CampaignDay(
+                        day=day,
+                        posts=[
+                            CampaignPostSuggestion(
+                                contentType="STORY" if post == 0 else "POST",
+                                title=f"Day {day} idea {post + 1}",
+                                description="Use a specific proof or audience question.",
+                                goal="Build trust",
+                                contentPillar="Proof and trust",
+                            )
+                            for post in range(2)
+                        ],
+                    )
+                    for day in range(8, 15)
+                ],
+            ),
         ],
         kpis=[CampaignKpi(name="qualified inquiries", target="increase")],
         risks=["Generic content"],
@@ -95,7 +132,7 @@ def campaign_request(*, locale: Literal["ar", "en"] = "en") -> CampaignGenerateR
     return CampaignGenerateRequest(
         workspace_id="workspace-secret-id",
         objective="Increase wholesale leads",
-        duration_days=90,
+        duration_days=14,
         publishes_per_day=2,
         starts_at=datetime(2026, 9, 1, tzinfo=UTC),
         locale=locale,
@@ -145,7 +182,7 @@ def test_openai_provider_stores_structured_request_and_reports_real_usage() -> N
     assert result.model == "gpt-test-returned-model"
     assert result.tokens_in == 321
     assert result.tokens_out == 654
-    assert result.campaign.duration_days == 90
+    assert result.campaign.duration_days == 14
     assert result.campaign.publishes_per_day == 2
 
 
@@ -182,7 +219,7 @@ def test_local_provider_generates_natural_arabic_without_a_key() -> None:
     provider = LocalCampaignProvider()
     result = asyncio.run(provider.generate_campaign(campaign_request(locale="ar")))
 
-    assert result.prompt_version == "campaign.v1.local"
+    assert result.prompt_version == "campaign.v2.local"
     assert "حملة" in result.campaign.summary
     assert result.campaign.pillars[0].name == "الثقة والدليل"
     assert result.tokens_in > 0
@@ -194,7 +231,7 @@ def test_campaign_request_rejects_unknown_fields() -> None:
         CampaignGenerateRequest.model_validate(
             {
                 "workspace_id": "workspace-1",
-                "duration_days": 90,
+                "duration_days": 14,
                 "starts_at": "2026-09-01T00:00:00Z",
                 "locale": "en",
                 "context": [],

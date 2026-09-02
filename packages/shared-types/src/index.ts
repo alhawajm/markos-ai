@@ -488,6 +488,8 @@ export interface ApproveOnboardingDocumentAnalysisResult {
 
 export const campaignDurations = [3, 7, 14, 30, 60, 90] as const;
 export type CampaignDurationDays = (typeof campaignDurations)[number];
+export const campaignGenerationDurations = [3, 7, 14] as const;
+export type CampaignGenerationDurationDays = (typeof campaignGenerationDurations)[number];
 
 export const campaignStatuses = ["REVIEW", "APPROVED", "ACTIVE", "COMPLETED", "ARCHIVED"] as const;
 export type CampaignStatus = (typeof campaignStatuses)[number];
@@ -498,17 +500,32 @@ export interface CampaignPillar {
   contentAngles: string[];
 }
 
+export interface CampaignPostSuggestion {
+  contentType: ContentType;
+  title: string;
+  description: string;
+  goal: string;
+  contentPillar: string;
+}
+
+export interface CampaignDay {
+  day: number;
+  posts: CampaignPostSuggestion[];
+}
+
+export interface CampaignWeek {
+  week: number;
+  focus: string;
+  days: CampaignDay[];
+}
+
 export interface CampaignPlan {
   summary: string;
   durationDays: CampaignDurationDays;
   publishesPerDay: number;
   objectives: string[];
   pillars: CampaignPillar[];
-  weeklyCadence: Array<{
-    week: number;
-    focus: string;
-    actions: string[];
-  }>;
+  weeklyCadence: CampaignWeek[];
   kpis: Array<{
     name: string;
     target: string;

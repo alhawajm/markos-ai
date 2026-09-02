@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Locale = Literal["ar", "en"]
-CampaignDurationDays = Literal[3, 7, 14, 30, 60, 90]
+CampaignDurationDays = Literal[3, 7, 14]
+CampaignContentType = Literal["POST", "CAROUSEL", "STORY", "REEL"]
 ShortText = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -34,10 +35,23 @@ class CampaignPillar(StrictContract):
     )
 
 
+class CampaignPostSuggestion(StrictContract):
+    content_type: CampaignContentType = Field(alias="contentType")
+    title: str = Field(min_length=1, max_length=180)
+    description: str = Field(min_length=1, max_length=500)
+    goal: str = Field(min_length=1, max_length=300)
+    content_pillar: str = Field(alias="contentPillar", min_length=1, max_length=160)
+
+
+class CampaignDay(StrictContract):
+    day: int = Field(ge=1, le=14)
+    posts: list[CampaignPostSuggestion] = Field(min_length=1, max_length=3)
+
+
 class CampaignWeek(StrictContract):
     week: int = Field(ge=1, le=26)
     focus: str = Field(min_length=1, max_length=300)
-    actions: list[ShortText] = Field(min_length=1, max_length=12)
+    days: list[CampaignDay] = Field(min_length=1, max_length=7)
 
 
 class CampaignKpi(StrictContract):
@@ -65,14 +79,33 @@ class GeneratedCampaignContent(StrictContract):
 
 class CampaignPlan(GeneratedCampaignContent):
     duration_days: CampaignDurationDays = Field(alias="durationDays")
-    publishes_per_day: int = Field(alias="publishesPerDay", ge=1, le=5)
+    publishes_per_day: int = Field(alias="publishesPerDay", ge=1, le=3)
+
+    @model_validator(mode="after")
+    def validate_schedule_shape(self) -> "CampaignPlan":
+        expected_weeks = (self.duration_days + 6) // 7
+        if len(self.weekly_cadence) != expected_weeks:
+            raise ValueError("weeklyCadence must contain every campaign week")
+
+        days = [day for week in self.weekly_cadence for day in week.days]
+        if [day.day for day in days] != list(range(1, self.duration_days + 1)):
+            raise ValueError("campaign days must be consecutive and complete")
+
+        if any(len(day.posts) != self.publishes_per_day for day in days):
+            raise ValueError("every campaign day must match publishesPerDay")
+
+        pillar_names = {pillar.name for pillar in self.pillars}
+        if any(post.content_pillar not in pillar_names for day in days for post in day.posts):
+            raise ValueError("every post must reference a generated content pillar")
+
+        return self
 
 
 class CampaignGenerateRequest(StrictContract):
     workspace_id: str = Field(min_length=1, max_length=120)
     objective: str | None = Field(default=None, min_length=3, max_length=500)
-    duration_days: CampaignDurationDays = 30
-    publishes_per_day: int = Field(default=1, ge=1, le=5)
+    duration_days: CampaignDurationDays = 14
+    publishes_per_day: int = Field(default=1, ge=1, le=3)
     starts_at: datetime
     locale: Locale = "en"
     context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)

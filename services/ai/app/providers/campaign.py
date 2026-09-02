@@ -5,11 +5,14 @@ from typing import Protocol, cast
 from openai import AsyncOpenAI
 
 from app.contracts.campaign import (
+    CampaignContentType,
+    CampaignDay,
     CampaignGenerateRequest,
     CampaignGenerateResponse,
     CampaignKpi,
     CampaignPillar,
     CampaignPlan,
+    CampaignPostSuggestion,
     CampaignWeek,
     GeneratedCampaignContent,
 )
@@ -163,7 +166,7 @@ def build_local_campaign(request: CampaignGenerateRequest) -> CampaignPlan:
                     contentAngles=["مناسبات البحرين", "المجتمع", "قصص عربية", "شراكات محلية"],
                 ),
             ],
-            weeklyCadence=arabic_cadence((request.duration_days + 6) // 7),
+            weeklyCadence=arabic_cadence(request.duration_days, request.publishes_per_day),
             kpis=[
                 CampaignKpi(name="استفسارات إنستغرام المؤهلة", target="زيادة خلال الحملة"),
                 CampaignKpi(name="معدل التفاعل", target="اتجاه تصاعدي مستمر"),
@@ -220,7 +223,7 @@ def build_local_campaign(request: CampaignGenerateRequest) -> CampaignPlan:
                 ],
             ),
         ],
-        weeklyCadence=english_cadence((request.duration_days + 6) // 7),
+        weeklyCadence=english_cadence(request.duration_days, request.publishes_per_day),
         kpis=[
             CampaignKpi(name="qualified Instagram inquiries", target="increase during the campaign"),
             CampaignKpi(name="engagement rate", target="maintain an upward trend"),
@@ -249,27 +252,76 @@ def summarize_context(request: CampaignGenerateRequest) -> str:
     return ", ".join(labels[:5]) if labels else "available workspace context"
 
 
-def english_cadence(week_count: int) -> list[CampaignWeek]:
+def english_cadence(duration_days: int, publishes_per_day: int) -> list[CampaignWeek]:
+    week_focuses = ["Clarify the offer", "Build trust and invite action"]
+    formats: list[CampaignContentType] = ["REEL", "CAROUSEL", "STORY", "POST"]
+    pillars = ["Proof and trust", "Offer education", "Local relevance"]
     templates = [
-        ("Message clarity", ["confirm the core offer", "publish an introduction carousel"]),
-        ("Audience learning", ["publish an FAQ reel", "collect recurring objections"]),
-        ("Trust building", ["publish a proof post", "share a process story"]),
-        ("Conversion loop", ["invite qualified inquiries", "review analytics and update the Vault"]),
+        ("Introduce the offer clearly", "Explain the core offer and who it helps.", "Build qualified awareness"),
+        ("Answer one buying question", "Resolve a practical question that may delay a decision.", "Reduce buying friction"),
+        ("Show how the work happens", "Share a credible detail from the process or customer experience.", "Build trust"),
+        ("Connect the offer to Bahrain", "Ground the message in a relevant local need or moment.", "Increase local relevance"),
+        ("Invite a useful response", "Ask a focused question that helps MARKOS learn about the audience.", "Learn from the audience"),
     ]
-    return [
-        CampaignWeek(week=index + 1, focus=templates[index % len(templates)][0], actions=templates[index % len(templates)][1])
-        for index in range(week_count)
-    ]
+    return build_cadence(
+        duration_days=duration_days,
+        publishes_per_day=publishes_per_day,
+        week_focuses=week_focuses,
+        formats=formats,
+        pillars=pillars,
+        templates=templates,
+    )
 
 
-def arabic_cadence(week_count: int) -> list[CampaignWeek]:
+def arabic_cadence(duration_days: int, publishes_per_day: int) -> list[CampaignWeek]:
+    week_focuses = ["توضيح العرض", "بناء الثقة والدعوة للتفاعل"]
+    formats: list[CampaignContentType] = ["REEL", "CAROUSEL", "STORY", "POST"]
+    pillars = ["الثقة والدليل", "تثقيف الجمهور", "الصلة المحلية"]
     templates = [
-        ("وضوح الرسالة", ["تأكيد العرض الأساسي", "نشر كاروسيل تعريفي"]),
-        ("فهم الجمهور", ["نشر ريل للأسئلة الشائعة", "جمع الاعتراضات المتكررة"]),
-        ("بناء الثقة", ["نشر دليل اجتماعي", "مشاركة قصة من خلف الكواليس"]),
-        ("تحسين التحويل", ["دعوة الجمهور للاستفسار", "مراجعة التحليلات وتحديث الخزنة"]),
+        ("عرّف بالعرض بوضوح", "اشرح العرض الأساسي ومن يستفيد منه.", "زيادة الوعي المؤهل"),
+        ("أجب عن سؤال قبل الشراء", "عالج سؤالاً عملياً قد يؤخر قرار العميل.", "تقليل التردد قبل الشراء"),
+        ("اعرض طريقة العمل", "شارك تفصيلاً موثوقاً من العملية أو تجربة العميل.", "بناء الثقة"),
+        ("اربط العرض بالبحرين", "اربط الرسالة بحاجة أو مناسبة محلية ذات صلة.", "تعزيز الصلة المحلية"),
+        ("ادعُ إلى تفاعل مفيد", "اطرح سؤالاً محدداً يساعد MARKOS على فهم الجمهور.", "التعلم من الجمهور"),
     ]
-    return [
-        CampaignWeek(week=index + 1, focus=templates[index % len(templates)][0], actions=templates[index % len(templates)][1])
-        for index in range(week_count)
-    ]
+    return build_cadence(
+        duration_days=duration_days,
+        publishes_per_day=publishes_per_day,
+        week_focuses=week_focuses,
+        formats=formats,
+        pillars=pillars,
+        templates=templates,
+    )
+
+
+def build_cadence(
+    *,
+    duration_days: int,
+    publishes_per_day: int,
+    week_focuses: list[str],
+    formats: list[CampaignContentType],
+    pillars: list[str],
+    templates: list[tuple[str, str, str]],
+) -> list[CampaignWeek]:
+    weeks: list[CampaignWeek] = []
+
+    for week_index, first_day in enumerate(range(1, duration_days + 1, 7)):
+        days: list[CampaignDay] = []
+        for day_number in range(first_day, min(first_day + 7, duration_days + 1)):
+            posts: list[CampaignPostSuggestion] = []
+            for post_index in range(publishes_per_day):
+                sequence = (day_number - 1) * publishes_per_day + post_index
+                title, description, goal = templates[sequence % len(templates)]
+                posts.append(
+                    CampaignPostSuggestion(
+                        contentType=formats[sequence % len(formats)],
+                        title=title,
+                        description=description,
+                        goal=goal,
+                        contentPillar=pillars[sequence % len(pillars)],
+                    )
+                )
+            days.append(CampaignDay(day=day_number, posts=posts))
+        weeks.append(CampaignWeek(week=week_index + 1, focus=week_focuses[week_index % len(week_focuses)], days=days))
+
+    return weeks

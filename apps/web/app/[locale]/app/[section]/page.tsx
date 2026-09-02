@@ -4,10 +4,6 @@ import { AppShell, type SectionSlug } from "../../_components/app-shell";
 const sections = ["briefing", "campaigns", "opportunities", "campaign-builder", "content-studio", "calendar", "analytics", "knowledge"] as const;
 type RouteSection = (typeof sections)[number];
 
-export function generateStaticParams() {
-  return ["ar", "en"].flatMap((locale) => sections.map((section) => ({ locale, section })));
-}
-
 export default async function AppSectionPage({ params }: { params: Promise<{ locale: string; section: string }> }) {
   const resolvedParams = await params;
   const locale: Locale = resolvedParams.locale === "en" ? "en" : "ar";

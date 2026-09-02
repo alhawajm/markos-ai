@@ -14,7 +14,7 @@ vi.mock("../src/ai/embeddings-client", () => ({
 vi.mock("../src/ai/campaign-client", () => ({
   generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; publishesPerDay: number; workspaceId: string }) => ({
     model: "test-campaign-model",
-    prompt_version: "campaign.v1.test",
+    prompt_version: "campaign.v2.test",
     tokens_in: 101,
     tokens_out: 202,
     campaign: {
@@ -29,13 +29,23 @@ vi.mock("../src/ai/campaign-client", () => ({
           contentAngles: ["customer outcomes", "process"]
         }
       ],
-      weeklyCadence: [
-        {
-          week: 1,
-          focus: "Message clarity",
-          actions: ["publish intro carousel"]
-        }
-      ],
+      weeklyCadence: Array.from({ length: Math.ceil(input.durationDays / 7) }, (_, weekIndex) => ({
+        week: weekIndex + 1,
+        focus: weekIndex === 0 ? "Message clarity" : "Trust and action",
+        days: Array.from({ length: Math.min(7, input.durationDays - weekIndex * 7) }, (_, dayIndex) => {
+          const day = weekIndex * 7 + dayIndex + 1;
+          return {
+            day,
+            posts: Array.from({ length: input.publishesPerDay }, (_, postIndex) => ({
+              contentType: postIndex % 2 === 0 ? "CAROUSEL" : "REEL",
+              title: `Campaign day ${day} idea ${postIndex + 1}`,
+              description: "Explain the offer with a specific, grounded angle.",
+              goal: "Increase qualified awareness",
+              contentPillar: "Proof and trust"
+            }))
+          };
+        })
+      })),
       kpis: [
         {
           name: "qualified inquiries",
@@ -49,6 +59,25 @@ vi.mock("../src/ai/campaign-client", () => ({
 }));
 
 describe("campaign routes", () => {
+  it("keeps future campaign durations out of the generation contract", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns/generate",
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {
+        durationDays: 30,
+        startsAt: "2026-09-01T00:00:00.000Z"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+
+    await app.close();
+  });
+
   it("requires Business Profile context before generating a campaign", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -57,7 +86,7 @@ describe("campaign routes", () => {
       url: "/v1/campaigns/generate",
       headers: authHeaders(session.tokens.accessToken),
       payload: {
-        durationDays: 90,
+        durationDays: 14,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
@@ -102,7 +131,7 @@ describe("campaign routes", () => {
       headers,
       payload: {
         objective: "increase wholesale cafe leads",
-        durationDays: 90,
+        durationDays: 14,
         publishesPerDay: 2,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
@@ -112,12 +141,12 @@ describe("campaign routes", () => {
     expect(response.json()).toMatchObject({
       data: {
         workspaceId: session.workspace.id,
-        title: "90-day campaign: increase wholesale cafe leads",
-        durationDays: 90,
+        title: "14-day campaign: increase wholesale cafe leads",
+        durationDays: 14,
         publishesPerDay: 2,
         status: "REVIEW",
         content: {
-          summary: "90-day campaign for increase wholesale cafe leads",
+          summary: "14-day campaign for increase wholesale cafe leads",
           retrievedContext: [
             expect.objectContaining({
               section: "COMPANY",
@@ -141,7 +170,7 @@ describe("campaign routes", () => {
     });
 
     expect(interaction).toMatchObject({
-      promptVersion: "campaign.v1.test",
+      promptVersion: "campaign.v2.test",
       tokensIn: 101,
       tokensOut: 202,
       costMinor: 0,
@@ -204,7 +233,7 @@ describe("campaign routes", () => {
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0]).toMatchObject({
-      title: "90-day campaign: increase wholesale cafe leads"
+      title: "14-day campaign: increase wholesale cafe leads"
     });
 
     await app.close();
@@ -233,7 +262,20 @@ describe("campaign routes", () => {
             {
               week: 1,
               focus: "Explain the offer",
-              actions: ["Publish launch carousel", "Share founder Reel"]
+              days: [
+                {
+                  day: 1,
+                  posts: [
+                    {
+                      contentType: "CAROUSEL",
+                      title: "Publish launch carousel",
+                      description: "Introduce the subscription paths and their value.",
+                      goal: "Explain the offer",
+                      contentPillar: "Offer education"
+                    }
+                  ]
+                }
+              ]
             }
           ],
           kpis: [],
@@ -286,9 +328,10 @@ describe("campaign routes", () => {
       workspaceId: owner.workspace.id,
       status: "DRAFT",
       contentType: "CAROUSEL",
-      brief: "Publish launch carousel",
+      brief: "Publish launch carousel\nIntroduce the subscription paths and their value.",
       campaignId: campaign.id,
       campaignGoal: "Explain the offer",
+      contentPillar: "Offer education",
       campaignWeek: 1,
       campaignActionIndex: 0
     });
@@ -337,7 +380,7 @@ describe("campaign routes", () => {
       headers,
       payload: {
         objective: "increase wholesale cafe leads",
-        durationDays: 90,
+        durationDays: 14,
         publishesPerDay: 2,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
@@ -351,10 +394,10 @@ describe("campaign routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("application/pdf");
-    expect(response.headers["content-disposition"]).toBe('attachment; filename="90-day-campaign-increase-wholesale-cafe-leads.pdf"');
+    expect(response.headers["content-disposition"]).toBe('attachment; filename="14-day-campaign-increase-wholesale-cafe-leads.pdf"');
     expect(response.body.startsWith("%PDF-1.4")).toBe(true);
     expect(response.body).toContain("MARKOS AI Campaign Export");
-    expect(response.body).toContain("90-day campaign: increase wholesale cafe leads");
+    expect(response.body).toContain("14-day campaign: increase wholesale cafe leads");
     expect(response.body.trimEnd().endsWith("%%EOF")).toBe(true);
 
     await app.close();
@@ -442,7 +485,7 @@ describe("campaign routes", () => {
       url: "/v1/campaigns/generate",
       headers,
       payload: {
-        durationDays: 90,
+        durationDays: 14,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
@@ -509,7 +552,7 @@ describe("campaign routes", () => {
       url: "/v1/campaigns/generate",
       headers,
       payload: {
-        durationDays: 90,
+        durationDays: 14,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
     });

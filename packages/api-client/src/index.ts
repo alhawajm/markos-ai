@@ -23,7 +23,7 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
-  CampaignDurationDays,
+  CampaignGenerationDurationDays,
   CampaignRecord,
   CalendarReadResult,
   ContentRecord,
@@ -367,7 +367,7 @@ export class MarkosApiClient {
 
   async generateCampaign(input: {
     objective?: string;
-    durationDays?: CampaignDurationDays;
+    durationDays?: CampaignGenerationDurationDays;
     publishesPerDay?: number;
     startsAt: string;
     locale?: Locale;

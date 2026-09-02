@@ -2,7 +2,7 @@ import json
 
 from app.contracts.campaign import CampaignGenerateRequest
 
-CAMPAIGN_PROMPT_VERSION = "campaign.v1"
+CAMPAIGN_PROMPT_VERSION = "campaign.v2"
 
 
 def build_campaign_instructions(request: CampaignGenerateRequest) -> str:
@@ -27,8 +27,14 @@ def build_campaign_instructions(request: CampaignGenerateRequest) -> str:
         f"Write every user-visible field in {language}. Keep brand names as provided.\n"
         "Use the business context as durable strategic guidance. Focus the campaign on measurable "
         "business outcomes, Bahrain relevance, content pillars, weekly execution, risks, and next actions.\n"
-        "Return exactly the requested duration and publishing intensity. Include one weekly cadence "
-        "entry for each seven-day campaign window, with a shorter final window when needed.\n"
+        "Create exactly one numbered campaign day for every requested day, in ascending order. Group days "
+        "into seven-day weeks, with a shorter final week when needed. Every day must contain exactly the "
+        "requested number of posts.\n"
+        "For every post, choose one of POST, CAROUSEL, REEL, or STORY; provide a specific title, a short "
+        "execution description, its own marketing goal, and the exact name of one generated content pillar. "
+        "Vary formats and purposes without making the plan repetitive. Return ideas only: do not write "
+        "captions, hashtags, scripts, or media instructions.\n"
+        "Return exactly the requested duration and publishing intensity. Do not omit or add days or posts.\n"
         "Return exactly the required structured output. Do not add prose outside that output."
         f"{customization}"
     )

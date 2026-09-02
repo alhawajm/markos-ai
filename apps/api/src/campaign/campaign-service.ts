@@ -1,4 +1,4 @@
-import { Prisma, type CampaignStatus, type ContentType } from "@prisma/client";
+import { Prisma, type CampaignStatus } from "@prisma/client";
 import type { CampaignPlan, CampaignRecord, ContentRecord } from "@markos/shared-types";
 import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
@@ -66,9 +66,10 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
   const campaign = await findWorkspaceCampaign(workspaceId, campaignId);
   const plan = campaign.content as unknown as CampaignPlan;
   const week = plan.weeklyCadence.find((candidate) => candidate.week === input.week);
-  const brief = week?.actions[input.actionIndex]?.trim();
+  const suggestion = week?.days.flatMap((day) => day.posts)[input.actionIndex];
+  const brief = suggestion === undefined ? undefined : `${suggestion.title.trim()}\n${suggestion.description.trim()}`;
 
-  if (!week || !brief) {
+  if (!week || !suggestion || !brief) {
     throw new CampaignSuggestionNotFoundError();
   }
 
@@ -91,8 +92,9 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
       where: { id: existing.id },
       data: {
         brief,
-        campaignGoal: week.focus,
-        contentType: contentTypeForSuggestion(brief),
+        campaignGoal: suggestion.goal,
+        contentPillar: suggestion.contentPillar,
+        contentType: suggestion.contentType,
         status: "DRAFT",
         plannedAt: null,
         scheduledAt: null,
@@ -108,13 +110,14 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
     const created = await prisma.contentItem.create({
       data: {
         workspaceId,
-        contentType: contentTypeForSuggestion(brief),
+        contentType: suggestion.contentType,
         status: "DRAFT",
         brief,
         hashtags: [],
         mediaIds: [],
         campaignId,
-        campaignGoal: week.focus,
+        campaignGoal: suggestion.goal,
+        contentPillar: suggestion.contentPillar,
         campaignWeek: input.week,
         campaignActionIndex: input.actionIndex
       }
@@ -163,15 +166,6 @@ async function findWorkspaceCampaign(workspaceId: string, campaignId: string) {
   }
 
   return row;
-}
-
-function contentTypeForSuggestion(brief: string): ContentType {
-  const normalized = brief.toLocaleLowerCase();
-
-  if (/\b(reel|reels)\b|ريل/.test(normalized)) return "REEL";
-  if (/\b(story|stories)\b|ستوري|قصص|قصة/.test(normalized)) return "STORY";
-  if (/\bcarousel\b|كاروسيل|شرائح/.test(normalized)) return "CAROUSEL";
-  return "POST";
 }
 
 export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput): Promise<CampaignRecord> {
@@ -357,7 +351,10 @@ function buildCampaignPdf(campaign: CampaignRecord): Buffer {
     ...content.pillars.flatMap((pillar) => [`- ${pillar.name}: ${pillar.rationale}`, ...pillar.contentAngles.map((angle) => `  * ${angle}`)]),
     "",
     "Weekly Cadence",
-    ...content.weeklyCadence.flatMap((week) => [`- Week ${week.week}: ${week.focus}`, ...week.actions.map((action) => `  * ${action}`)]),
+    ...content.weeklyCadence.flatMap((week) => [
+      `- Week ${week.week}: ${week.focus}`,
+      ...week.days.flatMap((day) => [`  Day ${day.day}`, ...day.posts.map((post) => `    * [${post.contentType}] ${post.title}: ${post.description}`)])
+    ]),
     "",
     "KPIs",
     ...content.kpis.map((kpi) => `- ${kpi.name}: ${kpi.target}`),
