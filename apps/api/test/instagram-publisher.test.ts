@@ -290,8 +290,12 @@ function workspace(): Workspace {
 function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" }): ContentItem {
   return {
     aiPromptUsed: null,
+    brief: null,
     callToAction: null,
+    campaignActionIndex: null,
+    campaignGoal: null,
     campaignId: null,
+    campaignWeek: null,
     captionAr: null,
     captionEn: "English caption",
     carousel: null,

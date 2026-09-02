@@ -379,6 +379,19 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async campaignDrafts(campaignId: string): Promise<ContentRecord[]> {
+    const response = await this.request<ContentRecord[]>(`/v1/campaigns/${campaignId}/drafts`);
+    return response.data;
+  }
+
+  async approveCampaignSuggestion(campaignId: string, input: { week: number; actionIndex: number }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/campaigns/${campaignId}/suggestions/approve`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async exportCampaignPdf(campaignId: string): Promise<ArrayBuffer> {
     return this.requestBinary(`/v1/campaigns/${campaignId}/pdf`, {
       accept: "application/pdf"

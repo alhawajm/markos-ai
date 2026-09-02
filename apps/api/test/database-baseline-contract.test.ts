@@ -17,6 +17,14 @@ const onboardingDocumentAnalysisMigration = readFileSync(
   "utf8"
 );
 const campaignDomainMigration = readFileSync(new URL("../prisma/migrations/20260901160000_reset_campaign_domain/migration.sql", import.meta.url), "utf8");
+const campaignSuggestionDraftMigration = readFileSync(
+  new URL("../prisma/migrations/20260901170000_add_campaign_suggestion_drafts/migration.sql", import.meta.url),
+  "utf8"
+);
+const campaignPlanLimitMigration = readFileSync(
+  new URL("../prisma/migrations/20260901180000_backfill_campaign_plan_limits/migration.sql", import.meta.url),
+  "utf8"
+);
 const seed = readFileSync(new URL("../prisma/seed.ts", import.meta.url), "utf8");
 
 describe("clean database baseline contract", () => {
@@ -36,7 +44,9 @@ describe("clean database baseline contract", () => {
       "20260831000000_add_offering_catalog",
       "20260831010000_add_offering_document_analysis",
       "20260901000000_add_onboarding_document_analysis",
-      "20260901160000_reset_campaign_domain"
+      "20260901160000_reset_campaign_domain",
+      "20260901170000_add_campaign_suggestion_drafts",
+      "20260901180000_backfill_campaign_plan_limits"
     ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);
@@ -54,6 +64,11 @@ describe("clean database baseline contract", () => {
     expect(campaignDomainMigration).toContain('CREATE TABLE "campaigns"');
     expect(campaignDomainMigration).toContain('"publishesPerDay" INTEGER NOT NULL');
     expect(campaignDomainMigration).toContain('ADD CONSTRAINT "content_items_campaignId_fkey"');
+    expect(campaignSuggestionDraftMigration).toContain('ADD COLUMN "brief" TEXT');
+    expect(campaignSuggestionDraftMigration).toContain('CREATE UNIQUE INDEX "content_items_campaign_suggestion_key"');
+    expect(campaignPlanLimitMigration).toContain("\"limits\" - 'strategies'");
+    expect(campaignPlanLimitMigration).toContain("'{campaigns}'");
+    expect(campaignPlanLimitMigration).toContain("COALESCE(\"limits\" -> 'campaigns', \"limits\" -> 'strategies')");
   });
 
   it("seeds only the runtime plan catalog through idempotent upserts", () => {

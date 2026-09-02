@@ -503,30 +503,35 @@ model Campaign {
 }
 
 model ContentItem {
-  id              String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId     String        @db.Uuid
-  contentType     ContentType
-  status          ContentStatus @default(DRAFT)
-  captionEn       String?
-  captionAr       String?
-  hashtags        String[]
-  callToAction    String?
-  mediaIds        String[]      @db.Uuid
-  carousel        Json?
-  reelScript      Json?
-  contentPillar   String?
-  campaignId      String?       @db.Uuid
-  campaign        Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  aiPromptUsed    String?
-  plannedAt       DateTime?
-  scheduledAt     DateTime?
-  publishedAt     DateTime?
-  instagramPostId String?
-  failureReason   String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+  id                  String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId         String        @db.Uuid
+  contentType         ContentType
+  status              ContentStatus @default(DRAFT)
+  brief               String?
+  captionEn           String?
+  captionAr           String?
+  hashtags            String[]
+  callToAction        String?
+  mediaIds            String[]      @db.Uuid
+  carousel            Json?
+  reelScript          Json?
+  contentPillar       String?
+  campaignId          String?       @db.Uuid
+  campaign            Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignGoal        String?
+  campaignWeek        Int?
+  campaignActionIndex Int?
+  aiPromptUsed        String?
+  plannedAt           DateTime?
+  scheduledAt         DateTime?
+  publishedAt         DateTime?
+  instagramPostId     String?
+  failureReason       String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
 
+  @@unique([campaignId, campaignWeek, campaignActionIndex], map: "content_items_campaign_suggestion_key")
   @@index([workspaceId, status])
   @@index([workspaceId, campaignId])
   @@index([workspaceId, plannedAt])

@@ -1314,6 +1314,7 @@ function CalendarDetails({
         <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[var(--sunlit-muted)]">
           <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{contentTypeLabel(record, locale)}</span>
           {record.contentPillar ? <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{record.contentPillar}</span> : null}
+          {record.campaignId ? <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5">{campaignOriginLabel(record, locale)}</span> : null}
           <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">
             {record.mediaIds.length} {locale === "ar" ? "وسائط" : "media"}
           </span>
@@ -1548,6 +1549,9 @@ function UnscheduledCollection({
                       <span className="mt-1 block text-xs font-bold text-[var(--sunlit-muted)]">
                         {contentTypeLabel(record, locale)} · {copy.updated} {formatCalendarDateTime(record.updatedAt, locale)}
                       </span>
+                      {record.campaignId ? (
+                        <span className="mt-1 block text-[11px] font-extrabold text-[var(--sunlit-aqua-dark)]">{campaignOriginLabel(record, locale)}</span>
+                      ) : null}
                     </span>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${statusBadgeClass(record.status)}`}>
                       {statusLabel(record.status, locale)}
@@ -2032,10 +2036,15 @@ function isScheduledInWeek(record: ContentRecord, dateKey: string): boolean {
 
 function contentTitle(record: ContentRecord, locale: Locale): string {
   const caption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
-  const title = (caption ?? record.contentPillar ?? "").split(/[.!?؟\n]/)[0]?.trim();
+  const title = (record.brief ?? caption ?? record.contentPillar ?? "").split(/[.!?؟\n]/)[0]?.trim();
   if (!title) return contentTypeLabel(record, locale);
   const words = title.split(/\s+/).filter(Boolean);
   return words.length > 3 ? `${words.slice(0, 3).join(" ")}...` : title;
+}
+
+function campaignOriginLabel(record: ContentRecord, locale: Locale): string {
+  if (record.campaignWeek === undefined) return locale === "ar" ? "حملة" : "Campaign";
+  return locale === "ar" ? `حملة · الأسبوع ${record.campaignWeek}` : `Campaign · Week ${record.campaignWeek}`;
 }
 
 function contentTypeLabel(record: ContentRecord, locale: Locale): string {

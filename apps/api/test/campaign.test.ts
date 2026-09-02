@@ -210,6 +210,104 @@ describe("campaign routes", () => {
     await app.close();
   });
 
+  it("approves an exact Campaign suggestion once and registers its draft in Create and Calendar", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    const campaign = await prisma.campaign.create({
+      data: {
+        workspaceId: owner.workspace.id,
+        title: "SnackLab launch",
+        startsAt: new Date("2026-09-01T00:00:00.000Z"),
+        endsAt: new Date("2026-09-14T00:00:00.000Z"),
+        durationDays: 14,
+        publishesPerDay: 1,
+        content: {
+          summary: "Launch SnackLab",
+          durationDays: 14,
+          publishesPerDay: 1,
+          objectives: ["Increase qualified subscriptions"],
+          pillars: [],
+          weeklyCadence: [
+            {
+              week: 1,
+              focus: "Explain the offer",
+              actions: ["Publish launch carousel", "Share founder Reel"]
+            }
+          ],
+          kpis: [],
+          risks: [],
+          nextActions: [],
+          retrievedContext: []
+        }
+      }
+    });
+    const approvalPayload = { week: 1, actionIndex: 0 };
+
+    const firstApproval = await app.inject({
+      method: "POST",
+      url: `/v1/campaigns/${campaign.id}/suggestions/approve`,
+      headers,
+      payload: approvalPayload
+    });
+    const repeatedApproval = await app.inject({
+      method: "POST",
+      url: `/v1/campaigns/${campaign.id}/suggestions/approve`,
+      headers,
+      payload: approvalPayload
+    });
+    const campaignDrafts = await app.inject({
+      method: "GET",
+      url: `/v1/campaigns/${campaign.id}/drafts`,
+      headers
+    });
+    const createRecords = await app.inject({ method: "GET", url: "/v1/content", headers });
+    const calendar = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?from=2026-09-01&to=2026-09-30",
+      headers
+    });
+    const foreignApproval = await app.inject({
+      method: "POST",
+      url: `/v1/campaigns/${campaign.id}/suggestions/approve`,
+      headers: authHeaders(other.tokens.accessToken),
+      payload: approvalPayload
+    });
+    const foreignDrafts = await app.inject({
+      method: "GET",
+      url: `/v1/campaigns/${campaign.id}/drafts`,
+      headers: authHeaders(other.tokens.accessToken)
+    });
+    const draft = firstApproval.json().data;
+
+    expect(firstApproval.statusCode).toBe(200);
+    expect(draft).toMatchObject({
+      workspaceId: owner.workspace.id,
+      status: "DRAFT",
+      contentType: "CAROUSEL",
+      brief: "Publish launch carousel",
+      campaignId: campaign.id,
+      campaignGoal: "Explain the offer",
+      campaignWeek: 1,
+      campaignActionIndex: 0
+    });
+    expect(repeatedApproval.statusCode).toBe(200);
+    expect(repeatedApproval.json().data.id).toBe(draft.id);
+    expect(campaignDrafts.json().data).toHaveLength(1);
+    expect(createRecords.json().data).toEqual(expect.arrayContaining([expect.objectContaining({ id: draft.id })]));
+    expect(calendar.json().data.unscheduled.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: draft.id })]));
+    await expect(
+      prisma.contentItem.count({
+        where: { campaignId: campaign.id, campaignWeek: 1, campaignActionIndex: 0 }
+      })
+    ).resolves.toBe(1);
+    expect(foreignApproval.statusCode).toBe(404);
+    expect(foreignDrafts.statusCode).toBe(404);
+
+    await app.close();
+  });
+
   it("exports a saved campaign as a workspace-scoped PDF", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

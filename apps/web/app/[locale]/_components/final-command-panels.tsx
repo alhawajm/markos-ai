@@ -191,10 +191,15 @@ function localizedContentTypeLabel(type: ContentType, locale: Locale): string {
 
 function contentPipelineTitle(record: ContentRecord, locale: Locale): string {
   const preferredCaption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
-  const firstSentence = (preferredCaption ?? record.contentPillar ?? "").split(/[.!?\n]/)[0]?.trim();
+  const firstSentence = (record.brief ?? preferredCaption ?? record.contentPillar ?? "").split(/[.!?\n]/)[0]?.trim();
 
   if (!firstSentence) return localizedContentTypeLabel(record.contentType, locale);
   return firstSentence.length > 58 ? `${firstSentence.slice(0, 55)}...` : firstSentence;
+}
+
+function campaignOriginLabel(record: ContentRecord, locale: Locale): string {
+  if (record.campaignWeek === undefined) return locale === "ar" ? "مسودة حملة" : "Campaign draft";
+  return locale === "ar" ? `مسودة حملة · الأسبوع ${record.campaignWeek}` : `Campaign draft · Week ${record.campaignWeek}`;
 }
 
 function contentCardFromRecord(record: ContentRecord, locale: Locale, index: number): ContentReadyCardModel {
@@ -1939,7 +1944,9 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           {editorOpen ? (
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="sunlit-eyebrow">{locale === "ar" ? "محرر المسودة" : "Draft editor"}</p>
+                <p className="sunlit-eyebrow">
+                  {currentRecord?.campaignId ? campaignOriginLabel(currentRecord, locale) : locale === "ar" ? "محرر المسودة" : "Draft editor"}
+                </p>
                 <h1 className="mt-1 truncate font-display text-xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
                   {currentRecord ? contentPipelineTitle(currentRecord, locale) : locale === "ar" ? "مسودة منشور جديدة" : "New post draft"}
                 </h1>
@@ -2174,6 +2181,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                               <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
                               <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
                                 <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
+                                {record.campaignId ? <span>{campaignOriginLabel(record, locale)}</span> : null}
                                 <span className="inline-flex items-center gap-1.5">
                                   {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
                                   {contentPipelineTimestamp(record, locale)}

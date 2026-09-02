@@ -102,7 +102,7 @@ These are current priorities, not claims that each item is already in progress:
 
 1. Keep the accepted Onboarding checkpoint closed except for focused defects. Before launch, deploy and live-verify the full-business document path on Railway with one successful mixed-file extraction and one honest failure/recovery state; retain the narrower Products/Services analyzer as a separate shortcut.
 2. Implement the reviewed Create prototype as one honest standard Post/JPEG vertical slice; keep Carousel, Reel, Story, Media Library, and production font/palette adoption explicitly outside that slice until separately supported.
-3. Add week-layered Campaign review, per-post approval, and the handoff into Create and Calendar without collecting inputs the current AI cannot consume.
+3. Build on the implemented week-layered Campaign review and idempotent per-suggestion handoff into Create and Calendar; next define the remaining Campaign lifecycle and higher-volume planning controls without blocking orphaned content.
 4. Preserve the accepted Calendar and Onboarding checkpoints while completing focused browser QA and deployed-journey proof; do not reopen deferred drag-and-drop or broad onboarding optionality incidentally.
 5. Validate, deploy, and production-verify account-verification email delivery and browser-session renewal.
 6. Continue security, sanitized logging, API-process hardening, and the restoration of final-system Sunlit operational surfaces.

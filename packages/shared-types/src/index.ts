@@ -557,6 +557,7 @@ export interface ContentRecord {
   workspaceId: string;
   contentType: ContentType;
   status: ContentStatus;
+  brief?: string;
   captionEn?: string;
   captionAr?: string;
   hashtags: string[];
@@ -566,6 +567,9 @@ export interface ContentRecord {
   reelScript?: Record<string, unknown>;
   contentPillar?: string;
   campaignId?: string;
+  campaignGoal?: string;
+  campaignWeek?: number;
+  campaignActionIndex?: number;
   aiPromptUsed?: string;
   plannedAt?: string;
   scheduledAt?: string;

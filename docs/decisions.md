@@ -532,3 +532,11 @@ Use one canonical workspace-scoped `Campaign` model. It records a title, optiona
 The current duration contract is exactly 3, 7, 14, 30, 60, or 90 days. Publishing intensity is one to five publishes per day. The owner chooses the duration, start date, objective, and intensity explicitly. Onboarding routes an approved Business Profile to `/{locale}/app/campaigns`; generation uses `POST /v1/campaigns/generate`, listing uses `GET /v1/campaigns`, and PDF export uses `GET /v1/campaigns/:campaignId/pdf`.
 
 This first pass corrects the domain language and contracts. The next Campaign passes must add multi-Campaign management, a compact high-level overview, no more than one week of detailed review at a time, and per-post approval that registers a minimal Campaign-linked draft in both Create and Calendar. Those later controls must not block valid orphaned content.
+
+## 2026-09-01: An approved Campaign suggestion becomes one minimal unscheduled draft
+
+Treat each generated weekly action as a stable Campaign suggestion identified by its Campaign, week number, and action index. The owner may approve that exact suggestion from the week review. Approval creates one workspace-owned `ContentItem` in `DRAFT` state with the suggestion as its brief, the week's focus as its Campaign goal, and the Campaign/week/action identity retained for later editing and measurement.
+
+Make this approval idempotent. Repeating the same approval returns the existing draft instead of creating duplicates, including when two requests race. A deleted suggestion draft may be restored as a draft through the same action. Every read and write remains scoped to the active workspace.
+
+Do not invent a publication time, caption, hashtags, media, or approval status at this boundary. The new item appears in Create as a Campaign draft and in Calendar's Unscheduled collection until the owner develops and deliberately plans or schedules it. Existing manual and AI-assisted orphaned content remains valid. A richer Campaign slot model, automatic content generation, and bulk approval are separate future decisions.

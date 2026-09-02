@@ -176,8 +176,12 @@ function workspace(): Workspace {
 function contentItem(): ContentItem {
   return {
     aiPromptUsed: null,
+    brief: null,
     callToAction: null,
+    campaignActionIndex: null,
+    campaignGoal: null,
     campaignId: null,
+    campaignWeek: null,
     captionAr: null,
     captionEn: "Analytics post",
     carousel: null,

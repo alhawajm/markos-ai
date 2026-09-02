@@ -134,21 +134,23 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **B1. Generate**
 
 - On the Campaigns surface, the user chooses an objective, start date, duration, and publishing intensity and calls `POST /v1/campaigns/generate`.
-- Final product target: 30-, 60-, and 90-day options, with plan availability still undecided. A 7-day option is only under consideration.
-- Current contract: the UI offers 30/60/90 and defaults to 30; the shared API accepts any integer from 30 through 180 and defaults to 90 only when the client omits the value.
+- The current contract offers exactly 3, 7, 14, 30, 60, or 90 days, defaults to 30, and accepts one to five publishes per day. Plan availability remains undecided.
 - The API checks the Campaign quota, retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Campaign` and `ai_interaction`, and records provider token use when available.
-- The current plan shape is `{ summary, horizonDays, objectives, pillars, weeklyCadence, kpis, risks, nextActions, retrievedContext }`.
+- The current plan shape is `{ summary, durationDays, publishesPerDay, objectives, pillars, weeklyCadence, kpis, risks, nextActions, retrievedContext }`.
 - Provider/schema failure receives only bounded retries and a sanitized recoverable message. A failed attempt follows the quota refund contract.
 
 **B2. Review and export**
 
-- The Campaigns surface shows the latest record, source-informed summary, pillars, cadence, KPIs, risks, and next actions.
+- The Campaigns surface lists the workspace's Campaigns, presents a compact overview for the selected Campaign, and limits detailed cadence review to one week at a time. The owner can move among weeks or return to the high-level Campaign map before approving an idea.
+- The selected Campaign still exposes its source-informed summary, objectives, pillars, cadence, KPIs, risks, and next actions through progressive disclosure.
 - The backend PDF contract is `GET /v1/campaigns/:campaignId/pdf`. It is not currently mounted as a Campaigns-page control, so the UI must not advertise a dead export action.
 
 **B3. Turn a Campaign into a content plan**
 
 - Final target: generate a monthly calendar whose slots map to objectives, pillars, content type, topic, and best time, then allow deliberate rescheduling.
-- Current implementation note: the dedicated Calendar surface reads existing content records and can schedule, atomically reschedule, cancel, and open them for editing. No standalone `/v1/calendar/plan` contract or pre-draft slot model exists; Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call this the complete `CONT-01` calendar.
+- Each exact weekly Campaign action has a small approval control. Approval is workspace-scoped and idempotently creates one minimal Campaign-linked `DRAFT` carrying its brief, weekly goal, week number, and suggestion index.
+- The new draft opens directly in Create and appears in Calendar's Unscheduled collection. Approval does not invent a publication time, generate finished copy or media, mark the item Ready, or schedule it.
+- The dedicated Calendar can subsequently plan, schedule, atomically reschedule, cancel, and open existing content for editing. No standalone `/v1/calendar/plan` contract or pre-draft slot model exists; Campaign Builder and `POST /v1/content/generate-for-slot` cover a narrower persisted generation/scheduling slice. Do not call this the complete `CONT-01` calendar.
 
 ### Flow C — Create, review, and approve content
 
@@ -157,6 +159,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 **C1. Start from Create or a campaign**
 
 - With no item selected, Create opens as a compact action hub rather than an empty editor. Primary actions are **Start a blank post**, **Draft with MARKOS AI**, **Explore content ideas**, **Continue a draft**, and **Open Calendar**.
+- A Campaign suggestion approved during weekly review opens as a saved Campaign draft. Create identifies its Campaign and week while preserving the suggestion as the editable brief; the owner still supplies or generates the actual post content deliberately.
 - **Start a blank post** opens an unpersisted browser working copy without calling AI, retrieving Vault context, or consuming AI quota. It creates a workspace-owned `DRAFT` only when the user deliberately saves meaningful work. **Draft with MARKOS AI** remains the grounded generation path. Ideas are not persisted until the user deliberately selects one.
 - Supporting account-readiness or performance cards may appear only from real workspace/provider data. Missing data receives an honest empty state.
 - Current APIs are `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`. The locked manual path requires the build-spec-aligned blank `POST /v1/content` contract and is not implemented merely by this documentation decision.

@@ -1,7 +1,8 @@
-import type { CampaignStatus, Prisma } from "@prisma/client";
-import type { CampaignPlan, CampaignRecord } from "@markos/shared-types";
-import type { GenerateCampaignInput } from "@markos/validation";
+import { Prisma, type CampaignStatus, type ContentType } from "@prisma/client";
+import type { CampaignPlan, CampaignRecord, ContentRecord } from "@markos/shared-types";
+import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
+import { toContentRecord } from "../content/content-service";
 import { generateCampaignPlan } from "../ai/campaign-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -24,6 +25,12 @@ export class CampaignNotFoundError extends Error {
   }
 }
 
+export class CampaignSuggestionNotFoundError extends Error {
+  constructor() {
+    super("Campaign suggestion was not found");
+  }
+}
+
 export async function listCampaigns(workspaceId: string): Promise<CampaignRecord[]> {
   const rows = await prisma.campaign.findMany({
     where: {
@@ -39,7 +46,110 @@ export async function listCampaigns(workspaceId: string): Promise<CampaignRecord
   return rows.map(toCampaignRecord);
 }
 
+export async function listCampaignDrafts(workspaceId: string, campaignId: string): Promise<ContentRecord[]> {
+  await findWorkspaceCampaign(workspaceId, campaignId);
+  const rows = await prisma.contentItem.findMany({
+    where: {
+      workspaceId,
+      campaignId,
+      deletedAt: null,
+      campaignWeek: { not: null },
+      campaignActionIndex: { not: null }
+    },
+    orderBy: [{ campaignWeek: "asc" }, { campaignActionIndex: "asc" }]
+  });
+
+  return rows.map(toContentRecord);
+}
+
+export async function approveCampaignSuggestion(workspaceId: string, campaignId: string, input: ApproveCampaignSuggestionInput): Promise<ContentRecord> {
+  const campaign = await findWorkspaceCampaign(workspaceId, campaignId);
+  const plan = campaign.content as unknown as CampaignPlan;
+  const week = plan.weeklyCadence.find((candidate) => candidate.week === input.week);
+  const brief = week?.actions[input.actionIndex]?.trim();
+
+  if (!week || !brief) {
+    throw new CampaignSuggestionNotFoundError();
+  }
+
+  const existing = await prisma.contentItem.findUnique({
+    where: {
+      campaignId_campaignWeek_campaignActionIndex: {
+        campaignId,
+        campaignWeek: input.week,
+        campaignActionIndex: input.actionIndex
+      }
+    }
+  });
+
+  if (existing?.deletedAt === null) {
+    return toContentRecord(existing);
+  }
+
+  if (existing) {
+    const restored = await prisma.contentItem.update({
+      where: { id: existing.id },
+      data: {
+        brief,
+        campaignGoal: week.focus,
+        contentType: contentTypeForSuggestion(brief),
+        status: "DRAFT",
+        plannedAt: null,
+        scheduledAt: null,
+        publishedAt: null,
+        failureReason: null,
+        deletedAt: null
+      }
+    });
+    return toContentRecord(restored);
+  }
+
+  try {
+    const created = await prisma.contentItem.create({
+      data: {
+        workspaceId,
+        contentType: contentTypeForSuggestion(brief),
+        status: "DRAFT",
+        brief,
+        hashtags: [],
+        mediaIds: [],
+        campaignId,
+        campaignGoal: week.focus,
+        campaignWeek: input.week,
+        campaignActionIndex: input.actionIndex
+      }
+    });
+    return toContentRecord(created);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrent = await prisma.contentItem.findUnique({
+        where: {
+          campaignId_campaignWeek_campaignActionIndex: {
+            campaignId,
+            campaignWeek: input.week,
+            campaignActionIndex: input.actionIndex
+          }
+        }
+      });
+      if (concurrent) return toContentRecord(concurrent);
+    }
+
+    throw error;
+  }
+}
+
 export async function exportCampaignPdf(workspaceId: string, campaignId: string): Promise<{ bytes: Buffer; filename: string }> {
+  const row = await findWorkspaceCampaign(workspaceId, campaignId);
+
+  const campaign = toCampaignRecord(row);
+
+  return {
+    bytes: buildCampaignPdf(campaign),
+    filename: `${slugForFilename(campaign.title)}.pdf`
+  };
+}
+
+async function findWorkspaceCampaign(workspaceId: string, campaignId: string) {
   const row = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -52,12 +162,16 @@ export async function exportCampaignPdf(workspaceId: string, campaignId: string)
     throw new CampaignNotFoundError();
   }
 
-  const campaign = toCampaignRecord(row);
+  return row;
+}
 
-  return {
-    bytes: buildCampaignPdf(campaign),
-    filename: `${slugForFilename(campaign.title)}.pdf`
-  };
+function contentTypeForSuggestion(brief: string): ContentType {
+  const normalized = brief.toLocaleLowerCase();
+
+  if (/\b(reel|reels)\b|ريل/.test(normalized)) return "REEL";
+  if (/\b(story|stories)\b|ستوري|قصص|قصة/.test(normalized)) return "STORY";
+  if (/\bcarousel\b|كاروسيل|شرائح/.test(normalized)) return "CAROUSEL";
+  return "POST";
 }
 
 export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput): Promise<CampaignRecord> {

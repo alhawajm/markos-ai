@@ -702,6 +702,7 @@ export function toContentRecord(row: {
   workspaceId: string;
   contentType: ContentType;
   status: ContentStatus;
+  brief: string | null;
   captionEn: string | null;
   captionAr: string | null;
   hashtags: string[];
@@ -711,6 +712,9 @@ export function toContentRecord(row: {
   reelScript: Prisma.JsonValue | null;
   contentPillar: string | null;
   campaignId: string | null;
+  campaignGoal: string | null;
+  campaignWeek: number | null;
+  campaignActionIndex: number | null;
   aiPromptUsed: string | null;
   plannedAt: Date | null;
   scheduledAt: Date | null;
@@ -725,6 +729,7 @@ export function toContentRecord(row: {
     workspaceId: row.workspaceId,
     contentType: row.contentType,
     status: row.status,
+    ...(row.brief === null ? {} : { brief: row.brief }),
     ...(row.captionEn === null ? {} : { captionEn: row.captionEn }),
     ...(row.captionAr === null ? {} : { captionAr: row.captionAr }),
     hashtags: row.hashtags,
@@ -734,6 +739,9 @@ export function toContentRecord(row: {
     ...(row.reelScript === null ? {} : { reelScript: row.reelScript as Record<string, unknown> }),
     ...(row.contentPillar === null ? {} : { contentPillar: row.contentPillar }),
     ...(row.campaignId === null ? {} : { campaignId: row.campaignId }),
+    ...(row.campaignGoal === null ? {} : { campaignGoal: row.campaignGoal }),
+    ...(row.campaignWeek === null ? {} : { campaignWeek: row.campaignWeek }),
+    ...(row.campaignActionIndex === null ? {} : { campaignActionIndex: row.campaignActionIndex }),
     ...(row.aiPromptUsed === null ? {} : { aiPromptUsed: row.aiPromptUsed }),
     ...(row.plannedAt === null ? {} : { plannedAt: row.plannedAt.toISOString() }),
     ...(row.scheduledAt === null ? {} : { scheduledAt: row.scheduledAt.toISOString() }),

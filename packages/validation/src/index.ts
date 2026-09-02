@@ -371,6 +371,13 @@ export const createContentSchema = z
   })
   .strict();
 
+export const approveCampaignSuggestionSchema = z
+  .object({
+    week: z.number().int().min(1),
+    actionIndex: z.number().int().min(0)
+  })
+  .strict();
+
 export const generateContentSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
@@ -667,6 +674,7 @@ export type ApproveOfferingDocumentAnalysisInput = z.infer<typeof approveOfferin
 export type CreateOnboardingDocumentAnalysisInput = z.infer<typeof createOnboardingDocumentAnalysisSchema>;
 export type ApproveOnboardingDocumentAnalysisInput = z.infer<typeof approveOnboardingDocumentAnalysisSchema>;
 export type GenerateCampaignInput = z.infer<typeof generateCampaignSchema>;
+export type ApproveCampaignSuggestionInput = z.infer<typeof approveCampaignSuggestionSchema>;
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;

@@ -245,33 +245,81 @@ describe("presentation journey", () => {
     await page.close();
   });
 
-  it("exposes Campaigns in the authenticated app and sends a real 30-day generation request", async () => {
+  it("selects among Campaigns, generates a new plan, and reviews only one detailed week at a time", async () => {
     const page = await sessionPage();
     let generationPayload: Record<string, unknown> | undefined;
+    let suggestionApprovalPayload: Record<string, unknown> | undefined;
+    let approvedSuggestionDraft: ReturnType<typeof campaignSuggestionDraft> | undefined;
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/campaigns" && route.request().method() === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/campaigns" && route.request().method() === "GET") {
+        return route.fulfill(json([snackLabCampaign(), snackLabCommunitySprint()]));
+      }
       if (pathname === "/v1/campaigns/generate" && route.request().method() === "POST") {
         generationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json(snackLabCampaign()));
+        return route.fulfill(json({ ...snackLabCampaign(), id: "campaign-snacklab-generated" }));
+      }
+      if (pathname.endsWith("/drafts") && pathname.startsWith("/v1/campaigns/")) {
+        return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      }
+      if (pathname.endsWith("/suggestions/approve") && route.request().method() === "POST") {
+        suggestionApprovalPayload = route.request().postDataJSON() as Record<string, unknown>;
+        approvedSuggestionDraft = campaignSuggestionDraft("campaign-snacklab-generated");
+        return route.fulfill(json(approvedSuggestionDraft));
+      }
+      if (pathname === "/v1/content") return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      if (pathname === "/v1/media") return route.fulfill(json([]));
+      if (pathname === "/v1/calendar") {
+        return route.fulfill(
+          json({
+            range: { from: "2026-09-01", to: "2026-09-30" },
+            items: [],
+            mediaAssets: [],
+            summary: { scheduledThisWeek: 0, ready: 0, needsAttention: 0 },
+            unscheduled: { items: approvedSuggestionDraft ? [approvedSuggestionDraft] : [], total: approvedSuggestionDraft ? 1 : 0 }
+          })
+        );
       }
 
       return route.fulfill(json([]));
     });
 
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
     await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
+    const campaignLibrary = page.getByRole("region", { name: "Campaign library" });
+    await expect(campaignLibrary.getByText("2", { exact: true }).isVisible()).resolves.toBe(true);
+    await campaignLibrary.getByRole("button", { name: /SnackLab 7-Day Community Sprint/ }).click();
+    await page.getByRole("heading", { name: "SnackLab 7-Day Community Sprint" }).waitFor();
+
+    await page.getByRole("button", { name: "New campaign" }).click();
     await expect(page.getByLabel("Duration").inputValue()).resolves.toBe("30");
-    await expect(page.getByText("No campaign created yet", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
     await page.getByRole("button", { name: "Create Campaign" }).click();
     await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Campaign" }).waitFor();
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
     await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("heading", { name: "Your weekly plan" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("heading", { name: "Campaign map" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Earn trust", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
+    await page.getByRole("tab", { name: "Week-by-week review" }).click();
+    await expect(page.getByText("Publish origin story Reel", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
+    const weekOneButton = page.getByRole("button", { name: "Week 1", exact: true });
+    const weekTwoButton = page.getByRole("button", { name: "Week 2", exact: true });
+    await weekTwoButton.click();
+    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Publish origin story Reel", { exact: true }).count()).resolves.toBe(0);
+    await expect(weekOneButton.getAttribute("aria-current")).resolves.toBe(null);
+    await expect(weekTwoButton.getAttribute("aria-current")).resolves.toBe("step");
+    await page.getByRole("button", { name: "Approve idea and create draft: Publish customer taste-test Reel" }).click();
+    const openDraft = page.getByRole("link", { name: "Open draft in Create: Publish customer taste-test Reel" });
+    await expect(openDraft.isVisible()).resolves.toBe(true);
+    expect(suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
+    await page.waitForTimeout(200);
     await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
     expect(generationPayload).toMatchObject({
       durationDays: 30,
@@ -280,8 +328,18 @@ describe("presentation journey", () => {
       publishesPerDay: 1,
       startsAt: expect.any(String)
     });
+
+    await openDraft.click();
+    await page.getByRole("heading", { name: "Publish customer taste-test Reel" }).waitFor();
+    await expect(page.getByText("Campaign draft · Week 2", { exact: true }).isVisible()).resolves.toBe(true);
+
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar", exact: true }).waitFor();
+    await page.getByRole("button", { name: /Unscheduled/ }).click();
+    await expect(page.getByText("Publish customer taste-test...", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Campaign · Week 2", { exact: true }).isVisible()).resolves.toBe(true);
     await page.close();
-  });
+  }, 60_000);
 
   it("renders the desktop overview, Create, and honest Insights destinations", async () => {
     const page = await sessionPage();
@@ -1075,7 +1133,28 @@ function snackLabCampaign() {
       risks: [],
       publishesPerDay: 1,
       summary: "A Vault-grounded 30-day Instagram campaign for SnackLab.",
-      weeklyCadence: [{ actions: ["Publish one Reel", "Publish one carousel"], focus: "Launch consistency", week: 1 }]
+      weeklyCadence: [
+        {
+          actions: ["Publish origin story Reel", "Share subscription carousel"],
+          focus: "Launch consistency",
+          week: 1
+        },
+        {
+          actions: ["Publish customer taste-test Reel", "Run founder Q&A Stories"],
+          focus: "Earn trust",
+          week: 2
+        },
+        {
+          actions: ["Publish product comparison carousel", "Share a baking guide"],
+          focus: "Clarify the offer",
+          week: 3
+        },
+        {
+          actions: ["Publish subscription reminder", "Share a customer outcome"],
+          focus: "Convert interest",
+          week: 4
+        }
+      ]
     },
     createdAt: "2026-08-09T11:35:00.000Z",
     durationDays: 30,
@@ -1088,6 +1167,51 @@ function snackLabCampaign() {
     updatedAt: "2026-08-09T11:35:00.000Z",
     version: 1,
     workspaceId: session.workspace.id
+  };
+}
+
+function snackLabCommunitySprint() {
+  const campaign = snackLabCampaign();
+  return {
+    ...campaign,
+    content: {
+      ...campaign.content,
+      durationDays: 7,
+      objectives: ["Start useful customer conversations"],
+      summary: "A focused seven-day community-building sprint.",
+      weeklyCadence: [
+        {
+          actions: ["Ask followers to choose the next experiment", "Reply to every relevant answer"],
+          focus: "Invite participation",
+          week: 1
+        }
+      ]
+    },
+    createdAt: "2026-08-02T11:35:00.000Z",
+    durationDays: 7,
+    endsAt: "2026-08-09T11:35:00.000Z",
+    id: "campaign-snacklab-community",
+    startsAt: "2026-08-02T11:35:00.000Z",
+    title: "SnackLab 7-Day Community Sprint",
+    updatedAt: "2026-08-02T11:35:00.000Z"
+  };
+}
+
+function campaignSuggestionDraft(campaignId = "campaign-snacklab-30") {
+  return {
+    id: "content-campaign-week-2-action-1",
+    workspaceId: session.workspace.id,
+    contentType: "REEL" as const,
+    status: "DRAFT" as const,
+    brief: "Publish customer taste-test Reel",
+    hashtags: [] as string[],
+    mediaIds: [] as string[],
+    campaignId,
+    campaignGoal: "Earn trust",
+    campaignWeek: 2,
+    campaignActionIndex: 0,
+    createdAt: "2026-09-01T13:00:00.000Z",
+    updatedAt: "2026-09-01T13:00:00.000Z"
   };
 }
 
