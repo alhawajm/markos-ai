@@ -845,6 +845,10 @@ function parseFutureScheduleTime(value: string): Date {
     throw new ContentScheduleError("Schedule time must be in the future");
   }
 
+  if (scheduledAt.getUTCMinutes() % 30 !== 0 || scheduledAt.getUTCSeconds() !== 0 || scheduledAt.getUTCMilliseconds() !== 0) {
+    throw new ContentScheduleError("Choose a publishing time on a 30-minute boundary, such as 9:00 or 9:30");
+  }
+
   return scheduledAt;
 }
 

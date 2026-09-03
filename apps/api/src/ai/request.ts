@@ -12,6 +12,11 @@ const safeAiMessages: Record<string, string> = {
   AI_IMAGE_GENERATION_DISABLED: "AI image generation is not available in this environment. Upload an image instead",
   AI_IMAGE_OUTPUT_INVALID: "The AI provider returned an image MARKOS could not validate",
   AI_IMAGE_REQUEST_REJECTED: "The AI provider could not generate that image direction. Revise it and try again",
+  AI_VIDEO_GENERATION_DISABLED: "AI video generation is not available in this environment",
+  AI_VIDEO_MODERATION_BLOCKED: "That video direction was blocked by the provider safety policy. Revise it and try again",
+  AI_VIDEO_OUTPUT_INVALID: "The AI provider returned a video MARKOS could not validate",
+  AI_VIDEO_REQUEST_REJECTED: "The AI provider could not generate that video direction. Revise it and try again",
+  AI_VIDEO_RESPONSE_INVALID: "The AI provider returned an invalid video job",
   AI_PROVIDER_NOT_CONFIGURED: "The AI provider is not configured",
   AI_PROVIDER_RATE_LIMITED: "The AI provider is temporarily rate limited",
   AI_PROVIDER_TIMEOUT: "The AI provider timed out",
@@ -97,6 +102,66 @@ export async function requestAi<T>(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function requestAiBinary(path: string, body: unknown, maxBytes = env.AI_VIDEO_MAX_BYTES): Promise<Buffer> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.AI_HTTP_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(new URL(path, env.AI_BASE_URL), {
+      body: JSON.stringify(body),
+      headers: {
+        authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}`,
+        "content-type": "application/json"
+      },
+      method: "POST",
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const value: unknown = await response.json().catch(() => undefined);
+      throw toAiServiceError(response.status, value);
+    }
+
+    const declaredLength = Number(response.headers.get("content-length") ?? 0);
+    if (declaredLength > maxBytes) {
+      throw invalidBinaryResponse();
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
+      throw invalidBinaryResponse();
+    }
+    return bytes;
+  } catch (error) {
+    if (error instanceof AiServiceRequestError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new AiServiceRequestError({
+        code: "AI_SERVICE_TIMEOUT",
+        message: "The AI service timed out",
+        retryable: true,
+        statusCode: 504
+      });
+    }
+    throw new AiServiceRequestError({
+      code: "AI_SERVICE_UNAVAILABLE",
+      message: "The AI service is temporarily unavailable",
+      retryable: true,
+      statusCode: 503
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function invalidBinaryResponse(): AiServiceRequestError {
+  return new AiServiceRequestError({
+    code: "AI_SERVICE_RESPONSE_INVALID",
+    message: "The AI service returned an invalid response",
+    retryable: true,
+    statusCode: 502
+  });
 }
 
 function toAiServiceError(status: number, value: unknown): AiServiceRequestError {

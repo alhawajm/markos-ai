@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
-import type { InstagramPublisher } from "../src/publishing/instagram-publisher";
+import { InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { decryptCredential } from "../src/security/credential-encryption";
@@ -93,6 +93,53 @@ describe("maintenance worker", () => {
     expect(publishedContentIds).toEqual(expect.arrayContaining([first.content.id, second.content.id]));
     expect(firstAfter.status).toBe("PUBLISHED");
     expect(secondAfter.status).toBe("PUBLISHED");
+    await expect(
+      prisma.publishJob.findFirstOrThrow({
+        where: { contentItemId: first.content.id }
+      })
+    ).resolves.toMatchObject({ status: "PUBLISHED", attempts: 1 });
+  }, 60_000);
+
+  it("persists terminal publishing failures and notifies the workspace owner", async () => {
+    const now = new Date(Date.UTC(2026, 0, 2, 12));
+    const target = await createPublishableWorkspace("worker-publish-failure", now);
+    const publisher: InstagramPublisher = {
+      async publish() {
+        throw new InstagramPublishError("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
+      }
+    };
+
+    const result = await runMaintenanceWorkerTick({
+      now,
+      publisher,
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+    const [contentAfter, job, notification] = await Promise.all([
+      prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } }),
+      prisma.publishJob.findFirstOrThrow({ where: { contentItemId: target.content.id } }),
+      prisma.notification.findFirstOrThrow({
+        where: {
+          userId: target.workspace.ownerUserId,
+          workspaceId: target.workspace.id,
+          templateKey: "publishing_failed"
+        }
+      })
+    ]);
+
+    expect(result.publishing?.failed).toBeGreaterThanOrEqual(1);
+    expect(contentAfter).toMatchObject({
+      failureReason: "INSTAGRAM_CONTAINER_PROCESSING_FAILED",
+      status: "FAILED"
+    });
+    expect(job).toMatchObject({
+      attempts: 1,
+      lastErrorCode: "INSTAGRAM_CONTAINER_PROCESSING_FAILED",
+      status: "FAILED"
+    });
+    expect(notification.payload).toMatchObject({ contentItemId: target.content.id });
   }, 60_000);
 
   it("refreshes due Instagram tokens", async () => {

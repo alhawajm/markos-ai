@@ -1352,6 +1352,7 @@ function CalendarDetails({
               id={`calendar-time-${record.id}`}
               min={minimumScheduleInput()}
               onChange={(event) => setScheduleValue(event.target.value)}
+              step={1800}
               type="datetime-local"
               value={scheduleValue}
             />

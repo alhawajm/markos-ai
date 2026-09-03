@@ -103,45 +103,9 @@ export class InstagramGraphPublisher implements InstagramPublisher {
   }
 
   async publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult> {
-    if (input.contentItem.contentType !== "POST") {
-      throw new InstagramPublishError("INSTAGRAM_MILESTONE_A_IMAGE_POST_ONLY");
-    }
-
-    if (input.mediaAssets.length !== 1 || input.mediaAssets[0] === undefined) {
-      throw new InstagramPublishError("INSTAGRAM_PUBLISH_REQUIRES_ONE_IMAGE");
-    }
-
-    const mediaAsset = input.mediaAssets[0];
-    const mediaReasons = validateInstagramImageForPublishing(mediaAsset);
-
-    if (mediaReasons[0] !== undefined) {
-      throw new InstagramPublishError(mediaReasons[0]);
-    }
-
     const { accountId, accessToken } = requiredConnection(input.workspace);
     const payload = buildPayload(input);
-    let providerImageUrl: string;
-
-    try {
-      providerImageUrl = await this.providerUrlResolver({
-        workspaceId: mediaAsset.workspaceId,
-        storageKey: mediaAsset.s3Key,
-        publicUrl: mediaAsset.cdnUrl
-      });
-    } catch (error) {
-      if (error instanceof MediaStorageError) throw new InstagramPublishError(error.code);
-      throw new InstagramPublishError("MEDIA_PROVIDER_URL_SIGNING_FAILED");
-    }
-
-    if (!isPublicHttpsUrl(providerImageUrl)) {
-      throw new InstagramPublishError("MEDIA_PROVIDER_URL_INVALID");
-    }
-
-    const container = await this.post(accountId, "media", accessToken, {
-      caption: payload.caption,
-      image_url: providerImageUrl
-    });
-    const creationId = requiredIdentifier(container.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID");
+    const creationId = await this.createPublishContainer(input, accountId, accessToken, payload.caption);
 
     await this.waitForContainer(creationId, accessToken);
 
@@ -156,6 +120,92 @@ export class InstagramGraphPublisher implements InstagramPublisher {
       payload,
       status: "PUBLISHED"
     };
+  }
+
+  private async createPublishContainer(
+    input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace },
+    accountId: string,
+    accessToken: string,
+    caption: string
+  ): Promise<string> {
+    const { contentType } = input.contentItem;
+
+    if (contentType === "CAROUSEL") {
+      if (input.mediaAssets.length < 2 || input.mediaAssets.length > 10) {
+        throw new InstagramPublishError("INSTAGRAM_CAROUSEL_REQUIRES_TWO_TO_TEN_ITEMS");
+      }
+      const children: string[] = [];
+      for (const asset of input.mediaAssets) {
+        const reason = validateInstagramImageForPublishing(asset)[0];
+        if (reason) throw new InstagramPublishError(reason);
+        const url = await this.resolveMediaUrl(asset);
+        const child = await this.post(accountId, "media", accessToken, {
+          image_url: url,
+          is_carousel_item: "true"
+        });
+        children.push(requiredIdentifier(child.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID"));
+      }
+      const parent = await this.post(accountId, "media", accessToken, {
+        caption,
+        children: children.join(","),
+        media_type: "CAROUSEL"
+      });
+      return requiredIdentifier(parent.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID");
+    }
+
+    if (input.mediaAssets.length !== 1 || input.mediaAssets[0] === undefined) {
+      throw new InstagramPublishError("INSTAGRAM_PUBLISH_REQUIRES_ONE_MEDIA_ITEM");
+    }
+    const asset = input.mediaAssets[0];
+
+    if (contentType === "REEL") {
+      const reason = validateInstagramVideoForPublishing(asset)[0];
+      if (reason) throw new InstagramPublishError(reason);
+      const providerUrl = await this.resolveMediaUrl(asset);
+      const container = await this.post(accountId, "media", accessToken, {
+        caption,
+        media_type: "REELS",
+        share_to_feed: "true",
+        video_url: providerUrl
+      });
+      return requiredIdentifier(container.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID");
+    }
+
+    if (contentType === "STORY") {
+      const reason = asset.mimeType.startsWith("video/") ? validateInstagramVideoForPublishing(asset)[0] : validateInstagramStoryImageForPublishing(asset)[0];
+      if (reason) throw new InstagramPublishError(reason);
+      const providerUrl = await this.resolveMediaUrl(asset);
+      const container = await this.post(accountId, "media", accessToken, {
+        media_type: "STORIES",
+        ...(asset.mimeType.startsWith("video/") ? { video_url: providerUrl } : { image_url: providerUrl })
+      });
+      return requiredIdentifier(container.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID");
+    }
+
+    const reason = validateInstagramImageForPublishing(asset)[0];
+    if (reason) throw new InstagramPublishError(reason);
+    const providerUrl = await this.resolveMediaUrl(asset);
+    const container = await this.post(accountId, "media", accessToken, {
+      caption,
+      image_url: providerUrl
+    });
+    return requiredIdentifier(container.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID");
+  }
+
+  private async resolveMediaUrl(mediaAsset: MediaAsset): Promise<string> {
+    let providerUrl: string;
+    try {
+      providerUrl = await this.providerUrlResolver({
+        workspaceId: mediaAsset.workspaceId,
+        storageKey: mediaAsset.s3Key,
+        publicUrl: mediaAsset.cdnUrl
+      });
+    } catch (error) {
+      if (error instanceof MediaStorageError) throw new InstagramPublishError(error.code);
+      throw new InstagramPublishError("MEDIA_PROVIDER_URL_SIGNING_FAILED");
+    }
+    if (!isPublicHttpsUrl(providerUrl)) throw new InstagramPublishError("MEDIA_PROVIDER_URL_INVALID");
+    return providerUrl;
   }
 
   private async waitForContainer(creationId: string, accessToken: string): Promise<void> {
@@ -212,6 +262,36 @@ export function validateInstagramImageForPublishing(mediaAsset: MediaAsset): str
     reasons.push("INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED");
   }
 
+  return reasons;
+}
+
+export function validateInstagramStoryImageForPublishing(mediaAsset: MediaAsset): string[] {
+  const reasons: string[] = [];
+  const extension = mediaAsset.filename.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+  if (mediaAsset.mimeType.toLowerCase() !== "image/jpeg" || (extension !== ".jpg" && extension !== ".jpeg")) {
+    reasons.push("INSTAGRAM_PUBLISH_JPEG_REQUIRED");
+  }
+  if (!mediaAsset.width || !mediaAsset.height || Math.abs(mediaAsset.width / mediaAsset.height - 9 / 16) > 0.03) {
+    reasons.push("INSTAGRAM_STORY_9_16_MEDIA_REQUIRED");
+  }
+  if (mediaAsset.sizeBytes <= 0 || mediaAsset.sizeBytes > 8_000_000) reasons.push("INSTAGRAM_PUBLISH_IMAGE_TOO_LARGE");
+  if (!isPublicHttpsUrl(mediaAsset.cdnUrl)) reasons.push("INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED");
+  return reasons;
+}
+
+export function validateInstagramVideoForPublishing(mediaAsset: MediaAsset): string[] {
+  const reasons: string[] = [];
+  if (mediaAsset.mimeType.toLowerCase() !== "video/mp4" || !mediaAsset.filename.toLowerCase().endsWith(".mp4")) {
+    reasons.push("INSTAGRAM_PUBLISH_MP4_REQUIRED");
+  }
+  if (!mediaAsset.width || !mediaAsset.height || Math.abs(mediaAsset.width / mediaAsset.height - 9 / 16) > 0.03) {
+    reasons.push("INSTAGRAM_VIDEO_9_16_REQUIRED");
+  }
+  if (!mediaAsset.durationSeconds || mediaAsset.durationSeconds < 3 || mediaAsset.durationSeconds > 900) {
+    reasons.push("INSTAGRAM_VIDEO_DURATION_UNSUPPORTED");
+  }
+  if (mediaAsset.sizeBytes <= 0 || mediaAsset.sizeBytes > 1_000_000_000) reasons.push("INSTAGRAM_VIDEO_TOO_LARGE");
+  if (!isPublicHttpsUrl(mediaAsset.cdnUrl)) reasons.push("INSTAGRAM_PUBLISH_PUBLIC_HTTPS_URL_REQUIRED");
   return reasons;
 }
 

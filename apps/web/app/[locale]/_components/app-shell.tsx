@@ -2,8 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Brain, CalendarDays, ChevronLeft, ChevronRight, Home, Languages, Palette, Settings, Target, type LucideIcon } from "lucide-react";
-import type { Locale } from "@markos/shared-types";
+import {
+  BarChart3,
+  Bell,
+  Brain,
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  Languages,
+  Palette,
+  Settings,
+  Target,
+  X,
+  type LucideIcon
+} from "lucide-react";
+import type { Locale, NotificationRecord } from "@markos/shared-types";
 import {
   CampaignBuilderPanel,
   ContentStudioPanel,
@@ -15,7 +30,7 @@ import {
 } from "./final-command-panels";
 import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
-import { initializeBrowserSession, watchBrowserSession } from "./browser-session";
+import { initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
 
 export type SectionSlug =
@@ -48,10 +63,14 @@ const SIDEBAR_COLLAPSED_KEY = "markos.sidebar.collapsed";
 const LOCALE_PREFERENCE_KEY = "markos.locale";
 
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
+  const client = useMarkosClient(locale);
+  const session = useMarkosSession();
   const [sessionChecked, setSessionChecked] = useState(false);
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceReady, setSidebarPreferenceReady] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
     setSessionCheckFailed(false);
@@ -86,6 +105,35 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
 
     return () => window.cancelAnimationFrame(preferenceReadyFrame);
   }, []);
+
+  useEffect(() => {
+    if (!sessionChecked || !session) return;
+    let cancelled = false;
+    const load = () => {
+      void client
+        .notifications()
+        .then((items) => {
+          if (!cancelled) setNotifications(items);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [client, session, sessionChecked]);
+
+  async function markNotificationRead(notification: NotificationRecord) {
+    if (notification.readAt) return;
+    try {
+      const updated = await client.markNotificationRead(notification.id);
+      setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch {
+      // The durable record remains available for a later retry.
+    }
+  }
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => {
@@ -202,6 +250,12 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           </nav>
 
           <div className="mt-auto grid gap-2 border-t border-[var(--sunlit-line)] pt-4">
+            <SidebarNotificationsButton
+              collapsed={sidebarCollapsed}
+              count={notifications.filter((notification) => !notification.readAt).length}
+              locale={locale}
+              onClick={() => setNotificationsOpen(true)}
+            />
             <SidebarLanguageToggle collapsed={sidebarCollapsed} locale={locale} onSwitch={switchLocale} />
             <SidebarNavLink activeSection={activeSection} collapsed={sidebarCollapsed} item={settingsNavItem} locale={locale} />
           </div>
@@ -249,6 +303,19 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               <Languages aria-hidden="true" size={16} />
               {locale === "ar" ? "العربية" : "English"}
             </button>
+            <button
+              className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 font-bold text-[var(--sunlit-muted)]"
+              onClick={() => setNotificationsOpen(true)}
+              type="button"
+            >
+              <Bell aria-hidden="true" size={16} />
+              {locale === "ar" ? "التنبيهات" : "Notifications"}
+              {notifications.some((notification) => !notification.readAt) ? (
+                <span className="grid min-w-5 place-items-center rounded-full bg-[var(--sunlit-pink)] px-1 text-[10px] text-white">
+                  {notifications.filter((notification) => !notification.readAt).length}
+                </span>
+              ) : null}
+            </button>
             <MobileNavLink activeSection={activeSection} item={settingsNavItem} locale={locale} />
           </nav>
 
@@ -271,7 +338,128 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           </div>
         </section>
       </div>
+      {notificationsOpen ? (
+        <NotificationDrawer
+          locale={locale}
+          notifications={notifications}
+          onClose={() => setNotificationsOpen(false)}
+          onRead={(notification) => void markNotificationRead(notification)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function SidebarNotificationsButton({ collapsed, count, locale, onClick }: { collapsed: boolean; count: number; locale: Locale; onClick: () => void }) {
+  return (
+    <button
+      aria-label={locale === "ar" ? `التنبيهات غير المقروءة: ${count}` : `Notifications, ${count} unread`}
+      className={`group relative grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] ${
+        collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="relative grid h-9 w-9 place-items-center justify-self-center rounded-lg text-[var(--sunlit-muted)]">
+        <Bell size={20} />
+        {count > 0 ? <span className="absolute end-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-[var(--sunlit-pink)]" /> : null}
+      </span>
+      <span
+        className={`min-w-0 overflow-hidden whitespace-nowrap text-start text-sm transition-[max-width,opacity] ${collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"}`}
+      >
+        {locale === "ar" ? "التنبيهات" : "Notifications"}
+        {count > 0 ? <span className="ms-2 rounded-full bg-[var(--sunlit-coral-soft)] px-2 py-0.5 text-xs text-[var(--sunlit-pink)]">{count}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function NotificationDrawer({
+  locale,
+  notifications,
+  onClose,
+  onRead
+}: {
+  locale: Locale;
+  notifications: NotificationRecord[];
+  onClose: () => void;
+  onRead: (notification: NotificationRecord) => void;
+}) {
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex justify-end bg-[rgb(32_33_43_/_35%)] rtl:justify-start" role="presentation">
+      <button aria-label={locale === "ar" ? "إغلاق التنبيهات" : "Close notifications"} className="absolute inset-0" onClick={onClose} type="button" />
+      <aside
+        aria-label={locale === "ar" ? "التنبيهات" : "Notifications"}
+        className="sunlit-card-scroll relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-6 shadow-2xl"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-[var(--sunlit-line)] pb-5">
+          <div>
+            <p className="sunlit-eyebrow">MARKOS</p>
+            <h2 className="mt-2 text-3xl font-bold text-[var(--sunlit-ink)]">{locale === "ar" ? "التنبيهات" : "Notifications"}</h2>
+          </div>
+          <button
+            aria-label={locale === "ar" ? "إغلاق" : "Close"}
+            className="sunlit-secondary grid h-11 w-11 place-items-center rounded-full"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={19} />
+          </button>
+        </header>
+        <div className="mt-5 grid gap-3">
+          {notifications.length === 0 ? (
+            <p className="rounded-2xl bg-[var(--sunlit-paper)] p-5 text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">
+              {locale === "ar" ? "لا توجد تنبيهات بعد." : "No notifications yet."}
+            </p>
+          ) : (
+            notifications.map((notification) => (
+              <article
+                className={`rounded-2xl border p-4 ${notification.readAt ? "border-[var(--sunlit-line)] bg-white" : "border-[#E8A8B2] bg-[#FFF7F8]"}`}
+                key={notification.id}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
+                    <Bell size={17} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold text-[var(--sunlit-ink)]">{locale === "ar" ? "تعذر نشر المحتوى" : "Publishing needs attention"}</p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-ink-soft)]">
+                      {typeof notification.payload.message === "string"
+                        ? notification.payload.message
+                        : locale === "ar"
+                          ? "راجع المحتوى وحاول مرة أخرى."
+                          : "Review the content and try again."}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-[var(--sunlit-muted)]">
+                      {new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { dateStyle: "medium", timeStyle: "short" }).format(
+                        new Date(notification.createdAt)
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {!notification.readAt ? (
+                  <button
+                    className="sunlit-secondary mt-3 inline-flex min-h-9 items-center gap-2 rounded-xl px-3 text-xs font-extrabold"
+                    onClick={() => onRead(notification)}
+                    type="button"
+                  >
+                    <Check size={15} /> {locale === "ar" ? "وضع كمقروء" : "Mark as read"}
+                  </button>
+                ) : null}
+              </article>
+            ))
+          )}
+        </div>
+      </aside>
+    </div>
   );
 }
 

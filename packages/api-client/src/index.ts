@@ -41,9 +41,11 @@ import type {
   KnowledgeVaultHistoryEntry,
   Locale,
   MediaAssetRecord,
+  MediaGenerationJobRecord,
   MediaType,
   MfaStatus,
   MfaTotpSetup,
+  NotificationRecord,
   OnboardingState,
   OnboardingDocumentAnalysisRecord,
   ApprovedOnboardingDocumentProfile,
@@ -54,6 +56,7 @@ import type {
   PromptTemplateRecord,
   PromptVariantSelection,
   PublishAttemptRecord,
+  PublishJobRecord,
   PublishDueContentResult,
   PublishingLiveReadiness,
   PublishReadiness,
@@ -685,6 +688,69 @@ export class MarkosApiClient {
   ): Promise<AiImageGenerationResult> {
     const response = await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, {
       body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentVideo(
+    contentItemId: string,
+    input: { aspectRatio?: "9:16"; durationSeconds?: 4 | 8 | 12; prompt: string }
+  ): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {
+    const response = await this.request<PublishJobRecord>(`/v1/content/${contentItemId}/publish-now`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async latestPublishJob(contentItemId: string): Promise<PublishJobRecord | null> {
+    const response = await this.request<PublishJobRecord | null>(`/v1/content/${contentItemId}/publish-job/latest`);
+    return response.data;
+  }
+
+  async notifications(): Promise<NotificationRecord[]> {
+    const response = await this.request<NotificationRecord[]>("/v1/notifications");
+    return response.data;
+  }
+
+  async markNotificationRead(notificationId: string): Promise<NotificationRecord> {
+    const response = await this.request<NotificationRecord>(`/v1/notifications/${notificationId}/read`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async mediaGenerationJob(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}`);
+    return response.data;
+  }
+
+  async latestMediaGenerationJob(contentItemId: string): Promise<MediaGenerationJobRecord | null> {
+    const response = await this.request<MediaGenerationJobRecord | null>(`/v1/content/${contentItemId}/media-generation/latest`);
+    return response.data;
+  }
+
+  async cancelMediaGeneration(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}/cancel`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryMediaGeneration(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}/retry`, {
+      body: {},
       method: "POST"
     });
     return response.data;

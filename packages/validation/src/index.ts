@@ -656,6 +656,12 @@ export const generateImageForContentSchema = z.object({
   aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
 });
 
+export const generateVideoForContentSchema = z.object({
+  prompt: z.string().trim().min(3).max(4000),
+  durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).default(8),
+  aspectRatio: z.literal("9:16").default("9:16")
+});
+
 export const createPromptTemplateSchema = z.object({
   agent: promptAgentSchema,
   version: z.string().min(3).max(120),
@@ -735,3 +741,4 @@ export type RegisterPublicMediaInput = z.infer<typeof registerPublicMediaSchema>
 export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
 export type GenerateImageForContentInput = z.infer<typeof generateImageForContentSchema>;
+export type GenerateVideoForContentInput = z.infer<typeof generateVideoForContentSchema>;

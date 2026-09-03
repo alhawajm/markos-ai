@@ -170,7 +170,7 @@ describe("publishing routes", () => {
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
     const failed = await createPublishableContent(session.workspace.id, new Date(Date.now() - 60 * 1000));
-    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = nextHalfHour().toISOString();
     await prisma.contentItem.update({
       data: {
         failureReason: "Meta rejected the media container",
@@ -251,7 +251,7 @@ describe("publishing routes", () => {
       data: {
         contentItemId: content.id,
         dryRun: true,
-        reasons: ["INSTAGRAM_NOT_CONNECTED", "PUBLIC_MEDIA_REQUIRED"],
+        reasons: ["INSTAGRAM_NOT_CONNECTED", "INSTAGRAM_PUBLISH_REQUIRES_ONE_MEDIA_ITEM", "PUBLIC_MEDIA_REQUIRED"],
         status: "BLOCKED"
       }
     });
@@ -338,6 +338,48 @@ describe("publishing routes", () => {
         status: "DRY_RUN"
       }
     });
+
+    await app.close();
+  });
+
+  it("queues Publish now durably and returns the same active job on repeated clicks", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content } = await createPublishableDueContent(session.workspace.id);
+    await prisma.contentItem.update({
+      where: { id: content.id },
+      data: { status: "APPROVED", scheduledAt: null }
+    });
+    const headers = authHeaders(await steppedUpToken(session.user.id, session.workspace.id));
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/publish-now`,
+      headers
+    });
+    const duplicate = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/publish-now`,
+      headers
+    });
+    const latest = await app.inject({
+      method: "GET",
+      url: `/v1/content/${content.id}/publish-job/latest`,
+      headers
+    });
+    const after = await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } });
+
+    expect(first.statusCode).toBe(202);
+    expect(duplicate.statusCode).toBe(202);
+    expect(first.json().data).toMatchObject({
+      contentItemId: content.id,
+      status: "QUEUED",
+      trigger: "PUBLISH_NOW"
+    });
+    expect(duplicate.json().data.id).toBe(first.json().data.id);
+    expect(latest.json().data.id).toBe(first.json().data.id);
+    expect(after.status).toBe("SCHEDULED");
+    expect(after.scheduledAt).not.toBeNull();
 
     await app.close();
   });
@@ -848,6 +890,14 @@ function monthStart(date = new Date()): Date {
 
 function nextMonthStart(date = new Date()): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+}
+
+function nextHalfHour(date = new Date()): Date {
+  const result = new Date(date);
+  result.setSeconds(0, 0);
+  result.setMinutes(result.getMinutes() < 30 ? 30 : 0);
+  if (result <= date) result.setHours(result.getHours() + 1);
+  return result;
 }
 
 function restoreProcessEnv(values: Record<string, string | undefined>): void {

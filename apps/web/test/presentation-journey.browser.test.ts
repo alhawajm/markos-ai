@@ -1169,11 +1169,11 @@ describe("presentation journey", () => {
     await expect(page.getByText(/already contains a caption or visual direction/).isVisible()).resolves.toBe(true);
     await page.getByRole("button", { name: "Replace studio content" }).click();
     await expect(studioCaption.inputValue()).resolves.toBe("Choose the SnackLab subscription that fits your week.");
-    await expect(page.getByLabel("Optional visual direction").inputValue()).resolves.toBe(
+    await expect(page.getByLabel("Visual direction", { exact: true }).inputValue()).resolves.toBe(
       "Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light."
     );
 
-    await page.getByRole("button", { name: "Generate", exact: true }).click();
+    await page.getByRole("button", { name: "Generate image", exact: true }).click();
     await page.getByAltText("assistant-direction.jpg").waitFor();
     expect(ideationCalls).toBe(1);
     expect(createCalls).toBe(1);

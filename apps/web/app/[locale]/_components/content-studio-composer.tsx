@@ -171,8 +171,20 @@ export function InstagramPostPreview({
       </header>
 
       {/* The natural dimensions preserve feed framing without an artificial crop. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt={media.filename} className="block aspect-[4/5] w-full shrink-0 bg-black/5 object-contain" src={media.publicUrl} />
+      {media.mimeType.startsWith("video/") ? (
+        <video
+          aria-label={media.filename}
+          className="block aspect-[4/5] w-full shrink-0 bg-black object-contain"
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          src={media.publicUrl}
+        />
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img alt={media.filename} className="block aspect-[4/5] w-full shrink-0 bg-black/5 object-contain" src={media.publicUrl} />
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center justify-between">

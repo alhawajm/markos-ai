@@ -1,7 +1,7 @@
 import { env } from "../config/env";
 import { sendMonthlyAnalyticsPdfEmailForAllWorkspaces, type AnalyticsEmailProvider } from "../analytics/analytics-email-service";
 import { syncInstagramAnalyticsForAllWorkspaces, type AnalyticsSyncForAllWorkspacesResult } from "../analytics/analytics-service";
-import { publishDueContentForAllWorkspaces, type PublishDueContentForAllWorkspacesResult } from "../publishing/publishing-service";
+import { processDuePublishJobs, type PublishJobWorkerResult } from "../publishing/publish-job-service";
 import type { AnalyticsEmailDeliveryForAllWorkspacesResult, OfferingDocumentCleanupResult } from "@markos/shared-types";
 import type { InstagramAnalyticsProvider } from "../analytics/instagram-analytics-provider";
 import type { InstagramPublisher } from "../publishing/instagram-publisher";
@@ -10,6 +10,7 @@ import { refreshDueInstagramTokens } from "../workspace/instagram-token-service"
 import type { InstagramTokenRefreshResult } from "@markos/shared-types";
 import { cleanupExpiredOfferingDocumentAnalyses } from "../offerings/offering-document-service";
 import { cleanupExpiredOnboardingDocumentAnalyses } from "../onboarding/onboarding-document-service";
+import { processDueVideoGenerationJobs, type VideoGenerationWorkerResult } from "../media/video-generation-service";
 
 export interface MaintenanceWorkerLogger {
   error(message: string, meta?: Record<string, unknown>): void;
@@ -21,9 +22,10 @@ export interface MaintenanceWorkerTickResult {
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
   analyticsSync?: AnalyticsSyncForAllWorkspacesResult;
   documentCleanup?: OfferingDocumentCleanupResult;
-  publishing?: PublishDueContentForAllWorkspacesResult;
+  publishing?: PublishJobWorkerResult;
   tokenRefresh?: InstagramTokenRefreshResult[];
   usageReset?: UsagePeriodResetResult;
+  videoGeneration?: VideoGenerationWorkerResult;
 }
 
 export interface MaintenanceWorkerHandle {
@@ -57,6 +59,7 @@ export async function runMaintenanceWorkerTick(
     runPublishing?: boolean;
     runTokenRefresh?: boolean;
     runUsageReset?: boolean;
+    runVideoGeneration?: boolean;
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
@@ -95,10 +98,11 @@ export async function runMaintenanceWorkerTick(
   const publishing =
     input.runPublishing === false
       ? undefined
-      : await publishDueContentForAllWorkspaces({
+      : await processDuePublishJobs({
           now,
           ...(input.publisher === undefined ? {} : { publisher: input.publisher })
         });
+  const videoGeneration = input.runVideoGeneration === false ? undefined : await processDueVideoGenerationJobs({ now });
 
   return {
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
@@ -106,7 +110,8 @@ export async function runMaintenanceWorkerTick(
     ...(documentCleanup === undefined ? {} : { documentCleanup }),
     ...(publishing === undefined ? {} : { publishing }),
     ...(tokenRefresh === undefined ? {} : { tokenRefresh }),
-    ...(usageReset === undefined ? {} : { usageReset })
+    ...(usageReset === undefined ? {} : { usageReset }),
+    ...(videoGeneration === undefined ? {} : { videoGeneration })
   };
 }
 
@@ -157,6 +162,7 @@ export function startMaintenanceWorker(
         runPublishing: true,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
+        runVideoGeneration: true,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
         ...(input.analyticsEmailProvider === undefined ? {} : { analyticsEmailProvider: input.analyticsEmailProvider }),
         ...(input.analyticsProvider === undefined ? {} : { analyticsProvider: input.analyticsProvider }),
@@ -215,6 +221,9 @@ function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unkn
     refreshedTokens: result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
     tokenRefreshFailures: result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0,
     usageCountersEnsured: result.usageReset?.countersEnsured ?? 0,
-    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0
+    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0,
+    videoJobsCompleted: result.videoGeneration?.completed ?? 0,
+    videoJobsFailed: result.videoGeneration?.failed ?? 0,
+    videoJobsProcessed: result.videoGeneration?.processed ?? 0
   };
 }

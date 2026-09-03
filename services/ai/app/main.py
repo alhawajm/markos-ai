@@ -31,6 +31,7 @@ from app.contracts.onboarding_document import (
     OnboardingDocumentAnalysisRequest,
     OnboardingDocumentAnalysisResponse,
 )
+from app.contracts.video import VideoJobRequest, VideoJobResponse, VideoStartRequest
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
@@ -41,6 +42,7 @@ from app.providers.content import get_content_provider
 from app.providers.image import get_image_provider
 from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
+from app.providers.video import get_video_provider
 
 
 class HealthResponse(BaseModel):
@@ -313,6 +315,57 @@ async def generate_image(request: ImageGenerateRequest) -> ImageGenerateResponse
             status_code=504,
             retryable=True,
         ) from None
+
+
+@app.post("/ai/videos/start", response_model=VideoJobResponse)
+async def start_video(request: VideoStartRequest) -> VideoJobResponse:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            return await provider.start(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post("/ai/videos/status", response_model=VideoJobResponse)
+async def video_status(request: VideoJobRequest) -> VideoJobResponse:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            return await provider.status(request.provider_job_id)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post("/ai/videos/download")
+async def download_video(request: VideoJobRequest) -> Response:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            video = await provider.download(request.provider_job_id)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+    return Response(
+        content=video,
+        media_type="video/mp4",
+        headers={"Content-Disposition": 'attachment; filename="markos-ai-video.mp4"'},
+    )
 
 
 @app.post("/ai/agents/run", response_model=AgentRunResponse)

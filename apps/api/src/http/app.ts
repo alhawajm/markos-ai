@@ -14,6 +14,7 @@ import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
 import { registerMetaRoutes } from "../meta/meta-routes";
+import { registerNotificationRoutes } from "../notifications/notification-routes";
 import { initObservability } from "../observability/sentry";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
 import { registerPromptRoutes } from "../prompts/prompt-routes";
@@ -81,6 +82,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerContentRoutes(app);
   await registerMediaRoutes(app);
   await registerMetaRoutes(app);
+  await registerNotificationRoutes(app);
   await registerPromptRoutes(app);
   await registerPublishingRoutes(app);
   await registerWorkspaceRoutes(app);

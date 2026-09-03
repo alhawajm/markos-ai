@@ -59,6 +59,8 @@ import type {
   KnowledgeVaultEntry,
   Locale,
   MediaAssetRecord,
+  MediaGenerationJobRecord,
+  PublishJobRecord,
   VaultCompletenessScore,
   VaultSection
 } from "@markos/shared-types";
@@ -1135,11 +1137,16 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [revisionPrompt, setRevisionPrompt] = useState("");
   const [revising, setRevising] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [videoGeneration, setVideoGeneration] = useState<MediaGenerationJobRecord | null>(null);
+  const [videoStarting, setVideoStarting] = useState(false);
+  const [videoDurationSeconds, setVideoDurationSeconds] = useState<4 | 8 | 12>(8);
   const [uploading, setUploading] = useState(false);
   const [removingMedia, setRemovingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [publishingNow, setPublishingNow] = useState(false);
+  const [publishJob, setPublishJob] = useState<PublishJobRecord | null>(null);
   const [unscheduling, setUnscheduling] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1211,12 +1218,123 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const selectedMedia = attachedMediaAssets.find((asset) => asset?.id === selectedMediaId) ?? attachedMediaAssets[0] ?? null;
   const activeCaption = captionLanguage === "ar" ? captionAr : captionEn;
   const setActiveCaption = captionLanguage === "ar" ? setCaptionAr : setCaptionEn;
+  const assistantApplied =
+    assistantSuggestion !== null && assistantCaption.trim() === activeCaption.trim() && assistantVisualDirection.trim() === imagePrompt.trim();
 
   useEffect(() => {
     if (contentType === "POST" && imageAspectRatio === "9:16") {
       setImageAspectRatio("4:5");
     }
   }, [contentType, imageAspectRatio]);
+
+  useEffect(() => {
+    const contentItemId = currentRecord?.id;
+    if (!contentItemId || (contentType !== "REEL" && contentType !== "STORY")) {
+      setVideoGeneration(null);
+      return;
+    }
+
+    let cancelled = false;
+    void client
+      .latestMediaGenerationJob(contentItemId)
+      .then((job) => {
+        if (!cancelled) setVideoGeneration(job);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoGeneration(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, contentType, currentRecord?.id]);
+
+  useEffect(() => {
+    if (!videoGeneration || !["QUEUED", "STARTING", "GENERATING", "PROCESSING"].includes(videoGeneration.status)) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void client
+        .mediaGenerationJob(videoGeneration.id)
+        .then(async (job) => {
+          if (cancelled) return;
+          setVideoGeneration(job);
+          if (job.status === "COMPLETED") {
+            const [nextRecords, nextMediaAssets] = await Promise.all([client.contentItems(), client.mediaAssets()]);
+            if (cancelled) return;
+            setRecords(nextRecords);
+            setMediaAssets(nextMediaAssets);
+            const updated = nextRecords.find((item) => item.id === job.contentItemId);
+            if (updated) {
+              setCurrentRecord(updated);
+              setDraftBaseline(contentDraftFieldsFromRecord(updated));
+            }
+            if (job.outputMediaAssetId) setSelectedMediaId(job.outputMediaAssetId);
+            setSidePanel("preview");
+            setAssistantMessageKind("success");
+            setAssistantMessage(locale === "ar" ? "تم إنشاء الفيديو وإضافته إلى الاستوديو." : "Video generated and inserted into the studio.");
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setAssistantMessageKind("error");
+            setAssistantMessage(contentStudioError(error));
+          }
+        });
+    }, 4_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [client, locale, videoGeneration]);
+
+  useEffect(() => {
+    const contentItemId = currentRecord?.id;
+    if (!contentItemId) {
+      setPublishJob(null);
+      return;
+    }
+    let cancelled = false;
+    void client
+      .latestPublishJob(contentItemId)
+      .then((job) => {
+        if (!cancelled) setPublishJob(job);
+      })
+      .catch(() => {
+        if (!cancelled) setPublishJob(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, currentRecord?.id]);
+
+  useEffect(() => {
+    if (!publishJob || !["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(publishJob.status)) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void client.latestPublishJob(publishJob.contentItemId).then(async (job) => {
+        if (cancelled || !job) return;
+        setPublishJob(job);
+        if (job.status === "PUBLISHED" || job.status === "FAILED") {
+          const nextRecords = await client.contentItems();
+          if (cancelled) return;
+          setRecords(nextRecords);
+          const updated = nextRecords.find((item) => item.id === job.contentItemId);
+          if (updated) setCurrentRecord(updated);
+          setMessage(
+            job.status === "PUBLISHED"
+              ? locale === "ar"
+                ? "تم النشر على Instagram."
+                : "Published to Instagram."
+              : job.lastErrorMessage ||
+                  (locale === "ar" ? "تعذر النشر. راجع التنبيه وحاول مرة أخرى." : "Publishing failed. Review the notification and try again.")
+          );
+        }
+      });
+    }, 4_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [client, locale, publishJob]);
 
   useEffect(() => {
     if (!schedulePanelOpen) return;
@@ -1545,14 +1663,14 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
     setActiveCaption(assistantCaption);
     setImagePrompt(assistantVisualDirection);
-    setImageComposerOpen(true);
+    setImageComposerOpen(false);
     setMediaLibraryOpen(false);
     setAssistantReplacementWarning(false);
     setAssistantMessageKind("success");
     setAssistantMessage(
       locale === "ar"
-        ? "تمت إضافة النص والتوجيه البصري إلى الاستوديو. يمكنك تعديلهما أو بدء إنشاء الصورة."
-        : "Caption and visual direction inserted into the studio. You can edit either one or start image generation."
+        ? "تمت إضافة النص والتوجيه البصري إلى الاستوديو. يمكنك تعديلهما أو بدء إنشاء الوسائط."
+        : "Caption and visual direction inserted into the studio. You can edit either one or start media generation."
     );
   }
 
@@ -1734,6 +1852,28 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setMessage(contentStudioError(error));
     } finally {
       setScheduling(false);
+    }
+  }
+
+  async function publishNow() {
+    if (!currentRecord || currentRecord.status !== "APPROVED") {
+      setMessage(locale === "ar" ? "اجعل المحتوى جاهزاً قبل نشره." : "Mark this content Ready before publishing it.");
+      return;
+    }
+    setPublishingNow(true);
+    try {
+      const job = await client.publishContentNow(currentRecord.id);
+      setPublishJob(job);
+      const nextRecords = await client.contentItems();
+      setRecords(nextRecords);
+      const updated = nextRecords.find((item) => item.id === currentRecord.id);
+      if (updated) setCurrentRecord(updated);
+      setSchedulePanelOpen(false);
+      setMessage(locale === "ar" ? "تمت إضافة المنشور إلى قائمة النشر الآن." : "Queued to publish now.");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setPublishingNow(false);
     }
   }
 
@@ -1972,6 +2112,89 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setMessage(contentStudioError(error));
     } finally {
       setGeneratingImage(false);
+    }
+  }
+
+  async function generateVideo() {
+    if (!session) {
+      setMessage(locale === "ar" ? "سجّل الدخول مرة أخرى قبل إنشاء فيديو." : "Sign in again before creating a video.");
+      return;
+    }
+    if (!contentTypeConfirmed || (contentType !== "REEL" && contentType !== "STORY")) {
+      setMessage(locale === "ar" ? "اختر ريل أو قصة لإنشاء فيديو." : "Choose Reel or Story before generating a video.");
+      return;
+    }
+    if (currentRecord && !canManageMedia) {
+      setMessage(`Media cannot be changed while this item is ${statusLabel(currentRecord.status).toLowerCase()}.`);
+      return;
+    }
+    if (imagePrompt.trim().length < 3) {
+      setAssistantMessageKind("error");
+      setAssistantMessage(locale === "ar" ? "أضف توجيهاً بصرياً قبل إنشاء الفيديو." : "Add a visual direction before generating video.");
+      return;
+    }
+
+    setVideoStarting(true);
+    setAssistantMessageKind("info");
+    setAssistantMessage(locale === "ar" ? "جارٍ بدء إنشاء الفيديو..." : "Starting video generation...");
+    try {
+      const editableRecord = canEdit ? await persistEditableDraft(false, true) : currentRecord;
+      if (!editableRecord) return;
+      const job = await client.generateContentVideo(editableRecord.id, {
+        aspectRatio: "9:16",
+        durationSeconds: videoDurationSeconds,
+        prompt: imagePrompt.trim()
+      });
+      setVideoGeneration(job);
+      setImageComposerOpen(false);
+      setAssistantMessageKind("success");
+      setAssistantMessage(
+        locale === "ar"
+          ? "بدأ إنشاء الفيديو. يمكنك متابعة العمل بينما يجهزه MARKOS."
+          : "Video generation started. You can keep working while MARKOS prepares it."
+      );
+    } catch (error) {
+      setAssistantMessageKind("error");
+      setAssistantMessage(contentStudioError(error));
+    } finally {
+      setVideoStarting(false);
+    }
+  }
+
+  async function cancelVideoGeneration() {
+    if (!videoGeneration) return;
+    try {
+      const job = await client.cancelMediaGeneration(videoGeneration.id);
+      setVideoGeneration(job);
+      setAssistantMessageKind("info");
+      setAssistantMessage(locale === "ar" ? "تم إلغاء إنشاء الفيديو." : "Video generation cancelled.");
+    } catch (error) {
+      setAssistantMessageKind("error");
+      setAssistantMessage(contentStudioError(error));
+    }
+  }
+
+  async function retryVideoGeneration() {
+    if (!videoGeneration) return;
+    setVideoStarting(true);
+    try {
+      const job = await client.retryMediaGeneration(videoGeneration.id);
+      setVideoGeneration(job);
+      setAssistantMessageKind("info");
+      setAssistantMessage(locale === "ar" ? "أعدنا بدء إنشاء الفيديو." : "Video generation restarted.");
+    } catch (error) {
+      setAssistantMessageKind("error");
+      setAssistantMessage(contentStudioError(error));
+    } finally {
+      setVideoStarting(false);
+    }
+  }
+
+  function generateApprovedMedia() {
+    if (contentType === "REEL" || contentType === "STORY") {
+      void generateVideo();
+    } else {
+      void generateImage();
     }
   }
 
@@ -2512,7 +2735,15 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     <Wand2 size={17} />
                   </span>
                   <span>
-                    <strong className="block text-sm">{locale === "ar" ? "إنشاء صورة" : "Generate image"}</strong>
+                    <strong className="block text-sm">
+                      {locale === "ar"
+                        ? contentType === "REEL" || contentType === "STORY"
+                          ? "إنشاء فيديو"
+                          : "إنشاء صورة"
+                        : contentType === "REEL" || contentType === "STORY"
+                          ? "Generate video"
+                          : "Generate image"}
+                    </strong>
                     <small className="block text-xs font-semibold text-[var(--sunlit-muted)]">
                       {locale === "ar" ? "أنشئ باستخدام MARKOS AI" : "Create with MARKOS AI"}
                     </small>
@@ -2549,30 +2780,42 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               {imageComposerOpen ? (
                 <div className="mt-3 grid gap-3 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper-deep)] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
                   <label className="grid gap-2 text-xs font-extrabold text-[var(--sunlit-ink)]">
-                    {locale === "ar" ? "توجيه بصري اختياري" : "Optional visual direction"}
+                    {locale === "ar" ? "التوجيه البصري" : "Visual direction"}
                     <input
                       className="sunlit-field h-11 rounded-xl px-3 text-sm font-normal outline-none"
                       onChange={(event) => setImagePrompt(event.target.value)}
                       value={imagePrompt}
                     />
                   </label>
-                  <select
-                    aria-label="Image aspect ratio"
-                    className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
-                    onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
-                    value={imageAspectRatio}
-                  >
-                    <option value="1:1">Square · 1:1</option>
-                    <option value="4:5">Portrait · 4:5</option>
-                    {contentType === "POST" ? null : <option value="9:16">Vertical · 9:16</option>}
-                  </select>
+                  {contentType === "REEL" || contentType === "STORY" ? (
+                    <select
+                      aria-label={locale === "ar" ? "مدة الفيديو" : "Video duration"}
+                      className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
+                      onChange={(event) => setVideoDurationSeconds(Number(event.target.value) as 4 | 8 | 12)}
+                      value={videoDurationSeconds}
+                    >
+                      <option value={4}>4 seconds</option>
+                      <option value={8}>8 seconds</option>
+                      <option value={12}>12 seconds</option>
+                    </select>
+                  ) : (
+                    <select
+                      aria-label="Image aspect ratio"
+                      className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
+                      onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
+                      value={imageAspectRatio}
+                    >
+                      <option value="1:1">Square · 1:1</option>
+                      <option value="4:5">Portrait · 4:5</option>
+                    </select>
+                  )}
                   <button
                     className="sunlit-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
-                    disabled={generatingImage}
-                    onClick={() => void generateImage()}
+                    disabled={generatingImage || videoStarting}
+                    onClick={generateApprovedMedia}
                     type="button"
                   >
-                    <Wand2 size={17} /> {generatingImage ? "Generating…" : locale === "ar" ? "إنشاء" : "Generate"}
+                    <Wand2 size={17} /> {generatingImage || videoStarting ? "Starting…" : locale === "ar" ? "إنشاء" : "Generate"}
                   </button>
                 </div>
               ) : null}
@@ -2845,6 +3088,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         <div className="min-h-[620px] xl:sticky xl:top-6 xl:h-[calc(100vh-4.5rem)] xl:min-h-0">
           <ContentStudioAssistantPanel
             activePanel={sidePanel}
+            assistantApplied={assistantApplied}
             assistantCaption={assistantCaption}
             assistantMessage={assistantMessage}
             assistantMessageKind={assistantMessageKind}
@@ -2854,14 +3098,19 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             contentType={contentType}
             hasSuggestion={assistantSuggestion !== null}
             locale={locale}
+            mediaBusy={generatingImage || videoStarting}
+            mediaGeneration={videoGeneration}
             onCancel={cancelAssistantIdea}
+            onCancelMedia={() => void cancelVideoGeneration()}
             onCaptionChange={setAssistantCaption}
             onDismissReplacement={() => setAssistantReplacementWarning(false)}
             onGenerate={() => void generateAssistantIdea()}
+            onGenerateApprovedMedia={generateApprovedMedia}
             onInsert={insertAssistantIdea}
             onPanelChange={setSidePanel}
             onPromptChange={setPrompt}
             onVisualDirectionChange={setAssistantVisualDirection}
+            onRetryMedia={() => void retryVideoGeneration()}
             preview={
               selectedMedia ? (
                 <InstagramPostPreview
@@ -2887,7 +3136,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           <button
             aria-label={locale === "ar" ? "إغلاق لوحة الجدولة" : "Close scheduling panel"}
             className="absolute inset-0 cursor-default"
-            disabled={scheduling}
+            disabled={scheduling || publishingNow}
             onClick={() => setSchedulePanelOpen(false)}
             type="button"
           />
@@ -2912,7 +3161,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <button
                 aria-label={locale === "ar" ? "إغلاق" : "Close"}
                 className="sunlit-secondary grid h-11 w-11 shrink-0 place-items-center rounded-full"
-                disabled={scheduling}
+                disabled={scheduling || publishingNow}
                 onClick={() => setSchedulePanelOpen(false)}
                 type="button"
               >
@@ -2945,6 +3194,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   <input
                     className="sunlit-field h-12 rounded-xl px-4 text-base font-normal outline-none"
                     onChange={(event) => setScheduleTime(event.target.value)}
+                    step={1800}
                     type="time"
                     value={scheduleTime}
                   />
@@ -2964,15 +3214,24 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             <footer className="flex flex-wrap justify-end gap-3 border-t border-[var(--sunlit-line)] bg-white px-6 py-5 sm:px-8">
               <button
                 className="sunlit-secondary min-h-12 rounded-xl px-6 text-sm font-extrabold"
-                disabled={scheduling}
+                disabled={scheduling || publishingNow}
                 onClick={() => setSchedulePanelOpen(false)}
                 type="button"
               >
                 {locale === "ar" ? "إلغاء" : "Cancel"}
               </button>
               <button
+                className="sunlit-secondary inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={scheduling || publishingNow}
+                onClick={() => void publishNow()}
+                type="button"
+              >
+                <Zap size={18} />
+                {publishingNow ? (locale === "ar" ? "جارٍ الإضافة..." : "Queuing...") : locale === "ar" ? "انشر الآن" : "Publish now"}
+              </button>
+              <button
                 className="sunlit-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={scheduling || !scheduleDate || !scheduleTime}
+                disabled={scheduling || publishingNow || !scheduleDate || !scheduleTime}
                 onClick={() => void scheduleDraft()}
                 type="button"
               >

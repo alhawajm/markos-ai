@@ -154,7 +154,7 @@ Observability:
 
 ### Worker runtime
 
-Follow the focused [Railway worker setup guide](railway-worker-setup.md) for the exact service, reference variables, deployment settings, and live verification sequence. The current worker needs PostgreSQL, the Instagram credential encryption key, live-mode settings, and private Bucket access. It does not consume Redis, OpenSearch, the AI service, SendGrid, JWT settings, or OAuth callback configuration.
+Follow the focused [Railway worker setup guide](railway-worker-setup.md) for the exact service, reference variables, deployment settings, and live verification sequence. The current worker needs PostgreSQL, the Instagram credential encryption key, live-mode settings, private Bucket access, and the AI service's private URL plus the shared internal-service token for video-generation jobs. It does not consume Redis, OpenSearch, SendGrid, JWT settings, or OAuth callback configuration.
 
 Worker intervals are:
 
@@ -164,7 +164,7 @@ Worker intervals are:
 - `WORKER_TOKEN_REFRESH_INTERVAL_MS`
 - `WORKER_USAGE_RESET_INTERVAL_MS`
 
-For the showcase, set only `WORKER_PUBLISHING_INTERVAL_MS=300000`; the remaining intervals use their source defaults. Do not copy all API secrets blindly.
+For the showcase, set only `WORKER_PUBLISHING_INTERVAL_MS=60000`; the same tick advances both durable publishing and video-generation jobs, while the remaining intervals use their source defaults. Do not copy all API secrets blindly.
 
 ### AI runtime
 
@@ -173,12 +173,15 @@ Current code consumes:
 - `AI_PORT`
 - `INTERNAL_SERVICE_TOKEN` (must match the API value; enforced on non-health routes)
 - `AI_TEXT_PROVIDER` (`local` for deterministic Campaign/profile/content development, `openai` for live provider-backed Campaign generation, onboarding profiles, both onboarding document analyzers, and content copy; document analysis has no local product fallback)
-- `AI_IMAGE_PROVIDER` (`local` for deterministic development JPEGs, `openai` for live provider-backed image generation)
-- `OPENAI_API_KEY` (AI service only; required when either provider selector is `openai`)
+- `AI_IMAGE_PROVIDER` (`disabled` by default; `openai` for provider-backed image generation; no synthetic fallback)
+- `AI_VIDEO_PROVIDER` (`disabled` by default; `openai` for the temporary Sora showcase bridge)
+- `VIDEO_MODEL_PRIMARY` (required when `AI_VIDEO_PROVIDER=openai`; currently `sora-2` for the time-boxed showcase bridge)
+- `OPENAI_API_KEY` (AI service only; required when any provider selector is `openai`)
 - `AI_CAMPAIGN_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
 - `AI_CONTENT_TIMEOUT_SECONDS`
 - `AI_IMAGE_TIMEOUT_SECONDS`
+- `AI_VIDEO_TIMEOUT_SECONDS`
 - `OPENAI_TIMEOUT_SECONDS`
 - `OPENAI_MAX_RETRIES`
 - `OPENAI_MAX_OUTPUT_TOKENS`

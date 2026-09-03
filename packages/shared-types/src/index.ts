@@ -649,6 +649,62 @@ export interface AiImageGenerationResult {
   promptVersion: string;
 }
 
+export const mediaGenerationStatuses = ["QUEUED", "STARTING", "GENERATING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"] as const;
+export type MediaGenerationStatus = (typeof mediaGenerationStatuses)[number];
+
+export interface MediaGenerationJobRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  kind: "VIDEO";
+  status: MediaGenerationStatus;
+  prompt: string;
+  aspectRatio: "9:16";
+  durationSeconds: 4 | 8 | 12;
+  progress: number;
+  model?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  retryable?: boolean;
+  outputMediaAssetId?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const publishJobStatuses = ["QUEUED", "PROCESSING", "RETRY_WAIT", "PUBLISHED", "FAILED", "CANCELLED"] as const;
+export type PublishJobStatus = (typeof publishJobStatuses)[number];
+
+export interface PublishJobRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  status: PublishJobStatus;
+  trigger: "SCHEDULED" | "PUBLISH_NOW";
+  scheduledFor: string;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  userId: string;
+  workspaceId?: string;
+  channel: string;
+  templateKey: string;
+  payload: Record<string, unknown>;
+  readAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PromptTemplateRecord {
   id: string;
   workspaceId: string;

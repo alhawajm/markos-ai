@@ -77,6 +77,34 @@ enum MediaType {
   AI_GENERATED
 }
 
+enum MediaGenerationKind {
+  VIDEO
+}
+
+enum MediaGenerationStatus {
+  QUEUED
+  STARTING
+  GENERATING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PublishJobStatus {
+  QUEUED
+  PROCESSING
+  RETRY_WAIT
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum PublishTrigger {
+  SCHEDULED
+  PUBLISH_NOW
+}
+
 enum MetricType {
   ACCOUNT
   POST
@@ -559,6 +587,80 @@ model MediaAsset {
 
   @@index([workspaceId, type])
   @@map("media_assets")
+}
+
+model MediaGenerationJob {
+  id                 String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId        String                @db.Uuid
+  contentItemId      String                @db.Uuid
+  kind               MediaGenerationKind   @default(VIDEO)
+  status             MediaGenerationStatus @default(QUEUED)
+  prompt             String
+  aspectRatio        String                @default("9:16")
+  durationSeconds    Int                   @default(8)
+  provider           String                @default("openai_sora")
+  model              String?
+  providerJobId      String?
+  progress           Int                   @default(0)
+  errorCode          String?
+  errorMessage       String?
+  retryable          Boolean?
+  attempts           Int                   @default(0)
+  nextAttemptAt      DateTime              @default(now())
+  leasedAt           DateTime?
+  leaseExpiresAt     DateTime?
+  outputMediaAssetId String?               @db.Uuid
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([contentItemId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("media_generation_jobs")
+}
+
+model PublishJob {
+  id               String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId      String           @db.Uuid
+  contentItemId    String           @db.Uuid
+  status           PublishJobStatus @default(QUEUED)
+  trigger          PublishTrigger
+  scheduledFor     DateTime
+  idempotencyKey   String           @unique
+  attempts         Int              @default(0)
+  maxAttempts      Int              @default(3)
+  nextAttemptAt    DateTime         @default(now())
+  leasedAt         DateTime?
+  leaseExpiresAt   DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  publishedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([contentItemId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("publish_jobs")
+}
+
+model PublishAttempt {
+  id            String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String    @db.Uuid
+  publishJobId  String    @db.Uuid
+  contentItemId String    @db.Uuid
+  attemptNumber Int
+  status        String
+  errorCode     String?
+  retryable     Boolean?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([workspaceId, startedAt])
+  @@index([publishJobId, attemptNumber])
+  @@map("publish_attempts")
 }
 
 model InstagramAnalytics {
