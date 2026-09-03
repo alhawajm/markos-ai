@@ -56,6 +56,9 @@ export type VaultSection = (typeof vaultSections)[number];
 export const contentTypes = ["POST", "CAROUSEL", "STORY", "REEL"] as const;
 export type ContentType = (typeof contentTypes)[number];
 
+export const contentPlatforms = ["INSTAGRAM"] as const;
+export type ContentPlatform = (typeof contentPlatforms)[number];
+
 export const contentStatuses = ["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
 
@@ -555,6 +558,7 @@ export interface ContentDraft {
   contentType: ContentType;
   captionEn?: string;
   captionAr?: string;
+  visualDirection?: string;
   hashtags: string[];
   callToAction?: string;
   contentPillar?: string;
@@ -572,6 +576,7 @@ export interface ContentToneLock {
 export interface ContentRecord {
   id: string;
   workspaceId: string;
+  platform?: ContentPlatform;
   contentType: ContentType;
   status: ContentStatus;
   brief?: string;
@@ -587,6 +592,7 @@ export interface ContentRecord {
   campaignGoal?: string;
   campaignWeek?: number;
   campaignActionIndex?: number;
+  tone?: string;
   aiPromptUsed?: string;
   plannedAt?: string;
   scheduledAt?: string;
@@ -771,6 +777,12 @@ export interface AnalyticsSummary {
     metricType: InstagramMetricType;
     totals: AnalyticsMetricTotals;
   }>;
+  comparison: {
+    from: string;
+    percentageChanges: Record<keyof AnalyticsMetricTotals, number | null>;
+    to: string;
+    totals: AnalyticsMetricTotals;
+  };
   daily: Array<{
     dataDate: string;
     totals: AnalyticsMetricTotals;

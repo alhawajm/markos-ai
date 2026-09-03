@@ -181,6 +181,57 @@ describe("analytics routes", () => {
     await app.close();
   });
 
+  it("compares the selected analytics window with the immediately preceding period", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const today = dayStart(new Date());
+    const previousWindowDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    await prisma.instagramAnalytics.createMany({
+      data: [
+        {
+          dataDate: today,
+          metricType: "ACCOUNT",
+          metrics: { reach: 150 },
+          syncedAt: new Date(),
+          workspaceId: session.workspace.id
+        },
+        {
+          dataDate: previousWindowDate,
+          metricType: "ACCOUNT",
+          metrics: { reach: 100 },
+          syncedAt: new Date(),
+          workspaceId: session.workspace.id
+        }
+      ]
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/analytics?days=7",
+      headers
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      comparison: {
+        percentageChanges: {
+          reach: 50
+        },
+        totals: {
+          reach: 100
+        }
+      },
+      days: 7,
+      totals: {
+        reach: 150
+      }
+    });
+
+    await app.close();
+  });
+
   it("does not leak analytics records across workspace boundaries", async () => {
     const app = await buildApp();
     const first = await registerTestUser(app);

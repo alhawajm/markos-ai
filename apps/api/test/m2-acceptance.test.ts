@@ -110,7 +110,7 @@ describe("M2 acceptance", () => {
       headers,
       payload: {
         objective: "increase wholesale office coffee leads",
-        durationDays: 90,
+        durationDays: 14,
         publishesPerDay: 1,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
@@ -251,7 +251,7 @@ describe("M2 acceptance", () => {
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers["content-type"]).toContain("application/pdf");
     expect(pdf.body).toContain("MARKOS AI Campaign Export");
-    expect(pdf.body).toContain("90-day campaign: increase wholesale office coffee leads");
+    expect(pdf.body).toContain("14-day campaign: increase wholesale office coffee leads");
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {

@@ -19,6 +19,7 @@ export async function generateContentDrafts(input: {
   campaign?: CampaignPlan;
   toneLock: ContentToneLock;
   promptTemplate?: { body: string; version: string };
+  revision?: { instruction: string; currentDraft: ContentDraft };
 }): Promise<ContentGenerateResponse> {
   const model = await resolveModelSetting("LLM_PRIMARY_MODEL");
   const body = {
@@ -38,6 +39,16 @@ export async function generateContentDrafts(input: {
       ...(input.toneLock.voiceNotes === undefined ? {} : { voice_notes: input.toneLock.voiceNotes }),
       brand_hints: input.toneLock.brandHints
     },
+    ...(input.revision === undefined
+      ? {}
+      : {
+          revision_instruction: input.revision.instruction,
+          current_draft: {
+            ...input.revision.currentDraft,
+            carousel: input.revision.currentDraft.carousel ?? null,
+            reelScript: input.revision.currentDraft.reelScript ?? null
+          }
+        }),
     ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
     model
   };

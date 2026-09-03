@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, UserRound } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { SettingsPanel } from "./settings-panel";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 const SETTINGS_RETURN_KEY = "markos.settings.returnTo";
 
@@ -37,7 +38,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
       <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6" dir={locale === "ar" ? "rtl" : "ltr"}>
         <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
-            <Sparkles size={25} />
+            <MarkosAiIcon size={25} />
           </span>
           <h1 className="mt-6 text-2xl font-bold text-[var(--sunlit-ink)]">
             {sessionCheckFailed
@@ -75,7 +76,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
             </Link>
             <Link className="flex min-w-0 items-center gap-3" href={`/${locale}/app`}>
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)]">
-                <Sparkles size={18} />
+                <MarkosAiIcon size={18} />
               </span>
               <span className="hidden sm:block">
                 <span className="block text-sm font-bold text-[var(--sunlit-ink)]">MARKOS AI</span>

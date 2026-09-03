@@ -6,8 +6,8 @@ const ENTER_EASE = [0.22, 1, 0.36, 1] as const;
 const EXIT_EASE = [0.4, 0, 0.2, 1] as const;
 
 export const calendarLayoutTransition: Transition = {
-  layout: { duration: 0.18, ease: ENTER_EASE },
-  opacity: { duration: 0.12, ease: ENTER_EASE }
+  opacity: { duration: 0.12, ease: ENTER_EASE },
+  transform: { duration: 0.14, ease: ENTER_EASE }
 };
 
 export const calendarBackdropVariants: Variants = {
@@ -19,25 +19,25 @@ export const calendarBackdropVariants: Variants = {
 export const calendarFocusVariants: Variants = {
   enter: {
     opacity: 1,
-    scale: 1,
+    y: 0,
     transition: {
       opacity: { duration: 0.14, ease: ENTER_EASE },
-      scale: { duration: 0.18, ease: ENTER_EASE }
+      y: { duration: 0.14, ease: ENTER_EASE }
     }
   },
   exit: {
     opacity: 0,
     pointerEvents: "none",
-    scale: 0.992,
+    y: 4,
     transition: { duration: 0.11, ease: EXIT_EASE }
   },
-  initial: { opacity: 0.7, scale: 0.988 }
+  initial: { opacity: 0, y: 6 }
 };
 
 export const calendarDayVariants: Variants = {
-  enter: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.16, ease: ENTER_EASE } },
-  exit: { opacity: 0, pointerEvents: "none", scale: 0.995, y: -4, transition: { duration: 0.09, ease: EXIT_EASE } },
-  initial: { opacity: 0, scale: 0.995, y: 7 }
+  enter: { opacity: 1, y: 0, transition: { duration: 0.14, ease: ENTER_EASE } },
+  exit: { opacity: 0, pointerEvents: "none", y: -3, transition: { duration: 0.08, ease: EXIT_EASE } },
+  initial: { opacity: 0, y: 5 }
 };
 
 export const calendarRecordFocusVariants: Variants = {
@@ -50,20 +50,8 @@ export function calendarRecordDetailVariants(isRtl: boolean): Variants {
   const inlineOffset = isRtl ? -20 : 20;
 
   return {
-    enter: { opacity: 1, scale: 1, x: 0, transition: { duration: 0.15, ease: ENTER_EASE } },
-    exit: { opacity: 0, pointerEvents: "none", scale: 0.997, x: -inlineOffset * 0.35, transition: { duration: 0.08, ease: EXIT_EASE } },
-    initial: { opacity: 0, scale: 0.995, x: inlineOffset }
+    enter: { opacity: 1, x: 0, transition: { duration: 0.14, ease: ENTER_EASE } },
+    exit: { opacity: 0, pointerEvents: "none", x: -inlineOffset * 0.25, transition: { duration: 0.08, ease: EXIT_EASE } },
+    initial: { opacity: 0, x: inlineOffset * 0.5 }
   };
-}
-
-export function calendarDayLayoutId(dateKey: string) {
-  return `calendar-day-${dateKey}`;
-}
-
-export function calendarDayContextLayoutId(dateKey: string) {
-  return `calendar-day-context-${dateKey}`;
-}
-
-export function calendarRecordLayoutId(recordId: string) {
-  return `calendar-record-${recordId}`;
 }

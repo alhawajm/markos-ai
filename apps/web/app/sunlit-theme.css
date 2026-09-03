@@ -181,6 +181,8 @@
   border: 0;
   background: linear-gradient(115deg, var(--sunlit-coral) 0%, #ff8a5f 48%, var(--sunlit-yellow) 100%);
   color: var(--sunlit-ink);
+  font-size: 0.95rem;
+  line-height: 1.25rem;
   box-shadow: 0 14px 28px rgb(255 102 90 / 20%);
 }
 
@@ -194,6 +196,8 @@
   border: 1px solid var(--sunlit-line-strong);
   background: rgb(255 255 255 / 78%);
   color: var(--sunlit-ink);
+  font-size: 0.95rem;
+  line-height: 1.25rem;
 }
 
 .sunlit-secondary:hover {
@@ -217,6 +221,45 @@
 .onboarding-offering-table {
   scrollbar-color: rgb(98 91 102 / 42%) transparent;
   scrollbar-width: thin;
+}
+
+.sunlit-card-scroll {
+  overscroll-behavior: contain;
+  scrollbar-color: rgb(33 191 174 / 46%) transparent;
+  scrollbar-width: thin;
+}
+
+.sunlit-card-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.sunlit-card-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sunlit-card-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(33 191 174 / 46%);
+  background-clip: padding-box;
+}
+
+.sunlit-card-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(14 136 123 / 68%);
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunlit-theme *,
+  .sunlit-theme *::before,
+  .sunlit-theme *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }
 
 .onboarding-prose-field {

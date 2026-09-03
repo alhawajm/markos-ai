@@ -54,7 +54,7 @@ def test_campaign_generation_contract() -> None:
         json={
             "workspace_id": "workspace-1",
             "objective": "increase wholesale cafe leads",
-            "duration_days": 90,
+            "duration_days": 14,
             "publishes_per_day": 2,
             "starts_at": "2026-09-01T00:00:00Z",
             "context": [
@@ -72,10 +72,10 @@ def test_campaign_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-campaign-model"
-    assert body["prompt_version"] == "campaign.v1.local"
+    assert body["prompt_version"] == "campaign.v2.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
-    assert body["campaign"]["durationDays"] == 90
+    assert body["campaign"]["durationDays"] == 14
     assert body["campaign"]["publishesPerDay"] == 2
     assert "COMPANY/profile" in body["campaign"]["summary"]
 
@@ -199,7 +199,7 @@ def test_content_generation_contract() -> None:
     assert body["drafts"][0]["carousel"]["slides"]
 
 
-def test_image_generation_contract() -> None:
+def test_image_generation_is_honestly_disabled_without_a_real_provider() -> None:
     client = TestClient(app)
     response = client.post(
         "/ai/images/generate",
@@ -212,17 +212,13 @@ def test_image_generation_contract() -> None:
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
-    assert body["model"] == "local-image-generator"
-    assert body["prompt_version"] == "image.v2.local"
-    assert body["mime_type"] == "image/jpeg"
-    assert body["filename"].endswith(".jpg")
-    assert body["width"] == 1024
-    assert body["height"] == 1280
-    assert body["tokens_in"] == 0
-    assert body["tokens_out"] == 0
-    assert base64.b64decode(body["base64_data"]).startswith(b"\xff\xd8")
+    assert body["error"] == {
+        "code": "AI_IMAGE_GENERATION_DISABLED",
+        "message": "AI image generation is not available in this environment. Upload an image instead.",
+        "details": [{"retryable": False}],
+    }
 
 
 def test_all_agent_run_contracts_are_grounded() -> None:

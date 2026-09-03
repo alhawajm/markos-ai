@@ -326,6 +326,7 @@ describe("campaign routes", () => {
     expect(firstApproval.statusCode).toBe(200);
     expect(draft).toMatchObject({
       workspaceId: owner.workspace.id,
+      platform: "INSTAGRAM",
       status: "DRAFT",
       contentType: "CAROUSEL",
       brief: "Publish launch carousel\nIntroduce the subscription paths and their value.",
@@ -333,13 +334,17 @@ describe("campaign routes", () => {
       campaignGoal: "Explain the offer",
       contentPillar: "Offer education",
       campaignWeek: 1,
-      campaignActionIndex: 0
+      campaignActionIndex: 0,
+      plannedAt: "2026-09-01T00:00:00.000Z"
     });
     expect(repeatedApproval.statusCode).toBe(200);
     expect(repeatedApproval.json().data.id).toBe(draft.id);
     expect(campaignDrafts.json().data).toHaveLength(1);
     expect(createRecords.json().data).toEqual(expect.arrayContaining([expect.objectContaining({ id: draft.id })]));
-    expect(calendar.json().data.unscheduled.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: draft.id })]));
+    expect(calendar.json().data.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: draft.id, campaignId: campaign.id, plannedAt: "2026-09-01T00:00:00.000Z" })])
+    );
+    expect(calendar.json().data.unscheduled.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: draft.id })]));
     await expect(
       prisma.contentItem.count({
         where: { campaignId: campaign.id, campaignWeek: 1, campaignActionIndex: 0 }

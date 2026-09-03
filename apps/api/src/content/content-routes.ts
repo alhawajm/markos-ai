@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import {
   createContentSchema,
+  generateContentForItemSchema,
   generateContentForSlotSchema,
   generateContentSchema,
+  ideateContentSchema,
+  reviseContentItemSchema,
   scheduleContentSchema,
   updateContentSchema,
   updateContentStatusSchema
@@ -16,13 +19,17 @@ import {
   ContentItemDeleteError,
   ContentItemLockedError,
   ContentItemNotFoundError,
+  ContentRevisionUnavailableError,
   ContentScheduleError,
   ContentStatusTransitionError,
   createWorkspaceContent,
   deleteContentItem,
   generateWorkspaceContentForSlot,
+  generateWorkspaceContentForItem,
   generateWorkspaceContent,
+  ideateWorkspaceContent,
   listContentItems,
+  reviseWorkspaceContentItem,
   rescheduleContentItem,
   scheduleContentItem,
   unscheduleContentItem,
@@ -42,6 +49,156 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     async () => {
       const { workspaceId } = requireWorkspaceContext();
       return ok(await listContentItems(workspaceId));
+    }
+  );
+
+  app.post(
+    "/v1/content/ideate",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write"]
+      }
+    },
+    async (request, reply) => {
+      const parsed = ideateContentSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content ideation request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await ideateWorkspaceContent(workspaceId, parsed.data));
+      } catch (error) {
+        if (error instanceof ContentContextMissingError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+        if (error instanceof ContentCampaignNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
+        }
+        if (error instanceof UsageQuotaExceededError) {
+          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/content/:contentItemId/generate",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      const parsed = generateContentForItemSchema.safeParse(request.body ?? {});
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content item generation request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await generateWorkspaceContentForItem(workspaceId, params.contentItemId, parsed.data));
+      } catch (error) {
+        if (error instanceof ContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof ContentItemLockedError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
+        }
+
+        if (error instanceof ContentContextMissingError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof ContentCampaignNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof UsageQuotaExceededError) {
+          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post(
+    "/v1/content/:contentItemId/revise",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      const parsed = reviseContentItemSchema.safeParse(request.body ?? {});
+
+      if (!params.contentItemId) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      }
+
+      if (!parsed.success) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content revision request", parsed.error.issues));
+      }
+
+      const { workspaceId } = requireWorkspaceContext();
+
+      try {
+        return ok(await reviseWorkspaceContentItem(workspaceId, params.contentItemId, parsed.data));
+      } catch (error) {
+        if (error instanceof ContentItemNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof ContentItemLockedError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
+        }
+
+        if (error instanceof ContentRevisionUnavailableError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_REVISION_UNAVAILABLE", error.message));
+        }
+
+        if (error instanceof ContentContextMissingError) {
+          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
+        }
+
+        if (error instanceof ContentCampaignNotFoundError) {
+          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
+        }
+
+        if (error instanceof UsageQuotaExceededError) {
+          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
+        }
+
+        if (error instanceof UsagePlanInactiveError) {
+          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
+        }
+
+        throw error;
+      }
     }
   );
 

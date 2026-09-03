@@ -46,7 +46,9 @@ describe("clean database baseline contract", () => {
       "20260901000000_add_onboarding_document_analysis",
       "20260901160000_reset_campaign_domain",
       "20260901170000_add_campaign_suggestion_drafts",
-      "20260901180000_backfill_campaign_plan_limits"
+      "20260901180000_backfill_campaign_plan_limits",
+      "20260902143000_add_content_tone",
+      "20260903090000_add_content_platform"
     ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);

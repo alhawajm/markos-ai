@@ -184,7 +184,7 @@ describe("M1 acceptance", () => {
       headers,
       payload: {
         objective: "increase wholesale office coffee leads in Bahrain",
-        durationDays: 90,
+        durationDays: 14,
         publishesPerDay: 1,
         startsAt: "2026-09-01T00:00:00.000Z"
       }
@@ -194,7 +194,7 @@ describe("M1 acceptance", () => {
     expect(campaignMock.lastInput).toMatchObject({
       workspaceId: session.workspace.id,
       objective: "increase wholesale office coffee leads in Bahrain",
-      durationDays: 90,
+      durationDays: 14,
       publishesPerDay: 1,
       context: expect.arrayContaining([
         expect.objectContaining({
@@ -212,7 +212,7 @@ describe("M1 acceptance", () => {
       ])
     });
     expect(campaign.json().data.content).toMatchObject({
-      summary: "Grounded 90-day campaign for increase wholesale office coffee leads in Bahrain",
+      summary: "Grounded 14-day campaign for increase wholesale office coffee leads in Bahrain",
       retrievedContext: expect.arrayContaining([
         expect.objectContaining({
           section: "COMPANY",

@@ -1,9 +1,12 @@
-import type { ContentStatus, ContentType, Prisma } from "@prisma/client";
-import type { CampaignPlan, ContentRecord, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
+import { Prisma, type ContentStatus, type ContentType } from "@prisma/client";
+import type { CampaignPlan, ContentDraft, ContentRecord, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
 import type {
   CreateContentInput,
+  GenerateContentForItemInput,
   GenerateContentForSlotInput,
   GenerateContentInput,
+  IdeateContentInput,
+  ReviseContentItemInput,
   ScheduleContentInput,
   UpdateContentInput,
   UpdateContentStatusInput
@@ -39,6 +42,12 @@ export class ContentItemNotFoundError extends Error {
 export class ContentItemLockedError extends Error {
   constructor() {
     super("Content item cannot be edited in its current status");
+  }
+}
+
+export class ContentRevisionUnavailableError extends Error {
+  constructor() {
+    super("Generate content before requesting a revision");
   }
 }
 
@@ -82,13 +91,17 @@ export async function createWorkspaceContent(workspaceId: string, input: CreateC
   const row = await prisma.contentItem.create({
     data: {
       workspaceId,
+      platform: input.platform,
       contentType: input.contentType,
       status: "DRAFT",
+      ...(input.brief === undefined ? {} : { brief: input.brief }),
       ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
       ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
       hashtags: input.hashtags ?? [],
       ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
       ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+      ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
+      ...(input.tone === undefined ? {} : { tone: input.tone }),
       ...(input.carousel == null ? {} : { carousel: input.carousel as Prisma.InputJsonValue }),
       ...(input.reelScript == null ? {} : { reelScript: input.reelScript as Prisma.InputJsonValue }),
       ...(input.plannedAt == null ? {} : { plannedAt: new Date(input.plannedAt) }),
@@ -154,6 +167,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
               ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
               ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
               ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
+              ...(toneLock.lock.toneWords.length === 0 ? {} : { tone: toneLock.lock.toneWords.join(", ") }),
               aiPromptUsed: promptVersion
             }
           })
@@ -201,6 +215,225 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
     throw error;
   }
+}
+
+export async function ideateWorkspaceContent(workspaceId: string, input: IdeateContentInput): Promise<ContentDraft> {
+  const score = await getVaultScore(workspaceId);
+  if (score.entryCount === 0) {
+    throw new ContentContextMissingError();
+  }
+
+  const campaign = await findCampaign(workspaceId, input.campaignId);
+  const context = await searchVaultContext(workspaceId, { query: input.topic, topK: 8 });
+  const toneLock = await getContentToneLock(workspaceId);
+  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const promptTemplate = await selectPromptTemplateForRun(
+    workspaceId,
+    contentAgentName,
+    `${workspaceId}:ideation:${input.topic}:${input.contentType}:${input.campaignId ?? "orphan"}`
+  );
+  const usagePeriodDate = new Date();
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+
+  try {
+    const generated = await generateContentDrafts({
+      workspaceId,
+      topic: input.topic,
+      contentType: input.contentType,
+      count: 1,
+      context: lockedContext,
+      toneLock: toneLock.lock,
+      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
+      ...(campaign === undefined ? {} : { campaign })
+    });
+    const idea = generated.drafts[0];
+    if (!idea) throw new Error("AI content ideation returned no draft");
+    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.aiInteraction.create({
+        data: {
+          workspaceId,
+          agent: contentAgentName,
+          promptVersion,
+          prompt: {
+            mode: "IDEATION",
+            topic: input.topic,
+            contentType: input.contentType,
+            ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
+            ...(promptTemplate === undefined ? {} : { promptTemplate }),
+            toneLock: toneLock.lock,
+            retrievedContext: lockedContext
+          } as unknown as Prisma.InputJsonValue,
+          response: { idea, providerPromptVersion: generated.prompt_version } as unknown as Prisma.InputJsonValue,
+          tokensIn: generated.tokens_in,
+          tokensOut: generated.tokens_out,
+          costMinor: 0,
+          currency: localCurrency,
+          model: generated.model || env.LLM_PRIMARY_MODEL
+        }
+      });
+      await recordAiTokenUsage({
+        client: tx,
+        workspaceId,
+        tokensIn: generated.tokens_in,
+        tokensOut: generated.tokens_out,
+        now: usagePeriodDate
+      });
+    });
+
+    return idea;
+  } catch (error) {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    throw error;
+  }
+}
+
+export async function generateWorkspaceContentForItem(
+  workspaceId: string,
+  contentItemId: string,
+  input: GenerateContentForItemInput,
+  revision?: { instruction: string; currentDraft: ContentDraft }
+): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
+    throw new ContentItemLockedError();
+  }
+
+  const score = await getVaultScore(workspaceId);
+  if (score.entryCount === 0) {
+    throw new ContentContextMissingError();
+  }
+
+  const campaign = await findCampaign(workspaceId, current.campaignId ?? undefined);
+  const context = await searchVaultContext(workspaceId, { query: input.topic, topK: 8 });
+  const toneLock = await getContentToneLock(workspaceId);
+  const explicitToneWords = current.tone
+    ?.split(/[,\n]/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+  const effectiveToneLock: ContentToneLock = explicitToneWords?.length ? { ...toneLock.lock, toneWords: explicitToneWords } : toneLock.lock;
+  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const promptTemplate = await selectPromptTemplateForRun(workspaceId, contentAgentName, `${workspaceId}:${contentItemId}:${input.topic}:${input.contentType}`);
+  const usagePeriodDate = new Date();
+  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+
+  try {
+    const generated = await generateContentDrafts({
+      workspaceId,
+      topic: input.topic,
+      contentType: input.contentType,
+      count: 1,
+      context: lockedContext,
+      toneLock: effectiveToneLock,
+      ...(revision === undefined ? {} : { revision }),
+      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
+      ...(campaign === undefined ? {} : { campaign })
+    });
+    const [draft] = generated.drafts;
+    if (!draft) throw new Error("AI content generation returned no draft");
+    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const row = await tx.contentItem.update({
+        where: { id: current.id },
+        data: {
+          brief: input.topic,
+          contentType: draft.contentType,
+          captionEn: draft.captionEn ?? null,
+          captionAr: draft.captionAr ?? null,
+          hashtags: draft.hashtags,
+          callToAction: draft.callToAction ?? null,
+          carousel: draft.carousel === undefined ? Prisma.JsonNull : (draft.carousel as unknown as Prisma.InputJsonValue),
+          reelScript: draft.reelScript === undefined ? Prisma.JsonNull : (draft.reelScript as unknown as Prisma.InputJsonValue),
+          contentPillar: current.contentPillar ?? draft.contentPillar ?? null,
+          tone: current.tone ?? (effectiveToneLock.toneWords.length > 0 ? effectiveToneLock.toneWords.join(", ") : null),
+          aiPromptUsed: promptVersion
+        }
+      });
+
+      await tx.aiInteraction.create({
+        data: {
+          workspaceId,
+          agent: contentAgentName,
+          promptVersion,
+          prompt: {
+            contentItemId,
+            topic: input.topic,
+            contentType: input.contentType,
+            ...(current.campaignId === null ? {} : { campaignId: current.campaignId }),
+            campaignGoal: current.campaignGoal,
+            contentPillar: current.contentPillar,
+            ...(revision === undefined ? {} : { revisionInstruction: revision.instruction, currentDraft: revision.currentDraft }),
+            toneLock: effectiveToneLock,
+            ...(promptTemplate === undefined ? {} : { promptTemplate }),
+            retrievedContext: lockedContext
+          } as unknown as Prisma.InputJsonValue,
+          response: { draft, providerPromptVersion: generated.prompt_version } as unknown as Prisma.InputJsonValue,
+          tokensIn: generated.tokens_in,
+          tokensOut: generated.tokens_out,
+          costMinor: 0,
+          currency: localCurrency,
+          model: generated.model || env.LLM_PRIMARY_MODEL
+        }
+      });
+      await recordAiTokenUsage({ client: tx, workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out, now: usagePeriodDate });
+      return row;
+    });
+
+    return toContentRecord(saved);
+  } catch (error) {
+    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    throw error;
+  }
+}
+
+export async function reviseWorkspaceContentItem(workspaceId: string, contentItemId: string, input: ReviseContentItemInput): Promise<ContentRecord> {
+  const current = await prisma.contentItem.findFirst({
+    where: {
+      id: contentItemId,
+      workspaceId,
+      deletedAt: null
+    }
+  });
+
+  if (!current) {
+    throw new ContentItemNotFoundError();
+  }
+
+  if (!current.aiPromptUsed || !current.captionEn || !current.captionAr || current.hashtags.length === 0 || !current.callToAction || !current.contentPillar) {
+    throw new ContentRevisionUnavailableError();
+  }
+
+  const currentDraft: ContentDraft = {
+    contentType: current.contentType,
+    captionEn: current.captionEn,
+    captionAr: current.captionAr,
+    hashtags: current.hashtags,
+    callToAction: current.callToAction,
+    contentPillar: current.contentPillar,
+    ...(current.carousel === null ? {} : { carousel: current.carousel as Record<string, unknown> }),
+    ...(current.reelScript === null ? {} : { reelScript: current.reelScript as Record<string, unknown> })
+  };
+  const topic = (current.brief?.trim() || current.captionEn.trim() || current.captionAr.trim()).slice(0, 1000);
+
+  return generateWorkspaceContentForItem(
+    workspaceId,
+    contentItemId,
+    { topic, contentType: current.contentType },
+    { instruction: input.instruction, currentDraft }
+  );
 }
 
 export async function generateWorkspaceContentForSlot(workspaceId: string, input: GenerateContentForSlotInput): Promise<ContentRecord> {
@@ -260,6 +493,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
           ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
           ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
           ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
+          ...(toneLock.lock.toneWords.length === 0 ? {} : { tone: toneLock.lock.toneWords.join(", ") }),
           aiPromptUsed: promptVersion
         }
       });
@@ -332,11 +566,16 @@ export async function updateContentItem(workspaceId: string, contentItemId: stri
       id: current.id
     },
     data: {
+      ...(input.platform === undefined ? {} : { platform: input.platform }),
+      ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
+      ...(input.brief === undefined ? {} : { brief: input.brief }),
       ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
       ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
       ...(input.hashtags === undefined ? {} : { hashtags: input.hashtags }),
       ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
       ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+      ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
+      ...(input.tone === undefined ? {} : { tone: input.tone }),
       ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
       ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
       ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
@@ -700,6 +939,7 @@ async function findCampaign(workspaceId: string, campaignId: string | undefined)
 export function toContentRecord(row: {
   id: string;
   workspaceId: string;
+  platform?: string;
   contentType: ContentType;
   status: ContentStatus;
   brief: string | null;
@@ -715,6 +955,7 @@ export function toContentRecord(row: {
   campaignGoal: string | null;
   campaignWeek: number | null;
   campaignActionIndex: number | null;
+  tone: string | null;
   aiPromptUsed: string | null;
   plannedAt: Date | null;
   scheduledAt: Date | null;
@@ -727,6 +968,7 @@ export function toContentRecord(row: {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
+    platform: row.platform === "INSTAGRAM" ? row.platform : "INSTAGRAM",
     contentType: row.contentType,
     status: row.status,
     ...(row.brief === null ? {} : { brief: row.brief }),
@@ -742,6 +984,7 @@ export function toContentRecord(row: {
     ...(row.campaignGoal === null ? {} : { campaignGoal: row.campaignGoal }),
     ...(row.campaignWeek === null ? {} : { campaignWeek: row.campaignWeek }),
     ...(row.campaignActionIndex === null ? {} : { campaignActionIndex: row.campaignActionIndex }),
+    ...(row.tone === null ? {} : { tone: row.tone }),
     ...(row.aiPromptUsed === null ? {} : { aiPromptUsed: row.aiPromptUsed }),
     ...(row.plannedAt === null ? {} : { plannedAt: row.plannedAt.toISOString() }),
     ...(row.scheduledAt === null ? {} : { scheduledAt: row.scheduledAt.toISOString() }),

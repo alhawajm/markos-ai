@@ -993,7 +993,7 @@ function auditStateText(locale: Locale, state: AuditState | null): { body: strin
         title: "Settings load failed"
       },
       limit: {
-        body: "Some plan or channel changes need a subscription upgrade or quota review before they can continue.",
+        body: "Some plan or channel changes need a subscription upgrade or plan review before they can continue.",
         title: "Plan review needed"
       },
       loading: {

@@ -9,6 +9,14 @@ const contentMock = vi.hoisted(() => ({
         context: Array<{ key: string; section: string }>;
         contentType: string;
         count: number;
+        revision?: {
+          instruction: string;
+          currentDraft: {
+            captionAr?: string;
+            captionEn?: string;
+            contentType: string;
+          };
+        };
         toneLock: { requiredLanguages: ["ar", "en"]; toneWords: string[]; voiceNotes?: string };
         topic: string;
       }
@@ -26,6 +34,10 @@ vi.mock("../src/ai/embeddings-client", () => ({
 vi.mock("../src/ai/content-client", () => ({
   generateContentDrafts: async (input: NonNullable<typeof contentMock.lastInput>) => {
     contentMock.lastInput = input;
+    if (input.revision?.instruction === "FAIL_REVISION_TEST") {
+      throw new Error("Simulated revision failure");
+    }
+    const revisionPrefix = input.revision ? `Revised for ${input.revision.instruction}: ` : "";
 
     return {
       model: "test-content-model",
@@ -34,8 +46,9 @@ vi.mock("../src/ai/content-client", () => ({
       tokens_out: 89,
       drafts: Array.from({ length: input.count }, (_, index) => ({
         contentType: input.contentType,
-        captionEn: `English caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
-        captionAr: `Arabic caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+        captionEn: `${revisionPrefix}English caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+        captionAr: `${revisionPrefix}Arabic caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+        visualDirection: `Editorial visual direction ${index + 1} for ${input.topic}`,
         hashtags: ["#BahrainBusiness", "#MarkosAI"],
         callToAction: "Send a DM.",
         contentPillar: "Proof and trust",
@@ -313,6 +326,37 @@ describe("content routes", () => {
     await app.close();
   });
 
+  it("returns editable AI ideation without creating a content record", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: { entries: [{ key: "profile", value: { name: "Pearl Coffee", industry: "specialty coffee" } }] }
+    });
+
+    const before = await prisma.contentItem.count({ where: { workspaceId: session.workspace.id } });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content/ideate",
+      headers,
+      payload: { topic: "Introduce our wholesale coffee service", contentType: "POST" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      captionEn: "English caption 1 for Introduce our wholesale coffee service using clear tone",
+      contentType: "POST",
+      visualDirection: "Editorial visual direction 1 for Introduce our wholesale coffee service"
+    });
+    await expect(prisma.contentItem.count({ where: { workspaceId: session.workspace.id } })).resolves.toBe(before);
+    await expect(prisma.aiInteraction.count({ where: { workspaceId: session.workspace.id, agent: "CONTENT" } })).resolves.toBe(1);
+
+    await app.close();
+  });
+
   it("generates Vault-grounded draft content and meters the interaction", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -438,6 +482,192 @@ describe("content routes", () => {
     });
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("generates into the existing campaign draft without losing its campaign placement or creating a duplicate", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const startsAt = new Date("2026-09-15T09:00:00.000Z");
+    const plannedAt = new Date("2026-09-17T09:00:00.000Z");
+
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [
+          {
+            key: "profile",
+            value: {
+              name: "SnackLab",
+              industry: "food subscriptions",
+              location: "Manama, Bahrain"
+            }
+          }
+        ]
+      }
+    });
+
+    const campaign = await prisma.campaign.create({
+      data: {
+        workspaceId: session.workspace.id,
+        title: "Subscription launch",
+        objective: "Explain the three subscription tiers",
+        startsAt,
+        endsAt: new Date("2026-09-28T09:00:00.000Z"),
+        durationDays: 14,
+        publishesPerDay: 1,
+        content: {
+          summary: "Introduce SnackLab subscriptions.",
+          objectives: ["Build awareness"],
+          pillars: [],
+          weeklyCadence: [],
+          kpis: [],
+          risks: [],
+          nextActions: [],
+          retrievedContext: []
+        }
+      }
+    });
+    const item = await prisma.contentItem.create({
+      data: {
+        workspaceId: session.workspace.id,
+        contentType: "POST",
+        status: "DRAFT",
+        brief: "Original campaign idea",
+        hashtags: [],
+        mediaIds: [],
+        campaignId: campaign.id,
+        campaignGoal: "Teach followers what each tier includes",
+        campaignWeek: 1,
+        campaignActionIndex: 2,
+        contentPillar: "Tier education",
+        tone: "warm, practical",
+        plannedAt
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${item.id}/generate`,
+      headers,
+      payload: {
+        topic: "Compare the three SnackLab subscription tiers",
+        contentType: "CAROUSEL"
+      }
+    });
+    const data = response.json().data;
+
+    expect(response.statusCode).toBe(200);
+    expect(data).toMatchObject({
+      id: item.id,
+      workspaceId: session.workspace.id,
+      campaignId: campaign.id,
+      campaignWeek: 1,
+      campaignActionIndex: 2,
+      campaignGoal: "Teach followers what each tier includes",
+      contentPillar: "Tier education",
+      contentType: "CAROUSEL",
+      brief: "Compare the three SnackLab subscription tiers",
+      tone: "warm, practical",
+      plannedAt: plannedAt.toISOString(),
+      captionEn: "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone",
+      captionAr: "Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+    });
+    expect(contentMock.lastInput).toMatchObject({
+      topic: "Compare the three SnackLab subscription tiers",
+      contentType: "CAROUSEL",
+      count: 1,
+      toneLock: {
+        toneWords: ["warm", "practical"]
+      }
+    });
+    await expect(
+      prisma.contentItem.count({
+        where: {
+          campaignId: campaign.id,
+          campaignWeek: 1,
+          campaignActionIndex: 2,
+          deletedAt: null
+        }
+      })
+    ).resolves.toBe(1);
+    await expect(
+      prisma.aiInteraction.count({
+        where: {
+          workspaceId: session.workspace.id,
+          agent: "CONTENT"
+        }
+      })
+    ).resolves.toBe(1);
+
+    const revision = await app.inject({
+      method: "POST",
+      url: `/v1/content/${item.id}/revise`,
+      headers,
+      payload: {
+        instruction: "Make it shorter and add a stronger call to action."
+      }
+    });
+
+    expect(revision.statusCode).toBe(200);
+    expect(revision.json().data).toMatchObject({
+      id: item.id,
+      campaignId: campaign.id,
+      campaignWeek: 1,
+      campaignActionIndex: 2,
+      campaignGoal: "Teach followers what each tier includes",
+      contentPillar: "Tier education",
+      tone: "warm, practical",
+      plannedAt: plannedAt.toISOString(),
+      captionEn:
+        "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+    });
+    expect(contentMock.lastInput).toMatchObject({
+      revision: {
+        instruction: "Make it shorter and add a stronger call to action.",
+        currentDraft: {
+          captionEn: "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone",
+          contentType: "CAROUSEL"
+        }
+      }
+    });
+    await expect(
+      prisma.contentItem.count({
+        where: {
+          campaignId: campaign.id,
+          campaignWeek: 1,
+          campaignActionIndex: 2,
+          deletedAt: null
+        }
+      })
+    ).resolves.toBe(1);
+
+    const failedRevision = await app.inject({
+      method: "POST",
+      url: `/v1/content/${item.id}/revise`,
+      headers,
+      payload: {
+        instruction: "FAIL_REVISION_TEST"
+      }
+    });
+    const preserved = await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } });
+
+    expect(failedRevision.statusCode).toBe(500);
+    expect(preserved.captionEn).toBe(
+      "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+    );
+    await expect(
+      prisma.aiInteraction.count({
+        where: {
+          workspaceId: session.workspace.id,
+          agent: "CONTENT"
+        }
+      })
+    ).resolves.toBe(2);
 
     await app.close();
   });

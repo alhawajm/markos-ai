@@ -85,12 +85,12 @@ py -3.11 -m venv .venv
 From the repository root, MARKOS has two explicit local modes. Both start the AI service through `scripts/python-runner.mjs` when the local environment is installed:
 
 ```powershell
-# Default: deterministic local text and image providers; no OpenAI key required.
+# Default: deterministic local text; image generation disabled; no OpenAI key required.
 corepack pnpm dev
 # Equivalent explicit name:
 corepack pnpm dev:safe
 
-# OpenAI text generation; image generation remains local.
+# OpenAI text generation; image generation remains disabled.
 corepack pnpm dev:live-ai
 ```
 
@@ -101,13 +101,13 @@ corepack pnpm local:check:safe
 corepack pnpm local:check:live-ai
 ```
 
-Keep the OpenAI credential only in the ignored `services/ai/.env` file. The committed `.env.example` files remain secret-free, and the repository-root `.env` must not contain `OPENAI_API_KEY`. Local live-AI mode currently enables provider-backed text only; email, image generation, media storage, and Instagram publishing/analytics remain local or dry-run.
+Keep the OpenAI credential only in the ignored `services/ai/.env` file. The committed `.env.example` files remain secret-free, and the repository-root `.env` must not contain `OPENAI_API_KEY`. Local live-AI mode currently enables provider-backed text only; image generation is disabled, while email, media storage, and Instagram publishing/analytics remain local or dry-run.
 
 Use a dedicated local-development OpenAI project and project service-account key. The local AI environment should use:
 
 ```dotenv
 AI_TEXT_PROVIDER=local
-AI_IMAGE_PROVIDER=local
+AI_IMAGE_PROVIDER=disabled
 OPENAI_API_KEY=<dedicated-local-project-service-account-key>
 OPENAI_STORE_RESPONSES=true
 LLM_PRIMARY_MODEL=gpt-5.6-terra
@@ -128,7 +128,7 @@ Current FastAPI settings consume these names:
 - `INTERNAL_SERVICE_TOKEN` (enforced on every non-health AI route)
 - `DATABASE_URL` (configured but not used by current request handlers)
 - `AI_TEXT_PROVIDER` (`local` by default; set to `openai` for provider-backed Campaign generation, onboarding profile resolution, both onboarding document analyzers, and content-copy generation)
-- `AI_IMAGE_PROVIDER` (`local` by default; set to `openai` for provider-backed JPEG generation)
+- `AI_IMAGE_PROVIDER` (`disabled` by default; set to `openai` for provider-backed JPEG generation; the legacy `local` value is also treated as disabled)
 - `AI_CAMPAIGN_TIMEOUT_SECONDS`
 - `AI_PROFILE_TIMEOUT_SECONDS`
 - `AI_DOCUMENT_TIMEOUT_SECONDS`

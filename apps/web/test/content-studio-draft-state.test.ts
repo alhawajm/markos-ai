@@ -36,12 +36,16 @@ describe("content studio draft state", () => {
     });
 
     expect(payload).toEqual({
+      brief: null,
       callToAction: "Send a message",
+      campaignGoal: null,
       captionAr: "أهلاً بالبحرين",
       captionEn: "Hello Bahrain",
+      contentPillar: null,
       contentType: "POST",
       hashtags: ["#launch", "#Bahrain"],
-      plannedAt: "2026-08-28T15:30:00.000Z"
+      plannedAt: "2026-08-28T15:30:00.000Z",
+      tone: null
     });
   });
 

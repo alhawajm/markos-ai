@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
+  Activity,
+  ArrowDownRight,
   ArrowRight,
+  ArrowUpRight,
   BarChart3,
   Bell,
   Brain,
@@ -17,6 +20,7 @@ import {
   DollarSign,
   Eye,
   ExternalLink,
+  FileBarChart2,
   Heart,
   Image as ImageIcon,
   Instagram,
@@ -24,11 +28,14 @@ import {
   Link2,
   LogOut,
   MessageCircle,
+  MousePointerClick,
   Palette,
   Pencil,
   Play,
+  RefreshCcw,
   RotateCcw,
   Settings,
+  Share2,
   Sparkles,
   Target,
   TrendingUp,
@@ -42,7 +49,10 @@ import {
 } from "lucide-react";
 import { MarkosApiClient } from "@markos/api-client";
 import type {
+  AnalyticsMetricTotals,
   AnalyticsSummary,
+  CampaignRecord,
+  ContentDraft,
   ContentRecord,
   ContentStatus,
   ContentType,
@@ -65,12 +75,12 @@ import {
   type ContentDraftFields
 } from "./content-studio-draft-state";
 import { ContentTypeStep, InstagramPostPreview } from "./content-studio-composer";
+import { ContentStudioAssistantPanel, EmptyStudioPreview, type StudioSidePanel } from "./content-studio-assistant";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
 type StudioContentType = Extract<ContentType, "POST" | "REEL" | "CAROUSEL" | "STORY">;
-type ContentPipelineFilter = "ALL" | "DRAFTS" | "READY" | "SCHEDULED" | "PUBLISHED";
-type ContentStudioHomePanel = "AI_DRAFT" | "DRAFTS" | "IDEAS" | null;
 type StudioExitIntent = { kind: "home"; note?: string } | { href: string; kind: "navigate" };
 
 interface ContentReadyCardModel {
@@ -112,13 +122,6 @@ const accent = {
     hex: "#81D8D0"
   }
 } as const;
-
-const studioTypes: Array<[StudioContentType, string, IconType]> = [
-  ["POST", "Post", ImageIcon],
-  ["REEL", "Reel", Play],
-  ["CAROUSEL", "Carousel", ImageIcon],
-  ["STORY", "Story", Instagram]
-];
 
 function recordTitle(record: ContentRecord): string {
   const caption = record.captionEn ?? record.captionAr ?? record.contentPillar ?? "";
@@ -184,14 +187,6 @@ function localizedContentTypeLabel(type: ContentType, locale: Locale): string {
   }[type];
 }
 
-function contentPipelineTitle(record: ContentRecord, locale: Locale): string {
-  const preferredCaption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
-  const firstSentence = (record.brief ?? preferredCaption ?? record.contentPillar ?? "").split(/[.!?\n]/)[0]?.trim();
-
-  if (!firstSentence) return localizedContentTypeLabel(record.contentType, locale);
-  return firstSentence.length > 58 ? `${firstSentence.slice(0, 55)}...` : firstSentence;
-}
-
 function campaignOriginLabel(record: ContentRecord, locale: Locale): string {
   if (record.campaignWeek === undefined) return locale === "ar" ? "مسودة حملة" : "Campaign draft";
   return locale === "ar" ? `مسودة حملة · الأسبوع ${record.campaignWeek}` : `Campaign draft · Week ${record.campaignWeek}`;
@@ -245,42 +240,6 @@ function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string
   }).format(new Date(value));
 
   return `${prefix} · ${formatted}`;
-}
-
-function matchesContentPipelineFilter(record: ContentRecord, filter: ContentPipelineFilter): boolean {
-  if (filter === "DRAFTS") {
-    return record.status === "DRAFT" || record.status === "IN_REVIEW";
-  }
-
-  if (filter === "READY") {
-    return record.status === "APPROVED";
-  }
-
-  return filter === "ALL" || record.status === filter;
-}
-
-function sortContentPipelineRecords(records: ContentRecord[], filter: ContentPipelineFilter): ContentRecord[] {
-  return [...records].sort((left, right) => {
-    if (filter === "SCHEDULED") {
-      return new Date(left.scheduledAt ?? left.updatedAt).getTime() - new Date(right.scheduledAt ?? right.updatedAt).getTime();
-    }
-
-    const leftPriority = left.status === "SCHEDULED" ? 0 : left.status === "APPROVED" ? 1 : 2;
-    const rightPriority = right.status === "SCHEDULED" ? 0 : right.status === "APPROVED" ? 1 : 2;
-
-    if (leftPriority !== rightPriority) {
-      return leftPriority - rightPriority;
-    }
-
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
-}
-
-function contentStatusBadgeClass(status: ContentStatus): string {
-  if (status === "SCHEDULED") return "bg-[var(--sunlit-aqua-soft)] text-[#157A70]";
-  if (status === "APPROVED" || status === "PUBLISHED") return "bg-[#EEF8E9] text-[#44713A]";
-  if (status === "FAILED") return "bg-[#FFF0F1] text-[#A43C49]";
-  return "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-ink-soft)]";
 }
 
 function formatCompactNumber(value: number): string {
@@ -372,7 +331,7 @@ function contentStudioError(error: unknown): string {
   }
 
   if (lower.includes("quota") || lower.includes("limit")) {
-    return "This workspace has reached its current AI quota. Upgrade or wait for the quota window to reset before generating more content.";
+    return "This workspace has reached its current generation allowance. Upgrade or wait for the next plan cycle before generating more content.";
   }
 
   if (lower.includes("payload too large") || lower.includes("body is too large")) {
@@ -611,7 +570,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
               {copy.today} {workspaceName} · {now}
             </p>
             <h2 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <p className="mt-2 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
@@ -679,7 +638,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <div className="min-w-0 flex-1">
               <p className="sunlit-eyebrow">{copy.next}</p>
               <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
+              <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
               <a className="sunlit-primary mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
                 {missionCta} <ArrowRight size={17} />
               </a>
@@ -694,7 +653,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             </span>
             <span className="text-3xl font-bold text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
           </div>
-          <h2 className="mt-5 text-lg font-bold text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
+          <h2 className="mt-5 text-xl font-bold text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
             <div className="h-full rounded-full bg-[var(--sunlit-aqua)]" style={{ width: `${liveState.vaultScore?.score ?? 0}%` }} />
           </div>
@@ -969,7 +928,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Sparkles} subtitle="I'll help you create a high-performing campaign in minutes, not days." title="AI Campaign Builder">
+      <HeroTitle icon={MarkosAiIcon} subtitle="I'll help you create a high-performing campaign in minutes, not days." title="AI Campaign Builder">
         <div className="mt-8 grid gap-4 text-base md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center xl:mt-10 xl:text-lg">
           {["Campaign Goal", "AI Generation", "Review & Launch"].map((label, index) => (
             <div className="contents" key={label}>
@@ -1016,7 +975,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               onClick={generateCampaignDrafts}
               type="button"
             >
-              {generatingCampaign ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Sparkles size={20} />}
+              {generatingCampaign ? <span className="lux-thinking-dot" aria-hidden="true" /> : <MarkosAiIcon size={20} />}
               {generatingCampaign ? "Generating campaign..." : "Generate Campaign Drafts"}
             </button>
           </article>
@@ -1136,20 +1095,32 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const client = useMarkosClient(locale);
   const [contentType, setContentType] = useState<StudioContentType>("POST");
   const [contentTypeConfirmed, setContentTypeConfirmed] = useState(false);
-  const [contentFilter, setContentFilter] = useState<ContentPipelineFilter>("ALL");
-  const [homePanel, setHomePanel] = useState<ContentStudioHomePanel>(null);
   const [prompt, setPrompt] = useState("");
+  const [sidePanel, setSidePanel] = useState<StudioSidePanel>("assistant");
+  const [assistantSuggestion, setAssistantSuggestion] = useState<ContentDraft | null>(null);
+  const [assistantCaption, setAssistantCaption] = useState("");
+  const [assistantVisualDirection, setAssistantVisualDirection] = useState("");
+  const [assistantMessage, setAssistantMessage] = useState("");
+  const [assistantMessageKind, setAssistantMessageKind] = useState<"error" | "info" | "success">("info");
+  const [assistantBusy, setAssistantBusy] = useState(false);
+  const [assistantReplacementWarning, setAssistantReplacementWarning] = useState(false);
+  const assistantGenerationRef = useRef(0);
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
   const [currentRecord, setCurrentRecord] = useState<ContentRecord | null>(null);
+  const [campaignContext, setCampaignContext] = useState<CampaignRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [draftBaseline, setDraftBaseline] = useState<ContentDraftFields | null>(null);
+  const [brief, setBrief] = useState("");
+  const [campaignGoal, setCampaignGoal] = useState("");
   const [captionLanguage, setCaptionLanguage] = useState<"ar" | "en">(locale);
   const [captionEn, setCaptionEn] = useState("");
   const [captionAr, setCaptionAr] = useState("");
+  const [contentPillar, setContentPillar] = useState("");
   const [hashtagsText, setHashtagsText] = useState("");
   const [callToAction, setCallToAction] = useState("");
   const [plannedAtInput, setPlannedAtInput] = useState("");
+  const [tone, setTone] = useState("");
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageAspectRatio, setImageAspectRatio] = useState<"1:1" | "4:5" | "9:16">("4:5");
@@ -1159,8 +1130,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [scheduleTime, setScheduleTime] = useState("19:30");
   const [schedulePanelOpen, setSchedulePanelOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [loadingRecords, setLoadingRecords] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [reviewingGenerated, setReviewingGenerated] = useState(false);
+  const [revisionPrompt, setRevisionPrompt] = useState("");
+  const [revising, setRevising] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removingMedia, setRemovingMedia] = useState(false);
@@ -1199,7 +1172,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           aiDescription: "Turn an idea or offer into a draft grounded in your Business Profile.",
           aiTitle: "Describe the post you want to create",
           blankAction: "Start a blank post",
-          blankDescription: "Open an editable draft without calling AI or consuming quota.",
+          blankDescription: "Open an editable draft and write it yourself.",
           calendarAction: "Open Calendar",
           calendarDescription: "Review published and scheduled work, then choose what comes next.",
           continueAction: "Continue a draft",
@@ -1213,79 +1186,17 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           subtitle: "Start on your own, or ask MARKOS for help only when you want it.",
           title: "How do you want to start your next post?"
         };
-  const contentIdeaStarters =
-    locale === "ar"
-      ? [
-          ["خلف الكواليس", "عرّف المتابعين على شخص أو خطوة أو تفصيل يصنع الفرق في عملك."],
-          ["منتج تحت الضوء", "اشرح لمن صُمم أحد منتجاتك ولماذا يختاره العملاء."],
-          ["إجابة على سؤال متكرر", "حوّل سؤالاً حقيقياً من العملاء إلى منشور مفيد وسهل الحفظ."],
-          ["قصة عميل", "شارك نتيجة أو تجربة حقيقية من دون اختلاق أرقام أو اقتباسات."],
-          ["دعوة محلية", "أنشئ سبباً واضحاً يدعو جمهور البحرين للزيارة أو التواصل هذا الأسبوع."]
-        ]
-      : [
-          ["Behind the scenes", "Introduce a person, process, or detail that makes your business different."],
-          ["Product spotlight", "Explain who one offer is for and why customers choose it."],
-          ["Answer a common question", "Turn a real customer question into something useful and saveable."],
-          ["Customer story", "Share a real outcome or experience without inventing numbers or quotes."],
-          ["Local invitation", "Give your Bahrain audience a clear reason to visit or get in touch this week."]
-        ];
-  const contentPipelineCopy =
-    locale === "ar"
-      ? {
-          all: "الكل",
-          drafts: "المسودات",
-          empty: "لا يوجد محتوى في هذه المرحلة حتى الآن.",
-          heading: "المحتوى والجدول",
-          note: "تعكس هذه القائمة الحالة والأوقات المحفوظة في MARKOS، ولا تؤكد بحد ذاتها النشر على إنستغرام.",
-          published: "المنشور",
-          ready: "جاهز",
-          scheduled: "المجدول",
-          subtitle: "افتح أي مسودة محفوظة أو راجع مواعيد المحتوى القادمة."
-        }
-      : {
-          all: "All",
-          drafts: "Drafts",
-          empty: "There is no content at this stage yet.",
-          heading: "Content and schedule",
-          note: "This list reflects saved MARKOS status and times; it does not by itself confirm publication on Instagram.",
-          published: "Published",
-          ready: "Ready",
-          scheduled: "Scheduled",
-          subtitle: "Open any saved draft or review the next content times."
-        };
-  const contentPipelineFilters: Array<[ContentPipelineFilter, string]> = [
-    ["ALL", contentPipelineCopy.all],
-    ["DRAFTS", contentPipelineCopy.drafts],
-    ["READY", contentPipelineCopy.ready],
-    ["SCHEDULED", contentPipelineCopy.scheduled],
-    ["PUBLISHED", contentPipelineCopy.published]
-  ];
-  const contentPipelineCounts = useMemo<Record<ContentPipelineFilter, number>>(
-    () => ({
-      ALL: records.length,
-      DRAFTS: records.filter((record) => matchesContentPipelineFilter(record, "DRAFTS")).length,
-      PUBLISHED: records.filter((record) => record.status === "PUBLISHED").length,
-      READY: records.filter((record) => record.status === "APPROVED").length,
-      SCHEDULED: records.filter((record) => record.status === "SCHEDULED").length
-    }),
-    [records]
-  );
-  const visibleContentRecords = useMemo(
-    () =>
-      sortContentPipelineRecords(
-        records.filter((record) => matchesContentPipelineFilter(record, contentFilter)),
-        contentFilter
-      ),
-    [contentFilter, records]
-  );
-  const recentContentRecord = useMemo(() => [...records].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null, [records]);
   const currentDraftFields: ContentDraftFields = {
+    brief,
     callToAction,
+    campaignGoal,
     captionAr,
     captionEn,
+    contentPillar,
     contentType,
     hashtagsText,
-    plannedAtInput
+    plannedAtInput,
+    tone
   };
   const isDraftDirty = editorOpen && draftBaseline !== null && contentDraftIsDirty(currentDraftFields, draftBaseline);
   const hasMeaningfulDraftWork = editorOpen && contentDraftHasMeaningfulWork(currentDraftFields);
@@ -1366,7 +1277,6 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     }
 
     let cancelled = false;
-    setLoadingRecords(true);
     setMessage("");
 
     async function loadRecords() {
@@ -1384,16 +1294,23 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
         if (requestedRecord) {
           applyRecord(requestedRecord);
+          setReviewingGenerated(Boolean(requestedRecord.aiPromptUsed && ["DRAFT", "IN_REVIEW"].includes(requestedRecord.status)));
+          if (requestedRecord.campaignId) {
+            void client
+              .campaigns()
+              .then((nextCampaigns) => {
+                if (!cancelled) setCampaignContext(nextCampaigns.find((campaign) => campaign.id === requestedRecord.campaignId) ?? null);
+              })
+              .catch(() => {
+                if (!cancelled) setCampaignContext(null);
+              });
+          }
         } else if (requestedItemId) {
           setMessage(locale === "ar" ? "تعذر العثور على المحتوى المطلوب في مساحة العمل هذه." : "That content item was not found in this workspace.");
         }
       } catch (error) {
         if (!cancelled) {
           setMessage(contentStudioError(error));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingRecords(false);
         }
       }
     }
@@ -1415,12 +1332,18 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     if (record) {
       const fields = contentDraftFieldsFromRecord(record);
       setEditorOpen(true);
+      setSidePanel(record.mediaIds.length > 0 ? "preview" : "assistant");
+      setBrief(fields.brief);
+      setPrompt(fields.brief);
       setContentType(fields.contentType);
+      setCampaignGoal(fields.campaignGoal);
       setCaptionEn(fields.captionEn);
       setCaptionAr(fields.captionAr);
+      setContentPillar(fields.contentPillar);
       setHashtagsText(fields.hashtagsText);
       setCallToAction(fields.callToAction);
       setPlannedAtInput(fields.plannedAtInput);
+      setTone(fields.tone);
       setDraftBaseline(fields);
       setSelectedMediaId(record.mediaIds[0] ?? null);
 
@@ -1435,13 +1358,21 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       }
     } else {
       setEditorOpen(false);
+      setBrief("");
+      setCampaignGoal("");
       setCaptionEn("");
       setCaptionAr("");
+      setContentPillar("");
       setHashtagsText("");
       setCallToAction("");
       setPlannedAtInput("");
+      setTone("");
+      setCampaignContext(null);
       setDraftBaseline(null);
       setSelectedMediaId(null);
+      setReviewingGenerated(false);
+      setRevisionPrompt("");
+      setPrompt("");
     }
 
     if (note !== undefined) {
@@ -1474,7 +1405,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
 
   function returnToCreateHome(note?: string) {
     applyRecord(null, note);
-    setHomePanel(null);
+    setAssistantSuggestion(null);
+    setAssistantCaption("");
+    setAssistantVisualDirection("");
+    setAssistantMessage("");
+    setAssistantReplacementWarning(false);
 
     const url = new URL(window.location.href);
     url.searchParams.delete("item");
@@ -1519,74 +1454,106 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     completeExit(intent);
   }
 
-  function createBlankDraft() {
-    if (!session) {
-      setMessage(
-        locale === "ar"
-          ? "سجّل الدخول أو أكمل الإعداد أولاً حتى يتمكن MARKOS من حفظ المسودة."
-          : "Sign in or complete onboarding first so MARKOS can save the draft."
-      );
-      return;
-    }
-
-    const fields = emptyContentDraftFields("POST");
+  function openStudio(mode: "ai" | "manual") {
+    const fields = emptyContentDraftFields(contentType);
     setCurrentRecord(null);
     setEditorOpen(true);
     setContentTypeConfirmed(false);
-    setContentType(fields.contentType);
-    setCaptionEn(fields.captionEn);
-    setCaptionAr(fields.captionAr);
-    setHashtagsText(fields.hashtagsText);
-    setCallToAction(fields.callToAction);
-    setPlannedAtInput(fields.plannedAtInput);
     setDraftBaseline(fields);
+    setCampaignContext(null);
+    setReviewingGenerated(false);
     setSelectedMediaId(null);
-    setHomePanel(null);
+    setSidePanel(mode === "ai" ? "assistant" : "preview");
+    setAssistantSuggestion(null);
+    setAssistantCaption("");
+    setAssistantVisualDirection("");
+    setAssistantMessage("");
+    setAssistantReplacementWarning(false);
     setMessage("");
   }
 
-  function openAiDraft(idea?: string) {
-    if (idea) {
-      setPrompt(idea);
-    }
-    setHomePanel("AI_DRAFT");
-  }
-
-  async function generate() {
+  async function generateAssistantIdea() {
     const trimmedPrompt = prompt.trim();
 
     if (!session) {
-      setMessage("Sign in or complete onboarding first so MARKOS can save generated work to a workspace.");
+      setAssistantMessageKind("error");
+      setAssistantMessage(locale === "ar" ? "سجّل الدخول قبل استخدام مساعد MARKOS." : "Sign in before using the MARKOS assistant.");
       return;
     }
 
     if (trimmedPrompt.length < 8) {
-      setMessage("Describe what MARKOS should create before generating.");
+      setAssistantMessageKind("error");
+      setAssistantMessage(locale === "ar" ? "صف ما تريد أن ينشئه MARKOS أولاً." : "Describe what MARKOS should create first.");
       return;
     }
 
-    setGenerating(true);
-    setMessage("MARKOS is thinking through your Vault context and generating a saved draft...");
+    if (!contentTypeConfirmed) {
+      setAssistantMessageKind("error");
+      setAssistantMessage(locale === "ar" ? "اختر نوع المحتوى في الخطوة الأولى." : "Choose a content type in step 1.");
+      return;
+    }
+
+    const generationId = assistantGenerationRef.current + 1;
+    assistantGenerationRef.current = generationId;
+    setAssistantBusy(true);
+    setAssistantReplacementWarning(false);
+    setAssistantMessageKind("info");
+    setAssistantMessage(locale === "ar" ? "يستخدم MARKOS ملف نشاطك لتطوير الفكرة." : "MARKOS is using your Business Profile to develop the idea.");
 
     try {
-      const drafts = await client.generateContent({
+      const idea = await client.ideateContent({
         contentType,
-        count: 1,
-        topic: trimmedPrompt
+        topic: trimmedPrompt,
+        ...(currentRecord?.campaignId ? { campaignId: currentRecord.campaignId } : {})
       });
-      const draft = drafts[0];
-
-      if (!draft) {
-        throw new Error("The API returned no content draft.");
-      }
-
-      upsertRecord(draft);
-      applyRecord(draft, "Draft generated and saved to this workspace.");
+      if (assistantGenerationRef.current !== generationId) return;
+      const suggestedCaption = locale === "ar" ? idea.captionAr || idea.captionEn || "" : idea.captionEn || idea.captionAr || "";
+      const visualDirection =
+        idea.visualDirection?.trim() ||
+        (locale === "ar"
+          ? `صورة أصلية لمنشور ${localizedContentTypeLabel(contentType, locale)} تعبّر عن: ${trimmedPrompt}`
+          : `An original ${localizedContentTypeLabel(contentType, locale)} visual that communicates: ${trimmedPrompt}`);
+      setAssistantSuggestion(idea);
+      setAssistantCaption(suggestedCaption);
+      setAssistantVisualDirection(visualDirection);
+      setAssistantMessageKind("success");
+      setAssistantMessage(locale === "ar" ? "الاقتراح جاهز للمراجعة والتعديل." : "The suggestion is ready to review and edit.");
     } catch (error) {
-      setMessage(contentStudioError(error));
+      if (assistantGenerationRef.current !== generationId) return;
+      setAssistantMessageKind("error");
+      setAssistantMessage(contentStudioError(error));
     } finally {
-      setGenerating(false);
+      if (assistantGenerationRef.current === generationId) setAssistantBusy(false);
     }
+  }
+
+  function cancelAssistantIdea() {
+    assistantGenerationRef.current += 1;
+    setAssistantBusy(false);
+    setAssistantMessageKind("info");
+    setAssistantMessage(locale === "ar" ? "تم إلغاء انتظار الاقتراح." : "Suggestion cancelled.");
+  }
+
+  function insertAssistantIdea(force = false) {
+    if (!assistantSuggestion || !assistantCaption.trim() || !assistantVisualDirection.trim()) return;
+    const replacesCaption = activeCaption.trim().length > 0 && activeCaption.trim() !== assistantCaption.trim();
+    const replacesVisual = imagePrompt.trim().length > 0 && imagePrompt.trim() !== assistantVisualDirection.trim();
+    if (!force && (replacesCaption || replacesVisual)) {
+      setAssistantReplacementWarning(true);
+      return;
+    }
+
+    setActiveCaption(assistantCaption);
+    setImagePrompt(assistantVisualDirection);
+    setImageComposerOpen(true);
+    setMediaLibraryOpen(false);
+    setAssistantReplacementWarning(false);
+    setAssistantMessageKind("success");
+    setAssistantMessage(
+      locale === "ar"
+        ? "تمت إضافة النص والتوجيه البصري إلى الاستوديو. يمكنك تعديلهما أو بدء إنشاء الصورة."
+        : "Caption and visual direction inserted into the studio. You can edit either one or start image generation."
+    );
   }
 
   async function persistEditableDraft(showMessage = true, allowEmpty = false): Promise<ContentRecord | null> {
@@ -1625,11 +1592,16 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const payload = contentDraftPayload(currentDraftFields);
       const updated = currentRecord
         ? await client.updateContent(currentRecord.id, {
+            contentType: payload.contentType,
+            brief: payload.brief,
             callToAction: payload.callToAction,
+            campaignGoal: payload.campaignGoal,
             captionAr: payload.captionAr,
             captionEn: payload.captionEn,
+            contentPillar: payload.contentPillar,
             hashtags: payload.hashtags,
-            plannedAt: payload.plannedAt
+            plannedAt: payload.plannedAt,
+            tone: payload.tone
           })
         : await client.createContent(payload);
       upsertRecord(updated);
@@ -1652,6 +1624,64 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  async function generateCampaignContent() {
+    if (!session || !currentRecord?.campaignId) {
+      setMessage(locale === "ar" ? "افتح فكرة محفوظة من حملة أولاً." : "Open a saved Campaign idea first.");
+      return;
+    }
+
+    if (brief.trim().length < 3) {
+      setMessage(locale === "ar" ? "أضف موضوعاً أو فكرة قبل الإنشاء." : "Add a topic or post idea before generating.");
+      return;
+    }
+
+    setGenerating(true);
+    setMessage(locale === "ar" ? "يحفظ MARKOS السياق ثم ينشئ المسودة..." : "MARKOS is saving the context and creating the draft...");
+
+    try {
+      const saved = await persistEditableDraft(false, true);
+      if (!saved) return;
+      const generated = await client.generateContentForItem(saved.id, { topic: brief.trim(), contentType });
+      upsertRecord(generated);
+      applyRecord(generated, locale === "ar" ? "تم إنشاء المسودة من سياق الحملة." : "Draft generated from the Campaign context.");
+      setReviewingGenerated(true);
+      setRevisionPrompt("");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function reviseGeneratedContent() {
+    const instruction = revisionPrompt.trim();
+
+    if (!session || !currentRecord?.aiPromptUsed) {
+      setMessage(locale === "ar" ? "أنشئ المحتوى قبل طلب المراجعة." : "Generate content before requesting a revision.");
+      return;
+    }
+
+    if (instruction.length < 3) {
+      setMessage(locale === "ar" ? "أضف توجيهاً واضحاً للمراجعة." : "Add a clear revision instruction.");
+      return;
+    }
+
+    setRevising(true);
+    setMessage(locale === "ar" ? "يراجع MARKOS المسودة مع الحفاظ على سياق الحملة..." : "MARKOS is revising the draft while preserving its Campaign context...");
+
+    try {
+      const revised = await client.reviseContentItem(currentRecord.id, { instruction });
+      upsertRecord(revised);
+      applyRecord(revised, locale === "ar" ? "تم تحديث المعاينة. يمكنك طلب تعديل آخر." : "Preview updated. You can request another revision.");
+      setReviewingGenerated(true);
+      setRevisionPrompt("");
+    } catch (error) {
+      setMessage(contentStudioError(error));
+    } finally {
+      setRevising(false);
+    }
+  }
+
   async function acceptDraft() {
     if (!session || !editorOpen) {
       setMessage("Open or generate a workspace draft before marking it ready.");
@@ -1669,6 +1699,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const approved = await approveContentRecord(client, editableRecord);
       upsertRecord(approved);
       applyRecord(approved, "Content marked Ready. It is now eligible for scheduling.");
+      setReviewingGenerated(false);
     } catch (error) {
       setMessage(contentStudioError(error));
     } finally {
@@ -1787,7 +1818,6 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       const remainingRecords = records.filter((record) => record.id !== deletedId);
       setRecords(remainingRecords);
       returnToCreateHome("Post draft deleted from MarkOS. Its media files remain in the workspace media library.");
-      setHomePanel("DRAFTS");
       setConfirmation(null);
     } catch (error) {
       setMessage(contentStudioError(error));
@@ -1999,7 +2029,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   }
 
   return (
-    <section className={`min-w-0 ${editorOpen && selectedMedia ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px] xl:gap-7" : ""}`}>
+    <section className={`min-w-0 ${editorOpen ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(380px,460px)] xl:gap-6" : ""}`}>
       <div
         aria-label={editorOpen ? (locale === "ar" ? "محرر المنشور" : "Post composer") : undefined}
         className={
@@ -2038,22 +2068,15 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </button>
             </div>
           ) : (
-            <>
-              <div>
-                <p className="sunlit-eyebrow">{studioHomeCopy.eyebrow}</p>
-                <h1 className="mt-2 max-w-4xl font-display text-4xl font-bold tracking-[-.045em] text-[var(--sunlit-ink)] sm:text-5xl">
-                  {locale === "ar" ? "ماذا تريد أن تنشئ؟" : "What would you like to create?"}
-                </h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)] sm:text-lg">
-                  {locale === "ar"
-                    ? "ابدأ بنفسك، أو استخدم مسودة مبنية على ملف نشاطك، أو استكشف فكرة قبل حفظ أي شيء."
-                    : "Start manually, use a grounded AI draft, or explore an idea before anything is saved."}
-                </p>
-              </div>
-              <p className="w-fit rounded-2xl border border-[var(--sunlit-line)] bg-white/80 px-4 py-3 text-sm font-bold text-[var(--sunlit-ink-soft)]">
-                {locale === "ar" ? "الإنشاء اليدوي لا يستهلك رصيد الذكاء الاصطناعي." : "Manual creation uses no AI quota."}
+            <div>
+              <p className="sunlit-eyebrow">{studioHomeCopy.eyebrow}</p>
+              <h1 className="mt-2 max-w-4xl font-display text-4xl font-bold tracking-[-.045em] text-[var(--sunlit-ink)] sm:text-5xl">
+                {locale === "ar" ? "كيف تريد أن تبدأ؟" : "How would you like to begin?"}
+              </h1>
+              <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)] sm:text-lg">
+                {locale === "ar" ? "أنشئ مع MARKOS أو استكشف فكرة أولاً." : "Create with MARKOS, or explore an idea first."}
               </p>
-            </>
+            </div>
           )}
         </section>
         {message ? (
@@ -2063,275 +2086,186 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         ) : null}
 
         {!editorOpen ? (
-          <div className="flex flex-col gap-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <StudioHomeAction
-                active={false}
-                cta={locale === "ar" ? "ابدأ يدوياً" : "Start manually"}
-                description={studioHomeCopy.blankDescription}
-                icon={Pencil}
-                label={studioHomeCopy.blankAction}
-                onClick={createBlankDraft}
-                tone="coral"
-              />
-              <StudioHomeAction
-                active={homePanel === "AI_DRAFT"}
-                cta={locale === "ar" ? "إجراء يستخدم الرصيد" : "Metered AI action"}
-                description={studioHomeCopy.aiDescription}
-                icon={Wand2}
-                label={studioHomeCopy.aiAction}
-                onClick={() => openAiDraft()}
-                tone="aqua"
-              />
-              <StudioHomeAction
-                active={homePanel === "IDEAS"}
-                cta={locale === "ar" ? "استكشف أولاً" : "Browse first"}
-                description={studioHomeCopy.ideasDescription}
-                icon={Lightbulb}
-                label={studioHomeCopy.ideasAction}
-                onClick={() => setHomePanel("IDEAS")}
-              />
-            </div>
-
-            <div className="order-last grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <section className="sunlit-panel min-h-56 overflow-hidden rounded-[1.75rem]" aria-labelledby="recent-create-work-heading">
-                <div className="flex items-center justify-between gap-4 border-b border-[var(--sunlit-line)] px-5 py-4 sm:px-6">
-                  <div>
-                    <h2 className="text-xl font-bold text-[var(--sunlit-ink)]" id="recent-create-work-heading">
-                      {locale === "ar" ? "آخر الأعمال" : "Recent work"}
-                    </h2>
-                    <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "تابع آخر عنصر محفوظ من حيث توقفت." : "Continue the latest saved item from where you stopped."}
-                    </p>
-                  </div>
-                  {records.length > 0 ? (
-                    <button
-                      className="text-sm font-extrabold text-[var(--sunlit-pink)]"
-                      onClick={() => {
-                        setContentFilter("ALL");
-                        setHomePanel("DRAFTS");
-                      }}
-                      type="button"
-                    >
-                      {locale === "ar" ? "عرض الكل" : "View all"}
-                    </button>
-                  ) : null}
-                </div>
-                <div className="p-4 sm:p-5">
-                  {loadingRecords ? (
-                    <p className="py-6 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
-                    </p>
-                  ) : recentContentRecord ? (
-                    <button
-                      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-white p-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                      onClick={() => applyRecord(recentContentRecord, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
-                      type="button"
-                    >
-                      <span className="flex min-w-0 items-center gap-4">
-                        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[var(--sunlit-coral)] to-[var(--sunlit-yellow)] font-display text-lg font-bold text-white">
-                          {localizedContentTypeLabel(recentContentRecord.contentType, locale).slice(0, 1)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(recentContentRecord, locale)}</span>
-                          <span className="mt-1 block truncate text-sm font-semibold text-[var(--sunlit-muted)]">
-                            {recentContentRecord.campaignId ? `${campaignOriginLabel(recentContentRecord, locale)} · ` : ""}
-                            {contentPipelineTimestamp(recentContentRecord, locale)}
-                          </span>
-                        </span>
-                      </span>
-                      <span className="sunlit-secondary shrink-0 rounded-xl px-4 py-2 text-sm font-extrabold">{locale === "ar" ? "متابعة" : "Continue"}</span>
-                    </button>
-                  ) : (
-                    <p className="rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-7 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "ستظهر أول مسودة محفوظة هنا." : "Your first saved draft will appear here."}
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              <a
-                className="sunlit-panel flex min-h-56 flex-col rounded-[1.75rem] p-5 transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm sm:p-6"
-                href={`/${locale}/app/calendar`}
-              >
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[#157A70]">
-                  <Calendar size={22} />
-                </span>
-                <span className="mt-5 text-xl font-bold text-[var(--sunlit-ink)]">{studioHomeCopy.calendarAction}</span>
-                <span className="mt-2 text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.calendarDescription}</span>
-                <span className="sunlit-secondary mt-auto inline-flex min-h-11 items-center justify-center rounded-xl px-5 text-sm font-extrabold">
-                  {locale === "ar" ? "اذهب إلى التقويم" : "Go to Calendar"}
-                </span>
-              </a>
-            </div>
-
-            {homePanel === "AI_DRAFT" ? (
-              <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-                    <Wand2 size={22} />
-                  </span>
-                  <div>
-                    <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{studioHomeCopy.aiTitle}</h2>
-                    <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "اختر النوع ثم وضّح الهدف والجمهور والعرض." : "Choose a format, then explain the objective, audience, and offer."}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[var(--sunlit-paper-deep)] px-4 py-3">
-                  <div>
-                    <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "الخطوة 1 · التنسيق" : "Step 1 · Format"}
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-[var(--sunlit-ink-soft)]">
-                      {locale === "ar" ? "اختره مرة واحدة قبل إنشاء المسودة." : "Choose it once before generating the draft."}
-                    </p>
-                  </div>
-                  <select
-                    aria-label={locale === "ar" ? "تنسيق المحتوى" : "Content format"}
-                    className="sunlit-field h-11 min-w-40 rounded-xl px-3 text-sm font-extrabold outline-none"
-                    onChange={(event) => setContentType(event.target.value as StudioContentType)}
-                    value={contentType}
-                  >
-                    {studioTypes.map(([value]) => (
-                      <option key={value} value={value}>
-                        {localizedContentTypeLabel(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <textarea
-                  className="sunlit-field mt-5 min-h-36 resize-none rounded-xl p-4 text-base leading-7 outline-none"
-                  dir={locale === "ar" ? "rtl" : "ltr"}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder={
-                    locale === "ar"
-                      ? "صف المحتوى المطلوب، بما في ذلك العرض والجمهور واللغة والهدف."
-                      : "Describe the content, including the offer, audience, language, and objective."
-                  }
-                  value={prompt}
-                />
-                <button
-                  className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={generating}
-                  onClick={generate}
-                  type="button"
-                >
-                  {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
-                  {generating ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : locale === "ar" ? "إنشاء المسودة" : "Generate draft"}
-                </button>
-              </article>
-            ) : null}
-
-            {homePanel === "IDEAS" ? (
-              <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-                <p className="sunlit-eyebrow">{locale === "ar" ? "أفكار المحتوى" : "Content ideas"}</p>
-                <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{locale === "ar" ? "اختر فكرة لتطويرها" : "Choose an idea to develop"}</h2>
-                <div className="mt-5 grid gap-3">
-                  {contentIdeaStarters.map(([title, description]) => (
-                    <button
-                      className="rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                      key={title}
-                      onClick={() => openAiDraft(`${title}. ${description}`)}
-                      type="button"
-                    >
-                      <span className="font-bold text-[var(--sunlit-ink)]">{title}</span>
-                      <span className="mt-1 block text-sm leading-6 text-[var(--sunlit-muted)]">{description}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-                  {locale === "ar"
-                    ? "لن يتم حفظ أي شيء حتى تختار الفكرة وتطلب إنشاء المسودة."
-                    : "Nothing is saved until you select an idea and ask MARKOS to create the draft."}
-                </p>
-              </section>
-            ) : null}
-
-            {homePanel === "DRAFTS" ? (
-              loadingRecords ? (
-                <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">
-                  {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
-                </article>
-              ) : (
-                <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6" aria-labelledby="content-pipeline-heading">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
-                      <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="content-pipeline-heading">
-                        {contentPipelineCopy.heading}
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
-                    </div>
-                    <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
-                      {records.length}
-                    </span>
-                  </div>
-                  <div className="mt-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={locale === "ar" ? "تصفية المحتوى" : "Filter content"}>
-                    {contentPipelineFilters.map(([value, label]) => (
-                      <button
-                        aria-pressed={contentFilter === value}
-                        className={
-                          contentFilter === value
-                            ? "shrink-0 rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
-                            : "shrink-0 rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
-                        }
-                        key={value}
-                        onClick={() => setContentFilter(value)}
-                        type="button"
-                      >
-                        {label} <span className="ms-1 opacity-65">{contentPipelineCounts[value]}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {visibleContentRecords.length === 0 ? (
-                    <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-8 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                      {contentPipelineCopy.empty}
-                    </div>
-                  ) : (
-                    <div className="mt-5 grid max-h-[34rem] gap-3 overflow-y-auto pe-1">
-                      {visibleContentRecords.map((record) => (
-                        <button
-                          className="rounded-2xl border border-[var(--sunlit-line)] bg-white px-5 py-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                          key={record.id}
-                          onClick={() => applyRecord(record, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
-                          type="button"
-                        >
-                          <span className="flex items-start justify-between gap-4">
-                            <span className="min-w-0">
-                              <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
-                              <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
-                                <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
-                                {record.campaignId ? <span>{campaignOriginLabel(record, locale)}</span> : null}
-                                <span className="inline-flex items-center gap-1.5">
-                                  {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
-                                  {contentPipelineTimestamp(record, locale)}
-                                </span>
-                                {record.mediaIds.length > 0 ? (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <ImageIcon size={14} />
-                                    {record.mediaIds.length}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </span>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${contentStatusBadgeClass(record.status)}`}>
-                              {localizedContentStatusLabel(record.status, locale)}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">{contentPipelineCopy.note}</p>
-                </section>
-              )
-            ) : null}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <StudioHomeAction
+              active={false}
+              cta={studioHomeCopy.blankAction}
+              description={studioHomeCopy.blankDescription}
+              icon={Pencil}
+              label={studioHomeCopy.blankAction}
+              onClick={() => openStudio("manual")}
+              tone="coral"
+            />
+            <StudioHomeAction
+              active={false}
+              cta={studioHomeCopy.aiAction}
+              description={studioHomeCopy.aiDescription}
+              icon={MarkosAiIcon}
+              label={studioHomeCopy.aiAction}
+              onClick={() => openStudio("ai")}
+              tone="aqua"
+            />
           </div>
         ) : null}
 
-        {editorOpen ? (
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6 xl:overscroll-contain">
+        {editorOpen && reviewingGenerated && currentRecord ? (
+          <div className="sunlit-card-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            <section className="rounded-[1.5rem] border border-[rgb(33_191_174_/_28%)] bg-[linear-gradient(145deg,var(--sunlit-aqua-soft),white)] p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-3xl">
+                  <p className="sunlit-eyebrow">{locale === "ar" ? "مراجعة المسودة" : "Review generated content"}</p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-[-.025em] text-[var(--sunlit-ink)]">
+                    {locale === "ar" ? "راجع المحتوى قبل اعتماده" : "Make sure this feels right before it moves forward"}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
+                    {locale === "ar"
+                      ? "يمكنك طلب تعديلات متتالية من MARKOS، أو الانتقال إلى التحرير اليدوي والوسائط."
+                      : "Ask MARKOS for another revision, or continue into manual editing and media when the direction is right."}
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-extrabold text-[var(--sunlit-ink-soft)] shadow-sm">
+                  <CheckCircle2 className="text-[var(--sunlit-aqua)]" size={16} /> {locale === "ar" ? "مسودة محفوظة" : "Saved draft"}
+                </span>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--sunlit-line)] bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                  <Instagram size={15} /> Instagram
+                </span>
+                <span className="rounded-full border border-[var(--sunlit-line)] bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                  {localizedContentTypeLabel(currentRecord.contentType, locale)}
+                </span>
+                {currentRecord.plannedAt ? (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--sunlit-line)] bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                    <Calendar size={15} /> {new Date(currentRecord.plannedAt).toLocaleDateString(locale === "ar" ? "ar-BH" : "en-GB")}
+                  </span>
+                ) : null}
+                {campaignContext ? (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--sunlit-line)] bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                    <Target size={15} /> {campaignContext.title}
+                  </span>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-2">
+              <article className="rounded-[1.5rem] border border-[var(--sunlit-line)] bg-white p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-bold text-[var(--sunlit-ink)]">English</h3>
+                  <span className="text-xs font-bold text-[var(--sunlit-muted)]">{captionEn.length} / 2,200</span>
+                </div>
+                <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-[var(--sunlit-ink-soft)]" dir="ltr">
+                  {captionEn}
+                </p>
+              </article>
+              <article className="rounded-[1.5rem] border border-[var(--sunlit-line)] bg-white p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-bold text-[var(--sunlit-ink)]">العربية</h3>
+                  <span className="text-xs font-bold text-[var(--sunlit-muted)]">{captionAr.length} / 2,200</span>
+                </div>
+                <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-[var(--sunlit-ink-soft)]" dir="rtl">
+                  {captionAr}
+                </p>
+              </article>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,.45fr)]">
+              <article className="rounded-[1.5rem] border border-[var(--sunlit-line)] bg-white p-5 sm:p-6">
+                <p className="text-sm font-extrabold text-[var(--sunlit-ink)]">{locale === "ar" ? "تفاصيل المنشور" : "Post details"}</p>
+                <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--sunlit-ink-soft)]">
+                  <p>
+                    <strong>{locale === "ar" ? "الدعوة إلى الإجراء: " : "Call to action: "}</strong>
+                    {callToAction}
+                  </p>
+                  <p className="break-words text-[var(--sunlit-muted)]">{hashtagsText}</p>
+                  {currentRecord.campaignGoal ? (
+                    <p>
+                      <strong>{locale === "ar" ? "هدف المنشور: " : "Post objective: "}</strong>
+                      {currentRecord.campaignGoal}
+                    </p>
+                  ) : null}
+                  {campaignContext ? (
+                    <details className="rounded-xl bg-[var(--sunlit-paper)] px-4 py-3">
+                      <summary className="cursor-pointer font-extrabold text-[var(--sunlit-ink)]">
+                        {locale === "ar" ? "سياق الحملة الأصلي" : "Original Campaign context"}
+                      </summary>
+                      <p className="mt-3 text-[var(--sunlit-muted)]">{campaignContext.content.summary}</p>
+                    </details>
+                  ) : null}
+                </div>
+              </article>
+
+              <article className="rounded-[1.5rem] border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
+                    <MessageCircle size={18} />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-[var(--sunlit-ink)]">{locale === "ar" ? "راجع مع MARKOS" : "Revise with MarkOS"}</h3>
+                    <p className="mt-1 text-xs leading-5 text-[var(--sunlit-muted)]">
+                      {locale === "ar" ? "تعليمات واحدة واضحة في كل مرة." : "Give one clear instruction at a time."}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(locale === "ar"
+                    ? ["اجعله أقصر", "استخدم نبرة أكثر مهنية", "أضف دعوة أقوى", "أعد كتابته بالعربية"]
+                    : ["Make it shorter", "Use a more professional tone", "Add a stronger call to action", "Rewrite it in Arabic"]
+                  ).map((suggestion) => (
+                    <button
+                      className="rounded-full border border-[var(--sunlit-line)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
+                      key={suggestion}
+                      onClick={() => setRevisionPrompt(suggestion)}
+                      type="button"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className="sunlit-field mt-4 min-h-28 resize-none rounded-xl p-4 text-sm leading-6 outline-none"
+                  disabled={revising}
+                  maxLength={1000}
+                  onChange={(event) => setRevisionPrompt(event.target.value)}
+                  placeholder={locale === "ar" ? "مثال: اجعله أقصر وأضف دعوة أوضح." : "For example: Make it shorter and add a clearer call to action."}
+                  value={revisionPrompt}
+                />
+                <button
+                  className="sunlit-primary mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={revising || revisionPrompt.trim().length < 3}
+                  onClick={() => void reviseGeneratedContent()}
+                  type="button"
+                >
+                  {revising ? <RefreshCcw className="animate-spin" size={17} /> : <Wand2 size={17} />}
+                  {revising ? (locale === "ar" ? "جارٍ تطبيق التعديلات..." : "Applying changes...") : locale === "ar" ? "راجع مع MARKOS" : "Revise with MarkOS"}
+                </button>
+              </article>
+            </section>
+
+            <div className="flex flex-wrap justify-end gap-3 pb-1">
+              <button
+                className="sunlit-secondary min-h-12 rounded-xl px-6 text-sm font-extrabold"
+                disabled={revising || approving}
+                onClick={() => setReviewingGenerated(false)}
+                type="button"
+              >
+                {locale === "ar" ? "متابعة التحرير والوسائط" : "Continue editing and media"}
+              </button>
+              <button
+                className="sunlit-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={revising || approving}
+                onClick={() => void acceptDraft()}
+                type="button"
+              >
+                <CheckCircle2 size={18} />{" "}
+                {approving ? (locale === "ar" ? "جارٍ الاعتماد..." : "Marking ready...") : locale === "ar" ? "اعتماد كجاهز" : "Mark as ready"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {editorOpen && !reviewingGenerated ? (
+          <div className="sunlit-card-scroll min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
             {currentRecord && !canEdit ? (
               <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
                 <div>
@@ -2361,10 +2295,116 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               </article>
             ) : null}
 
+            {currentRecord?.campaignId ? (
+              <section className="rounded-[1.5rem] border border-[rgb(33_191_174_/_30%)] bg-[linear-gradient(145deg,var(--sunlit-aqua-soft),white)] p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="sunlit-eyebrow">{locale === "ar" ? "نقطة بداية من الحملة" : "Campaign starting point"}</p>
+                    <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
+                      {campaignContext?.title ?? (locale === "ar" ? "فكرة محتوى مرتبطة بحملة" : "Campaign-linked content idea")}
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
+                      {locale === "ar"
+                        ? "راجع ما نقله MARKOS من الحملة وعدّله قبل إنشاء المحتوى."
+                        : "Review what MARKOS transferred from the Campaign and adjust it before generation."}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+                    <Instagram size={15} /> Instagram
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <label className="grid gap-2 text-sm font-extrabold text-[var(--sunlit-ink)] lg:col-span-2">
+                    {locale === "ar" ? "الموضوع أو فكرة المنشور" : "Topic or post idea"}
+                    <textarea
+                      className="sunlit-field min-h-24 resize-none rounded-xl p-4 text-base font-normal leading-7 outline-none"
+                      disabled={!canEdit}
+                      maxLength={1000}
+                      onChange={(event) => setBrief(event.target.value)}
+                      value={brief}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-extrabold text-[var(--sunlit-ink)]">
+                    {locale === "ar" ? "هدف المنشور" : "Post objective"}
+                    <input
+                      className="sunlit-field h-12 rounded-xl px-4 text-base font-normal outline-none"
+                      disabled={!canEdit}
+                      maxLength={500}
+                      onChange={(event) => setCampaignGoal(event.target.value)}
+                      value={campaignGoal}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-extrabold text-[var(--sunlit-ink)]">
+                    {locale === "ar" ? "ركيزة المحتوى" : "Content pillar"}
+                    <input
+                      className="sunlit-field h-12 rounded-xl px-4 text-base font-normal outline-none"
+                      disabled={!canEdit}
+                      maxLength={160}
+                      onChange={(event) => setContentPillar(event.target.value)}
+                      value={contentPillar}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-extrabold text-[var(--sunlit-ink)]">
+                    {locale === "ar" ? "نبرة الصوت" : "Tone"}
+                    <input
+                      className="sunlit-field h-12 rounded-xl px-4 text-base font-normal outline-none"
+                      disabled={!canEdit}
+                      maxLength={200}
+                      onChange={(event) => setTone(event.target.value)}
+                      placeholder={locale === "ar" ? "مثال: ودود، واثق" : "For example: friendly, confident"}
+                      value={tone}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-extrabold text-[var(--sunlit-ink)]">
+                    {locale === "ar" ? "التاريخ المخطط" : "Planned date"}
+                    <input
+                      className="sunlit-field h-12 rounded-xl px-4 text-base font-normal outline-none"
+                      disabled={!canEdit}
+                      onChange={(event) => setPlannedAtInput(event.target.value ? `${event.target.value}T${plannedAtInput.slice(11) || "12:00"}` : "")}
+                      type="date"
+                      value={plannedAtInput.slice(0, 10)}
+                    />
+                  </label>
+                </div>
+
+                {campaignContext ? (
+                  <details className="mt-4 rounded-xl border border-[var(--sunlit-line)] bg-white/80 px-4 py-3">
+                    <summary className="cursor-pointer text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
+                      {locale === "ar" ? "سياق الحملة" : "Campaign context"}
+                    </summary>
+                    <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">{campaignContext.content.summary}</p>
+                    {campaignContext.objective ? (
+                      <p className="mt-2 text-sm font-bold text-[var(--sunlit-ink-soft)]">
+                        {locale === "ar" ? "الهدف العام: " : "Campaign objective: "}
+                        {campaignContext.objective}
+                      </p>
+                    ) : null}
+                  </details>
+                ) : null}
+
+                <button
+                  className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={!canEdit || generating || brief.trim().length < 3}
+                  onClick={() => void generateCampaignContent()}
+                  type="button"
+                >
+                  {generating ? <RefreshCcw className="animate-spin" size={19} /> : <Wand2 size={19} />}
+                  {generating
+                    ? locale === "ar"
+                      ? "جارٍ إنشاء المسودة..."
+                      : "Creating draft..."
+                    : locale === "ar"
+                      ? "أنشئ باستخدام MARKOS"
+                      : "Generate with MarkOS"}
+                </button>
+              </section>
+            ) : null}
+
             <ContentTypeStep
               expanded={!contentTypeConfirmed}
               locale={locale}
-              locked={currentRecord !== null}
+              locked={currentRecord !== null && currentRecord.campaignId === undefined}
               onChangeRequest={() => setContentTypeConfirmed(false)}
               onSelect={(value) => {
                 setContentType(value);
@@ -2696,7 +2736,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             </details>
           </div>
         ) : null}
-        {editorOpen ? (
+        {editorOpen && !reviewingGenerated ? (
           <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--sunlit-line)] bg-white/95 px-5 py-4 shadow-[0_-14px_35px_rgba(32,33,43,.06)] sm:px-6">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-ink)]">
@@ -2801,40 +2841,45 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         ) : null}
       </div>
 
-      {editorOpen && selectedMedia ? (
-        <aside className="sunlit-preview-enter sticky top-6 hidden h-[calc(100vh-4.5rem)] flex-col items-center justify-center px-2 xl:flex">
-          <InstagramPostPreview
-            brandName={session?.workspace.name ?? "yourbrand"}
-            caption={locale === "ar" ? captionAr || captionEn : captionEn || captionAr}
-            hashtags={parseHashtags(hashtagsText)}
+      {editorOpen ? (
+        <div className="min-h-[620px] xl:sticky xl:top-6 xl:h-[calc(100vh-4.5rem)] xl:min-h-0">
+          <ContentStudioAssistantPanel
+            activePanel={sidePanel}
+            assistantCaption={assistantCaption}
+            assistantMessage={assistantMessage}
+            assistantMessageKind={assistantMessageKind}
+            assistantVisualDirection={assistantVisualDirection}
+            busy={assistantBusy}
+            canGenerate={contentTypeConfirmed && prompt.trim().length >= 8}
+            contentType={contentType}
+            hasSuggestion={assistantSuggestion !== null}
             locale={locale}
-            media={selectedMedia}
-            scheduledAt={currentRecord?.scheduledAt}
+            onCancel={cancelAssistantIdea}
+            onCaptionChange={setAssistantCaption}
+            onDismissReplacement={() => setAssistantReplacementWarning(false)}
+            onGenerate={() => void generateAssistantIdea()}
+            onInsert={insertAssistantIdea}
+            onPanelChange={setSidePanel}
+            onPromptChange={setPrompt}
+            onVisualDirectionChange={setAssistantVisualDirection}
+            preview={
+              selectedMedia ? (
+                <InstagramPostPreview
+                  brandName={session?.workspace.name ?? "yourbrand"}
+                  caption={locale === "ar" ? captionAr || captionEn : captionEn || captionAr}
+                  hashtags={parseHashtags(hashtagsText)}
+                  locale={locale}
+                  media={selectedMedia}
+                  scheduledAt={currentRecord?.scheduledAt}
+                />
+              ) : (
+                <EmptyStudioPreview locale={locale} />
+              )
+            }
+            prompt={prompt}
+            replacementWarning={assistantReplacementWarning}
           />
-          {currentRecord ? (
-            <button
-              className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={(!canSchedule && currentRecord.status !== "SCHEDULED") || scheduling || unscheduling}
-              onClick={() => {
-                if (currentRecord.status === "SCHEDULED") {
-                  requestCancelSchedule();
-                } else {
-                  setSchedulePanelOpen(true);
-                }
-              }}
-              type="button"
-            >
-              {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
-              {currentRecord.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
-            </button>
-          ) : editorOpen ? (
-            <p className="mt-6 max-w-xs text-center text-sm font-bold leading-6 text-[var(--sunlit-muted)]">
-              {locale === "ar"
-                ? "احفظ عملاً فعلياً أولاً لإضافة الوسائط أو الانتقال إلى الجدولة."
-                : "Save real work first to add media or move into scheduling."}
-            </p>
-          ) : null}
-        </aside>
+        </div>
       ) : null}
 
       {schedulePanelOpen && currentRecord?.status === "APPROVED" ? (
@@ -2972,6 +3017,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [days, setDays] = useState(7);
+  const [trendMetric, setTrendMetric] = useState<"engagement" | "impressions" | "reach">("reach");
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -3030,110 +3076,279 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   }
 
   const totals = summary?.totals;
-  const audienceMetric =
-    totals && typeof totals.profileViews === "number"
-      ? { label: "Profile views", value: totals.profileViews }
-      : { label: "Followers", value: totals?.followers ?? null };
-  const daily = summary?.daily.filter((item) => item.totals.reach !== null).slice(-14) ?? [];
-  const maximumReach = Math.max(...daily.map((item) => item.totals.reach ?? 0), 1);
+  const comparison = summary?.comparison;
+  const viewsMetric: keyof AnalyticsMetricTotals = totals?.views !== null && totals?.views !== undefined ? "views" : "impressions";
+  const daily = summary?.daily.filter((item) => item.totals[trendMetric] !== null) ?? [];
+  const maximumTrendValue = Math.max(...daily.map((item) => item.totals[trendMetric] ?? 0), 1);
+  const syncedContentCount = new Set(summary?.records.flatMap((record) => (record.contentItemId ? [record.contentItemId] : [])) ?? []).size;
+  const contentBuckets = summary?.byMetricType.filter((item) => item.metricType === "POST" || item.metricType === "REEL" || item.metricType === "STORY") ?? [];
+  const audienceBucket = summary?.byMetricType.find((item) => item.metricType === "AUDIENCE");
+  const hasAnalytics = (summary?.records.length ?? 0) > 0 && totals !== undefined && Object.values(totals).some((value) => value !== null);
+  const periodLabel = summary ? formatInsightsDateRange(locale, summary.from, summary.to) : "";
+  const previousPeriodLabel = comparison ? formatInsightsDateRange(locale, comparison.from, comparison.to) : "";
   const copy =
     locale === "ar"
       ? {
-          empty: "ستظهر بيانات الأداء هنا بعد ربط إنستغرام ومزامنة أول مجموعة من الإحصاءات.",
+          audience: "الجمهور",
+          audienceUnavailable: "لا تتضمن المزامنة الحالية توزيع الجمهور حسب العمر أو الموقع أو الجنس. سنعرضه هنا عندما يصبح متاحاً من المصدر.",
+          comparison: "مقارنة الفترات",
+          comparisonEmpty: "تحتاج المقارنة إلى بيانات من الفترة السابقة.",
+          contentInteractions: "تفاعلات المحتوى",
+          contentPerformance: "أداء المحتوى المنشور",
+          empty: "ستظهر بيانات الأداء الحقيقية هنا بعد ربط إنستغرام ومزامنة أول مجموعة من الإحصاءات.",
           export: "تصدير التقرير الشهري",
+          followers: "المتابعون",
           heading: "الإحصاءات",
-          range: days === 7 ? "آخر 7 أيام" : "آخر 30 يوماً",
-          subtitle: "افهم ما ينجح، ثم حوّل ذلك إلى خطوة واضحة للمحتوى التالي."
+          impressions: "مرات الظهور",
+          latestSync: "آخر مزامنة",
+          noContent: "لا توجد منشورات مرتبطة ببيانات أداء خلال هذه الفترة.",
+          noSync: "لا توجد بيانات متزامنة بعد",
+          previous: "الفترة السابقة",
+          profileActivity: "نشاط الملف الشخصي",
+          published: "محتوى تمت مزامنته",
+          range: days === 7 ? "7 أيام" : "30 يوماً",
+          reach: "الحسابات التي تم الوصول إليها",
+          reportWindow: "فترة التقرير",
+          shares: "المشاركات",
+          subtitle: "راجع ما وصل إلى جمهورك وما حرّك التفاعل، ثم استخدمه لتحسين الحملة التالية.",
+          topContent: "أفضل المحتويات",
+          trend: "اتجاه الأداء",
+          unavailable: "غير متاح",
+          views: "المشاهدات"
         }
       : {
-          empty: "Performance data will appear here after Instagram is connected and the first insights are synced.",
+          audience: "Audience insights",
+          audienceUnavailable:
+            "The current sync does not include age, location, or gender breakdowns. MARKOS will show them here when the source provides them.",
+          comparison: "Period comparison",
+          comparisonEmpty: "Comparison needs data from the preceding period.",
+          contentInteractions: "Content interactions",
+          contentPerformance: "Published content performance",
+          empty: "Real performance data will appear here after Instagram is connected and the first insights are synced.",
           export: "Export monthly report",
+          followers: "Followers",
           heading: "Insights",
-          range: days === 7 ? "Last 7 days" : "Last 30 days",
-          subtitle: "See what is working, then turn it into a clear next move for your content."
+          impressions: "Impressions",
+          latestSync: "Latest sync",
+          noContent: "No published content has linked performance data in this period.",
+          noSync: "No synced insights yet",
+          previous: "Previous period",
+          profileActivity: "Profile activity",
+          published: "Content with synced data",
+          range: days === 7 ? "7 days" : "30 days",
+          reach: "Accounts reached",
+          reportWindow: "Reporting period",
+          shares: "Shares",
+          subtitle: "See what reached people and moved them to act, then use it to improve the next Campaign.",
+          topContent: "Top-performing posts",
+          trend: "Performance trend",
+          unavailable: "Unavailable",
+          views: "Views"
         };
 
+  const metricCards: Array<{
+    icon: IconType;
+    label: string;
+    metric: keyof AnalyticsMetricTotals;
+    tone: "aqua" | "coral" | "pink" | "yellow";
+  }> = [
+    { icon: Eye, label: viewsMetric === "views" ? copy.views : copy.impressions, metric: viewsMetric, tone: "pink" },
+    { icon: Users, label: copy.reach, metric: "reach", tone: "aqua" },
+    { icon: Heart, label: copy.contentInteractions, metric: "engagement", tone: "coral" },
+    { icon: TrendingUp, label: copy.followers, metric: "followers", tone: "yellow" },
+    { icon: MousePointerClick, label: copy.profileActivity, metric: "profileViews", tone: "aqua" },
+    { icon: Share2, label: copy.shares, metric: "shares", tone: "pink" }
+  ];
+
   return (
-    <section className="space-y-6 xl:space-y-7">
+    <section aria-busy={loading} className="space-y-5 xl:space-y-6">
       <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">Instagram performance</p>
             <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <p className="mt-2 max-w-2xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
+              <span>
+                {copy.reportWindow}: {periodLabel || copy.range}
+              </span>
+              <span>
+                {copy.latestSync}: {summary?.latestSyncedAt ? formatInsightsTimestamp(locale, summary.latestSyncedAt) : copy.unavailable}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div aria-label={copy.reportWindow} className="inline-flex rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1" role="group">
+              {[7, 30].map((option) => (
+                <button
+                  aria-pressed={days === option}
+                  className={`min-h-9 rounded-lg px-4 text-sm font-extrabold transition ${
+                    days === option ? "bg-white text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                  }`}
+                  key={option}
+                  onClick={() => setDays(option)}
+                  type="button"
+                >
+                  {locale === "ar" ? (option === 7 ? "7 أيام" : "30 يوماً") : `${option} days`}
+                </button>
+              ))}
+            </div>
             <button
-              className="sunlit-secondary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold"
-              onClick={() => setDays(days === 7 ? 30 : 7)}
-              type="button"
-            >
-              {copy.range}
-            </button>
-            <button
-              className="sunlit-primary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+              className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
               disabled={exporting || !session}
               onClick={() => void exportReport()}
               type="button"
             >
-              {exporting ? "Preparing..." : copy.export}
+              <FileBarChart2 aria-hidden="true" size={17} />
+              {exporting ? (locale === "ar" ? "جارٍ التجهيز..." : "Preparing...") : copy.export}
             </button>
           </div>
         </div>
       </section>
 
-      {message ? <article className="sunlit-panel-soft rounded-2xl p-5 text-sm font-bold text-[var(--sunlit-ink-soft)]">{message}</article> : null}
+      {message ? (
+        <article
+          className="rounded-2xl border border-[var(--sunlit-line-strong)] bg-white/85 p-4 text-sm font-bold text-[var(--sunlit-ink-soft)]"
+          role="status"
+        >
+          {message}
+        </article>
+      ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-3 xl:gap-6">
-        <SunlitMetricCard
-          icon={Users}
-          label={audienceMetric.label}
-          note={copy.range}
-          tone="aqua"
-          value={loading ? "…" : totals ? formatMetricValue(audienceMetric.value) : "—"}
-        />
-        <SunlitMetricCard icon={Eye} label="Reach" note={copy.range} tone="yellow" value={loading ? "…" : totals ? formatMetricValue(totals.reach) : "—"} />
-        <SunlitMetricCard
-          icon={Heart}
-          label="Engagements"
-          note={copy.range}
-          tone="coral"
-          value={loading ? "…" : totals ? formatMetricValue(totals.engagement) : "—"}
-        />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {metricCards.map((item) => (
+          <InsightsMetricCard
+            change={comparison?.percentageChanges[item.metric] ?? null}
+            comparisonAvailable={comparison?.totals[item.metric] !== null && comparison?.totals[item.metric] !== undefined}
+            icon={item.icon}
+            key={item.metric}
+            label={item.label}
+            loading={loading && !summary}
+            locale={locale}
+            tone={item.tone}
+            value={totals?.[item.metric] ?? null}
+          />
+        ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
+      {!loading && !hasAnalytics ? (
+        <section className="sunlit-panel grid min-h-56 place-items-center rounded-[1.75rem] p-8 text-center">
+          <div className="max-w-xl">
+            <BarChart3 className="mx-auto text-[var(--sunlit-aqua-dark)]" size={42} />
+            <h2 className="mt-4 text-xl font-bold text-[var(--sunlit-ink)]">{copy.noSync}</h2>
+            <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.empty}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,.55fr)]">
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">Reach over time</p>
-          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">Daily Instagram reach</h2>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="sunlit-eyebrow">{copy.trend}</p>
+              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{periodLabel || copy.range}</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["reach", "impressions", "engagement"] as const).map((metric) => (
+                <button
+                  aria-pressed={trendMetric === metric}
+                  className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition ${
+                    trendMetric === metric
+                      ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+                      : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                  }`}
+                  key={metric}
+                  onClick={() => setTrendMetric(metric)}
+                  type="button"
+                >
+                  {insightsMetricLabel(locale, metric)}
+                </button>
+              ))}
+            </div>
+          </div>
           {daily.length > 0 ? (
-            <div className="mt-7 flex h-72 items-end gap-2 rounded-2xl bg-[var(--sunlit-paper)] px-5 pb-5 pt-8">
-              {daily.map((item) => (
-                <div className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
-                  <span className="invisible rounded-md bg-[var(--sunlit-ink)] px-2 py-1 text-[10px] font-bold text-white group-hover:visible">
-                    {formatMetricValue(item.totals.reach)}
-                  </span>
-                  <div
-                    className="w-full min-w-2 rounded-t-lg bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
-                    style={{ height: `${Math.max(8, ((item.totals.reach ?? 0) / maximumReach) * 190)}px` }}
-                  />
-                  <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{new Date(item.dataDate).getDate()}</span>
+            <div className="mt-6 overflow-x-auto rounded-2xl bg-[var(--sunlit-paper)] px-4 pb-4 pt-6">
+              <div className="flex h-64 min-w-[34rem] items-end gap-2" role="img" aria-label={`${insightsMetricLabel(locale, trendMetric)} · ${periodLabel}`}>
+                {daily.map((item) => (
+                  <div className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
+                    <span className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-[var(--sunlit-ink)] opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100">
+                      {formatMetricValue(item.totals[trendMetric])}
+                    </span>
+                    <div
+                      className="w-full min-w-2 rounded-t-md bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
+                      style={{ height: `${Math.max(8, ((item.totals[trendMetric] ?? 0) / maximumTrendValue) * 178)}px` }}
+                      title={`${formatInsightsDay(locale, item.dataDate)}: ${formatMetricValue(item.totals[trendMetric])}`}
+                    />
+                    <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{formatInsightsDay(locale, item.dataDate)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <InsightsUnavailableState label={copy.unavailable} locale={locale} />
+          )}
+        </article>
+
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <p className="sunlit-eyebrow">{copy.comparison}</p>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{previousPeriodLabel || copy.previous}</h2>
+          <div className="mt-5 grid gap-1">
+            {(["reach", "impressions", "engagement", "profileViews"] as const).map((metric) => (
+              <InsightsComparisonRow
+                change={comparison?.percentageChanges[metric] ?? null}
+                current={totals?.[metric] ?? null}
+                key={metric}
+                label={insightsMetricLabel(locale, metric)}
+                locale={locale}
+                previous={comparison?.totals[metric] ?? null}
+              />
+            ))}
+          </div>
+          {!comparison || !Object.values(comparison.totals).some((value) => value !== null) ? (
+            <p className="mt-4 rounded-xl bg-[var(--sunlit-paper)] p-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.comparisonEmpty}</p>
+          ) : null}
+        </article>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="sunlit-eyebrow">{copy.contentPerformance}</p>
+              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
+                {syncedContentCount} {copy.published}
+              </h2>
+            </div>
+            <Activity aria-hidden="true" className="text-[var(--sunlit-coral-deep)]" size={24} />
+          </div>
+          {contentBuckets.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+              {contentBuckets.map((bucket) => (
+                <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={bucket.metricType}>
+                  <p className="text-sm font-extrabold text-[var(--sunlit-ink)]">{insightsContentBucketLabel(locale, bucket.metricType)}</p>
+                  <dl className="mt-3 grid gap-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-[var(--sunlit-muted)]">{copy.reach}</dt>
+                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.reach)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-[var(--sunlit-muted)]">{copy.contentInteractions}</dt>
+                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.engagement)}</dd>
+                    </div>
+                  </dl>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-7 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-8 text-center">
-              <div className="max-w-md">
-                <BarChart3 className="mx-auto text-[var(--sunlit-aqua)]" size={38} />
-                <p className="mt-4 font-extrabold text-[var(--sunlit-ink)]">No synced insight data yet</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.empty}</p>
-              </div>
-            </div>
+            <InsightsUnavailableState label={copy.noContent} locale={locale} />
           )}
         </article>
+
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">Content signals</p>
-          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">Top content</h2>
+          <p className="sunlit-eyebrow">{copy.topContent}</p>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
+            {locale === "ar" ? "ما الذي حقق أفضل استجابة" : "What earned the strongest response"}
+          </h2>
           <div className="mt-6 grid gap-3">
             {summary?.topContent.length ? (
               summary.topContent.slice(0, 4).map((item, index) => (
@@ -3149,7 +3364,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                     <div className="min-w-0">
                       <p className="line-clamp-2 font-extrabold leading-6 text-[var(--sunlit-ink)]">{item.caption || contentTypeLabel(item.contentType)}</p>
                       <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                        {formatMetricValue(item.metrics.reach)} reach · {formatMetricValue(item.engagement)} engagements
+                        {formatMetricValue(item.metrics.reach)} {copy.reach} · {formatMetricValue(item.engagement)} {copy.contentInteractions}
                       </p>
                     </div>
                   </div>
@@ -3157,17 +3372,188 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
               ))
             ) : (
               <div className="rounded-2xl bg-[var(--sunlit-paper)] p-5">
-                <p className="font-extrabold text-[var(--sunlit-ink)]">Nothing to rank yet</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
-                  Once content has synced performance data, the strongest posts will appear here.
-                </p>
+                <p className="font-extrabold text-[var(--sunlit-ink)]">{copy.noContent}</p>
               </div>
             )}
           </div>
         </article>
       </section>
+
+      <section className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,.45fr)_minmax(0,.55fr)] lg:items-center">
+          <div>
+            <p className="sunlit-eyebrow">{copy.audience}</p>
+            <div className="mt-3 flex items-end gap-3">
+              <p className="text-4xl font-bold tracking-tight text-[var(--sunlit-ink)]">
+                {formatMetricValue(audienceBucket?.totals.followers ?? totals?.followers ?? null)}
+              </p>
+              <p className="pb-1 text-sm font-bold text-[var(--sunlit-muted)]">{copy.followers}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-5">
+            <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy.audienceUnavailable}</p>
+          </div>
+        </div>
+      </section>
     </section>
   );
+}
+
+function InsightsMetricCard({
+  change,
+  comparisonAvailable,
+  icon: Icon,
+  label,
+  loading,
+  locale,
+  tone,
+  value
+}: {
+  change: number | null;
+  comparisonAvailable: boolean;
+  icon: IconType;
+  label: string;
+  loading: boolean;
+  locale: Locale;
+  tone: "aqua" | "coral" | "pink" | "yellow";
+  value: number | null;
+}) {
+  const tones = {
+    aqua: "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]",
+    coral: "bg-[rgb(255_102_90_/_12%)] text-[var(--sunlit-coral-deep)]",
+    pink: "bg-[rgb(226_56_123_/_10%)] text-[var(--sunlit-pink)]",
+    yellow: "bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-ink)]"
+  } as const;
+  const changeLabel = formatInsightsChange(locale, change, comparisonAvailable);
+  const ChangeIcon = change !== null && change < 0 ? ArrowDownRight : ArrowUpRight;
+
+  return (
+    <article className="sunlit-panel rounded-2xl p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-bold text-[var(--sunlit-muted)]">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{loading ? "…" : formatMetricValue(value)}</p>
+        </div>
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}>
+          <Icon aria-hidden="true" size={20} strokeWidth={2} />
+        </span>
+      </div>
+      <p
+        className={`mt-3 inline-flex items-center gap-1 text-xs font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}
+      >
+        {change !== null ? <ChangeIcon aria-hidden="true" size={14} /> : null}
+        {changeLabel}
+      </p>
+    </article>
+  );
+}
+
+function InsightsComparisonRow({
+  change,
+  current,
+  label,
+  locale,
+  previous
+}: {
+  change: number | null;
+  current: number | null;
+  label: string;
+  locale: Locale;
+  previous: number | null;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-[var(--sunlit-line)] py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="truncate text-base font-extrabold text-[var(--sunlit-ink)]">{label}</p>
+        <p className="mt-1 text-xs text-[var(--sunlit-muted)]">
+          {formatMetricValue(current)} · {locale === "ar" ? "السابق" : "previous"} {formatMetricValue(previous)}
+        </p>
+      </div>
+      <span className={`text-sm font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}>
+        {formatInsightsChange(locale, change, previous !== null)}
+      </span>
+    </div>
+  );
+}
+
+function InsightsUnavailableState({ label, locale }: { label: string; locale: Locale }) {
+  return (
+    <div className="mt-6 grid min-h-44 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-center">
+      <div className="max-w-sm">
+        <BarChart3 aria-hidden="true" className="mx-auto text-[var(--sunlit-aqua-dark)]" size={30} />
+        <p className="mt-3 text-sm font-bold leading-6 text-[var(--sunlit-muted)]">
+          {label || (locale === "ar" ? "لا توجد بيانات متاحة." : "No data is available.")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function insightsMetricLabel(locale: Locale, metric: keyof AnalyticsMetricTotals): string {
+  const labels: Record<Locale, Record<keyof AnalyticsMetricTotals, string>> = {
+    ar: {
+      comments: "التعليقات",
+      engagement: "التفاعلات",
+      followers: "المتابعون",
+      impressions: "مرات الظهور",
+      likes: "الإعجابات",
+      profileViews: "زيارات الملف",
+      reach: "الوصول",
+      saves: "عمليات الحفظ",
+      shares: "المشاركات",
+      views: "المشاهدات"
+    },
+    en: {
+      comments: "Comments",
+      engagement: "Interactions",
+      followers: "Followers",
+      impressions: "Impressions",
+      likes: "Likes",
+      profileViews: "Profile activity",
+      reach: "Reach",
+      saves: "Saves",
+      shares: "Shares",
+      views: "Views"
+    }
+  };
+
+  return labels[locale][metric];
+}
+
+function insightsContentBucketLabel(locale: Locale, metricType: string): string {
+  const labels: Record<string, [string, string]> = {
+    POST: ["Post", "منشور"],
+    REEL: ["Reel", "ريل"],
+    STORY: ["Story", "قصة"]
+  };
+  const label = labels[metricType];
+  return label ? label[locale === "ar" ? 1 : 0] : metricType;
+}
+
+function formatInsightsChange(locale: Locale, change: number | null, comparisonAvailable: boolean): string {
+  if (change === null)
+    return comparisonAvailable
+      ? locale === "ar"
+        ? "لا يمكن حساب النسبة"
+        : "Change unavailable"
+      : locale === "ar"
+        ? "لا توجد فترة سابقة"
+        : "No prior-period data";
+  const formatted = `${change > 0 ? "+" : ""}${new Intl.NumberFormat(locale === "ar" ? "ar-BH" : "en-BH", { maximumFractionDigits: 1 }).format(change)}%`;
+  return locale === "ar" ? `${formatted} عن الفترة السابقة` : `${formatted} vs previous`;
+}
+
+function formatInsightsDateRange(locale: Locale, from: string, to: string): string {
+  const formatter = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${formatter.format(new Date(from))} – ${formatter.format(new Date(to))}`;
+}
+
+function formatInsightsTimestamp(locale: Locale, value: string): string {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatInsightsDay(locale: Locale, value: string): string {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(value));
 }
 
 interface FinalVaultState {
@@ -3260,7 +3646,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">{copy.modules}</p>
             <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
             <a
               className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
               href={`/${locale}/onboarding?mode=edit`}
@@ -3271,8 +3657,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-muted)]">Profile readiness</p>
-                <p className="mt-2 text-sm font-bold text-[var(--sunlit-ink-soft)]">
+                <p className="text-sm font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-muted)]">Profile readiness</p>
+                <p className="mt-2 text-base font-bold text-[var(--sunlit-ink-soft)]">
                   {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
                 </p>
               </div>
@@ -3305,7 +3691,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           {completedCount}/{modules.length}
         </span>
       </div>
-      <section className="grid gap-5 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-2">
         {modules.map((module, index) => (
           <article
             className={
@@ -3327,8 +3713,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                   {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
                 </span>
                 <div>
-                  <h3 className="text-lg font-bold text-[var(--sunlit-ink)]">{module.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
+                  <h3 className="text-xl font-bold text-[var(--sunlit-ink)]">{module.title}</h3>
+                  <p className="mt-2 text-base leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
                   <p className="mt-4 text-xs font-bold text-[var(--sunlit-muted)]">
                     {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}
                   </p>
@@ -3353,8 +3739,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <Lightbulb size={20} />
         </span>
         <div>
-          <h2 className="font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--sunlit-muted)]">
+          <h2 className="text-lg font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
+          <p className="mt-2 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">
             Changes to approved business context can influence future business strategy, Campaigns, and content. Existing saved work remains unchanged until you
             create a new version.
           </p>

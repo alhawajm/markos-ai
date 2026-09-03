@@ -16,7 +16,6 @@ from openai import (
     RateLimitError,
 )
 from PIL import Image as PillowImage
-from PIL import ImageDraw
 
 from app.contracts.image import (
     ImageAspectRatio,
@@ -64,24 +63,14 @@ class ImageProvider(Protocol):
     async def generate_image(self, request: ImageGenerateRequest) -> ImageGenerateResponse: ...
 
 
-class LocalImageProvider:
+class DisabledImageProvider:
     async def generate_image(self, request: ImageGenerateRequest) -> ImageGenerateResponse:
-        width, height = IMAGE_DIMENSIONS[request.aspect_ratio]
-        image_bytes = build_local_jpeg(request, width, height)
-        digest = hashlib.sha256(image_bytes).hexdigest()[:12]
-
-        return ImageGenerateResponse(
-            model="local-image-generator",
-            prompt_version=f"{IMAGE_PROMPT_VERSION}.local",
-            tokens_in=0,
-            tokens_out=0,
-            prompt=request.prompt,
-            filename=f"markos-local-{digest}.jpg",
-            mime_type="image/jpeg",
-            base64_data=base64.b64encode(image_bytes).decode("ascii"),
-            size_bytes=len(image_bytes),
-            width=width,
-            height=height,
+        del request
+        raise AiServiceError(
+            code="AI_IMAGE_GENERATION_DISABLED",
+            message="AI image generation is not available in this environment. Upload an image instead.",
+            status_code=503,
+            retryable=False,
         )
 
 
@@ -258,7 +247,9 @@ def get_image_provider() -> ImageProvider:
     if settings.ai_image_provider == "openai":
         return OpenAIImageProvider()
 
-    return LocalImageProvider()
+    # Treat the legacy `local` selector as disabled. This prevents an older
+    # environment value from silently restoring the synthetic bitmap pipeline.
+    return DisabledImageProvider()
 
 
 def classify_image_status_error(status_code: int, provider_code: str | None) -> AiServiceError:
@@ -294,50 +285,6 @@ def validate_generated_jpeg(image_bytes: bytes, expected_dimensions: tuple[int, 
         if image.format != "JPEG" or image.size != expected_dimensions:
             raise ValueError("invalid image format or dimensions")
         image.verify()
-
-
-def build_local_jpeg(request: ImageGenerateRequest, width: int, height: int) -> bytes:
-    digest = hashlib.sha256(
-        f"{request.workspace_id}:{request.prompt}:{request.aspect_ratio}".encode("utf-8")
-    ).digest()
-    primary = tuple(48 + value % 144 for value in digest[:3])
-    secondary = tuple(48 + value % 144 for value in digest[3:6])
-    accent = tuple(64 + value % 160 for value in digest[6:9])
-    image = PillowImage.new("RGB", (width, height), primary)
-    draw = ImageDraw.Draw(image)
-    margin = width // 12
-    draw.rounded_rectangle(
-        (margin, margin, width - margin, height - margin),
-        radius=width // 24,
-        fill=secondary,
-    )
-    circle_size = width // 3
-    draw.ellipse(
-        (
-            width - margin - circle_size,
-            margin * 2,
-            width - margin,
-            margin * 2 + circle_size,
-        ),
-        fill=accent,
-    )
-    line_width = max(8, width // 64)
-    draw.line(
-        (
-            margin * 2,
-            int(height * 0.68),
-            int(width * 0.45),
-            int(height * 0.58),
-            width - margin * 2,
-            int(height * 0.66),
-        ),
-        fill=(238, 235, 226),
-        width=line_width,
-        joint="curve",
-    )
-    output = BytesIO()
-    image.save(output, format="JPEG", quality=88, optimize=True, progressive=True)
-    return output.getvalue()
 
 
 def log_image_provider_failure(error: BaseException) -> None:

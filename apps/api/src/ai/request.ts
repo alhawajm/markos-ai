@@ -9,6 +9,7 @@ const safeAiMessages: Record<string, string> = {
   AI_OUTPUT_INVALID: "The AI provider returned an invalid result",
   AI_OUTPUT_REFUSED: "The AI provider could not generate this result",
   AI_IMAGE_MODERATION_BLOCKED: "That image direction was blocked by the provider safety policy. Revise it and try again",
+  AI_IMAGE_GENERATION_DISABLED: "AI image generation is not available in this environment. Upload an image instead",
   AI_IMAGE_OUTPUT_INVALID: "The AI provider returned an image MARKOS could not validate",
   AI_IMAGE_REQUEST_REJECTED: "The AI provider could not generate that image direction. Revise it and try again",
   AI_PROVIDER_NOT_CONFIGURED: "The AI provider is not configured",

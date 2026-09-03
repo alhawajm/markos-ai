@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ import { useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
+  const router = useRouter();
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
@@ -51,6 +52,7 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
   const [campaignDrafts, setCampaignDrafts] = useState<ContentRecord[]>([]);
   const [approvingSuggestion, setApprovingSuggestion] = useState<string>();
   const [suggestionMessage, setSuggestionMessage] = useState("");
+  const [suggestionMessageKind, setSuggestionMessageKind] = useState<"error" | "success">("success");
   const [isBusy, setIsBusy] = useState(false);
   const vaultGrounding = useVaultGroundingState({ area: "campaigns", locale });
   const campaignUsage = useMeteredActionState({ fallbackTotal: 3, fallbackUsed: 1, label: t(locale, "title"), metric: "CAMPAIGN" });
@@ -69,13 +71,17 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
     let cancelled = false;
     setCampaignDrafts([]);
     setSuggestionMessage("");
+    setSuggestionMessageKind("success");
     void client
       .campaignDrafts(selectedCampaignId)
       .then((drafts) => {
         if (!cancelled) setCampaignDrafts(drafts);
       })
       .catch(() => {
-        if (!cancelled) setSuggestionMessage(t(locale, "suggestionLoadFailed"));
+        if (!cancelled) {
+          setSuggestionMessageKind("error");
+          setSuggestionMessage(t(locale, "suggestionLoadFailed"));
+        }
       });
     return () => {
       cancelled = true;
@@ -132,6 +138,7 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
     setCollapsedDays(new Set());
     setCampaignDrafts([]);
     setSuggestionMessage("");
+    setSuggestionMessageKind("success");
   }
 
   function changeWeek(index: number) {
@@ -150,17 +157,24 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
 
   async function approveSuggestion(campaign: CampaignRecord, week: number, actionIndex: number) {
     const key = suggestionKey(week, actionIndex);
-    if (approvingSuggestion || campaignDrafts.some((draft) => suggestionKey(draft.campaignWeek, draft.campaignActionIndex) === key)) return;
+    if (approvingSuggestion) return;
     setApprovingSuggestion(key);
     setSuggestionMessage("");
     try {
       const draft = await client.approveCampaignSuggestion(campaign.id, { week, actionIndex });
       setCampaignDrafts((current) => [draft, ...current.filter((item) => item.id !== draft.id)]);
+      setSuggestionMessageKind("success");
+      setSuggestionMessage(t(locale, "draftRegistered"));
     } catch {
+      setSuggestionMessageKind("error");
       setSuggestionMessage(t(locale, "suggestionApprovalFailed"));
     } finally {
       setApprovingSuggestion(undefined);
     }
+  }
+
+  function openDraftInCreate(draft: ContentRecord) {
+    router.push(`/${locale}/app/content-studio?item=${draft.id}&source=campaign`);
   }
 
   return (
@@ -197,7 +211,7 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
                       />
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 [scrollbar-color:rgb(33_191_174_/_42%)_transparent] [scrollbar-width:thin] sm:px-6 sm:pb-6">
+                  <div className="sunlit-card-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 sm:px-6 sm:pb-6">
                     {reviewMode === "overview" ? (
                       <CampaignOverview
                         campaign={active}
@@ -218,7 +232,9 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
                         locale={locale}
                         onApprove={approveSuggestion}
                         onChangeWeek={changeWeek}
+                        onOpenCreate={openDraftInCreate}
                         onToggleDay={toggleDay}
+                        suggestionMessageKind={suggestionMessageKind}
                         suggestionMessage={suggestionMessage}
                       />
                     ) : null}
@@ -236,13 +252,12 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
       </section>
       {showComposer ? (
         <CampaignComposer
-          canClose={campaigns.length > 0}
           durationDays={durationDays}
           isBusy={isBusy}
           locale={locale}
           message={message}
           objective={objective}
-          onClose={() => campaigns.length > 0 && setShowComposer(false)}
+          onClose={() => setShowComposer(false)}
           onDuration={setDurationDays}
           onGenerate={() => void generate()}
           onIntensity={setPublishesPerDay}
@@ -327,7 +342,7 @@ function CampaignLibrary({
           <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2.5 py-1 text-xs font-extrabold">{campaigns.length}</span>
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1 [scrollbar-color:rgb(33_191_174_/_40%)_transparent] [scrollbar-width:thin]">
+      <div className="sunlit-card-scroll min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
         {campaigns.map((campaign) => {
           const selected = campaign.id === active?.id;
           return (
@@ -446,7 +461,9 @@ function WeeklyReview({
   locale,
   onApprove,
   onChangeWeek,
+  onOpenCreate,
   onToggleDay,
+  suggestionMessageKind,
   suggestionMessage
 }: {
   activeWeek: CampaignWeek;
@@ -458,25 +475,29 @@ function WeeklyReview({
   locale: Locale;
   onApprove: (campaign: CampaignRecord, week: number, actionIndex: number) => Promise<void>;
   onChangeWeek: (index: number) => void;
+  onOpenCreate: (draft: ContentRecord) => void;
   onToggleDay: (day: number) => void;
+  suggestionMessageKind: "error" | "success";
   suggestionMessage: string;
 }) {
   const allCollapsed = activeWeek.days.every((day) => collapsedDays.has(day.day));
   return (
     <div role="tabpanel">
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {campaign.content.weeklyCadence.map((week, index) => (
-          <button
-            aria-current={index === activeWeekIndex ? "step" : undefined}
-            className={`h-9 shrink-0 rounded-lg px-4 text-xs font-extrabold ${index === activeWeekIndex ? "bg-[var(--sunlit-ink)] text-white" : "border border-[var(--sunlit-line)] bg-white text-[var(--sunlit-muted)]"}`}
-            key={week.week}
-            onClick={() => onChangeWeek(index)}
-            type="button"
-          >
-            {t(locale, "week")} {week.week}
-          </button>
-        ))}
-      </div>
+      <label className="mb-2 flex max-w-xs items-center gap-3 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
+        <span className="shrink-0">{t(locale, "dailyPlan")}</span>
+        <select
+          aria-label={t(locale, "dailyPlan")}
+          className="sunlit-field h-10 min-w-0 flex-1 rounded-xl px-3 text-sm font-extrabold outline-none"
+          onChange={(event) => onChangeWeek(Number(event.target.value))}
+          value={activeWeekIndex}
+        >
+          {campaign.content.weeklyCadence.map((week, index) => (
+            <option key={week.week} value={index}>
+              {t(locale, "week")} {week.week} · {week.focus}
+            </option>
+          ))}
+        </select>
+      </label>
       <section className="rounded-[1.35rem] border border-[rgb(33_191_174_/_30%)] bg-[linear-gradient(145deg,rgb(239_253_250_/_82%),rgb(255_250_244_/_88%))] p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgb(33_191_174_/_18%)] pb-3">
           <div>
@@ -525,36 +546,26 @@ function WeeklyReview({
                           key={`${day.day}-${postIndex}-${post.title}`}
                         >
                           <ContentTypeBadge locale={locale} type={post.contentType} />
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-extrabold">{post.title}</p>
-                            <p className="truncate text-[11px] text-[var(--sunlit-muted)]">{post.description}</p>
+                          <div className="min-w-0 py-0.5">
+                            <p className="break-words text-sm font-extrabold leading-5">{post.title}</p>
+                            <p className="mt-0.5 break-words text-xs leading-5 text-[var(--sunlit-muted)]">{post.description}</p>
                           </div>
-                          {linkedDraft ? (
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className="grid h-8 w-8 place-items-center rounded-full bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
-                                title={t(locale, "draftAdded")}
-                              >
-                                <CheckCircle2 size={17} />
-                              </span>
-                              <Link
-                                className="sunlit-secondary inline-flex h-8 items-center rounded-lg px-2.5 text-[11px] font-extrabold"
-                                href={`/${locale}/app/content-studio?item=${linkedDraft.id}`}
-                              >
-                                {t(locale, "create")}
-                              </Link>
-                            </div>
-                          ) : (
-                            <button
-                              aria-label={`${t(locale, "approveSuggestion")}: ${post.title}`}
-                              className="sunlit-secondary grid h-8 w-8 place-items-center rounded-full text-[var(--sunlit-aqua-dark)] disabled:opacity-50"
-                              disabled={Boolean(approvingSuggestion)}
-                              onClick={() => void onApprove(campaign, activeWeek.week, actionIndex)}
-                              type="button"
-                            >
-                              {approvingSuggestion === key ? <RefreshCcw className="animate-spin" size={15} /> : <Check size={16} />}
-                            </button>
-                          )}
+                          <button
+                            aria-label={`${linkedDraft ? t(locale, "openDraftInCreate") : t(locale, "approveSuggestion")}: ${post.title}`}
+                            className={`${linkedDraft ? "sunlit-secondary min-w-[4.7rem] px-3" : "w-9 border border-[rgb(33_191_174_/_42%)] bg-[var(--sunlit-aqua-soft)] px-0 text-[var(--sunlit-aqua-dark)] hover:bg-[rgb(207_247_240)]"} inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-extrabold disabled:opacity-50`}
+                            disabled={Boolean(approvingSuggestion)}
+                            onClick={() => (linkedDraft ? onOpenCreate(linkedDraft) : void onApprove(campaign, activeWeek.week, actionIndex))}
+                            title={linkedDraft ? t(locale, "draftAdded") : t(locale, "approveSuggestion")}
+                            type="button"
+                          >
+                            {approvingSuggestion === key ? (
+                              <RefreshCcw className="animate-spin" size={15} />
+                            ) : linkedDraft ? (
+                              t(locale, "create")
+                            ) : (
+                              <Check size={17} />
+                            )}
+                          </button>
                         </div>
                       );
                     })}
@@ -564,7 +575,10 @@ function WeeklyReview({
             );
           })}
         </div>
-        <p aria-live="polite" className="mt-2 min-h-4 text-xs font-semibold text-[var(--sunlit-pink)]">
+        <p
+          aria-live="polite"
+          className={`mt-2 min-h-4 text-sm font-semibold ${suggestionMessageKind === "error" ? "text-[var(--sunlit-pink)]" : "text-[var(--sunlit-aqua-dark)]"}`}
+        >
           {suggestionMessage}
         </p>
       </section>
@@ -621,7 +635,6 @@ function CampaignRationale({ campaign, locale }: { campaign: CampaignRecord; loc
 }
 
 function CampaignComposer({
-  canClose,
   durationDays,
   isBusy,
   locale,
@@ -636,7 +649,6 @@ function CampaignComposer({
   publishesPerDay,
   startsAt
 }: {
-  canClose: boolean;
   durationDays: CampaignGenerationDurationDays;
   isBusy: boolean;
   locale: Locale;
@@ -651,23 +663,34 @@ function CampaignComposer({
   publishesPerDay: number;
   startsAt: string;
 }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[rgb(32_33_43_/_32%)] p-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[rgb(32_33_43_/_32%)] p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <section
         aria-modal="true"
         className="sunlit-panel relative w-full max-w-2xl rounded-[1.75rem] p-5 shadow-[0_28px_90px_rgb(32_33_43_/_24%)] sm:p-7"
         role="dialog"
       >
-        {canClose ? (
-          <button
-            aria-label={t(locale, "closeComposer")}
-            className="sunlit-secondary absolute end-5 top-5 grid h-10 w-10 place-items-center rounded-xl"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={17} />
-          </button>
-        ) : null}
+        <button
+          aria-label={t(locale, "closeComposer")}
+          className="sunlit-secondary absolute end-5 top-5 grid h-10 w-10 place-items-center rounded-xl"
+          onClick={onClose}
+          type="button"
+        >
+          <X size={17} />
+        </button>
         <div className="flex items-center gap-3 pe-12">
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
             <Sparkles size={20} />
@@ -914,11 +937,13 @@ function t(locale: Locale, key: string): string {
       collapseAll: "طي الكل",
       contentPillars: "ركائز المحتوى",
       create: "فتح",
+      dailyPlan: "الخطة اليومية",
       day: "اليوم",
       dayShort: "يوم",
       days: "يوم",
       defaultObjective: "زيادة الاستفسارات المؤهلة عبر إنستغرام",
       draftAdded: "أُضيفت المسودة إلى الإنشاء والتقويم",
+      draftRegistered: "تمت إضافة الفكرة كمسودة. يمكنك فتحها في الإنشاء الآن.",
       duration: "المدة",
       emptyBody: "حدد هدفاً ومدة وتاريخ بداية، ثم أنشئ أول حملة لنشاطك.",
       emptyTitle: "ابدأ حملتك الأولى",
@@ -939,6 +964,7 @@ function t(locale: Locale, key: string): string {
       nextWeek: "الأسبوع التالي",
       objective: "هدف الحملة",
       objectives: "أهداف الحملة",
+      openDraftInCreate: "فتح المسودة في الإنشاء",
       overview: "نظرة عامة",
       perDay: "منشور يومياً",
       previewMode: "معاينة",
@@ -972,11 +998,13 @@ function t(locale: Locale, key: string): string {
       collapseAll: "Collapse all",
       contentPillars: "Content Pillars",
       create: "Create",
+      dailyPlan: "Daily plan",
       day: "Day",
       dayShort: "day",
       days: "days",
       defaultObjective: "Increase qualified Instagram inquiries",
       draftAdded: "Draft added to Create and Calendar",
+      draftRegistered: "Idea registered as a draft. You can open it in Create now.",
       duration: "Duration",
       emptyBody: "Set an objective, duration, and start date, then create your first business-informed campaign.",
       emptyTitle: "Start your first campaign",
@@ -997,6 +1025,7 @@ function t(locale: Locale, key: string): string {
       nextWeek: "Next week",
       objective: "Campaign objective",
       objectives: "Campaign objectives",
+      openDraftInCreate: "Open draft in Create",
       overview: "Overview",
       perDay: "per day",
       previewMode: "Preview mode",

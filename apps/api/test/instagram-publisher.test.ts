@@ -308,11 +308,13 @@ function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" }): Cont
     id: "content-id",
     instagramPostId: null,
     mediaIds: ["media-id"],
+    platform: "INSTAGRAM",
     plannedAt: null,
     publishedAt: null,
     reelScript: null,
     scheduledAt: new Date(Date.now() - 1000),
     status: "SCHEDULED",
+    tone: null,
     updatedAt: new Date(),
     workspaceId: "workspace-id"
   };

@@ -206,6 +206,7 @@ describe("presentation journey", () => {
           json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
         );
       }
+      if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
 
       if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
       return route.fulfill(json([]));
@@ -360,16 +361,21 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
+    await page.getByRole("heading", { name: "How would you like to begin?" }).waitFor();
     await expect(page.getByRole("button", { name: /Start a blank post/ }).isVisible()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: /Draft with MARKOS AI/ }).isVisible()).resolves.toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Insights", exact: true }).waitFor();
-    await expect(page.getByText("No synced insight data yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("No synced insights yet", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Live", { exact: true }).count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
+
+    await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Business Profile", exact: true }).waitFor();
+    await expect(page.getByRole("link", { name: /Review and edit profile/ }).getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
+    await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
     await page.close();
   });
 
@@ -941,6 +947,240 @@ describe("presentation journey", () => {
     expect(unscheduleCalls).toBe(1);
     await page.close();
   }, 60_000);
+
+  it("keeps an empty Campaign page dismissible and registers an idea before opening Create", async () => {
+    const emptyPage = await sessionPage();
+    await mockApi(emptyPage, async (route, pathname) => {
+      if (pathname === "/v1/campaigns") return route.fulfill(json([]));
+      return route.fulfill(json([]));
+    });
+
+    await emptyPage.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
+    await closeComposer.waitFor();
+    await emptyPage.keyboard.press("Escape");
+    await expect(closeComposer.count()).resolves.toBe(0);
+    await expect(emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).resolves.toBe(true);
+    await emptyPage.getByRole("link", { name: "Overview" }).click();
+    await emptyPage.waitForURL(`${baseUrl}/en/app`);
+    await emptyPage.close();
+
+    const page = await sessionPage();
+    const campaign = phaseTwoCampaign();
+    const draft = phaseTwoCampaignDraft(campaign.id);
+    let registeredDraft: typeof draft | undefined;
+    let approvalCalls = 0;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/campaigns") return route.fulfill(json([campaign]));
+      if (pathname.endsWith("/drafts")) return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname.endsWith("/suggestions/approve")) {
+        approvalCalls += 1;
+        registeredDraft = draft;
+        return route.fulfill(json(draft));
+      }
+      if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    const description = "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.";
+    const descriptionNode = page.getByText(description, { exact: true });
+    await descriptionNode.waitFor();
+    await expect(descriptionNode.evaluate((node) => getComputedStyle(node).whiteSpace)).resolves.toBe("normal");
+
+    const beforeApproval = page.url();
+    await page.getByRole("button", { name: "Approve idea and create draft: Compare the subscription tiers" }).click();
+    await expect(page.url()).toBe(beforeApproval);
+    await expect(page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" }).isVisible()).resolves.toBe(true);
+    expect(approvalCalls).toBe(1);
+    await page.screenshot({ path: ".tmp-phase2-ui/phase2-campaign-registered.png" });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
+    await createButton.waitFor();
+    expect(approvalCalls).toBe(1);
+    await createButton.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.close();
+  }, 60_000);
+
+  it("opens unscheduled Calendar content in a right drawer and reuses the existing draft in Create", async () => {
+    const page = await sessionPage();
+    const draft = {
+      ...studioContentRecord(),
+      captionEn: "A saved SnackLab draft waiting for a publishing date.",
+      id: "calendar-unscheduled-existing",
+      status: "DRAFT",
+      updatedAt: new Date().toISOString()
+    };
+    let createCalls = 0;
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult([draft], route.request().url())));
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([draft]));
+      if (pathname === "/v1/content" && method === "POST") {
+        createCalls += 1;
+        return route.fulfill(json(draft));
+      }
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      return route.fulfill(json([]));
+    });
+
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+
+    const calendarSurface = page.locator("section.sunlit-panel").filter({ has: page.getByRole("button", { name: "Week", exact: true }) });
+    const before = await calendarSurface.boundingBox();
+    if (!before) throw new Error("Expected the Calendar surface to be visible.");
+
+    const drawerButton = page.getByRole("button", { name: /Unscheduled · 1/ });
+    await drawerButton.click();
+    const drawer = page.getByRole("dialog", { name: /Unscheduled · 1/ });
+    await drawer.waitFor();
+    const after = await calendarSurface.boundingBox();
+    if (!after) throw new Error("Expected the Calendar surface to remain visible behind the drawer.");
+    expect(after.width).toBe(before.width);
+    await page.screenshot({ path: ".tmp-phase2-ui/phase2-calendar-drawer.png" });
+
+    const existingDraftLink = drawer.locator(`a[href*="item=${draft.id}"]`);
+    await expect(existingDraftLink.getAttribute("href")).resolves.toBe(`/en/app/content-studio?item=${draft.id}&source=calendar`);
+
+    await page.keyboard.press("Escape");
+    await drawer.waitFor({ state: "detached" });
+
+    await page.setViewportSize({ height: 600, width: 1440 });
+    const shellScroll = page.locator("[data-app-content-scroll]");
+    await expect(shellScroll.evaluate((element) => element.scrollHeight > element.clientHeight)).resolves.toBe(true);
+    await shellScroll.evaluate((element) => element.scrollTo({ top: 160 }));
+    await expect(page.evaluate(() => window.scrollY)).resolves.toBe(0);
+    await expect(page.locator("[data-app-sidebar]").evaluate((element) => Math.round(element.getBoundingClientRect().top))).resolves.toBe(0);
+    await shellScroll.evaluate((element) => element.scrollTo({ top: 0 }));
+    await page.setViewportSize({ height: 900, width: 1440 });
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await expect(page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).resolves.toBe(true);
+    await drawerButton.click();
+    await drawer.waitFor();
+    await page.waitForTimeout(50);
+    await expect(
+      drawer.evaluate((element) =>
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running" || animation.pending)
+          .filter((animation) => Number(animation.effect?.getComputedTiming().duration ?? 0) > 20)
+          .map((animation) => ({ duration: animation.effect?.getComputedTiming().duration, playState: animation.playState }))
+      )
+    ).resolves.toEqual([]);
+    await page.keyboard.press("Escape");
+    await drawer.waitFor({ state: "detached" });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await drawerButton.click();
+    await existingDraftLink.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
+    await page.getByRole("heading", { name: "New Instagram post" }).waitFor();
+    expect(createCalls).toBe(0);
+    await page.close();
+  }, 60_000);
+
+  it("keeps the full Create studio manual-first and inserts approved AI ideation into its fields", async () => {
+    const page = await sessionPage();
+    let record: ReturnType<typeof studioContentRecord> | undefined;
+    let ideationCalls = 0;
+    let createCalls = 0;
+    let imagePrompt: string | undefined;
+    const generatedMedia = {
+      createdAt: "2026-09-03T09:10:00.000Z",
+      filename: "assistant-direction.jpg",
+      height: 1280,
+      id: "media-assistant-direction",
+      mimeType: "image/jpeg",
+      publicUrl: onePixelJpegDataUrl,
+      sizeBytes: 631,
+      type: "AI_GENERATED",
+      updatedAt: "2026-09-03T09:10:00.000Z",
+      width: 1024,
+      workspaceId: session.workspace.id
+    };
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json(record ? [record] : []));
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/content/ideate" && method === "POST") {
+        ideationCalls += 1;
+        return route.fulfill(
+          json({
+            callToAction: "Ask about a subscription.",
+            captionAr: "اكتشف اشتراك سناك لاب المناسب لك.",
+            captionEn: "Find the SnackLab subscription that fits your week.",
+            contentPillar: "Offer education",
+            contentType: "POST",
+            hashtags: ["#SnackLab", "#Bahrain"],
+            visualDirection: "A warm overhead editorial photograph of three distinct SnackLab subscription boxes on a clean coral and cream surface."
+          })
+        );
+      }
+      if (pathname === "/v1/content" && method === "POST") {
+        createCalls += 1;
+        const payload = route.request().postDataJSON() as Record<string, unknown>;
+        record = { ...studioContentRecord(), ...payload, id: "content-assistant-direction" };
+        return route.fulfill(json(record));
+      }
+      if (record && pathname === `/v1/content/${record.id}` && method === "PATCH") {
+        record = { ...record, ...(route.request().postDataJSON() as Record<string, unknown>) };
+        return route.fulfill(json(record));
+      }
+      if (record && pathname === `/v1/content/${record.id}/generate-image` && method === "POST") {
+        imagePrompt = (route.request().postDataJSON() as { prompt?: string }).prompt;
+        record = { ...record, mediaIds: [generatedMedia.id] };
+        return route.fulfill(json({ contentItem: record, mediaAsset: generatedMedia, model: "test-image", prompt: imagePrompt, promptVersion: "image.test" }));
+      }
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /Draft with MARKOS AI/ }).click();
+    await page.getByRole("heading", { name: "New Instagram post" }).waitFor();
+    const contentTypes = page.getByRole("group", { name: "Content types" });
+    await contentTypes.getByRole("button", { name: /Post/ }).click();
+    const studioCaption = page.getByPlaceholder("Write the caption in your own words…");
+    await expect(studioCaption.isEnabled()).resolves.toBe(true);
+    await studioCaption.fill("Manual caption that must not be silently replaced.");
+
+    await page
+      .getByPlaceholder("Describe the goal, offer, audience, or message you want to communicate.")
+      .fill("Help customers compare our three subscriptions.");
+    await page.getByRole("button", { name: "Generate suggestion" }).click();
+    const suggestedCaption = page.getByLabel("Suggested caption");
+    await suggestedCaption.waitFor();
+    await suggestedCaption.fill("Choose the SnackLab subscription that fits your week.");
+    await page
+      .getByLabel("Visual direction", { exact: true })
+      .fill("Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light.");
+    await page.screenshot({ path: ".tmp-phase2-ui/phase2-create-assistant.png" });
+    await page.getByRole("button", { name: "Insert approved direction" }).click();
+    await expect(page.getByText(/already contains a caption or visual direction/).isVisible()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Replace studio content" }).click();
+    await expect(studioCaption.inputValue()).resolves.toBe("Choose the SnackLab subscription that fits your week.");
+    await expect(page.getByLabel("Optional visual direction").inputValue()).resolves.toBe(
+      "Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light."
+    );
+
+    await page.getByRole("button", { name: "Generate", exact: true }).click();
+    await page.getByAltText("assistant-direction.jpg").waitFor();
+    expect(ideationCalls).toBe(1);
+    expect(createCalls).toBe(1);
+    expect(imagePrompt).toBe("Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light.");
+    await page.screenshot({ path: ".tmp-phase2-ui/phase2-create-studio.png" });
+    await page.close();
+  }, 60_000);
 });
 
 async function sessionPage(): Promise<Page> {
@@ -1194,6 +1434,75 @@ function snackLabCommunitySprint() {
     startsAt: "2026-08-02T11:35:00.000Z",
     title: "SnackLab 7-Day Community Sprint",
     updatedAt: "2026-08-02T11:35:00.000Z"
+  };
+}
+
+function phaseTwoCampaign() {
+  return {
+    content: {
+      durationDays: 7,
+      kpis: [{ name: "Qualified inquiries", target: "12" }],
+      nextActions: ["Prepare the approved ideas"],
+      objectives: ["Help customers choose a subscription"],
+      pillars: [{ contentAngles: ["Comparison"], name: "Offer education", rationale: "Make the plans easy to compare." }],
+      publishesPerDay: 1,
+      retrievedContext: [],
+      risks: [],
+      summary: "A focused seven-day campaign for SnackLab subscriptions.",
+      weeklyCadence: [
+        {
+          days: [
+            {
+              day: 1,
+              posts: [
+                {
+                  contentPillar: "Offer education",
+                  contentType: "CAROUSEL",
+                  description: "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.",
+                  goal: "Help customers choose a subscription",
+                  title: "Compare the subscription tiers"
+                }
+              ]
+            }
+          ],
+          focus: "Clarify the offer",
+          week: 1
+        }
+      ]
+    },
+    createdAt: "2026-09-03T08:00:00.000Z",
+    durationDays: 7,
+    endsAt: "2026-09-09T00:00:00.000Z",
+    id: "campaign-phase-two",
+    publishesPerDay: 1,
+    startsAt: "2026-09-03T00:00:00.000Z",
+    status: "REVIEW",
+    title: "SnackLab subscription guide",
+    updatedAt: "2026-09-03T08:00:00.000Z",
+    version: 1,
+    workspaceId: session.workspace.id
+  };
+}
+
+function phaseTwoCampaignDraft(campaignId: string) {
+  return {
+    brief:
+      "Compare the subscription tiers\nExplain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.",
+    campaignActionIndex: 0,
+    campaignGoal: "Help customers choose a subscription",
+    campaignId,
+    campaignWeek: 1,
+    contentPillar: "Offer education",
+    contentType: "CAROUSEL" as const,
+    createdAt: "2026-09-03T08:05:00.000Z",
+    hashtags: [] as string[],
+    id: "content-phase-two",
+    mediaIds: [] as string[],
+    plannedAt: "2026-09-03T00:00:00.000Z",
+    platform: "INSTAGRAM" as const,
+    status: "DRAFT" as const,
+    updatedAt: "2026-09-03T08:05:00.000Z",
+    workspaceId: session.workspace.id
   };
 }
 

@@ -27,7 +27,7 @@ describe("rendered Sunlit authentication", () => {
   });
 
   it("registers, requests verification, verifies the token, and resumes onboarding", async () => {
-    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
+    const context = await browser.newContext({ viewport: { height: 768, width: 1366 } });
     const page = await context.newPage();
     const requests: Array<{ body: unknown; path: string }> = [];
 
@@ -61,6 +61,9 @@ describe("rendered Sunlit authentication", () => {
 
     await expect(page.locator('[data-auth-page="signup"]').getAttribute("dir")).resolves.toBe("ltr");
     await expect(page.locator('[data-auth-page="signup"]').evaluate((element) => getComputedStyle(element).colorScheme)).resolves.toBe("light");
+    await expect(page.getByRole("complementary", { name: "Static preview of a populated MARKOS calendar" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("group", { name: "Choose language" }).isVisible()).resolves.toBe(true);
+    await expect(noVerticalOverflow(page)).resolves.toBe(true);
     await expect(page.getByRole("link", { name: "Terms of Service" }).first().getAttribute("href")).resolves.toBe("/en/terms");
     await expect(
       page.locator('img[src="/auth/providers/google-signin.svg"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)
@@ -114,14 +117,10 @@ describe("rendered Sunlit authentication", () => {
     });
 
     await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
-    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Open Wednesday 26 August" }).click();
-    await expect(page.locator('[data-login-preview="day"]').isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Open Product spotlight" }).click();
-    await expect(page.locator('[data-login-preview="post"]').isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Wednesday" }).click();
-    await page.getByRole("button", { name: "Week overview" }).click();
-    await expect(page.locator('[data-login-preview="week"]').isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("complementary", { name: "Static preview of a populated MARKOS Insights dashboard" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("img", { name: "Rising reach chart" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("img", { name: "Reels 45%, carousels 35%, posts 20%" }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("group", { name: "Choose language" }).isVisible()).resolves.toBe(true);
     await page.getByLabel("Email").fill(verifiedSession.user.email);
     await page.locator('input[autocomplete="current-password"]').fill("a-secure-passphrase");
     await page.getByRole("button", { name: "Log in" }).click();
@@ -245,6 +244,10 @@ function json(data: unknown, status = 200) {
 
 async function noHorizontalOverflow(page: Page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+}
+
+async function noVerticalOverflow(page: Page) {
+  return page.evaluate(() => document.documentElement.scrollHeight <= document.documentElement.clientHeight);
 }
 
 async function saveScreenshot(page: Page, name: string) {

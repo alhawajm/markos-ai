@@ -8,7 +8,7 @@ import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { getVaultScore, searchVaultContext } from "../vault/vault-service";
+import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
 
 const campaignAgentName = "STRATEGIST";
 const localCurrency = "BHD";
@@ -66,12 +66,16 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
   const campaign = await findWorkspaceCampaign(workspaceId, campaignId);
   const plan = campaign.content as unknown as CampaignPlan;
   const week = plan.weeklyCadence.find((candidate) => candidate.week === input.week);
-  const suggestion = week?.days.flatMap((day) => day.posts)[input.actionIndex];
+  const locatedSuggestion = week === undefined ? undefined : findWeekSuggestion(week.days, input.actionIndex);
+  const suggestion = locatedSuggestion?.suggestion;
   const brief = suggestion === undefined ? undefined : `${suggestion.title.trim()}\n${suggestion.description.trim()}`;
 
-  if (!week || !suggestion || !brief) {
+  if (!week || !locatedSuggestion || !suggestion || !brief) {
     throw new CampaignSuggestionNotFoundError();
   }
+
+  const plannedAt = campaignDayDate(campaign.startsAt, locatedSuggestion.day);
+  const tone = await campaignToneSummary(workspaceId);
 
   const existing = await prisma.contentItem.findUnique({
     where: {
@@ -84,6 +88,17 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
   });
 
   if (existing?.deletedAt === null) {
+    if (existing.plannedAt === null || (existing.tone === null && tone !== undefined)) {
+      const placed = await prisma.contentItem.update({
+        where: { id: existing.id },
+        data: {
+          platform: "INSTAGRAM",
+          ...(existing.plannedAt === null ? { plannedAt } : {}),
+          ...(existing.tone === null && tone !== undefined ? { tone } : {})
+        }
+      });
+      return toContentRecord(placed);
+    }
     return toContentRecord(existing);
   }
 
@@ -92,11 +107,13 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
       where: { id: existing.id },
       data: {
         brief,
+        platform: "INSTAGRAM",
         campaignGoal: suggestion.goal,
         contentPillar: suggestion.contentPillar,
+        ...(tone === undefined ? {} : { tone }),
         contentType: suggestion.contentType,
         status: "DRAFT",
-        plannedAt: null,
+        plannedAt,
         scheduledAt: null,
         publishedAt: null,
         failureReason: null,
@@ -110,6 +127,7 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
     const created = await prisma.contentItem.create({
       data: {
         workspaceId,
+        platform: "INSTAGRAM",
         contentType: suggestion.contentType,
         status: "DRAFT",
         brief,
@@ -119,7 +137,9 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
         campaignGoal: suggestion.goal,
         contentPillar: suggestion.contentPillar,
         campaignWeek: input.week,
-        campaignActionIndex: input.actionIndex
+        campaignActionIndex: input.actionIndex,
+        ...(tone === undefined ? {} : { tone }),
+        plannedAt
       }
     });
     return toContentRecord(created);
@@ -139,6 +159,42 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
 
     throw error;
   }
+}
+
+async function campaignToneSummary(workspaceId: string): Promise<string | undefined> {
+  const entries = await listVaultSection(workspaceId, "TONE");
+  const words = entries
+    .flatMap((entry) => (Array.isArray(entry.value.toneWords) ? entry.value.toneWords : []))
+    .filter((value): value is string => typeof value === "string");
+  const summary = Array.from(new Set(words.map((word) => word.trim()).filter(Boolean)))
+    .slice(0, 4)
+    .join(", ");
+  if (summary) return summary;
+  return entries
+    .map((entry) => entry.value.voiceNotes)
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0)
+    ?.trim();
+}
+
+function findWeekSuggestion(days: CampaignPlan["weeklyCadence"][number]["days"], actionIndex: number) {
+  let currentIndex = 0;
+
+  for (const day of days) {
+    for (const suggestion of day.posts) {
+      if (currentIndex === actionIndex) {
+        return { day: day.day, suggestion };
+      }
+      currentIndex += 1;
+    }
+  }
+
+  return undefined;
+}
+
+function campaignDayDate(startsAt: Date, day: number): Date {
+  const plannedAt = new Date(startsAt);
+  plannedAt.setUTCDate(plannedAt.getUTCDate() + day - 1);
+  return plannedAt;
 }
 
 export async function exportCampaignPdf(workspaceId: string, campaignId: string): Promise<{ bytes: Buffer; filename: string }> {
@@ -333,6 +389,12 @@ function toCampaignRecord(row: {
 
 function buildCampaignPdf(campaign: CampaignRecord): Buffer {
   const content = campaign.content;
+  const pillars = Array.isArray(content.pillars) ? content.pillars : [];
+  const weeklyCadence = Array.isArray(content.weeklyCadence) ? content.weeklyCadence : [];
+  const kpis = Array.isArray(content.kpis) ? content.kpis : [];
+  const risks = Array.isArray(content.risks) ? content.risks : [];
+  const nextActions = Array.isArray(content.nextActions) ? content.nextActions : [];
+  const retrievedContext = Array.isArray(content.retrievedContext) ? content.retrievedContext : [];
   const lines = [
     "MARKOS AI Campaign Export",
     campaign.title,
@@ -348,25 +410,37 @@ function buildCampaignPdf(campaign: CampaignRecord): Buffer {
     ...content.objectives.map((item) => `- ${item}`),
     "",
     "Content Pillars",
-    ...content.pillars.flatMap((pillar) => [`- ${pillar.name}: ${pillar.rationale}`, ...pillar.contentAngles.map((angle) => `  * ${angle}`)]),
-    "",
-    "Weekly Cadence",
-    ...content.weeklyCadence.flatMap((week) => [
-      `- Week ${week.week}: ${week.focus}`,
-      ...week.days.flatMap((day) => [`  Day ${day.day}`, ...day.posts.map((post) => `    * [${post.contentType}] ${post.title}: ${post.description}`)])
+    ...pillars.flatMap((pillar) => [
+      `- ${pillar.name}: ${pillar.rationale}`,
+      ...(Array.isArray(pillar.contentAngles) ? pillar.contentAngles.map((angle) => `  * ${angle}`) : [])
     ]),
     "",
+    "Weekly Cadence",
+    ...weeklyCadence.flatMap((week) => {
+      const legacyActions = (week as typeof week & { actions?: string[] }).actions;
+      const days = Array.isArray(week.days) ? week.days : [];
+
+      return [
+        `- Week ${week.week}: ${week.focus}`,
+        ...days.flatMap((day) => [
+          `  Day ${day.day}`,
+          ...(Array.isArray(day.posts) ? day.posts.map((post) => `    * [${post.contentType}] ${post.title}: ${post.description}`) : [])
+        ]),
+        ...(Array.isArray(legacyActions) ? legacyActions.map((action) => `  * ${action}`) : [])
+      ];
+    }),
+    "",
     "KPIs",
-    ...content.kpis.map((kpi) => `- ${kpi.name}: ${kpi.target}`),
+    ...kpis.map((kpi) => `- ${kpi.name}: ${kpi.target}`),
     "",
     "Risks",
-    ...content.risks.map((risk) => `- ${risk}`),
+    ...risks.map((risk) => `- ${risk}`),
     "",
     "Next Actions",
-    ...content.nextActions.map((action) => `- ${action}`),
+    ...nextActions.map((action) => `- ${action}`),
     "",
     "Vault Context",
-    ...content.retrievedContext.map((chunk) => `- ${chunk.section}/${chunk.key}`)
+    ...retrievedContext.map((chunk) => `- ${chunk.section}/${chunk.key}`)
   ];
   const pages = paginatePdfLines(lines.map(sanitizePdfText), 42);
   const objects: string[] = [];

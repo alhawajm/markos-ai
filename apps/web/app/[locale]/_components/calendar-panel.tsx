@@ -2,18 +2,18 @@
 
 import Link from "next/link";
 import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, LayoutGroup, LazyMotion, MotionConfig, useIsPresent, useReducedMotion } from "motion/react";
+import { AnimatePresence, LazyMotion, MotionConfig, useIsPresent, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import {
   AlertCircle,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
   LayoutGrid,
   List,
+  PanelRightOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -25,14 +25,11 @@ import type { CalendarSummary, ContentRecord, ContentStatus, ContentType, Locale
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import {
   calendarBackdropVariants,
-  calendarDayContextLayoutId,
-  calendarDayLayoutId,
   calendarDayVariants,
   calendarFocusVariants,
   calendarLayoutTransition,
   calendarRecordDetailVariants,
   calendarRecordFocusVariants,
-  calendarRecordLayoutId,
   type CalendarMotionIntent
 } from "./calendar-motion";
 
@@ -106,9 +103,7 @@ export function CalendarPanel({ locale }: { locale: Locale }) {
   return (
     <MotionConfig reducedMotion="user">
       <LazyMotion features={loadCalendarMotionFeatures} strict>
-        <LayoutGroup id="calendar-navigation">
-          <CalendarPanelContent locale={locale} />
-        </LayoutGroup>
+        <CalendarPanelContent locale={locale} />
       </LazyMotion>
     </MotionConfig>
   );
@@ -140,7 +135,6 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
   const [loadingMoreUnscheduled, setLoadingMoreUnscheduled] = useState(false);
   const [summary, setSummary] = useState<CalendarSummary>({ needsAttention: 0, ready: 0, scheduledThisWeek: 0 });
   const [notice, setNotice] = useState<CalendarNotice | null>(null);
-  const [focusLayoutId, setFocusLayoutId] = useState<string>();
   const [motionKind, setMotionKind] = useState<CalendarMotionKind>("deep-link");
   const [motionState, setMotionState] = useState<CalendarMotionState>("settled");
   const focusDialogRef = useRef<HTMLElement | null>(null);
@@ -286,6 +280,17 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
     window.requestAnimationFrame(() => cancelDialogRef.current?.focus());
   }, [showCancelConfirmation]);
 
+  useEffect(() => {
+    if (!showUnscheduled) return;
+
+    function closeOnEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setShowUnscheduled(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showUnscheduled]);
+
   const selectedRecord = records.find((record) => record.id === selectedRecordId) ?? null;
 
   useEffect(() => {
@@ -367,7 +372,6 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
   function openDay(dateKey: string, _origin?: HTMLElement | null) {
     if (!beginCalendarMotion("calendar-to-day")) return;
     rememberOverviewFocus();
-    setFocusLayoutId(calendarDayLayoutId(dateKey));
     setSelectedDateKey(dateKey);
     setAnchorDateKey(dateKey);
     setSelectedRecordId(null);
@@ -384,9 +388,6 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
     if (!beginCalendarMotion(intent)) return;
     rememberOverviewFocus();
     const recordDate = calendarDateKey(record) ?? selectedDateKey;
-    if (layer === "overview") {
-      setFocusLayoutId(calendarRecordLayoutId(record.id));
-    }
     setSelectedRecordId(record.id);
     setSelectedDateKey(recordDate);
     setAnchorDateKey(recordDate);
@@ -676,6 +677,20 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
             </h1>
             <div className="flex flex-wrap gap-2 lg:justify-end">
               <button
+                aria-label={`${copy.unscheduled} · ${formatCompactCount(unscheduledTotal, locale)}`}
+                aria-controls="calendar-unscheduled-drawer"
+                aria-expanded={showUnscheduled}
+                className="sunlit-secondary inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
+                onClick={() => setShowUnscheduled(true)}
+                type="button"
+              >
+                <PanelRightOpen size={17} />
+                {copy.unscheduled}
+                <span className="rounded-lg bg-[var(--sunlit-paper-deep)] px-2 py-1 text-xs leading-none text-[var(--sunlit-ink-soft)]">
+                  {formatCompactCount(unscheduledTotal, locale)}
+                </span>
+              </button>
+              <button
                 className="sunlit-secondary inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
                 onClick={() => void refresh()}
                 type="button"
@@ -857,19 +872,23 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
             />
           )}
         </section>
-
-        <UnscheduledCollection
-          copy={copy}
-          expanded={showUnscheduled}
-          hasMore={unscheduledNextOffset !== null}
-          loadingMore={loadingMoreUnscheduled}
-          locale={locale}
-          onLoadMore={() => void loadMoreUnscheduled()}
-          onToggle={() => setShowUnscheduled((current) => !current)}
-          records={unscheduledRecords}
-          total={unscheduledTotal}
-        />
       </m.div>
+
+      <AnimatePresence initial={false}>
+        {showUnscheduled ? (
+          <UnscheduledDrawer
+            copy={copy}
+            hasMore={unscheduledNextOffset !== null}
+            loadingMore={loadingMoreUnscheduled}
+            locale={locale}
+            onClose={() => setShowUnscheduled(false)}
+            onLoadMore={() => void loadMoreUnscheduled()}
+            records={unscheduledRecords}
+            shouldReduceMotion={shouldReduceMotion ?? false}
+            total={unscheduledTotal}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence initial={false} onExitComplete={restoreOverviewFocus}>
         {layer !== "overview" ? (
@@ -900,10 +919,8 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
               data-calendar-motion-state={motionState}
               exit="exit"
               initial={shouldReduceMotion ? false : "initial"}
-              layoutId={focusLayoutId ?? "calendar-focus-deep-link"}
               onAnimationComplete={settleCalendarMotion}
               onKeyDown={(event) => handleFocusDialogKeyDown(event, layer, backToDay, closeDrillDown)}
-              onLayoutAnimationComplete={settleCalendarMotion}
               ref={focusDialogRef}
               role="dialog"
               tabIndex={-1}
@@ -1111,7 +1128,6 @@ function CalendarRecordFocus({
       <m.aside
         className="min-w-0 border-b border-[var(--sunlit-line)] pb-5 lg:flex lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-e lg:pe-5 lg:pb-0"
         data-calendar-motion-part="day-context"
-        layoutId={calendarDayContextLayoutId(dateKey)}
         transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
       >
         <button
@@ -1193,7 +1209,6 @@ function CalendarRecordFocus({
                 {selected ? (
                   <m.span
                     className="h-8 w-1 shrink-0 rounded-full bg-[var(--sunlit-ink)]"
-                    layoutId="calendar-selected-record-indicator"
                     transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
                   />
                 ) : null}
@@ -1414,7 +1429,6 @@ function CalendarDayView({
       className={isPresent ? undefined : "pointer-events-none"}
       data-calendar-motion-part="day-view"
       inert={isPresent ? undefined : true}
-      layoutId={calendarDayContextLayoutId(dateKey)}
       transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
     >
       <div className="flex items-start justify-between gap-3 border-b border-[var(--sunlit-line)] pb-5">
@@ -1491,66 +1505,88 @@ function CalendarDayView({
   );
 }
 
-function UnscheduledCollection({
+function UnscheduledDrawer({
   copy,
-  expanded,
   hasMore,
   loadingMore,
   locale,
+  onClose,
   onLoadMore,
-  onToggle,
   records,
+  shouldReduceMotion,
   total
 }: {
   copy: CalendarCopy;
-  expanded: boolean;
   hasMore: boolean;
   loadingMore: boolean;
   locale: Locale;
+  onClose: () => void;
   onLoadMore: () => void;
-  onToggle: () => void;
   records: ContentRecord[];
+  shouldReduceMotion: boolean;
   total: number;
 }) {
   return (
-    <section className="sunlit-panel overflow-hidden rounded-[1.75rem]">
-      <button
-        aria-expanded={expanded}
-        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-start transition hover:bg-white/65 sm:px-5"
-        onClick={onToggle}
-        type="button"
+    <m.div
+      animate={{ opacity: 1 }}
+      className="fixed inset-0 z-[70] bg-[rgb(32_33_43_/_34%)] backdrop-blur-[2px]"
+      exit={{ opacity: 0 }}
+      initial={shouldReduceMotion ? false : { opacity: 0 }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.14 }}
+    >
+      <m.aside
+        animate={{ opacity: 1, x: 0 }}
+        aria-labelledby="calendar-unscheduled-title"
+        aria-modal="true"
+        className="sunlit-panel absolute inset-y-0 end-0 flex w-[min(31rem,calc(100vw-1rem))] flex-col rounded-none border-y-0 border-e-0 shadow-[0_24px_80px_rgb(32_33_43_/_22%)] sm:w-[min(31rem,calc(100vw-2rem))] sm:rounded-s-[2rem]"
+        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, x: locale === "ar" ? -24 : 24 }}
+        id="calendar-unscheduled-drawer"
+        initial={shouldReduceMotion ? false : { opacity: 0, x: locale === "ar" ? -24 : 24 }}
+        role="dialog"
+        transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
-            <CalendarDays size={19} />
-          </span>
-          <span className="min-w-0">
-            <span className="block font-bold text-[var(--sunlit-ink)]">
-              {copy.unscheduled} <span className="text-[var(--sunlit-muted)]">· {formatCompactCount(total, locale)}</span>
+        <header className="flex items-start justify-between gap-4 border-b border-[var(--sunlit-line)] px-5 py-5 sm:px-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-pink-soft)] text-[var(--sunlit-pink)]">
+              <CalendarDays size={20} />
             </span>
-            <span className="mt-0.5 block text-xs font-semibold leading-5 text-[var(--sunlit-muted)]">{copy.unscheduledDescription}</span>
-          </span>
-        </span>
-        <ChevronDown className={`shrink-0 text-[var(--sunlit-muted)] transition ${expanded ? "rotate-180" : ""}`} size={19} />
-      </button>
-      {expanded ? (
-        records.length > 0 ? (
-          <div className="border-t border-[var(--sunlit-line)]">
-            <div className="grid max-h-72 gap-2 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4">
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-[var(--sunlit-ink)]" id="calendar-unscheduled-title">
+                {copy.unscheduled} <span className="text-[var(--sunlit-muted)]">· {formatCompactCount(total, locale)}</span>
+              </h2>
+              <p className="mt-1 text-sm font-semibold leading-5 text-[var(--sunlit-muted)]">{copy.unscheduledDescription}</p>
+            </div>
+          </div>
+          <button
+            aria-label={copy.close}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-white text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="sunlit-card-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5" tabIndex={0}>
+          {records.length > 0 ? (
+            <div className="grid gap-2.5">
               {records.map((record) => (
                 <Link
-                  className="rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3 transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                  href={`/${locale}/app/content-studio?item=${record.id}`}
+                  className="rounded-2xl border border-[var(--sunlit-line)] bg-white px-4 py-3.5 transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sunlit-aqua)]"
+                  href={`/${locale}/app/content-studio?item=${record.id}&source=calendar`}
                   key={record.id}
                 >
                   <span className="flex items-start justify-between gap-3">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
-                      <span className="mt-1 block text-xs font-bold text-[var(--sunlit-muted)]">
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words text-base font-bold leading-6 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
+                      <span className="mt-1 block text-xs font-bold leading-5 text-[var(--sunlit-muted)]">
                         {contentTypeLabel(record, locale)} · {copy.updated} {formatCalendarDateTime(record.updatedAt, locale)}
                       </span>
                       {record.campaignId ? (
-                        <span className="mt-1 block text-[11px] font-extrabold text-[var(--sunlit-aqua-dark)]">{campaignOriginLabel(record, locale)}</span>
+                        <span className="mt-1 block text-xs font-extrabold text-[var(--sunlit-aqua-dark)]">{campaignOriginLabel(record, locale)}</span>
                       ) : null}
                     </span>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${statusBadgeClass(record.status)}`}>
@@ -1559,25 +1595,25 @@ function UnscheduledCollection({
                   </span>
                 </Link>
               ))}
-            </div>
-            {hasMore ? (
-              <div className="border-t border-[var(--sunlit-line)] p-3 text-center">
+              {hasMore ? (
                 <button
-                  className="sunlit-secondary min-h-10 rounded-xl px-5 text-sm font-extrabold disabled:opacity-60"
+                  className="sunlit-secondary mt-1 min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-60"
                   disabled={loadingMore}
                   onClick={onLoadMore}
                   type="button"
                 >
                   {loadingMore ? copy.loadingMore : copy.loadMore}
                 </button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="border-t border-[var(--sunlit-line)] px-5 py-5 text-sm font-bold text-[var(--sunlit-muted)]">{copy.unscheduledEmpty}</p>
-        )
-      ) : null}
-    </section>
+              ) : null}
+            </div>
+          ) : (
+            <div className="grid min-h-56 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-center">
+              <p className="text-base font-bold leading-6 text-[var(--sunlit-muted)]">{copy.unscheduledEmpty}</p>
+            </div>
+          )}
+        </div>
+      </m.aside>
+    </m.div>
   );
 }
 
@@ -1613,7 +1649,6 @@ function CalendarDayColumn({
           : "min-w-0 cursor-pointer rounded-2xl border border-[var(--sunlit-line)] bg-white p-3 text-start lg:min-h-[26rem] xl:min-h-[30rem]"
       }
       data-calendar-day-surface={dateKey}
-      layoutId={calendarDayLayoutId(dateKey)}
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button, a, input, select, textarea, [role='button']")) return;
         onChooseDate(event.currentTarget);
@@ -1642,10 +1677,9 @@ function CalendarDayColumn({
           <>
             {records.slice(0, 4).map((record) => (
               <m.button
-                aria-label={`${statusLabel(record.status, locale)}: ${contentTitle(record, locale)} · ${contentTypeLabel(record, locale)} · ${formatCalendarTime(calendarPlacementInstant(record) ?? record.updatedAt, locale)}`}
+                aria-label={`${statusLabel(record.status, locale)}: ${contentTitle(record, locale)} · ${contentTypeLabel(record, locale)} · ${calendarPlacementLabel(record, locale)}`}
                 className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-white/85 px-2.5 py-2 text-start outline-none transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--sunlit-aqua)] motion-reduce:transition-none"
                 key={record.id}
-                layoutId={calendarRecordLayoutId(record.id)}
                 onClick={(event) => onChooseRecord(record, event.currentTarget)}
                 transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
                 type="button"
@@ -1655,7 +1689,7 @@ function CalendarDayColumn({
                   <span className="min-w-0 flex-1 truncate text-[10px] font-extrabold text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
                 </span>
                 <span className="mt-1 block truncate text-[9px] font-bold text-[var(--sunlit-muted)]">
-                  {contentTypeLabel(record, locale)} · {formatCalendarTime(calendarPlacementInstant(record) ?? record.updatedAt, locale)}
+                  {contentTypeLabel(record, locale)} · {calendarPlacementLabel(record, locale)}
                 </span>
               </m.button>
             ))}
@@ -1742,7 +1776,6 @@ function MonthOverview({
                   : "h-[4.75rem] overflow-hidden rounded-xl border border-[var(--sunlit-line)] bg-white p-2 text-start hover:border-[var(--sunlit-line-strong)]"
               }
               key={dateKey}
-              layoutId={calendarDayLayoutId(dateKey)}
               onClick={(event) => onChooseDate(dateKey, event.currentTarget)}
               transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
               type="button"
@@ -2146,6 +2179,13 @@ function recordMomentLabel(record: ContentRecord, copy: CalendarCopy, locale: Lo
     return `${record.status === "SCHEDULED" ? copy.scheduled : statusLabel(record.status, locale)} · ${formatCalendarTime(record.scheduledAt, locale)}`;
   if (record.plannedAt) return `${copy.planned} · ${formatCalendarTime(record.plannedAt, locale)}`;
   return copy.unscheduled;
+}
+
+function calendarPlacementLabel(record: ContentRecord, locale: Locale): string {
+  if (record.status === "PUBLISHED" && record.publishedAt) return formatCalendarTime(record.publishedAt, locale);
+  if (record.scheduledAt) return formatCalendarTime(record.scheduledAt, locale);
+  if (record.plannedAt) return locale === "ar" ? "مخطط" : "Planned";
+  return locale === "ar" ? "غير مجدول" : "Unscheduled";
 }
 
 function formatItemCount(count: number, locale: Locale): string {

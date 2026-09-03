@@ -540,3 +540,29 @@ Treat each generated weekly action as a stable Campaign suggestion identified by
 Make this approval idempotent. Repeating the same approval returns the existing draft instead of creating duplicates, including when two requests race. A deleted suggestion draft may be restored as a draft through the same action. Every read and write remains scoped to the active workspace.
 
 Do not invent a publication time, caption, hashtags, media, or approval status at this boundary. The new item appears in Create as a Campaign draft and in Calendar's Unscheduled collection until the owner develops and deliberately plans or schedules it. Existing manual and AI-assisted orphaned content remains valid. A richer Campaign slot model, automatic content generation, and bulk approval are separate future decisions.
+
+## 2026-09-02: Campaign Create registers one dated planning draft
+
+Supersede only the Unscheduled placement in the September 1 Campaign-suggestion decision. A generated daily Campaign idea already owns a calendar day, so its single **Create** action idempotently creates or restores one Campaign-linked `DRAFT`, copies that day's date into `plannedAt`, and opens the same record in Create. Repeating the action must reuse the unique Campaign/week/action identity and never create another draft.
+
+The Campaign day is a planning date, not a publishing time. Calendar places the draft on that date and labels it as planned without presenting the stored date boundary as a chosen publication time. The action still does not generate finished copy or media, approve the draft, write `scheduledAt`, or enter the publishing queue. A future Campaign idea that lacks an assigned day must require a date before this registration boundary can succeed.
+
+## 2026-09-02: Create has two normal entry choices and preserves Campaign identity during generation
+
+Supersede the five-action Create hub for the current presentation slice. Opening Create without a selected item now offers only **Create with MarkOS** and **Explore**. It does not show a separate blank-post, recent-work, Calendar, or user-facing quota action. The Draft Editor and existing saved records remain available through their own direct links and connected product journeys.
+
+Opening Create from a Campaign bypasses that greeting and loads the one idempotently registered Campaign draft. The owner may review or edit its topic, content type, post objective, content pillar, tone, platform context, and planning date before generation. `POST /v1/content/:contentItemId/generate` generates into that same editable record; it must preserve the record ID, Campaign/week/action identity, post objective, planning date, and any explicit tone or pillar override. Repeated generation revises the existing draft and consumes another deliberate generation call, but never inserts a duplicate Campaign draft.
+
+## 2026-09-02: Generated copy enters an in-place review and revision loop
+
+After successful AI generation, show a review surface before the ordinary manual editor. It presents the complete English and Arabic copy, Instagram/content-type metadata, call to action, hashtags, planning date, and any Campaign objective/context. The generated result is already one saved workspace draft; the owner may mark it Ready or continue to manual editing and media.
+
+`POST /v1/content/:contentItemId/revise` accepts one explicit revision instruction only for an editable AI-generated draft. MARKOS sends that instruction together with the current full draft, the original Campaign plan, the post-level goal/pillar/tone, and retrieved Vault context through the existing structured content boundary. A successful response updates the same `ContentItem` and records another metered `ai_interaction`. A failed response leaves the previous draft untouched, and further revision prompts reuse the same record rather than creating version-like duplicates.
+
+## 2026-09-02: Insights compares only provider-backed reporting windows
+
+Build the current Insights presentation surface from the existing workspace-scoped Instagram analytics records. The API returns the requested 7- or 30-day window plus totals for the immediately preceding equal-length window and calculates percentage changes only when both values exist and the previous value is non-zero. A missing metric, previous period, audience demographic, or content association remains unavailable; the UI must not translate it into a fabricated zero or estimate.
+
+Use the existing lightweight daily chart treatment rather than adding a chart dependency for this bounded dashboard. Show compact performance metrics, selectable reach/impression/interaction trends, period comparison, content-type buckets, ranked content, follower/profile activity when returned, and an explicit demographic-unavailable state. Keep monthly PDF export. Detailed post, Reel, Story, audience-demographic, 90-day/custom-range, and provider-backed recommendation screens remain later work.
+
+Retain Lucide as the single interface icon system because it is already installed and covers the modified navigation and action surfaces; do not add a redundant package based on a stale assumption that no icon library exists. Put the active English/Arabic control directly above Settings, preserve the current route and query while switching, store the choice locally, and let the locale route continue to control RTL.

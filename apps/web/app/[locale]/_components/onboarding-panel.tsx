@@ -7,6 +7,7 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  ChevronDown,
   Compass,
   FileText,
   Info,
@@ -38,6 +39,7 @@ import type {
   OnboardingState
 } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { MarkosAiIcon } from "./markos-ai-icon";
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import {
   createEmptyOnboardingDraft,
@@ -1202,7 +1204,7 @@ export function OnboardingPanel({
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
         <a className="flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_14px_30px_rgb(32_33_43_/_18%)]">
-            <Sparkles size={21} strokeWidth={2.35} />
+            <MarkosAiIcon size={21} />
           </span>
           <strong className="text-[16px] font-bold tracking-tight">MARKOS AI</strong>
         </a>
@@ -1321,6 +1323,7 @@ export function OnboardingPanel({
             <ProfileScreen
               copy={copy}
               language={profileLanguage}
+              locale={locale}
               loading={profileLoading}
               onApprove={() => void approveProfile()}
               onBack={() => setScreen("review")}
@@ -2579,6 +2582,7 @@ function ReviewScreen({
 function ProfileScreen({
   copy,
   language,
+  locale,
   loading,
   onApprove,
   onBack,
@@ -2591,6 +2595,7 @@ function ProfileScreen({
 }: {
   copy: OnboardingCopy;
   language: Locale;
+  locale: Locale;
   loading: boolean;
   onApprove: () => void;
   onBack: () => void;
@@ -2601,6 +2606,8 @@ function ProfileScreen({
   updateBusinessName: (value: string) => void;
   updateProfileField: (field: ProfileFieldKey, locale: Locale, value: string) => void;
 }) {
+  const [expandedFields, setExpandedFields] = useState<Set<ProfileFieldKey>>(() => new Set());
+
   if (loading) {
     return (
       <section className="mx-auto grid min-h-[calc(100vh-110px)] max-w-4xl place-items-center px-5 pb-12 text-center">
@@ -2630,9 +2637,46 @@ function ProfileScreen({
   }
 
   const valid = businessProfileIsComplete(profile);
+  const groups: Array<{ fields: ProfileFieldKey[]; key: string; title: string }> = [
+    {
+      fields: ["tagline", "overview", "offerSummary"],
+      key: "identity",
+      title: locale === "ar" ? "هوية النشاط" : "Business identity"
+    },
+    {
+      fields: ["uniqueValue", "marketPosition"],
+      key: "brand",
+      title: locale === "ar" ? "معلومات العلامة" : "Brand information"
+    },
+    {
+      fields: ["idealCustomer"],
+      key: "audience",
+      title: locale === "ar" ? "الجمهور" : "Audience"
+    },
+    {
+      fields: ["marketingFocus"],
+      key: "goals",
+      title: locale === "ar" ? "الأهداف" : "Goals"
+    },
+    {
+      fields: ["brandVoice"],
+      key: "tone",
+      title: locale === "ar" ? "النبرة والتفضيلات" : "Tone and preferences"
+    }
+  ];
+
+  function toggleExpanded(field: ProfileFieldKey) {
+    setExpandedFields((current) => {
+      const next = new Set(current);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  }
+
   return (
-    <section className="mx-auto w-full max-w-6xl px-5 pb-12 sm:px-8">
-      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-9 lg:p-10">
+    <section className="mx-auto w-full max-w-[1480px] px-5 pb-12 sm:px-8">
+      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-8 lg:p-9">
         <div className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-3xl">
             <span className="sunlit-eyebrow inline-flex items-center gap-2">
@@ -2655,34 +2699,78 @@ function ProfileScreen({
           </div>
         </div>
 
-        <label className="mt-6 block rounded-2xl border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-5">
-          <span className="text-[13px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-aqua-dark)]">{copy.profile.businessName}</span>
-          <input
-            className="mt-2 w-full bg-transparent font-display text-2xl font-bold outline-none"
-            dir="auto"
-            onChange={(event) => updateBusinessName(event.target.value)}
-            value={profile.businessName}
-          />
-        </label>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {profileFieldKeys.map((field, index) => (
-            <label
-              className={
-                index === 1
-                  ? "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5 md:col-span-2"
-                  : "rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5"
-              }
-              key={field}
+        <div className="mt-6 grid items-start gap-4 lg:grid-cols-12">
+          {groups.map((group) => (
+            <section
+              className={`overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] ${
+                group.key === "identity" ? "lg:col-span-7 lg:row-span-2" : group.key === "brand" ? "lg:col-span-5" : "lg:col-span-4"
+              }`}
+              key={group.key}
             >
-              <span className="text-[13px] font-bold uppercase tracking-[.07em] text-[var(--sunlit-muted)]">{copy.profile.fields[field]}</span>
-              <textarea
-                className="onboarding-prose-field mt-3 h-28 w-full resize-none bg-transparent text-[16px] leading-7 outline-none"
-                dir={language === "ar" ? "rtl" : "ltr"}
-                onChange={(event) => updateProfileField(field, language, event.target.value)}
-                value={profile[field][language]}
-              />
-            </label>
+              <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--sunlit-line)] bg-white/75 px-5 py-3">
+                <h2 className="text-[18px] font-bold text-[var(--sunlit-ink)]">{group.title}</h2>
+                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-aqua-dark)]">
+                  {group.key === "identity" ? group.fields.length + 1 : group.fields.length}
+                </span>
+              </header>
+
+              {group.key === "identity" ? (
+                <label className="block px-5 py-4">
+                  <span className="text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{copy.profile.businessName}</span>
+                  <input
+                    className="sunlit-field mt-2 min-h-12 w-full rounded-xl px-4 font-display text-[20px] font-bold outline-none"
+                    dir="auto"
+                    onChange={(event) => updateBusinessName(event.target.value)}
+                    value={profile.businessName}
+                  />
+                </label>
+              ) : null}
+
+              <div className={group.key === "identity" ? "border-t border-[var(--sunlit-line)]" : ""}>
+                {group.fields.map((field, index) => {
+                  const expanded = expandedFields.has(field);
+                  const value = profile[field][language];
+                  const fieldId = `profile-${field}-${language}`;
+                  return (
+                    <article className={index > 0 ? "border-t border-[var(--sunlit-line)] px-5 py-4" : "px-5 py-4"} key={field}>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-[15px] font-bold text-[var(--sunlit-ink-soft)]" htmlFor={fieldId}>
+                          {copy.profile.fields[field]}
+                        </label>
+                        <button
+                          aria-controls={`${fieldId}-content`}
+                          aria-expanded={expanded}
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] transition hover:bg-[var(--sunlit-aqua-soft)]"
+                          onClick={() => toggleExpanded(field)}
+                          type="button"
+                        >
+                          <ChevronDown className={`transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} size={15} />
+                          {expanded ? (locale === "ar" ? "طي" : "Collapse") : locale === "ar" ? "عرض وتعديل" : "Review & edit"}
+                        </button>
+                      </div>
+                      <div id={`${fieldId}-content`}>
+                        {expanded ? (
+                          <textarea
+                            className="onboarding-prose-field mt-3 h-36 w-full resize-none rounded-xl border border-[var(--sunlit-line-strong)] bg-white px-4 py-3 text-[16px] leading-7 outline-none"
+                            dir={language === "ar" ? "rtl" : "ltr"}
+                            id={fieldId}
+                            onChange={(event) => updateProfileField(field, language, event.target.value)}
+                            value={value}
+                          />
+                        ) : (
+                          <p
+                            className="mt-2 line-clamp-3 whitespace-pre-wrap text-[15px] leading-6 text-[var(--sunlit-muted)]"
+                            dir={language === "ar" ? "rtl" : "ltr"}
+                          >
+                            {value}
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
 

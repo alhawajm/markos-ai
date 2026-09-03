@@ -13,14 +13,17 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  Globe2,
+  Images,
+  Instagram,
   KeyRound,
+  Languages,
   Lock,
   Mail,
-  Send,
+  Play,
   ShieldCheck,
   Sparkles,
-  Wand2,
+  TrendingUp,
+  UsersRound,
   type LucideIcon
 } from "lucide-react";
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
@@ -28,6 +31,7 @@ import type { AuthSession, Locale } from "@markos/shared-types";
 import { loginSchema, registerSchema } from "@markos/validation";
 import { getBrowserApiBaseUrl } from "./api-base-url";
 import { refreshBrowserSession, setBrowserSession, useMarkosSession } from "./browser-session";
+import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./auth-page.module.css";
 
 export type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
@@ -402,13 +406,6 @@ const copyByLocale = {
   }
 } as const;
 
-const asideIcons = {
-  plan: CalendarDays,
-  create: Wand2,
-  publish: Send,
-  insights: BarChart3
-} as const;
-
 export function AuthPage({
   initialEmail = "",
   initialToken = "",
@@ -427,7 +424,6 @@ export function AuthPage({
   const client = useMemo(() => new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }), []);
   const copy = copyByLocale[locale];
   const isArabic = locale === "ar";
-  const otherLocale = isArabic ? "en" : "ar";
   const currentPath = pathByMode[mode];
   const landingHref = `/${locale}`;
   const loginHref = `/${locale}/login`;
@@ -437,7 +433,6 @@ export function AuthPage({
   const privacyHref = `/${locale}/privacy`;
   const languageQuery =
     mode === "verify" && initialEmail ? `?email=${encodeURIComponent(initialEmail)}` : mode === "reset-password" && resetLinkExpired ? "?expired=1" : "";
-  const languageHref = `/${otherLocale}/${currentPath}${languageQuery}`;
   const legalCheckboxRef = useRef<HTMLInputElement>(null);
   const verificationStartedRef = useRef(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -702,41 +697,22 @@ export function AuthPage({
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">
-            <Sparkles size={21} />
+            <MarkosAiIcon size={21} />
           </span>
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المصادقة" : "Authentication navigation"}>
-          {mode === "login" ? (
-            <span className={styles.loginLocaleSwitch} dir="ltr">
-              {locale === "en" ? <strong aria-current="page">English</strong> : <Link href="/en/login">English</Link>}
-              <span aria-hidden="true">/</span>
-              {locale === "ar" ? (
-                <strong aria-current="page" lang="ar">
-                  العربية
-                </strong>
-              ) : (
-                <Link href="/ar/login" lang="ar">
-                  العربية
-                </Link>
-              )}
-            </span>
-          ) : (
-            <>
-              <a className={styles.backLink} href={landingHref}>
-                <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
-                {copy.back}
-              </a>
-              <a className={styles.languageLink} href={languageHref}>
-                <Globe2 aria-hidden="true" size={17} />
-                {copy.language}
-              </a>
-            </>
+          {mode === "login" ? null : (
+            <a className={styles.backLink} href={landingHref}>
+              <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
+              {copy.back}
+            </a>
           )}
+          <AuthLanguageSelector arabicHref={`/ar/${currentPath}${languageQuery}`} englishHref={`/en/${currentPath}${languageQuery}`} locale={locale} />
         </nav>
       </header>
 
-      <div className={`${styles.authLayout} ${mode === "login" ? styles.loginLayout : ""}`}>
+      <div className={`${styles.authLayout} ${mode === "login" ? styles.loginLayout : mode === "signup" ? styles.signupLayout : ""}`}>
         {mode === "login" ? (
           <>
             <section className={`${styles.authCard} ${styles.loginCard}`} data-login-card>
@@ -785,46 +761,15 @@ export function AuthPage({
               <ProviderButtons compact copy={copy.provider} onProvider={handleProvider} />
               <AuthSwitch action={copy.login.switchAction} href={signupHref} prefix={copy.login.switchPrefix} />
             </section>
-            <LoginProductPreview copy={copy.login.preview} />
+            <LoginInsightsPreview locale={locale} />
           </>
         ) : (
           <>
-            <aside className={styles.authAside} aria-label={copy.aside.title}>
-              <div className={styles.asideGlow} aria-hidden="true" />
-              <p className={styles.asideBrand}>{copy.brand}</p>
-              <h2>{copy.aside.title}</h2>
-              <div className={styles.asideFlow}>
-                {copy.aside.items.map((item, index) => {
-                  const Icon = asideIcons[item.icon];
-                  return (
-                    <div className={styles.asideItem} data-position={index} key={item.label}>
-                      <span aria-hidden="true">
-                        <Icon size={19} />
-                      </span>
-                      <div>
-                        <strong>{item.label}</strong>
-                        <small>{item.value}</small>
-                      </div>
-                      <Check aria-hidden="true" size={17} />
-                    </div>
-                  );
-                })}
-              </div>
-            </aside>
-
-            <section className={styles.authCard}>
+            <section className={`${styles.authCard} ${mode === "signup" ? styles.signupCard : ""}`}>
               {mode === "signup" ? (
                 <>
                   <AuthHeading body={copy.signup.body} title={copy.signup.title} />
                   <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
-                  <LegalConsent
-                    accepted={acceptedTerms}
-                    checkboxRef={legalCheckboxRef}
-                    copy={copy.legal}
-                    onChange={setAcceptedTerms}
-                    privacyHref={privacyHref}
-                    termsHref={termsHref}
-                  />
                   <Divider label={copy.provider.divider} />
                   <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
                     <div className={styles.formStack}>
@@ -848,6 +793,14 @@ export function AuthPage({
                         toggle={() => setShowPassword((current) => !current)}
                       />
                     </div>
+                    <LegalConsent
+                      accepted={acceptedTerms}
+                      checkboxRef={legalCheckboxRef}
+                      copy={copy.legal}
+                      onChange={setAcceptedTerms}
+                      privacyHref={privacyHref}
+                      termsHref={termsHref}
+                    />
                     <NoticeMessage notice={notice} />
                     <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
                       {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
@@ -983,6 +936,7 @@ export function AuthPage({
                 </StatusPanel>
               ) : null}
             </section>
+            {mode === "signup" ? <SignupCalendarPreview locale={locale} /> : null}
           </>
         )}
       </div>
@@ -999,148 +953,186 @@ export function AuthPage({
   );
 }
 
-function LoginProductPreview({ copy }: { copy: (typeof copyByLocale)[Locale]["login"]["preview"] }) {
-  const [selectedPostIndex, setSelectedPostIndex] = useState(0);
-  const [view, setView] = useState<"day" | "post" | "week">("week");
-  const selectedPost = copy.day.posts[selectedPostIndex] ?? copy.day.posts[0];
-
-  function openPost(index: number) {
-    setSelectedPostIndex(index);
-    setView("post");
-  }
+function SignupCalendarPreview({ locale }: { locale: Locale }) {
+  const isArabic = locale === "ar";
+  const days = isArabic ? ["الأحد 6", "الاثنين 7", "الثلاثاء 8", "الأربعاء 9", "الخميس 10"] : ["Sun 6", "Mon 7", "Tue 8", "Wed 9", "Thu 10"];
+  const posts = isArabic
+    ? [
+        { day: 0, icon: Play, time: "10:00", title: "جولة سريعة في المطبخ", tone: "coral", type: "ريل" },
+        { day: 1, icon: Images, time: "13:30", title: "ثلاث نصائح لاختيار الوجبة", tone: "aqua", type: "كاروسيل" },
+        { day: 2, icon: Instagram, time: "09:00", title: "قصة عميلة هذا الأسبوع", tone: "pink", type: "منشور" },
+        { day: 3, icon: Play, time: "18:00", title: "من الفكرة إلى المنتج", tone: "yellow", type: "ريل" },
+        { day: 4, icon: Instagram, time: "11:30", title: "اختيار الجمهور", tone: "aqua", type: "قصة" }
+      ]
+    : [
+        { day: 0, icon: Play, time: "10:00", title: "A quick kitchen tour", tone: "coral", type: "Reel" },
+        { day: 1, icon: Images, time: "13:30", title: "3 ways to choose your plan", tone: "aqua", type: "Carousel" },
+        { day: 2, icon: Instagram, time: "09:00", title: "This week's customer story", tone: "pink", type: "Post" },
+        { day: 3, icon: Play, time: "18:00", title: "From idea to finished product", tone: "yellow", type: "Reel" },
+        { day: 4, icon: Instagram, time: "11:30", title: "Audience choice", tone: "aqua", type: "Story" }
+      ];
 
   return (
-    <aside aria-label={copy.ariaLabel} className={styles.loginPreview}>
-      <div className={styles.previewHeading}>
-        <p className={styles.previewEyebrow}>{copy.eyebrow}</p>
-        <h2>{copy.title}</h2>
-        <p>{copy.body}</p>
+    <aside
+      aria-label={isArabic ? "معاينة ثابتة لتقويم MARKOS" : "Static preview of a populated MARKOS calendar"}
+      className={`${styles.authPreview} ${styles.signupPreview}`}
+    >
+      <div className={styles.authPreviewHeader}>
+        <span className={styles.authPreviewIcon} aria-hidden="true">
+          <CalendarDays size={22} />
+        </span>
+        <div>
+          <p>{isArabic ? "تقويم MARKOS" : "MARKOS CALENDAR"}</p>
+          <h2>{isArabic ? "خطتك جاهزة للأسبوع" : "Your week, already taking shape"}</h2>
+        </div>
+        <span className={styles.sampleBadge}>{isArabic ? "نموذج" : "SAMPLE"}</span>
       </div>
-
-      <ol aria-label={copy.body} className={styles.previewJourney}>
-        {copy.journey.map((step, index) => (
-          <li key={step}>
-            <span data-active={index === 0 ? "true" : undefined}>{step}</span>
-            {index < copy.journey.length - 1 ? <ArrowRight aria-hidden="true" className={styles.directionalIcon} size={15} /> : null}
-          </li>
+      <div className={styles.calendarPreviewToolbar}>
+        <strong>{isArabic ? "6–10 سبتمبر" : "6–10 September"}</strong>
+        <span>{isArabic ? "عرض الأسبوع" : "Week view"}</span>
+      </div>
+      <div className={styles.staticWeekGrid} aria-hidden="true">
+        {days.map((day, index) => (
+          <div className={styles.staticWeekDay} key={day}>
+            <span>{day}</span>
+            <div className={styles.staticWeekTrack}>
+              {posts
+                .filter((post) => post.day === index)
+                .map((post) => {
+                  const Icon = post.icon;
+                  return (
+                    <article data-tone={post.tone} key={post.title}>
+                      <span>
+                        <Icon size={14} /> {post.type}
+                      </span>
+                      <strong>{post.title}</strong>
+                      <small>{post.time}</small>
+                    </article>
+                  );
+                })}
+            </div>
+          </div>
         ))}
-      </ol>
-
-      <div aria-live="polite" className={styles.previewStage} data-login-preview={view}>
-        {view === "week" ? (
-          <div className={styles.previewWeek}>
-            <div className={styles.previewStageTopbar}>
-              <strong>{copy.week.label}</strong>
-              <span>{copy.week.sample}</span>
-            </div>
-            <div className={styles.previewWeekGrid}>
-              {copy.week.days.map((day, index) => {
-                const content = (
-                  <>
-                    <span className={styles.previewDayLabel}>{day.label}</span>
-                    <span className={styles.previewDayColumn} data-placement={day.placement}>
-                      {day.title ? (
-                        <span className={styles.previewCalendarPost}>
-                          <small>{day.status}</small>
-                          <strong>{day.title}</strong>
-                        </span>
-                      ) : null}
-                    </span>
-                  </>
-                );
-
-                return index === 2 ? (
-                  <button aria-label={copy.week.openDay} className={styles.previewDayGroup} key={day.label} onClick={() => setView("day")} type="button">
-                    {content}
-                  </button>
-                ) : (
-                  <div className={styles.previewDayGroup} key={day.label}>
-                    {content}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {view === "day" ? (
-          <div className={styles.previewDay}>
-            <div className={styles.previewStageTopbar}>
-              <button className={styles.previewBack} onClick={() => setView("week")} type="button">
-                <ArrowLeft aria-hidden="true" className={styles.directionalIcon} size={15} />
-                {copy.day.back}
-              </button>
-              <span className={styles.previewCount}>{copy.day.count}</span>
-            </div>
-            <div className={styles.previewDayIntro}>
-              <h3>{copy.day.title}</h3>
-              <p>{copy.day.guidance}</p>
-            </div>
-            <div className={styles.previewPostList}>
-              {copy.day.posts.map((post, index) => (
-                <button
-                  aria-label={copy.day.openPost(post.title)}
-                  className={styles.previewPostRow}
-                  data-primary={index === 0 ? "true" : undefined}
-                  key={post.time}
-                  onClick={() => openPost(index)}
-                  type="button"
-                >
-                  <bdi className={styles.previewPostTime}>{post.time}</bdi>
-                  <span className={styles.previewPostCopy}>
-                    <strong>{post.title}</strong>
-                    <small>{post.meta}</small>
-                  </span>
-                  <ArrowRight aria-hidden="true" className={styles.directionalIcon} size={17} />
-                </button>
-              ))}
-            </div>
-            <small className={styles.previewHint}>{copy.day.hint}</small>
-          </div>
-        ) : null}
-
-        {view === "post" ? (
-          <div className={styles.previewPostDetail}>
-            <div className={styles.previewStageTopbar}>
-              <button className={styles.previewBack} onClick={() => setView("day")} type="button">
-                <ArrowLeft aria-hidden="true" className={styles.directionalIcon} size={15} />
-                {copy.post.back}
-              </button>
-              <span className={styles.previewCount}>{selectedPost.status}</span>
-            </div>
-            <div className={styles.previewPostDetailBody}>
-              <div className={styles.previewMedia}>
-                <span aria-hidden="true" className={styles.previewMediaHalo} />
-                <span className={styles.previewMediaCard}>
-                  <small>{selectedPost.mediaEyebrow}</small>
-                  <strong>{selectedPost.mediaTitle}</strong>
-                </span>
-                <small className={styles.previewMediaLabel}>{copy.post.media}</small>
-              </div>
-              <div className={styles.previewPostPanel}>
-                <div>
-                  <h3>{selectedPost.title}</h3>
-                  <p>{selectedPost.meta}</p>
-                </div>
-                <div className={styles.previewCaption}>
-                  <small>{copy.post.caption}</small>
-                  <p>{selectedPost.caption}</p>
-                </div>
-                <div className={styles.previewSchedule}>
-                  <span>{copy.post.reserved}</span>
-                  <bdi>{selectedPost.schedule}</bdi>
-                </div>
-                <div className={styles.previewHandoff}>
-                  <span>{copy.post.handoff}</span>
-                  <strong>{copy.post.action}</strong>
-                </div>
-              </div>
-            </div>
-            <small className={styles.previewHint}>{copy.post.hint}</small>
-          </div>
-        ) : null}
+      </div>
+      <div className={styles.calendarPreviewFooter}>
+        <span>{isArabic ? "5 قطع محتوى" : "5 content ideas"}</span>
+        <strong>{isArabic ? "3 جاهزة للمراجعة" : "3 ready to review"}</strong>
       </div>
     </aside>
+  );
+}
+
+function LoginInsightsPreview({ locale }: { locale: Locale }) {
+  const isArabic = locale === "ar";
+  return (
+    <aside
+      aria-label={isArabic ? "معاينة ثابتة للوحة رؤى MARKOS" : "Static preview of a populated MARKOS Insights dashboard"}
+      className={`${styles.authPreview} ${styles.insightsPreview}`}
+    >
+      <div className={styles.authPreviewHeader}>
+        <span className={styles.authPreviewIcon} aria-hidden="true">
+          <BarChart3 size={22} />
+        </span>
+        <div>
+          <p>{isArabic ? "رؤى MARKOS" : "MARKOS INSIGHTS"}</p>
+          <h2>{isArabic ? "اعرف ما الذي يحرّك النمو" : "See what is moving the business"}</h2>
+        </div>
+        <span className={styles.sampleBadge}>{isArabic ? "آخر 30 يومًا" : "LAST 30 DAYS"}</span>
+      </div>
+      <div className={styles.insightMetricGrid}>
+        <article>
+          <TrendingUp aria-hidden="true" size={18} />
+          <span>{isArabic ? "الوصول" : "Reach"}</span>
+          <strong>38.4K</strong>
+          <small>+18.6%</small>
+        </article>
+        <article>
+          <UsersRound aria-hidden="true" size={18} />
+          <span>{isArabic ? "تفاعل الجمهور" : "Engagement"}</span>
+          <strong>7.8%</strong>
+          <small>+2.1%</small>
+        </article>
+        <article>
+          <CalendarDays aria-hidden="true" size={18} />
+          <span>{isArabic ? "محتوى منشور" : "Published"}</span>
+          <strong>16</strong>
+          <small>{isArabic ? "هذا الشهر" : "this month"}</small>
+        </article>
+      </div>
+      <div className={styles.insightCharts}>
+        <article className={styles.reachChart}>
+          <header>
+            <span>{isArabic ? "الوصول بمرور الوقت" : "Reach over time"}</span>
+            <strong>+18.6%</strong>
+          </header>
+          <svg aria-label={isArabic ? "مخطط وصول صاعد" : "Rising reach chart"} role="img" viewBox="0 0 420 190">
+            <defs>
+              <linearGradient id="auth-reach-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#21bfae" stopOpacity=".34" />
+                <stop offset="100%" stopColor="#21bfae" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24 L420 190 L0 190 Z" fill="url(#auth-reach-fill)" />
+            <path
+              d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24"
+              fill="none"
+              stroke="#078c7d"
+              strokeLinecap="round"
+              strokeWidth="5"
+            />
+          </svg>
+          <div>
+            <span>6 Aug</span>
+            <span>20 Aug</span>
+            <span>2 Sep</span>
+          </div>
+        </article>
+        <article className={styles.contentMixChart}>
+          <header>
+            <span>{isArabic ? "مزيج المحتوى" : "Content mix"}</span>
+          </header>
+          <div className={styles.donutChart} aria-label={isArabic ? "ريل 45%، كاروسيل 35%، منشورات 20%" : "Reels 45%, carousels 35%, posts 20%"} role="img">
+            <span>
+              16<small>{isArabic ? "منشورًا" : "posts"}</small>
+            </span>
+          </div>
+          <ul>
+            <li data-tone="coral">
+              {isArabic ? "ريل" : "Reels"} <strong>45%</strong>
+            </li>
+            <li data-tone="aqua">
+              {isArabic ? "كاروسيل" : "Carousels"} <strong>35%</strong>
+            </li>
+            <li data-tone="yellow">
+              {isArabic ? "منشورات" : "Posts"} <strong>20%</strong>
+            </li>
+          </ul>
+        </article>
+      </div>
+      <div className={styles.insightCallout}>
+        <Sparkles aria-hidden="true" size={18} />
+        <span>{isArabic ? "مقاطع الريل التعليمية تحقق أفضل وصول هذا الشهر." : "Educational Reels are delivering your strongest reach this month."}</span>
+      </div>
+    </aside>
+  );
+}
+
+function AuthLanguageSelector({ arabicHref, englishHref, locale }: { arabicHref: string; englishHref: string; locale: Locale }) {
+  return (
+    <span aria-label={locale === "ar" ? "اختر اللغة" : "Choose language"} className={styles.authLanguageSelector} dir="ltr" role="group">
+      <Languages aria-hidden="true" size={16} />
+      {locale === "en" ? <strong aria-current="page">English</strong> : <Link href={englishHref}>English</Link>}
+      <span aria-hidden="true">/</span>
+      {locale === "ar" ? (
+        <strong aria-current="page" lang="ar">
+          العربية
+        </strong>
+      ) : (
+        <Link href={arabicHref} lang="ar">
+          العربية
+        </Link>
+      )}
+    </span>
   );
 }
 

@@ -27,6 +27,7 @@ import type {
   CampaignRecord,
   CalendarReadResult,
   ContentRecord,
+  ContentDraft,
   ContentStatus,
   ContentType,
   EmailVerificationChallenge,
@@ -481,12 +482,16 @@ export class MarkosApiClient {
 
   async createContent(
     input: {
+      platform?: "INSTAGRAM";
       contentType?: ContentType;
+      brief?: string | null;
       captionEn?: string | null;
       captionAr?: string | null;
       hashtags?: string[];
       callToAction?: string | null;
       contentPillar?: string | null;
+      campaignGoal?: string | null;
+      tone?: string | null;
       carousel?: Record<string, unknown> | null;
       reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;
@@ -552,8 +557,32 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async ideateContent(input: { topic: string; contentType?: ContentType; campaignId?: string }): Promise<ContentDraft> {
+    const response = await this.request<ContentDraft>("/v1/content/ideate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
   async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; campaignId?: string }): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentForItem(contentItemId: string, input: { topic: string; contentType: ContentType }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/generate`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async reviseContentItem(contentItemId: string, input: { instruction: string }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/revise`, {
       body: input,
       method: "POST"
     });
@@ -563,11 +592,16 @@ export class MarkosApiClient {
   async updateContent(
     contentItemId: string,
     input: {
+      platform?: "INSTAGRAM";
+      contentType?: ContentType;
+      brief?: string | null;
       captionEn?: string | null;
       captionAr?: string | null;
       hashtags?: string[];
       callToAction?: string | null;
       contentPillar?: string | null;
+      campaignGoal?: string | null;
+      tone?: string | null;
       carousel?: Record<string, unknown> | null;
       reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;

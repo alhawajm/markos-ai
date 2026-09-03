@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.contracts.campaign import StrictContract, VaultContextChunk
 
@@ -16,7 +16,9 @@ def default_required_languages() -> list[ContentLanguage]:
 
 
 class ContentToneLock(StrictContract):
-    required_languages: list[ContentLanguage] = Field(default_factory=default_required_languages, min_length=2, max_length=2)
+    required_languages: list[ContentLanguage] = Field(
+        default_factory=default_required_languages, min_length=2, max_length=2
+    )
     tone_words: list[ShortContentText] = Field(default_factory=list, max_length=20)
     voice_notes: str | None = Field(default=None, min_length=1, max_length=2_000)
     brand_hints: dict[str, object] = Field(default_factory=dict)
@@ -54,6 +56,9 @@ class ContentDraft(StrictContract):
     content_type: ContentType = Field(alias="contentType")
     caption_en: ContentText = Field(alias="captionEn")
     caption_ar: ContentText = Field(alias="captionAr")
+    visual_direction: str | None = Field(
+        default=None, alias="visualDirection", min_length=1, max_length=2_000
+    )
     hashtags: list[Hashtag] = Field(min_length=1, max_length=30)
     call_to_action: str = Field(alias="callToAction", min_length=1, max_length=500)
     content_pillar: str = Field(alias="contentPillar", min_length=1, max_length=160)
@@ -73,8 +78,17 @@ class ContentGenerateRequest(StrictContract):
     context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
     tone_lock: ContentToneLock
     campaign: dict[str, object] | None = None
+    revision_instruction: str | None = Field(default=None, min_length=3, max_length=1_000)
+    current_draft: ContentDraft | None = None
     prompt_template: ContentPromptTemplate | None = None
     model: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def require_complete_revision_context(self) -> "ContentGenerateRequest":
+        if (self.revision_instruction is None) != (self.current_draft is None):
+            raise ValueError("Revision instruction and current draft must be supplied together")
+
+        return self
 
 
 class ContentGenerateResponse(StrictContract):

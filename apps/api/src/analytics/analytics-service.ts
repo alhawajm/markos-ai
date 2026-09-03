@@ -41,18 +41,23 @@ const analyticsRequiredScopes = [...INSTAGRAM_RELEASE_SCOPES];
 
 export async function getAnalyticsSummary(workspaceId: string, input: { days?: number; from?: Date; to?: Date } = {}): Promise<AnalyticsSummary> {
   const range = analyticsRange(input);
+  const comparisonRange = previousAnalyticsRange(range);
   const rows = await prisma.instagramAnalytics.findMany({
     orderBy: [{ dataDate: "desc" }, { updatedAt: "desc" }],
     where: {
       workspaceId,
       dataDate: {
-        gte: range.from,
+        gte: comparisonRange.from,
         lte: range.to
       },
       deletedAt: null
     }
   });
-  const records = rows.map(toInstagramAnalyticsRecord);
+  const allRecords = rows.map(toInstagramAnalyticsRecord);
+  const records = allRecords.filter((record) => new Date(record.dataDate).getTime() >= range.from.getTime());
+  const comparisonRecords = allRecords.filter((record) => new Date(record.dataDate).getTime() < range.from.getTime());
+  const totals = summarizeMetrics(records);
+  const comparisonTotals = summarizeMetrics(comparisonRecords);
   const contentItems = await prisma.contentItem.findMany({
     where: {
       id: {
@@ -65,6 +70,12 @@ export async function getAnalyticsSummary(workspaceId: string, input: { days?: n
 
   return {
     byMetricType: summarizeByMetricType(records),
+    comparison: {
+      from: comparisonRange.from.toISOString(),
+      percentageChanges: metricPercentageChanges(totals, comparisonTotals),
+      to: comparisonRange.to.toISOString(),
+      totals: comparisonTotals
+    },
     daily: summarizeDaily(records),
     days: range.days,
     from: range.from.toISOString(),
@@ -72,7 +83,7 @@ export async function getAnalyticsSummary(workspaceId: string, input: { days?: n
     records,
     topContent: summarizeTopContent(records, contentById),
     to: range.to.toISOString(),
-    totals: summarizeMetrics(records)
+    totals
   };
 }
 
@@ -419,6 +430,18 @@ function summarizeMetrics(records: InstagramAnalyticsRecord[]): AnalyticsMetricT
   return totals;
 }
 
+function metricPercentageChanges(current: AnalyticsMetricTotals, previous: AnalyticsMetricTotals): Record<keyof AnalyticsMetricTotals, number | null> {
+  return Object.fromEntries(
+    (Object.keys(current) as Array<keyof AnalyticsMetricTotals>).map((key) => {
+      const currentValue = current[key];
+      const previousValue = previous[key];
+
+      if (currentValue === null || previousValue === null || previousValue === 0) return [key, null];
+      return [key, ((currentValue - previousValue) / Math.abs(previousValue)) * 100];
+    })
+  ) as Record<keyof AnalyticsMetricTotals, number | null>;
+}
+
 function summarizeByMetricType(records: InstagramAnalyticsRecord[]): AnalyticsSummary["byMetricType"] {
   const grouped = new Map<InstagramMetricType, InstagramAnalyticsRecord[]>();
 
@@ -541,6 +564,16 @@ function analyticsRange(input: { days?: number; from?: Date; to?: Date }): { day
   return {
     days,
     from,
+    to
+  };
+}
+
+function previousAnalyticsRange(range: { days: number; from: Date; to: Date }): { from: Date; to: Date } {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const to = new Date(range.from.getTime() - dayMs);
+
+  return {
+    from: new Date(to.getTime() - (range.days - 1) * dayMs),
     to
   };
 }

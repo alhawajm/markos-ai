@@ -92,6 +92,7 @@ def content_batch(count: int = 1) -> ContentDraftBatch:
                 contentType="POST",
                 captionEn=f"Pearl Coffee helps independent cafes plan a dependable wholesale coffee program. Draft {index + 1}.",
                 captionAr=f"تساعد بيرل كوفي المقاهي المستقلة على التخطيط لتجربة قهوة موثوقة. المسودة {index + 1}.",
+                visualDirection="A warm editorial coffee service scene with natural light and a clear focal point.",
                 hashtags=["#PearlCoffee", "#BahrainBusiness", "#SpecialtyCoffee"],
                 callToAction="Message us to discuss your cafe's needs.",
                 contentPillar="Proof and trust",
@@ -132,7 +133,9 @@ def test_openai_content_provider_uses_grounded_strict_bilingual_contract() -> No
 
 
 def test_openai_content_provider_rejects_wrong_draft_count() -> None:
-    provider = OpenAIContentProvider(client=FakeClient(content_batch().model_dump_json(by_alias=True)))
+    provider = OpenAIContentProvider(
+        client=FakeClient(content_batch().model_dump_json(by_alias=True))
+    )
 
     with pytest.raises(AiServiceError) as raised:
         asyncio.run(provider.generate_content(content_request(count=2)))
@@ -150,6 +153,33 @@ def test_local_content_provider_preserves_bilingual_development_fallback() -> No
     assert all(draft.caption_ar for draft in result.drafts)
     assert result.tokens_in > 0
     assert result.tokens_out > 0
+
+
+def test_content_revision_sends_current_draft_and_instruction_as_bounded_context() -> None:
+    request = content_request()
+    request.revision_instruction = "Make it shorter and use a more professional tone."
+    request.current_draft = content_batch().drafts[0]
+    client = FakeClient(content_batch().model_dump_json(by_alias=True))
+
+    asyncio.run(OpenAIContentProvider(client=client).generate_content(request))
+    kwargs = client.fake_responses.last_kwargs
+
+    assert kwargs is not None
+    assert "This is a revision request" in str(kwargs["instructions"])
+    assert "Make it shorter and use a more professional tone." in str(kwargs["input"])
+    assert "Pearl Coffee helps independent cafes" in str(kwargs["input"])
+
+    local_result = asyncio.run(LocalContentProvider().generate_content(request))
+    assert local_result.drafts[0].caption_en != request.current_draft.caption_en
+    assert len(local_result.drafts[0].caption_en) <= 80
+
+
+def test_content_revision_requires_instruction_and_current_draft_together() -> None:
+    payload = content_request().model_dump()
+    payload["revision_instruction"] = "Make it shorter."
+
+    with pytest.raises(ValueError):
+        ContentGenerateRequest.model_validate(payload)
 
 
 def test_content_request_rejects_unknown_fields_and_non_bilingual_output() -> None:

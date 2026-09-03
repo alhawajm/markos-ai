@@ -28,7 +28,9 @@ from app.providers.openai_structured import (
 
 
 class ContentProvider(Protocol):
-    async def generate_content(self, request: ContentGenerateRequest) -> ContentGenerateResponse: ...
+    async def generate_content(
+        self, request: ContentGenerateRequest
+    ) -> ContentGenerateResponse: ...
 
 
 class LocalContentProvider:
@@ -152,7 +154,9 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
                 slides=[
                     CarouselSlide(title="Hook", body=request.topic),
                     CarouselSlide(title="Problem", body="Show the customer pain point."),
-                    CarouselSlide(title="Proof", body="Use a specific business detail from the Vault."),
+                    CarouselSlide(
+                        title="Proof", body="Use a specific business detail from the Vault."
+                    ),
                     CarouselSlide(title="Action", body="Invite the viewer to message or save."),
                 ]
             )
@@ -160,23 +164,50 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
         if request.content_type == "REEL":
             reel_script = ReelScript(
                 hook=f"One thing to know about {request.topic}",
-                beats=["show the product or service", "explain the benefit", "close with a direct CTA"],
+                beats=[
+                    "show the product or service",
+                    "explain the benefit",
+                    "close with a direct CTA",
+                ],
                 durationSeconds=20,
             )
+
+        caption_en = (
+            f"{request.topic}: {article} {angle} post grounded in {context_summary}. "
+            f"Use a {tone_summary} voice to connect {pillar.lower()} with a clear Instagram action."
+        )
+        caption_ar = (
+            f"{request.topic}: مسودة محتوى مبنية على {context_summary}. "
+            "تربط قيمة النشاط بدعوة واضحة ومناسبة للجمهور على إنستغرام."
+        )
+        call_to_action = "Send a DM to learn more."
+
+        if request.revision_instruction is not None and request.current_draft is not None:
+            instruction = request.revision_instruction.casefold()
+            caption_en = request.current_draft.caption_en
+            caption_ar = request.current_draft.caption_ar
+            call_to_action = request.current_draft.call_to_action
+
+            if "short" in instruction or "أقصر" in instruction:
+                caption_en = shorten_local_caption(caption_en, 80)
+                caption_ar = shorten_local_caption(caption_ar, 80)
+            elif "professional" in instruction or "مهني" in instruction:
+                caption_en = f"Professional revision: {caption_en}"
+
+            if "stronger call" in instruction or "دعوة أقوى" in instruction:
+                call_to_action = "Send us a message today to choose the right next step."
 
         drafts.append(
             ContentDraft(
                 contentType=request.content_type,
-                captionEn=(
-                    f"{request.topic}: {article} {angle} post grounded in {context_summary}. "
-                    f"Use a {tone_summary} voice to connect {pillar.lower()} with a clear Instagram action."
-                ),
-                captionAr=(
-                    f"{request.topic}: مسودة محتوى مبنية على {context_summary}. "
-                    "تربط قيمة النشاط بدعوة واضحة ومناسبة للجمهور على إنستغرام."
+                captionEn=caption_en,
+                captionAr=caption_ar,
+                visualDirection=(
+                    f"Create a polished {request.content_type.lower()} visual about {request.topic}. "
+                    f"Use a {tone_summary} mood, a clear focal subject, uncluttered composition, and brand-aligned colors grounded in {context_summary}."
                 ),
                 hashtags=["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
-                callToAction="Send a DM to learn more.",
+                callToAction=call_to_action,
                 contentPillar=pillar,
                 carousel=carousel,
                 reelScript=reel_script,
@@ -184,6 +215,14 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
         )
 
     return ContentDraftBatch(drafts=drafts)
+
+
+def shorten_local_caption(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+
+    shortened = value[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,.;:")
+    return f"{shortened}…"
 
 
 def summarize_context(request: ContentGenerateRequest) -> str:

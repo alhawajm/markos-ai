@@ -505,6 +505,7 @@ model Campaign {
 model ContentItem {
   id                  String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId         String        @db.Uuid
+  platform            String        @default("INSTAGRAM")
   contentType         ContentType
   status              ContentStatus @default(DRAFT)
   brief               String?
@@ -521,6 +522,7 @@ model ContentItem {
   campaignGoal        String?
   campaignWeek        Int?
   campaignActionIndex Int?
+  tone                String?
   aiPromptUsed        String?
   plannedAt           DateTime?
   scheduledAt         DateTime?

@@ -51,6 +51,7 @@ export const paymentGatewayCodeSchema = z.enum(["CREDIMAX", "BENEFIT", "STRIPE"]
 export const vaultSectionSchema = z.enum(["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"]);
 
 export const contentTypeSchema = z.enum(["POST", "CAROUSEL", "STORY", "REEL"]);
+export const contentPlatformSchema = z.enum(["INSTAGRAM"]);
 export const contentStatusSchema = z.enum(["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"]);
 export const mediaTypeSchema = z.enum(["IMAGE", "VIDEO", "BRAND_ASSET", "AI_GENERATED"]);
 export const agentNameSchema = z.enum([
@@ -359,12 +360,16 @@ export const approveBusinessProfileSchema = z
 
 export const createContentSchema = z
   .object({
+    platform: contentPlatformSchema.default("INSTAGRAM"),
     contentType: contentTypeSchema.default("POST"),
+    brief: z.string().max(1000).nullable().optional(),
     captionEn: z.string().max(2200).nullable().optional(),
     captionAr: z.string().max(2200).nullable().optional(),
     hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
     callToAction: z.string().max(500).nullable().optional(),
     contentPillar: z.string().max(160).nullable().optional(),
+    campaignGoal: z.string().max(500).nullable().optional(),
+    tone: z.string().max(200).nullable().optional(),
     carousel: z.record(z.string(), z.unknown()).nullable().optional(),
     reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
@@ -385,12 +390,33 @@ export const generateContentSchema = z.object({
   campaignId: z.string().uuid().optional()
 });
 
+export const ideateContentSchema = z
+  .object({
+    topic: z.string().trim().min(8).max(1000),
+    contentType: contentTypeSchema.default("POST"),
+    campaignId: z.string().uuid().optional()
+  })
+  .strict();
+
 export const generateContentForSlotSchema = z.object({
   topic: z.string().min(3).max(500),
   contentType: contentTypeSchema.default("POST"),
   scheduledAt: z.string().datetime(),
   campaignId: z.string().uuid().optional()
 });
+
+export const generateContentForItemSchema = z
+  .object({
+    topic: z.string().trim().min(3).max(1000),
+    contentType: contentTypeSchema
+  })
+  .strict();
+
+export const reviseContentItemSchema = z
+  .object({
+    instruction: z.string().trim().min(3).max(1000)
+  })
+  .strict();
 
 export const runAgentSchema = z.object({
   agent: agentNameSchema,
@@ -460,11 +486,16 @@ export const adminUpdateModelSettingSchema = z.object({
 
 export const updateContentSchema = z
   .object({
+    platform: contentPlatformSchema.optional(),
+    contentType: contentTypeSchema.optional(),
+    brief: z.string().max(1000).nullable().optional(),
     captionEn: z.string().max(2200).nullable().optional(),
     captionAr: z.string().max(2200).nullable().optional(),
     hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
     callToAction: z.string().max(500).nullable().optional(),
     contentPillar: z.string().max(160).nullable().optional(),
+    campaignGoal: z.string().max(500).nullable().optional(),
+    tone: z.string().max(200).nullable().optional(),
     carousel: z.record(z.string(), z.unknown()).nullable().optional(),
     reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
@@ -677,7 +708,10 @@ export type GenerateCampaignInput = z.infer<typeof generateCampaignSchema>;
 export type ApproveCampaignSuggestionInput = z.infer<typeof approveCampaignSuggestionSchema>;
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
+export type IdeateContentInput = z.infer<typeof ideateContentSchema>;
 export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
+export type GenerateContentForItemInput = z.infer<typeof generateContentForItemSchema>;
+export type ReviseContentItemInput = z.infer<typeof reviseContentItemSchema>;
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
 export type AnalyticsMonthlyPdfInput = z.infer<typeof analyticsMonthlyPdfSchema>;
 export type AnalyticsMonthlyEmailInput = z.infer<typeof analyticsMonthlyEmailSchema>;

@@ -48,7 +48,7 @@ test("safe mode is ready without an OpenAI key", () => {
   const result = validateLocalConfiguration({ aiEnv: { ...aiEnv, OPENAI_API_KEY: "" }, mode: "safe", rootEnv });
   assert.deepEqual(result.errors, []);
   assert.equal(result.summary.textProvider, "local");
-  assert.equal(result.summary.imageProvider, "local");
+  assert.equal(result.summary.imageProvider, "disabled");
 });
 
 test("live AI requires a server-only OpenAI key", () => {

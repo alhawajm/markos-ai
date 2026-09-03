@@ -143,7 +143,7 @@ export function validateLocalConfiguration({ aiEnv = {}, mode, rootEnv = {} }) {
     summary: {
       database: databaseUrl?.pathname.slice(1) ?? "invalid",
       email: root.EMAIL_PROVIDER,
-      imageProvider: "local",
+      imageProvider: "disabled",
       mode,
       responseStorage: aiEnv.OPENAI_STORE_RESPONSES === "true" ? "enabled" : "disabled",
       textProvider: mode === "live-ai" ? "openai" : "local"
@@ -199,7 +199,7 @@ function startDevelopment(mode) {
     cwd: repositoryRoot,
     env: {
       ...process.env,
-      AI_IMAGE_PROVIDER: "local",
+      AI_IMAGE_PROVIDER: "disabled",
       AI_TEXT_PROVIDER: mode === "live-ai" ? "openai" : "local"
     },
     shell: false,

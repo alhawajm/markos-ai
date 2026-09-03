@@ -53,14 +53,17 @@ describe("Sunlit authentication pages", () => {
     expect(authStyles).toContain("color: var(--ink-soft)");
   });
 
-  it("mounts the restrained interactive calendar preview on Login", () => {
-    expect(authSource).toContain("MARKOS PRODUCT PREVIEW");
-    expect(authSource).toContain("معاينة منتج MARKOS");
-    expect(authSource).toContain("data-login-preview={view}");
-    expect(authSource).toContain('setView("day")');
-    expect(authSource).toContain('setView("post")');
-    expect(authStyles).toContain(".loginPreview");
-    expect(authStyles).toContain("grid-template-columns: 520px minmax(0, 752px)");
+  it("uses static product previews and one shared language selector", () => {
+    expect(authSource).toContain("SignupCalendarPreview");
+    expect(authSource).toContain("Static preview of a populated MARKOS calendar");
+    expect(authSource).toContain("LoginInsightsPreview");
+    expect(authSource).toContain("Static preview of a populated MARKOS Insights dashboard");
+    expect(authSource).toContain("AuthLanguageSelector");
+    expect(authSource).toContain("Reach over time");
+    expect(authSource).toContain("Content mix");
+    expect(authSource).not.toContain("data-login-preview={view}");
+    expect(authStyles).toContain(".signupLayout");
+    expect(authStyles).toContain(".insightsPreview");
   });
 
   it("keeps browser autofill and text selection within the bright field theme", () => {

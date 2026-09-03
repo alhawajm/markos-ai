@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     internal_service_token: str = "change-me"
     database_url: str = "postgresql://markos:markos@localhost:5432/markos"
     ai_text_provider: Literal["local", "openai"] = "local"
-    ai_image_provider: Literal["local", "openai"] = "local"
+    # `local` remains accepted as a legacy value, but it is deliberately disabled
+    # by the provider factory. MARKOS must never represent a synthetic bitmap as
+    # AI-generated media.
+    ai_image_provider: Literal["disabled", "local", "openai"] = "disabled"
     ai_campaign_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_document_timeout_seconds: float = Field(default=50, gt=0, le=60)
