@@ -716,11 +716,17 @@ describe("presentation journey", () => {
       .click();
     await page.locator('[data-calendar-layer="day"]').waitFor();
     await expect(focusSurface.getAttribute("data-calendar-motion-state")).resolves.toBe("reduced");
+    // Reduced-motion CSS uses 0.01 ms transitions; Chromium can report these as pending until the next frame.
+    // Inspect total timing (including delays and iterations) so visible motion still fails without waiting it away.
     await expect(
-      page
-        .locator('[data-calendar-layer="day"]')
-        .evaluate((element) => element.getAnimations({ subtree: true }).filter((animation) => animation.playState === "running" || animation.pending).length)
-    ).resolves.toBe(0);
+      page.locator('[data-calendar-layer="day"]').evaluate((element) =>
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running" || animation.pending)
+          .map((animation) => animation.effect?.getComputedTiming())
+          .filter((timing) => Number(timing?.endTime ?? Number.POSITIVE_INFINITY) > 1)
+      )
+    ).resolves.toEqual([]);
     await page.keyboard.press("Escape");
     await page.locator('[data-calendar-layer="overview"]').waitFor();
     await page.emulateMedia({ reducedMotion: "no-preference" });
