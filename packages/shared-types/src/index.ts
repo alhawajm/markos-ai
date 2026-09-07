@@ -31,8 +31,8 @@ export const permissions = [
   "vault:write",
   "onboarding:read",
   "onboarding:write",
-  "strategy:read",
-  "strategy:generate",
+  "campaign:read",
+  "campaign:generate",
   "content:read",
   "content:write",
   "content:schedule",
@@ -55,6 +55,9 @@ export type VaultSection = (typeof vaultSections)[number];
 
 export const contentTypes = ["POST", "CAROUSEL", "STORY", "REEL"] as const;
 export type ContentType = (typeof contentTypes)[number];
+
+export const contentPlatforms = ["INSTAGRAM"] as const;
+export type ContentPlatform = (typeof contentPlatforms)[number];
 
 export const contentStatuses = ["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
 export type ContentStatus = (typeof contentStatuses)[number];
@@ -208,6 +211,7 @@ export interface AgentRunRecord {
 export interface OnboardingModuleState {
   module: string;
   completed: boolean;
+  skipped: boolean;
   sections: VaultSection[];
 }
 
@@ -238,27 +242,293 @@ export interface OnboardingBusinessProfileState {
 export interface OnboardingState {
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
   onboardingScore: number;
+  readyForProfile: boolean;
   vaultScore: VaultCompletenessScore;
   modules: OnboardingModuleState[];
   businessProfile: OnboardingBusinessProfileState;
 }
 
-export interface StrategyPillar {
+export const offeringKinds = ["PRODUCT", "SERVICE", "UNSPECIFIED"] as const;
+export type OfferingKind = (typeof offeringKinds)[number];
+
+export const offeringStatuses = ["ACTIVE", "PAUSED", "ARCHIVED"] as const;
+export type OfferingStatus = (typeof offeringStatuses)[number];
+
+export const offeringPriceTypes = ["UNSPECIFIED", "FIXED", "FROM", "RANGE", "QUOTE"] as const;
+export type OfferingPriceType = (typeof offeringPriceTypes)[number];
+
+export interface OfferingRecord {
+  id: string;
+  workspaceId: string;
+  catalogId: string;
+  kind: OfferingKind;
+  name: string;
+  nameEn?: string;
+  nameAr?: string;
+  category?: string;
+  description?: string;
+  priceType: OfferingPriceType;
+  priceMinor?: number;
+  minPriceMinor?: number;
+  maxPriceMinor?: number;
+  currency: string;
+  status: OfferingStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferingCatalogRecord {
+  id: string;
+  workspaceId: string;
+  summary?: string;
+  differentiators: string[];
+  priceRange?: string;
+  salesChannels: string[];
+  version: number;
+  projectionStatus: "PENDING" | "READY" | "FAILED";
+  projectedVersion: number;
+  offerings: OfferingRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferingCatalogUpdate {
+  summary?: string;
+  items?: Array<{
+    kind?: OfferingKind;
+    name: string;
+    category?: string;
+    description?: string;
+    priceMinor?: number;
+    currency: string;
+  }>;
+  differentiators?: string[];
+  priceRange?: string;
+  salesChannels?: string[];
+}
+
+export const offeringDocumentAnalysisStatuses = ["PROCESSING", "READY", "FAILED", "APPROVED", "DISCARDED", "EXPIRED"] as const;
+export type OfferingDocumentAnalysisStatus = (typeof offeringDocumentAnalysisStatuses)[number];
+
+export interface OfferingDocumentCandidate {
+  kind: OfferingKind;
+  name: string;
+  category?: string;
+  description?: string;
+  priceMinor?: number;
+  currency: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  sourceFiles: string[];
+}
+
+export interface OfferingDocumentIssue {
+  code:
+    | "NO_OFFERINGS_FOUND"
+    | "AMBIGUOUS_OFFERING"
+    | "MISSING_DESCRIPTION"
+    | "MISSING_PRICE"
+    | "CONFLICTING_INFORMATION"
+    | "POSSIBLE_NON_OFFERING"
+    | "REVIEW_REQUIRED"
+    | "SOURCE_TRUNCATED";
+  severity: "INFO" | "WARNING";
+  message: string;
+  field?: string;
+  offeringName?: string;
+  sourceFiles: string[];
+}
+
+export interface OfferingDocumentExtraction {
+  catalog: {
+    summary?: string;
+    items: OfferingDocumentCandidate[];
+    differentiators: string[];
+    priceRange?: string;
+    salesChannels: string[];
+  };
+  issues: OfferingDocumentIssue[];
+}
+
+export interface OfferingDocumentAnalysisRecord {
+  id: string;
+  workspaceId: string;
+  status: OfferingDocumentAnalysisStatus;
+  files: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    removed: boolean;
+  }>;
+  result?: OfferingDocumentExtraction;
+  failureCode?: string;
+  expiresAt: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApproveOfferingDocumentAnalysisResult {
+  analysis: OfferingDocumentAnalysisRecord;
+  onboarding: OnboardingState;
+}
+
+export interface OfferingDocumentCleanupResult {
+  expired: number;
+  failed: number;
+}
+
+export type OnboardingDocumentAnalysisStatus = OfferingDocumentAnalysisStatus;
+export type OnboardingDocumentConfidence = "HIGH" | "MEDIUM" | "LOW";
+export type OnboardingDocumentEvidenceBasis = "EXPLICIT" | "VISUAL_INFERENCE";
+
+export interface OnboardingDocumentProfileDraft {
+  company: {
+    name?: string;
+    industry?: string;
+    size?: string;
+    location?: string;
+    socials: string[];
+    website?: string;
+    languages: string[];
+  };
+  offerings: OfferingDocumentExtraction["catalog"];
+  story: {
+    mission?: string;
+    origin?: string;
+    problemSolved?: string;
+    values: string[];
+    usp?: string;
+    vision?: string;
+  };
+  audience: {
+    ageRange?: string;
+    demographics?: string;
+    genderBreakdown?: string;
+    interests: string[];
+    locations: string[];
+    motivations: string[];
+    painPoints: string[];
+  };
+  competitors: {
+    marketContext?: string;
+    items: Array<{
+      name: string;
+      instagramHandle?: string;
+      website?: string;
+      notes?: string;
+    }>;
+    competitiveAdvantage?: string;
+    doDifferently?: string;
+  };
+  brand: {
+    aestheticWords: string[];
+    colors: string[];
+    fonts: string[];
+    toneWords: string[];
+    voiceNotes?: string;
+  };
+  objectives: {
+    currentPriority?: string;
+    goals: string[];
+    budgetRange?: string;
+    instagramExperience?: string;
+    success90Days?: string;
+  };
+}
+
+export interface ApprovedOnboardingDocumentProfile {
+  company: OnboardingDocumentProfileDraft["company"] & { name: string };
+  offerings: OfferingCatalogUpdate;
+  story?: OnboardingDocumentProfileDraft["story"];
+  audience?: OnboardingDocumentProfileDraft["audience"];
+  competitors?: OnboardingDocumentProfileDraft["competitors"];
+  brand?: OnboardingDocumentProfileDraft["brand"];
+  objectives?: OnboardingDocumentProfileDraft["objectives"];
+}
+
+export interface OnboardingDocumentExtraction {
+  profile: OnboardingDocumentProfileDraft;
+  evidence: Array<{
+    field: string;
+    sourceFiles: string[];
+    confidence: OnboardingDocumentConfidence;
+    basis: OnboardingDocumentEvidenceBasis;
+  }>;
+  issues: Array<{
+    code: "MISSING_ESSENTIAL" | "AMBIGUOUS_INFORMATION" | "CONFLICTING_INFORMATION" | "VISUAL_INFERENCE" | "REVIEW_REQUIRED" | "UNSUPPORTED_CONTENT";
+    severity: "INFO" | "WARNING";
+    message: string;
+    field?: string;
+    sourceFiles: string[];
+  }>;
+}
+
+export interface OnboardingDocumentAnalysisRecord {
+  id: string;
+  workspaceId: string;
+  status: OnboardingDocumentAnalysisStatus;
+  files: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    removed: boolean;
+  }>;
+  result?: OnboardingDocumentExtraction;
+  failureCode?: string;
+  expiresAt: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApproveOnboardingDocumentAnalysisResult {
+  analysis: OnboardingDocumentAnalysisRecord;
+  onboarding: OnboardingState;
+}
+
+export const campaignDurations = [3, 7, 14, 30, 60, 90] as const;
+export type CampaignDurationDays = (typeof campaignDurations)[number];
+export const campaignGenerationDurations = [3, 7, 14] as const;
+export type CampaignGenerationDurationDays = (typeof campaignGenerationDurations)[number];
+
+export const campaignStatuses = ["REVIEW", "APPROVED", "ACTIVE", "COMPLETED", "ARCHIVED"] as const;
+export type CampaignStatus = (typeof campaignStatuses)[number];
+
+export interface CampaignPillar {
   name: string;
   rationale: string;
   contentAngles: string[];
 }
 
-export interface StrategyPlan {
+export interface CampaignPostSuggestion {
+  contentType: ContentType;
+  title: string;
+  description: string;
+  goal: string;
+  contentPillar: string;
+}
+
+export interface CampaignDay {
+  day: number;
+  posts: CampaignPostSuggestion[];
+}
+
+export interface CampaignWeek {
+  week: number;
+  focus: string;
+  days: CampaignDay[];
+}
+
+export interface CampaignPlan {
   summary: string;
-  horizonDays: number;
+  durationDays: CampaignDurationDays;
+  publishesPerDay: number;
   objectives: string[];
-  pillars: StrategyPillar[];
-  weeklyCadence: Array<{
-    week: number;
-    focus: string;
-    actions: string[];
-  }>;
+  pillars: CampaignPillar[];
+  weeklyCadence: CampaignWeek[];
   kpis: Array<{
     name: string;
     target: string;
@@ -268,50 +538,69 @@ export interface StrategyPlan {
   retrievedContext: VaultRagChunk[];
 }
 
-export interface StrategyRecord {
+export interface CampaignRecord {
   id: string;
   workspaceId: string;
   title: string;
-  horizonDays: number;
-  content: StrategyPlan;
+  objective?: string;
+  status: CampaignStatus;
+  startsAt: string;
+  endsAt: string;
+  durationDays: CampaignDurationDays;
+  publishesPerDay: number;
+  content: CampaignPlan;
   version: number;
   createdAt: string;
   updatedAt: string;
 }
 
+export {
+  CONTENT_CAPTION_MAX_LENGTH,
+  CONTENT_CAPTION_MAX_HASHTAGS,
+  captionCharacterCount,
+  captionHashtagCount,
+  captionValidationIssue
+} from "./content-caption";
+
 export interface ContentDraft {
   contentType: ContentType;
-  captionEn?: string;
-  captionAr?: string;
-  hashtags: string[];
-  callToAction?: string;
+  caption: string;
+  visualDirection?: string;
   contentPillar?: string;
   carousel?: Record<string, unknown>;
   reelScript?: Record<string, unknown>;
 }
 
 export interface ContentToneLock {
-  requiredLanguages: ["ar", "en"];
+  preferredLanguages: Array<"en" | "ar">;
   toneWords: string[];
   voiceNotes?: string;
   brandHints: Record<string, unknown>;
 }
 
+export * from "./conversation";
+
 export interface ContentRecord {
+  revision: number;
+  visualDirection?: string;
   id: string;
   workspaceId: string;
+  platform?: ContentPlatform;
   contentType: ContentType;
   status: ContentStatus;
-  captionEn?: string;
-  captionAr?: string;
-  hashtags: string[];
-  callToAction?: string;
+  brief?: string;
+  caption: string;
   mediaIds: string[];
   carousel?: Record<string, unknown>;
   reelScript?: Record<string, unknown>;
   contentPillar?: string;
   campaignId?: string;
+  campaignGoal?: string;
+  campaignWeek?: number;
+  campaignActionIndex?: number;
+  tone?: string;
   aiPromptUsed?: string;
+  plannedAt?: string;
   scheduledAt?: string;
   publishedAt?: string;
   instagramPostId?: string;
@@ -335,12 +624,91 @@ export interface MediaAssetRecord {
   updatedAt: string;
 }
 
+export interface CalendarSummary {
+  scheduledThisWeek: number;
+  ready: number;
+  needsAttention: number;
+}
+
+export interface CalendarUnscheduledPage {
+  items: ContentRecord[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface CalendarReadResult {
+  range: {
+    from: string;
+    to: string;
+  };
+  items: ContentRecord[];
+  mediaAssets: MediaAssetRecord[];
+  summary: CalendarSummary;
+  unscheduled: CalendarUnscheduledPage;
+}
+
 export interface AiImageGenerationResult {
   contentItem: ContentRecord;
   mediaAsset: MediaAssetRecord;
   model: string;
   prompt: string;
   promptVersion: string;
+}
+
+export const mediaGenerationStatuses = ["QUEUED", "STARTING", "GENERATING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"] as const;
+export type MediaGenerationStatus = (typeof mediaGenerationStatuses)[number];
+
+export interface MediaGenerationJobRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  kind: "VIDEO";
+  status: MediaGenerationStatus;
+  prompt: string;
+  aspectRatio: "9:16";
+  durationSeconds: 4 | 8 | 12;
+  progress: number;
+  model?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  retryable?: boolean;
+  outputMediaAssetId?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const publishJobStatuses = ["QUEUED", "PROCESSING", "RETRY_WAIT", "PUBLISHED", "FAILED", "CANCELLED"] as const;
+export type PublishJobStatus = (typeof publishJobStatuses)[number];
+
+export interface PublishJobRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  status: PublishJobStatus;
+  trigger: "SCHEDULED" | "PUBLISH_NOW";
+  scheduledFor: string;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  userId: string;
+  workspaceId?: string;
+  channel: string;
+  templateKey: string;
+  payload: Record<string, unknown>;
+  readAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PromptTemplateRecord {
@@ -471,6 +839,12 @@ export interface AnalyticsSummary {
     metricType: InstagramMetricType;
     totals: AnalyticsMetricTotals;
   }>;
+  comparison: {
+    from: string;
+    percentageChanges: Record<keyof AnalyticsMetricTotals, number | null>;
+    to: string;
+    totals: AnalyticsMetricTotals;
+  };
   daily: Array<{
     dataDate: string;
     totals: AnalyticsMetricTotals;

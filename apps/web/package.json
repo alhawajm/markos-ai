@@ -24,6 +24,7 @@
     "@tiptap/react": "^3.26.0",
     "@tiptap/starter-kit": "^3.26.0",
     "lucide-react": "^0.562.0",
+    "motion": "13.1.1",
     "next": "16.2.9",
     "qrcode.react": "4.2.0",
     "react": "19.2.7",

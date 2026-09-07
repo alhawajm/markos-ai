@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from app.contracts.strategy import StrategyContextChunk, StrictContract
+from app.contracts.campaign import StrictContract, VaultContextChunk
 
 
 class LocalizedBusinessProfileText(StrictContract):
@@ -22,7 +22,7 @@ class BusinessProfile(StrictContract):
 
 class BusinessProfileGenerateRequest(StrictContract):
     workspace_id: str = Field(min_length=1, max_length=120)
-    context: list[StrategyContextChunk] = Field(min_length=1, max_length=20)
+    context: list[VaultContextChunk] = Field(min_length=1, max_length=20)
     model: str | None = Field(default=None, min_length=1, max_length=200)
 
 

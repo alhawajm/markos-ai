@@ -1,7 +1,7 @@
 import logging
 import re
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, TypeAlias, TypeVar
 
 from openai import (
     APIConnectionError,
@@ -44,6 +44,7 @@ class OpenAIClient(Protocol):
 
 
 ContractT = TypeVar("ContractT", bound=BaseModel)
+StructuredInput: TypeAlias = str | list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -57,13 +58,18 @@ class StructuredResult(Generic[ContractT]):
 async def generate_structured(
     *,
     client: OpenAIClient,
-    input_text: str,
     instructions: str,
     model: str,
     output_label: str,
     schema: type[ContractT],
     schema_name: str,
+    input_text: str | None = None,
+    input_items: list[dict[str, object]] | None = None,
 ) -> StructuredResult[ContractT]:
+    if (input_text is None) == (input_items is None):
+        raise ValueError("Provide exactly one structured input")
+    structured_input: StructuredInput = input_text if input_text is not None else input_items or []
+
     logger.info(
         "openai_structured_request_started schema=%s model=%s store=%s",
         schema_name,
@@ -73,7 +79,7 @@ async def generate_structured(
 
     try:
         response = await client.responses.create(
-            input=input_text,
+            input=structured_input,
             instructions=instructions,
             max_output_tokens=settings.openai_max_output_tokens,
             model=model,
@@ -83,7 +89,7 @@ async def generate_structured(
                 "format": {
                     "type": "json_schema",
                     "name": schema_name,
-                    "schema": schema.model_json_schema(by_alias=True),
+                    "schema": strict_json_schema(schema),
                     "strict": True,
                 }
             },
@@ -276,3 +282,31 @@ def contains_refusal(value: object) -> bool:
         return any(contains_refusal(item) for item in value)
 
     return False
+
+
+def strict_json_schema(schema: type[BaseModel]) -> dict[str, object]:
+    """Convert Pydantic output into the strict subset accepted by OpenAI."""
+    return _normalize_strict_schema(schema.model_json_schema(by_alias=True))
+
+
+def _normalize_strict_schema(value: dict[str, object]) -> dict[str, object]:
+    normalized: dict[str, object] = {}
+    for key, item in value.items():
+        if key == "default" and item is None:
+            continue
+        if isinstance(item, dict):
+            normalized[key] = _normalize_strict_schema(item)
+        elif isinstance(item, list):
+            normalized[key] = [
+                _normalize_strict_schema(entry) if isinstance(entry, dict) else entry
+                for entry in item
+            ]
+        else:
+            normalized[key] = item
+
+    properties = normalized.get("properties")
+    if isinstance(properties, dict):
+        normalized["required"] = list(properties)
+    if normalized.get("type") == "object":
+        normalized["additionalProperties"] = False
+    return normalized

@@ -131,7 +131,7 @@ describe("agent routes", () => {
       })
     ).resolves.toMatchObject({
       used: BigInt(agentNames.length),
-      limit: 100n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -180,9 +180,8 @@ describe("agent routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const content = await prisma.contentItem.create({
       data: {
-        captionEn: "Analytics proof post",
+        caption: "Analytics proof post\n\n#MarkosAI",
         contentType: "POST",
-        hashtags: ["#MarkosAI"],
         instagramPostId: `ig-${randomUUID()}`,
         mediaIds: [],
         publishedAt: new Date(),
@@ -251,7 +250,7 @@ describe("agent routes", () => {
               },
               topContent: [
                 expect.objectContaining({
-                  caption: "Analytics proof post",
+                  caption: "Analytics proof post\n\n#MarkosAI",
                   contentItemId: content.id,
                   engagement: 30
                 })

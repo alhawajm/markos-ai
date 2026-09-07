@@ -23,7 +23,13 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
+  CampaignGenerationDurationDays,
+  CampaignRecord,
+  CalendarReadResult,
   ContentRecord,
+  ContentConversationRecord,
+  ConversationTurnInput,
+  ContentDraft,
   ContentStatus,
   ContentType,
   EmailVerificationChallenge,
@@ -37,17 +43,25 @@ import type {
   KnowledgeVaultHistoryEntry,
   Locale,
   MediaAssetRecord,
+  MediaGenerationJobRecord,
   MediaType,
   MfaStatus,
   MfaTotpSetup,
+  NotificationRecord,
   OnboardingState,
+  OnboardingDocumentAnalysisRecord,
+  ApprovedOnboardingDocumentProfile,
+  ApproveOnboardingDocumentAnalysisResult,
+  OfferingCatalogUpdate,
+  OfferingDocumentAnalysisRecord,
+  ApproveOfferingDocumentAnalysisResult,
   PromptTemplateRecord,
   PromptVariantSelection,
   PublishAttemptRecord,
+  PublishJobRecord,
   PublishDueContentResult,
   PublishingLiveReadiness,
   PublishReadiness,
-  StrategyRecord,
   VaultCompletenessScore,
   VaultRagChunk,
   VaultSection,
@@ -184,10 +198,115 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async saveOnboardingModule(module: string, body: Record<string, unknown>): Promise<OnboardingState> {
-    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}`, {
+  async onboardingDocumentAnalysis(): Promise<OnboardingDocumentAnalysisRecord | null> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord | null>("/v1/onboarding/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOnboardingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType:
+        | "application/pdf"
+        | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        | "text/plain"
+        | "image/jpeg"
+        | "image/png"
+        | "image/webp";
+      base64Data: string;
+    }>
+  ): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>("/v1/onboarding/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOnboardingDocumentAnalysis(analysisId: string, profile: ApprovedOnboardingDocumentProfile): Promise<ApproveOnboardingDocumentAnalysisResult> {
+    const response = await this.request<ApproveOnboardingDocumentAnalysisResult>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}/approve`, {
+      body: { profile },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async discardOnboardingDocumentAnalysis(analysisId: string): Promise<OnboardingDocumentAnalysisRecord> {
+    const response = await this.request<OnboardingDocumentAnalysisRecord>(`/v1/onboarding/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
+    });
+    return response.data;
+  }
+
+  async saveOnboardingModule(module: string, body: Record<string, unknown>, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}${query}`, {
       body,
       method: "PUT"
+    });
+    return response.data;
+  }
+
+  async skipOnboardingModule(module: string, options: { preserveApprovedProfile?: boolean } = {}): Promise<OnboardingState> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<OnboardingState>(`/v1/onboarding/${module}/skip${query}`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async offeringDocumentAnalysis(): Promise<OfferingDocumentAnalysisRecord | null> {
+    const response = await this.request<OfferingDocumentAnalysisRecord | null>("/v1/onboarding/products/document-analysis");
+    return response.data;
+  }
+
+  async analyzeOfferingDocuments(
+    files: Array<{
+      filename: string;
+      mimeType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain";
+      base64Data: string;
+    }>
+  ): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>("/v1/onboarding/products/document-analysis", {
+      body: { files },
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/retry`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async approveOfferingDocumentAnalysis(
+    analysisId: string,
+    catalog: OfferingCatalogUpdate,
+    options: { preserveApprovedProfile?: boolean } = {}
+  ): Promise<ApproveOfferingDocumentAnalysisResult> {
+    const query = options.preserveApprovedProfile ? "?preserveApprovedProfile=true" : "";
+    const response = await this.request<ApproveOfferingDocumentAnalysisResult>(
+      `/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}/approve${query}`,
+      { body: { catalog }, method: "POST" }
+    );
+    return response.data;
+  }
+
+  async discardOfferingDocumentAnalysis(analysisId: string): Promise<OfferingDocumentAnalysisRecord> {
+    const response = await this.request<OfferingDocumentAnalysisRecord>(`/v1/onboarding/products/document-analysis/${encodeURIComponent(analysisId)}`, {
+      method: "DELETE"
     });
     return response.data;
   }
@@ -247,21 +366,40 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async strategies(): Promise<StrategyRecord[]> {
-    const response = await this.request<StrategyRecord[]>("/v1/strategy");
+  async campaigns(): Promise<CampaignRecord[]> {
+    const response = await this.request<CampaignRecord[]>("/v1/campaigns");
     return response.data;
   }
 
-  async generateStrategy(input: { objective?: string; horizonDays?: number; locale?: Locale }): Promise<StrategyRecord> {
-    const response = await this.request<StrategyRecord>("/v1/strategy/generate", {
+  async generateCampaign(input: {
+    objective?: string;
+    durationDays?: CampaignGenerationDurationDays;
+    publishesPerDay?: number;
+    startsAt: string;
+    locale?: Locale;
+  }): Promise<CampaignRecord> {
+    const response = await this.request<CampaignRecord>("/v1/campaigns/generate", {
       body: input,
       method: "POST"
     });
     return response.data;
   }
 
-  async exportStrategyPdf(strategyId: string): Promise<ArrayBuffer> {
-    return this.requestBinary(`/v1/strategy/${strategyId}/pdf`, {
+  async campaignDrafts(campaignId: string): Promise<ContentRecord[]> {
+    const response = await this.request<ContentRecord[]>(`/v1/campaigns/${campaignId}/drafts`);
+    return response.data;
+  }
+
+  async approveCampaignSuggestion(campaignId: string, input: { week: number; actionIndex: number }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/campaigns/${campaignId}/suggestions/approve`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async exportCampaignPdf(campaignId: string): Promise<ArrayBuffer> {
+    return this.requestBinary(`/v1/campaigns/${campaignId}/pdf`, {
       accept: "application/pdf"
     });
   }
@@ -325,12 +463,51 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async contentConversation(contentItemId: string): Promise<ContentConversationRecord> {
+    return (await this.request<ContentConversationRecord>(`/v1/content/${contentItemId}/conversation`)).data;
+  }
+
+  async sendConversationMessage(contentItemId: string, input: ConversationTurnInput): Promise<ContentConversationRecord> {
+    return (await this.request<ContentConversationRecord>(`/v1/content/${contentItemId}/conversation`, { method: "POST", body: { ...input } })).data;
+  }
+
   async contentItems(): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content");
     return response.data;
   }
 
-  async createContent(input: { contentType?: ContentType } = {}): Promise<ContentRecord> {
+  async calendar(input: {
+    from: string;
+    to: string;
+    statuses?: ContentStatus[];
+    contentTypes?: ContentType[];
+    unscheduledOffset?: number;
+    unscheduledLimit?: number;
+  }): Promise<CalendarReadResult> {
+    const search = new URLSearchParams({ from: input.from, to: input.to });
+    if (input.statuses?.length) search.set("statuses", input.statuses.join(","));
+    if (input.contentTypes?.length) search.set("contentTypes", input.contentTypes.join(","));
+    if (input.unscheduledOffset !== undefined) search.set("unscheduledOffset", String(input.unscheduledOffset));
+    if (input.unscheduledLimit !== undefined) search.set("unscheduledLimit", String(input.unscheduledLimit));
+    const response = await this.request<CalendarReadResult>(`/v1/calendar?${search.toString()}`);
+    return response.data;
+  }
+
+  async createContent(
+    input: {
+      platform?: "INSTAGRAM";
+      contentType?: ContentType;
+      brief?: string | null;
+      caption?: string;
+      visualDirection?: string | null;
+      contentPillar?: string | null;
+      campaignGoal?: string | null;
+      tone?: string | null;
+      carousel?: Record<string, unknown> | null;
+      reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
+    } = {}
+  ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content", {
       body: input,
       method: "POST"
@@ -383,7 +560,7 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContent(input: { topic: string; contentType?: ContentType; count?: number; strategyId?: string }): Promise<ContentRecord[]> {
+  async generateContent(input: { topic: string; contentType?: ContentType; count?: number; campaignId?: string }): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content/generate", {
       body: input,
       method: "POST"
@@ -391,8 +568,32 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; strategyId?: string }): Promise<ContentRecord> {
+  async ideateContent(input: { topic: string; contentType?: ContentType; campaignId?: string }): Promise<ContentDraft> {
+    const response = await this.request<ContentDraft>("/v1/content/ideate", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; campaignId?: string }): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentForItem(contentItemId: string, input: { topic: string; contentType: ContentType }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/generate`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async reviseContentItem(contentItemId: string, input: { instruction: string }): Promise<ContentRecord> {
+    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/revise`, {
       body: input,
       method: "POST"
     });
@@ -402,13 +603,18 @@ export class MarkosApiClient {
   async updateContent(
     contentItemId: string,
     input: {
-      captionEn?: string | null;
-      captionAr?: string | null;
-      hashtags?: string[];
-      callToAction?: string | null;
+      platform?: "INSTAGRAM";
+      contentType?: ContentType;
+      brief?: string | null;
+      caption?: string;
+      visualDirection?: string | null;
+      expectedRevision?: number;
       contentPillar?: string | null;
+      campaignGoal?: string | null;
+      tone?: string | null;
       carousel?: Record<string, unknown> | null;
       reelScript?: Record<string, unknown> | null;
+      plannedAt?: string | null;
     }
   ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}`, {
@@ -425,10 +631,15 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async updateContentStatus(contentItemId: string, status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">): Promise<ContentRecord> {
+  async updateContentStatus(
+    contentItemId: string,
+    status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">,
+    expectedRevision?: number
+  ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {
-        status
+        status,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
       },
       method: "POST"
     });
@@ -489,6 +700,69 @@ export class MarkosApiClient {
   ): Promise<AiImageGenerationResult> {
     const response = await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, {
       body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async generateContentVideo(
+    contentItemId: string,
+    input: { aspectRatio?: "9:16"; durationSeconds?: 4 | 8 | 12; prompt: string }
+  ): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, {
+      body: input,
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {
+    const response = await this.request<PublishJobRecord>(`/v1/content/${contentItemId}/publish-now`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async latestPublishJob(contentItemId: string): Promise<PublishJobRecord | null> {
+    const response = await this.request<PublishJobRecord | null>(`/v1/content/${contentItemId}/publish-job/latest`);
+    return response.data;
+  }
+
+  async notifications(): Promise<NotificationRecord[]> {
+    const response = await this.request<NotificationRecord[]>("/v1/notifications");
+    return response.data;
+  }
+
+  async markNotificationRead(notificationId: string): Promise<NotificationRecord> {
+    const response = await this.request<NotificationRecord>(`/v1/notifications/${notificationId}/read`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async mediaGenerationJob(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}`);
+    return response.data;
+  }
+
+  async latestMediaGenerationJob(contentItemId: string): Promise<MediaGenerationJobRecord | null> {
+    const response = await this.request<MediaGenerationJobRecord | null>(`/v1/content/${contentItemId}/media-generation/latest`);
+    return response.data;
+  }
+
+  async cancelMediaGeneration(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}/cancel`, {
+      body: {},
+      method: "POST"
+    });
+    return response.data;
+  }
+
+  async retryMediaGeneration(jobId: string): Promise<MediaGenerationJobRecord> {
+    const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}/retry`, {
+      body: {},
       method: "POST"
     });
     return response.data;

@@ -13,8 +13,39 @@ import {
   rescheduleFailedPublish
 } from "./publishing-service";
 import { DryRunInstagramPublisher } from "./instagram-publisher";
+import { getLatestPublishJob, PublishNowStateError, queuePublishNow } from "./publish-job-service";
 
 export async function registerPublishingRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/v1/content/:contentItemId/publish-now",
+    {
+      config: {
+        mfaRequired: true,
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["publishing:run"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      if (!params.contentItemId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return reply.status(202).send(ok(await queuePublishNow(workspaceId, params.contentItemId)));
+      } catch (error) {
+        if (error instanceof PublishContentItemNotFoundError) return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
+        if (error instanceof PublishNowStateError) return reply.status(409).send(errorEnvelope("PUBLISH_NOW_STATE_INVALID", error.message));
+        throw error;
+      }
+    }
+  );
+
+  app.get("/v1/content/:contentItemId/publish-job/latest", { config: { workspaceRequired: true, permissions: ["publishing:run"] } }, async (request, reply) => {
+    const params = request.params as { contentItemId?: string };
+    if (!params.contentItemId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+    const { workspaceId } = requireWorkspaceContext();
+    return ok(await getLatestPublishJob(workspaceId, params.contentItemId));
+  });
   app.get(
     "/v1/publishing/live-readiness",
     {

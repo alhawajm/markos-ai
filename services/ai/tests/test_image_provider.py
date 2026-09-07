@@ -1,7 +1,9 @@
 import asyncio
 import base64
+from io import BytesIO
 
 import pytest
+from PIL import Image as PillowImage
 
 from app.contracts.image import (
     ImageGenerateRequest,
@@ -10,12 +12,12 @@ from app.contracts.image import (
 from app.core.errors import AiServiceError
 from app.providers.image import (
     IMAGE_DIMENSIONS,
+    DisabledImageProvider,
     ImagesApi,
     OpenAIImageProvider,
     RawImageData,
     RawImageResponse,
     RawImageUsage,
-    build_local_jpeg,
     classify_image_status_error,
     validate_generated_jpeg,
 )
@@ -67,10 +69,31 @@ def image_request() -> ImageGenerateRequest:
     )
 
 
+def valid_test_jpeg(width: int, height: int) -> bytes:
+    output = BytesIO()
+    PillowImage.new("RGB", (width, height), (42, 96, 84)).save(
+        output,
+        format="JPEG",
+        quality=88,
+    )
+    return output.getvalue()
+
+
+def test_disabled_image_provider_returns_an_honest_non_retryable_error() -> None:
+    provider = DisabledImageProvider()
+
+    with pytest.raises(AiServiceError) as raised:
+        asyncio.run(provider.generate_image(image_request()))
+
+    assert raised.value.code == "AI_IMAGE_GENERATION_DISABLED"
+    assert raised.value.status_code == 503
+    assert raised.value.retryable is False
+
+
 def test_openai_image_provider_requests_publish_ready_jpeg_and_exact_usage() -> None:
     request = image_request()
     width, height = IMAGE_DIMENSIONS[request.aspect_ratio]
-    image_bytes = build_local_jpeg(request, width, height)
+    image_bytes = valid_test_jpeg(width, height)
     client = FakeClient(FakeResponse(image_bytes))
     provider = OpenAIImageProvider(client=client)
 

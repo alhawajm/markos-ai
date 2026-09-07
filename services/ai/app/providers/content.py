@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Protocol, cast
 
 from openai import AsyncOpenAI
+from pydantic import ValidationError
 
 from app.contracts.content import (
     CarouselContent,
@@ -28,12 +29,17 @@ from app.providers.openai_structured import (
 
 
 class ContentProvider(Protocol):
-    async def generate_content(self, request: ContentGenerateRequest) -> ContentGenerateResponse: ...
+    async def generate_content(
+        self, request: ContentGenerateRequest
+    ) -> ContentGenerateResponse: ...
 
 
 class LocalContentProvider:
     async def generate_content(self, request: ContentGenerateRequest) -> ContentGenerateResponse:
-        batch = build_local_content(request)
+        try:
+            batch = build_local_content(request)
+        except ValidationError as error:
+            raise invalid_output_error("content drafts") from error
         prompt = f"{build_content_instructions(request)}\n{build_content_input(request)}"
         model = request.model or settings.llm_primary_model or "local-content-generator"
 
@@ -136,7 +142,7 @@ def validate_generated_batch(batch: ContentDraftBatch, request: ContentGenerateR
 
 def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
     context_summary = summarize_context(request)
-    pillar = first_strategy_pillar(request.strategy)
+    pillar = first_campaign_pillar(request.campaign)
     tone_summary = summarize_tone_lock(request)
     angles = ["educational", "proof-led", "invitation", "comparison", "behind-the-scenes"]
     drafts: list[ContentDraft] = []
@@ -152,7 +158,9 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
                 slides=[
                     CarouselSlide(title="Hook", body=request.topic),
                     CarouselSlide(title="Problem", body="Show the customer pain point."),
-                    CarouselSlide(title="Proof", body="Use a specific business detail from the Vault."),
+                    CarouselSlide(
+                        title="Proof", body="Use a specific business detail from the Vault."
+                    ),
                     CarouselSlide(title="Action", body="Invite the viewer to message or save."),
                 ]
             )
@@ -160,23 +168,54 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
         if request.content_type == "REEL":
             reel_script = ReelScript(
                 hook=f"One thing to know about {request.topic}",
-                beats=["show the product or service", "explain the benefit", "close with a direct CTA"],
+                beats=[
+                    "show the product or service",
+                    "explain the benefit",
+                    "close with a direct CTA",
+                ],
                 durationSeconds=20,
             )
+
+        caption_en = (
+            f"{request.topic}: {article} {angle} post grounded in {context_summary}. "
+            f"Use a {tone_summary} voice to connect {pillar.lower()} with a clear Instagram action."
+        )
+        caption_ar = (
+            f"{request.topic}: مسودة محتوى مبنية على {context_summary}. "
+            "تربط قيمة النشاط بدعوة واضحة ومناسبة للجمهور على إنستغرام."
+        )
+        parts = {
+            "en": shorten_local_caption(caption_en, 800),
+            "ar": shorten_local_caption(caption_ar, 800),
+        }
+        caption = "\n\n".join(
+            [
+                *(parts[language] for language in request.tone_lock.preferred_languages),
+                "Send a DM to learn more.",
+                "#BahrainBusiness #InstagramMarketing #MarkosAI",
+            ]
+        )
+
+        if request.revision_instruction is not None and request.current_draft is not None:
+            instruction = request.revision_instruction.casefold()
+            caption = request.current_draft.caption
+
+            if "short" in instruction or "أقصر" in instruction:
+                caption = shorten_local_caption(caption, 80)
+            elif "professional" in instruction or "مهني" in instruction:
+                caption = f"Professional revision: {caption}"
+
+            if "stronger call" in instruction or "دعوة أقوى" in instruction:
+                caption = f"{caption}\n\nSend us a message today to choose the right next step."
 
         drafts.append(
             ContentDraft(
                 contentType=request.content_type,
-                captionEn=(
-                    f"{request.topic}: {article} {angle} post grounded in {context_summary}. "
-                    f"Use a {tone_summary} voice to connect {pillar.lower()} with a clear Instagram action."
+                caption=caption,
+                visualDirection=(
+                    f"Create a polished {request.content_type.lower()} visual about {request.topic}. "
+                    f"Use a {tone_summary} mood, a clear focal subject, uncluttered composition, and brand-aligned colors grounded in {context_summary}."
                 ),
-                captionAr=(
-                    f"{request.topic}: مسودة محتوى مبنية على {context_summary}. "
-                    "تربط قيمة النشاط بدعوة واضحة ومناسبة للجمهور على إنستغرام."
-                ),
-                hashtags=["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
-                callToAction="Send a DM to learn more.",
                 contentPillar=pillar,
                 carousel=carousel,
                 reelScript=reel_script,
@@ -184,6 +223,14 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
         )
 
     return ContentDraftBatch(drafts=drafts)
+
+
+def shorten_local_caption(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+
+    shortened = value[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,.;:")
+    return f"{shortened}…"
 
 
 def summarize_context(request: ContentGenerateRequest) -> str:
@@ -197,11 +244,11 @@ def summarize_context(request: ContentGenerateRequest) -> str:
     return ", ".join(labels[:5]) if labels else "the available workspace context"
 
 
-def first_strategy_pillar(strategy: dict[str, object] | None) -> str:
-    if not strategy:
+def first_campaign_pillar(campaign: dict[str, object] | None) -> str:
+    if not campaign:
         return "Vault-grounded content"
 
-    pillars = strategy.get("pillars")
+    pillars = campaign.get("pillars")
     if not isinstance(pillars, list) or not pillars:
         return "Vault-grounded content"
 

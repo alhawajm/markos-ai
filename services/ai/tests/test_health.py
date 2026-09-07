@@ -24,7 +24,7 @@ def test_health() -> None:
 
 def test_ai_route_requires_internal_service_token() -> None:
     client = TestClient(app)
-    response = client.post("/ai/strategy/generate", json={})
+    response = client.post("/ai/campaigns/generate", json={})
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "AI_SERVICE_UNAUTHORIZED"
@@ -46,15 +46,17 @@ def test_vault_embedding_contract() -> None:
     assert len(body["embeddings"][0]) == 1536
 
 
-def test_strategy_generation_contract() -> None:
+def test_campaign_generation_contract() -> None:
     client = TestClient(app)
     response = client.post(
-        "/ai/strategy/generate",
+        "/ai/campaigns/generate",
         headers=SERVICE_HEADERS,
         json={
             "workspace_id": "workspace-1",
             "objective": "increase wholesale cafe leads",
-            "horizon_days": 90,
+            "duration_days": 14,
+            "publishes_per_day": 2,
+            "starts_at": "2026-09-01T00:00:00Z",
             "context": [
                 {
                     "section": "COMPANY",
@@ -63,18 +65,19 @@ def test_strategy_generation_contract() -> None:
                     "score": 0.82,
                 }
             ],
-            "model": "test-strategy-model",
+            "model": "test-campaign-model",
         },
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model"] == "test-strategy-model"
-    assert body["prompt_version"] == "strategy.v2.local"
+    assert body["model"] == "test-campaign-model"
+    assert body["prompt_version"] == "campaign.v2.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
-    assert body["strategy"]["horizonDays"] == 90
-    assert "COMPANY/profile" in body["strategy"]["summary"]
+    assert body["campaign"]["durationDays"] == 14
+    assert body["campaign"]["publishesPerDay"] == 2
+    assert "COMPANY/profile" in body["campaign"]["summary"]
 
 
 def test_business_profile_generation_contract() -> None:
@@ -99,10 +102,60 @@ def test_business_profile_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-profile-model"
-    assert body["prompt_version"] == "onboarding-business-profile.v1.local"
+    assert body["prompt_version"] == "onboarding-business-profile.v2.local"
     assert body["profile"]["businessName"] == "Pearl Coffee"
     assert body["profile"]["overview"]["en"]
     assert body["profile"]["overview"]["ar"]
+
+
+def test_offering_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/offerings/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "offers.txt",
+                    "mime_type": "text/plain",
+                    "base64_data": base64.b64encode(
+                        "Espresso: Rich house blend\nOffice plan - Weekly delivery".encode()
+                    ).decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
+
+
+def test_full_onboarding_document_analysis_requires_configured_provider() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/ai/onboarding/documents/analyze",
+        headers=SERVICE_HEADERS,
+        json={
+            "workspace_id": "workspace-1",
+            "model": "test-document-model",
+            "files": [
+                {
+                    "filename": "brand.png",
+                    "mime_type": "image/png",
+                    "base64_data": base64.b64encode(b"\x89PNG-test").decode("ascii"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AI_PROVIDER_NOT_CONFIGURED"
+    assert body["error"]["details"] == [{"retryable": False}]
 
 
 def test_content_generation_contract() -> None:
@@ -124,7 +177,7 @@ def test_content_generation_contract() -> None:
                 }
             ],
             "tone_lock": {
-                "required_languages": ["ar", "en"],
+                "preferred_languages": ["ar", "en"],
                 "tone_words": ["warm", "clear", "confident"],
                 "voice_notes": "Helpful, bilingual, and direct.",
                 "brand_hints": {"identity": {"colors": ["#123456"]}},
@@ -136,17 +189,17 @@ def test_content_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-content-model"
-    assert body["prompt_version"] == "content.v2.local"
+    assert body["prompt_version"] == "content.v3.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert len(body["drafts"]) == 2
     assert body["drafts"][0]["contentType"] == "CAROUSEL"
-    assert "warm, clear, confident" in body["drafts"][0]["captionEn"]
-    assert body["drafts"][0]["captionAr"]
+    assert "warm, clear, confident" in body["drafts"][0]["caption"]
+    assert "مسودة" in body["drafts"][0]["caption"]
     assert body["drafts"][0]["carousel"]["slides"]
 
 
-def test_image_generation_contract() -> None:
+def test_image_generation_is_honestly_disabled_without_a_real_provider() -> None:
     client = TestClient(app)
     response = client.post(
         "/ai/images/generate",
@@ -159,17 +212,13 @@ def test_image_generation_contract() -> None:
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
-    assert body["model"] == "local-image-generator"
-    assert body["prompt_version"] == "image.v2.local"
-    assert body["mime_type"] == "image/jpeg"
-    assert body["filename"].endswith(".jpg")
-    assert body["width"] == 1024
-    assert body["height"] == 1280
-    assert body["tokens_in"] == 0
-    assert body["tokens_out"] == 0
-    assert base64.b64decode(body["base64_data"]).startswith(b"\xff\xd8")
+    assert body["error"] == {
+        "code": "AI_IMAGE_GENERATION_DISABLED",
+        "message": "AI image generation is not available in this environment. Upload an image instead.",
+        "details": [{"retryable": False}],
+    }
 
 
 def test_all_agent_run_contracts_are_grounded() -> None:

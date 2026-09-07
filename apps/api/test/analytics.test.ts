@@ -137,7 +137,7 @@ describe("analytics routes", () => {
     expect(summaryResponse.json().data.daily.length).toBeGreaterThan(0);
     expect(summaryResponse.json().data.topContent).toEqual([
       expect.objectContaining({
-        caption: "Analytics post",
+        caption: "Analytics post\n\n#MarkosAI",
         contentItemId: content.id,
         contentType: "POST",
         engagement: expect.any(Number)
@@ -177,6 +177,57 @@ describe("analytics routes", () => {
         })
       ])
     );
+
+    await app.close();
+  });
+
+  it("compares the selected analytics window with the immediately preceding period", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const today = dayStart(new Date());
+    const previousWindowDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    await prisma.instagramAnalytics.createMany({
+      data: [
+        {
+          dataDate: today,
+          metricType: "ACCOUNT",
+          metrics: { reach: 150 },
+          syncedAt: new Date(),
+          workspaceId: session.workspace.id
+        },
+        {
+          dataDate: previousWindowDate,
+          metricType: "ACCOUNT",
+          metrics: { reach: 100 },
+          syncedAt: new Date(),
+          workspaceId: session.workspace.id
+        }
+      ]
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/analytics?days=7",
+      headers
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      comparison: {
+        percentageChanges: {
+          reach: 50
+        },
+        totals: {
+          reach: 100
+        }
+      },
+      days: 7,
+      totals: {
+        reach: 150
+      }
+    });
 
     await app.close();
   });
@@ -401,11 +452,11 @@ describe("analytics routes", () => {
     const other = await registerTestUser(app);
     const headers = authHeaders(owner.tokens.accessToken);
     const ownerContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "Owner winning format",
+      caption: "Owner winning format",
       publishedAt: new Date()
     });
     const otherContent = await createPublishedContent(other.workspace.id, {
-      captionEn: "Other workspace format",
+      caption: "Other workspace format",
       publishedAt: new Date()
     });
 
@@ -482,7 +533,7 @@ describe("analytics routes", () => {
       },
       topContent: [
         expect.objectContaining({
-          caption: "Owner winning format",
+          caption: "Owner winning format\n\n#MarkosAI",
           contentItemId: ownerContent.id
         })
       ]
@@ -500,15 +551,15 @@ describe("analytics routes", () => {
     const other = await registerTestUser(app);
     const headers = authHeaders(owner.tokens.accessToken);
     const januaryContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "January proof post",
+      caption: "January proof post",
       publishedAt: new Date(Date.UTC(2026, 0, 10))
     });
     const februaryContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "February proof post",
+      caption: "February proof post",
       publishedAt: new Date(Date.UTC(2026, 1, 10))
     });
     const otherContent = await createPublishedContent(other.workspace.id, {
-      captionEn: "Other workspace post",
+      caption: "Other workspace post",
       publishedAt: new Date(Date.UTC(2026, 0, 10))
     });
 
@@ -725,12 +776,11 @@ async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Rec
   });
 }
 
-async function createPublishedContent(workspaceId: string, input: { captionEn?: string; publishedAt?: Date } = {}) {
+async function createPublishedContent(workspaceId: string, input: { caption?: string; publishedAt?: Date } = {}) {
   return prisma.contentItem.create({
     data: {
-      captionEn: input.captionEn ?? "Analytics post",
+      caption: [input.caption ?? "Analytics post", ["#MarkosAI"].join(" ")].filter(Boolean).join("\n\n"),
       contentType: "POST",
-      hashtags: ["#MarkosAI"],
       instagramPostId: `ig-${randomUUID()}`,
       mediaIds: [],
       publishedAt: input.publishedAt ?? new Date(),
@@ -770,7 +820,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       },
       name: "Test Analytics",

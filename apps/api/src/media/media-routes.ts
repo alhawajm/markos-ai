@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { attachMediaToContentSchema, generateImageForContentSchema, registerPublicMediaSchema, uploadMediaSchema } from "@markos/validation";
+import {
+  attachMediaToContentSchema,
+  generateImageForContentSchema,
+  generateVideoForContentSchema,
+  registerPublicMediaSchema,
+  uploadMediaSchema
+} from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
@@ -21,6 +27,16 @@ import {
   registerPublicMedia,
   uploadMedia
 } from "./media-service";
+import {
+  cancelMediaGenerationJob,
+  getMediaGenerationJob,
+  getLatestMediaGenerationJob,
+  MediaGenerationJobNotFoundError,
+  MediaGenerationJobStateError,
+  MediaVideoGenerationUnsupportedError,
+  queueVideoGeneration,
+  retryMediaGenerationJob
+} from "./video-generation-service";
 
 const maxDirectUploadBodyBytes = 12 * 1024 * 1024;
 
@@ -185,6 +201,74 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   );
+
+  app.post(
+    "/v1/content/:contentItemId/generate-video",
+    {
+      config: {
+        workspaceRequired: true,
+        verifiedUserRequired: true,
+        permissions: ["content:write", "media:write"]
+      }
+    },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      const parsed = generateVideoForContentSchema.safeParse(request.body ?? {});
+      if (!params.contentItemId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      if (!parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid video generation request", parsed.error.issues));
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return reply.status(202).send(ok(await queueVideoGeneration(workspaceId, params.contentItemId, parsed.data)));
+      } catch (error) {
+        if (error instanceof MediaVideoGenerationUnsupportedError) {
+          return reply.status(409).send(errorEnvelope("AI_VIDEO_CONTENT_TYPE_UNSUPPORTED", error.message));
+        }
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
+  app.get("/v1/media-generation/:jobId", { config: { workspaceRequired: true, permissions: ["media:read"] } }, async (request, reply) => {
+    const params = request.params as { jobId?: string };
+    if (!params.jobId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Media generation job id is required"));
+    const { workspaceId } = requireWorkspaceContext();
+    try {
+      return ok(await getMediaGenerationJob(workspaceId, params.jobId));
+    } catch (error) {
+      if (error instanceof MediaGenerationJobNotFoundError) return reply.status(404).send(errorEnvelope("MEDIA_GENERATION_NOT_FOUND", error.message));
+      throw error;
+    }
+  });
+
+  app.get(
+    "/v1/content/:contentItemId/media-generation/latest",
+    { config: { workspaceRequired: true, permissions: ["media:read"] } },
+    async (request, reply) => {
+      const params = request.params as { contentItemId?: string };
+      if (!params.contentItemId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      const { workspaceId } = requireWorkspaceContext();
+      return ok(await getLatestMediaGenerationJob(workspaceId, params.contentItemId));
+    }
+  );
+
+  for (const action of ["cancel", "retry"] as const) {
+    app.post(
+      `/v1/media-generation/:jobId/${action}`,
+      { config: { workspaceRequired: true, verifiedUserRequired: true, permissions: ["media:write"] } },
+      async (request, reply) => {
+        const params = request.params as { jobId?: string };
+        if (!params.jobId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Media generation job id is required"));
+        const { workspaceId } = requireWorkspaceContext();
+        try {
+          return ok(action === "cancel" ? await cancelMediaGenerationJob(workspaceId, params.jobId) : await retryMediaGenerationJob(workspaceId, params.jobId));
+        } catch (error) {
+          if (error instanceof MediaGenerationJobNotFoundError) return reply.status(404).send(errorEnvelope("MEDIA_GENERATION_NOT_FOUND", error.message));
+          if (error instanceof MediaGenerationJobStateError) return reply.status(409).send(errorEnvelope("MEDIA_GENERATION_STATE_INVALID", error.message));
+          return handleMediaMutationError(error, reply);
+        }
+      }
+    );
+  }
 
   app.post(
     "/v1/content/:contentItemId/media",

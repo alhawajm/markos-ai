@@ -4,7 +4,7 @@ Source of truth: `MARKOS_BUILD_SPEC. 2.pdf`, especially Section 7.3 and Section 
 
 Use this file as the working progress tracker. Only tick an item when the implementation is merged, verified, and the relevant test or acceptance gate passes. If a feature is scaffolded but missing a required spec condition, leave it unchecked and add a short note.
 
-The active visual direction is documented in `docs/ui-design-foundation.md`. Prior UI parity evidence remains in `docs/ui-functionality-checklist.md` and `docs/final-ui-implementation-checklist.md` as historical records.
+The active visual direction is documented in `docs/ui-design-foundation.md`; the working design method and interpreted improvement backlog are in `docs/ui-ux-workflow.md` and `docs/ui-ux-improvement-plan.md`. Prior UI parity evidence is archived under `docs/archive/ui/pre-sunlit/`.
 
 Current implementation, roadmap, ownership, and evidence classifications are summarized in `docs/project-status.md`.
 
@@ -52,12 +52,12 @@ Gate: Section 7.3 acceptance. Register, verify, login including Google, land on 
 - [x] RBAC permission catalog with role and permission guards.
 - [x] Shared packages: shared types, validation, API client, i18n, UI tokens.
 - [x] AI HTTP client boundaries and configurable model slots.
-- [x] A real provider interface is implemented for Strategy and onboarding-profile resolution.
+- [x] A real provider interface is implemented for Campaign and onboarding-profile resolution.
   - Note: current source uses the OpenAI Responses API with strict structured output when `AI_TEXT_PROVIDER=openai`; local mode remains the safe default and other AI routes remain deterministic.
 - [ ] A current provider-backed application response is verified end to end through browser, API, deployed AI service, persistence, and metering.
-  - Note: a direct Responses call from the Railway AI container succeeded on 2026-08-06, while the previously deployed Strategy adapter returned 503. The replacement shared adapter is locally/fake-client verified but not yet live-verified.
+  - Note: a direct Responses call from the Railway AI container succeeded on 2026-08-06, while the previously deployed, pre-rename adapter returned 503. The replacement Campaign adapter is locally/fake-client verified but not yet live-verified.
 - [x] AI interaction token metering skeleton.
-- [x] Usage counters and plan quota enforcement for strategy/content AI generation.
+- [x] Usage counters and plan quota enforcement for Campaign/content AI generation.
 - [x] Usage enforcement covers AI image generation, MARKOS post publish caps, storage, and reset rules.
 - [x] Usage enforcement covers billing lifecycle states such as expired trial, past-due, suspended, and cancelled.
 - [x] Usage enforcement covers automated plan reset scheduling.
@@ -85,29 +85,36 @@ Gate: A grounded test agent call returns correct business context; completeness 
 - [x] Vault storage APIs exist.
 - [x] Vault embeddings are generated and stored using the deterministic local embedding contract.
 - [x] Vault completeness score exists.
-- [x] RAG search exists and is used by strategy/content calls.
-- [x] One locally grounded Strategy path returns workspace Vault context.
-- [x] Seven-module onboarding wizard is complete against the spec.
+- [x] RAG search exists and is used by Campaign/content calls.
+- [x] One locally grounded Campaign path returns workspace Vault context.
+- [x] Seven-area onboarding wizard is mounted; Company and Products are the two profile-readiness essentials, while the other five areas can be explicitly skipped and remain visible as Vault gaps.
+- [x] Products and services have a canonical workspace-scoped Offering Catalog with stable identities, revisions, archival, RLS, PDPL export/erasure, and compatible Vault projections.
+  - Note: existing Products Vault catalogs are migrated where possible. The focused document-assisted Products/Services path remains implemented with temporary files, editable extraction/issues, owner confirmation, and focused local tests.
+- [x] Products/Services onboarding supports an optional owner-confirmed PDF, DOCX, or TXT extraction path without replacing the manual editor.
+  - Note: the narrower analyzer accepts one or two files, uses configured provider-backed AI, and keeps its independent 8 MB each/12 MB combined policy. Raw files expire within 24 hours and are removed on approval; extracted claims do not reach the canonical catalog or Vault projection before approval.
+- [x] First-run onboarding supports a separate full-business document path without removing the manual seven-area wizard.
+  - Note: owners stage and explicitly send one to five PDF, DOCX, UTF-8 TXT, JPEG, PNG, or WebP files, limited to 8 MB each and 20 MB combined. Provider-native file/image inputs extract an editable proposal, evidence, issues, and up to seven confirmable business colors. Approval writes reviewed modules, preserves offering provenance, and removes temporary source files before the ordinary bilingual Business Profile generation and approval steps.
+  - Note: local deterministic parsing is not a product fallback. Provider/configuration failures stay sanitized with retry or discard/manual recovery as appropriate. Focused provider, contract, persistence, isolation, retention, export/erasure, client, and browser coverage passes locally; full Railway proof remains open.
 - [ ] Vault versioning UX and history are complete in the mounted Sunlit Business Profile.
   - Note: history APIs exist, but the current Sunlit panel is a summary and does not mount the full editor/history workflow.
 - [ ] Brand upload flow is complete in the active onboarding/Vault UI.
-  - Note: media upload APIs exist, but onboarding currently collects brand values and explicitly defers files to a later Vault flow.
+  - Note: full-business document analysis may inspect images and image-bearing PDFs and propose visual colors for confirmation, but temporary evidence is not a permanent logo, media, or brand-guideline library.
 - [x] Completeness gaps are surfaced in the expected UX.
 - [ ] M1 acceptance gate fully passed with a live provider interface.
   - Note: local deterministic grounding is covered, but provider-backed embeddings/generation and deployed cross-service behavior remain unverified.
 
 ## M2 AI Content Engine
 
-Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, moved through workflow; strategy PDF exports.
+Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, moved through workflow; Campaign PDF exports.
 
-- [x] Vault-grounded local strategy generation exists.
+- [x] Vault-grounded local Campaign generation exists.
 - [x] Vault-grounded local content draft generation exists.
 - [x] Content approval workflow exists.
 - [x] Schedule/calendar foundation exists.
 - [ ] All eight agents are provider-backed and satisfy their production contracts.
   - Note: one endpoint returns fixed local output shapes for all eight agent names; that is scaffolding, not mature provider-backed agent implementation.
-- [x] Strategy PDF export API.
-- [ ] Strategy PDF export is mounted in the active Sunlit Strategy page.
+- [x] Campaign PDF export API.
+- [ ] Campaign PDF export is mounted in the active Sunlit Campaigns page.
 - [x] Calendar slot to content generation workflow.
 - [x] Bilingual tone-locked content workflow.
 - [ ] Rich-text/editorial workflow is complete in the active Sunlit Create surface.
@@ -116,7 +123,7 @@ Gate: From a calendar slot to a full tone-locked bilingual item plus AI image, m
   - Note: the source now provides a separately configured OpenAI Images adapter, exact JPEG output contracts, moderation/provider error mapping, pre-request image quota enforcement, provider token metering, and workspace-owned durable storage. A deployed provider call is still required by the acceptance gate.
 - [x] Prompt A/B tooling.
 - [ ] Provider-reported token and image metering is verified end to end.
-  - Note: provider-capable Strategy/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
+  - Note: provider-capable Campaign/profile source records provider token counts; content, image, embeddings, and generic agents remain deterministic, and `costMinor` remains zero pending reviewed pricing.
 - [ ] M2 acceptance gate fully passed.
 
 ## M3 Instagram

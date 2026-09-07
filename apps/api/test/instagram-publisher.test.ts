@@ -1,6 +1,13 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { InstagramGraphPublisher, validateInstagramImageForPublishing } from "../src/publishing/instagram-publisher";
+import {
+  InstagramGraphPublisher,
+  validateInstagramImageForPublishing,
+  validateInstagramStoryImageForPublishing,
+  validateInstagramVideoForPublishing
+} from "../src/publishing/instagram-publisher";
+
+const completeCaption = "  English caption 🍊\n\nالنص العربي\n\nMessage us. راسلنا.\n\n#Bahrain #البحرين\n";
 
 describe("InstagramGraphPublisher", () => {
   it("creates, polls, and publishes one JPEG through the constrained Instagram Login transport", async () => {
@@ -66,7 +73,7 @@ describe("InstagramGraphPublisher", () => {
       url: "https://graph.instagram.com/v25.0/17841400000000000/media"
     });
     expect(calls[0]?.body).toContain("image_url=https%3A%2F%2Fbucket.example.test%2Fobject.jpg%3Fsignature%3Dsensitive");
-    expect(calls[0]?.body).toContain("caption=English+caption");
+    expect(new URLSearchParams(calls[0]?.body).get("caption")).toBe(completeCaption);
     expect(calls[1]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
     expect(calls[2]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
     expect(calls[3]).toMatchObject({
@@ -95,9 +102,13 @@ describe("InstagramGraphPublisher", () => {
     expect(called).toBe(false);
   });
 
-  it("keeps the Milestone A live publisher constrained to one image post", async () => {
+  it("rejects a Reel without a publishable MP4 before calling Instagram", async () => {
+    let called = false;
     const publisher = new InstagramGraphPublisher({
-      fetchImpl: async () => jsonResponse({ id: "unexpected" })
+      fetchImpl: async () => {
+        called = true;
+        return jsonResponse({ id: "unexpected" });
+      }
     });
 
     await expect(
@@ -106,7 +117,102 @@ describe("InstagramGraphPublisher", () => {
         mediaAssets: [mediaAsset({})],
         workspace: workspace()
       })
-    ).rejects.toThrow("INSTAGRAM_MILESTONE_A_IMAGE_POST_ONLY");
+    ).rejects.toThrow("INSTAGRAM_PUBLISH_MP4_REQUIRED");
+    expect(called).toBe(false);
+  });
+
+  it("creates and publishes a Reel from one 9:16 MP4", async () => {
+    const calls: Array<{ body?: string; method?: string; url: string }> = [];
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: input.toString(),
+          ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() }),
+          ...(init?.method === undefined ? {} : { method: init.method })
+        });
+        if (calls.length === 1) return jsonResponse({ id: "reel-container" });
+        if (calls.length === 2) return jsonResponse({ status_code: "FINISHED" });
+        return jsonResponse({ id: "ig-reel" });
+      },
+      pollAttempts: 1,
+      pollDelayMs: 0
+    });
+
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "REEL" }),
+        mediaAssets: [videoAsset({})],
+        workspace: workspace()
+      })
+    ).resolves.toMatchObject({ instagramPostId: "ig-reel", status: "PUBLISHED" });
+
+    expect(calls[0]?.body).toContain("media_type=REELS");
+    expect(calls[0]?.body).toContain("video_url=https%3A%2F%2Fcdn.example.com%2Freel.mp4");
+    expect(calls[0]?.body).toContain("share_to_feed=true");
+    expect(new URLSearchParams(calls[0]?.body).get("caption")).toBe(completeCaption);
+  });
+
+  it("creates a Business Story container without a feed caption", async () => {
+    const calls: Array<{ body?: string; url: string }> = [];
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: input.toString(),
+          ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() })
+        });
+        if (calls.length === 1) return jsonResponse({ id: "story-container" });
+        if (calls.length === 2) return jsonResponse({ status_code: "FINISHED" });
+        return jsonResponse({ id: "ig-story" });
+      },
+      pollAttempts: 1,
+      pollDelayMs: 0
+    });
+
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "STORY" }),
+        mediaAssets: [videoAsset({ filename: "story.mp4" })],
+        workspace: workspace()
+      })
+    ).resolves.toMatchObject({ instagramPostId: "ig-story", status: "PUBLISHED" });
+
+    expect(calls[0]?.body).toContain("media_type=STORIES");
+    expect(calls[0]?.body).not.toContain("caption=");
+  });
+
+  it("creates two carousel children before publishing the parent", async () => {
+    const calls: Array<{ body?: string; url: string }> = [];
+    const publisher = new InstagramGraphPublisher({
+      fetchImpl: async (input, init) => {
+        calls.push({
+          url: input.toString(),
+          ...(init?.body === undefined || init.body === null ? {} : { body: init.body.toString() })
+        });
+        if (calls.length === 1) return jsonResponse({ id: "child-1" });
+        if (calls.length === 2) return jsonResponse({ id: "child-2" });
+        if (calls.length === 3) return jsonResponse({ id: "carousel-parent" });
+        if (calls.length === 4) return jsonResponse({ status_code: "FINISHED" });
+        return jsonResponse({ id: "ig-carousel" });
+      },
+      pollAttempts: 1,
+      pollDelayMs: 0
+    });
+
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "CAROUSEL" }),
+        mediaAssets: [mediaAsset({ id: "media-1" }), mediaAsset({ cdnUrl: "https://cdn.example.com/post-2.jpg", id: "media-2" })],
+        workspace: workspace()
+      })
+    ).resolves.toMatchObject({ instagramPostId: "ig-carousel", status: "PUBLISHED" });
+
+    expect(calls[0]?.body).toContain("is_carousel_item=true");
+    expect(calls[1]?.body).toContain("is_carousel_item=true");
+    expect(calls[2]?.body).toContain("media_type=CAROUSEL");
+    expect(calls[2]?.body).toContain("children=child-1%2Cchild-2");
+    expect(new URLSearchParams(calls[2]?.body).get("caption")).toBe(completeCaption);
+    expect(new URLSearchParams(calls[0]?.body).has("caption")).toBe(false);
+    expect(new URLSearchParams(calls[1]?.body).has("caption")).toBe(false);
   });
 
   it("returns a sanitized code when a container finishes with an error status", async () => {
@@ -259,6 +365,18 @@ describe("validateInstagramImageForPublishing", () => {
   });
 });
 
+describe("Instagram Story and video publishing validation", () => {
+  it("requires 9:16 media for Stories", () => {
+    expect(validateInstagramStoryImageForPublishing(mediaAsset({ height: 1080, width: 1080 }))).toContain("INSTAGRAM_STORY_9_16_MEDIA_REQUIRED");
+    expect(validateInstagramStoryImageForPublishing(mediaAsset({ height: 1920, width: 1080 }))).toEqual([]);
+  });
+
+  it("accepts an MP4 with supported Reel and Story metadata", () => {
+    expect(validateInstagramVideoForPublishing(videoAsset({}))).toEqual([]);
+    expect(validateInstagramVideoForPublishing(videoAsset({ durationSeconds: 2 }))).toContain("INSTAGRAM_VIDEO_DURATION_UNSUPPORTED");
+  });
+});
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -278,6 +396,7 @@ function workspace(): Workspace {
     instagramTokenExpiresAt: new Date(Date.now() + 3600000),
     name: "Workspace",
     onboardingScore: 0,
+    onboardingSkippedModules: [],
     onboardingStatus: "NOT_STARTED",
     ownerUserId: "owner-id",
     slug: "workspace",
@@ -286,30 +405,50 @@ function workspace(): Workspace {
   };
 }
 
-function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" }): ContentItem {
+function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" | "STORY" }): ContentItem {
   return {
     aiPromptUsed: null,
-    callToAction: null,
+    revision: 1,
+    visualDirection: null,
+    brief: null,
+    caption: completeCaption,
+    campaignActionIndex: null,
+    campaignGoal: null,
     campaignId: null,
-    captionAr: null,
-    captionEn: "English caption",
+    campaignWeek: null,
     carousel: null,
     contentPillar: null,
     contentType: input.contentType,
     createdAt: new Date(),
     deletedAt: null,
     failureReason: null,
-    hashtags: ["#Bahrain"],
     id: "content-id",
     instagramPostId: null,
     mediaIds: ["media-id"],
+    platform: "INSTAGRAM",
+    plannedAt: null,
     publishedAt: null,
     reelScript: null,
     scheduledAt: new Date(Date.now() - 1000),
     status: "SCHEDULED",
+    tone: null,
     updatedAt: new Date(),
     workspaceId: "workspace-id"
   };
+}
+
+function videoAsset(input: Partial<MediaAsset>): MediaAsset {
+  return mediaAsset({
+    cdnUrl: "https://cdn.example.com/reel.mp4",
+    durationSeconds: 8,
+    filename: "reel.mp4",
+    height: 1280,
+    mimeType: "video/mp4",
+    sizeBytes: 4_000_000,
+    type: "AI_GENERATED",
+    width: 720,
+    ...input
+  });
 }
 
 function mediaAsset(input: Partial<MediaAsset>): MediaAsset {

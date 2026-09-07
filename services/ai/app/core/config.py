@@ -11,11 +11,17 @@ class Settings(BaseSettings):
     internal_service_token: str = "change-me"
     database_url: str = "postgresql://markos:markos@localhost:5432/markos"
     ai_text_provider: Literal["local", "openai"] = "local"
-    ai_image_provider: Literal["local", "openai"] = "local"
-    ai_strategy_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    # `local` remains accepted as a legacy value, but it is deliberately disabled
+    # by the provider factory. MARKOS must never represent a synthetic bitmap as
+    # AI-generated media.
+    ai_image_provider: Literal["disabled", "local", "openai"] = "disabled"
+    ai_video_provider: Literal["disabled", "openai"] = "disabled"
+    ai_campaign_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    ai_document_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_image_timeout_seconds: float = Field(default=120, gt=0, le=180)
+    ai_video_timeout_seconds: float = Field(default=120, gt=0, le=180)
     openai_api_key: SecretStr | None = None
     openai_timeout_seconds: float = Field(default=45, gt=0, le=60)
     openai_max_retries: int = Field(default=1, ge=0, le=3)
@@ -30,6 +36,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     image_model_primary: str = ""
     image_model_fallback: str = ""
+    video_model_primary: str = ""
     sentry_dsn: str = ""
     sentry_environment: str = "development"
     sentry_release: str = ""

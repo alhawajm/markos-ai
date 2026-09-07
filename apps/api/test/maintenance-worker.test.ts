@@ -3,13 +3,38 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
-import type { InstagramPublisher } from "../src/publishing/instagram-publisher";
+import { InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { decryptCredential } from "../src/security/credential-encryption";
 import { env } from "../src/config/env";
 
 describe("maintenance worker", () => {
+  it("expires temporary offering document analyses", async () => {
+    const workspace = await createWorkspace("worker-document-cleanup");
+    const analysis = await prisma.offeringDocumentAnalysis.create({
+      data: {
+        workspaceId: workspace.id,
+        status: "FAILED",
+        expiresAt: new Date("2026-01-01T00:00:00.000Z")
+      }
+    });
+
+    const result = await runMaintenanceWorkerTick({
+      now: new Date("2026-01-02T00:00:00.000Z"),
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
+      runPublishing: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+
+    expect(result.documentCleanup).toEqual({ expired: 1, failed: 0 });
+    await expect(prisma.offeringDocumentAnalysis.findUniqueOrThrow({ where: { id: analysis.id } })).resolves.toMatchObject({
+      status: "EXPIRED"
+    });
+  });
+
   it("publishes due content across workspaces", async () => {
     const now = new Date(Date.UTC(2026, 0, 1, 12));
     await prisma.contentItem.updateMany({
@@ -17,7 +42,7 @@ describe("maintenance worker", () => {
         status: "FAILED"
       },
       where: {
-        captionEn: "Worker publish",
+        caption: "Worker publish\n\n#MarkosAI",
         status: "SCHEDULED"
       }
     });
@@ -33,7 +58,7 @@ describe("maintenance worker", () => {
           instagramPostId: `ig-${input.contentItem.id}`,
           payload: {
             accountId: input.workspace.instagramAccountId ?? "",
-            caption: input.contentItem.captionEn ?? "",
+            caption: input.contentItem.caption ?? "",
             contentItemId: input.contentItem.id,
             contentType: input.contentItem.contentType,
             mediaCount: input.mediaAssets.length
@@ -68,6 +93,53 @@ describe("maintenance worker", () => {
     expect(publishedContentIds).toEqual(expect.arrayContaining([first.content.id, second.content.id]));
     expect(firstAfter.status).toBe("PUBLISHED");
     expect(secondAfter.status).toBe("PUBLISHED");
+    await expect(
+      prisma.publishJob.findFirstOrThrow({
+        where: { contentItemId: first.content.id }
+      })
+    ).resolves.toMatchObject({ status: "PUBLISHED", attempts: 1 });
+  }, 60_000);
+
+  it("persists terminal publishing failures and notifies the workspace owner", async () => {
+    const now = new Date(Date.UTC(2026, 0, 2, 12));
+    const target = await createPublishableWorkspace("worker-publish-failure", now);
+    const publisher: InstagramPublisher = {
+      async publish() {
+        throw new InstagramPublishError("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
+      }
+    };
+
+    const result = await runMaintenanceWorkerTick({
+      now,
+      publisher,
+      runAnalyticsEmail: false,
+      runAnalyticsSync: false,
+      runTokenRefresh: false,
+      runUsageReset: false
+    });
+    const [contentAfter, job, notification] = await Promise.all([
+      prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } }),
+      prisma.publishJob.findFirstOrThrow({ where: { contentItemId: target.content.id } }),
+      prisma.notification.findFirstOrThrow({
+        where: {
+          userId: target.workspace.ownerUserId,
+          workspaceId: target.workspace.id,
+          templateKey: "publishing_failed"
+        }
+      })
+    ]);
+
+    expect(result.publishing?.failed).toBeGreaterThanOrEqual(1);
+    expect(contentAfter).toMatchObject({
+      failureReason: "INSTAGRAM_CONTAINER_PROCESSING_FAILED",
+      status: "FAILED"
+    });
+    expect(job).toMatchObject({
+      attempts: 1,
+      lastErrorCode: "INSTAGRAM_CONTAINER_PROCESSING_FAILED",
+      status: "FAILED"
+    });
+    expect(notification.payload).toMatchObject({ contentItemId: target.content.id });
   }, 60_000);
 
   it("refreshes due Instagram tokens", async () => {
@@ -182,8 +254,8 @@ describe("maintenance worker", () => {
       "AI_IMAGE",
       "AI_TOKENS_IN",
       "AI_TOKENS_OUT",
-      "POST_PUBLISH",
-      "STRATEGY"
+      "CAMPAIGN",
+      "POST_PUBLISH"
     ]);
     expect(currentCounters.every((counter) => counter.used === 0n)).toBe(true);
     expect(previousCounter.used).toBe(7n);
@@ -270,9 +342,8 @@ async function createPublishableWorkspace(label: string, now = new Date()) {
   });
   const content = await prisma.contentItem.create({
     data: {
-      captionEn: "Worker publish",
+      caption: "Worker publish\n\n#MarkosAI",
       contentType: "POST",
-      hashtags: ["#MarkosAI"],
       mediaIds: [media.id],
       scheduledAt: new Date(now.getTime() - 60 * 1000),
       status: "SCHEDULED",
@@ -300,7 +371,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       },
       name: "Test Worker",
@@ -315,7 +386,7 @@ async function createWorkspace(label: string) {
         aiOutputTokens: 500_000,
         posts: 30,
         storageBytes: 1_000_000_000,
-        strategies: 1,
+        campaigns: 1,
         workspaces: 1
       }
     },

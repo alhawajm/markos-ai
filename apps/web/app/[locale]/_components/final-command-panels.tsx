@@ -1,11 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { MarkosApiClient } from "@markos/api-client";
+
+import type {
+  AnalyticsMetricTotals,
+  AnalyticsSummary,
+  ContentRecord,
+  ContentStatus,
+  ContentType,
+  KnowledgeVaultEntry,
+  Locale,
+  VaultCompletenessScore,
+  VaultSection
+} from "@markos/shared-types";
 import {
+  Activity,
+  ArrowDownRight,
   ArrowRight,
+  ArrowUpRight,
   BarChart3,
   Bell,
-  Bookmark,
   Brain,
   Building2,
   Calendar,
@@ -15,57 +29,31 @@ import {
   CircleHelp,
   Clock,
   CreditCard,
-  DollarSign,
   Eye,
-  ExternalLink,
+  FileBarChart2,
   Heart,
-  Image as ImageIcon,
-  ImagePlus,
-  Instagram,
   Lightbulb,
   Link2,
   LogOut,
-  Maximize2,
   MessageCircle,
-  MoreHorizontal,
+  MousePointerClick,
   Palette,
-  Pencil,
   Play,
-  Repeat2,
-  RotateCcw,
-  Send,
   Settings,
+  Share2,
   Sparkles,
   Target,
   TrendingUp,
-  Trash2,
-  Upload,
   User,
   Users,
-  Wand2,
-  X,
   Zap
 } from "lucide-react";
-import { MarkosApiClient } from "@markos/api-client";
-import type {
-  AnalyticsSummary,
-  ContentRecord,
-  ContentStatus,
-  ContentType,
-  KnowledgeVaultEntry,
-  Locale,
-  MediaAssetRecord,
-  VaultCompletenessScore,
-  VaultSection
-} from "@markos/shared-types";
-import { instagramImageConstraints } from "@markos/validation";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
-type StudioContentType = Extract<ContentType, "POST" | "REEL" | "CAROUSEL" | "STORY">;
-type ContentPipelineFilter = "ALL" | "DRAFTS" | "READY" | "SCHEDULED" | "PUBLISHED";
-type ContentStudioHomePanel = "AI_DRAFT" | "DRAFTS" | "IDEAS" | null;
 
 interface ContentReadyCardModel {
   accent: Accent;
@@ -107,15 +95,8 @@ const accent = {
   }
 } as const;
 
-const studioTypes: Array<[StudioContentType, string, IconType]> = [
-  ["POST", "Post", ImageIcon],
-  ["REEL", "Reel", Play],
-  ["CAROUSEL", "Carousel", ImageIcon],
-  ["STORY", "Story", Instagram]
-];
-
 function recordTitle(record: ContentRecord): string {
-  const caption = record.captionEn ?? record.captionAr ?? record.contentPillar ?? "";
+  const caption = record.caption || record.contentPillar || "";
   const firstSentence = caption.split(/[.!?\n]/)[0]?.trim();
 
   if (firstSentence) {
@@ -130,10 +111,6 @@ function recordSubtitle(record: ContentRecord): string {
     return record.contentPillar;
   }
 
-  if (record.hashtags[0]) {
-    return record.hashtags[0].replace(/^#/, "");
-  }
-
   if (record.scheduledAt) {
     return `Scheduled ${formatShortTime(record.scheduledAt)}`;
   }
@@ -146,6 +123,8 @@ function contentTypeLabel(type: ContentType): string {
 }
 
 function statusLabel(status: ContentStatus): string {
+  if (status === "APPROVED") return "Ready";
+
   return status
     .toLowerCase()
     .replace("_", " ")
@@ -176,19 +155,16 @@ function localizedContentTypeLabel(type: ContentType, locale: Locale): string {
   }[type];
 }
 
-function contentPipelineTitle(record: ContentRecord, locale: Locale): string {
-  const preferredCaption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
-  const firstSentence = (preferredCaption ?? record.contentPillar ?? "").split(/[.!?\n]/)[0]?.trim();
-
-  if (!firstSentence) return localizedContentTypeLabel(record.contentType, locale);
-  return firstSentence.length > 58 ? `${firstSentence.slice(0, 55)}...` : firstSentence;
+function campaignOriginLabel(record: ContentRecord, locale: Locale): string {
+  if (record.campaignWeek === undefined) return locale === "ar" ? "مسودة حملة" : "Campaign draft";
+  return locale === "ar" ? `مسودة حملة · الأسبوع ${record.campaignWeek}` : `Campaign draft · Week ${record.campaignWeek}`;
 }
 
 function contentCardFromRecord(record: ContentRecord, locale: Locale, index: number): ContentReadyCardModel {
   const accentNames: Accent[] = ["teal", "gold", "amber", "teal"];
   const status = record.scheduledAt ? formatShortTime(record.scheduledAt) : statusLabel(record.status);
   const cta =
-    record.status === "SCHEDULED" || record.status === "PUBLISHED" ? "View Details" : record.status === "APPROVED" ? "Schedule Post" : "Review & Approve";
+    record.status === "SCHEDULED" || record.status === "PUBLISHED" ? "View Details" : record.status === "APPROVED" ? "Schedule Post" : "Review & mark ready";
 
   return {
     accent: accentNames[index % accentNames.length] ?? "teal",
@@ -206,7 +182,7 @@ function formatShortTime(value: string): string {
 }
 
 function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string {
-  const value = record.publishedAt ?? record.scheduledAt ?? record.updatedAt;
+  const value = record.publishedAt ?? record.scheduledAt ?? record.plannedAt ?? record.updatedAt;
   const prefix =
     record.publishedAt !== undefined
       ? locale === "ar"
@@ -216,9 +192,13 @@ function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string
         ? locale === "ar"
           ? "مجدول"
           : "Scheduled"
-        : locale === "ar"
-          ? "آخر تحديث"
-          : "Updated";
+        : record.plannedAt !== undefined
+          ? locale === "ar"
+            ? "مخطط"
+            : "Planned"
+          : locale === "ar"
+            ? "آخر تحديث"
+            : "Updated";
   const formatted = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", {
     day: "numeric",
     hour: "numeric",
@@ -230,42 +210,6 @@ function contentPipelineTimestamp(record: ContentRecord, locale: Locale): string
   return `${prefix} · ${formatted}`;
 }
 
-function matchesContentPipelineFilter(record: ContentRecord, filter: ContentPipelineFilter): boolean {
-  if (filter === "DRAFTS") {
-    return record.status === "DRAFT" || record.status === "IN_REVIEW";
-  }
-
-  if (filter === "READY") {
-    return record.status === "APPROVED";
-  }
-
-  return filter === "ALL" || record.status === filter;
-}
-
-function sortContentPipelineRecords(records: ContentRecord[], filter: ContentPipelineFilter): ContentRecord[] {
-  return [...records].sort((left, right) => {
-    if (filter === "SCHEDULED") {
-      return new Date(left.scheduledAt ?? left.updatedAt).getTime() - new Date(right.scheduledAt ?? right.updatedAt).getTime();
-    }
-
-    const leftPriority = left.status === "SCHEDULED" ? 0 : left.status === "APPROVED" ? 1 : 2;
-    const rightPriority = right.status === "SCHEDULED" ? 0 : right.status === "APPROVED" ? 1 : 2;
-
-    if (leftPriority !== rightPriority) {
-      return leftPriority - rightPriority;
-    }
-
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
-}
-
-function contentStatusBadgeClass(status: ContentStatus): string {
-  if (status === "SCHEDULED") return "bg-[var(--sunlit-aqua-soft)] text-[#157A70]";
-  if (status === "APPROVED" || status === "PUBLISHED") return "bg-[#EEF8E9] text-[#44713A]";
-  if (status === "FAILED") return "bg-[#FFF0F1] text-[#A43C49]";
-  return "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-ink-soft)]";
-}
-
 function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat("en", { maximumFractionDigits: value >= 10000 ? 1 : 0, notation: value >= 10000 ? "compact" : "standard" }).format(value);
 }
@@ -274,113 +218,22 @@ function formatMetricValue(value: number | null): string {
   return value === null ? "—" : formatCompactNumber(value);
 }
 
-function parseHashtags(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-    .filter((tag, index, all) => all.indexOf(tag) === index)
-    .slice(0, 30);
-}
-
-function initialScheduleDate(): string {
-  const nextDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  return nextDay.toISOString().slice(0, 10);
-}
-
-function toScheduleIso(date: string, time: string): string {
-  const scheduled = new Date(`${date}T${time}:00`);
-
-  if (Number.isNaN(scheduled.getTime())) {
-    throw new Error("Choose a valid schedule date and time.");
-  }
-
-  if (scheduled.getTime() <= Date.now()) {
-    throw new Error("Choose a future time before scheduling.");
-  }
-
-  return scheduled.toISOString();
-}
-
-function fileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("MARKOS could not read that image. Choose the file again."));
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      const separator = result.indexOf(",");
-
-      if (separator < 0) {
-        reject(new Error("MARKOS could not read that image. Choose the file again."));
-        return;
-      }
-
-      resolve(result.slice(separator + 1));
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function imageDimensions(file: File): Promise<{ height: number; width: number }> {
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new window.Image();
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("That JPEG could not be decoded. Choose a valid image file."));
-    };
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ height: image.naturalHeight, width: image.naturalWidth });
-    };
-    image.src = objectUrl;
-  });
-}
-
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024 * 1024) return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function instagramImageDimensionsError(width: number, height: number): string | undefined {
-  if (width < instagramImageConstraints.minWidth || width > instagramImageConstraints.maxWidth) {
-    return "Choose a JPEG between 320 and 1,440 pixels wide.";
-  }
-
-  const aspectRatio = width / height;
-  if (aspectRatio < instagramImageConstraints.minAspectRatio || aspectRatio > instagramImageConstraints.maxAspectRatio) {
-    return "Choose a JPEG with an aspect ratio between 4:5 portrait and 1.91:1 landscape.";
-  }
-
-  return undefined;
-}
-
 function contentStudioError(error: unknown): string {
   const message = error instanceof Error ? error.message : "MARKOS could not complete that action.";
   const lower = message.toLowerCase();
-
   if (lower.includes("vault") || lower.includes("context")) {
     return "Your Business Profile needs more context before MARKOS can create grounded content. Complete at least one profile section, then try again.";
   }
-
   if (lower.includes("quota") || lower.includes("limit")) {
-    return "This workspace has reached its current AI quota. Upgrade or wait for the quota window to reset before generating more content.";
+    return "This workspace has reached its current generation allowance. Upgrade or wait for the next plan cycle before generating more content.";
   }
-
   if (lower.includes("payload too large") || lower.includes("body is too large")) {
     return "That image is too large for this upload path. Choose a JPEG no larger than 8 MB.";
   }
-
   if (lower.includes("unauthorized") || lower.includes("401")) {
     return "Your session is missing or expired. Sign in again so MARKOS can save work to the right workspace.";
   }
-
   return message;
-}
-
-function isStudioContentType(value: string | null): value is StudioContentType {
-  return value === "POST" || value === "REEL" || value === "CAROUSEL" || value === "STORY";
 }
 
 async function approveContentRecord(client: MarkosApiClient, record: ContentRecord): Promise<ContentRecord> {
@@ -397,7 +250,7 @@ async function approveContentRecord(client: MarkosApiClient, record: ContentReco
     return client.updateContentStatus(record.id, "APPROVED");
   }
 
-  throw new Error(`Only draft or in-review content can be approved. Current status: ${statusLabel(record.status)}.`);
+  throw new Error(`Only draft or in-review content can be marked Ready. Current status: ${statusLabel(record.status)}.`);
 }
 
 const performanceHighlights = [
@@ -530,10 +383,8 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           openAll: "عرض الكل",
           profileReady: "جاهزية الملف",
           scheduled: "المجدول",
-          strategy: "فتح الاستراتيجية",
-          subtitle: topContent
-            ? `لديك محتوى ${statusLabel(topContent.status)} جاهز للخطوة التالية.`
-            : "ابدأ من الاستراتيجية أو أنشئ أول مسودة عندما تكون جاهزاً.",
+          campaigns: "فتح الحملات",
+          subtitle: topContent ? `لديك محتوى ${statusLabel(topContent.status)} جاهز للخطوة التالية.` : "ابدأ بحملة أو أنشئ أول مسودة عندما تكون جاهزاً.",
           today: "اليوم في",
           workspaceContent: "عناصر مساحة العمل"
         }
@@ -550,10 +401,10 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           openAll: "View all",
           profileReady: "Profile readiness",
           scheduled: "Scheduled",
-          strategy: "Open Strategy",
+          campaigns: "Open Campaigns",
           subtitle: topContent
             ? `${recordTitle(topContent)} is ${statusLabel(topContent.status).toLowerCase()} and ready for its next step.`
-            : "Start with your Strategy, or create the first draft when you are ready.",
+            : "Start with a Campaign, or create the first draft when you are ready.",
           today: "Today in",
           workspaceContent: "Workspace items"
         };
@@ -605,15 +456,15 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">
               {copy.today} {workspaceName} · {now}
             </p>
-            <h2 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
+            <p className="mt-2 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
               {missionCta} <ArrowRight size={17} />
             </a>
-            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/strategy`}>
-              {copy.strategy}
+            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/campaigns`}>
+              {copy.campaigns}
             </a>
           </div>
         </div>
@@ -673,8 +524,8 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="sunlit-eyebrow">{copy.next}</p>
-              <h2 className="mt-2 font-display text-2xl font-black tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
+              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
+              <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
               <a className="sunlit-primary mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
                 {missionCta} <ArrowRight size={17} />
               </a>
@@ -687,9 +538,9 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
               <Brain size={22} />
             </span>
-            <span className="text-3xl font-black text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
+            <span className="text-3xl font-bold text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
           </div>
-          <h2 className="mt-5 text-lg font-black text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
+          <h2 className="mt-5 text-xl font-bold text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
             <div className="h-full rounded-full bg-[var(--sunlit-aqua)]" style={{ width: `${liveState.vaultScore?.score ?? 0}%` }} />
           </div>
@@ -700,7 +551,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
       </section>
 
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
+        <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
         <a className="inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/content-studio`}>
           {copy.openAll} <ArrowRight size={17} />
         </a>
@@ -727,14 +578,14 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
                   {statusLabel(item.status)}
                 </span>
               </div>
-              <h3 className="mt-5 line-clamp-2 font-black leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
+              <h3 className="mt-5 line-clamp-2 font-bold leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
               <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--sunlit-muted)]">{recordSubtitle(item)}</p>
             </a>
           ))}
         </section>
       ) : (
         <article className="sunlit-panel-soft rounded-[1.75rem] p-6 xl:p-7">
-          <p className="text-xl font-black text-[var(--sunlit-ink)]">{copy.contentEmpty}</p>
+          <p className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.contentEmpty}</p>
           <a
             className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
             href={`/${locale}/app/content-studio`}
@@ -773,7 +624,7 @@ function SunlitMetricCard({
         <span className={`grid h-11 w-11 place-items-center rounded-xl ${toneClass}`}>
           <Icon size={20} />
         </span>
-        <strong className="text-3xl font-black tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
+        <strong className="text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
       </div>
       <p className="mt-5 font-extrabold text-[var(--sunlit-ink)]">{label}</p>
       <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--sunlit-muted)]">{note}</p>
@@ -964,7 +815,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Sparkles} subtitle="I'll help you create a high-performing campaign in minutes, not days." title="AI Campaign Builder">
+      <HeroTitle icon={MarkosAiIcon} subtitle="I'll help you create a high-performing campaign in minutes, not days." title="AI Campaign Builder">
         <div className="mt-8 grid gap-4 text-base md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center xl:mt-10 xl:text-lg">
           {["Campaign Goal", "AI Generation", "Review & Launch"].map((label, index) => (
             <div className="contents" key={label}>
@@ -1011,7 +862,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               onClick={generateCampaignDrafts}
               type="button"
             >
-              {generatingCampaign ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Sparkles size={20} />}
+              {generatingCampaign ? <span className="lux-thinking-dot" aria-hidden="true" /> : <MarkosAiIcon size={20} />}
               {generatingCampaign ? "Generating campaign..." : "Generate Campaign Drafts"}
             </button>
           </article>
@@ -1126,1328 +977,11 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
   );
 }
 
-export function ContentStudioPanel({ locale }: { locale: Locale }) {
-  const session = useMarkosSession();
-  const client = useMarkosClient(locale);
-  const [contentType, setContentType] = useState<StudioContentType>("POST");
-  const [contentFilter, setContentFilter] = useState<ContentPipelineFilter>("ALL");
-  const [homePanel, setHomePanel] = useState<ContentStudioHomePanel>(null);
-  const [prompt, setPrompt] = useState("");
-  const [records, setRecords] = useState<ContentRecord[]>([]);
-  const [mediaAssets, setMediaAssets] = useState<MediaAssetRecord[]>([]);
-  const [currentRecord, setCurrentRecord] = useState<ContentRecord | null>(null);
-  const [captionLanguage, setCaptionLanguage] = useState<"ar" | "en">(locale);
-  const [captionEn, setCaptionEn] = useState("");
-  const [captionAr, setCaptionAr] = useState("");
-  const [hashtagsText, setHashtagsText] = useState("");
-  const [callToAction, setCallToAction] = useState("");
-  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
-  const [imagePrompt, setImagePrompt] = useState("");
-  const [imageAspectRatio, setImageAspectRatio] = useState<"1:1" | "4:5" | "9:16">("4:5");
-  const [scheduleDate, setScheduleDate] = useState(initialScheduleDate);
-  const [scheduleTime, setScheduleTime] = useState("19:30");
-  const [message, setMessage] = useState("");
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [creatingBlank, setCreatingBlank] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [generatingImage, setGeneratingImage] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [removingMedia, setRemovingMedia] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [approving, setApproving] = useState(false);
-  const [scheduling, setScheduling] = useState(false);
-  const [unscheduling, setUnscheduling] = useState(false);
-  const [reopening, setReopening] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [confirmation, setConfirmation] = useState<"cancel-schedule" | "delete-draft" | null>(null);
-  const [expandedMedia, setExpandedMedia] = useState<MediaAssetRecord | null>(null);
-  const studioHomeCopy =
-    locale === "ar"
-      ? {
-          aiAction: "اكتب مسودة مع MARKOS AI",
-          aiDescription: "حوّل فكرة أو عرضاً إلى مسودة مبنية على ملف نشاطك التجاري.",
-          aiTitle: "صف المنشور الذي تريد إنشاءه",
-          blankAction: "ابدأ منشوراً فارغاً",
-          blankDescription: "افتح مسودة قابلة للتحرير من دون استخدام الذكاء الاصطناعي أو استهلاك الرصيد.",
-          calendarAction: "افتح التقويم",
-          calendarDescription: "راجع ما تم نشره وما هو مجدول واختر موعدك التالي.",
-          continueAction: "تابع مسودة",
-          continueDescription: "ارجع إلى المحتوى المحفوظ وعدّل من حيث توقفت.",
-          eyebrow: "إنشاء",
-          ideasAction: "استكشف أفكار المحتوى",
-          ideasDescription: "اختر نقطة بداية قبل إنشاء أي مسودة.",
-          statsDrafts: "مسودات",
-          statsPublished: "منشور",
-          statsScheduled: "مجدول",
-          subtitle: "ابدأ بنفسك أو اطلب مساعدة MARKOS فقط عندما تحتاجها.",
-          title: "كيف تريد أن تبدأ منشورك التالي؟"
-        }
-      : {
-          aiAction: "Draft with MARKOS AI",
-          aiDescription: "Turn an idea or offer into a draft grounded in your Business Profile.",
-          aiTitle: "Describe the post you want to create",
-          blankAction: "Start a blank post",
-          blankDescription: "Open an editable draft without calling AI or consuming quota.",
-          calendarAction: "Open Calendar",
-          calendarDescription: "Review published and scheduled work, then choose what comes next.",
-          continueAction: "Continue a draft",
-          continueDescription: "Return to saved content and pick up where you left off.",
-          eyebrow: "Create",
-          ideasAction: "Explore content ideas",
-          ideasDescription: "Choose a useful starting point before anything is saved.",
-          statsDrafts: "Drafts",
-          statsPublished: "Published",
-          statsScheduled: "Scheduled",
-          subtitle: "Start on your own, or ask MARKOS for help only when you want it.",
-          title: "How do you want to start your next post?"
-        };
-  const contentIdeaStarters =
-    locale === "ar"
-      ? [
-          ["خلف الكواليس", "عرّف المتابعين على شخص أو خطوة أو تفصيل يصنع الفرق في عملك."],
-          ["منتج تحت الضوء", "اشرح لمن صُمم أحد منتجاتك ولماذا يختاره العملاء."],
-          ["إجابة على سؤال متكرر", "حوّل سؤالاً حقيقياً من العملاء إلى منشور مفيد وسهل الحفظ."],
-          ["قصة عميل", "شارك نتيجة أو تجربة حقيقية من دون اختلاق أرقام أو اقتباسات."],
-          ["دعوة محلية", "أنشئ سبباً واضحاً يدعو جمهور البحرين للزيارة أو التواصل هذا الأسبوع."]
-        ]
-      : [
-          ["Behind the scenes", "Introduce a person, process, or detail that makes your business different."],
-          ["Product spotlight", "Explain who one offer is for and why customers choose it."],
-          ["Answer a common question", "Turn a real customer question into something useful and saveable."],
-          ["Customer story", "Share a real outcome or experience without inventing numbers or quotes."],
-          ["Local invitation", "Give your Bahrain audience a clear reason to visit or get in touch this week."]
-        ];
-  const contentPipelineCopy =
-    locale === "ar"
-      ? {
-          all: "الكل",
-          drafts: "المسودات",
-          empty: "لا يوجد محتوى في هذه المرحلة حتى الآن.",
-          heading: "المحتوى والجدول",
-          note: "تعكس هذه القائمة الحالة والأوقات المحفوظة في MARKOS، ولا تؤكد بحد ذاتها النشر على إنستغرام.",
-          published: "المنشور",
-          ready: "جاهز",
-          scheduled: "المجدول",
-          subtitle: "افتح أي مسودة محفوظة أو راجع مواعيد المحتوى القادمة."
-        }
-      : {
-          all: "All",
-          drafts: "Drafts",
-          empty: "There is no content at this stage yet.",
-          heading: "Content and schedule",
-          note: "This list reflects saved MARKOS status and times; it does not by itself confirm publication on Instagram.",
-          published: "Published",
-          ready: "Ready",
-          scheduled: "Scheduled",
-          subtitle: "Open any saved draft or review the next content times."
-        };
-  const contentPipelineFilters: Array<[ContentPipelineFilter, string]> = [
-    ["ALL", contentPipelineCopy.all],
-    ["DRAFTS", contentPipelineCopy.drafts],
-    ["READY", contentPipelineCopy.ready],
-    ["SCHEDULED", contentPipelineCopy.scheduled],
-    ["PUBLISHED", contentPipelineCopy.published]
-  ];
-  const contentPipelineCounts = useMemo<Record<ContentPipelineFilter, number>>(
-    () => ({
-      ALL: records.length,
-      DRAFTS: records.filter((record) => matchesContentPipelineFilter(record, "DRAFTS")).length,
-      PUBLISHED: records.filter((record) => record.status === "PUBLISHED").length,
-      READY: records.filter((record) => record.status === "APPROVED").length,
-      SCHEDULED: records.filter((record) => record.status === "SCHEDULED").length
-    }),
-    [records]
-  );
-  const visibleContentRecords = useMemo(
-    () =>
-      sortContentPipelineRecords(
-        records.filter((record) => matchesContentPipelineFilter(record, contentFilter)),
-        contentFilter
-      ),
-    [contentFilter, records]
-  );
-  const selectedTypeLabel = studioTypes.find(([value]) => value === contentType)?.[1] ?? "Post";
-  const canEdit = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
-  const canApprove = currentRecord?.status === "DRAFT" || currentRecord?.status === "IN_REVIEW";
-  const canSchedule = currentRecord?.status === "APPROVED";
-  const canManageMedia = canEdit;
-  const canDelete = currentRecord !== null && currentRecord.status !== "SCHEDULED" && currentRecord.status !== "PUBLISHED";
-  const attachedMediaAssets = currentRecord
-    ? currentRecord.mediaIds.map((id) => mediaAssets.find((asset) => asset.id === id)).filter((asset): asset is MediaAssetRecord => asset !== undefined)
-    : [];
-  const selectedMedia = attachedMediaAssets.find((asset) => asset?.id === selectedMediaId) ?? attachedMediaAssets[0] ?? null;
-  const activeCaption = captionLanguage === "ar" ? captionAr : captionEn;
-  const setActiveCaption = captionLanguage === "ar" ? setCaptionAr : setCaptionEn;
-
-  useEffect(() => {
-    if (contentType === "POST" && imageAspectRatio === "9:16") {
-      setImageAspectRatio("4:5");
-    }
-  }, [contentType, imageAspectRatio]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlType = params.get("type")?.toUpperCase() ?? null;
-    if (isStudioContentType(urlType)) {
-      setContentType(urlType);
-    }
-
-    if (!session) {
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingRecords(true);
-    setMessage("");
-
-    async function loadRecords() {
-      try {
-        const [nextRecords, nextMediaAssets] = await Promise.all([client.contentItems(), client.mediaAssets()]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setRecords(nextRecords);
-        setMediaAssets(nextMediaAssets);
-        const requestedItemId = params.get("item");
-        const requestedRecord = requestedItemId ? nextRecords.find((item) => item.id === requestedItemId) : undefined;
-
-        if (requestedRecord) {
-          applyRecord(requestedRecord);
-        } else if (requestedItemId) {
-          setMessage(locale === "ar" ? "تعذر العثور على المحتوى المطلوب في مساحة العمل هذه." : "That content item was not found in this workspace.");
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setMessage(contentStudioError(error));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingRecords(false);
-        }
-      }
-    }
-
-    void loadRecords();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [client, locale, session]);
-
-  function applyRecord(record: ContentRecord | null, note?: string) {
-    setCurrentRecord(record);
-
-    if (record) {
-      setContentType(record.contentType);
-      setCaptionEn(record.captionEn ?? "");
-      setCaptionAr(record.captionAr ?? "");
-      setHashtagsText(record.hashtags.join(" "));
-      setCallToAction(record.callToAction ?? "");
-      setSelectedMediaId(record.mediaIds[0] ?? null);
-    } else {
-      setCaptionEn("");
-      setCaptionAr("");
-      setHashtagsText("");
-      setCallToAction("");
-      setSelectedMediaId(null);
-    }
-
-    if (note !== undefined) {
-      setMessage(note);
-    }
-  }
-
-  function upsertRecord(record: ContentRecord) {
-    setRecords((current) => {
-      const existingIndex = current.findIndex((item) => item.id === record.id);
-      if (existingIndex === -1) {
-        return [record, ...current];
-      }
-
-      const next = [...current];
-      next[existingIndex] = record;
-      return next;
-    });
-  }
-
-  function upsertMediaAsset(mediaAsset: MediaAssetRecord) {
-    setMediaAssets((current) => {
-      const existingIndex = current.findIndex((item) => item.id === mediaAsset.id);
-      if (existingIndex === -1) return [mediaAsset, ...current];
-      const next = [...current];
-      next[existingIndex] = mediaAsset;
-      return next;
-    });
-  }
-
-  function returnToCreateHome(note?: string) {
-    applyRecord(null, note);
-    setHomePanel(null);
-
-    const url = new URL(window.location.href);
-    url.searchParams.delete("item");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }
-
-  async function createBlankDraft() {
-    if (!session) {
-      setMessage(
-        locale === "ar"
-          ? "سجّل الدخول أو أكمل الإعداد أولاً حتى يتمكن MARKOS من حفظ المسودة."
-          : "Sign in or complete onboarding first so MARKOS can save the draft."
-      );
-      return;
-    }
-
-    setCreatingBlank(true);
-    setMessage(locale === "ar" ? "جارٍ فتح مسودة فارغة..." : "Opening a blank post draft...");
-
-    try {
-      const draft = await client.createContent({ contentType: "POST" });
-      upsertRecord(draft);
-      applyRecord(draft, locale === "ar" ? "تم حفظ مسودة فارغة. ابدأ بالكتابة عندما تكون جاهزاً." : "Blank draft saved. Start writing whenever you are ready.");
-      setHomePanel(null);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setCreatingBlank(false);
-    }
-  }
-
-  function openAiDraft(idea?: string) {
-    if (idea) {
-      setPrompt(idea);
-    }
-    setHomePanel("AI_DRAFT");
-  }
-
-  async function generate() {
-    const trimmedPrompt = prompt.trim();
-
-    if (!session) {
-      setMessage("Sign in or complete onboarding first so MARKOS can save generated work to a workspace.");
-      return;
-    }
-
-    if (trimmedPrompt.length < 8) {
-      setMessage("Describe what MARKOS should create before generating.");
-      return;
-    }
-
-    setGenerating(true);
-    setMessage("MARKOS is thinking through your Vault context and generating a saved draft...");
-
-    try {
-      const drafts = await client.generateContent({
-        contentType,
-        count: 1,
-        topic: trimmedPrompt
-      });
-      const draft = drafts[0];
-
-      if (!draft) {
-        throw new Error("The API returned no content draft.");
-      }
-
-      upsertRecord(draft);
-      applyRecord(draft, "Draft generated and saved to this workspace.");
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function persistEditableDraft(showMessage = true): Promise<ContentRecord | null> {
-    if (!session) {
-      setMessage("Sign in again before saving edits.");
-      return null;
-    }
-
-    if (!currentRecord) {
-      setMessage("Generate or choose a draft before saving edits.");
-      return null;
-    }
-
-    if (!canEdit) {
-      if (showMessage) {
-        setMessage(`This item is ${statusLabel(currentRecord.status).toLowerCase()} and cannot be edited in this state.`);
-      }
-      return currentRecord;
-    }
-
-    setSaving(true);
-
-    try {
-      const updated = await client.updateContent(currentRecord.id, {
-        callToAction: callToAction.trim() || null,
-        captionAr: captionAr.trim() || null,
-        captionEn: captionEn.trim() || null,
-        hashtags: parseHashtags(hashtagsText)
-      });
-      upsertRecord(updated);
-      applyRecord(updated, showMessage ? "Edits saved to the workspace draft." : undefined);
-      return updated;
-    } catch (error) {
-      setMessage(contentStudioError(error));
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function acceptDraft() {
-    if (!session || !currentRecord) {
-      setMessage("Generate or choose a workspace draft before approving.");
-      return;
-    }
-
-    setApproving(true);
-
-    try {
-      const editableRecord = canEdit ? await persistEditableDraft(false) : currentRecord;
-      if (!editableRecord) {
-        return;
-      }
-
-      const approved = await approveContentRecord(client, editableRecord);
-      upsertRecord(approved);
-      applyRecord(approved, "Content approved. It is now eligible for scheduling.");
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setApproving(false);
-    }
-  }
-
-  async function scheduleDraft() {
-    if (!session || !currentRecord) {
-      setMessage("Generate or choose a workspace draft before scheduling.");
-      return;
-    }
-
-    if (!canSchedule) {
-      setMessage(
-        currentRecord.status === "SCHEDULED"
-          ? "This item is already scheduled. Cancel its schedule before choosing a different time."
-          : "Approve this draft explicitly before choosing its publishing time."
-      );
-      return;
-    }
-
-    setScheduling(true);
-
-    try {
-      const scheduledAt = toScheduleIso(scheduleDate, scheduleTime);
-      const scheduled = await client.scheduleContent(currentRecord.id, scheduledAt);
-      upsertRecord(scheduled);
-      applyRecord(scheduled, `Scheduled for ${formatShortTime(scheduled.scheduledAt ?? scheduledAt)}.`);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setScheduling(false);
-    }
-  }
-
-  async function reopenForEditing() {
-    if (!session || !currentRecord || currentRecord.status !== "APPROVED") {
-      setMessage("Only approved content can be reopened directly. Cancel a schedule first if this item is scheduled.");
-      return;
-    }
-
-    setReopening(true);
-
-    try {
-      const draft = await client.updateContentStatus(currentRecord.id, "DRAFT");
-      upsertRecord(draft);
-      applyRecord(draft, "Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.");
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setReopening(false);
-    }
-  }
-
-  function requestCancelSchedule() {
-    if (!session || !currentRecord || currentRecord.status !== "SCHEDULED") {
-      setMessage("Choose a scheduled item before cancelling its publishing time.");
-      return;
-    }
-
-    setConfirmation("cancel-schedule");
-  }
-
-  async function cancelSchedule() {
-    if (!session || !currentRecord || currentRecord.status !== "SCHEDULED") {
-      setMessage("Choose a scheduled item before cancelling its publishing time.");
-      return;
-    }
-
-    setUnscheduling(true);
-
-    try {
-      const unscheduled = await client.unscheduleContent(currentRecord.id);
-      upsertRecord(unscheduled);
-      applyRecord(unscheduled, "Schedule cancelled. The approved item has returned to the ready queue.");
-      setConfirmation(null);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setUnscheduling(false);
-    }
-  }
-
-  function requestDeleteDraft() {
-    if (!session || !currentRecord) {
-      setMessage("Choose a saved post draft before deleting it.");
-      return;
-    }
-
-    if (currentRecord.status === "SCHEDULED") {
-      setMessage("Cancel this post's schedule first. Once it returns to Approved, you can delete it separately.");
-      return;
-    }
-
-    if (currentRecord.status === "PUBLISHED") {
-      setMessage("This action deletes MarkOS drafts; it does not remove an already-published Instagram post.");
-      return;
-    }
-
-    setConfirmation("delete-draft");
-  }
-
-  async function deleteDraft() {
-    if (!session || !currentRecord || !canDelete) {
-      setMessage("Choose a deletable post draft first.");
-      return;
-    }
-
-    setDeleting(true);
-
-    try {
-      const deletedId = currentRecord.id;
-      await client.deleteContent(deletedId);
-      const remainingRecords = records.filter((record) => record.id !== deletedId);
-      setRecords(remainingRecords);
-      returnToCreateHome("Post draft deleted from MarkOS. Its media files remain in the workspace media library.");
-      setHomePanel("DRAFTS");
-      setConfirmation(null);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = "";
-
-    if (!file) return;
-
-    if (!session || !currentRecord) {
-      setMessage("Generate or choose a saved draft before uploading an image.");
-      return;
-    }
-
-    if (!canManageMedia) {
-      setMessage(`Media cannot be changed while this item is ${statusLabel(currentRecord.status).toLowerCase()}.`);
-      return;
-    }
-
-    if (file.type.toLowerCase() !== "image/jpeg" || !/\.jpe?g$/i.test(file.name)) {
-      setMessage("Choose a JPEG (.jpg or .jpeg). The controlled Instagram publishing path does not accept PNG, SVG, or renamed files.");
-      return;
-    }
-
-    if (file.size <= 0 || file.size > instagramImageConstraints.maxSizeBytes) {
-      setMessage("Choose a non-empty JPEG no larger than 8 MB.");
-      return;
-    }
-
-    setUploading(true);
-    setMessage("Reading the JPEG and uploading it through the workspace API...");
-    let uploadedAsset: MediaAssetRecord | null = null;
-
-    try {
-      const editableRecord = canEdit ? await persistEditableDraft(false) : currentRecord;
-      if (!editableRecord) return;
-
-      const [{ height, width }, base64Data] = await Promise.all([imageDimensions(file), fileAsBase64(file)]);
-      const dimensionsError = instagramImageDimensionsError(width, height);
-
-      if (dimensionsError) {
-        throw new Error(dimensionsError);
-      }
-
-      uploadedAsset = await client.uploadMedia({
-        base64Data,
-        filename: file.name,
-        height,
-        mimeType: file.type,
-        type: "IMAGE",
-        width
-      });
-      const attached = await client.attachMediaToContent(editableRecord.id, uploadedAsset.id);
-      upsertMediaAsset(uploadedAsset);
-      upsertRecord(attached);
-      setSelectedMediaId(uploadedAsset.id);
-      applyRecord(attached, `${file.name} uploaded and attached to this workspace draft.`);
-      setSelectedMediaId(uploadedAsset.id);
-    } catch (error) {
-      if (uploadedAsset) {
-        try {
-          await client.deleteMediaAsset(uploadedAsset.id);
-        } catch {
-          // The upload may have attached successfully before a later response failed. Preserve it for safe operator review.
-        }
-      }
-      setMessage(contentStudioError(error));
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function generateImage() {
-    if (!session || !currentRecord) {
-      setMessage("Generate or choose a saved draft before creating an image.");
-      return;
-    }
-
-    if (!canManageMedia) {
-      setMessage(`Media cannot be changed while this item is ${statusLabel(currentRecord.status).toLowerCase()}.`);
-      return;
-    }
-
-    setGeneratingImage(true);
-    setMessage("MARKOS is generating and saving a publish-ready JPEG. This can take up to two minutes...");
-
-    try {
-      const editableRecord = canEdit ? await persistEditableDraft(false) : currentRecord;
-      if (!editableRecord) return;
-      const trimmedImagePrompt = imagePrompt.trim();
-      const generated = await client.generateContentImage(editableRecord.id, {
-        aspectRatio: imageAspectRatio,
-        ...(trimmedImagePrompt ? { prompt: trimmedImagePrompt } : {})
-      });
-      upsertMediaAsset(generated.mediaAsset);
-      upsertRecord(generated.contentItem);
-      applyRecord(generated.contentItem, "AI image generated, saved, and attached to this draft.");
-      setSelectedMediaId(generated.mediaAsset.id);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setGeneratingImage(false);
-    }
-  }
-
-  async function removeSelectedMedia() {
-    if (!session || !currentRecord || !selectedMedia) {
-      setMessage("Choose an attached image before removing it from this draft.");
-      return;
-    }
-
-    if (!canManageMedia) {
-      setMessage(`Media cannot be changed while this item is ${statusLabel(currentRecord.status).toLowerCase()}.`);
-      return;
-    }
-
-    setRemovingMedia(true);
-
-    try {
-      const updated = await client.detachMediaFromContent(currentRecord.id, selectedMedia.id);
-      upsertRecord(updated);
-      applyRecord(updated, "Image removed from this draft. The asset remains safely available in the workspace media library.");
-      setExpandedMedia(null);
-    } catch (error) {
-      setMessage(contentStudioError(error));
-    } finally {
-      setRemovingMedia(false);
-    }
-  }
-
-  async function copyCaption() {
-    const text = [captionEn, captionAr, callToAction, hashtagsText].filter(Boolean).join("\n\n");
-
-    if (!text.trim()) {
-      setMessage("There is no generated content to copy yet.");
-      return;
-    }
-
-    await navigator.clipboard.writeText(text);
-    setMessage("Caption copied.");
-  }
-
-  async function shareCaption() {
-    const text = [captionEn, captionAr, callToAction, hashtagsText].filter(Boolean).join("\n\n");
-
-    if (!text.trim()) {
-      setMessage("There is no generated content to share yet.");
-      return;
-    }
-
-    if ("share" in navigator) {
-      await navigator.share({ text, title: "MARKOS AI content draft" });
-      setMessage("Draft shared.");
-      return;
-    }
-
-    await copyCaption();
-  }
-
-  return (
-    <section className="grid min-h-[calc(100vh-8rem)] min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-7">
-      <div className="min-w-0 space-y-6">
-        <section className="sunlit-panel rounded-[1.5rem] border-s-4 border-s-[var(--sunlit-pink)] p-4 sm:px-5 sm:py-4">
-          {currentRecord ? (
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="sunlit-eyebrow">{locale === "ar" ? "محرر المسودة" : "Draft editor"}</p>
-                <h1 className="mt-1 truncate font-display text-xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-2xl">
-                  {contentPipelineTitle(currentRecord, locale)}
-                </h1>
-              </div>
-              <button
-                className="sunlit-secondary inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-extrabold"
-                onClick={() =>
-                  returnToCreateHome(locale === "ar" ? "تم حفظ العمل المؤكد في مساحة العمل." : "Your confirmed changes remain saved in the workspace.")
-                }
-                type="button"
-              >
-                <ArrowRight className={locale === "ar" ? "" : "rotate-180"} size={17} />
-                {locale === "ar" ? "العودة" : "Back to Create"}
-              </button>
-            </div>
-          ) : (
-            <>
-              <p className="sunlit-eyebrow">{studioHomeCopy.eyebrow}</p>
-              <h1 className="mt-1 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{studioHomeCopy.title}</h1>
-              <p className="mt-1 max-w-3xl text-base leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.subtitle}</p>
-            </>
-          )}
-        </section>
-        {message ? (
-          <article className="sunlit-panel-soft rounded-2xl p-5">
-            <p className="text-sm font-bold leading-6 text-[var(--sunlit-ink-soft)]">{message}</p>
-          </article>
-        ) : null}
-
-        {!currentRecord ? (
-          <>
-            <article className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  [studioHomeCopy.statsDrafts, contentPipelineCounts.DRAFTS, "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-ink-soft)]"],
-                  [studioHomeCopy.statsScheduled, contentPipelineCounts.SCHEDULED, "bg-[var(--sunlit-aqua-soft)] text-[#157A70]"],
-                  [studioHomeCopy.statsPublished, contentPipelineCounts.PUBLISHED, "bg-[#EEF8E9] text-[#44713A]"]
-                ].map(([label, value, className]) => (
-                  <div className={`flex items-center justify-between rounded-2xl px-4 py-3 ${className}`} key={label}>
-                    <span className="text-sm font-extrabold">{label}</span>
-                    <span className="text-xl font-black">{value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <button
-                  className="sunlit-primary flex min-h-36 items-start gap-4 rounded-2xl p-5 text-start disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
-                  disabled={creatingBlank}
-                  onClick={() => void createBlankDraft()}
-                  type="button"
-                >
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/20">
-                    <Pencil size={21} />
-                  </span>
-                  <span>
-                    <span className="block text-lg font-black">
-                      {creatingBlank ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : studioHomeCopy.blankAction}
-                    </span>
-                    <span className="mt-1 block text-sm font-semibold leading-6 opacity-85">{studioHomeCopy.blankDescription}</span>
-                  </span>
-                </button>
-                <StudioHomeAction
-                  active={homePanel === "AI_DRAFT"}
-                  description={studioHomeCopy.aiDescription}
-                  icon={Wand2}
-                  label={studioHomeCopy.aiAction}
-                  onClick={() => openAiDraft()}
-                />
-                <StudioHomeAction
-                  active={homePanel === "IDEAS"}
-                  description={studioHomeCopy.ideasDescription}
-                  icon={Lightbulb}
-                  label={studioHomeCopy.ideasAction}
-                  onClick={() => setHomePanel("IDEAS")}
-                />
-                <StudioHomeAction
-                  active={homePanel === "DRAFTS"}
-                  badge={contentPipelineCounts.DRAFTS}
-                  description={studioHomeCopy.continueDescription}
-                  icon={Clock}
-                  label={studioHomeCopy.continueAction}
-                  onClick={() => {
-                    setContentFilter("DRAFTS");
-                    setHomePanel("DRAFTS");
-                  }}
-                />
-                <a
-                  className="rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                  href={`/${locale}/app/calendar`}
-                >
-                  <span className="flex items-start gap-4">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[#157A70]">
-                      <Calendar size={21} />
-                    </span>
-                    <span>
-                      <span className="block font-black text-[var(--sunlit-ink)]">{studioHomeCopy.calendarAction}</span>
-                      <span className="mt-1 block text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{studioHomeCopy.calendarDescription}</span>
-                    </span>
-                  </span>
-                </a>
-              </div>
-            </article>
-
-            {homePanel === "AI_DRAFT" ? (
-              <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-                    <Wand2 size={22} />
-                  </span>
-                  <div>
-                    <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{studioHomeCopy.aiTitle}</h2>
-                    <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                      {locale === "ar" ? "اختر النوع ثم وضّح الهدف والجمهور والعرض." : "Choose a format, then explain the objective, audience, and offer."}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {studioTypes.map(([value, , Icon]) => (
-                    <button
-                      className={
-                        contentType === value
-                          ? "rounded-xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] px-4 py-3 text-start font-extrabold text-[var(--sunlit-pink)]"
-                          : "rounded-xl border border-[var(--sunlit-line)] bg-white px-4 py-3 text-start font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
-                      }
-                      key={value}
-                      onClick={() => setContentType(value)}
-                      type="button"
-                    >
-                      <span className="inline-flex items-center gap-3">
-                        <Icon size={19} />
-                        {localizedContentTypeLabel(value, locale)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  className="sunlit-field mt-5 min-h-36 resize-y rounded-xl p-4 text-base leading-7 outline-none"
-                  dir={locale === "ar" ? "rtl" : "ltr"}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder={
-                    locale === "ar"
-                      ? "صف المحتوى المطلوب، بما في ذلك العرض والجمهور واللغة والهدف."
-                      : "Describe the content, including the offer, audience, language, and objective."
-                  }
-                  value={prompt}
-                />
-                <button
-                  className="sunlit-primary mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl px-6 text-base font-extrabold disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={generating}
-                  onClick={generate}
-                  type="button"
-                >
-                  {generating ? <span className="lux-thinking-dot" aria-hidden="true" /> : <Wand2 size={20} />}
-                  {generating ? (locale === "ar" ? "جارٍ إنشاء المسودة..." : "Creating your draft...") : locale === "ar" ? "إنشاء المسودة" : "Generate draft"}
-                </button>
-              </article>
-            ) : null}
-
-            {homePanel === "IDEAS" ? (
-              <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-                <p className="sunlit-eyebrow">{locale === "ar" ? "أفكار المحتوى" : "Content ideas"}</p>
-                <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">{locale === "ar" ? "اختر فكرة لتطويرها" : "Choose an idea to develop"}</h2>
-                <div className="mt-5 grid gap-3">
-                  {contentIdeaStarters.map(([title, description]) => (
-                    <button
-                      className="rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                      key={title}
-                      onClick={() => openAiDraft(`${title}. ${description}`)}
-                      type="button"
-                    >
-                      <span className="font-black text-[var(--sunlit-ink)]">{title}</span>
-                      <span className="mt-1 block text-sm leading-6 text-[var(--sunlit-muted)]">{description}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-                  {locale === "ar"
-                    ? "لن يتم حفظ أي شيء حتى تختار الفكرة وتطلب إنشاء المسودة."
-                    : "Nothing is saved until you select an idea and ask MARKOS to create the draft."}
-                </p>
-              </section>
-            ) : null}
-
-            {homePanel === "DRAFTS" ? (
-              loadingRecords ? (
-                <article className="sunlit-panel rounded-2xl p-6 text-[var(--sunlit-muted)]">
-                  {locale === "ar" ? "جارٍ تحميل المحتوى..." : "Loading workspace content..."}
-                </article>
-              ) : (
-                <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6" aria-labelledby="content-pipeline-heading">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="sunlit-eyebrow">{locale === "ar" ? "مكتبة المحتوى" : "Content library"}</p>
-                      <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="content-pipeline-heading">
-                        {contentPipelineCopy.heading}
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{contentPipelineCopy.subtitle}</p>
-                    </div>
-                    <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-sm font-extrabold text-[var(--sunlit-ink-soft)]">
-                      {records.length}
-                    </span>
-                  </div>
-                  <div className="mt-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={locale === "ar" ? "تصفية المحتوى" : "Filter content"}>
-                    {contentPipelineFilters.map(([value, label]) => (
-                      <button
-                        aria-pressed={contentFilter === value}
-                        className={
-                          contentFilter === value
-                            ? "shrink-0 rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
-                            : "shrink-0 rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line-strong)]"
-                        }
-                        key={value}
-                        onClick={() => setContentFilter(value)}
-                        type="button"
-                      >
-                        {label} <span className="ms-1 opacity-65">{contentPipelineCounts[value]}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {visibleContentRecords.length === 0 ? (
-                    <div className="mt-5 rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] px-5 py-8 text-center text-sm font-bold text-[var(--sunlit-muted)]">
-                      {contentPipelineCopy.empty}
-                    </div>
-                  ) : (
-                    <div className="mt-5 grid max-h-[34rem] gap-3 overflow-y-auto pe-1">
-                      {visibleContentRecords.map((record) => (
-                        <button
-                          className="rounded-2xl border border-[var(--sunlit-line)] bg-white px-5 py-4 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-                          key={record.id}
-                          onClick={() => applyRecord(record, locale === "ar" ? "تم فتح المحتوى المحفوظ." : "Loaded saved content.")}
-                          type="button"
-                        >
-                          <span className="flex items-start justify-between gap-4">
-                            <span className="min-w-0">
-                              <span className="block truncate font-extrabold text-[var(--sunlit-ink)]">{contentPipelineTitle(record, locale)}</span>
-                              <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
-                                <span>{localizedContentTypeLabel(record.contentType, locale)}</span>
-                                <span className="inline-flex items-center gap-1.5">
-                                  {record.scheduledAt ? <Calendar size={14} /> : <Clock size={14} />}
-                                  {contentPipelineTimestamp(record, locale)}
-                                </span>
-                                {record.mediaIds.length > 0 ? (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <ImageIcon size={14} />
-                                    {record.mediaIds.length}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </span>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${contentStatusBadgeClass(record.status)}`}>
-                              {localizedContentStatusLabel(record.status, locale)}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">{contentPipelineCopy.note}</p>
-                </section>
-              )
-            ) : null}
-          </>
-        ) : null}
-
-        {currentRecord ? (
-          <>
-            {currentRecord && !canEdit ? (
-              <article className="sunlit-panel-soft flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
-                <div>
-                  <p className="font-extrabold text-[var(--sunlit-ink)]">
-                    {currentRecord.status === "APPROVED"
-                      ? "Approved content is locked against accidental changes."
-                      : currentRecord.status === "SCHEDULED"
-                        ? "Cancel the schedule before editing or deleting this post."
-                        : "This post is locked in its current state."}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                    {currentRecord.status === "APPROVED"
-                      ? "Reopening it removes approval and returns the post to Draft."
-                      : "MARKOS keeps approval, scheduling, and content changes as explicit separate actions."}
-                  </p>
-                </div>
-                {currentRecord.status === "APPROVED" ? (
-                  <button
-                    className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={reopening}
-                    onClick={() => void reopenForEditing()}
-                    type="button"
-                  >
-                    <Pencil size={17} /> {reopening ? "Reopening..." : "Edit post"}
-                  </button>
-                ) : null}
-              </article>
-            ) : null}
-
-            <EditorBlock action="Save edits" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Caption">
-              <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Caption language">
-                {(
-                  [
-                    ["en", "English"],
-                    ["ar", "العربية"]
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    className={
-                      captionLanguage === value
-                        ? "rounded-full bg-[var(--sunlit-ink)] px-4 py-2 text-sm font-extrabold text-white"
-                        : "rounded-full border border-[var(--sunlit-line)] bg-white px-4 py-2 text-sm font-bold text-[var(--sunlit-ink-soft)]"
-                    }
-                    key={value}
-                    onClick={() => setCaptionLanguage(value)}
-                    type="button"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                className="min-h-56 w-full resize-y border-0 bg-transparent text-lg leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)] xl:min-h-64"
-                dir={captionLanguage === "ar" ? "rtl" : "ltr"}
-                disabled={!canEdit}
-                onChange={(event) => setActiveCaption(event.target.value)}
-                placeholder={locale === "ar" ? "اكتب النص العربي لهذا المنشور." : "Write the caption for this post."}
-                value={activeCaption}
-              />
-              <div className="mt-8 border-t border-[var(--sunlit-line)] pt-5 text-sm text-[var(--sunlit-muted)]">{activeCaption.length} / 2,200 characters</div>
-            </EditorBlock>
-
-            <EditorBlock action="Save tags" busy={saving} disabled={!currentRecord || !canEdit} onAction={() => void persistEditableDraft()} title="Hashtags">
-              <textarea
-                className="min-h-24 w-full resize-y border-0 bg-transparent text-base leading-relaxed text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
-                disabled={!canEdit}
-                onChange={(event) => setHashtagsText(event.target.value)}
-                placeholder="#Generated #Hashtags"
-                value={hashtagsText}
-              />
-            </EditorBlock>
-
-            <EditorBlock
-              action={locale === "ar" ? "حفظ الدعوة" : "Save CTA"}
-              busy={saving}
-              disabled={!currentRecord || !canEdit}
-              onAction={() => void persistEditableDraft()}
-              title={locale === "ar" ? "الدعوة إلى الإجراء" : "Call to action"}
-            >
-              <input
-                className="w-full border-0 bg-transparent text-base text-[var(--sunlit-ink)] outline-none placeholder:text-[var(--sunlit-muted)]"
-                disabled={!canEdit}
-                onChange={(event) => setCallToAction(event.target.value)}
-                placeholder={locale === "ar" ? "مثال: أرسل لنا رسالة لمعرفة المزيد" : "Example: Send us a message to learn more"}
-                value={callToAction}
-              />
-            </EditorBlock>
-
-            <section>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-black text-[var(--sunlit-ink)]">Images</h2>
-                  <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Upload a publish-ready JPEG or generate one with MARKOS AI.</p>
-                </div>
-                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
-                  {attachedMediaAssets.length} attached
-                </span>
-              </div>
-              <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">
-                {selectedMedia ? (
-                  <div className="overflow-hidden rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper-deep)]">
-                    <button
-                      aria-label={`Expand ${selectedMedia.filename}`}
-                      className="group relative grid max-h-72 min-h-48 w-full place-items-center overflow-hidden bg-[var(--sunlit-paper-deep)]"
-                      onClick={() => setExpandedMedia(selectedMedia)}
-                      type="button"
-                    >
-                      {/* Workspace media can use API origins or data URLs that Next Image cannot safely preconfigure. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img alt={selectedMedia.filename} className="max-h-72 w-full object-contain" src={selectedMedia.publicUrl} />
-                      <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-black/75 px-3 py-2 text-xs font-extrabold text-white opacity-90 transition group-hover:opacity-100">
-                        <Maximize2 size={15} /> Expand
-                      </span>
-                    </button>
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] bg-white px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-extrabold text-[var(--sunlit-ink)]">{selectedMedia.filename}</p>
-                        <p className="mt-1 text-xs text-[var(--sunlit-muted)]">
-                          {selectedMedia.width && selectedMedia.height ? `${selectedMedia.width} × ${selectedMedia.height} · ` : ""}
-                          {formatFileSize(selectedMedia.sizeBytes)}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <a
-                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-ink-soft)]"
-                          href={selectedMedia.publicUrl}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          <ExternalLink size={16} /> Open original
-                        </a>
-                        <button
-                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] px-4 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={!canManageMedia || removingMedia}
-                          onClick={() => void removeSelectedMedia()}
-                          type="button"
-                        >
-                          <Trash2 size={17} /> {removingMedia ? "Removing..." : "Remove from draft"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper-deep)] p-6 text-center">
-                    <div>
-                      <ImagePlus className="mx-auto text-[var(--sunlit-pink)]" size={34} />
-                      <p className="mt-3 font-extrabold text-[var(--sunlit-ink)]">No image attached yet</p>
-                      <p className="mt-1 text-sm text-[var(--sunlit-muted)]">Create or upload one after saving a content draft.</p>
-                    </div>
-                  </div>
-                )}
-
-                {attachedMediaAssets.length > 1 ? (
-                  <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                    {attachedMediaAssets.map((asset) => (
-                      <button
-                        aria-label={`Preview ${asset.filename}`}
-                        className={
-                          selectedMedia?.id === asset.id
-                            ? "h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-[var(--sunlit-pink)]"
-                            : "h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--sunlit-line)]"
-                        }
-                        key={asset.id}
-                        onClick={() => setSelectedMediaId(asset.id)}
-                        type="button"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img alt="" className="h-full w-full object-cover" src={asset.publicUrl} />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
-                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Upload from your device</h3>
-                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">
-                      JPEG only, no larger than 8 MB, 320–1,440 px wide, and between 4:5 portrait and 1.91:1 landscape.
-                    </p>
-                    <label className="sunlit-secondary mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-4 text-sm font-extrabold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-                      <Upload size={18} /> {uploading ? "Uploading..." : "Choose JPEG"}
-                      <input
-                        accept=".jpg,.jpeg,image/jpeg"
-                        aria-label="Upload JPEG"
-                        className="sr-only"
-                        disabled={!currentRecord || !canManageMedia || uploading}
-                        onChange={(event) => void uploadImage(event)}
-                        type="file"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="rounded-2xl bg-[var(--sunlit-paper-deep)] p-4">
-                    <h3 className="font-extrabold text-[var(--sunlit-ink)]">Generate an AI image</h3>
-                    <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">Uses the saved caption when the optional direction is empty.</p>
-                    <input
-                      className="sunlit-field mt-3 h-11 rounded-xl px-3 text-sm outline-none"
-                      onChange={(event) => setImagePrompt(event.target.value)}
-                      placeholder="Optional visual direction"
-                      value={imagePrompt}
-                    />
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <select
-                        aria-label="Image aspect ratio"
-                        className="sunlit-field h-11 rounded-xl px-3 text-sm font-bold outline-none"
-                        onChange={(event) => setImageAspectRatio(event.target.value as "1:1" | "4:5" | "9:16")}
-                        value={imageAspectRatio}
-                      >
-                        <option value="1:1">Square · 1:1</option>
-                        <option value="4:5">Portrait · 4:5</option>
-                        {contentType === "POST" ? null : <option value="9:16">Story / Reel · 9:16</option>}
-                      </select>
-                      <button
-                        className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={!currentRecord || !canManageMedia || generatingImage}
-                        onClick={() => void generateImage()}
-                        type="button"
-                      >
-                        <Wand2 size={18} /> {generatingImage ? "Generating..." : "Generate image"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-4 text-xs leading-5 text-[var(--sunlit-muted)]">
-                  MARKOS saves generated images as Instagram-ready JPEGs in this workspace. Review every generated image before approval. Instagram may still
-                  recompress the file and convert non-sRGB color to sRGB.
-                </p>
-              </article>
-            </section>
-
-            <EditorBlock title="Schedule">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <input
-                  className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-                  disabled={currentRecord?.status === "SCHEDULED"}
-                  onChange={(event) => setScheduleDate(event.target.value)}
-                  type="date"
-                  value={scheduleDate}
-                />
-                <input
-                  className="sunlit-field h-12 rounded-xl px-4 text-base outline-none"
-                  disabled={currentRecord?.status === "SCHEDULED"}
-                  onChange={(event) => setScheduleTime(event.target.value)}
-                  type="time"
-                  value={scheduleTime}
-                />
-              </div>
-              <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]">
-                {currentRecord?.status === "SCHEDULED"
-                  ? `Scheduled for ${formatShortTime(currentRecord.scheduledAt ?? new Date().toISOString())}. Cancelling returns it to Approved; it does not delete the content.`
-                  : "Approval is a separate required step. Once approved, choose a future time and add the item to the publishing queue."}
-              </p>
-            </EditorBlock>
-
-            <EditorBlock action="Copy" disabled={!currentRecord} onAction={() => void copyCaption()} title="Actions">
-              <div className="flex flex-wrap gap-3">
-                <button
-                  className="sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={currentRecord?.status === "APPROVED" ? scheduling : currentRecord?.status === "SCHEDULED" ? unscheduling : !canApprove || approving}
-                  onClick={() => {
-                    if (currentRecord?.status === "APPROVED") {
-                      void scheduleDraft();
-                    } else if (currentRecord?.status === "SCHEDULED") {
-                      requestCancelSchedule();
-                    } else {
-                      void acceptDraft();
-                    }
-                  }}
-                  type="button"
-                >
-                  {approving
-                    ? "Approving..."
-                    : scheduling
-                      ? "Scheduling..."
-                      : unscheduling
-                        ? "Cancelling..."
-                        : currentRecord?.status === "APPROVED"
-                          ? "Schedule"
-                          : currentRecord?.status === "SCHEDULED"
-                            ? "Cancel schedule"
-                            : currentRecord && !canApprove
-                              ? statusLabel(currentRecord.status)
-                              : "Approve draft"}
-                </button>
-                <button
-                  className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() =>
-                    returnToCreateHome(
-                      locale === "ar"
-                        ? "تم حفظ العمل المؤكد. اختر كيف تريد بدء المحتوى التالي."
-                        : "Your confirmed work is saved. Choose how to start the next item."
-                    )
-                  }
-                  type="button"
-                >
-                  {locale === "ar" ? "إنشاء محتوى آخر" : "Create another"}
-                </button>
-                <button
-                  className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!currentRecord}
-                  onClick={() => void shareCaption()}
-                  type="button"
-                >
-                  Share
-                </button>
-                <button
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!canDelete || deleting}
-                  onClick={requestDeleteDraft}
-                  title={currentRecord?.status === "SCHEDULED" ? "Cancel the schedule before deleting this post" : undefined}
-                  type="button"
-                >
-                  <Trash2 size={17} /> {deleting ? "Deleting..." : "Delete post draft"}
-                </button>
-              </div>
-              {currentRecord?.status === "SCHEDULED" ? (
-                <p className="mt-4 text-sm font-bold text-[var(--sunlit-muted)]">Cancel the schedule first; deletion remains a separate confirmed action.</p>
-              ) : null}
-            </EditorBlock>
-          </>
-        ) : null}
-      </div>
-
-      <aside className="sticky top-6 hidden h-[calc(100vh-7.5rem)] flex-col items-center justify-center rounded-[2rem] bg-[var(--sunlit-paper-deep)] p-6 xl:flex">
-        <p className="sunlit-eyebrow mb-5 self-start">Instagram preview</p>
-        <InstagramPreview
-          brandName={session?.workspace.name ?? "yourbrand"}
-          caption={locale === "ar" ? captionAr || captionEn : captionEn || captionAr}
-          hashtags={parseHashtags(hashtagsText)}
-          locale={locale}
-          media={selectedMedia}
-          scheduledAt={currentRecord?.scheduledAt}
-          type={selectedTypeLabel}
-        />
-        {currentRecord ? (
-          <button
-            className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={(!canSchedule && currentRecord.status !== "SCHEDULED") || scheduling || unscheduling}
-            onClick={() => void (currentRecord.status === "SCHEDULED" ? requestCancelSchedule() : scheduleDraft())}
-            type="button"
-          >
-            {scheduling ? "Scheduling..." : unscheduling ? "Cancelling..." : currentRecord.status === "SCHEDULED" ? "Cancel Schedule" : "Schedule Post"}
-            {currentRecord.status === "SCHEDULED" ? <RotateCcw size={22} /> : <ArrowRight size={24} />}
-          </button>
-        ) : (
-          <a className="mt-6 inline-flex items-center gap-3 text-base font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/calendar`}>
-            {studioHomeCopy.calendarAction} <ArrowRight className={locale === "ar" ? "rotate-180" : ""} size={24} />
-          </a>
-        )}
-      </aside>
-
-      {confirmation ? (
-        <ConfirmationDialog
-          busy={confirmation === "cancel-schedule" ? unscheduling : deleting}
-          confirmLabel={confirmation === "cancel-schedule" ? "Yes, cancel schedule" : "Yes, delete draft"}
-          description={
-            confirmation === "cancel-schedule"
-              ? "This removes the publishing time and returns the post to Approved. It does not delete the post."
-              : "This removes the post draft from MarkOS. Its media files remain in the workspace media library."
-          }
-          onCancel={() => setConfirmation(null)}
-          onConfirm={() => void (confirmation === "cancel-schedule" ? cancelSchedule() : deleteDraft())}
-          title={confirmation === "cancel-schedule" ? "Cancel this scheduled post?" : "Delete this post draft?"}
-          tone={confirmation === "cancel-schedule" ? "neutral" : "danger"}
-        />
-      ) : null}
-
-      {expandedMedia ? <MediaViewerDialog media={expandedMedia} onClose={() => setExpandedMedia(null)} /> : null}
-    </section>
-  );
-}
-
 export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [days, setDays] = useState(7);
+  const [trendMetric, setTrendMetric] = useState<"engagement" | "impressions" | "reach">("reach");
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -2506,110 +1040,279 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   }
 
   const totals = summary?.totals;
-  const audienceMetric =
-    totals && typeof totals.profileViews === "number"
-      ? { label: "Profile views", value: totals.profileViews }
-      : { label: "Followers", value: totals?.followers ?? null };
-  const daily = summary?.daily.filter((item) => item.totals.reach !== null).slice(-14) ?? [];
-  const maximumReach = Math.max(...daily.map((item) => item.totals.reach ?? 0), 1);
+  const comparison = summary?.comparison;
+  const viewsMetric: keyof AnalyticsMetricTotals = totals?.views !== null && totals?.views !== undefined ? "views" : "impressions";
+  const daily = summary?.daily.filter((item) => item.totals[trendMetric] !== null) ?? [];
+  const maximumTrendValue = Math.max(...daily.map((item) => item.totals[trendMetric] ?? 0), 1);
+  const syncedContentCount = new Set(summary?.records.flatMap((record) => (record.contentItemId ? [record.contentItemId] : [])) ?? []).size;
+  const contentBuckets = summary?.byMetricType.filter((item) => item.metricType === "POST" || item.metricType === "REEL" || item.metricType === "STORY") ?? [];
+  const audienceBucket = summary?.byMetricType.find((item) => item.metricType === "AUDIENCE");
+  const hasAnalytics = (summary?.records.length ?? 0) > 0 && totals !== undefined && Object.values(totals).some((value) => value !== null);
+  const periodLabel = summary ? formatInsightsDateRange(locale, summary.from, summary.to) : "";
+  const previousPeriodLabel = comparison ? formatInsightsDateRange(locale, comparison.from, comparison.to) : "";
   const copy =
     locale === "ar"
       ? {
-          empty: "ستظهر بيانات الأداء هنا بعد ربط إنستغرام ومزامنة أول مجموعة من الإحصاءات.",
+          audience: "الجمهور",
+          audienceUnavailable: "لا تتضمن المزامنة الحالية توزيع الجمهور حسب العمر أو الموقع أو الجنس. سنعرضه هنا عندما يصبح متاحاً من المصدر.",
+          comparison: "مقارنة الفترات",
+          comparisonEmpty: "تحتاج المقارنة إلى بيانات من الفترة السابقة.",
+          contentInteractions: "تفاعلات المحتوى",
+          contentPerformance: "أداء المحتوى المنشور",
+          empty: "ستظهر بيانات الأداء الحقيقية هنا بعد ربط إنستغرام ومزامنة أول مجموعة من الإحصاءات.",
           export: "تصدير التقرير الشهري",
+          followers: "المتابعون",
           heading: "الإحصاءات",
-          range: days === 7 ? "آخر 7 أيام" : "آخر 30 يوماً",
-          subtitle: "افهم ما ينجح، ثم حوّل ذلك إلى خطوة واضحة للمحتوى التالي."
+          impressions: "مرات الظهور",
+          latestSync: "آخر مزامنة",
+          noContent: "لا توجد منشورات مرتبطة ببيانات أداء خلال هذه الفترة.",
+          noSync: "لا توجد بيانات متزامنة بعد",
+          previous: "الفترة السابقة",
+          profileActivity: "نشاط الملف الشخصي",
+          published: "محتوى تمت مزامنته",
+          range: days === 7 ? "7 أيام" : "30 يوماً",
+          reach: "الحسابات التي تم الوصول إليها",
+          reportWindow: "فترة التقرير",
+          shares: "المشاركات",
+          subtitle: "راجع ما وصل إلى جمهورك وما حرّك التفاعل، ثم استخدمه لتحسين الحملة التالية.",
+          topContent: "أفضل المحتويات",
+          trend: "اتجاه الأداء",
+          unavailable: "غير متاح",
+          views: "المشاهدات"
         }
       : {
-          empty: "Performance data will appear here after Instagram is connected and the first insights are synced.",
+          audience: "Audience insights",
+          audienceUnavailable:
+            "The current sync does not include age, location, or gender breakdowns. MARKOS will show them here when the source provides them.",
+          comparison: "Period comparison",
+          comparisonEmpty: "Comparison needs data from the preceding period.",
+          contentInteractions: "Content interactions",
+          contentPerformance: "Published content performance",
+          empty: "Real performance data will appear here after Instagram is connected and the first insights are synced.",
           export: "Export monthly report",
+          followers: "Followers",
           heading: "Insights",
-          range: days === 7 ? "Last 7 days" : "Last 30 days",
-          subtitle: "See what is working, then turn it into a clear next move for your content."
+          impressions: "Impressions",
+          latestSync: "Latest sync",
+          noContent: "No published content has linked performance data in this period.",
+          noSync: "No synced insights yet",
+          previous: "Previous period",
+          profileActivity: "Profile activity",
+          published: "Content with synced data",
+          range: days === 7 ? "7 days" : "30 days",
+          reach: "Accounts reached",
+          reportWindow: "Reporting period",
+          shares: "Shares",
+          subtitle: "See what reached people and moved them to act, then use it to improve the next Campaign.",
+          topContent: "Top-performing posts",
+          trend: "Performance trend",
+          unavailable: "Unavailable",
+          views: "Views"
         };
 
+  const metricCards: Array<{
+    icon: IconType;
+    label: string;
+    metric: keyof AnalyticsMetricTotals;
+    tone: "aqua" | "coral" | "pink" | "yellow";
+  }> = [
+    { icon: Eye, label: viewsMetric === "views" ? copy.views : copy.impressions, metric: viewsMetric, tone: "pink" },
+    { icon: Users, label: copy.reach, metric: "reach", tone: "aqua" },
+    { icon: Heart, label: copy.contentInteractions, metric: "engagement", tone: "coral" },
+    { icon: TrendingUp, label: copy.followers, metric: "followers", tone: "yellow" },
+    { icon: MousePointerClick, label: copy.profileActivity, metric: "profileViews", tone: "aqua" },
+    { icon: Share2, label: copy.shares, metric: "shares", tone: "pink" }
+  ];
+
   return (
-    <section className="space-y-6 xl:space-y-7">
+    <section aria-busy={loading} className="space-y-5 xl:space-y-6">
       <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">Instagram performance</p>
-            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 max-w-2xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
+              <span>
+                {copy.reportWindow}: {periodLabel || copy.range}
+              </span>
+              <span>
+                {copy.latestSync}: {summary?.latestSyncedAt ? formatInsightsTimestamp(locale, summary.latestSyncedAt) : copy.unavailable}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div aria-label={copy.reportWindow} className="inline-flex rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1" role="group">
+              {[7, 30].map((option) => (
+                <button
+                  aria-pressed={days === option}
+                  className={`min-h-9 rounded-lg px-4 text-sm font-extrabold transition ${
+                    days === option ? "bg-white text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                  }`}
+                  key={option}
+                  onClick={() => setDays(option)}
+                  type="button"
+                >
+                  {locale === "ar" ? (option === 7 ? "7 أيام" : "30 يوماً") : `${option} days`}
+                </button>
+              ))}
+            </div>
             <button
-              className="sunlit-secondary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold"
-              onClick={() => setDays(days === 7 ? 30 : 7)}
-              type="button"
-            >
-              {copy.range}
-            </button>
-            <button
-              className="sunlit-primary inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
+              className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
               disabled={exporting || !session}
               onClick={() => void exportReport()}
               type="button"
             >
-              {exporting ? "Preparing..." : copy.export}
+              <FileBarChart2 aria-hidden="true" size={17} />
+              {exporting ? (locale === "ar" ? "جارٍ التجهيز..." : "Preparing...") : copy.export}
             </button>
           </div>
         </div>
       </section>
 
-      {message ? <article className="sunlit-panel-soft rounded-2xl p-5 text-sm font-bold text-[var(--sunlit-ink-soft)]">{message}</article> : null}
+      {message ? (
+        <article
+          className="rounded-2xl border border-[var(--sunlit-line-strong)] bg-white/85 p-4 text-sm font-bold text-[var(--sunlit-ink-soft)]"
+          role="status"
+        >
+          {message}
+        </article>
+      ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-3 xl:gap-6">
-        <SunlitMetricCard
-          icon={Users}
-          label={audienceMetric.label}
-          note={copy.range}
-          tone="aqua"
-          value={loading ? "…" : totals ? formatMetricValue(audienceMetric.value) : "—"}
-        />
-        <SunlitMetricCard icon={Eye} label="Reach" note={copy.range} tone="yellow" value={loading ? "…" : totals ? formatMetricValue(totals.reach) : "—"} />
-        <SunlitMetricCard
-          icon={Heart}
-          label="Engagements"
-          note={copy.range}
-          tone="coral"
-          value={loading ? "…" : totals ? formatMetricValue(totals.engagement) : "—"}
-        />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {metricCards.map((item) => (
+          <InsightsMetricCard
+            change={comparison?.percentageChanges[item.metric] ?? null}
+            comparisonAvailable={comparison?.totals[item.metric] !== null && comparison?.totals[item.metric] !== undefined}
+            icon={item.icon}
+            key={item.metric}
+            label={item.label}
+            loading={loading && !summary}
+            locale={locale}
+            tone={item.tone}
+            value={totals?.[item.metric] ?? null}
+          />
+        ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
+      {!loading && !hasAnalytics ? (
+        <section className="sunlit-panel grid min-h-56 place-items-center rounded-[1.75rem] p-8 text-center">
+          <div className="max-w-xl">
+            <BarChart3 className="mx-auto text-[var(--sunlit-aqua-dark)]" size={42} />
+            <h2 className="mt-4 text-xl font-bold text-[var(--sunlit-ink)]">{copy.noSync}</h2>
+            <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.empty}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,.55fr)]">
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">Reach over time</p>
-          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Daily Instagram reach</h2>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="sunlit-eyebrow">{copy.trend}</p>
+              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{periodLabel || copy.range}</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["reach", "impressions", "engagement"] as const).map((metric) => (
+                <button
+                  aria-pressed={trendMetric === metric}
+                  className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition ${
+                    trendMetric === metric
+                      ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+                      : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                  }`}
+                  key={metric}
+                  onClick={() => setTrendMetric(metric)}
+                  type="button"
+                >
+                  {insightsMetricLabel(locale, metric)}
+                </button>
+              ))}
+            </div>
+          </div>
           {daily.length > 0 ? (
-            <div className="mt-7 flex h-72 items-end gap-2 rounded-2xl bg-[var(--sunlit-paper)] px-5 pb-5 pt-8">
-              {daily.map((item) => (
-                <div className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
-                  <span className="invisible rounded-md bg-[var(--sunlit-ink)] px-2 py-1 text-[10px] font-bold text-white group-hover:visible">
-                    {formatMetricValue(item.totals.reach)}
-                  </span>
-                  <div
-                    className="w-full min-w-2 rounded-t-lg bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
-                    style={{ height: `${Math.max(8, ((item.totals.reach ?? 0) / maximumReach) * 190)}px` }}
-                  />
-                  <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{new Date(item.dataDate).getDate()}</span>
+            <div className="mt-6 overflow-x-auto rounded-2xl bg-[var(--sunlit-paper)] px-4 pb-4 pt-6">
+              <div className="flex h-64 min-w-[34rem] items-end gap-2" role="img" aria-label={`${insightsMetricLabel(locale, trendMetric)} · ${periodLabel}`}>
+                {daily.map((item) => (
+                  <div className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
+                    <span className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-[var(--sunlit-ink)] opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100">
+                      {formatMetricValue(item.totals[trendMetric])}
+                    </span>
+                    <div
+                      className="w-full min-w-2 rounded-t-md bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
+                      style={{ height: `${Math.max(8, ((item.totals[trendMetric] ?? 0) / maximumTrendValue) * 178)}px` }}
+                      title={`${formatInsightsDay(locale, item.dataDate)}: ${formatMetricValue(item.totals[trendMetric])}`}
+                    />
+                    <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{formatInsightsDay(locale, item.dataDate)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <InsightsUnavailableState label={copy.unavailable} locale={locale} />
+          )}
+        </article>
+
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <p className="sunlit-eyebrow">{copy.comparison}</p>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{previousPeriodLabel || copy.previous}</h2>
+          <div className="mt-5 grid gap-1">
+            {(["reach", "impressions", "engagement", "profileViews"] as const).map((metric) => (
+              <InsightsComparisonRow
+                change={comparison?.percentageChanges[metric] ?? null}
+                current={totals?.[metric] ?? null}
+                key={metric}
+                label={insightsMetricLabel(locale, metric)}
+                locale={locale}
+                previous={comparison?.totals[metric] ?? null}
+              />
+            ))}
+          </div>
+          {!comparison || !Object.values(comparison.totals).some((value) => value !== null) ? (
+            <p className="mt-4 rounded-xl bg-[var(--sunlit-paper)] p-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.comparisonEmpty}</p>
+          ) : null}
+        </article>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
+        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="sunlit-eyebrow">{copy.contentPerformance}</p>
+              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
+                {syncedContentCount} {copy.published}
+              </h2>
+            </div>
+            <Activity aria-hidden="true" className="text-[var(--sunlit-coral-deep)]" size={24} />
+          </div>
+          {contentBuckets.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+              {contentBuckets.map((bucket) => (
+                <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={bucket.metricType}>
+                  <p className="text-sm font-extrabold text-[var(--sunlit-ink)]">{insightsContentBucketLabel(locale, bucket.metricType)}</p>
+                  <dl className="mt-3 grid gap-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-[var(--sunlit-muted)]">{copy.reach}</dt>
+                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.reach)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-[var(--sunlit-muted)]">{copy.contentInteractions}</dt>
+                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.engagement)}</dd>
+                    </div>
+                  </dl>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-7 grid min-h-72 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-8 text-center">
-              <div className="max-w-md">
-                <BarChart3 className="mx-auto text-[var(--sunlit-aqua)]" size={38} />
-                <p className="mt-4 font-extrabold text-[var(--sunlit-ink)]">No synced insight data yet</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.empty}</p>
-              </div>
-            </div>
+            <InsightsUnavailableState label={copy.noContent} locale={locale} />
           )}
         </article>
+
         <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">Content signals</p>
-          <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]">Top content</h2>
+          <p className="sunlit-eyebrow">{copy.topContent}</p>
+          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
+            {locale === "ar" ? "ما الذي حقق أفضل استجابة" : "What earned the strongest response"}
+          </h2>
           <div className="mt-6 grid gap-3">
             {summary?.topContent.length ? (
               summary.topContent.slice(0, 4).map((item, index) => (
@@ -2619,13 +1322,13 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                   key={item.contentItemId}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-black text-[var(--sunlit-pink)]">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-bold text-[var(--sunlit-pink)]">
                       {index + 1}
                     </span>
                     <div className="min-w-0">
                       <p className="line-clamp-2 font-extrabold leading-6 text-[var(--sunlit-ink)]">{item.caption || contentTypeLabel(item.contentType)}</p>
                       <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                        {formatMetricValue(item.metrics.reach)} reach · {formatMetricValue(item.engagement)} engagements
+                        {formatMetricValue(item.metrics.reach)} {copy.reach} · {formatMetricValue(item.engagement)} {copy.contentInteractions}
                       </p>
                     </div>
                   </div>
@@ -2633,17 +1336,188 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
               ))
             ) : (
               <div className="rounded-2xl bg-[var(--sunlit-paper)] p-5">
-                <p className="font-extrabold text-[var(--sunlit-ink)]">Nothing to rank yet</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">
-                  Once content has synced performance data, the strongest posts will appear here.
-                </p>
+                <p className="font-extrabold text-[var(--sunlit-ink)]">{copy.noContent}</p>
               </div>
             )}
           </div>
         </article>
       </section>
+
+      <section className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,.45fr)_minmax(0,.55fr)] lg:items-center">
+          <div>
+            <p className="sunlit-eyebrow">{copy.audience}</p>
+            <div className="mt-3 flex items-end gap-3">
+              <p className="text-4xl font-bold tracking-tight text-[var(--sunlit-ink)]">
+                {formatMetricValue(audienceBucket?.totals.followers ?? totals?.followers ?? null)}
+              </p>
+              <p className="pb-1 text-sm font-bold text-[var(--sunlit-muted)]">{copy.followers}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-5">
+            <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy.audienceUnavailable}</p>
+          </div>
+        </div>
+      </section>
     </section>
   );
+}
+
+function InsightsMetricCard({
+  change,
+  comparisonAvailable,
+  icon: Icon,
+  label,
+  loading,
+  locale,
+  tone,
+  value
+}: {
+  change: number | null;
+  comparisonAvailable: boolean;
+  icon: IconType;
+  label: string;
+  loading: boolean;
+  locale: Locale;
+  tone: "aqua" | "coral" | "pink" | "yellow";
+  value: number | null;
+}) {
+  const tones = {
+    aqua: "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]",
+    coral: "bg-[rgb(255_102_90_/_12%)] text-[var(--sunlit-coral-deep)]",
+    pink: "bg-[rgb(226_56_123_/_10%)] text-[var(--sunlit-pink)]",
+    yellow: "bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-ink)]"
+  } as const;
+  const changeLabel = formatInsightsChange(locale, change, comparisonAvailable);
+  const ChangeIcon = change !== null && change < 0 ? ArrowDownRight : ArrowUpRight;
+
+  return (
+    <article className="sunlit-panel rounded-2xl p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-bold text-[var(--sunlit-muted)]">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{loading ? "…" : formatMetricValue(value)}</p>
+        </div>
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}>
+          <Icon aria-hidden="true" size={20} strokeWidth={2} />
+        </span>
+      </div>
+      <p
+        className={`mt-3 inline-flex items-center gap-1 text-xs font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}
+      >
+        {change !== null ? <ChangeIcon aria-hidden="true" size={14} /> : null}
+        {changeLabel}
+      </p>
+    </article>
+  );
+}
+
+function InsightsComparisonRow({
+  change,
+  current,
+  label,
+  locale,
+  previous
+}: {
+  change: number | null;
+  current: number | null;
+  label: string;
+  locale: Locale;
+  previous: number | null;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-[var(--sunlit-line)] py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="truncate text-base font-extrabold text-[var(--sunlit-ink)]">{label}</p>
+        <p className="mt-1 text-xs text-[var(--sunlit-muted)]">
+          {formatMetricValue(current)} · {locale === "ar" ? "السابق" : "previous"} {formatMetricValue(previous)}
+        </p>
+      </div>
+      <span className={`text-sm font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}>
+        {formatInsightsChange(locale, change, previous !== null)}
+      </span>
+    </div>
+  );
+}
+
+function InsightsUnavailableState({ label, locale }: { label: string; locale: Locale }) {
+  return (
+    <div className="mt-6 grid min-h-44 place-items-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-center">
+      <div className="max-w-sm">
+        <BarChart3 aria-hidden="true" className="mx-auto text-[var(--sunlit-aqua-dark)]" size={30} />
+        <p className="mt-3 text-sm font-bold leading-6 text-[var(--sunlit-muted)]">
+          {label || (locale === "ar" ? "لا توجد بيانات متاحة." : "No data is available.")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function insightsMetricLabel(locale: Locale, metric: keyof AnalyticsMetricTotals): string {
+  const labels: Record<Locale, Record<keyof AnalyticsMetricTotals, string>> = {
+    ar: {
+      comments: "التعليقات",
+      engagement: "التفاعلات",
+      followers: "المتابعون",
+      impressions: "مرات الظهور",
+      likes: "الإعجابات",
+      profileViews: "زيارات الملف",
+      reach: "الوصول",
+      saves: "عمليات الحفظ",
+      shares: "المشاركات",
+      views: "المشاهدات"
+    },
+    en: {
+      comments: "Comments",
+      engagement: "Interactions",
+      followers: "Followers",
+      impressions: "Impressions",
+      likes: "Likes",
+      profileViews: "Profile activity",
+      reach: "Reach",
+      saves: "Saves",
+      shares: "Shares",
+      views: "Views"
+    }
+  };
+
+  return labels[locale][metric];
+}
+
+function insightsContentBucketLabel(locale: Locale, metricType: string): string {
+  const labels: Record<string, [string, string]> = {
+    POST: ["Post", "منشور"],
+    REEL: ["Reel", "ريل"],
+    STORY: ["Story", "قصة"]
+  };
+  const label = labels[metricType];
+  return label ? label[locale === "ar" ? 1 : 0] : metricType;
+}
+
+function formatInsightsChange(locale: Locale, change: number | null, comparisonAvailable: boolean): string {
+  if (change === null)
+    return comparisonAvailable
+      ? locale === "ar"
+        ? "لا يمكن حساب النسبة"
+        : "Change unavailable"
+      : locale === "ar"
+        ? "لا توجد فترة سابقة"
+        : "No prior-period data";
+  const formatted = `${change > 0 ? "+" : ""}${new Intl.NumberFormat(locale === "ar" ? "ar-BH" : "en-BH", { maximumFractionDigits: 1 }).format(change)}%`;
+  return locale === "ar" ? `${formatted} عن الفترة السابقة` : `${formatted} vs previous`;
+}
+
+function formatInsightsDateRange(locale: Locale, from: string, to: string): string {
+  const formatter = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${formatter.format(new Date(from))} – ${formatter.format(new Date(to))}`;
+}
+
+function formatInsightsTimestamp(locale: Locale, value: string): string {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatInsightsDay(locale: Locale, value: string): string {
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(value));
 }
 
 interface FinalVaultState {
@@ -2714,7 +1588,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "أقسام الملف",
           refresh: "تحديث",
           refreshing: "جارٍ التحديث...",
-          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لفهم نشاطك وتوجيه الاستراتيجية والمحتوى.",
+          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لتوجيه استراتيجية النشاط والحملات والمحتوى.",
           updated: "آخر تحديث"
         }
       : {
@@ -2725,7 +1599,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "Profile sections",
           refresh: "Refresh",
           refreshing: "Refreshing...",
-          subtitle: "The approved business context MARKOS uses to guide Strategy and content.",
+          subtitle: "The approved business context MARKOS uses to guide business strategy, Campaigns, and content.",
           updated: "Last updated"
         };
 
@@ -2735,8 +1609,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-center">
           <div className="max-w-3xl">
             <p className="sunlit-eyebrow">{copy.modules}</p>
-            <h1 className="mt-2 font-display text-2xl font-black tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
+            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
             <a
               className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
               href={`/${locale}/onboarding?mode=edit`}
@@ -2747,12 +1621,12 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[var(--sunlit-muted)]">Profile readiness</p>
-                <p className="mt-2 text-sm font-bold text-[var(--sunlit-ink-soft)]">
+                <p className="text-sm font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-muted)]">Profile readiness</p>
+                <p className="mt-2 text-base font-bold text-[var(--sunlit-ink-soft)]">
                   {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
                 </p>
               </div>
-              <p className="text-3xl font-black text-[var(--sunlit-pink)]">{score}%</p>
+              <p className="text-3xl font-bold text-[var(--sunlit-pink)]">{score}%</p>
             </div>
             <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
               <div className="h-full rounded-full bg-[var(--sunlit-aqua)] transition-[width]" style={{ width: `${score}%` }} />
@@ -2776,12 +1650,12 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
       ) : null}
 
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{copy.modules}</h2>
+        <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.modules}</h2>
         <span className="text-sm font-bold text-[var(--sunlit-muted)]">
           {completedCount}/{modules.length}
         </span>
       </div>
-      <section className="grid gap-5 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-2">
         {modules.map((module, index) => (
           <article
             className={
@@ -2803,8 +1677,8 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                   {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
                 </span>
                 <div>
-                  <h3 className="text-lg font-black text-[var(--sunlit-ink)]">{module.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
+                  <h3 className="text-xl font-bold text-[var(--sunlit-ink)]">{module.title}</h3>
+                  <p className="mt-2 text-base leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
                   <p className="mt-4 text-xs font-bold text-[var(--sunlit-muted)]">
                     {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}
                   </p>
@@ -2829,10 +1703,10 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           <Lightbulb size={20} />
         </span>
         <div>
-          <h2 className="font-black text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--sunlit-muted)]">
-            Changes to approved business context can influence future Strategy and content. Existing saved work remains unchanged until you create a new
-            version.
+          <h2 className="text-lg font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
+          <p className="mt-2 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">
+            Changes to approved business context can influence future business strategy, Campaigns, and content. Existing saved work remains unchanged until you
+            create a new version.
           </p>
         </div>
       </article>
@@ -3236,296 +2110,6 @@ function ObjectiveCard({ icon, label, sub, value }: { icon: IconType; label: str
       <p className="mt-5 font-display text-3xl font-bold text-white xl:mt-6 xl:text-4xl">{value}</p>
       <p className="mt-3 text-base text-[#9AA7BD] xl:text-lg">{sub}</p>
     </article>
-  );
-}
-
-function StudioHomeAction({
-  active,
-  badge,
-  description,
-  icon,
-  label,
-  onClick
-}: {
-  active: boolean;
-  badge?: number;
-  description: string;
-  icon: IconType;
-  label: string;
-  onClick: () => void;
-}) {
-  const Icon = icon;
-
-  return (
-    <button
-      aria-pressed={active}
-      className={
-        active
-          ? "rounded-2xl border border-[rgb(217_63_122_/_28%)] bg-[var(--sunlit-paper-deep)] p-5 text-start shadow-sm"
-          : "rounded-2xl border border-[var(--sunlit-line)] bg-white p-5 text-start transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
-      }
-      onClick={onClick}
-      type="button"
-    >
-      <span className="flex items-start gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-          <Icon size={21} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center justify-between gap-3">
-            <span className="font-black text-[var(--sunlit-ink)]">{label}</span>
-            {badge === undefined ? null : (
-              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">{badge}</span>
-            )}
-          </span>
-          <span className="mt-1 block text-sm font-semibold leading-6 text-[var(--sunlit-muted)]">{description}</span>
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function EditorBlock({
-  action,
-  busy = false,
-  children,
-  disabled = false,
-  onAction,
-  title
-}: {
-  action?: string;
-  busy?: boolean;
-  children: ReactNode;
-  disabled?: boolean;
-  onAction?: () => void;
-  title: string;
-}) {
-  function handleAction() {
-    onAction?.();
-  }
-
-  return (
-    <section>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-black text-[var(--sunlit-ink)]">{title}</h2>
-        {action ? (
-          <button
-            className="text-sm font-extrabold text-[var(--sunlit-pink)] disabled:cursor-not-allowed disabled:opacity-45"
-            disabled={disabled || busy}
-            onClick={handleAction}
-            type="button"
-          >
-            {busy ? "Working..." : action}
-          </button>
-        ) : null}
-      </div>
-      <article className="sunlit-panel rounded-[1.75rem] p-5 xl:p-6">{children}</article>
-    </section>
-  );
-}
-
-function ConfirmationDialog({
-  busy,
-  confirmLabel,
-  description,
-  onCancel,
-  onConfirm,
-  title,
-  tone
-}: {
-  busy: boolean;
-  confirmLabel: string;
-  description: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  title: string;
-  tone: "danger" | "neutral";
-}) {
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !busy) onCancel();
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [busy, onCancel]);
-
-  return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-[rgb(32_33_43_/_58%)] p-5 backdrop-blur-sm">
-      <article
-        aria-describedby="studio-confirmation-description"
-        aria-labelledby="studio-confirmation-title"
-        aria-modal="true"
-        className="sunlit-panel w-full max-w-md rounded-[1.75rem] p-6 shadow-2xl"
-        role="dialog"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="sunlit-eyebrow">Confirmation required</p>
-            <h2 className="mt-2 text-xl font-black text-[var(--sunlit-ink)]" id="studio-confirmation-title">
-              {title}
-            </h2>
-          </div>
-          <button aria-label="Close confirmation" className="rounded-full p-2 text-[var(--sunlit-muted)]" disabled={busy} onClick={onCancel} type="button">
-            <X size={20} />
-          </button>
-        </div>
-        <p className="mt-4 text-sm leading-6 text-[var(--sunlit-muted)]" id="studio-confirmation-description">
-          {description}
-        </p>
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button
-            className="sunlit-secondary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
-            disabled={busy}
-            onClick={onCancel}
-            type="button"
-          >
-            Keep post
-          </button>
-          <button
-            className={
-              tone === "danger"
-                ? "min-h-11 rounded-xl bg-[var(--sunlit-pink)] px-5 text-sm font-extrabold text-white disabled:opacity-50"
-                : "sunlit-primary min-h-11 rounded-xl px-5 text-sm font-extrabold disabled:opacity-50"
-            }
-            disabled={busy}
-            onClick={onConfirm}
-            type="button"
-          >
-            {busy ? "Working..." : confirmLabel}
-          </button>
-        </div>
-      </article>
-    </div>
-  );
-}
-
-function MediaViewerDialog({ media, onClose }: { media: MediaAssetRecord; onClose: () => void }) {
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
-      <article
-        aria-label={`Expanded preview of ${media.filename}`}
-        aria-modal="true"
-        className="relative flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-black"
-        role="dialog"
-      >
-        <div className="flex items-center justify-between gap-4 bg-black px-4 py-3 text-white">
-          <p className="truncate text-sm font-extrabold">{media.filename}</p>
-          <div className="flex items-center gap-2">
-            <a
-              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/25 px-3 text-sm font-bold"
-              href={media.publicUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <ExternalLink size={16} /> Open original
-            </a>
-            <button aria-label="Close expanded image" className="rounded-xl border border-white/25 p-2.5" onClick={onClose} type="button">
-              <X size={19} />
-            </button>
-          </div>
-        </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt={media.filename} className="min-h-0 w-full flex-1 object-contain" src={media.publicUrl} />
-      </article>
-    </div>
-  );
-}
-
-function InstagramPreview({
-  brandName,
-  caption,
-  hashtags,
-  locale,
-  media,
-  scheduledAt,
-  type
-}: {
-  brandName: string;
-  caption: string;
-  hashtags: string[];
-  locale: Locale;
-  media: MediaAssetRecord | null;
-  scheduledAt: string | undefined;
-  type: string;
-}) {
-  const cleanBrand = brandName.trim().replace(/^@/, "").replace(/\s+/g, "_").toLowerCase().slice(0, 30) || "yourbrand";
-  const captionWithTags = [caption.trim(), hashtags.join(" ")].filter(Boolean).join("\n\n");
-  const [expanded, setExpanded] = useState(false);
-  const isLongCaption = captionWithTags.length > 150;
-  const visibleCaption = expanded || !isLongCaption ? captionWithTags : `${captionWithTags.slice(0, 147).trimEnd()}…`;
-  const direction = /[\u0600-\u06ff]/.test(captionWithTags) ? "rtl" : "ltr";
-  const scheduledLabel = scheduledAt
-    ? new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { day: "numeric", month: "long" }).format(new Date(scheduledAt))
-    : undefined;
-
-  useEffect(() => setExpanded(false), [captionWithTags]);
-
-  return (
-    <div className="mx-auto max-w-full rounded-[2.5rem] bg-[var(--sunlit-ink)] p-2.5 shadow-[0_24px_70px_rgba(32,33,43,.22)]">
-      <article className="h-[min(620px,calc(100vh-11rem))] min-h-[460px] w-[min(350px,calc(100vw-4rem))] overflow-y-auto rounded-[2rem] bg-white text-[#171717]">
-        <header className="flex items-center justify-between px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              aria-label="Workspace avatar placeholder"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--sunlit-yellow)] via-[var(--sunlit-coral)] to-[var(--sunlit-pink)] text-sm font-black text-white"
-            >
-              {cleanBrand.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="truncate text-sm font-extrabold">{cleanBrand}</span>
-          </div>
-          <MoreHorizontal aria-hidden="true" size={22} />
-        </header>
-
-        {media ? (
-          // The natural dimensions preserve feed framing without an artificial crop.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img alt={media.filename} className="block h-auto w-full bg-black/5" src={media.publicUrl} />
-        ) : (
-          <div className="grid aspect-[4/5] place-items-center bg-[#f4f4f4] p-8 text-center">
-            <div>
-              <ImagePlus className="mx-auto text-black/35" size={42} />
-              <p className="mt-3 text-sm font-bold text-black/55">Attach a JPEG to preview the {type.toLowerCase()} framing.</p>
-            </div>
-          </div>
-        )}
-
-        <div className="px-4 pb-5 pt-3">
-          <div className="flex items-center justify-between">
-            <div aria-label="Instagram action preview" className="flex items-center gap-4">
-              <Heart aria-hidden="true" size={25} strokeWidth={1.8} />
-              <MessageCircle aria-hidden="true" size={25} strokeWidth={1.8} />
-              <Repeat2 aria-hidden="true" size={25} strokeWidth={1.8} />
-              <Send aria-hidden="true" size={24} strokeWidth={1.8} />
-            </div>
-            <Bookmark aria-hidden="true" size={25} strokeWidth={1.8} />
-          </div>
-          <p className="mt-3 text-[10px] font-bold uppercase tracking-[.12em] text-black/40">Follower preview · no fabricated metrics</p>
-          {captionWithTags ? (
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-5" dir={direction}>
-              <span className="font-extrabold">{cleanBrand}</span> {visibleCaption}
-              {isLongCaption ? (
-                <button className="ms-1 font-semibold text-black/50" onClick={() => setExpanded((value) => !value)} type="button">
-                  {expanded ? "less" : "more"}
-                </button>
-              ) : null}
-            </p>
-          ) : (
-            <p className="mt-3 text-sm text-black/45">Caption preview will appear here.</p>
-          )}
-          {scheduledLabel ? <p className="mt-3 text-xs text-black/45">{scheduledLabel}</p> : null}
-        </div>
-      </article>
-    </div>
   );
 }
 

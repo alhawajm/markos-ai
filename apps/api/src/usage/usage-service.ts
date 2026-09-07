@@ -10,10 +10,10 @@ const limitKeys: Record<SupportedUsageMetric, string> = {
   AI_TOKENS_OUT: "aiOutputTokens",
   POST_PUBLISH: "posts",
   STORAGE_BYTES: "storageBytes",
-  STRATEGY: "strategies"
+  CAMPAIGN: "campaigns"
 };
 
-const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "STRATEGY"];
+const monthlyUsageMetrics: SupportedUsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "CAMPAIGN"];
 
 export class UsageQuotaExceededError extends Error {
   readonly metric: SupportedUsageMetric;
@@ -40,53 +40,7 @@ export async function reserveWorkspaceUsage(input: { amount?: number; metric: Su
     throw new Error("Usage amount must be a positive integer");
   }
 
-  const now = input.now ?? new Date();
-  const period = usagePeriod(input.metric, now);
-  const limit = await getWorkspaceLimit(input.workspaceId, input.metric);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.usageCounter.upsert({
-      create: {
-        workspaceId: input.workspaceId,
-        metric: input.metric,
-        periodStart: period.start,
-        periodEnd: period.end,
-        limit,
-        used: 0
-      },
-      update: {
-        limit,
-        periodEnd: period.end
-      },
-      where: {
-        workspaceId_metric_periodStart: {
-          workspaceId: input.workspaceId,
-          metric: input.metric,
-          periodStart: period.start
-        }
-      }
-    });
-
-    const updated = await tx.usageCounter.updateMany({
-      data: {
-        used: {
-          increment: amount
-        }
-      },
-      where: {
-        workspaceId: input.workspaceId,
-        metric: input.metric,
-        periodStart: period.start,
-        used: {
-          lte: limit - amount
-        }
-      }
-    });
-
-    if (updated.count !== 1) {
-      throw new UsageQuotaExceededError(input.metric);
-    }
-  });
+  await recordWorkspaceMeteredUsage({ ...input, amount });
 }
 
 export async function refundWorkspaceUsage(input: { amount?: number; metric: SupportedUsageMetric; now?: Date; workspaceId: string }): Promise<void> {
@@ -158,7 +112,8 @@ export async function recordWorkspaceMeteredUsage(input: {
   const client = input.client ?? prisma;
   const now = input.now ?? new Date();
   const period = usagePeriod(input.metric, now);
-  const limit = await getWorkspaceLimit(input.workspaceId, input.metric);
+  // Commercial quotas are deferred. Zero is a legacy metadata value, not a ceiling.
+  const limit = 0;
 
   await client.usageCounter.upsert({
     create: {
@@ -191,10 +146,7 @@ export async function recordWorkspaceMeteredUsage(input: {
     where: {
       workspaceId: input.workspaceId,
       metric: input.metric,
-      periodStart: period.start,
-      used: {
-        lte: limit - input.amount
-      }
+      periodStart: period.start
     }
   });
 
@@ -314,64 +266,6 @@ export async function ensureCurrentUsagePeriods(input: { now?: Date } = {}): Pro
     periodStart: period.start.toISOString(),
     workspacesChecked: workspaces.length
   };
-}
-
-async function getWorkspaceLimit(workspaceId: string, metric: SupportedUsageMetric): Promise<number> {
-  const workspace = await prisma.workspace.findFirstOrThrow({
-    select: {
-      ownerUserId: true
-    },
-    where: {
-      deletedAt: null,
-      id: workspaceId
-    }
-  });
-  const owner = await prisma.user.findFirstOrThrow({
-    select: {
-      planId: true,
-      planStatus: true,
-      trialEndsAt: true
-    },
-    where: {
-      deletedAt: null,
-      id: workspace.ownerUserId
-    }
-  });
-
-  assertUsageAllowed(owner.planStatus, owner.trialEndsAt);
-
-  const plan = owner.planId
-    ? await prisma.plan.findFirst({
-        select: {
-          limits: true
-        },
-        where: {
-          active: true,
-          deletedAt: null,
-          id: owner.planId
-        }
-      })
-    : null;
-  const limits = plan?.limits;
-  const limit = getLimitValue(limits, limitKeys[metric]);
-
-  if (limit === undefined) {
-    throw new Error(`Plan limit is missing for ${metric}`);
-  }
-
-  return limit;
-}
-
-function assertUsageAllowed(status: PlanStatus, trialEndsAt: Date | null): void {
-  if (status === "ACTIVE") {
-    return;
-  }
-
-  if (status === "TRIAL" && (trialEndsAt === null || trialEndsAt > new Date())) {
-    return;
-  }
-
-  throw new UsagePlanInactiveError(status);
 }
 
 function getLimitValue(limits: Prisma.JsonValue | undefined, key: string): number | undefined {

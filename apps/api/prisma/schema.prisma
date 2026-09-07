@@ -77,6 +77,34 @@ enum MediaType {
   AI_GENERATED
 }
 
+enum MediaGenerationKind {
+  VIDEO
+}
+
+enum MediaGenerationStatus {
+  QUEUED
+  STARTING
+  GENERATING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PublishJobStatus {
+  QUEUED
+  PROCESSING
+  RETRY_WAIT
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum PublishTrigger {
+  SCHEDULED
+  PUBLISH_NOW
+}
+
 enum MetricType {
   ACCOUNT
   POST
@@ -117,8 +145,16 @@ enum UsageMetric {
   AI_TOKENS_IN
   AI_TOKENS_OUT
   POST_PUBLISH
-  STRATEGY
+  CAMPAIGN
   STORAGE_BYTES
+}
+
+enum CampaignStatus {
+  REVIEW
+  APPROVED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
 }
 
 enum InstagramConnectionStatus {
@@ -127,6 +163,47 @@ enum InstagramConnectionStatus {
   EXPIRED
   REVOKED
   ERROR
+}
+
+enum OfferingKind {
+  PRODUCT
+  SERVICE
+  UNSPECIFIED
+}
+
+enum OfferingStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum OfferingPriceType {
+  UNSPECIFIED
+  FIXED
+  FROM
+  RANGE
+  QUOTE
+}
+
+enum OfferingSourceType {
+  OWNER
+  DOCUMENT
+  INSTAGRAM
+}
+
+enum OfferingProjectionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum OfferingDocumentAnalysisStatus {
+  PROCESSING
+  READY
+  FAILED
+  APPROVED
+  DISCARDED
+  EXPIRED
 }
 
 model User {
@@ -151,19 +228,20 @@ model User {
 }
 
 model Workspace {
-  id                      String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  ownerUserId             String           @db.Uuid
-  name                    String
-  slug                    String           @unique
-  instagramAccountId      String?
-  instagramAccessToken    String?
-  instagramTokenExpiresAt DateTime?
-  onboardingStatus        OnboardingStatus @default(NOT_STARTED)
-  onboardingScore         Int              @default(0)
-  vatPricingMode          VatMode          @default(EXCLUSIVE)
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
-  deletedAt               DateTime?
+  id                       String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  ownerUserId              String           @db.Uuid
+  name                     String
+  slug                     String           @unique
+  instagramAccountId       String?
+  instagramAccessToken     String?
+  instagramTokenExpiresAt  DateTime?
+  onboardingStatus         OnboardingStatus @default(NOT_STARTED)
+  onboardingScore          Int              @default(0)
+  onboardingSkippedModules String[]         @default([])
+  vatPricingMode           VatMode          @default(EXCLUSIVE)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  deletedAt                DateTime?
 
   @@index([ownerUserId])
   @@map("workspaces")
@@ -203,23 +281,23 @@ model InstagramConnectionCredential {
   updatedAt               DateTime                  @updatedAt
   deletedAt               DateTime?
 
-  @@index([workspaceId, status])
   @@unique([provider, providerAccountId])
+  @@index([workspaceId, status])
   @@map("instagram_connection_credentials")
 }
 
 model InstagramRecentMedia {
-  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId    String   @db.Uuid
-  connectionId   String   @db.Uuid
-  providerMediaId String
-  mediaType      String
-  caption        String?
-  mediaUrl       String?
-  thumbnailUrl   String?
-  permalink      String?
+  id                String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId       String    @db.Uuid
+  connectionId      String    @db.Uuid
+  providerMediaId   String
+  mediaType         String
+  caption           String?
+  mediaUrl          String?
+  thumbnailUrl      String?
+  permalink         String?
   providerTimestamp DateTime?
-  syncedAt       DateTime @default(now())
+  syncedAt          DateTime  @default(now())
 
   @@unique([connectionId, providerMediaId])
   @@index([workspaceId, connectionId])
@@ -240,15 +318,15 @@ model OAuthStateNonce {
 }
 
 model KnowledgeVault {
-  id          String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String                   @db.Uuid
+  id          String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String                       @db.Uuid
   section     VaultSection
   key         String
   value       Json
   embedding   Unsupported("vector(1536)")?
-  version     Int                      @default(1)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  version     Int                          @default(1)
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
   deletedAt   DateTime?
 
   @@index([workspaceId, section])
@@ -270,19 +348,150 @@ model KnowledgeVaultHistory {
   @@map("knowledge_vault_history")
 }
 
-model Strategy {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String    @db.Uuid
-  title       String
-  horizonDays Int
-  content     Json
-  version     Int       @default(1)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+model OfferingCatalog {
+  id               String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId      String                   @unique @db.Uuid
+  summary          String?
+  differentiators  String[]                 @default([])
+  priceRange       String?
+  salesChannels    String[]                 @default([])
+  version          Int                      @default(1)
+  sourceType       OfferingSourceType       @default(OWNER)
+  projectionStatus OfferingProjectionStatus @default(PENDING)
+  projectedVersion Int                      @default(0)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  deletedAt        DateTime?
 
   @@index([workspaceId])
-  @@map("strategies")
+  @@map("offering_catalogs")
+}
+
+model OfferingCatalogRevision {
+  id          String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String             @db.Uuid
+  catalogId   String             @db.Uuid
+  version     Int
+  snapshot    Json
+  sourceType  OfferingSourceType
+  sourceRef   String?
+  createdAt   DateTime           @default(now())
+
+  @@unique([catalogId, version])
+  @@index([workspaceId, catalogId])
+  @@map("offering_catalog_revisions")
+}
+
+model Offering {
+  id             String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String             @db.Uuid
+  catalogId      String             @db.Uuid
+  kind           OfferingKind       @default(UNSPECIFIED)
+  name           String
+  normalizedName String
+  nameEn         String?
+  nameAr         String?
+  category       String?
+  description    String?
+  priceType      OfferingPriceType  @default(UNSPECIFIED)
+  priceMinor     Int?
+  minPriceMinor  Int?
+  maxPriceMinor  Int?
+  currency       String             @default("BHD") @db.VarChar(3)
+  status         OfferingStatus     @default(ACTIVE)
+  version        Int                @default(1)
+  sourceType     OfferingSourceType @default(OWNER)
+  sourceRef      String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([workspaceId, normalizedName])
+  @@index([workspaceId, catalogId, status])
+  @@map("offerings")
+}
+
+model OfferingRevision {
+  id          String             @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String             @db.Uuid
+  offeringId  String             @db.Uuid
+  version     Int
+  snapshot    Json
+  sourceType  OfferingSourceType
+  sourceRef   String?
+  createdAt   DateTime           @default(now())
+
+  @@unique([offeringId, version])
+  @@index([workspaceId, offeringId])
+  @@map("offering_revisions")
+}
+
+model OfferingDocumentAnalysis {
+  id            String                         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                         @db.Uuid
+  status        OfferingDocumentAnalysisStatus @default(PROCESSING)
+  result        Json?
+  failureCode   String?
+  interactionId String?                        @db.Uuid
+  expiresAt     DateTime
+  approvedAt    DateTime?
+  discardedAt   DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([status, expiresAt])
+  @@map("offering_document_analyses")
+}
+
+model OfferingDocumentFile {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String    @db.Uuid
+  analysisId     String    @db.Uuid
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String    @db.VarChar(64)
+  storageKey     String?
+  removedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([workspaceId, analysisId])
+  @@map("offering_document_files")
+}
+
+model OnboardingDocumentAnalysis {
+  id            String                         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                         @db.Uuid
+  status        OfferingDocumentAnalysisStatus @default(PROCESSING)
+  result        Json?
+  failureCode   String?
+  interactionId String?                        @db.Uuid
+  expiresAt     DateTime
+  approvedAt    DateTime?
+  discardedAt   DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@index([workspaceId, status, createdAt])
+  @@index([status, expiresAt])
+  @@map("onboarding_document_analyses")
+}
+
+model OnboardingDocumentFile {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String    @db.Uuid
+  analysisId     String    @db.Uuid
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String    @db.VarChar(64)
+  storageKey     String?
+  removedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([workspaceId, analysisId])
+  @@map("onboarding_document_files")
 }
 
 model ContentCalendar {
@@ -299,44 +508,63 @@ model ContentCalendar {
 }
 
 model Campaign {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId String    @db.Uuid
-  name        String
-  objective   String?
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id              String         @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId     String         @db.Uuid
+  title           String
+  objective       String?
+  status          CampaignStatus @default(REVIEW)
+  startsAt        DateTime
+  endsAt          DateTime
+  durationDays    Int
+  publishesPerDay Int            @default(1)
+  content         Json
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+  contentItems    ContentItem[]
 
   @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, startsAt])
   @@map("campaigns")
 }
 
 model ContentItem {
-  id              String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId     String        @db.Uuid
-  contentType     ContentType
-  status          ContentStatus @default(DRAFT)
-  captionEn       String?
-  captionAr       String?
-  hashtags        String[]
-  callToAction    String?
-  mediaIds        String[]      @db.Uuid
-  carousel        Json?
-  reelScript      Json?
-  contentPillar   String?
-  campaignId      String?       @db.Uuid
-  aiPromptUsed    String?
-  scheduledAt     DateTime?
-  publishedAt     DateTime?
-  instagramPostId String?
-  failureReason   String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+  revision            Int                  @default(1)
+  visualDirection     String?
+  conversation        ContentConversation?
+  id                  String               @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId         String               @db.Uuid
+  platform            String               @default("INSTAGRAM")
+  contentType         ContentType
+  status              ContentStatus        @default(DRAFT)
+  brief               String?
+  caption             String               @default("")
+  mediaIds            String[]             @db.Uuid
+  carousel            Json?
+  reelScript          Json?
+  contentPillar       String?
+  campaignId          String?              @db.Uuid
+  campaign            Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignGoal        String?
+  campaignWeek        Int?
+  campaignActionIndex Int?
+  tone                String?
+  aiPromptUsed        String?
+  plannedAt           DateTime?
+  scheduledAt         DateTime?
+  publishedAt         DateTime?
+  instagramPostId     String?
+  failureReason       String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
 
+  @@unique([campaignId, campaignWeek, campaignActionIndex], map: "content_items_campaign_suggestion_key")
   @@index([workspaceId, status])
+  @@index([workspaceId, campaignId])
+  @@index([workspaceId, plannedAt])
   @@index([workspaceId, scheduledAt])
   @@map("content_items")
 }
@@ -361,6 +589,80 @@ model MediaAsset {
   @@map("media_assets")
 }
 
+model MediaGenerationJob {
+  id                 String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId        String                @db.Uuid
+  contentItemId      String                @db.Uuid
+  kind               MediaGenerationKind   @default(VIDEO)
+  status             MediaGenerationStatus @default(QUEUED)
+  prompt             String
+  aspectRatio        String                @default("9:16")
+  durationSeconds    Int                   @default(8)
+  provider           String                @default("openai_sora")
+  model              String?
+  providerJobId      String?
+  progress           Int                   @default(0)
+  errorCode          String?
+  errorMessage       String?
+  retryable          Boolean?
+  attempts           Int                   @default(0)
+  nextAttemptAt      DateTime              @default(now())
+  leasedAt           DateTime?
+  leaseExpiresAt     DateTime?
+  outputMediaAssetId String?               @db.Uuid
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([contentItemId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("media_generation_jobs")
+}
+
+model PublishJob {
+  id               String           @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId      String           @db.Uuid
+  contentItemId    String           @db.Uuid
+  status           PublishJobStatus @default(QUEUED)
+  trigger          PublishTrigger
+  scheduledFor     DateTime
+  idempotencyKey   String           @unique
+  attempts         Int              @default(0)
+  maxAttempts      Int              @default(3)
+  nextAttemptAt    DateTime         @default(now())
+  leasedAt         DateTime?
+  leaseExpiresAt   DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  publishedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([contentItemId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("publish_jobs")
+}
+
+model PublishAttempt {
+  id            String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String    @db.Uuid
+  publishJobId  String    @db.Uuid
+  contentItemId String    @db.Uuid
+  attemptNumber Int
+  status        String
+  errorCode     String?
+  retryable     Boolean?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([workspaceId, startedAt])
+  @@index([publishJobId, attemptNumber])
+  @@map("publish_attempts")
+}
+
 model InstagramAnalytics {
   id            String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId   String     @db.Uuid
@@ -378,24 +680,27 @@ model InstagramAnalytics {
 }
 
 model AiInteraction {
-  id            String                   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId   String                   @db.Uuid
-  agent         String
-  promptVersion String
-  prompt        Json
-  response      Json
-  accepted      Boolean?
-  edited        Boolean?
-  regenerated   Boolean?
-  tokensIn      Int
-  tokensOut     Int
-  costMinor     Int
-  currency      String                   @default("BHD") @db.VarChar(3)
-  model         String
-  embedding     Unsupported("vector(1536)")?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
-  deletedAt     DateTime?
+  conversationRunId String?                      @db.Uuid
+  contentItemId     String?                      @db.Uuid
+  contentRevision   Int?
+  id                String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId       String                       @db.Uuid
+  agent             String
+  promptVersion     String
+  prompt            Json
+  response          Json
+  accepted          Boolean?
+  edited            Boolean?
+  regenerated       Boolean?
+  tokensIn          Int
+  tokensOut         Int
+  costMinor         Int
+  currency          String                       @default("BHD") @db.VarChar(3)
+  model             String
+  embedding         Unsupported("vector(1536)")?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  deletedAt         DateTime?
 
   @@index([workspaceId, agent])
   @@map("ai_interactions")
@@ -491,17 +796,17 @@ model UsageCounter {
 }
 
 model PromptTemplate {
-  id         String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId String    @db.Uuid
-  agent      String
-  version    String
-  body       String
-  variantOf  String?   @db.Uuid
-  trafficPct Int       @default(100)
-  active     Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+  agent       String
+  version     String
+  body        String
+  variantOf   String?   @db.Uuid
+  trafficPct  Int       @default(100)
+  active      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   @@unique([workspaceId, agent, version])
   @@index([workspaceId, agent, active])
@@ -536,16 +841,72 @@ model Notification {
 }
 
 model AuditLog {
-  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  actorId     String?   @db.Uuid
-  workspaceId String?   @db.Uuid
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  actorId     String?  @db.Uuid
+  workspaceId String?  @db.Uuid
   action      String
   targetType  String
   targetId    String?
   metadata    Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([workspaceId, action])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+model ContentConversation {
+  id            String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                @db.Uuid
+  contentItemId String                @unique @db.Uuid
+  contentItem   ContentItem           @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  summary       String                @default("")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  runs          ConversationRun[]
+  messages      ConversationMessage[]
+
+  @@index([workspaceId])
+  @@map("content_conversations")
+}
+
+model ConversationRun {
+  id             String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String                @db.Uuid
+  conversationId String                @db.Uuid
+  conversation   ContentConversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String                @db.Uuid
+  requestId      String                @db.Uuid
+  instruction    String
+  locale         String                @default("en")
+  baseRevision   Int
+  status         String                @default("QUEUED")
+  result         Json?
+  errorCode      String?
+  leaseExpiresAt DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  messages       ConversationMessage[]
+
+  @@unique([conversationId, requestId])
+  @@index([workspaceId])
+  @@index([status, createdAt])
+  @@map("conversation_runs")
+}
+
+model ConversationMessage {
+  id             String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String              @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ContentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  runId          String              @db.Uuid
+  run            ConversationRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  role           String
+  text           String
+  createdAt      DateTime            @default(now())
+
+  @@unique([runId, role])
+  @@index([workspaceId])
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
 }

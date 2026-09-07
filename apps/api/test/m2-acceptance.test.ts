@@ -10,7 +10,7 @@ const contentMock = vi.hoisted(() => ({
         context: Array<{ key: string; section: string }>;
         contentType: string;
         count: number;
-        toneLock: { requiredLanguages: ["ar", "en"]; toneWords: string[]; voiceNotes?: string };
+        toneLock: { preferredLanguages: ["en", "ar"]; toneWords: string[]; voiceNotes?: string };
         topic: string;
       }
     | undefined
@@ -24,15 +24,16 @@ vi.mock("../src/ai/embeddings-client", () => ({
   })
 }));
 
-vi.mock("../src/ai/strategy-client", () => ({
-  generateStrategyPlan: async (input: { context: unknown[]; horizonDays: number; objective?: string; workspaceId: string }) => ({
-    model: "test-strategy-model",
-    prompt_version: "strategy.v1.m2",
+vi.mock("../src/ai/campaign-client", () => ({
+  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; publishesPerDay: number; workspaceId: string }) => ({
+    model: "test-campaign-model",
+    prompt_version: "campaign.v1.m2",
     tokens_in: 100,
     tokens_out: 200,
-    strategy: {
-      summary: `${input.horizonDays}-day M2 plan for ${input.objective ?? "Instagram growth"}`,
-      horizonDays: input.horizonDays,
+    campaign: {
+      summary: `${input.durationDays}-day M2 campaign for ${input.objective ?? "Instagram growth"}`,
+      durationDays: input.durationDays,
+      publishesPerDay: input.publishesPerDay,
       objectives: [input.objective ?? "grow qualified Instagram inquiries"],
       pillars: [
         {
@@ -61,10 +62,14 @@ vi.mock("../src/ai/content-client", () => ({
       drafts: [
         {
           contentType: input.contentType,
-          captionEn: `English ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
-          captionAr: `Arabic ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
-          hashtags: ["#BahrainBusiness", "#PearlCoffee"],
-          callToAction: "Send a DM for the office coffee menu.",
+          caption: [
+            `English ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
+            `Arabic ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
+            "Send a DM for the office coffee menu.",
+            ["#BahrainBusiness", "#PearlCoffee"].join(" ")
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           contentPillar: "Wholesale proof"
         }
       ]
@@ -93,26 +98,28 @@ vi.mock("../src/ai/image-client", () => ({
 }));
 
 describe("M2 acceptance", () => {
-  it("turns a calendar slot into bilingual tone-locked content with an AI image, workflow movement, and strategy PDF export", async () => {
+  it("turns a Campaign-linked calendar slot into bilingual tone-locked content with an AI image, workflow movement, and Campaign PDF export", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    const scheduledAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-    const rescheduledAt = new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = futureScheduleTime(4);
+    const rescheduledAt = futureScheduleTime(28);
     const periodStart = monthStart(new Date());
 
     await seedVault(app, headers);
 
-    const strategy = await app.inject({
+    const campaign = await app.inject({
       method: "POST",
-      url: "/v1/strategy/generate",
+      url: "/v1/campaigns/generate",
       headers,
       payload: {
         objective: "increase wholesale office coffee leads",
-        horizonDays: 90
+        durationDays: 14,
+        publishesPerDay: 1,
+        startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
-    const strategyId = strategy.json().data.id as string;
+    const campaignId = campaign.json().data.id as string;
 
     const generated = await app.inject({
       method: "POST",
@@ -121,7 +128,7 @@ describe("M2 acceptance", () => {
       payload: {
         topic: "wholesale office coffee leads",
         contentType: "POST",
-        strategyId,
+        campaignId,
         scheduledAt
       }
     });
@@ -178,7 +185,7 @@ describe("M2 acceptance", () => {
     });
     const pdf = await app.inject({
       method: "GET",
-      url: `/v1/strategy/${strategyId}/pdf`,
+      url: `/v1/campaigns/${campaignId}/pdf`,
       headers
     });
     const calendar = await prisma.contentCalendar.findFirstOrThrow({
@@ -188,7 +195,7 @@ describe("M2 acceptance", () => {
       }
     });
 
-    expect(strategy.statusCode).toBe(200);
+    expect(campaign.statusCode).toBe(200);
     expect(generated.statusCode).toBe(200);
     expect(generated.json()).toMatchObject({
       data: {
@@ -196,15 +203,15 @@ describe("M2 acceptance", () => {
         contentType: "POST",
         status: "SCHEDULED",
         scheduledAt,
-        captionEn: "English wholesale office coffee leads using warm, clear, confident tone",
-        captionAr: "Arabic wholesale office coffee leads using warm, clear, confident tone",
+        caption:
+          "English wholesale office coffee leads using warm, clear, confident tone\n\nArabic wholesale office coffee leads using warm, clear, confident tone\n\nSend a DM for the office coffee menu.\n\n#BahrainBusiness #PearlCoffee",
         contentPillar: "Wholesale proof"
       }
     });
     expect(contentMock.lastInput).toMatchObject({
       topic: "wholesale office coffee leads",
       toneLock: {
-        requiredLanguages: ["ar", "en"],
+        preferredLanguages: ["en", "ar"],
         toneWords: ["warm", "clear", "confident"],
         voiceNotes: "Helpful, bilingual, and direct."
       },
@@ -247,8 +254,8 @@ describe("M2 acceptance", () => {
     });
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers["content-type"]).toContain("application/pdf");
-    expect(pdf.body).toContain("MARKOS AI Strategy Export");
-    expect(pdf.body).toContain("90-day strategy: increase wholesale office coffee leads");
+    expect(pdf.body).toContain("MARKOS AI Campaign Export");
+    expect(pdf.body).toContain("14-day campaign: increase wholesale office coffee leads");
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
         where: {
@@ -412,4 +419,8 @@ function testEmbedding(text: string): number[] {
   const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 
   return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function futureScheduleTime(hours: number): string {
+  return new Date(Math.ceil((Date.now() + hours * 60 * 60 * 1000) / 1_800_000) * 1_800_000).toISOString();
 }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Database } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 
-type VaultGroundingArea = "assistant" | "content" | "strategy";
+type VaultGroundingArea = "assistant" | "campaigns" | "content";
 
 export interface VaultGroundingState {
   area: VaultGroundingArea;
@@ -102,12 +102,12 @@ function defaultGrounding(area: VaultGroundingArea, locale: Locale): VaultGround
     ar: {
       assistant: ["ملف الشركة", "الجمهور", "أهداف النمو"],
       content: ["نبرة العلامة", "الجمهور", "عروض الموسم"],
-      strategy: ["ملف الشركة", "التحليلات", "أهداف العمل"]
+      campaigns: ["ملف الشركة", "التحليلات", "أهداف العمل"]
     },
     en: {
       assistant: ["Company profile", "Audience", "Growth goals"],
       content: ["Brand voice", "Audience", "Seasonal offers"],
-      strategy: ["Company profile", "Analytics", "Business goals"]
+      campaigns: ["Company profile", "Analytics", "Business goals"]
     }
   };
 
@@ -128,7 +128,7 @@ function groundingCopy(locale: Locale, key: string): string {
       gapInline: "تحتاج هذه الخطوة إلى ذاكرة أعمال من الخزنة قبل تشغيل الذكاء.",
       gapTitle: "فجوة في الخزنة",
       groundedTitle: "مبني على الخزنة",
-      strategyGapBody: "لا يمكن توليد استراتيجية موثوقة بدون أهداف العمل والجمهور والتحليلات الأساسية في الخزنة."
+      campaignsGapBody: "لا يمكن إنشاء حملة موثوقة بدون أهداف العمل والجمهور والتحليلات الأساسية في الخزنة."
     },
     en: {
       assistantGapBody: "MARKOS needs enough business memory before it can recommend a reliable next move. Complete the Vault, then run the assistant again.",
@@ -137,7 +137,7 @@ function groundingCopy(locale: Locale, key: string): string {
       gapInline: "This action needs business memory from the Vault before AI can run.",
       gapTitle: "Vault knowledge gap",
       groundedTitle: "Vault grounded",
-      strategyGapBody: "A reliable strategy needs business goals, audience, and baseline analytics in the Vault first."
+      campaignsGapBody: "A reliable campaign needs business goals, audience, and baseline analytics in the Vault first."
     }
   };
 

@@ -16,20 +16,35 @@ from app.contracts.business_profile import (
     BusinessProfileGenerateRequest,
     BusinessProfileGenerateResponse,
 )
-from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
-from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
-from app.contracts.strategy import (
-    StrategyContextChunk,
-    StrategyGenerateRequest,
-    StrategyGenerateResponse,
+from app.contracts.campaign import (
+    CampaignGenerateRequest,
+    CampaignGenerateResponse,
+    VaultContextChunk,
 )
+from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
+from app.contracts.conversation import ConversationRequest, ConversationResponse
+from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
+from app.contracts.offering_document import (
+    OfferingDocumentAnalysisRequest,
+    OfferingDocumentAnalysisResponse,
+)
+from app.contracts.onboarding_document import (
+    OnboardingDocumentAnalysisRequest,
+    OnboardingDocumentAnalysisResponse,
+)
+from app.contracts.video import VideoJobRequest, VideoJobResponse, VideoStartRequest
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
+from app.documents import extract_documents
 from app.providers.business_profile import get_business_profile_provider
+from app.providers.campaign import get_campaign_provider
 from app.providers.content import get_content_provider
+from app.providers.conversation import respond_to_conversation
 from app.providers.image import get_image_provider
-from app.providers.strategy import get_strategy_provider
+from app.providers.offering_document import get_offering_document_provider
+from app.providers.onboarding_document import get_onboarding_document_provider
+from app.providers.video import get_video_provider
 
 
 class HealthResponse(BaseModel):
@@ -66,7 +81,7 @@ class AgentRunRequest(BaseModel):
     agent: AgentName
     task: str = Field(min_length=3, max_length=1000)
     locale: Literal["ar", "en"] = "en"
-    context: list[StrategyContextChunk] = Field(default_factory=list, max_length=10)
+    context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
     inputs: dict[str, object] | None = None
     model: str | None = None
 
@@ -175,21 +190,21 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
     )
 
 
-@app.post("/ai/strategy/generate", response_model=StrategyGenerateResponse)
-async def generate_strategy(request: StrategyGenerateRequest) -> StrategyGenerateResponse:
+@app.post("/ai/campaigns/generate", response_model=CampaignGenerateResponse)
+async def generate_campaign(request: CampaignGenerateRequest) -> CampaignGenerateResponse:
     if not request.context:
         raise AiServiceError(
             code="AI_CONTEXT_MISSING",
-            message="Knowledge Vault context is required for strategy generation",
+            message="Business Profile context is required for campaign generation",
             status_code=422,
             retryable=False,
         )
 
-    provider = get_strategy_provider()
+    provider = get_campaign_provider()
 
     try:
-        async with asyncio.timeout(settings.ai_strategy_timeout_seconds):
-            return await provider.generate_strategy(request)
+        async with asyncio.timeout(settings.ai_campaign_timeout_seconds):
+            return await provider.generate_campaign(request)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",
@@ -208,6 +223,51 @@ async def generate_business_profile(
     try:
         async with asyncio.timeout(settings.ai_profile_timeout_seconds):
             return await provider.generate_profile(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post(
+    "/ai/onboarding/offerings/analyze",
+    response_model=OfferingDocumentAnalysisResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_offering_documents(
+    request: OfferingDocumentAnalysisRequest,
+) -> OfferingDocumentAnalysisResponse:
+    documents = extract_documents(request.files)
+    provider = get_offering_document_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_document_timeout_seconds):
+            return await provider.analyze(request, documents)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post(
+    "/ai/onboarding/documents/analyze",
+    response_model=OnboardingDocumentAnalysisResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_onboarding_documents(
+    request: OnboardingDocumentAnalysisRequest,
+) -> OnboardingDocumentAnalysisResponse:
+    provider = get_onboarding_document_provider()
+
+    try:
+        async with asyncio.timeout(settings.ai_document_timeout_seconds):
+            return await provider.analyze(request)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",
@@ -259,6 +319,57 @@ async def generate_image(request: ImageGenerateRequest) -> ImageGenerateResponse
         ) from None
 
 
+@app.post("/ai/videos/start", response_model=VideoJobResponse)
+async def start_video(request: VideoStartRequest) -> VideoJobResponse:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            return await provider.start(request)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post("/ai/videos/status", response_model=VideoJobResponse)
+async def video_status(request: VideoJobRequest) -> VideoJobResponse:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            return await provider.status(request.provider_job_id)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+
+@app.post("/ai/videos/download")
+async def download_video(request: VideoJobRequest) -> Response:
+    provider = get_video_provider()
+    try:
+        async with asyncio.timeout(settings.ai_video_timeout_seconds):
+            video = await provider.download(request.provider_job_id)
+    except TimeoutError:
+        raise AiServiceError(
+            code="AI_PROVIDER_TIMEOUT",
+            message="The AI video provider timed out",
+            status_code=504,
+            retryable=True,
+        ) from None
+
+    return Response(
+        content=video,
+        media_type="video/mp4",
+        headers={"Content-Disposition": 'attachment; filename="markos-ai-video.mp4"'},
+    )
+
+
 @app.post("/ai/agents/run", response_model=AgentRunResponse)
 async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
     model = request.model or settings.llm_primary_model
@@ -292,7 +403,7 @@ def deterministic_embedding(text: str, dimensions: int) -> list[float]:
     return [value / norm for value in vector]
 
 
-def summarize_context(context: list[StrategyContextChunk]) -> str:
+def summarize_context(context: list[VaultContextChunk]) -> str:
     if not context:
         return "the available workspace context"
 
@@ -373,10 +484,7 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
         return {
             **base,
             "draft": {
-                "captionEn": f"{request.task}: a Vault-grounded Instagram caption with a clear CTA.",
-                "captionAr": f"{request.task}: صياغة إنستغرام مبنية على معرفة النشاط مع دعوة واضحة.",
-                "hashtags": ["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
-                "callToAction": "Send a DM to learn more.",
+                "caption": f"{request.task}: a Vault-grounded Instagram caption.\n\nصياغة إنستغرام مبنية على معرفة النشاط.\n\nSend a DM to learn more.\n\n#BahrainBusiness #InstagramMarketing #MarkosAI",
             },
         }
 
@@ -455,3 +563,8 @@ def human_agent_name(agent: AgentName) -> str:
 
 def agent_prompt_text(request: AgentRunRequest) -> str:
     return f"{request.workspace_id} {request.agent} {request.task} {request.locale} {request.context} {request.inputs}"
+
+
+@app.post("/ai/content/conversation", response_model=ConversationResponse)
+async def content_conversation(request: ConversationRequest) -> ConversationResponse:
+    return await respond_to_conversation(request)

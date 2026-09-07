@@ -68,13 +68,165 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.knowledgeVaultHistory.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
-    model: "Strategy",
+    model: "OfferingCatalog",
     create: (fixture) =>
-      prisma.strategy.create({
-        data: { workspaceId: fixture.workspaceId, title: `Strategy ${randomUUID()}`, horizonDays: 30, content: { pillars: [] } },
+      prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Workspace-owned catalogue" },
         select: { id: true, workspaceId: true }
       }),
-    list: (workspaceId) => prisma.strategy.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+    list: (workspaceId) => prisma.offeringCatalog.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingCatalogRevision",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Revision catalogue" }
+      });
+      return prisma.offeringCatalogRevision.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          version: 1,
+          snapshot: { summary: catalog.summary },
+          sourceType: "OWNER"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringCatalogRevision.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "Offering",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Offering catalogue" }
+      });
+      return prisma.offering.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          name: `Offering ${randomUUID()}`,
+          normalizedName: `offering-${randomUUID()}`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offering.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingRevision",
+    create: async (fixture) => {
+      const catalog = await prisma.offeringCatalog.create({
+        data: { workspaceId: fixture.workspaceId, summary: "Offering revision catalogue" }
+      });
+      const offering = await prisma.offering.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          catalogId: catalog.id,
+          name: `Revision Offering ${randomUUID()}`,
+          normalizedName: `revision-offering-${randomUUID()}`
+        }
+      });
+      return prisma.offeringRevision.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          offeringId: offering.id,
+          version: 1,
+          snapshot: { name: offering.name },
+          sourceType: "OWNER"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringRevision.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingDocumentAnalysis",
+    create: (fixture) =>
+      prisma.offeringDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.offeringDocumentAnalysis.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OfferingDocumentFile",
+    create: async (fixture) => {
+      const analysis = await prisma.offeringDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        }
+      });
+      return prisma.offeringDocumentFile.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          analysisId: analysis.id,
+          filename: "offerings.txt",
+          mimeType: "text/plain",
+          sizeBytes: 12,
+          checksumSha256: "a".repeat(64),
+          storageKey: `local:${fixture.workspaceId}/${randomUUID()}.txt`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.offeringDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OnboardingDocumentAnalysis",
+    create: (fixture) =>
+      prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.onboardingDocumentAnalysis.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "OnboardingDocumentFile",
+    create: async (fixture) => {
+      const analysis = await prisma.onboardingDocumentAnalysis.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          expiresAt: new Date(Date.now() + 60_000)
+        }
+      });
+      return prisma.onboardingDocumentFile.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          analysisId: analysis.id,
+          filename: "business.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 12,
+          checksumSha256: "b".repeat(64),
+          storageKey: `local:${fixture.workspaceId}/${randomUUID()}.pdf`
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.onboardingDocumentFile.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "Campaign",
+    create: (fixture) =>
+      prisma.campaign.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          title: `Campaign ${randomUUID()}`,
+          startsAt: new Date("2026-09-01T00:00:00.000Z"),
+          endsAt: new Date("2026-10-01T00:00:00.000Z"),
+          durationDays: 30,
+          content: { durationDays: 30, pillars: [], publishesPerDay: 1 }
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.campaign.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "ContentCalendar",
@@ -86,22 +238,67 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.contentCalendar.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
-    model: "Campaign",
-    create: (fixture) =>
-      prisma.campaign.create({
-        data: { workspaceId: fixture.workspaceId, name: `Campaign ${randomUUID()}` },
-        select: { id: true, workspaceId: true }
-      }),
-    list: (workspaceId) => prisma.campaign.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
-  },
-  {
     model: "ContentItem",
     create: (fixture) =>
       prisma.contentItem.create({
-        data: { workspaceId: fixture.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+        data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.contentItem.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ContentConversation",
+    create: async (fixture) => createConversationFixture(fixture),
+    list: (workspaceId) => prisma.contentConversation.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ConversationRun",
+    create: async (fixture) => createConversationRunFixture(fixture),
+    list: (workspaceId) => prisma.conversationRun.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ConversationMessage",
+    create: async (fixture) => {
+      const run = await createConversationRunFixture(fixture);
+      return prisma.conversationMessage.create({
+        data: { workspaceId: fixture.workspaceId, conversationId: run.conversationId, runId: run.id, role: "user", text: "Create a citrus post" },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.conversationMessage.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "MediaGenerationJob",
+    create: async (fixture) => {
+      const content = await createContentFixture(fixture);
+      return prisma.mediaGenerationJob.create({
+        data: { workspaceId: fixture.workspaceId, contentItemId: content.id, prompt: "Show the citrus product", status: "CANCELLED" },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.mediaGenerationJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "PublishJob",
+    create: async (fixture) => createPublishJobFixture(fixture),
+    list: (workspaceId) => prisma.publishJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "PublishAttempt",
+    create: async (fixture) => {
+      const job = await createPublishJobFixture(fixture);
+      return prisma.publishAttempt.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          contentItemId: job.contentItemId,
+          publishJobId: job.id,
+          attemptNumber: 1,
+          status: "FAILED"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.publishAttempt.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "MediaAsset",
@@ -300,6 +497,44 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.auditLog.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   }
 ];
+
+function createContentFixture(fixture: WorkspaceFixture) {
+  return prisma.contentItem.create({ data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "Isolation test", mediaIds: [] } });
+}
+
+async function createConversationFixture(fixture: WorkspaceFixture) {
+  const content = await createContentFixture(fixture);
+  return prisma.contentConversation.create({ data: { workspaceId: fixture.workspaceId, contentItemId: content.id } });
+}
+
+async function createConversationRunFixture(fixture: WorkspaceFixture) {
+  const conversation = await createConversationFixture(fixture);
+  return prisma.conversationRun.create({
+    data: {
+      workspaceId: fixture.workspaceId,
+      conversationId: conversation.id,
+      userId: fixture.userId,
+      requestId: randomUUID(),
+      instruction: "Create a citrus post",
+      baseRevision: 1,
+      status: "SUCCEEDED"
+    }
+  });
+}
+
+async function createPublishJobFixture(fixture: WorkspaceFixture) {
+  const content = await createContentFixture(fixture);
+  return prisma.publishJob.create({
+    data: {
+      workspaceId: fixture.workspaceId,
+      contentItemId: content.id,
+      trigger: "PUBLISH_NOW",
+      scheduledFor: new Date(),
+      idempotencyKey: randomUUID(),
+      status: "CANCELLED"
+    }
+  });
+}
 
 describe("workspace-owned data isolation", () => {
   it("covers every Prisma model with a workspaceId field", () => {

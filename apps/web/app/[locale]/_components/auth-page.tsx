@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -12,14 +13,17 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  Globe2,
+  Images,
+  Instagram,
   KeyRound,
+  Languages,
   Lock,
   Mail,
-  Send,
+  Play,
   ShieldCheck,
   Sparkles,
-  Wand2,
+  TrendingUp,
+  UsersRound,
   type LucideIcon
 } from "lucide-react";
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
@@ -27,6 +31,7 @@ import type { AuthSession, Locale } from "@markos/shared-types";
 import { loginSchema, registerSchema } from "@markos/validation";
 import { getBrowserApiBaseUrl } from "./api-base-url";
 import { refreshBrowserSession, setBrowserSession, useMarkosSession } from "./browser-session";
+import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./auth-page.module.css";
 
 export type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
@@ -64,6 +69,9 @@ const copyByLocale = {
       google: "Continue with Google",
       apple: "Continue with Apple",
       divider: "or continue with email",
+      compactGoogle: "Google",
+      compactApple: "Apple",
+      compactDivider: "or",
       unavailable: (name: string) => `${name} sign-in is not available yet. Use email for now.`
     },
     fields: {
@@ -72,13 +80,16 @@ const copyByLocale = {
       email: "Email",
       emailPlaceholder: "you@example.com",
       password: "Password",
+      passwordPlaceholder: "Enter your password",
       newPassword: "New password",
       confirmPassword: "Confirm new password",
       passwordRequirement: "At least 12 characters",
       mfaCode: "MFA code",
       mfaPlaceholder: "6-digit code",
       showPassword: "Show password",
-      hidePassword: "Hide password"
+      hidePassword: "Hide password",
+      showPasswordShort: "Show",
+      hidePasswordShort: "Hide"
     },
     legal: {
       prefix: "I agree to the",
@@ -98,6 +109,7 @@ const copyByLocale = {
       passwordRequired: "Use a password with at least 12 characters."
     },
     login: {
+      eyebrow: "LOG IN",
       title: "Welcome back",
       body: "Continue to your MARKOS workspace.",
       forgot: "Forgot password?",
@@ -105,7 +117,76 @@ const copyByLocale = {
       switchPrefix: "New to MARKOS?",
       switchAction: "Create an account",
       fieldsRequired: "Enter your email and password.",
-      mfaRequired: "Enter the 6-digit code from your authenticator app."
+      mfaRequired: "Enter the 6-digit code from your authenticator app.",
+      preview: {
+        ariaLabel: "Interactive sample of the MARKOS content calendar",
+        eyebrow: "MARKOS PRODUCT PREVIEW",
+        title: "Your week, ready when you are.",
+        body: "Pick up your plan at a glance—then create, approve, and schedule.",
+        journey: ["Create", "Approve", "Schedule"],
+        week: {
+          label: "Week of 24 August",
+          sample: "SAMPLE PLAN",
+          openDay: "Open Wednesday 26 August",
+          days: [
+            { label: "Mon 24", status: "DRAFT", title: "Behind the scenes", placement: "start" },
+            { label: "Tue 25", status: "", title: "", placement: "start" },
+            { label: "Wed 26", status: "APPROVAL", title: "Product spotlight", placement: "center" },
+            { label: "Thu 27", status: "", title: "", placement: "start" },
+            { label: "Fri 28", status: "SCHEDULED", title: "Weekend story", placement: "end" }
+          ]
+        },
+        day: {
+          back: "Week overview",
+          title: "Wednesday, 26 August",
+          count: "3 planned",
+          guidance: "Select a post to expand its approval and schedule details.",
+          hint: "CLICK A POST TO EXPAND",
+          openPost: (title: string) => `Open ${title}`,
+          posts: [
+            {
+              time: "09:30",
+              title: "Product spotlight",
+              meta: "Instagram feed · Needs approval",
+              status: "Needs approval",
+              mediaEyebrow: "NEW ARRIVALS",
+              mediaTitle: "Made for weekends.",
+              caption: "A closer look at a customer favourite—ready for your final review.",
+              schedule: "Wed · 09:30"
+            },
+            {
+              time: "13:00",
+              title: "Product teaser story",
+              meta: "Instagram story · Draft",
+              status: "Draft",
+              mediaEyebrow: "STORY PREVIEW",
+              mediaTitle: "A closer look.",
+              caption: "A short teaser that introduces the product before the main post.",
+              schedule: "Wed · 13:00"
+            },
+            {
+              time: "18:30",
+              title: "Question prompt",
+              meta: "Instagram story · Scheduled",
+              status: "Scheduled",
+              mediaEyebrow: "COMMUNITY",
+              mediaTitle: "What would you choose?",
+              caption: "Invite followers to share the option they would choose this weekend.",
+              schedule: "Wed · 18:30"
+            }
+          ]
+        },
+        post: {
+          back: "Wednesday",
+          format: "Instagram feed · 1 image",
+          caption: "CAPTION",
+          reserved: "Reserved slot",
+          handoff: "Approve to keep this slot",
+          action: "Approve & schedule",
+          media: "1:1 MEDIA PREVIEW",
+          hint: "BACK RETURNS TO THE DAY VIEW"
+        }
+      }
     },
     forgot: {
       title: "Reset your password",
@@ -164,6 +245,9 @@ const copyByLocale = {
       google: "المتابعة باستخدام Google",
       apple: "المتابعة باستخدام Apple",
       divider: "أو تابع بالبريد الإلكتروني",
+      compactGoogle: "Google",
+      compactApple: "Apple",
+      compactDivider: "أو",
       unavailable: (name: string) => `تسجيل الدخول باستخدام ${name} غير متاح بعد. استخدم البريد الإلكتروني حالياً.`
     },
     fields: {
@@ -172,13 +256,16 @@ const copyByLocale = {
       email: "البريد الإلكتروني",
       emailPlaceholder: "you@example.com",
       password: "كلمة المرور",
+      passwordPlaceholder: "أدخل كلمة المرور",
       newPassword: "كلمة المرور الجديدة",
       confirmPassword: "تأكيد كلمة المرور الجديدة",
       passwordRequirement: "12 حرفًا على الأقل",
       mfaCode: "رمز التحقق بخطوتين",
       mfaPlaceholder: "رمز من 6 أرقام",
       showPassword: "إظهار كلمة المرور",
-      hidePassword: "إخفاء كلمة المرور"
+      hidePassword: "إخفاء كلمة المرور",
+      showPasswordShort: "إظهار",
+      hidePasswordShort: "إخفاء"
     },
     legal: {
       prefix: "أوافق على",
@@ -198,6 +285,7 @@ const copyByLocale = {
       passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل."
     },
     login: {
+      eyebrow: "تسجيل الدخول",
       title: "مرحبًا بعودتك",
       body: "تابع إلى مساحة عمل MARKOS.",
       forgot: "نسيت كلمة المرور؟",
@@ -205,7 +293,76 @@ const copyByLocale = {
       switchPrefix: "جديد في MARKOS؟",
       switchAction: "إنشاء حساب",
       fieldsRequired: "أدخل بريدك الإلكتروني وكلمة المرور.",
-      mfaRequired: "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة."
+      mfaRequired: "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة.",
+      preview: {
+        ariaLabel: "معاينة تفاعلية لنظام تقويم المحتوى في MARKOS",
+        eyebrow: "معاينة منتج MARKOS",
+        title: "أسبوعك جاهز عندما تحتاجه.",
+        body: "اطّلع على خطتك بسرعة، ثم أنشئ المحتوى واعتمده وجدوله.",
+        journey: ["أنشئ", "اعتمد", "جدول"],
+        week: {
+          label: "أسبوع 24 أغسطس",
+          sample: "خطة تجريبية",
+          openDay: "فتح يوم الأربعاء 26 أغسطس",
+          days: [
+            { label: "الاثنين 24", status: "مسودة", title: "خلف الكواليس", placement: "start" },
+            { label: "الثلاثاء 25", status: "", title: "", placement: "start" },
+            { label: "الأربعاء 26", status: "للاعتماد", title: "إبراز المنتج", placement: "center" },
+            { label: "الخميس 27", status: "", title: "", placement: "start" },
+            { label: "الجمعة 28", status: "مجدول", title: "قصة نهاية الأسبوع", placement: "end" }
+          ]
+        },
+        day: {
+          back: "نظرة الأسبوع",
+          title: "الأربعاء، 26 أغسطس",
+          count: "3 منشورات",
+          guidance: "اختر منشورًا لعرض تفاصيل الاعتماد والجدولة.",
+          hint: "اختر منشورًا لعرض التفاصيل",
+          openPost: (title: string) => `فتح ${title}`,
+          posts: [
+            {
+              time: "09:30",
+              title: "إبراز المنتج",
+              meta: "منشور Instagram · يحتاج اعتمادًا",
+              status: "يحتاج اعتمادًا",
+              mediaEyebrow: "وصل حديثًا",
+              mediaTitle: "مصمم لنهاية الأسبوع.",
+              caption: "نظرة أقرب على أحد المنتجات المفضلة لدى العملاء، جاهزة لمراجعتك النهائية.",
+              schedule: "الأربعاء · 09:30"
+            },
+            {
+              time: "13:00",
+              title: "قصة تمهيدية للمنتج",
+              meta: "قصة Instagram · مسودة",
+              status: "مسودة",
+              mediaEyebrow: "معاينة القصة",
+              mediaTitle: "نظرة أقرب.",
+              caption: "تمهيد قصير يعرّف بالمنتج قبل نشر المنشور الرئيسي.",
+              schedule: "الأربعاء · 13:00"
+            },
+            {
+              time: "18:30",
+              title: "سؤال للمتابعين",
+              meta: "قصة Instagram · مجدولة",
+              status: "مجدول",
+              mediaEyebrow: "المجتمع",
+              mediaTitle: "ماذا ستختار؟",
+              caption: "ادعُ المتابعين لمشاركة الخيار الذي يفضلونه في نهاية هذا الأسبوع.",
+              schedule: "الأربعاء · 18:30"
+            }
+          ]
+        },
+        post: {
+          back: "الأربعاء",
+          format: "منشور Instagram · صورة واحدة",
+          caption: "النص",
+          reserved: "موعد محجوز",
+          handoff: "اعتمد المحتوى للحفاظ على الموعد",
+          action: "اعتماد وجدولة",
+          media: "معاينة وسائط 1:1",
+          hint: "العودة تفتح عرض اليوم"
+        }
+      }
     },
     forgot: {
       title: "استعد كلمة المرور",
@@ -249,13 +406,6 @@ const copyByLocale = {
   }
 } as const;
 
-const asideIcons = {
-  plan: CalendarDays,
-  create: Wand2,
-  publish: Send,
-  insights: BarChart3
-} as const;
-
 export function AuthPage({
   initialEmail = "",
   initialToken = "",
@@ -274,7 +424,6 @@ export function AuthPage({
   const client = useMemo(() => new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }), []);
   const copy = copyByLocale[locale];
   const isArabic = locale === "ar";
-  const otherLocale = isArabic ? "en" : "ar";
   const currentPath = pathByMode[mode];
   const landingHref = `/${locale}`;
   const loginHref = `/${locale}/login`;
@@ -284,7 +433,6 @@ export function AuthPage({
   const privacyHref = `/${locale}/privacy`;
   const languageQuery =
     mode === "verify" && initialEmail ? `?email=${encodeURIComponent(initialEmail)}` : mode === "reset-password" && resetLinkExpired ? "?expired=1" : "";
-  const languageHref = `/${otherLocale}/${currentPath}${languageQuery}`;
   const legalCheckboxRef = useRef<HTMLInputElement>(null);
   const verificationStartedRef = useRef(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -549,106 +697,36 @@ export function AuthPage({
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">
-            <Sparkles size={21} />
+            <MarkosAiIcon size={21} />
           </span>
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المصادقة" : "Authentication navigation"}>
-          <a className={styles.backLink} href={landingHref}>
-            <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
-            {copy.back}
-          </a>
-          <a className={styles.languageLink} href={languageHref}>
-            <Globe2 aria-hidden="true" size={17} />
-            {copy.language}
-          </a>
+          {mode === "login" ? null : (
+            <a className={styles.backLink} href={landingHref}>
+              <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
+              {copy.back}
+            </a>
+          )}
+          <AuthLanguageSelector arabicHref={`/ar/${currentPath}${languageQuery}`} englishHref={`/en/${currentPath}${languageQuery}`} locale={locale} />
         </nav>
       </header>
 
-      <div className={styles.authLayout}>
-        <aside className={styles.authAside} aria-label={copy.aside.title}>
-          <div className={styles.asideGlow} aria-hidden="true" />
-          <p className={styles.asideBrand}>{copy.brand}</p>
-          <h2>{copy.aside.title}</h2>
-          <div className={styles.asideFlow}>
-            {copy.aside.items.map((item, index) => {
-              const Icon = asideIcons[item.icon];
-              return (
-                <div className={styles.asideItem} data-position={index} key={item.label}>
-                  <span aria-hidden="true">
-                    <Icon size={19} />
-                  </span>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <small>{item.value}</small>
-                  </div>
-                  <Check aria-hidden="true" size={17} />
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        <section className={styles.authCard}>
-          {mode === "signup" ? (
-            <>
-              <AuthHeading body={copy.signup.body} title={copy.signup.title} />
-              <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
-              <LegalConsent
-                accepted={acceptedTerms}
-                checkboxRef={legalCheckboxRef}
-                copy={copy.legal}
-                onChange={setAcceptedTerms}
-                privacyHref={privacyHref}
-                termsHref={termsHref}
-              />
-              <Divider label={copy.provider.divider} />
-              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
-                <div className={styles.formStack}>
-                  <Field id="full-name" label={copy.fields.fullName}>
-                    <input
-                      autoComplete="name"
-                      id="full-name"
-                      onChange={(event) => setFullName(event.target.value)}
-                      placeholder={copy.fields.fullNamePlaceholder}
-                      type="text"
-                      value={fullName}
-                    />
-                  </Field>
-                  <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                  <PasswordField
-                    copy={copy.fields}
-                    onChange={setPassword}
-                    password={password}
-                    requirement
-                    show={showPassword}
-                    toggle={() => setShowPassword((current) => !current)}
-                  />
-                </div>
-                <NoticeMessage notice={notice} />
-                <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
-                  {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </button>
-              </form>
-              <AuthSwitch action={copy.signup.switchAction} href={loginHref} prefix={copy.signup.switchPrefix} />
-            </>
-          ) : null}
-
-          {mode === "login" ? (
-            <>
-              <AuthHeading body={copy.login.body} title={copy.login.title} />
-              <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
-              <Divider label={copy.provider.divider} />
-              <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitLogin(event)}>
+      <div className={`${styles.authLayout} ${mode === "login" ? styles.loginLayout : mode === "signup" ? styles.signupLayout : ""}`}>
+        {mode === "login" ? (
+          <>
+            <section className={`${styles.authCard} ${styles.loginCard}`} data-login-card>
+              <AuthHeading body={copy.login.body} eyebrow={copy.login.eyebrow} title={copy.login.title} />
+              <form aria-busy={isSubmitting} className={styles.loginForm} noValidate onSubmit={(event) => void submitLogin(event)}>
                 <div className={styles.formStack}>
                   <EmailField copy={copy.fields} email={email} onChange={setEmail} />
                   <PasswordField
-                    action={{ href: forgotHref, label: copy.login.forgot }}
                     autoComplete="current-password"
                     copy={copy.fields}
                     onChange={setPassword}
                     password={password}
+                    placeholder={copy.fields.passwordPlaceholder}
+                    revealVariant="text"
                     show={showPassword}
                     toggle={() => setShowPassword((current) => !current)}
                   />
@@ -669,136 +747,198 @@ export function AuthPage({
                     </Field>
                   ) : null}
                 </div>
+                <div className={styles.forgotRow}>
+                  <a className={styles.inlineAction} href={forgotHref}>
+                    {copy.login.forgot}
+                  </a>
+                </div>
                 <NoticeMessage notice={notice} />
                 <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
                   {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                 </button>
               </form>
+              <Divider label={copy.provider.compactDivider} />
+              <ProviderButtons compact copy={copy.provider} onProvider={handleProvider} />
               <AuthSwitch action={copy.login.switchAction} href={signupHref} prefix={copy.login.switchPrefix} />
-            </>
-          ) : null}
-
-          {mode === "forgot-password" ? (
-            forgotSent ? (
-              <StatusPanel icon={Mail} title={copy.forgot.sentTitle} tone="aqua">
-                <p>{copy.forgot.sentBody}</p>
-                <strong className={styles.statusEmail} dir="ltr">
-                  {email}
-                </strong>
-                <button className={styles.secondaryButton} onClick={() => setForgotSent(false)} type="button">
-                  {copy.forgot.sendAgain}
-                </button>
-                <a className={styles.textLink} href={loginHref}>
-                  {copy.forgot.back}
-                </a>
-              </StatusPanel>
-            ) : (
-              <>
-                <AuthHeading body={copy.forgot.body} icon={KeyRound} title={copy.forgot.title} />
-                <form noValidate onSubmit={submitForgot}>
-                  <div className={styles.formStack}>
-                    <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                  </div>
-                  <NoticeMessage notice={notice} />
-                  <button className={styles.primaryButton} type="submit">
-                    {copy.forgot.action}
-                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                  </button>
-                </form>
-                <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
-                  {copy.forgot.back}
-                </a>
-              </>
-            )
-          ) : null}
-
-          {mode === "reset-password" ? (
-            resetLinkExpired ? (
-              <StatusPanel icon={Lock} title={copy.reset.expiredTitle} tone="coral">
-                <p>{copy.reset.expiredBody}</p>
-                <a className={styles.primaryButton} href={forgotHref}>
-                  {copy.reset.requestNew}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </a>
-              </StatusPanel>
-            ) : resetComplete ? (
-              <StatusPanel icon={CheckCircle2} title={copy.reset.successTitle} tone="aqua">
-                <p>{copy.reset.successBody}</p>
-                <a className={styles.primaryButton} href={loginHref}>
-                  {copy.reset.login}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </a>
-              </StatusPanel>
-            ) : (
-              <>
-                <AuthHeading body={copy.reset.body} icon={Lock} title={copy.reset.title} />
-                <form noValidate onSubmit={submitReset}>
-                  <div className={styles.formStack}>
-                    <PasswordField
-                      copy={copy.fields}
-                      id="new-password"
-                      label={copy.fields.newPassword}
-                      onChange={setPassword}
-                      password={password}
-                      requirement
-                      show={showPassword}
-                      toggle={() => setShowPassword((current) => !current)}
+            </section>
+            <LoginInsightsPreview locale={locale} />
+          </>
+        ) : (
+          <>
+            <section className={`${styles.authCard} ${mode === "signup" ? styles.signupCard : ""}`}>
+              {mode === "signup" ? (
+                <>
+                  <AuthHeading body={copy.signup.body} title={copy.signup.title} />
+                  <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
+                  <Divider label={copy.provider.divider} />
+                  <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
+                    <div className={styles.formStack}>
+                      <Field id="full-name" label={copy.fields.fullName}>
+                        <input
+                          autoComplete="name"
+                          id="full-name"
+                          onChange={(event) => setFullName(event.target.value)}
+                          placeholder={copy.fields.fullNamePlaceholder}
+                          type="text"
+                          value={fullName}
+                        />
+                      </Field>
+                      <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                      <PasswordField
+                        copy={copy.fields}
+                        onChange={setPassword}
+                        password={password}
+                        requirement
+                        show={showPassword}
+                        toggle={() => setShowPassword((current) => !current)}
+                      />
+                    </div>
+                    <LegalConsent
+                      accepted={acceptedTerms}
+                      checkboxRef={legalCheckboxRef}
+                      copy={copy.legal}
+                      onChange={setAcceptedTerms}
+                      privacyHref={privacyHref}
+                      termsHref={termsHref}
                     />
-                    <PasswordField
-                      copy={copy.fields}
-                      id="confirm-password"
-                      label={copy.fields.confirmPassword}
-                      onChange={setConfirmPassword}
-                      password={confirmPassword}
-                      show={showConfirmPassword}
-                      toggle={() => setShowConfirmPassword((current) => !current)}
-                    />
-                  </div>
-                  <NoticeMessage notice={notice} />
-                  <button className={styles.primaryButton} type="submit">
-                    {copy.reset.action}
-                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                  </button>
-                </form>
-              </>
-            )
-          ) : null}
-
-          {mode === "verify" ? (
-            <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
-              <p>{copy.verify.body}</p>
-              <strong className={styles.statusEmail} dir="ltr">
-                {email || copy.verify.fallbackEmail}
-              </strong>
-              <p>{copy.verify.instructions}</p>
-              <NoticeMessage notice={notice} />
-              <button
-                className={styles.secondaryButton}
-                disabled={isSubmitting || resendSeconds > 0 || !email}
-                onClick={() => void requestVerification()}
-                type="button"
-              >
-                <Mail aria-hidden="true" size={17} />
-                {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
-              </button>
-              {localVerificationToken ? (
-                <button className={styles.primaryButton} disabled={isSubmitting} onClick={() => void verifyEmailToken(localVerificationToken)} type="button">
-                  {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
-                  <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                </button>
+                    <NoticeMessage notice={notice} />
+                    <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                      {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </button>
+                  </form>
+                  <AuthSwitch action={copy.signup.switchAction} href={loginHref} prefix={copy.signup.switchPrefix} />
+                </>
               ) : null}
-              <div className={styles.statusLinks}>
-                <a className={styles.textLink} href={signupHref}>
-                  {copy.verify.changeEmail}
-                </a>
-                <a className={styles.textLink} href={loginHref}>
-                  {copy.verify.back}
-                </a>
-              </div>
-            </StatusPanel>
-          ) : null}
-        </section>
+
+              {mode === "forgot-password" ? (
+                forgotSent ? (
+                  <StatusPanel icon={Mail} title={copy.forgot.sentTitle} tone="aqua">
+                    <p>{copy.forgot.sentBody}</p>
+                    <strong className={styles.statusEmail} dir="ltr">
+                      {email}
+                    </strong>
+                    <button className={styles.secondaryButton} onClick={() => setForgotSent(false)} type="button">
+                      {copy.forgot.sendAgain}
+                    </button>
+                    <a className={styles.textLink} href={loginHref}>
+                      {copy.forgot.back}
+                    </a>
+                  </StatusPanel>
+                ) : (
+                  <>
+                    <AuthHeading body={copy.forgot.body} icon={KeyRound} title={copy.forgot.title} />
+                    <form noValidate onSubmit={submitForgot}>
+                      <div className={styles.formStack}>
+                        <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                      </div>
+                      <NoticeMessage notice={notice} />
+                      <button className={styles.primaryButton} type="submit">
+                        {copy.forgot.action}
+                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                      </button>
+                    </form>
+                    <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
+                      {copy.forgot.back}
+                    </a>
+                  </>
+                )
+              ) : null}
+
+              {mode === "reset-password" ? (
+                resetLinkExpired ? (
+                  <StatusPanel icon={Lock} title={copy.reset.expiredTitle} tone="coral">
+                    <p>{copy.reset.expiredBody}</p>
+                    <a className={styles.primaryButton} href={forgotHref}>
+                      {copy.reset.requestNew}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </a>
+                  </StatusPanel>
+                ) : resetComplete ? (
+                  <StatusPanel icon={CheckCircle2} title={copy.reset.successTitle} tone="aqua">
+                    <p>{copy.reset.successBody}</p>
+                    <a className={styles.primaryButton} href={loginHref}>
+                      {copy.reset.login}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </a>
+                  </StatusPanel>
+                ) : (
+                  <>
+                    <AuthHeading body={copy.reset.body} icon={Lock} title={copy.reset.title} />
+                    <form noValidate onSubmit={submitReset}>
+                      <div className={styles.formStack}>
+                        <PasswordField
+                          copy={copy.fields}
+                          id="new-password"
+                          label={copy.fields.newPassword}
+                          onChange={setPassword}
+                          password={password}
+                          requirement
+                          show={showPassword}
+                          toggle={() => setShowPassword((current) => !current)}
+                        />
+                        <PasswordField
+                          copy={copy.fields}
+                          id="confirm-password"
+                          label={copy.fields.confirmPassword}
+                          onChange={setConfirmPassword}
+                          password={confirmPassword}
+                          show={showConfirmPassword}
+                          toggle={() => setShowConfirmPassword((current) => !current)}
+                        />
+                      </div>
+                      <NoticeMessage notice={notice} />
+                      <button className={styles.primaryButton} type="submit">
+                        {copy.reset.action}
+                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                      </button>
+                    </form>
+                  </>
+                )
+              ) : null}
+
+              {mode === "verify" ? (
+                <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
+                  <p>{copy.verify.body}</p>
+                  <strong className={styles.statusEmail} dir="ltr">
+                    {email || copy.verify.fallbackEmail}
+                  </strong>
+                  <p>{copy.verify.instructions}</p>
+                  <NoticeMessage notice={notice} />
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={isSubmitting || resendSeconds > 0 || !email}
+                    onClick={() => void requestVerification()}
+                    type="button"
+                  >
+                    <Mail aria-hidden="true" size={17} />
+                    {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
+                  </button>
+                  {localVerificationToken ? (
+                    <button
+                      className={styles.primaryButton}
+                      disabled={isSubmitting}
+                      onClick={() => void verifyEmailToken(localVerificationToken)}
+                      type="button"
+                    >
+                      {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
+                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                    </button>
+                  ) : null}
+                  <div className={styles.statusLinks}>
+                    <a className={styles.textLink} href={signupHref}>
+                      {copy.verify.changeEmail}
+                    </a>
+                    <a className={styles.textLink} href={loginHref}>
+                      {copy.verify.back}
+                    </a>
+                  </div>
+                </StatusPanel>
+              ) : null}
+            </section>
+            {mode === "signup" ? <SignupCalendarPreview locale={locale} /> : null}
+          </>
+        )}
       </div>
 
       <footer className={styles.footer}>
@@ -813,7 +953,190 @@ export function AuthPage({
   );
 }
 
-function AuthHeading({ body, icon: Icon, title }: { body: string; icon?: LucideIcon; title: string }) {
+function SignupCalendarPreview({ locale }: { locale: Locale }) {
+  const isArabic = locale === "ar";
+  const days = isArabic ? ["الأحد 6", "الاثنين 7", "الثلاثاء 8", "الأربعاء 9", "الخميس 10"] : ["Sun 6", "Mon 7", "Tue 8", "Wed 9", "Thu 10"];
+  const posts = isArabic
+    ? [
+        { day: 0, icon: Play, time: "10:00", title: "جولة سريعة في المطبخ", tone: "coral", type: "ريل" },
+        { day: 1, icon: Images, time: "13:30", title: "ثلاث نصائح لاختيار الوجبة", tone: "aqua", type: "كاروسيل" },
+        { day: 2, icon: Instagram, time: "09:00", title: "قصة عميلة هذا الأسبوع", tone: "pink", type: "منشور" },
+        { day: 3, icon: Play, time: "18:00", title: "من الفكرة إلى المنتج", tone: "yellow", type: "ريل" },
+        { day: 4, icon: Instagram, time: "11:30", title: "اختيار الجمهور", tone: "aqua", type: "قصة" }
+      ]
+    : [
+        { day: 0, icon: Play, time: "10:00", title: "A quick kitchen tour", tone: "coral", type: "Reel" },
+        { day: 1, icon: Images, time: "13:30", title: "3 ways to choose your plan", tone: "aqua", type: "Carousel" },
+        { day: 2, icon: Instagram, time: "09:00", title: "This week's customer story", tone: "pink", type: "Post" },
+        { day: 3, icon: Play, time: "18:00", title: "From idea to finished product", tone: "yellow", type: "Reel" },
+        { day: 4, icon: Instagram, time: "11:30", title: "Audience choice", tone: "aqua", type: "Story" }
+      ];
+
+  return (
+    <aside
+      aria-label={isArabic ? "معاينة ثابتة لتقويم MARKOS" : "Static preview of a populated MARKOS calendar"}
+      className={`${styles.authPreview} ${styles.signupPreview}`}
+    >
+      <div className={styles.authPreviewHeader}>
+        <span className={styles.authPreviewIcon} aria-hidden="true">
+          <CalendarDays size={22} />
+        </span>
+        <div>
+          <p>{isArabic ? "تقويم MARKOS" : "MARKOS CALENDAR"}</p>
+          <h2>{isArabic ? "خطتك جاهزة للأسبوع" : "Your week, already taking shape"}</h2>
+        </div>
+        <span className={styles.sampleBadge}>{isArabic ? "نموذج" : "SAMPLE"}</span>
+      </div>
+      <div className={styles.calendarPreviewToolbar}>
+        <strong>{isArabic ? "6–10 سبتمبر" : "6–10 September"}</strong>
+        <span>{isArabic ? "عرض الأسبوع" : "Week view"}</span>
+      </div>
+      <div className={styles.staticWeekGrid} aria-hidden="true">
+        {days.map((day, index) => (
+          <div className={styles.staticWeekDay} key={day}>
+            <span>{day}</span>
+            <div className={styles.staticWeekTrack}>
+              {posts
+                .filter((post) => post.day === index)
+                .map((post) => {
+                  const Icon = post.icon;
+                  return (
+                    <article data-tone={post.tone} key={post.title}>
+                      <span>
+                        <Icon size={14} /> {post.type}
+                      </span>
+                      <strong>{post.title}</strong>
+                      <small>{post.time}</small>
+                    </article>
+                  );
+                })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className={styles.calendarPreviewFooter}>
+        <span>{isArabic ? "5 قطع محتوى" : "5 content ideas"}</span>
+        <strong>{isArabic ? "3 جاهزة للمراجعة" : "3 ready to review"}</strong>
+      </div>
+    </aside>
+  );
+}
+
+function LoginInsightsPreview({ locale }: { locale: Locale }) {
+  const isArabic = locale === "ar";
+  return (
+    <aside
+      aria-label={isArabic ? "معاينة ثابتة للوحة رؤى MARKOS" : "Static preview of a populated MARKOS Insights dashboard"}
+      className={`${styles.authPreview} ${styles.insightsPreview}`}
+    >
+      <div className={styles.authPreviewHeader}>
+        <span className={styles.authPreviewIcon} aria-hidden="true">
+          <BarChart3 size={22} />
+        </span>
+        <div>
+          <p>{isArabic ? "رؤى MARKOS" : "MARKOS INSIGHTS"}</p>
+          <h2>{isArabic ? "اعرف ما الذي يحرّك النمو" : "See what is moving the business"}</h2>
+        </div>
+        <span className={styles.sampleBadge}>{isArabic ? "آخر 30 يومًا" : "LAST 30 DAYS"}</span>
+      </div>
+      <div className={styles.insightMetricGrid}>
+        <article>
+          <TrendingUp aria-hidden="true" size={18} />
+          <span>{isArabic ? "الوصول" : "Reach"}</span>
+          <strong>38.4K</strong>
+          <small>+18.6%</small>
+        </article>
+        <article>
+          <UsersRound aria-hidden="true" size={18} />
+          <span>{isArabic ? "تفاعل الجمهور" : "Engagement"}</span>
+          <strong>7.8%</strong>
+          <small>+2.1%</small>
+        </article>
+        <article>
+          <CalendarDays aria-hidden="true" size={18} />
+          <span>{isArabic ? "محتوى منشور" : "Published"}</span>
+          <strong>16</strong>
+          <small>{isArabic ? "هذا الشهر" : "this month"}</small>
+        </article>
+      </div>
+      <div className={styles.insightCharts}>
+        <article className={styles.reachChart}>
+          <header>
+            <span>{isArabic ? "الوصول بمرور الوقت" : "Reach over time"}</span>
+            <strong>+18.6%</strong>
+          </header>
+          <svg aria-label={isArabic ? "مخطط وصول صاعد" : "Rising reach chart"} role="img" viewBox="0 0 420 190">
+            <defs>
+              <linearGradient id="auth-reach-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#21bfae" stopOpacity=".34" />
+                <stop offset="100%" stopColor="#21bfae" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24 L420 190 L0 190 Z" fill="url(#auth-reach-fill)" />
+            <path
+              d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24"
+              fill="none"
+              stroke="#078c7d"
+              strokeLinecap="round"
+              strokeWidth="5"
+            />
+          </svg>
+          <div>
+            <span>6 Aug</span>
+            <span>20 Aug</span>
+            <span>2 Sep</span>
+          </div>
+        </article>
+        <article className={styles.contentMixChart}>
+          <header>
+            <span>{isArabic ? "مزيج المحتوى" : "Content mix"}</span>
+          </header>
+          <div className={styles.donutChart} aria-label={isArabic ? "ريل 45%، كاروسيل 35%، منشورات 20%" : "Reels 45%, carousels 35%, posts 20%"} role="img">
+            <span>
+              16<small>{isArabic ? "منشورًا" : "posts"}</small>
+            </span>
+          </div>
+          <ul>
+            <li data-tone="coral">
+              {isArabic ? "ريل" : "Reels"} <strong>45%</strong>
+            </li>
+            <li data-tone="aqua">
+              {isArabic ? "كاروسيل" : "Carousels"} <strong>35%</strong>
+            </li>
+            <li data-tone="yellow">
+              {isArabic ? "منشورات" : "Posts"} <strong>20%</strong>
+            </li>
+          </ul>
+        </article>
+      </div>
+      <div className={styles.insightCallout}>
+        <Sparkles aria-hidden="true" size={18} />
+        <span>{isArabic ? "مقاطع الريل التعليمية تحقق أفضل وصول هذا الشهر." : "Educational Reels are delivering your strongest reach this month."}</span>
+      </div>
+    </aside>
+  );
+}
+
+function AuthLanguageSelector({ arabicHref, englishHref, locale }: { arabicHref: string; englishHref: string; locale: Locale }) {
+  return (
+    <span aria-label={locale === "ar" ? "اختر اللغة" : "Choose language"} className={styles.authLanguageSelector} dir="ltr" role="group">
+      <Languages aria-hidden="true" size={16} />
+      {locale === "en" ? <strong aria-current="page">English</strong> : <Link href={englishHref}>English</Link>}
+      <span aria-hidden="true">/</span>
+      {locale === "ar" ? (
+        <strong aria-current="page" lang="ar">
+          العربية
+        </strong>
+      ) : (
+        <Link href={arabicHref} lang="ar">
+          العربية
+        </Link>
+      )}
+    </span>
+  );
+}
+
+function AuthHeading({ body, eyebrow, icon: Icon, title }: { body: string; eyebrow?: string; icon?: LucideIcon; title: string }) {
   return (
     <div className={styles.authHeading}>
       {Icon ? (
@@ -821,24 +1144,33 @@ function AuthHeading({ body, icon: Icon, title }: { body: string; icon?: LucideI
           <Icon size={22} />
         </span>
       ) : null}
+      {eyebrow ? <p className={styles.authEyebrow}>{eyebrow}</p> : null}
       <h1>{title}</h1>
       <p>{body}</p>
     </div>
   );
 }
 
-function ProviderButtons({ copy, onProvider }: { copy: (typeof copyByLocale)[Locale]["provider"]; onProvider: (provider: "Apple" | "Google") => void }) {
+function ProviderButtons({
+  compact = false,
+  copy,
+  onProvider
+}: {
+  compact?: boolean;
+  copy: (typeof copyByLocale)[Locale]["provider"];
+  onProvider: (provider: "Apple" | "Google") => void;
+}) {
   return (
-    <div className={styles.providerStack}>
+    <div className={`${styles.providerStack} ${compact ? styles.providerCompact : ""}`}>
       <button className={styles.providerButton} onClick={() => onProvider("Google")} type="button">
         <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/auth/providers/google-signin.svg" unoptimized width={32} />
-        {copy.google}
+        {compact ? copy.compactGoogle : copy.google}
       </button>
       <button className={styles.providerButton} onClick={() => onProvider("Apple")} type="button">
         <span className={styles.appleLogoFrame} aria-hidden="true">
           <Image alt="" className={styles.appleLogo} height={23} src="/auth/providers/apple-signin.png" unoptimized width={18} />
         </span>
-        {copy.apple}
+        {compact ? copy.compactApple : copy.apple}
       </button>
     </div>
   );
@@ -926,6 +1258,8 @@ function PasswordField({
   label,
   onChange,
   password,
+  placeholder,
+  revealVariant = "icon",
   requirement = false,
   show,
   toggle
@@ -937,6 +1271,8 @@ function PasswordField({
   label?: string;
   onChange: (password: string) => void;
   password: string;
+  placeholder?: string;
+  revealVariant?: "icon" | "text";
   requirement?: boolean;
   show: boolean;
   toggle: () => void;
@@ -955,9 +1291,32 @@ function PasswordField({
     >
       <span className={styles.inputWrap}>
         <Lock aria-hidden="true" size={19} />
-        <input autoComplete={autoComplete} id={id} onChange={(event) => onChange(event.target.value)} type={show ? "text" : "password"} value={password} />
-        <button aria-label={show ? copy.hidePassword : copy.showPassword} className={styles.revealButton} onClick={toggle} type="button">
-          {show ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
+        <input
+          autoComplete={autoComplete}
+          id={id}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          type={show ? "text" : "password"}
+          value={password}
+        />
+        <button
+          aria-label={show ? copy.hidePassword : copy.showPassword}
+          className={styles.revealButton}
+          data-variant={revealVariant}
+          onClick={toggle}
+          type="button"
+        >
+          {revealVariant === "text" ? (
+            show ? (
+              copy.hidePasswordShort
+            ) : (
+              copy.showPasswordShort
+            )
+          ) : show ? (
+            <EyeOff aria-hidden="true" size={19} />
+          ) : (
+            <Eye aria-hidden="true" size={19} />
+          )}
         </button>
       </span>
       {requirement ? (

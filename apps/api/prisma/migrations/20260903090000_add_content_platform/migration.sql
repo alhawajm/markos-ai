@@ -1,0 +1,2 @@
+ALTER TABLE "content_items"
+ADD COLUMN "platform" TEXT NOT NULL DEFAULT 'INSTAGRAM';

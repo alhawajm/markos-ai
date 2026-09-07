@@ -1,18 +1,18 @@
 # Railway worker setup for the showcase
 
-Status date: 2026-08-19.
+Status date: 2026-09-03.
 
-This is the exact staging setup for MARKOS's automatic scheduled-publishing worker. It uses the existing repository worker and the existing Railway PostgreSQL and Bucket services. It does **not** require OpenSearch.
+This is the staging setup for MARKOS's durable publishing and video-generation worker. It uses the existing repository worker plus the existing Railway PostgreSQL, Bucket, and AI services. It does **not** require OpenSearch.
 
 ## Decision summary
 
 - Create one ordinary **persistent** Railway service named `worker`; do not configure it as a cron job.
 - Deploy one replica from `apps/api/worker.Dockerfile`.
-- Give it PostgreSQL, the Instagram credential encryption key, the two live-mode settings, and the existing private Bucket credentials.
-- Do not add Redis, OpenSearch, AI, SendGrid, JWT, OAuth callback, public-domain, volume, port, or health-check configuration to the worker.
+- Give it PostgreSQL, the Instagram credential encryption key, the two live-mode settings, the existing private Bucket credentials, and private access to the AI service.
+- Do not add Redis, OpenSearch, SendGrid, JWT, OAuth callback, public-domain, volume, port, or health-check configuration to the worker.
 - Keep the API deployment health check on `/v1/health`, not `/v1/health/deep`.
 
-The worker process starts immediately, runs a maintenance tick on boot, and then scans for due scheduled content every five minutes. Its other current jobs retain their source defaults: analytics email every 24 hours, analytics sync every 6 hours, token refresh every hour, and usage-period maintenance every hour.
+The worker process starts immediately, runs a maintenance tick on boot, and then scans for due scheduled content, Publish now jobs, and video-generation jobs every minute by default. Its other current jobs retain their source defaults: analytics email every 24 hours, analytics sync every 6 hours, token refresh every hour, and usage-period maintenance every hour.
 
 ## 1. Create the service
 
@@ -40,6 +40,8 @@ RAILWAY_DOCKERFILE_PATH=/apps/api/worker.Dockerfile
 
 DATABASE_URL=${{pgvector.DATABASE_URL}}
 API_BASE_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
+AI_BASE_URL=http://${{ai.RAILWAY_PRIVATE_DOMAIN}}:8000
+INTERNAL_SERVICE_TOKEN=${{api.INTERNAL_SERVICE_TOKEN}}
 
 INSTAGRAM_TOKEN_ENCRYPTION_KEY=${{api.INSTAGRAM_TOKEN_ENCRYPTION_KEY}}
 INSTAGRAM_PUBLISH_MODE=${{api.INSTAGRAM_PUBLISH_MODE}}
@@ -56,7 +58,7 @@ AWS_DEFAULT_REGION=${{compact-keg.REGION}}
 AWS_S3_URL_STYLE=virtual
 SIGNED_URL_TTL=3600
 
-WORKER_PUBLISHING_INTERVAL_MS=300000
+WORKER_PUBLISHING_INTERVAL_MS=60000
 ```
 
 If Railway's actual service display name differs from `pgvector`, `api`, or `compact-keg`, select the matching service through autocomplete instead of pasting that namespace literally.
@@ -68,7 +70,7 @@ Before deploying, confirm that the referenced API values resolve to:
 
 Do not paste the raw database password, Bucket keys, or Instagram encryption key into the worker. Railway supports references to variables in other services, and the Bucket exposes `ENDPOINT`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `BUCKET`, and `REGION` specifically for this purpose. Railway Buckets are private and use virtual-hosted-style URLs; see [Storage Buckets](https://docs.railway.com/storage-buckets#connecting-to-your-bucket).
 
-`API_BASE_URL` does not mean the worker calls the API. The shared S3 configuration parser requires a public HTTPS base when `MEDIA_STORAGE_DRIVER=s3`, and this reference supplies the existing canonical API origin.
+`API_BASE_URL` does not mean the worker calls the API. The shared S3 configuration parser requires a public HTTPS base when `MEDIA_STORAGE_DRIVER=s3`, and this reference supplies the existing canonical API origin. `AI_BASE_URL` uses Railway's private network and the AI service's fixed port; `INTERNAL_SERVICE_TOKEN` must match the AI service without copying the OpenAI key into the worker.
 
 ## 3. Configure deployment settings
 
@@ -86,19 +88,19 @@ Use these exact worker settings:
 | Replicas | `1` |
 | Restart policy | `On Failure` |
 | Public networking/domain | None |
-| Private service domain | Not required |
+| Private worker domain | No inbound domain required; the worker calls the AI service over its private domain |
 | Health-check path | None; the worker has no HTTP server |
 | Volume | None |
 
-Railway documents `RAILWAY_DOCKERFILE_PATH` for a non-root Dockerfile in [Dockerfiles](https://docs.railway.com/builds/dockerfiles#custom-dockerfile-path). `On Failure` is Railway's default restart policy. Keep one replica because the current duplicate-publish guard is process-local; the repository does not yet contain a cross-replica publish lease.
+Railway documents `RAILWAY_DOCKERFILE_PATH` for a non-root Dockerfile in [Dockerfiles](https://docs.railway.com/builds/dockerfiles#custom-dockerfile-path). `On Failure` is Railway's default restart policy. Keep one replica for this showcase even though publishing and video jobs now use database leases; multi-replica throughput and contention have not been load-tested.
 
 ## 4. Do not add these variables or resources
 
-They are not consumed by the current worker path and are not required for tomorrow:
+They are not consumed by the current worker path:
 
 - `REDIS_URL`
 - `OPENSEARCH_URL`, `OPENSEARCH_USER`, or `OPENSEARCH_PASS`
-- `AI_BASE_URL`, `INTERNAL_SERVICE_TOKEN`, or any `OPENAI_*` value
+- any `OPENAI_*` value (the worker calls the AI service and never receives the provider key)
 - `PORT` or `API_PORT`
 - `JWT_*`, `EMAIL_PROVIDER`, `SENDGRID_API_KEY`, or `FROM_EMAIL`
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_OAUTH_REDIRECT_URI`, or `INSTAGRAM_OAUTH_STATE_SECRET`
@@ -122,18 +124,21 @@ The completion log contains bounded counts such as:
 - `refreshedTokens`
 - `tokenRefreshFailures`
 - `usageCountersEnsured`
+- `videoJobsProcessed`
+- `videoJobsCompleted`
+- `videoJobsFailed`
 
 A task-level failure logs `Maintenance worker tick failed`; inspect the accompanying safe error text. A clean container that remains running but never emits the first completed tick is not a successful verification.
 
 ## 6. Prove scheduled publishing end to end
 
-1. Confirm the Instagram account was reconnected with the current release scopes and the intended draft has one publish-ready JPEG stored in the private Bucket.
-2. In MarkOS, schedule the item. Confirm its saved state is `SCHEDULED` and its Bahrain time becomes due.
+1. Confirm the Instagram account was reconnected with the current release scopes and the intended draft has publish-ready media stored in the private Bucket.
+2. In MarkOS, schedule the item on a half-hour boundary. Confirm its saved state is `SCHEDULED` and its Bahrain time becomes due.
 3. Leave the worker running. It will select the item automatically; do not call the operator publish route for this proof.
 4. Watch the worker log for `attemptedPublishes: 1`.
 5. Confirm MarkOS changes the item to `PUBLISHED`, stores the Instagram media ID and publication time, and the post appears on the connected Instagram account.
 
-The five-minute worker interval creates up to roughly five minutes of scan delay. After selection, Meta container processing can use the configured immediate check plus five one-minute waits. Allow up to roughly ten minutes after the scheduled time before treating the attempt as late and inspecting logs. A provider failure moves the item to `FAILED`; the worker selects only `SCHEDULED` items, so it does not blindly retry that failed item.
+The one-minute worker interval creates up to roughly one minute of scan delay. Meta container processing may still take several minutes after selection. Retryable provider failures remain in a persisted retry state with a bounded next-attempt time and no more than three total attempts; terminal or exhausted failures move the item and job to `FAILED` and create a persistent owner notification. Inspect the job attempt history and safe error code before retrying manually.
 
 ## OpenSearch decision for tomorrow
 

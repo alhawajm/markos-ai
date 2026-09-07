@@ -99,8 +99,7 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
         workspaceId: id,
         contentType: "POST",
         status: "PUBLISHED",
-        captionEn: "Retained workspace content",
-        hashtags: ["#markos"],
+        caption: "Retained workspace content\n\n#markos",
         mediaIds: [],
         instagramPostId: "published-history-id"
       }

@@ -17,7 +17,7 @@ const plans = [
       aiImages: 20,
       aiInputTokens: 1_000_000,
       aiOutputTokens: 500_000,
-      strategies: 1,
+      campaigns: 1,
       posts: 30,
       seats: 1,
       storageBytes: 1_000_000_000
@@ -33,7 +33,7 @@ const plans = [
       aiImages: 60,
       aiInputTokens: 3_000_000,
       aiOutputTokens: 1_500_000,
-      strategies: 3,
+      campaigns: 3,
       posts: 90,
       seats: 2,
       storageBytes: 5_000_000_000
@@ -49,7 +49,7 @@ const plans = [
       aiImages: 150,
       aiInputTokens: 8_000_000,
       aiOutputTokens: 4_000_000,
-      strategies: 12,
+      campaigns: 12,
       posts: 200,
       seats: 5,
       storageBytes: 20_000_000_000
@@ -65,7 +65,7 @@ const plans = [
       aiImages: 500,
       aiInputTokens: 20_000_000,
       aiOutputTokens: 10_000_000,
-      strategies: 20,
+      campaigns: 20,
       posts: 500,
       seats: 15,
       storageBytes: 100_000_000_000

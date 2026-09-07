@@ -9,11 +9,24 @@ const rlsTables = [
   "workspace_members",
   "knowledge_vault",
   "knowledge_vault_history",
-  "strategies",
+  "offering_catalogs",
+  "offering_catalog_revisions",
+  "offerings",
+  "offering_revisions",
+  "offering_document_analyses",
+  "offering_document_files",
+  "onboarding_document_analyses",
+  "onboarding_document_files",
   "content_calendars",
   "campaigns",
   "content_items",
+  "content_conversations",
+  "conversation_runs",
+  "conversation_messages",
   "media_assets",
+  "media_generation_jobs",
+  "publish_jobs",
+  "publish_attempts",
   "instagram_analytics",
   "instagram_connection_credentials",
   "instagram_recent_media",
@@ -55,11 +68,11 @@ describe("database row-level security", () => {
     const second = await createWorkspace("second");
 
     const firstItem = await prisma.contentItem.create({
-      data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+      data: { workspaceId: first.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
       select: { id: true }
     });
     await prisma.contentItem.create({
-      data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+      data: { workspaceId: second.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
       select: { id: true }
     });
 
@@ -84,7 +97,7 @@ describe("database row-level security", () => {
 
     await withWorkspaceDbContext(first.workspaceId, async (tx) => {
       await tx.contentItem.create({
-        data: { workspaceId: first.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+        data: { workspaceId: first.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
         select: { id: true }
       });
     });
@@ -92,11 +105,60 @@ describe("database row-level security", () => {
     await expect(
       withWorkspaceDbContext(first.workspaceId, async (tx) => {
         await tx.contentItem.create({
-          data: { workspaceId: second.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+          data: { workspaceId: second.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
           select: { id: true }
         });
       })
     ).rejects.toThrow();
+  });
+
+  it("grants the app role access to offering catalogue and document-analysis tables and enum types", async () => {
+    const privileges = await prisma.$queryRaw<Array<{ table_name: string; privilege_type: string }>>`
+      SELECT table_name, privilege_type
+      FROM information_schema.role_table_grants
+      WHERE grantee = 'markos_app'
+        AND table_name = ANY(ARRAY[
+          'offering_catalogs',
+          'offering_catalog_revisions',
+          'offerings',
+          'offering_revisions',
+          'offering_document_analyses',
+          'offering_document_files',
+          'onboarding_document_analyses',
+          'onboarding_document_files'
+        ])
+    `;
+    const typePrivileges = await prisma.$queryRaw<Array<{ type_name: string; has_usage: boolean }>>`
+      SELECT type_name, has_type_privilege('markos_app', quote_ident(type_name), 'USAGE') AS has_usage
+      FROM unnest(ARRAY[
+        'OfferingKind',
+        'OfferingStatus',
+        'OfferingPriceType',
+        'OfferingSourceType',
+        'OfferingProjectionStatus',
+        'OfferingDocumentAnalysisStatus'
+      ]) AS types(type_name)
+    `;
+
+    for (const tableName of [
+      "offering_catalogs",
+      "offering_catalog_revisions",
+      "offerings",
+      "offering_revisions",
+      "offering_document_analyses",
+      "offering_document_files",
+      "onboarding_document_analyses",
+      "onboarding_document_files"
+    ]) {
+      expect(
+        privileges
+          .filter((row) => row.table_name === tableName)
+          .map((row) => row.privilege_type)
+          .sort()
+      ).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
+    }
+    expect(typePrivileges).toHaveLength(6);
+    expect(typePrivileges.every((row) => row.has_usage)).toBe(true);
   });
 });
 

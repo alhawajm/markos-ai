@@ -1,13 +1,16 @@
 import { env } from "../config/env";
 import { sendMonthlyAnalyticsPdfEmailForAllWorkspaces, type AnalyticsEmailProvider } from "../analytics/analytics-email-service";
 import { syncInstagramAnalyticsForAllWorkspaces, type AnalyticsSyncForAllWorkspacesResult } from "../analytics/analytics-service";
-import { publishDueContentForAllWorkspaces, type PublishDueContentForAllWorkspacesResult } from "../publishing/publishing-service";
-import type { AnalyticsEmailDeliveryForAllWorkspacesResult } from "@markos/shared-types";
+import { processDuePublishJobs, type PublishJobWorkerResult } from "../publishing/publish-job-service";
+import type { AnalyticsEmailDeliveryForAllWorkspacesResult, OfferingDocumentCleanupResult } from "@markos/shared-types";
 import type { InstagramAnalyticsProvider } from "../analytics/instagram-analytics-provider";
 import type { InstagramPublisher } from "../publishing/instagram-publisher";
 import { ensureCurrentUsagePeriods, type UsagePeriodResetResult } from "../usage/usage-service";
 import { refreshDueInstagramTokens } from "../workspace/instagram-token-service";
 import type { InstagramTokenRefreshResult } from "@markos/shared-types";
+import { cleanupExpiredOfferingDocumentAnalyses } from "../offerings/offering-document-service";
+import { cleanupExpiredOnboardingDocumentAnalyses } from "../onboarding/onboarding-document-service";
+import { processDueVideoGenerationJobs, type VideoGenerationWorkerResult } from "../media/video-generation-service";
 
 export interface MaintenanceWorkerLogger {
   error(message: string, meta?: Record<string, unknown>): void;
@@ -18,9 +21,11 @@ export interface MaintenanceWorkerLogger {
 export interface MaintenanceWorkerTickResult {
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
   analyticsSync?: AnalyticsSyncForAllWorkspacesResult;
-  publishing?: PublishDueContentForAllWorkspacesResult;
+  documentCleanup?: OfferingDocumentCleanupResult;
+  publishing?: PublishJobWorkerResult;
   tokenRefresh?: InstagramTokenRefreshResult[];
   usageReset?: UsagePeriodResetResult;
+  videoGeneration?: VideoGenerationWorkerResult;
 }
 
 export interface MaintenanceWorkerHandle {
@@ -50,12 +55,23 @@ export async function runMaintenanceWorkerTick(
     publisher?: InstagramPublisher;
     runAnalyticsEmail?: boolean;
     runAnalyticsSync?: boolean;
+    runDocumentCleanup?: boolean;
     runPublishing?: boolean;
     runTokenRefresh?: boolean;
     runUsageReset?: boolean;
+    runVideoGeneration?: boolean;
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
+  const documentCleanup =
+    input.runDocumentCleanup === false
+      ? undefined
+      : await Promise.all([cleanupExpiredOfferingDocumentAnalyses({ now }), cleanupExpiredOnboardingDocumentAnalyses({ now })]).then(
+          ([offerings, onboarding]) => ({
+            expired: offerings.expired + onboarding.expired,
+            failed: offerings.failed + onboarding.failed
+          })
+        );
   const analyticsEmail =
     input.runAnalyticsEmail === false
       ? undefined
@@ -82,17 +98,20 @@ export async function runMaintenanceWorkerTick(
   const publishing =
     input.runPublishing === false
       ? undefined
-      : await publishDueContentForAllWorkspaces({
+      : await processDuePublishJobs({
           now,
           ...(input.publisher === undefined ? {} : { publisher: input.publisher })
         });
+  const videoGeneration = input.runVideoGeneration === false ? undefined : await processDueVideoGenerationJobs({ now });
 
   return {
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
     ...(analyticsSync === undefined ? {} : { analyticsSync }),
+    ...(documentCleanup === undefined ? {} : { documentCleanup }),
     ...(publishing === undefined ? {} : { publishing }),
     ...(tokenRefresh === undefined ? {} : { tokenRefresh }),
-    ...(usageReset === undefined ? {} : { usageReset })
+    ...(usageReset === undefined ? {} : { usageReset }),
+    ...(videoGeneration === undefined ? {} : { videoGeneration })
   };
 }
 
@@ -143,6 +162,7 @@ export function startMaintenanceWorker(
         runPublishing: true,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
+        runVideoGeneration: true,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
         ...(input.analyticsEmailProvider === undefined ? {} : { analyticsEmailProvider: input.analyticsEmailProvider }),
         ...(input.analyticsProvider === undefined ? {} : { analyticsProvider: input.analyticsProvider }),
@@ -196,9 +216,14 @@ function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unkn
     analyticsEmailsDelivered: result.analyticsEmail?.delivered ?? 0,
     analyticsEmailsSkipped: result.analyticsEmail?.skipped ?? 0,
     analyticsWorkspacesSynced: result.analyticsSync?.attempted ?? 0,
+    expiredOfferingDocumentAnalyses: result.documentCleanup?.expired ?? 0,
+    offeringDocumentCleanupFailures: result.documentCleanup?.failed ?? 0,
     refreshedTokens: result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
     tokenRefreshFailures: result.tokenRefresh?.filter((item) => !item.refreshed).length ?? 0,
     usageCountersEnsured: result.usageReset?.countersEnsured ?? 0,
-    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0
+    usageWorkspacesChecked: result.usageReset?.workspacesChecked ?? 0,
+    videoJobsCompleted: result.videoGeneration?.completed ?? 0,
+    videoJobsFailed: result.videoGeneration?.failed ?? 0,
+    videoJobsProcessed: result.videoGeneration?.processed ?? 0
   };
 }

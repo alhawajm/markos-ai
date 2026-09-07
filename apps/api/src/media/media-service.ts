@@ -526,44 +526,24 @@ function validateGeneratedImage(
   return verified;
 }
 
-function promptFromContent(contentItem: {
-  callToAction: string | null;
-  captionAr: string | null;
-  captionEn: string | null;
-  contentPillar: string | null;
-  contentType: string;
-  hashtags: string[];
-}): string {
-  const caption = contentItem.captionEn ?? contentItem.captionAr ?? "Instagram marketing visual";
+function promptFromContent(contentItem: { caption: string; contentPillar: string | null; contentType: string }): string {
+  const caption = contentItem.caption || "Instagram marketing visual";
   const pillar = contentItem.contentPillar ?? "brand awareness";
-  const hashtags = contentItem.hashtags.slice(0, 5).join(" ");
 
   return [
     `Create a Bahrain-ready Instagram ${contentItem.contentType.toLowerCase()} visual.`,
     `Theme: ${pillar}.`,
     `Caption context: ${caption}.`,
-    contentItem.callToAction ? `Call to action: ${contentItem.callToAction}.` : "",
-    hashtags ? `Hashtag context: ${hashtags}.` : "",
     "No unreadable text, distorted logos, or generic stock-photo styling."
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-function contentImagePromptSource(contentItem: {
-  callToAction: string | null;
-  captionAr: string | null;
-  captionEn: string | null;
-  contentPillar: string | null;
-  contentType: string;
-  hashtags: string[];
-}): Record<string, unknown> {
+function contentImagePromptSource(contentItem: { caption: string; contentPillar: string | null; contentType: string }): Record<string, unknown> {
   return {
     contentType: contentItem.contentType,
-    captionEn: contentItem.captionEn,
-    captionAr: contentItem.captionAr,
-    hashtags: contentItem.hashtags,
-    callToAction: contentItem.callToAction,
+    caption: contentItem.caption,
     contentPillar: contentItem.contentPillar
   };
 }

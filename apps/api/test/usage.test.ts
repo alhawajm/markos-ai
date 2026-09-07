@@ -3,12 +3,12 @@ import type { UsageMetric } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
-import { recordWorkspaceMeteredUsage, reserveWorkspaceUsage, UsageQuotaExceededError } from "../src/usage/usage-service";
+import { recordWorkspaceMeteredUsage, reserveWorkspaceUsage } from "../src/usage/usage-service";
 
-const billableMetrics: UsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "STRATEGY", "STORAGE_BYTES"];
+const billableMetrics: UsageMetric[] = ["AI_GENERATION", "AI_IMAGE", "AI_TOKENS_IN", "AI_TOKENS_OUT", "POST_PUBLISH", "CAMPAIGN", "STORAGE_BYTES"];
 
-describe("usage quota enforcement", () => {
-  it.each(billableMetrics)("enforces the active plan limit for %s", async (metric) => {
+describe("diagnostic usage without commercial quotas", () => {
+  it.each(billableMetrics)("allows repeated %s usage beyond the old one-unit plan", async (metric) => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     await assignOneUnitPlan(session.user.id);
@@ -25,7 +25,7 @@ describe("usage quota enforcement", () => {
         metric,
         workspaceId: session.workspace.id
       })
-    ).rejects.toBeInstanceOf(UsageQuotaExceededError);
+    ).resolves.toBeUndefined();
     await expect(
       prisma.usageCounter.findFirstOrThrow({
         where: {
@@ -34,17 +34,18 @@ describe("usage quota enforcement", () => {
         }
       })
     ).resolves.toMatchObject({
-      limit: 1n,
-      used: 1n
+      limit: 0n,
+      used: 2n
     });
 
     await app.close();
   });
 
-  it("uses the same hard quota guard for reserved usage", async () => {
+  it("allows repeated actions after trial expiry without changing account security", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     await assignOneUnitPlan(session.user.id);
+    await prisma.user.update({ where: { id: session.user.id }, data: { planStatus: "TRIAL", trialEndsAt: new Date(0) } });
 
     await reserveWorkspaceUsage({
       metric: "POST_PUBLISH",
@@ -56,7 +57,7 @@ describe("usage quota enforcement", () => {
         metric: "POST_PUBLISH",
         workspaceId: session.workspace.id
       })
-    ).rejects.toBeInstanceOf(UsageQuotaExceededError);
+    ).resolves.toBeUndefined();
 
     await app.close();
   });
@@ -108,7 +109,7 @@ async function assignOneUnitPlan(userId: string): Promise<void> {
         aiOutputTokens: 1,
         posts: 1,
         storageBytes: 1,
-        strategies: 1
+        campaigns: 1
       },
       name: "Test One Unit Plan",
       priceMinor: 1000

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-const sections = ["briefing", "strategy", "opportunities", "campaign-builder", "content-studio", "analytics", "knowledge", "settings"] as const;
-const legacySections = ["vault", "content", "schedule", "audience", "channels", "ai", "admin"] as const;
+const sections = ["briefing", "campaigns", "opportunities", "campaign-builder", "content-studio", "analytics", "knowledge", "settings"] as const;
+const legacySections = ["strategy", "vault", "content", "schedule", "audience", "channels", "ai", "admin"] as const;
 type RouteSection = (typeof sections)[number] | (typeof legacySections)[number];
 type CanonicalSection = (typeof sections)[number] | "dashboard";
 
@@ -12,6 +12,7 @@ const legacySectionMap: Record<(typeof legacySections)[number], CanonicalSection
   channels: "settings",
   content: "content-studio",
   schedule: "campaign-builder",
+  strategy: "campaigns",
   vault: "knowledge"
 };
 

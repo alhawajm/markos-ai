@@ -11,7 +11,9 @@ import {
   type InstagramPublishResult,
   type InstagramPublisher,
   type InstagramPublishingLimit,
-  validateInstagramImageForPublishing
+  validateInstagramImageForPublishing,
+  validateInstagramStoryImageForPublishing,
+  validateInstagramVideoForPublishing
 } from "./instagram-publisher";
 import { getSecureInstagramConnection, withSecureInstagramCredential } from "../workspace/instagram-connection-service";
 
@@ -22,6 +24,7 @@ export interface PublishAttemptRecord {
   result?: InstagramPublishResult;
   publishingLimit?: InstagramPublishingLimit;
   status: "BLOCKED" | "DRY_RUN" | "FAILED" | "PUBLISHED";
+  retryable?: boolean;
 }
 
 export interface PublishDueContentResult {
@@ -63,7 +66,7 @@ export class PublishRescheduleInvalidError extends Error {
   }
 }
 
-const publishableTypes = new Set(["CAROUSEL", "POST", "REEL"]);
+const publishableTypes = new Set(["CAROUSEL", "POST", "REEL", "STORY"]);
 const publishingRequiredEnv = [
   "INSTAGRAM_PUBLISH_MODE",
   "INSTAGRAM_APP_ID",
@@ -339,7 +342,8 @@ async function executePublishContentItem(
     mediaAssets,
     now,
     workspace,
-    milestoneAImageOnly: publisher instanceof InstagramGraphPublisher,
+    ...(liveConnection?.accountType === undefined ? {} : { instagramAccountType: liveConnection.accountType }),
+    liveProvider: publisher instanceof InstagramGraphPublisher,
     releaseScopesCurrent: liveConnection === undefined || !liveConnection.connected || hasCanonicalReleaseScopeSet(liveConnection.requestedScopes ?? [])
   });
 
@@ -426,7 +430,7 @@ async function executePublishContentItem(
         },
         data: {
           failureReason: error.message,
-          status: "FAILED"
+          status: error.retryable ? "SCHEDULED" : "FAILED"
         }
       });
 
@@ -434,7 +438,8 @@ async function executePublishContentItem(
         contentItemId,
         dryRun: false,
         reasons: [error.message],
-        status: "FAILED"
+        status: "FAILED",
+        retryable: error.retryable
       };
     }
 
@@ -452,6 +457,7 @@ async function executePublishContentItem(
         id: contentItem.id
       },
       data: {
+        failureReason: null,
         instagramPostId: result.instagramPostId,
         publishedAt: now,
         status: "PUBLISHED"
@@ -473,7 +479,8 @@ function validatePublishAttempt(input: {
   mediaAssets: MediaAsset[];
   now: Date;
   workspace: Workspace;
-  milestoneAImageOnly: boolean;
+  instagramAccountType?: string;
+  liveProvider: boolean;
   releaseScopesCurrent: boolean;
 }): string[] {
   const reasons: string[] = [];
@@ -500,18 +507,10 @@ function validatePublishAttempt(input: {
     reasons.push("CONTENT_TYPE_NOT_PUBLISHABLE");
   }
 
-  if (input.milestoneAImageOnly) {
-    if (input.contentItem.contentType !== "POST") {
-      reasons.push("INSTAGRAM_MILESTONE_A_IMAGE_POST_ONLY");
-    } else if (input.mediaAssets.length !== 1 || input.mediaAssets[0] === undefined) {
-      reasons.push("INSTAGRAM_PUBLISH_REQUIRES_ONE_IMAGE");
-    } else {
-      reasons.push(...validateInstagramImageForPublishing(input.mediaAssets[0]));
+  reasons.push(...validateContentMedia(input.contentItem, input.mediaAssets, input.instagramAccountType));
 
-      if (!input.mediaAssets[0].s3Key.startsWith("s3:")) {
-        reasons.push("INSTAGRAM_MILESTONE_A_S3_MEDIA_REQUIRED");
-      }
-    }
+  if (input.liveProvider && input.mediaAssets.some((asset) => !asset.s3Key.startsWith("s3:") && !asset.s3Key.startsWith("external:"))) {
+    reasons.push("INSTAGRAM_PUBLISH_PROVIDER_FETCHABLE_MEDIA_REQUIRED");
   }
 
   const validPublicMediaIds = new Set(input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
@@ -523,10 +522,30 @@ function validatePublishAttempt(input: {
   return reasons;
 }
 
+function validateContentMedia(contentItem: ContentItem, mediaAssets: MediaAsset[], instagramAccountType?: string): string[] {
+  if (contentItem.contentType === "CAROUSEL") {
+    if (mediaAssets.length < 2 || mediaAssets.length > 10) return ["INSTAGRAM_CAROUSEL_REQUIRES_TWO_TO_TEN_ITEMS"];
+    return mediaAssets.flatMap(validateInstagramImageForPublishing);
+  }
+  if (mediaAssets.length !== 1 || mediaAssets[0] === undefined) return ["INSTAGRAM_PUBLISH_REQUIRES_ONE_MEDIA_ITEM"];
+  const asset = mediaAssets[0];
+  if (contentItem.contentType === "REEL") return validateInstagramVideoForPublishing(asset);
+  if (contentItem.contentType === "STORY") {
+    const reasons =
+      instagramAccountType === undefined || instagramAccountType.toUpperCase() === "BUSINESS" ? [] : ["INSTAGRAM_STORY_REQUIRES_BUSINESS_ACCOUNT"];
+    return reasons.concat(asset.mimeType.startsWith("video/") ? validateInstagramVideoForPublishing(asset) : validateInstagramStoryImageForPublishing(asset));
+  }
+  return validateInstagramImageForPublishing(asset);
+}
+
 function parseFutureScheduleTime(value: string): Date {
   const scheduledAt = new Date(value);
 
   if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+    throw new PublishRescheduleInvalidError();
+  }
+
+  if (scheduledAt.getUTCMinutes() % 30 !== 0 || scheduledAt.getUTCSeconds() !== 0 || scheduledAt.getUTCMilliseconds() !== 0) {
     throw new PublishRescheduleInvalidError();
   }
 

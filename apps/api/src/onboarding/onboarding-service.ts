@@ -11,8 +11,10 @@ import {
   type OnboardingModuleInput,
   type UpsertVaultSectionInput
 } from "@markos/validation";
+import type { OfferingSourceType } from "@prisma/client";
 import type { z } from "zod";
 import { prisma } from "../db/prisma";
+import { saveOfferingCatalog } from "../offerings/offering-catalog-service";
 import { getVaultScore, upsertVaultSection } from "../vault/vault-service";
 import { getBusinessProfileState, invalidateBusinessProfile } from "./business-profile-service";
 
@@ -30,21 +32,33 @@ interface VaultWrite {
   input: UpsertVaultSectionInput;
 }
 
+interface SaveOnboardingModuleOptions {
+  offeringSource?: { sourceRef?: string; sourceType: OfferingSourceType };
+  preserveApprovedProfile?: boolean;
+}
+
 const moduleSections: Record<OnboardingModuleInput, VaultSection[]> = {
   company: ["COMPANY"],
   story: ["STORY"],
   products: ["PRODUCTS"],
   audience: ["AUDIENCE"],
   competitors: ["COMPETITORS"],
-  brand: ["BRAND", "TONE"],
+  brand: ["TONE"],
   objectives: ["OBJECTIVES"]
 };
 
 const onboardingModules = onboardingModuleSchema.options;
+const requiredOnboardingModules = new Set<OnboardingModuleInput>(["company", "products"]);
 
 export class OnboardingIncompleteError extends Error {
   constructor(public readonly state: OnboardingState) {
     super("Onboarding is incomplete");
+  }
+}
+
+export class RequiredOnboardingModuleError extends Error {
+  constructor() {
+    super("This onboarding section is required before MARKOS can prepare a business profile");
   }
 }
 
@@ -57,7 +71,8 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
       },
       select: {
         onboardingStatus: true,
-        onboardingScore: true
+        onboardingScore: true,
+        onboardingSkippedModules: true
       }
     }),
     getVaultScore(workspaceId),
@@ -65,34 +80,84 @@ export async function getOnboardingState(workspaceId: string): Promise<Onboardin
   ]);
 
   const completed = new Set(vaultScore.completedSections);
+  const skipped = new Set(workspace.onboardingSkippedModules);
+  const modules = onboardingModules.map((module) => ({
+    module,
+    sections: moduleSections[module],
+    completed: moduleSections[module].every((section) => completed.has(section)),
+    skipped: skipped.has(module)
+  }));
 
   return {
     status: workspace.onboardingStatus,
     onboardingScore: workspace.onboardingScore,
+    readyForProfile: [...requiredOnboardingModules].every((module) => modules.some((state) => state.module === module && state.completed)),
     vaultScore,
     businessProfile,
-    modules: onboardingModules.map((module) => ({
-      module,
-      sections: moduleSections[module],
-      completed: moduleSections[module].every((section) => completed.has(section))
-    }))
+    modules
   };
 }
 
-export async function saveOnboardingModule(workspaceId: string, module: OnboardingModuleInput, payload: OnboardingPayload): Promise<OnboardingState> {
-  for (const write of toVaultWrites(module, payload)) {
-    await upsertVaultSection(workspaceId, write.section, write.input);
+export async function saveOnboardingModule(
+  workspaceId: string,
+  module: OnboardingModuleInput,
+  payload: OnboardingPayload,
+  options: SaveOnboardingModuleOptions = {}
+): Promise<OnboardingState> {
+  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
+
+  if (module === "products") {
+    await saveOfferingCatalog(workspaceId, payload as z.infer<typeof productsOnboardingSchema>, options.offeringSource);
+  } else {
+    for (const write of toVaultWrites(module, payload)) {
+      await upsertVaultSection(workspaceId, write.section, write.input);
+    }
   }
 
   const vaultScore = await getVaultScore(workspaceId);
-  await invalidateBusinessProfile(workspaceId);
+  if (!preserveApprovedProfile) await invalidateBusinessProfile(workspaceId);
+  const workspace = await prisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { onboardingSkippedModules: true }
+  });
   await prisma.workspace.update({
     where: {
       id: workspaceId
     },
     data: {
-      onboardingStatus: "IN_PROGRESS",
-      onboardingScore: vaultScore.score
+      onboardingStatus: preserveApprovedProfile ? "COMPLETE" : "IN_PROGRESS",
+      onboardingScore: vaultScore.score,
+      onboardingSkippedModules: {
+        set: workspace.onboardingSkippedModules.filter((item) => item !== module)
+      }
+    }
+  });
+
+  return getOnboardingState(workspaceId);
+}
+
+export async function skipOnboardingModule(
+  workspaceId: string,
+  module: OnboardingModuleInput,
+  options: SaveOnboardingModuleOptions = {}
+): Promise<OnboardingState> {
+  if (requiredOnboardingModules.has(module)) {
+    throw new RequiredOnboardingModuleError();
+  }
+
+  const workspace = await prisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { onboardingSkippedModules: true }
+  });
+  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
+
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      onboardingStatus: preserveApprovedProfile ? "COMPLETE" : "IN_PROGRESS",
+      onboardingSkippedModules: {
+        set: Array.from(new Set([...workspace.onboardingSkippedModules, module]))
+      }
     }
   });
 
@@ -102,7 +167,7 @@ export async function saveOnboardingModule(workspaceId: string, module: Onboardi
 export async function completeOnboarding(workspaceId: string): Promise<OnboardingState> {
   const state = await getOnboardingState(workspaceId);
 
-  if (state.vaultScore.score < 100 || state.businessProfile.status !== "APPROVED") {
+  if (!state.readyForProfile || state.businessProfile.status !== "APPROVED") {
     throw new OnboardingIncompleteError(state);
   }
 
@@ -112,7 +177,7 @@ export async function completeOnboarding(workspaceId: string): Promise<Onboardin
     },
     data: {
       onboardingStatus: "COMPLETE",
-      onboardingScore: 100
+      onboardingScore: state.vaultScore.score
     }
   });
 
@@ -126,15 +191,16 @@ function toVaultWrites(module: OnboardingModuleInput, payload: OnboardingPayload
     case "story":
       return [{ section: "STORY", input: { entries: [{ key: "story", value: payload as Record<string, unknown> }] } }];
     case "products":
-      return [{ section: "PRODUCTS", input: { entries: [{ key: "catalog", value: payload as Record<string, unknown> }] } }];
+      return [];
     case "audience":
       return [{ section: "AUDIENCE", input: { entries: [{ key: "primary-audience", value: payload as Record<string, unknown> }] } }];
     case "competitors":
       return [{ section: "COMPETITORS", input: { entries: [{ key: "competitors", value: payload as Record<string, unknown> }] } }];
     case "brand": {
       const brand = payload as z.infer<typeof brandOnboardingSchema>;
-      return [
-        {
+      const writes: VaultWrite[] = [];
+      if (brand.aestheticWords.length || brand.colors.length || brand.fonts.length || brand.logoMediaId || brand.guidelinesMediaId) {
+        writes.push({
           section: "BRAND",
           input: {
             entries: [
@@ -150,8 +216,10 @@ function toVaultWrites(module: OnboardingModuleInput, payload: OnboardingPayload
               }
             ]
           }
-        },
-        {
+        });
+      }
+      if (brand.toneWords.length || brand.voiceNotes) {
+        writes.push({
           section: "TONE",
           input: {
             entries: [
@@ -164,8 +232,9 @@ function toVaultWrites(module: OnboardingModuleInput, payload: OnboardingPayload
               }
             ]
           }
-        }
-      ];
+        });
+      }
+      return writes;
     }
     case "objectives":
       return [{ section: "OBJECTIVES", input: { entries: [{ key: "goals", value: payload as Record<string, unknown> }] } }];

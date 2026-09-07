@@ -191,6 +191,66 @@ select {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .sunlit-preview-enter {
+    animation: sunlit-preview-enter 220ms ease-out both;
+  }
+
+  .sunlit-schedule-drawer-enter {
+    animation: sunlit-schedule-drawer-enter 220ms ease-out both;
+  }
+
+  @keyframes sunlit-preview-enter {
+    from {
+      opacity: 0;
+      transform: translateX(1.25rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes sunlit-schedule-drawer-enter {
+    from {
+      opacity: 0;
+      transform: translateX(2rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  [dir="rtl"] .sunlit-preview-enter {
+    animation-name: sunlit-preview-enter-rtl;
+  }
+
+  [dir="rtl"] .sunlit-schedule-drawer-enter {
+    animation-name: sunlit-schedule-drawer-enter-rtl;
+  }
+
+  @keyframes sunlit-preview-enter-rtl {
+    from {
+      opacity: 0;
+      transform: translateX(-1.25rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes sunlit-schedule-drawer-enter-rtl {
+    from {
+      opacity: 0;
+      transform: translateX(-2rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
   @keyframes lux-core-pulse {
     0%,
     100% {

@@ -16,8 +16,31 @@ describe("Instagram database integration safety", () => {
     ).toBe(true);
   });
 
+  it("accepts the persistent local test database without requiring CI", () => {
+    expect(
+      validateInstagramDatabaseTarget({
+        DATABASE_URL: "postgresql://localhost:5432/markos_local_test",
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://[::1]:5432/markos_local_test"
+      })
+    ).toBe(true);
+  });
+
   it.each([
     ["missing CI opt-in", { CI: "true", DATABASE_URL: "postgresql://localhost/markos_ci_test" }],
+    [
+      "ordinary local development database",
+      {
+        DATABASE_URL: "postgresql://localhost/markos",
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost/markos"
+      }
+    ],
+    [
+      "mismatched database port",
+      {
+        DATABASE_URL: "postgresql://localhost:5432/markos_local_test",
+        INSTAGRAM_DATABASE_TEST_URL: "postgresql://localhost:5433/markos_local_test"
+      }
+    ],
     [
       "missing actual Prisma target",
       {

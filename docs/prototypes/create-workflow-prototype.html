@@ -1,0 +1,2821 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-preview="lab" data-state="hub" data-format="post" data-sidebar="expanded">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Interactive desktop prototype for the MARKOS Create action hub, Draft Editor, Ready transition, and scheduling handoff."
+    />
+    <title>MARKOS Create workflow prototype</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #eef1f3;
+        --canvas-glow: #e3edf6;
+        --surface: #fbfcfd;
+        --surface-strong: #ffffff;
+        --surface-soft: #f4f6f8;
+        --line: #d8dee3;
+        --line-strong: #c6ced5;
+        --text: #20262d;
+        --muted: #5f6b75;
+        --primary: #c64f2e;
+        --primary-hover: #ae4024;
+        --on-primary: #ffffff;
+        --accent: #315a7d;
+        --accent-soft: #e7eff6;
+        --focus: #315a7d;
+        --danger: #c83250;
+        --danger-soft: #fff0f3;
+        --draft: #526276;
+        --draft-soft: #f1f5f9;
+        --ready: #2563eb;
+        --ready-soft: #eff6ff;
+        --scheduled: #e95018;
+        --scheduled-soft: #fff2ea;
+        --success: #168448;
+        --success-soft: #eaf8f0;
+        --radius-sm: 0.6rem;
+        --radius-md: 0.9rem;
+        --radius-lg: 1.25rem;
+        --shadow-sm: 0 0.35rem 1.2rem rgb(39 49 57 / 7%);
+        --shadow-lg: 0 1.4rem 4rem rgb(39 49 57 / 16%);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #151a20;
+        --canvas-glow: #17293a;
+        --surface: #1b2128;
+        --surface-strong: #202831;
+        --surface-soft: #252e38;
+        --line: #34414c;
+        --line-strong: #465461;
+        --text: #f4f7fa;
+        --muted: #aeb8c2;
+        --primary: #f47a45;
+        --primary-hover: #ff8b58;
+        --on-primary: #181d22;
+        --accent: #78a9d1;
+        --accent-soft: #22394c;
+        --focus: #8fc7f1;
+        --danger: #ff718b;
+        --danger-soft: #49252f;
+        --draft: #b0bbc7;
+        --draft-soft: #2a333d;
+        --ready: #76aaff;
+        --ready-soft: #23364e;
+        --scheduled: #ff925c;
+        --scheduled-soft: #482a20;
+        --success: #5ad88a;
+        --success-soft: #203a2c;
+        --shadow-sm: 0 0.35rem 1.2rem rgb(0 0 0 / 18%);
+        --shadow-lg: 0 1.4rem 4rem rgb(0 0 0 / 40%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: #e9e7e3;
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
+      html[dir="rtl"] body,
+      html[dir="rtl"] button,
+      html[dir="rtl"] input,
+      html[dir="rtl"] select,
+      html[dir="rtl"] textarea {
+        font-family: "IBM Plex Sans Arabic", sans-serif;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        color: inherit;
+        font: inherit;
+      }
+
+      button,
+      select,
+      summary {
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      summary:focus-visible,
+      a:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .lab {
+        display: grid;
+        min-height: 100vh;
+        grid-template-rows: auto 1fr;
+      }
+
+      .lab-toolbar {
+        position: sticky;
+        z-index: 50;
+        top: 0;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.7rem 1rem;
+        border-block-end: 1px solid #d5d2cd;
+        color: #20212b;
+        background: rgb(255 255 255 / 95%);
+        backdrop-filter: blur(12px);
+      }
+
+      .lab-title {
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        min-width: 14rem;
+      }
+
+      .brand-mark,
+      .lab-mark {
+        display: grid;
+        place-items: center;
+        color: #ffcd59;
+        background: #20262d;
+      }
+
+      .lab-mark {
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 0.65rem;
+        font-size: 1.15rem;
+      }
+
+      .lab-title strong,
+      .lab-title small {
+        display: block;
+      }
+
+      .lab-title strong {
+        font-size: 0.92rem;
+      }
+
+      .lab-title small {
+        margin-block-start: 0.1rem;
+        color: #716e69;
+        font-size: 0.7rem;
+      }
+
+      .lab-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
+      }
+
+      .lab-control {
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
+        padding: 0.18rem;
+        border: 1px solid #d8d5d0;
+        border-radius: 0.7rem;
+        background: #f4f3f1;
+      }
+
+      .lab-control span {
+        padding-inline: 0.45rem 0.2rem;
+        color: #716e69;
+        font-size: 0.63rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .lab-control select,
+      .lab-control button {
+        min-height: 1.95rem;
+        padding: 0.38rem 0.6rem;
+        border: 0;
+        border-radius: 0.5rem;
+        color: #20212b;
+        background: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .stage {
+        display: grid;
+        min-height: 0;
+        padding: 1rem;
+        place-items: center;
+        background: radial-gradient(circle at 10% 0%, #fff8ed 0, transparent 32%), radial-gradient(circle at 100% 30%, #e8f3f8 0, transparent 34%), #e9e7e3;
+      }
+
+      .artifact {
+        position: relative;
+        display: grid;
+        width: min(100%, 1440px);
+        height: min(900px, calc(100vh - 6rem));
+        min-height: 680px;
+        grid-template-columns: 224px minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 1.4rem;
+        background: var(--canvas);
+        box-shadow: var(--shadow-lg);
+      }
+
+      :root[data-sidebar="collapsed"] .artifact {
+        grid-template-columns: 78px minmax(0, 1fr);
+      }
+
+      :root[data-preview="focus"] body {
+        overflow: hidden;
+      }
+
+      :root[data-preview="focus"] .lab {
+        display: block;
+        min-height: 100vh;
+      }
+
+      :root[data-preview="focus"] .lab-toolbar {
+        display: none;
+      }
+
+      :root[data-preview="focus"] .stage {
+        min-height: 100vh;
+        padding: 0;
+        background: var(--canvas);
+      }
+
+      :root[data-preview="focus"] .artifact {
+        width: 100%;
+        height: 100vh;
+        min-height: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .sidebar {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        padding: 1.3rem 1rem 1rem;
+        border-inline-end: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
+      .sidebar-toggle {
+        position: absolute;
+        z-index: 5;
+        inset-inline-end: -0.9rem;
+        top: 4.75rem;
+        display: grid;
+        width: 1.9rem;
+        height: 1.9rem;
+        padding: 0;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        color: var(--muted);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-sm);
+        font-size: 0.9rem;
+      }
+
+      .sidebar-toggle:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+
+      .brand {
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        padding: 0.15rem 0.35rem 1.35rem;
+      }
+
+      .brand-mark {
+        width: 2.65rem;
+        height: 2.65rem;
+        flex: 0 0 auto;
+        border-radius: 0.8rem;
+        font-size: 1.35rem;
+        box-shadow: 0 0.65rem 1.5rem rgb(32 38 45 / 16%);
+      }
+
+      .brand strong,
+      .brand small {
+        display: block;
+      }
+
+      .brand strong {
+        font-size: 1rem;
+      }
+
+      .brand small {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .nav {
+        display: grid;
+        gap: 0.36rem;
+      }
+
+      .nav a,
+      .settings-link {
+        display: grid;
+        min-height: 2.8rem;
+        grid-template-columns: 2rem minmax(0, 1fr);
+        gap: 0.55rem;
+        align-items: center;
+        padding: 0.55rem 0.36rem;
+        border: 1px solid transparent;
+        border-radius: 0.75rem;
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.86rem;
+        font-weight: 600;
+      }
+
+      .nav a:hover,
+      .settings-link:hover {
+        color: var(--text);
+        background: var(--surface-soft);
+      }
+
+      .nav a[aria-current="page"] {
+        border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+        color: var(--primary-hover);
+        background: color-mix(in srgb, var(--primary) 9%, var(--surface-strong));
+      }
+
+      .nav-icon {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 0.62rem;
+        font-size: 1.1rem;
+      }
+
+      .nav a[aria-current="page"] .nav-icon {
+        background: color-mix(in srgb, var(--primary) 13%, var(--surface-strong));
+      }
+
+      .sidebar-foot {
+        display: grid;
+        gap: 0.55rem;
+        margin-block-start: auto;
+      }
+
+      .prototype-flag {
+        padding: 0.65rem 0.7rem;
+        border: 1px dashed var(--line-strong);
+        border-radius: 0.75rem;
+        color: var(--muted);
+        background: var(--surface-soft);
+        font-size: 0.68rem;
+      }
+
+      :root[data-sidebar="collapsed"] .brand-copy,
+      :root[data-sidebar="collapsed"] .nav-label,
+      :root[data-sidebar="collapsed"] .settings-label,
+      :root[data-sidebar="collapsed"] .prototype-flag {
+        display: none;
+      }
+
+      :root[data-sidebar="collapsed"] .sidebar {
+        padding-inline: 0.75rem;
+      }
+
+      :root[data-sidebar="collapsed"] .brand {
+        justify-content: center;
+        padding-inline: 0;
+      }
+
+      :root[data-sidebar="collapsed"] .nav a,
+      :root[data-sidebar="collapsed"] .settings-link {
+        grid-template-columns: 2rem;
+        justify-content: center;
+        padding-inline: 0;
+      }
+
+      .main {
+        position: relative;
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-rows: auto 1fr;
+        background:
+          radial-gradient(circle at 0 0, color-mix(in srgb, var(--primary) 7%, transparent), transparent 34%),
+          radial-gradient(circle at 100% 0, var(--canvas-glow), transparent 38%), var(--canvas);
+      }
+
+      .page-head {
+        display: flex;
+        min-height: 4.5rem;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.85rem 1.35rem;
+        border-block-end: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
+      }
+
+      .page-head-left {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .page-head h1,
+      .page-head p {
+        margin: 0;
+      }
+
+      .page-head h1 {
+        font-size: 1.35rem;
+        line-height: 1.15;
+      }
+
+      .page-head p {
+        margin-block-start: 0.16rem;
+        color: var(--muted);
+        font-size: 0.76rem;
+      }
+
+      .back-button,
+      .icon-button,
+      .btn {
+        min-height: 2.65rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.72rem;
+        background: var(--surface-strong);
+        font-weight: 600;
+      }
+
+      .back-button,
+      .icon-button {
+        display: grid;
+        width: 2.65rem;
+        padding: 0;
+        place-items: center;
+      }
+
+      .back-button[hidden] {
+        display: none;
+      }
+
+      .btn {
+        padding: 0.65rem 0.9rem;
+      }
+
+      .btn:hover,
+      .back-button:hover,
+      .icon-button:hover {
+        border-color: var(--accent);
+        background: var(--surface-soft);
+      }
+
+      .btn.primary {
+        border-color: var(--primary);
+        color: var(--on-primary);
+        background: var(--primary);
+      }
+
+      .btn.primary:hover {
+        border-color: var(--primary-hover);
+        background: var(--primary-hover);
+      }
+
+      .btn.ghost {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      .btn.danger {
+        border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+        color: var(--danger);
+        background: var(--danger-soft);
+      }
+
+      .state-pill,
+      .micro-pill,
+      .type-pill {
+        display: inline-flex;
+        gap: 0.38rem;
+        align-items: center;
+        width: max-content;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+
+      .state-pill {
+        padding: 0.45rem 0.7rem;
+        color: var(--draft);
+        background: var(--draft-soft);
+        font-size: 0.75rem;
+      }
+
+      .state-pill::before,
+      .micro-pill::before {
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: currentColor;
+        content: "";
+      }
+
+      :root[data-state="ready"] .state-pill,
+      :root[data-state="schedule"] .state-pill {
+        color: var(--ready);
+        background: var(--ready-soft);
+      }
+
+      :root[data-state="scheduled"] .state-pill {
+        color: var(--scheduled);
+        background: var(--scheduled-soft);
+      }
+
+      .workspace {
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        padding: 1.15rem 1.35rem 1.25rem;
+      }
+
+      .hub,
+      .editor {
+        height: 100%;
+      }
+
+      .hub {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 1rem;
+        overflow: auto;
+      }
+
+      :root:not([data-state="hub"]) .hub {
+        display: none;
+      }
+
+      .editor {
+        display: none;
+      }
+
+      :root:not([data-state="hub"]) .editor {
+        display: grid;
+      }
+
+      .hub-intro {
+        display: flex;
+        gap: 1rem;
+        align-items: end;
+        justify-content: space-between;
+      }
+
+      .hub-intro h2,
+      .hub-intro p {
+        margin: 0;
+      }
+
+      .hub-intro h2 {
+        max-width: 34rem;
+        font-size: clamp(1.55rem, 2.5vw, 2.25rem);
+        letter-spacing: -0.025em;
+        line-height: 1.08;
+      }
+
+      .hub-intro p {
+        max-width: 34rem;
+        margin-block-start: 0.45rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .usage-note {
+        padding: 0.55rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        color: var(--muted);
+        background: var(--surface-strong);
+        font-size: 0.72rem;
+      }
+
+      .start-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+        gap: 0.8rem;
+      }
+
+      .start-card {
+        display: grid;
+        min-height: 10.5rem;
+        grid-template-rows: auto 1fr auto;
+        gap: 0.7rem;
+        padding: 1rem;
+        text-align: start;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        color: var(--text);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .start-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+
+      .start-card.primary-start {
+        border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+        background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 9%, var(--surface-strong)), var(--surface-strong) 62%);
+      }
+
+      .start-icon {
+        display: grid;
+        width: 2.7rem;
+        height: 2.7rem;
+        place-items: center;
+        border-radius: 0.8rem;
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-size: 1.25rem;
+      }
+
+      .primary-start .start-icon {
+        color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 13%, var(--surface-strong));
+      }
+
+      .start-card strong {
+        display: block;
+        font-size: 1rem;
+      }
+
+      .start-card p {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .start-card .card-action {
+        color: var(--primary);
+        font-size: 0.76rem;
+        font-weight: 700;
+      }
+
+      .hub-lower {
+        display: grid;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1.45fr) minmax(15rem, 0.75fr);
+        gap: 0.8rem;
+      }
+
+      .panel {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .panel-head {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.85rem 1rem;
+        border-block-end: 1px solid var(--line);
+      }
+
+      .panel-head h3,
+      .panel-head p {
+        margin: 0;
+      }
+
+      .panel-head h3 {
+        font-size: 0.95rem;
+      }
+
+      .panel-head p {
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .draft-row {
+        display: grid;
+        grid-template-columns: 3rem minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: center;
+        margin: 0.7rem;
+        padding: 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--surface);
+      }
+
+      .draft-thumb {
+        display: grid;
+        width: 3rem;
+        height: 3rem;
+        place-items: center;
+        border-radius: 0.72rem;
+        color: #fff;
+        background: linear-gradient(145deg, #e25e2d, #f6b953);
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      .draft-row strong,
+      .draft-row small {
+        display: block;
+      }
+
+      .draft-row small {
+        margin-block-start: 0.18rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .calendar-card {
+        display: grid;
+        min-height: 100%;
+        grid-template-rows: 1fr auto;
+        gap: 0.8rem;
+        padding: 1rem;
+        background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 9%, var(--surface-strong)), var(--surface-strong));
+      }
+
+      .calendar-card h3,
+      .calendar-card p {
+        margin: 0;
+      }
+
+      .calendar-card p {
+        margin-block-start: 0.35rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .editor {
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr) minmax(19rem, 25rem);
+        gap: 1rem;
+      }
+
+      .compose-panel {
+        display: grid;
+        min-height: 0;
+        grid-template-rows: auto 1fr auto;
+        overflow: hidden;
+      }
+
+      .compose-head {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.8rem 1rem;
+        border-block-end: 1px solid var(--line);
+      }
+
+      .compose-head h2,
+      .compose-head p {
+        margin: 0;
+      }
+
+      .compose-head h2 {
+        font-size: 1.05rem;
+      }
+
+      .compose-head p {
+        margin-block-start: 0.16rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .type-pill {
+        padding: 0.45rem 0.7rem;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: var(--surface-soft);
+        font-size: 0.7rem;
+      }
+
+      .format-picker {
+        display: inline-flex;
+        width: max-content;
+        max-width: 100%;
+        gap: 0.18rem;
+        padding: 0.2rem;
+        border: 1px solid var(--line);
+        border-radius: 0.72rem;
+        background: var(--surface-soft);
+      }
+
+      .format-option {
+        display: inline-flex;
+        min-height: 2.25rem;
+        gap: 0.35rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0.38rem 0.58rem;
+        border: 1px solid transparent;
+        border-radius: 0.55rem;
+        background: transparent;
+      }
+
+      .format-option:hover {
+        border-color: var(--accent);
+        background: var(--surface-soft);
+      }
+
+      .format-option[aria-pressed="true"] {
+        border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+        color: var(--primary-hover);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .format-icon {
+        display: grid;
+        width: 1.2rem;
+        height: 1.2rem;
+        place-items: center;
+        border-radius: 0.36rem;
+        color: var(--accent);
+        background: transparent;
+        font-size: 0.64rem;
+        font-weight: 700;
+      }
+
+      .format-option[aria-pressed="true"] .format-icon {
+        color: var(--primary-hover);
+        background: color-mix(in srgb, var(--primary) 11%, var(--surface-strong));
+      }
+
+      .format-option strong {
+        font-size: 0.68rem;
+        white-space: nowrap;
+      }
+
+      .format-note {
+        margin: 0.28rem 0 0;
+        color: var(--muted);
+        font-size: 0.58rem;
+      }
+
+      .compose-scroll {
+        min-height: 0;
+        overflow: auto;
+        padding: 0.85rem 1rem;
+      }
+
+      .flow-section + .flow-section {
+        margin-block-start: 0.8rem;
+      }
+
+      .section-title {
+        display: flex;
+        gap: 0.8rem;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-block-end: 0.48rem;
+      }
+
+      .section-title h3,
+      .section-title p {
+        margin: 0;
+      }
+
+      .section-title h3 {
+        font-size: 0.88rem;
+      }
+
+      .section-title p {
+        color: var(--muted);
+        font-size: 0.68rem;
+      }
+
+      .media-zone {
+        display: grid;
+        min-height: 10.2rem;
+        grid-template-columns: minmax(14rem, 1.15fr) minmax(12rem, 0.85fr);
+        gap: 0.7rem;
+      }
+
+      .media-preview {
+        position: relative;
+        display: grid;
+        min-height: 10.2rem;
+        aspect-ratio: 4 / 5;
+        place-items: center;
+        justify-self: center;
+        max-height: 13.5rem;
+        width: min(100%, 10.8rem);
+        overflow: hidden;
+        border: 1px dashed var(--line-strong);
+        border-radius: 0.9rem;
+        color: var(--muted);
+        background: var(--surface-soft);
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .media-preview {
+        aspect-ratio: 9 / 16;
+        width: min(100%, 7.7rem);
+      }
+
+      .media-preview.has-media {
+        border-style: solid;
+        color: #ffffff;
+        background:
+          radial-gradient(circle at 72% 18%, rgb(255 239 200 / 65%), transparent 22%), linear-gradient(145deg, #a82f22 0 36%, #e76a2d 36% 68%, #f6bd54 68%);
+      }
+
+      .media-preview.has-media::before {
+        position: absolute;
+        width: 6.6rem;
+        height: 6.6rem;
+        border: 0.85rem solid rgb(255 255 255 / 88%);
+        border-radius: 50%;
+        content: "";
+      }
+
+      .media-empty,
+      .media-filled {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+      }
+
+      .media-filled {
+        display: none;
+        text-shadow: 0 1px 8px rgb(0 0 0 / 22%);
+      }
+
+      .media-preview.has-media .media-empty {
+        display: none;
+      }
+
+      .media-preview.has-media .media-filled {
+        display: block;
+      }
+
+      .media-empty strong,
+      .media-empty small,
+      .media-filled strong,
+      .media-filled small {
+        display: block;
+      }
+
+      .media-empty small,
+      .media-filled small {
+        margin-block-start: 0.2rem;
+        font-size: 0.67rem;
+      }
+
+      .media-options {
+        display: grid;
+        gap: 0.55rem;
+        align-content: start;
+      }
+
+      .drop-zone {
+        display: grid;
+        min-height: 3.5rem;
+        grid-template-columns: 2rem minmax(0, 1fr);
+        gap: 0.55rem;
+        align-items: center;
+        padding: 0.62rem;
+        text-align: start;
+        border: 1px dashed color-mix(in srgb, var(--accent) 60%, var(--line));
+        border-radius: 0.78rem;
+        color: var(--text);
+        background: color-mix(in srgb, var(--accent) 5%, var(--surface-strong));
+      }
+
+      .drop-zone:hover {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 7%, var(--surface-strong));
+      }
+
+      .drop-zone strong,
+      .drop-zone small {
+        display: block;
+      }
+
+      .drop-zone strong {
+        font-size: 0.72rem;
+      }
+
+      .drop-zone small {
+        color: var(--muted);
+        font-size: 0.59rem;
+      }
+
+      .media-option {
+        display: grid;
+        grid-template-columns: 2rem minmax(0, 1fr);
+        gap: 0.55rem;
+        align-items: center;
+        padding: 0.65rem;
+        text-align: start;
+        border: 1px solid var(--line);
+        border-radius: 0.78rem;
+        background: var(--surface-strong);
+      }
+
+      .media-option:hover:not(:disabled) {
+        border-color: var(--accent);
+      }
+
+      .media-option .option-icon,
+      .drop-zone .option-icon {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 0.58rem;
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .media-option strong,
+      .media-option small {
+        display: block;
+      }
+
+      .media-option strong {
+        font-size: 0.74rem;
+      }
+
+      .media-option small {
+        margin-block-start: 0.1rem;
+        color: var(--muted);
+        font-size: 0.62rem;
+      }
+
+      .field-card {
+        padding: 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: var(--surface);
+      }
+
+      .field-head {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-block-end: 0.45rem;
+      }
+
+      .field-head label {
+        font-size: 0.76rem;
+        font-weight: 700;
+      }
+
+      .ai-button {
+        min-height: 2rem;
+        padding: 0.35rem 0.55rem;
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+        border-radius: 0.58rem;
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-size: 0.66rem;
+        font-weight: 700;
+      }
+
+      textarea,
+      input[type="text"],
+      input[type="date"],
+      input[type="time"] {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        border-radius: 0.68rem;
+        color: var(--text);
+        background: var(--surface-strong);
+      }
+
+      textarea {
+        min-height: 6.3rem;
+        padding: 0.65rem 0.7rem;
+        resize: vertical;
+      }
+
+      .caption-meta {
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-block-start: 0.38rem;
+        color: var(--muted);
+        font-size: 0.62rem;
+      }
+
+      details.options-disclosure {
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--surface-strong);
+      }
+
+      details.options-disclosure summary {
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.7rem 0.8rem;
+        list-style: none;
+        font-size: 0.74rem;
+        font-weight: 700;
+      }
+
+      details.options-disclosure summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .options-body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.65rem;
+        padding: 0 0.8rem 0.8rem;
+      }
+
+      .option-field label,
+      .option-toggle strong,
+      .option-toggle small {
+        display: block;
+      }
+
+      .option-field label,
+      .option-toggle strong {
+        margin-block-end: 0.3rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+      }
+
+      .option-field input {
+        min-height: 2.45rem;
+        padding: 0.55rem 0.65rem;
+      }
+
+      .option-toggle {
+        padding: 0.55rem 0.65rem;
+        border: 1px solid var(--line);
+        border-radius: 0.7rem;
+        background: var(--surface-soft);
+      }
+
+      .option-toggle small {
+        color: var(--muted);
+        font-size: 0.6rem;
+      }
+
+      .compose-actions {
+        display: flex;
+        min-height: 4.3rem;
+        gap: 0.6rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.7rem 1rem;
+        border-block-start: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
+      .save-summary {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .save-summary strong,
+      .save-summary small {
+        display: block;
+      }
+
+      .save-summary strong {
+        font-size: 0.75rem;
+      }
+
+      .save-summary small {
+        color: var(--muted);
+        font-size: 0.62rem;
+      }
+
+      .action-group {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .only-saved,
+      .only-ready,
+      .only-scheduled {
+        display: none;
+      }
+
+      :root[data-state="saved"] .only-saved {
+        display: inline-flex;
+      }
+
+      :root[data-state="ready"] .only-ready,
+      :root[data-state="schedule"] .only-ready {
+        display: inline-flex;
+      }
+
+      :root[data-state="scheduled"] .only-scheduled {
+        display: inline-flex;
+      }
+
+      :root[data-state="saved"] .save-draft,
+      :root[data-state="ready"] .save-draft,
+      :root[data-state="schedule"] .save-draft,
+      :root[data-state="scheduled"] .save-draft {
+        display: none;
+      }
+
+      .right-rail {
+        display: grid;
+        min-height: 0;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 0.8rem;
+      }
+
+      .instagram-preview {
+        display: grid;
+        min-height: 0;
+        width: min(100%, 18rem);
+        align-self: start;
+        justify-self: center;
+        grid-template-rows: auto auto auto;
+        overflow: hidden;
+      }
+
+      .ig-head {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        padding: 0.75rem 0.8rem;
+        border-block-end: 1px solid var(--line);
+      }
+
+      .avatar {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: #20262d;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
+      .ig-head strong,
+      .ig-head small {
+        display: block;
+      }
+
+      .ig-head strong {
+        font-size: 0.72rem;
+      }
+
+      .ig-head small {
+        color: var(--muted);
+        font-size: 0.58rem;
+      }
+
+      .ig-media {
+        position: relative;
+        display: grid;
+        width: 100%;
+        min-height: 0;
+        aspect-ratio: 4 / 5;
+        place-items: center;
+        overflow: hidden;
+        color: var(--muted);
+        background: var(--surface-soft);
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .instagram-preview {
+        position: relative;
+        grid-template-rows: auto;
+        aspect-ratio: 9 / 16;
+        color: #ffffff;
+        background: #15171a;
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .ig-head,
+      :root:is([data-format="reel"], [data-format="story"]) .ig-copy {
+        position: absolute;
+        z-index: 3;
+        inset-inline: 0;
+        border: 0;
+        color: #ffffff;
+        background: linear-gradient(180deg, rgb(0 0 0 / 58%), transparent);
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .ig-head {
+        top: 0;
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .ig-head small,
+      :root:is([data-format="reel"], [data-format="story"]) .ig-caption {
+        color: #ffffff;
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .ig-copy {
+        bottom: 0;
+        padding-block-start: 2.6rem;
+        background: linear-gradient(0deg, rgb(0 0 0 / 70%), transparent);
+      }
+
+      :root:is([data-format="reel"], [data-format="story"]) .ig-media {
+        aspect-ratio: 9 / 16;
+      }
+
+      .ig-media.has-media {
+        color: #fff;
+        background:
+          radial-gradient(circle at 72% 18%, rgb(255 239 200 / 65%), transparent 22%), linear-gradient(145deg, #a82f22 0 36%, #e76a2d 36% 68%, #f6bd54 68%);
+      }
+
+      .ig-media.has-media::before {
+        position: absolute;
+        width: 8.5rem;
+        height: 8.5rem;
+        border: 1.05rem solid rgb(255 255 255 / 88%);
+        border-radius: 50%;
+        content: "";
+      }
+
+      .ig-media span {
+        position: relative;
+        z-index: 1;
+        font-size: 0.7rem;
+        font-weight: 600;
+      }
+
+      .ig-copy {
+        padding: 0.7rem 0.8rem;
+        border-block-start: 1px solid var(--line);
+      }
+
+      .ig-actions {
+        display: flex;
+        gap: 0.65rem;
+        margin-block-end: 0.45rem;
+        font-size: 1rem;
+      }
+
+      .ig-caption {
+        display: -webkit-box;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 0.68rem;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
+
+      .ig-caption strong {
+        margin-inline-end: 0.3rem;
+      }
+
+      .publication-card {
+        width: min(100%, 18rem);
+        justify-self: center;
+        padding: 0.85rem;
+      }
+
+      .publication-head {
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-block-end: 0.65rem;
+      }
+
+      .publication-head h3 {
+        margin: 0;
+        font-size: 0.85rem;
+      }
+
+      .publication-state {
+        padding: 0.3rem 0.5rem;
+        border-radius: 999px;
+        color: var(--draft);
+        background: var(--draft-soft);
+        font-size: 0.63rem;
+        font-weight: 700;
+      }
+
+      :root[data-state="ready"] .publication-state,
+      :root[data-state="schedule"] .publication-state {
+        color: var(--ready);
+        background: var(--ready-soft);
+      }
+
+      :root[data-state="scheduled"] .publication-state {
+        color: var(--scheduled);
+        background: var(--scheduled-soft);
+      }
+
+      .date-row {
+        display: grid;
+        grid-template-columns: 1fr 0.72fr;
+        gap: 0.55rem;
+      }
+
+      .date-row label {
+        display: block;
+        color: var(--muted);
+        font-size: 0.6rem;
+        font-weight: 700;
+      }
+
+      .date-row input {
+        min-height: 2.35rem;
+        margin-block-start: 0.25rem;
+        padding: 0.48rem 0.55rem;
+        font-size: 0.68rem;
+      }
+
+      .publication-note {
+        margin: 0.58rem 0 0;
+        color: var(--muted);
+        font-size: 0.62rem;
+      }
+
+      .guidance-panel {
+        position: absolute;
+        z-index: 60;
+        inset-inline-end: 1rem;
+        bottom: 1rem;
+        display: none;
+        width: min(24rem, calc(100% - 2rem));
+        padding: 0.9rem;
+        border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
+        border-radius: 0.95rem;
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .guidance-panel[data-open="true"] {
+        display: block;
+      }
+
+      .guidance-head {
+        display: flex;
+        gap: 0.75rem;
+        align-items: start;
+        justify-content: space-between;
+      }
+
+      .guidance-eyebrow {
+        display: block;
+        margin-block-end: 0.15rem;
+        color: var(--accent);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .guidance-panel h2,
+      .guidance-panel p {
+        margin: 0;
+      }
+
+      .guidance-panel h2 {
+        font-size: 0.92rem;
+      }
+
+      .guidance-panel p {
+        margin-block-start: 0.3rem;
+        color: var(--muted);
+        font-size: 0.68rem;
+      }
+
+      .guidance-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-block-start: 0.7rem;
+      }
+
+      .overlay {
+        position: absolute;
+        z-index: 80;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: rgb(20 28 35 / 42%);
+        backdrop-filter: blur(3px);
+      }
+
+      .overlay[data-open="true"] {
+        display: flex;
+      }
+
+      .dialog {
+        width: min(100%, 32rem);
+        padding: 1.1rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .dialog h2,
+      .dialog p {
+        margin: 0;
+      }
+
+      .dialog h2 {
+        font-size: 1.05rem;
+      }
+
+      .dialog p {
+        margin-block-start: 0.4rem;
+        color: var(--muted);
+        font-size: 0.76rem;
+      }
+
+      .dialog-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-block-start: 1rem;
+      }
+
+      .schedule-drawer {
+        position: absolute;
+        z-index: 70;
+        inset-block: 0;
+        inset-inline-end: 0;
+        display: none;
+        width: min(30rem, 88%);
+        padding: 1.1rem;
+        border-inline-start: 1px solid var(--line);
+        background: var(--surface-strong);
+        box-shadow: var(--shadow-lg);
+      }
+
+      :root[data-state="schedule"] .schedule-drawer {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .drawer-head {
+        display: flex;
+        gap: 1rem;
+        align-items: start;
+        justify-content: space-between;
+        padding-block-end: 0.9rem;
+        border-block-end: 1px solid var(--line);
+      }
+
+      .drawer-head h2,
+      .drawer-head p {
+        margin: 0;
+      }
+
+      .drawer-head h2 {
+        font-size: 1.1rem;
+      }
+
+      .drawer-head p {
+        margin-block-start: 0.28rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+
+      .drawer-body {
+        display: grid;
+        gap: 0.8rem;
+        align-content: start;
+        padding-block: 1rem;
+      }
+
+      .drawer-summary {
+        padding: 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--surface-soft);
+      }
+
+      .drawer-summary strong,
+      .drawer-summary small {
+        display: block;
+      }
+
+      .drawer-summary small {
+        margin-block-start: 0.25rem;
+        color: var(--muted);
+        font-size: 0.66rem;
+      }
+
+      .drawer-actions {
+        display: flex;
+        gap: 0.55rem;
+        justify-content: flex-end;
+        padding-block-start: 0.9rem;
+        border-block-start: 1px solid var(--line);
+      }
+
+      @media (max-width: 1180px) {
+        .artifact {
+          grid-template-columns: 78px minmax(0, 1fr);
+        }
+
+        .brand-copy,
+        .nav-label,
+        .settings-label,
+        .prototype-flag {
+          display: none;
+        }
+
+        .brand {
+          justify-content: center;
+          padding-inline: 0;
+        }
+
+        .nav a,
+        .settings-link {
+          display: grid;
+          grid-template-columns: 1fr;
+          justify-items: center;
+          padding-inline: 0;
+        }
+
+        .editor {
+          grid-template-columns: minmax(0, 1fr) 19rem;
+        }
+      }
+
+      @media (max-height: 820px) {
+        .workspace {
+          padding: 0.8rem 1rem 0.9rem;
+        }
+
+        .start-card {
+          min-height: 8.8rem;
+        }
+
+        .media-zone,
+        .media-preview {
+          min-height: 8.8rem;
+        }
+
+        textarea {
+          min-height: 5rem;
+        }
+
+        .page-head {
+          min-height: 4.1rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .start-card,
+        .btn,
+        .drop-zone,
+        .format-option,
+        .media-option,
+        .nav a,
+        .artifact {
+          transition:
+            transform 140ms ease,
+            color 140ms ease,
+            border-color 140ms ease,
+            background 140ms ease;
+        }
+
+        .schedule-drawer {
+          animation: drawer-in 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+        }
+
+        @keyframes drawer-in {
+          from {
+            opacity: 0;
+            transform: translateX(1rem);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        html[dir="rtl"] .schedule-drawer {
+          animation-name: drawer-in-rtl;
+        }
+
+        @keyframes drawer-in-rtl {
+          from {
+            opacity: 0;
+            transform: translateX(-1rem);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="lab">
+      <header class="lab-toolbar">
+        <div class="lab-title">
+          <div class="lab-mark" aria-hidden="true">✦</div>
+          <div>
+            <strong>MARKOS Create workflow lab</strong>
+            <small>Connected desktop states · prototype fixtures only · no workspace writes</small>
+          </div>
+        </div>
+        <div class="lab-controls" aria-label="Prototype controls">
+          <label class="lab-control">
+            <span>State</span>
+            <select id="state-select" aria-label="Prototype state">
+              <option value="hub">Action hub</option>
+              <option value="blank">Untouched blank</option>
+              <option value="unsaved">Unsaved work</option>
+              <option value="saved">Saved draft</option>
+              <option value="ready">Ready</option>
+              <option value="schedule">Schedule handoff</option>
+              <option value="scheduled">Scheduled</option>
+            </select>
+          </label>
+          <label class="lab-control">
+            <span>Locale</span>
+            <select id="locale-select" aria-label="Prototype locale">
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+            </select>
+          </label>
+          <label class="lab-control">
+            <span>Theme</span>
+            <select id="theme-select" aria-label="Prototype theme">
+              <option value="light">Tangerine Slate</option>
+              <option value="dark">Dark companion</option>
+            </select>
+          </label>
+          <div class="lab-control">
+            <button id="focus-toggle" type="button">Focus</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="stage">
+        <section class="artifact" aria-label="MARKOS Create desktop prototype">
+          <aside class="sidebar">
+            <div class="brand">
+              <div class="brand-mark" aria-hidden="true">✦</div>
+              <div class="brand-copy">
+                <strong>MARKOS AI</strong>
+                <small data-i18n="marketingStudio">Marketing studio</small>
+              </div>
+            </div>
+            <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-expanded="true" aria-controls="primary-nav" aria-label="Collapse sidebar">
+              <span id="sidebar-toggle-icon" aria-hidden="true">←</span>
+            </button>
+            <nav id="primary-nav" class="nav" aria-label="Primary">
+              <a href="#" aria-label="Overview" data-label-i18n="overview"
+                ><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-label" data-i18n="overview">Overview</span></a
+              >
+              <a href="#" aria-label="Strategy" data-label-i18n="strategy"
+                ><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label" data-i18n="strategy">Strategy</span></a
+              >
+              <a href="#" aria-current="page" aria-label="Create" data-label-i18n="create"
+                ><span class="nav-icon" aria-hidden="true">✣</span><span class="nav-label" data-i18n="create">Create</span></a
+              >
+              <a href="#" aria-label="Calendar" data-label-i18n="calendar"
+                ><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label" data-i18n="calendar">Calendar</span></a
+              >
+              <a href="#" aria-label="Insights" data-label-i18n="insights"
+                ><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-label" data-i18n="insights">Insights</span></a
+              >
+              <a href="#" aria-label="Business profile" data-label-i18n="businessProfile"
+                ><span class="nav-icon" aria-hidden="true">◉</span><span class="nav-label" data-i18n="businessProfile">Business profile</span></a
+              >
+            </nav>
+            <div class="sidebar-foot">
+              <div class="prototype-flag" data-i18n="prototypeFlag">Prototype · sample content is visibly marked and never saved.</div>
+              <a class="settings-link" href="#" aria-label="Settings" data-label-i18n="settings"
+                ><span class="nav-icon" aria-hidden="true">⚙</span><span class="settings-label" data-i18n="settings">Settings</span></a
+              >
+            </div>
+          </aside>
+
+          <div class="main">
+            <header class="page-head">
+              <div class="page-head-left">
+                <button id="back-button" class="back-button" type="button" aria-label="Back" hidden>←</button>
+                <div>
+                  <h1 data-i18n="create">Create</h1>
+                  <p id="page-subtitle" data-i18n="pageSubtitle">Prepare one Instagram post without losing control of the publishing decision.</p>
+                </div>
+              </div>
+              <div id="state-pill" class="state-pill" aria-live="polite"><span id="state-label">Action hub</span></div>
+            </header>
+
+            <div class="workspace">
+              <section class="hub" aria-labelledby="hub-title">
+                <div class="hub-intro">
+                  <div>
+                    <h2 id="hub-title" data-i18n="hubTitle">What would you like to create?</h2>
+                    <p data-i18n="hubCopy">Start manually, use a grounded AI draft, or explore ideas. Nothing is saved until you choose to save or generate.</p>
+                  </div>
+                  <div class="usage-note" data-i18n="manualPromise">Manual creation uses no AI quota.</div>
+                </div>
+
+                <div class="start-grid">
+                  <button class="start-card primary-start" type="button" data-action="start-blank">
+                    <span class="start-icon" aria-hidden="true">＋</span>
+                    <span>
+                      <strong data-i18n="startBlank">Start a blank post</strong>
+                      <p data-i18n="startBlankCopy">Add your own media and copy. Leave an untouched post without creating an empty draft.</p>
+                    </span>
+                    <span class="card-action" data-i18n="startManually">Start manually →</span>
+                  </button>
+                  <button class="start-card" type="button" data-action="open-ai">
+                    <span class="start-icon" aria-hidden="true">✦</span>
+                    <span>
+                      <strong data-i18n="draftAi">Draft with MARKOS AI</strong>
+                      <p data-i18n="draftAiCopy">Use your approved Business Profile and a short brief to create saved copy.</p>
+                    </span>
+                    <span class="card-action" data-i18n="meteredAction">Metered AI action →</span>
+                  </button>
+                  <button class="start-card" type="button" data-action="open-ideas">
+                    <span class="start-icon" aria-hidden="true">⌁</span>
+                    <span>
+                      <strong data-i18n="exploreIdeas">Explore content ideas</strong>
+                      <p data-i18n="exploreIdeasCopy">Review grounded starting points before deciding whether to create anything.</p>
+                    </span>
+                    <span class="card-action" data-i18n="browseFirst">Browse first →</span>
+                  </button>
+                </div>
+
+                <div class="hub-lower">
+                  <section class="panel" aria-labelledby="recent-title">
+                    <div class="panel-head">
+                      <div>
+                        <h3 id="recent-title" data-i18n="recentWork">Recent work</h3>
+                        <p data-i18n="recentCopy">Continue a saved item without opening a blank editor.</p>
+                      </div>
+                      <button class="btn ghost" type="button" data-i18n="viewAll">View all</button>
+                    </div>
+                    <div class="draft-row">
+                      <div class="draft-thumb" aria-hidden="true">S</div>
+                      <div>
+                        <strong data-i18n="sampleTitle">Summer weekend offer…</strong>
+                        <small data-i18n="sampleMeta">Prototype sample · Draft · Updated 12 min ago</small>
+                      </div>
+                      <button class="btn" type="button" data-action="open-saved" data-i18n="continue">Continue</button>
+                    </div>
+                  </section>
+
+                  <section class="panel calendar-card">
+                    <div>
+                      <span class="start-icon" aria-hidden="true">▦</span>
+                      <h3 data-i18n="openCalendar">Open Calendar</h3>
+                      <p data-i18n="calendarCopy">Review planned, Ready, scheduled, and published work in context.</p>
+                    </div>
+                    <button class="btn" type="button" data-i18n="goCalendar">Go to Calendar</button>
+                  </section>
+                </div>
+              </section>
+
+              <section class="editor" aria-labelledby="editor-title">
+                <section class="panel compose-panel">
+                  <header class="compose-head">
+                    <div>
+                      <h2 id="editor-title" data-i18n="newPost">New Instagram post</h2>
+                      <p data-i18n="editorCopy">Compose the post first. Publishing remains a separate decision.</p>
+                    </div>
+                    <span class="type-pill">Instagram · <span id="format-pill" data-i18n="post">Post</span></span>
+                  </header>
+
+                  <div class="compose-scroll">
+                    <section class="flow-section" aria-labelledby="format-title">
+                      <div class="section-title">
+                        <h3 id="format-title"><span data-i18n="contentTypeStep">1. Content type</span></h3>
+                        <p data-i18n="contentTypeHelp">Choose the format before adding media</p>
+                      </div>
+                      <div class="format-picker" role="group" aria-labelledby="format-title">
+                        <button class="format-option" type="button" data-format-option="post" aria-pressed="true">
+                          <span class="format-icon" aria-hidden="true">▣</span>
+                          <strong data-i18n="post">Post</strong>
+                        </button>
+                        <button class="format-option" type="button" data-format-option="carousel" aria-pressed="false">
+                          <span class="format-icon" aria-hidden="true">▥</span>
+                          <strong data-i18n="carousel">Carousel</strong>
+                        </button>
+                        <button class="format-option" type="button" data-format-option="reel" aria-pressed="false">
+                          <span class="format-icon" aria-hidden="true">▶</span>
+                          <strong data-i18n="reel">Reel</strong>
+                        </button>
+                        <button class="format-option" type="button" data-format-option="story" aria-pressed="false">
+                          <span class="format-icon" aria-hidden="true">◫</span>
+                          <strong data-i18n="story">Story</strong>
+                        </button>
+                      </div>
+                      <p id="format-note" class="format-note">
+                        Post is the first implementation path. Other formats currently demonstrate structure and preview behavior.
+                      </p>
+                    </section>
+
+                    <section class="flow-section" aria-labelledby="media-title">
+                      <div class="section-title">
+                        <h3 id="media-title"><span data-i18n="media">2. Media</span></h3>
+                        <p id="media-help" data-i18n="mediaHelp">JPEG for this first reviewed path</p>
+                      </div>
+                      <div class="media-zone">
+                        <div id="media-preview" class="media-preview">
+                          <div class="media-empty">
+                            <strong data-i18n="noMedia">No media selected</strong>
+                            <small data-i18n="localUntilSave">A manual JPEG stays local until the first Save.</small>
+                          </div>
+                          <div class="media-filled">
+                            <strong data-i18n="sampleCreative">Weekend offer</strong>
+                            <small data-i18n="prototypeMedia">Prototype media</small>
+                          </div>
+                        </div>
+                        <div class="media-options">
+                          <button class="drop-zone" type="button" data-action="choose-media">
+                            <span class="option-icon" aria-hidden="true">↑</span>
+                            <span
+                              ><strong id="drop-media-title" data-i18n="dropMedia">Drop a JPEG here or browse</strong
+                              ><small id="drop-media-copy" data-i18n="dropMediaCopy">Manual upload · stays local until Save</small></span
+                            >
+                          </button>
+                          <button id="ai-image-button" class="media-option" type="button" data-action="open-ai-image" disabled>
+                            <span class="option-icon" aria-hidden="true">✦</span>
+                            <span
+                              ><strong data-i18n="generateImage">Generate image</strong
+                              ><small id="ai-image-help" data-i18n="saveFirst">Save this draft first · metered</small></span
+                            >
+                          </button>
+                          <button class="media-option" type="button" data-action="open-library">
+                            <span class="option-icon" aria-hidden="true">▧</span>
+                            <span
+                              ><strong data-i18n="mediaLibrary">Media Library</strong
+                              ><small data-i18n="libraryCopy">Uploads and reusable generated assets</small></span
+                            >
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="flow-section" aria-labelledby="caption-title">
+                      <div class="section-title">
+                        <h3 id="caption-title"><span data-i18n="captionStep">3. Caption</span></h3>
+                        <p data-i18n="copyLanguage">Write in the publishing language</p>
+                      </div>
+                      <div class="field-card">
+                        <div class="field-head">
+                          <label class="sr-only" for="caption" data-i18n="caption">Caption</label>
+                          <button class="ai-button" type="button" data-action="open-ai-assist" data-i18n="assistCopy">✦ Assist with copy</button>
+                        </div>
+                        <textarea
+                          id="caption"
+                          maxlength="2200"
+                          data-placeholder-en="Write the caption in your own words…"
+                          data-placeholder-ar="اكتب التعليق بأسلوبك…"
+                          placeholder="Write the caption in your own words…"
+                        ></textarea>
+                        <div class="caption-meta">
+                          <span data-i18n="aiOptional">AI suggestions never replace your text automatically.</span>
+                          <span id="character-count" dir="ltr">0 / 2,200</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="flow-section">
+                      <details class="options-disclosure">
+                        <summary>
+                          <span data-i18n="instagramOptions">Instagram options</span>
+                          <span data-i18n="optional">Optional +</span>
+                        </summary>
+                        <div class="options-body">
+                          <div class="option-field">
+                            <label for="alt-text" data-i18n="altText">Alt text</label>
+                            <input
+                              id="alt-text"
+                              type="text"
+                              data-placeholder-en="Describe the image"
+                              data-placeholder-ar="صِف الصورة"
+                              placeholder="Describe the image"
+                            />
+                          </div>
+                          <div class="option-toggle">
+                            <strong data-i18n="aiLabel">AI-content disclosure</strong>
+                            <small data-i18n="aiLabelCopy">Shown when generated media requires Meta's AI information label.</small>
+                          </div>
+                        </div>
+                      </details>
+                    </section>
+                  </div>
+
+                  <footer class="compose-actions">
+                    <div class="save-summary">
+                      <span class="state-pill"><span id="save-state-label">Untouched</span></span>
+                      <span
+                        ><strong id="save-state-title">Nothing to save yet</strong><small id="save-state-copy">Leaving now creates no empty draft.</small></span
+                      >
+                    </div>
+                    <div class="action-group">
+                      <button class="btn save-draft" type="button" data-action="save-draft" disabled data-i18n="saveDraft">Save draft</button>
+                      <button class="btn only-saved" type="button" data-action="mark-ready" data-i18n="markReady">Mark Ready</button>
+                      <button class="btn only-ready" type="button" data-action="return-draft" data-i18n="returnDraft">Return to Draft</button>
+                      <button class="btn primary only-ready" type="button" data-action="schedule" data-i18n="schedule">Schedule</button>
+                      <button class="btn only-scheduled" type="button" data-i18n="viewCalendar">View in Calendar</button>
+                    </div>
+                  </footer>
+                </section>
+
+                <aside class="right-rail">
+                  <section class="panel instagram-preview" aria-labelledby="preview-title">
+                    <div class="ig-head">
+                      <div class="avatar" aria-hidden="true">S</div>
+                      <div>
+                        <strong id="preview-title">sunlit_studio</strong>
+                        <small id="preview-mode" data-i18n="followerPreview">Feed preview · approximation</small>
+                      </div>
+                    </div>
+                    <div id="ig-media" class="ig-media"><span data-i18n="previewMedia">Your media preview appears here</span></div>
+                    <div class="ig-copy">
+                      <div class="ig-actions" aria-hidden="true">♡　⌁　◯</div>
+                      <div class="ig-caption">
+                        <strong>sunlit_studio</strong><span id="caption-preview" data-i18n="previewCaption">Your caption preview appears here.</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="panel publication-card" aria-labelledby="publication-title">
+                    <div class="publication-head">
+                      <h3 id="publication-title" data-i18n="publication">Publication</h3>
+                      <span id="publication-state" class="publication-state">Unscheduled</span>
+                    </div>
+                    <div class="date-row">
+                      <label><span data-i18n="plannedDate">Planned date</span><input id="planned-date" type="date" value="2026-08-30" /></label>
+                      <label><span data-i18n="time">Time</span><input id="planned-time" type="time" value="18:00" /></label>
+                    </div>
+                    <p id="publication-note" class="publication-note" data-i18n="plannedNotScheduled">
+                      This places the draft on Calendar. It does not schedule publishing.
+                    </p>
+                  </section>
+                </aside>
+              </section>
+            </div>
+
+            <div id="exit-overlay" class="overlay" data-open="false">
+              <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="exit-title" aria-describedby="exit-copy">
+                <h2 id="exit-title" data-i18n="exitTitle">Save this draft before leaving?</h2>
+                <p id="exit-copy" data-i18n="exitCopy">You have meaningful unsaved work. Choose what MARKOS should do with it.</p>
+                <div class="dialog-actions">
+                  <button class="btn" type="button" data-action="keep-editing" data-i18n="keepEditing">Keep editing</button>
+                  <button class="btn danger" type="button" data-action="discard" data-i18n="discard">Discard changes</button>
+                  <button class="btn primary" type="button" data-action="save-exit" data-i18n="saveDraft">Save draft</button>
+                </div>
+              </section>
+            </div>
+
+            <aside id="guidance-panel" class="guidance-panel" data-open="false" aria-live="polite" aria-labelledby="guidance-title">
+              <div class="guidance-head">
+                <div>
+                  <span class="guidance-eyebrow" data-i18n="optionalGuidance">Optional guidance</span>
+                  <h2 id="guidance-title">MARKOS assistance</h2>
+                </div>
+                <button class="icon-button" type="button" data-action="close-guidance" aria-label="Close">×</button>
+              </div>
+              <p id="guidance-copy">AI guidance appears here without blocking the composer.</p>
+              <div class="guidance-actions">
+                <button class="btn" type="button" data-action="close-guidance" data-i18n="dismiss">Dismiss</button>
+                <button id="guidance-cta" class="btn primary" type="button" data-action="continue-guidance">Continue</button>
+              </div>
+            </aside>
+
+            <aside class="schedule-drawer" aria-labelledby="schedule-title">
+              <header class="drawer-head">
+                <div>
+                  <h2 id="schedule-title" data-i18n="schedulePost">Schedule this Ready post</h2>
+                  <p data-i18n="scheduleCopy">Review the exact publishing time before adding it to the queue.</p>
+                </div>
+                <button class="icon-button" type="button" data-action="close-schedule" aria-label="Close">×</button>
+              </header>
+              <div class="drawer-body">
+                <div class="drawer-summary">
+                  <strong data-i18n="readyToSchedule">Ready to schedule</strong>
+                  <small data-i18n="readyCheck">Copy and media remain editable until scheduling is confirmed.</small>
+                </div>
+                <div class="date-row">
+                  <label
+                    ><span data-i18n="publishDate">Publish date</span><input id="schedule-date" name="schedule-date" type="date" value="2026-08-30"
+                  /></label>
+                  <label><span data-i18n="publishTime">Publish time</span><input id="schedule-time" name="schedule-time" type="time" value="18:00" /></label>
+                </div>
+                <div class="drawer-summary">
+                  <strong data-i18n="bahrainTime">Sunday, August 30 · 6:00 PM Bahrain time</strong>
+                  <small data-i18n="queueExplain">Confirming creates the active schedule. It is different from merely planning a Calendar time.</small>
+                </div>
+              </div>
+              <footer class="drawer-actions">
+                <button class="btn" type="button" data-action="close-schedule" data-i18n="cancel">Cancel</button>
+                <button class="btn primary" type="button" data-action="confirm-schedule" data-i18n="confirmSchedule">Confirm schedule</button>
+              </footer>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const root = document.documentElement;
+      const stateSelect = document.querySelector("#state-select");
+      const localeSelect = document.querySelector("#locale-select");
+      const themeSelect = document.querySelector("#theme-select");
+      const backButton = document.querySelector("#back-button");
+      const sidebarToggle = document.querySelector("#sidebar-toggle");
+      const sidebarToggleIcon = document.querySelector("#sidebar-toggle-icon");
+      const caption = document.querySelector("#caption");
+      const altText = document.querySelector("#alt-text");
+      const mediaPreview = document.querySelector("#media-preview");
+      const igMedia = document.querySelector("#ig-media");
+      const captionPreview = document.querySelector("#caption-preview");
+      const characterCount = document.querySelector("#character-count");
+      const exitOverlay = document.querySelector("#exit-overlay");
+      const guidancePanel = document.querySelector("#guidance-panel");
+      const guidanceTitle = document.querySelector("#guidance-title");
+      const guidanceCopy = document.querySelector("#guidance-copy");
+      const guidanceCta = document.querySelector("#guidance-cta");
+      const formatPill = document.querySelector("#format-pill");
+      const formatNote = document.querySelector("#format-note");
+      const previewMode = document.querySelector("#preview-mode");
+      const formatButtons = [...document.querySelectorAll("[data-format-option]")];
+      const saveButton = document.querySelector('[data-action="save-draft"]');
+      const aiImageButton = document.querySelector("#ai-image-button");
+
+      const copy = {
+        en: {
+          marketingStudio: "Marketing studio",
+          overview: "Overview",
+          strategy: "Strategy",
+          create: "Create",
+          calendar: "Calendar",
+          insights: "Insights",
+          businessProfile: "Business profile",
+          settings: "Settings",
+          prototypeFlag: "Prototype · sample content is visibly marked and never saved.",
+          pageSubtitle: "Prepare one Instagram post without losing control of the publishing decision.",
+          hubTitle: "What would you like to create?",
+          hubCopy: "Start manually, use a grounded AI draft, or explore ideas. Nothing is saved until you choose to save or generate.",
+          manualPromise: "Manual creation uses no AI quota.",
+          startBlank: "Start a blank post",
+          startBlankCopy: "Add your own media and copy. Leave an untouched post without creating an empty draft.",
+          startManually: "Start manually →",
+          draftAi: "Draft with MARKOS AI",
+          draftAiCopy: "Use your approved Business Profile and a short brief to create saved copy.",
+          meteredAction: "Metered AI action →",
+          exploreIdeas: "Explore content ideas",
+          exploreIdeasCopy: "Review grounded starting points before deciding whether to create anything.",
+          browseFirst: "Browse first →",
+          recentWork: "Recent work",
+          recentCopy: "Continue a saved item without opening a blank editor.",
+          viewAll: "View all",
+          sampleTitle: "Summer weekend offer…",
+          sampleMeta: "Prototype sample · Draft · Updated 12 min ago",
+          continue: "Continue",
+          openCalendar: "Open Calendar",
+          calendarCopy: "Review planned, Ready, scheduled, and published work in context.",
+          goCalendar: "Go to Calendar",
+          newPost: "New Instagram post",
+          editorCopy: "Compose the post first. Publishing remains a separate decision.",
+          contentTypeStep: "1. Content type",
+          contentTypeHelp: "Choose the format before adding media",
+          post: "Post",
+          carousel: "Carousel",
+          reel: "Reel",
+          story: "Story",
+          media: "2. Media",
+          mediaHelp: "JPEG for this first reviewed path",
+          noMedia: "No media selected",
+          localUntilSave: "A manual JPEG stays local until the first Save.",
+          sampleCreative: "Weekend offer",
+          prototypeMedia: "Prototype media",
+          uploadJpeg: "Choose JPEG",
+          uploadCopy: "Manual and first-class",
+          dropMedia: "Drop a JPEG here or browse",
+          dropMediaCopy: "Manual upload · stays local until Save",
+          generateImage: "Generate image",
+          saveFirst: "Save this draft first · metered",
+          availableMetered: "Available now · metered",
+          mediaLibrary: "Media Library",
+          libraryCopy: "Uploads and reusable generated assets",
+          laterCapability: "Later capability",
+          captionStep: "3. Caption",
+          copyLanguage: "Write in the publishing language",
+          caption: "Caption",
+          assistCopy: "✦ Assist with copy",
+          aiOptional: "AI suggestions never replace your text automatically.",
+          instagramOptions: "Instagram options",
+          optional: "Optional +",
+          altText: "Alt text",
+          aiLabel: "AI-content disclosure",
+          aiLabelCopy: "Shown when generated media requires Meta's AI information label.",
+          saveDraft: "Save draft",
+          markReady: "Mark Ready",
+          returnDraft: "Return to Draft",
+          schedule: "Schedule",
+          viewCalendar: "View in Calendar",
+          followerPreview: "Feed preview · approximation",
+          previewMedia: "Your media preview appears here",
+          previewCaption: "Your caption preview appears here.",
+          publication: "Publication",
+          plannedDate: "Planned date",
+          time: "Time",
+          plannedNotScheduled: "This places the draft on Calendar. It does not schedule publishing.",
+          exitTitle: "Save this draft before leaving?",
+          exitCopy: "You have meaningful unsaved work. Choose what MARKOS should do with it.",
+          keepEditing: "Keep editing",
+          discard: "Discard changes",
+          close: "Close",
+          dismiss: "Dismiss",
+          optionalGuidance: "Optional guidance",
+          schedulePost: "Schedule this Ready post",
+          scheduleCopy: "Review the exact publishing time before adding it to the queue.",
+          readyToSchedule: "Ready to schedule",
+          readyCheck: "Copy and media remain editable until scheduling is confirmed.",
+          publishDate: "Publish date",
+          publishTime: "Publish time",
+          bahrainTime: "Sunday, August 30 · 6:00 PM Bahrain time",
+          queueExplain: "Confirming creates the active schedule. It is different from merely planning a Calendar time.",
+          cancel: "Cancel",
+          confirmSchedule: "Confirm schedule"
+        },
+        ar: {
+          marketingStudio: "استوديو التسويق",
+          overview: "نظرة عامة",
+          strategy: "الاستراتيجية",
+          create: "إنشاء",
+          calendar: "التقويم",
+          insights: "الرؤى",
+          businessProfile: "ملف النشاط",
+          settings: "الإعدادات",
+          prototypeFlag: "نموذج أولي · المحتوى تجريبي ولا يُحفظ.",
+          pageSubtitle: "جهّز منشور إنستغرام مع بقاء قرار النشر تحت سيطرتك.",
+          hubTitle: "ماذا تريد أن تنشئ؟",
+          hubCopy: "ابدأ بنفسك، أو استخدم مسودة مبنية على بيانات نشاطك، أو استكشف الأفكار. لن يُحفظ شيء قبل اختيارك.",
+          manualPromise: "الإنشاء اليدوي لا يستهلك حصة الذكاء الاصطناعي.",
+          startBlank: "ابدأ بمنشور فارغ",
+          startBlankCopy: "أضف الوسائط والنص بنفسك. الخروج دون تعديلات لا ينشئ مسودة فارغة.",
+          startManually: "ابدأ يدويًا ←",
+          draftAi: "اكتب مسودة مع MARKOS AI",
+          draftAiCopy: "استخدم ملف النشاط المعتمد ووصفًا قصيرًا لإنشاء نص محفوظ.",
+          meteredAction: "إجراء محسوب ضمن الحصة ←",
+          exploreIdeas: "استكشف أفكار المحتوى",
+          exploreIdeasCopy: "راجع أفكارًا مبنية على نشاطك قبل إنشاء أي محتوى.",
+          browseFirst: "استعرض أولًا ←",
+          recentWork: "أحدث الأعمال",
+          recentCopy: "تابع عنصرًا محفوظًا دون فتح محرر فارغ.",
+          viewAll: "عرض الكل",
+          sampleTitle: "عرض عطلة نهاية الأسبوع…",
+          sampleMeta: "مثال للنموذج · مسودة · حُدّث قبل 12 دقيقة",
+          continue: "متابعة",
+          openCalendar: "فتح التقويم",
+          calendarCopy: "راجع المحتوى المخطط والجاهز والمجدول والمنشور ضمن سياقه.",
+          goCalendar: "الذهاب إلى التقويم",
+          newPost: "منشور إنستغرام جديد",
+          editorCopy: "أنشئ المنشور أولًا. يظل النشر قرارًا منفصلًا.",
+          contentTypeStep: "١. نوع المحتوى",
+          contentTypeHelp: "اختر التنسيق قبل إضافة الوسائط",
+          post: "منشور",
+          carousel: "ألبوم",
+          reel: "ريل",
+          story: "قصة",
+          media: "٢. الوسائط",
+          mediaHelp: "ملف JPEG للمسار الأول الذي سنراجعه",
+          noMedia: "لم تُحدَّد وسائط",
+          localUntilSave: "يبقى ملف JPEG اليدوي محليًا حتى أول حفظ.",
+          sampleCreative: "عرض نهاية الأسبوع",
+          prototypeMedia: "وسائط تجريبية",
+          uploadJpeg: "اختيار JPEG",
+          uploadCopy: "يدوي وأساسي",
+          dropMedia: "أفلت ملف JPEG هنا أو تصفح",
+          dropMediaCopy: "رفع يدوي · يبقى محليًا حتى الحفظ",
+          generateImage: "إنشاء صورة",
+          saveFirst: "احفظ المسودة أولًا · محسوب ضمن الحصة",
+          availableMetered: "متاح الآن · محسوب ضمن الحصة",
+          mediaLibrary: "مكتبة الوسائط",
+          libraryCopy: "الملفات المرفوعة والوسائط المُنشأة القابلة لإعادة الاستخدام",
+          laterCapability: "ميزة لاحقة",
+          captionStep: "٣. التعليق",
+          copyLanguage: "اكتب بلغة النشر",
+          caption: "التعليق",
+          assistCopy: "✦ مساعدة في الكتابة",
+          aiOptional: "لا تستبدل اقتراحات الذكاء الاصطناعي نصك تلقائيًا.",
+          instagramOptions: "خيارات إنستغرام",
+          optional: "اختياري +",
+          altText: "النص البديل",
+          aiLabel: "الإفصاح عن محتوى الذكاء الاصطناعي",
+          aiLabelCopy: "يظهر عندما تتطلب الوسائط المُنشأة علامة معلومات الذكاء الاصطناعي من Meta.",
+          saveDraft: "حفظ المسودة",
+          markReady: "تمييز كجاهز",
+          returnDraft: "إرجاع إلى مسودة",
+          schedule: "جدولة",
+          viewCalendar: "عرض في التقويم",
+          followerPreview: "معاينة الخلاصة · تقريبية",
+          previewMedia: "ستظهر معاينة الوسائط هنا",
+          previewCaption: "ستظهر معاينة التعليق هنا.",
+          publication: "النشر",
+          plannedDate: "التاريخ المخطط",
+          time: "الوقت",
+          plannedNotScheduled: "يضع هذه المسودة في التقويم، لكنه لا يفعّل النشر المجدول.",
+          exitTitle: "هل تريد حفظ هذه المسودة قبل المغادرة؟",
+          exitCopy: "لديك تعديلات غير محفوظة. اختر ما يجب أن يفعله MARKOS بها.",
+          keepEditing: "متابعة التحرير",
+          discard: "تجاهل التعديلات",
+          close: "إغلاق",
+          dismiss: "إخفاء",
+          optionalGuidance: "إرشاد اختياري",
+          schedulePost: "جدولة هذا المنشور الجاهز",
+          scheduleCopy: "راجع وقت النشر الدقيق قبل إضافته إلى قائمة الانتظار.",
+          readyToSchedule: "جاهز للجدولة",
+          readyCheck: "يبقى النص والوسائط قابلين للتحرير حتى تأكيد الجدولة.",
+          publishDate: "تاريخ النشر",
+          publishTime: "وقت النشر",
+          bahrainTime: "الأحد، ٣٠ أغسطس · ٦:٠٠ مساءً بتوقيت البحرين",
+          queueExplain: "التأكيد ينشئ الجدولة الفعلية، وهو مختلف عن وضع وقت مخطط في التقويم.",
+          cancel: "إلغاء",
+          confirmSchedule: "تأكيد الجدولة"
+        }
+      };
+
+      const stateCopy = {
+        en: {
+          hub: ["Action hub", "Choose how to start"],
+          blank: ["Untouched", "Nothing to save yet", "Leaving now creates no empty draft."],
+          unsaved: ["Unsaved changes", "Meaningful work is only in this browser", "Save once when you want a workspace draft."],
+          unsavedPersisted: ["Unsaved changes", "Saved draft has new changes", "Save to update the workspace draft."],
+          saved: ["Saved draft", "All changes saved", "AI image generation is now available."],
+          ready: ["Ready", "Ready for scheduling", "Ready protects against accidental publishing; nothing is scheduled yet."],
+          schedule: ["Ready", "Review the publishing time", "Confirm once to create the active schedule."],
+          scheduled: ["Scheduled", "Publishing is scheduled", "Sunday, August 30 at 6:00 PM Bahrain time."]
+        },
+        ar: {
+          hub: ["مركز البدء", "اختر طريقة البدء"],
+          blank: ["دون تعديلات", "لا يوجد ما يجب حفظه", "الخروج الآن لا ينشئ مسودة فارغة."],
+          unsaved: ["تعديلات غير محفوظة", "العمل موجود في هذا المتصفح فقط", "احفظ مرة واحدة عندما تريد إنشاء مسودة في مساحة العمل."],
+          unsavedPersisted: ["تعديلات غير محفوظة", "توجد تعديلات جديدة على المسودة المحفوظة", "احفظ لتحديث مسودة مساحة العمل."],
+          saved: ["مسودة محفوظة", "جميع التعديلات محفوظة", "أصبح إنشاء الصور بالذكاء الاصطناعي متاحًا."],
+          ready: ["جاهز", "جاهز للجدولة", "حالة جاهز تحمي من النشر العرضي؛ لم تتم الجدولة بعد."],
+          schedule: ["جاهز", "راجع وقت النشر", "أكّد مرة واحدة لإنشاء الجدولة الفعلية."],
+          scheduled: ["مجدول", "تمت جدولة النشر", "الأحد، ٣٠ أغسطس الساعة ٦:٠٠ مساءً بتوقيت البحرين."]
+        }
+      };
+
+      const formatCopy = {
+        en: {
+          post: {
+            label: "Post",
+            note: "Current implementation path · fixed feed preview.",
+            preview: "Feed preview · approximation",
+            mediaHelp: "JPEG for this first reviewed path",
+            dropTitle: "Drop a JPEG here or browse",
+            dropCopy: "Manual upload · stays local until Save"
+          },
+          carousel: {
+            label: "Carousel",
+            note: "Preview structure only · fixed feed preview.",
+            preview: "Carousel feed preview · approximation",
+            mediaHelp: "Multiple-image behavior is still exploratory",
+            dropTitle: "Drop images here or browse",
+            dropCopy: "Ordering and multi-upload are not implemented yet"
+          },
+          reel: {
+            label: "Reel",
+            note: "Preview structure only · full-screen preview.",
+            preview: "Full-screen Reel preview · approximation",
+            mediaHelp: "Video behavior is still exploratory",
+            dropTitle: "Drop a video here or browse",
+            dropCopy: "Preview architecture only · not an implemented upload path"
+          },
+          story: {
+            label: "Story",
+            note: "Preview structure only · full-screen preview.",
+            preview: "Full-screen Story preview · approximation",
+            mediaHelp: "Story behavior is still exploratory",
+            dropTitle: "Drop a story asset here or browse",
+            dropCopy: "Preview architecture only · not an implemented upload path"
+          }
+        },
+        ar: {
+          post: {
+            label: "منشور",
+            note: "مسار التنفيذ الحالي · معاينة خلاصة ثابتة.",
+            preview: "معاينة الخلاصة · تقريبية",
+            mediaHelp: "ملف JPEG للمسار الأول الذي سنراجعه",
+            dropTitle: "أفلت ملف JPEG هنا أو تصفح",
+            dropCopy: "رفع يدوي · يبقى محليًا حتى الحفظ"
+          },
+          carousel: {
+            label: "ألبوم",
+            note: "بنية معاينة فقط · معاينة خلاصة ثابتة.",
+            preview: "معاينة ألبوم الخلاصة · تقريبية",
+            mediaHelp: "سلوك الصور المتعددة ما زال استكشافيًا",
+            dropTitle: "أفلت الصور هنا أو تصفح",
+            dropCopy: "الترتيب والرفع المتعدد غير منفذين بعد"
+          },
+          reel: {
+            label: "ريل",
+            note: "بنية معاينة فقط · معاينة بملء الشاشة.",
+            preview: "معاينة ريل بملء الشاشة · تقريبية",
+            mediaHelp: "سلوك الفيديو ما زال استكشافيًا",
+            dropTitle: "أفلت فيديو هنا أو تصفح",
+            dropCopy: "بنية معاينة فقط · الرفع غير منفذ"
+          },
+          story: {
+            label: "قصة",
+            note: "بنية معاينة فقط · معاينة بملء الشاشة.",
+            preview: "معاينة قصة بملء الشاشة · تقريبية",
+            mediaHelp: "سلوك القصة ما زال استكشافيًا",
+            dropTitle: "أفلت وسائط القصة هنا أو تصفح",
+            dropCopy: "بنية معاينة فقط · الرفع غير منفذ"
+          }
+        }
+      };
+
+      const guidanceMessages = {
+        en: {
+          ai: {
+            title: "Optional MARKOS assistance",
+            copy: "Generation uses approved business context. Quota impact should appear here before MARKOS creates and saves a draft.",
+            cta: "Start sample draft"
+          },
+          ideas: {
+            title: "Explore before creating",
+            copy: "Ideas can be reviewed without saving content. Choosing one prepares a brief; generation remains a separate metered action.",
+            cta: "Open sample brief"
+          },
+          image: {
+            title: "Generate an image",
+            copy: "Image generation is optional and metered. This prototype attaches the result to the saved draft; independent library saving is an open contract decision.",
+            cta: "Use sample image"
+          },
+          assist: {
+            title: "Assist with copy",
+            copy: "MARKOS can suggest text beside the editor. Nothing replaces your caption until you explicitly insert a suggestion.",
+            cta: "Insert sample"
+          },
+          library: {
+            title: "Reusable Media Library",
+            copy: "The design can retain uploads and generated media for later use. Saving generated assets without attaching them needs a separate product and API contract.",
+            cta: "Keep as exploration"
+          }
+        },
+        ar: {
+          ai: {
+            title: "مساعدة اختيارية من MARKOS",
+            copy: "يستخدم الإنشاء سياق النشاط المعتمد. يجب عرض أثر الحصة هنا قبل إنشاء المسودة وحفظها.",
+            cta: "بدء مسودة تجريبية"
+          },
+          ideas: {
+            title: "استكشف قبل الإنشاء",
+            copy: "يمكن مراجعة الأفكار دون حفظ محتوى. اختيار فكرة يجهز الوصف، ويبقى الإنشاء إجراءً منفصلًا ومحسوبًا.",
+            cta: "فتح وصف تجريبي"
+          },
+          image: {
+            title: "إنشاء صورة",
+            copy: "إنشاء الصور اختياري ومحسوب. يربط هذا النموذج النتيجة بالمسودة المحفوظة؛ أما حفظها مستقلًا في المكتبة فيحتاج قرارًا تعاقديًا.",
+            cta: "استخدام صورة تجريبية"
+          },
+          assist: {
+            title: "مساعدة في الكتابة",
+            copy: "يمكن لـ MARKOS اقتراح نص بجانب المحرر. لن يستبدل أي شيء تعليقك حتى تختار إدراج الاقتراح.",
+            cta: "إدراج مثال"
+          },
+          library: {
+            title: "مكتبة وسائط قابلة لإعادة الاستخدام",
+            copy: "يمكن للتصميم الاحتفاظ بالملفات المرفوعة والوسائط المُنشأة لاستخدامها لاحقًا. حفظ الوسائط المُنشأة دون ربطها بمحتوى يحتاج عقد منتج وواجهة برمجة منفصلين.",
+            cta: "إبقاؤها قيد الاستكشاف"
+          }
+        }
+      };
+
+      const samples = {
+        en: "Make this weekend brighter with our summer offer. Visit us before Sunday and discover something made for the moment. #SummerWeekend #Bahrain",
+        ar: "اجعلوا عطلة نهاية الأسبوع أكثر إشراقًا مع عرضنا الصيفي. زورونا قبل الأحد واكتشفوا تجربة صُممت لهذه اللحظة. #عطلة_الصيف #البحرين"
+      };
+
+      let hasMedia = false;
+      let hasPersistedDraft = false;
+
+      function setState(nextState, options = {}) {
+        if (["hub", "blank"].includes(nextState)) hasPersistedDraft = false;
+        if (["saved", "ready", "schedule", "scheduled"].includes(nextState)) hasPersistedDraft = true;
+        root.dataset.state = nextState;
+        stateSelect.value = nextState;
+        backButton.hidden = nextState === "hub";
+        exitOverlay.dataset.open = "false";
+        guidancePanel.dataset.open = "false";
+        const plannedDate = document.querySelector("#planned-date");
+        const plannedTime = document.querySelector("#planned-time");
+
+        if (nextState === "blank") {
+          caption.value = "";
+          altText.value = "";
+          hasMedia = false;
+          plannedDate.value = "";
+          plannedTime.value = "";
+        }
+
+        if (nextState === "unsaved" && !options.preservePlan) {
+          plannedDate.value = "";
+          plannedTime.value = "";
+        }
+
+        if (["saved", "ready", "schedule", "scheduled"].includes(nextState) && !options.preservePlan) {
+          plannedDate.value = "2026-08-30";
+          plannedTime.value = "18:00";
+        }
+
+        if (["unsaved", "saved", "ready", "schedule", "scheduled"].includes(nextState) && !options.preserveContent) {
+          caption.value = samples[localeSelect.value];
+          altText.value = localeSelect.value === "ar" ? "تصميم تجريبي بألوان برتقالية لعرض صيفي" : "Orange prototype artwork for a summer offer";
+          hasMedia = true;
+        }
+
+        updateStatePresentation();
+        updatePreview();
+      }
+
+      function updateStatePresentation() {
+        const locale = localeSelect.value;
+        const state = root.dataset.state;
+        const values = state === "unsaved" && hasPersistedDraft ? stateCopy[locale].unsavedPersisted : stateCopy[locale][state];
+        document.querySelector("#state-label").textContent = values[0];
+        document.querySelector("#save-state-label").textContent = values[0];
+        document.querySelector("#save-state-title").textContent = values[1];
+        document.querySelector("#save-state-copy").textContent = values[2] ?? values[1];
+        saveButton.disabled = state === "blank" || state === "saved" || state === "ready" || state === "schedule" || state === "scheduled";
+        aiImageButton.disabled = !hasPersistedDraft;
+        document.querySelector("#ai-image-help").textContent = aiImageButton.disabled ? copy[locale].saveFirst : copy[locale].availableMetered;
+
+        const publicationState = document.querySelector("#publication-state");
+        const publicationNote = document.querySelector("#publication-note");
+        if (state === "ready" || state === "schedule") {
+          publicationState.textContent = locale === "ar" ? "جاهز" : "Ready";
+          publicationNote.textContent =
+            locale === "ar"
+              ? "المنشور جاهز، لكنه لن يدخل قائمة النشر حتى تأكيد الجدولة."
+              : "The post is Ready, but it will not enter the publishing queue until scheduling is confirmed.";
+        } else if (state === "scheduled") {
+          publicationState.textContent = locale === "ar" ? "مجدول" : "Scheduled";
+          publicationNote.textContent =
+            locale === "ar" ? "تم تأكيد وقت النشر وإضافة المنشور إلى قائمة الانتظار." : "The publishing time is confirmed and the post is in the queue.";
+        } else {
+          publicationState.textContent = locale === "ar" ? "غير مجدول" : "Unscheduled";
+          publicationNote.textContent = copy[locale].plannedNotScheduled;
+        }
+      }
+
+      function updatePreview() {
+        mediaPreview.classList.toggle("has-media", hasMedia);
+        igMedia.classList.toggle("has-media", hasMedia);
+        igMedia.querySelector("span").textContent = hasMedia
+          ? localeSelect.value === "ar"
+            ? "مثال مرئي"
+            : "Visual sample"
+          : copy[localeSelect.value].previewMedia;
+        const value = caption.value.trim();
+        captionPreview.textContent = value || copy[localeSelect.value].previewCaption;
+        characterCount.textContent = `${caption.value.length.toLocaleString(localeSelect.value)} / 2,200`;
+      }
+
+      function setFormat(format, userInitiated = false) {
+        const locale = localeSelect.value;
+        const values = formatCopy[locale][format];
+        const changed = root.dataset.format !== format;
+        root.dataset.format = format;
+        formatButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.formatOption === format)));
+        formatPill.textContent = values.label;
+        formatNote.textContent = values.note;
+        previewMode.textContent = values.preview;
+        document.querySelector("#media-help").textContent = values.mediaHelp;
+        document.querySelector("#drop-media-title").textContent = values.dropTitle;
+        document.querySelector("#drop-media-copy").textContent = values.dropCopy;
+        updatePreview();
+        if (userInitiated && changed && ["saved", "ready"].includes(root.dataset.state)) {
+          setState("unsaved", { preserveContent: true, preservePlan: true });
+        }
+      }
+
+      function updateSidebarPresentation() {
+        const collapsed = root.dataset.sidebar === "collapsed";
+        const rtl = localeSelect.value === "ar";
+        sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+        sidebarToggle.setAttribute(
+          "aria-label",
+          collapsed ? (rtl ? "توسيع الشريط الجانبي" : "Expand sidebar") : rtl ? "طي الشريط الجانبي" : "Collapse sidebar"
+        );
+        sidebarToggleIcon.textContent = collapsed ? (rtl ? "←" : "→") : rtl ? "→" : "←";
+      }
+
+      function setSidebar(nextState, persist = true) {
+        root.dataset.sidebar = nextState;
+        if (persist) localStorage.setItem("markos-create-prototype-sidebar", nextState);
+        updateSidebarPresentation();
+      }
+
+      function applyLocale(locale) {
+        localeSelect.value = locale;
+        root.lang = locale;
+        root.dir = locale === "ar" ? "rtl" : "ltr";
+        document.querySelectorAll("[data-i18n]").forEach((node) => {
+          const value = copy[locale][node.dataset.i18n];
+          if (value) node.textContent = value;
+        });
+        document.querySelectorAll("[data-label-i18n]").forEach((node) => {
+          const value = copy[locale][node.dataset.labelI18n];
+          if (value) node.setAttribute("aria-label", value);
+        });
+        document.querySelectorAll("[data-placeholder-en]").forEach((node) => {
+          node.placeholder = node.dataset[`placeholder${locale === "ar" ? "Ar" : "En"}`];
+        });
+        backButton.textContent = locale === "ar" ? "→" : "←";
+        backButton.setAttribute("aria-label", locale === "ar" ? "رجوع" : "Back");
+        updateSidebarPresentation();
+        if (["unsaved", "saved", "ready", "schedule", "scheduled"].includes(root.dataset.state)) caption.value = samples[locale];
+        updateStatePresentation();
+        setFormat(root.dataset.format);
+      }
+
+      function openGuidance(kind) {
+        const locale = localeSelect.value;
+        const message = guidanceMessages[locale][kind];
+        guidanceTitle.textContent = message.title;
+        guidanceCopy.textContent = message.copy;
+        guidanceCta.textContent = message.cta;
+        guidancePanel.dataset.kind = kind;
+        guidancePanel.dataset.open = "true";
+      }
+
+      document.addEventListener("click", (event) => {
+        const control = event.target.closest("[data-action]");
+        if (!control) return;
+        const action = control.dataset.action;
+        if (action === "start-blank") setState("blank");
+        if (action === "open-saved") setState("saved");
+        if (action === "choose-media") {
+          hasMedia = true;
+          setState("unsaved", { preserveContent: true });
+        }
+        if (action === "save-draft") setState("saved", { preserveContent: true, preservePlan: true });
+        if (action === "mark-ready") setState("ready", { preserveContent: true, preservePlan: true });
+        if (action === "return-draft") setState("saved", { preserveContent: true, preservePlan: true });
+        if (action === "schedule") setState("schedule", { preserveContent: true, preservePlan: true });
+        if (action === "close-schedule") setState("ready", { preserveContent: true, preservePlan: true });
+        if (action === "confirm-schedule") setState("scheduled", { preserveContent: true, preservePlan: true });
+        if (action === "keep-editing") exitOverlay.dataset.open = "false";
+        if (action === "discard") setState("hub");
+        if (action === "save-exit") setState("hub");
+        if (action === "open-ai") openGuidance("ai");
+        if (action === "open-ideas") openGuidance("ideas");
+        if (action === "open-ai-image") openGuidance("image");
+        if (action === "open-ai-assist") openGuidance("assist");
+        if (action === "open-library") openGuidance("library");
+        if (action === "close-guidance") guidancePanel.dataset.open = "false";
+        if (action === "continue-guidance") {
+          const kind = guidancePanel.dataset.kind;
+          guidancePanel.dataset.open = "false";
+          if (kind === "ai") setState("saved");
+          if (kind === "ideas") setState("blank");
+          if (kind === "image") {
+            hasMedia = true;
+            setState("saved", { preserveContent: true, preservePlan: true });
+          }
+          if (kind === "assist") {
+            caption.value = samples[localeSelect.value];
+            setState("unsaved", { preserveContent: true, preservePlan: true });
+          }
+        }
+      });
+
+      formatButtons.forEach((button) => {
+        button.addEventListener("click", () => setFormat(button.dataset.formatOption, true));
+      });
+
+      sidebarToggle.addEventListener("click", () => {
+        setSidebar(root.dataset.sidebar === "collapsed" ? "expanded" : "collapsed");
+      });
+
+      backButton.addEventListener("click", () => {
+        if (root.dataset.state === "unsaved") {
+          exitOverlay.dataset.open = "true";
+          exitOverlay.querySelector("button").focus();
+          return;
+        }
+        setState("hub");
+      });
+
+      caption.addEventListener("input", () => {
+        if (root.dataset.state !== "unsaved") setState("unsaved", { preserveContent: true });
+        updatePreview();
+      });
+
+      altText.addEventListener("input", () => {
+        if (root.dataset.state !== "unsaved") setState("unsaved", { preserveContent: true });
+      });
+
+      document.querySelectorAll("#planned-date, #planned-time").forEach((control) => {
+        control.addEventListener("input", () => {
+          if (root.dataset.state !== "unsaved") setState("unsaved", { preserveContent: true, preservePlan: true });
+        });
+      });
+
+      stateSelect.addEventListener("change", () => setState(stateSelect.value));
+      localeSelect.addEventListener("change", () => applyLocale(localeSelect.value));
+      themeSelect.addEventListener("change", () => {
+        root.dataset.theme = themeSelect.value;
+      });
+      document.querySelector("#focus-toggle").addEventListener("click", () => {
+        root.dataset.preview = "focus";
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          if (exitOverlay.dataset.open === "true") exitOverlay.dataset.open = "false";
+          else if (guidancePanel.dataset.open === "true") guidancePanel.dataset.open = "false";
+          else if (root.dataset.state === "schedule") setState("ready", { preserveContent: true });
+          else if (root.dataset.preview === "focus") root.dataset.preview = "lab";
+        }
+      });
+
+      const params = new URLSearchParams(location.search);
+      if (params.get("theme") === "dark") {
+        root.dataset.theme = "dark";
+        themeSelect.value = "dark";
+      }
+      if (params.get("focus") === "1") root.dataset.preview = "focus";
+      const storedSidebar = localStorage.getItem("markos-create-prototype-sidebar");
+      root.dataset.sidebar = params.has("sidebar")
+        ? params.get("sidebar") === "collapsed"
+          ? "collapsed"
+          : "expanded"
+        : ["collapsed", "expanded"].includes(storedSidebar)
+          ? storedSidebar
+          : "expanded";
+      applyLocale(params.get("locale") === "ar" ? "ar" : "en");
+      setFormat(["post", "carousel", "reel", "story"].includes(params.get("format")) ? params.get("format") : "post");
+      setState(params.get("state") || "hub");
+    </script>
+  </body>
+</html>

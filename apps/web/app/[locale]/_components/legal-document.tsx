@@ -1,6 +1,7 @@
-import { ArrowLeft, FileText, Globe2, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, FileText, Globe2, ShieldCheck } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import { SectionNavigation } from "./section-navigation";
+import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./legal-document.module.css";
 
 export type LegalDocumentKind = "privacy" | "terms";
@@ -310,7 +311,7 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
       <header className={styles.header}>
         <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
           <span className={styles.brandMark} aria-hidden="true">
-            <Sparkles size={21} />
+            <MarkosAiIcon size={21} />
           </span>
           <strong>{copy.brand}</strong>
         </a>

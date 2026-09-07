@@ -1,5 +1,6 @@
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { CampaignRecord } from "@markos/shared-types";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered presentation-journey tests");
@@ -39,21 +40,116 @@ describe("presentation journey", () => {
     await page.addInitScript(() => localStorage.setItem("markos.onboarding.draft.v2", JSON.stringify({ companyName: "stale" })));
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(
-          json({
-            status: "COMPLETE",
-            businessProfile: { status: "APPROVED", interactionId: "profile-1", profile: null, updatedAt: "2026-08-09T11:30:00.000Z" }
-          })
-        );
+        return route.fulfill(json(approvedOnboardingState("2026-08-09T11:30:00.000Z")));
       }
 
       return route.fulfill(json([]));
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app/strategy`);
+    await page.waitForURL(`${baseUrl}/en/app/campaigns`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
+    await page.close();
+  });
+
+  it("offers a document-assisted onboarding path and makes extracted colors editable before saving", async () => {
+    const page = await sessionPage();
+    await page.setViewportSize({ height: 900, width: 1440 });
+    let documentAnalysisFileCount = 0;
+    let documentAnalysisPosts = 0;
+    let moduleWrites = 0;
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "POST") {
+        const body = route.request().postDataJSON() as { files?: unknown[] };
+        documentAnalysisFileCount = body.files?.length ?? 0;
+        documentAnalysisPosts += 1;
+        return route.fulfill(json(onboardingDocumentAnalysis()));
+      }
+      if (method === "PUT" && pathname.startsWith("/v1/onboarding/")) {
+        moduleWrites += 1;
+        return route.fulfill(json(emptyOnboardingState()));
+      }
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
+    const documentCta = await page.getByRole("button", { name: "Use business documents" }).boundingBox();
+    const manualCta = await page.getByRole("button", { name: "Enter details myself" }).boundingBox();
+    expect(Math.abs((documentCta?.width ?? 0) - (manualCta?.width ?? 0))).toBeLessThan(1);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-greeting.png", fullPage: true });
+    await page.getByRole("button", { name: "Use business documents" }).click();
+    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
+    await page.locator('input[type="file"]').setInputFiles({ name: "brand.txt", mimeType: "text/plain", buffer: Buffer.from("SnackLab brand information") });
+    await page.locator('input[type="file"]').setInputFiles({ name: "offerings.pdf", mimeType: "application/pdf", buffer: Buffer.from("SnackLab offerings") });
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("brand", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("offerings", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("2/5", { exact: true }).isVisible()).toBe(true);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-document-selection.png", fullPage: true });
+    expect(documentAnalysisPosts).toBe(0);
+    await page.getByRole("button", { name: "Analyze files" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    expect(documentAnalysisFileCount).toBe(2);
+    expect(documentAnalysisPosts).toBe(1);
+    expect(moduleWrites).toBe(0);
+    await expect.poll(() => page.getByText("Information found in your files").isVisible()).toBe(true);
+
+    await page.getByRole("button", { name: /^Tone of voice/ }).click();
+    await page.getByRole("heading", { name: "How should the business sound?" }).waitFor();
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#2B59FF" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#F97316" }).isVisible()).toBe(true);
+    await page.getByLabel("Choose color").fill("#123456");
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
+    await page.screenshot({ path: "evidence/sunlit-onboarding-color-selection.png", fullPage: true });
+    await page.getByRole("button", { name: "Add selected color" }).click();
+    await expect(page.locator('input[type="color"]').count()).resolves.toBe(4);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#123456" }).isVisible()).toBe(true);
+    expect(moduleWrites).toBe(0);
+    await page.close();
+
+    const arabicPage = await sessionPage();
+    await arabicPage.setViewportSize({ height: 900, width: 1440 });
+    await mockApi(arabicPage, async (route, pathname) => {
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis") return route.fulfill(json(null));
+      return route.fulfill(json([]));
+    });
+    await arabicPage.goto(`${baseUrl}/ar/onboarding`, { waitUntil: "domcontentloaded" });
+    await arabicPage.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
+    await expect(arabicPage.locator("main").getAttribute("dir")).resolves.toBe("rtl");
+    await arabicPage.screenshot({ path: "evidence/sunlit-onboarding-greeting-rtl.png", fullPage: true });
+    await arabicPage.close();
+  });
+
+  it("restores an active document analysis and lets the owner replace it", async () => {
+    const page = await sessionPage();
+    let discarded = false;
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") {
+        return route.fulfill(json(discarded ? null : onboardingDocumentAnalysis()));
+      }
+      if (pathname.endsWith("/v1/onboarding/document-analysis/01a05c25-3efd-7ed2-bdcf-5de2e04be57e") && method === "DELETE") {
+        discarded = true;
+        return route.fulfill(json({ ...onboardingDocumentAnalysis(), status: "DISCARDED" }));
+      }
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: "Discard and choose different files" }).click();
+    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
+    expect(discarded).toBe(true);
     await page.close();
   });
 
@@ -79,8 +175,8 @@ describe("presentation journey", () => {
 
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     await page.getByText("7 of 7 sections", { exact: true }).waitFor();
-    await expect(page.getByText("100%", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByLabel("Competitors complete").isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("100%", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("Competitors complete").isVisible()).toBe(true);
     await expect(page.getByText("May 15, 2026").count()).resolves.toBe(0);
     await expect(page.getByText("Last updated: Never").count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
@@ -91,14 +187,19 @@ describe("presentation journey", () => {
 
   it("opens an approved Business Profile in populated onboarding edit mode", async () => {
     const page = await sessionPage();
+    let completionRequests = 0;
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/onboarding") {
-        return route.fulfill(
-          json({
-            status: "COMPLETE",
-            businessProfile: { status: "APPROVED", interactionId: "profile-1", profile: null, updatedAt: "2026-08-20T06:00:00.000Z" }
-          })
-        );
+        return route.fulfill(json(approvedOnboardingState("2026-08-20T06:00:00.000Z")));
+      }
+
+      if (pathname === "/v1/onboarding/complete") {
+        completionRequests += 1;
+        return route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "ONBOARDING_INCOMPLETE", message: "Onboarding is incomplete" } })
+        });
       }
 
       if (pathname === "/v1/vault/score") {
@@ -106,6 +207,7 @@ describe("presentation journey", () => {
           json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
         );
       }
+      if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
 
       if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
       return route.fulfill(json([]));
@@ -114,50 +216,143 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     const editLink = page.getByRole("link", { name: "Review and edit profile" });
     await expect(editLink.getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
-    await editLink.click();
-    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`);
-    await page.getByRole("heading", { name: "Tell us about your company" }).waitFor();
-    await expect(page.getByLabel("Company Name *").inputValue()).resolves.toBe("SnackLab");
-    await expect(page.getByLabel("Industry *").inputValue()).resolves.toBe("Food & Beverage");
-    await expect(page.getByLabel("Business location *").inputValue()).resolves.toBe("Manama, Bahrain");
+    await editLink.click({ timeout: 10_000 });
+    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`, { timeout: 10_000 });
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^Business name/ }).click({ timeout: 10_000 });
+    await page.getByRole("heading", { name: "Let’s start with the basics" }).waitFor({ timeout: 10_000 });
+    await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("SnackLab");
+    await expect(page.getByLabel("Business type").inputValue()).resolves.toBe("Food & Beverage");
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("dialog", { name: "Leave this step?" }).count()).resolves.toBe(0);
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: /^Business name/ }).click();
+    await page.getByLabel("Main market").fill("Muharraq, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
+    await expect.poll(() => backGuard.isVisible()).toBe(true);
+    await backGuard.getByRole("button", { name: "Keep editing" }).click();
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Muharraq, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: /^Business name/ }).click();
+    await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Manama, Bahrain");
+    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.waitForURL(`${baseUrl}/en/app/knowledge`, { timeout: 10_000 });
+    expect(completionRequests).toBe(0);
     await page.close();
   });
 
-  it("exposes Strategy in the authenticated app and sends a real 30-day generation request", async () => {
+  it("selects among Campaigns, generates a new plan, and reviews only one detailed week at a time", async () => {
     const page = await sessionPage();
     let generationPayload: Record<string, unknown> | undefined;
+    let suggestionApprovalPayload: Record<string, unknown> | undefined;
+    let approvedSuggestionDraft: ReturnType<typeof campaignSuggestionDraft> | undefined;
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/strategy" && route.request().method() === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/strategy/generate" && route.request().method() === "POST") {
+      if (pathname === "/v1/campaigns" && route.request().method() === "GET") {
+        return route.fulfill(json([snackLabCampaign(), snackLabCommunitySprint()]));
+      }
+      if (pathname === "/v1/campaigns/generate" && route.request().method() === "POST") {
         generationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json(snackLabStrategy()));
+        return route.fulfill(json({ ...snackLabCampaign(), id: "campaign-snacklab-generated" }));
+      }
+      if (pathname.endsWith("/drafts") && pathname.startsWith("/v1/campaigns/")) {
+        return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      }
+      if (pathname.endsWith("/suggestions/approve") && route.request().method() === "POST") {
+        suggestionApprovalPayload = route.request().postDataJSON() as Record<string, unknown>;
+        approvedSuggestionDraft = campaignSuggestionDraft("campaign-snacklab-generated");
+        return route.fulfill(json(approvedSuggestionDraft));
+      }
+      if (pathname === "/v1/content") return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: approvedSuggestionDraft, messages: [], latestRun: null }));
+      if (pathname === "/v1/media") return route.fulfill(json([]));
+      if (pathname === "/v1/calendar") {
+        return route.fulfill(
+          json({
+            range: { from: "2026-09-01", to: "2026-09-30" },
+            items: [],
+            mediaAssets: [],
+            summary: { scheduledThisWeek: 0, ready: 0, needsAttention: 0 },
+            unscheduled: { items: approvedSuggestionDraft ? [approvedSuggestionDraft] : [], total: approvedSuggestionDraft ? 1 : 0 }
+          })
+        );
       }
 
       return route.fulfill(json([]));
     });
 
-    await page.goto(`${baseUrl}/en/app/strategy`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Strategy", exact: true }).waitFor();
-    await expect(page.getByRole("link", { name: "Strategy" }).getAttribute("aria-current")).resolves.toBe("page");
-    await expect(page.getByLabel("Horizon").inputValue()).resolves.toBe("30");
-    await expect(page.getByText("No strategy generated yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
+    await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
+    const campaignLibrary = page.getByRole("complementary").filter({ has: page.getByRole("heading", { name: "Your campaigns" }) });
+    await expect.poll(() => campaignLibrary.getByText("2", { exact: true }).isVisible()).toBe(true);
+    await campaignLibrary.getByRole("button", { name: /SnackLab 7-Day Community Sprint/ }).click();
+    await page.getByRole("heading", { name: "SnackLab 7-Day Community Sprint" }).waitFor();
+
+    await page.getByRole("button", { name: "New campaign" }).click();
+    const composer = page.getByRole("dialog");
+    await expect(composer.getByRole("button", { name: "14 days", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    for (const duration of [30, 60, 90]) {
+      await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(true);
+    }
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
-    await page.getByRole("button", { name: "Create Strategy" }).click();
-    await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Strategy" }).waitFor();
+    await composer.getByRole("button", { name: "Create campaign", exact: true }).click();
+    await page.getByRole("heading", { name: "SnackLab 14-Day Instagram Campaign" }).waitFor();
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
-    await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("heading", { name: "Your weekly plan" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByRole("tab", { name: "Week-by-week review" }).getAttribute("aria-selected")).resolves.toBe("true");
+    await page.getByRole("tab", { name: "Overview", exact: true }).click();
+    await expect.poll(() => page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("heading", { name: "Campaign map" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByText("Earn trust", { exact: true }).isVisible()).toBe(true);
+    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
+    await page.getByRole("tab", { name: "Week-by-week review" }).click();
+    await expect.poll(() => page.getByText("Publish origin story Reel", { exact: true }).isVisible()).toBe(true);
+    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
+    const dailyPlan = page.getByRole("combobox", { name: "Daily plan" });
+    await expect(dailyPlan.inputValue()).resolves.toBe("0");
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    await expect.poll(() => page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).toBe(true);
+    await expect(page.getByText("Publish origin story Reel", { exact: true }).count()).resolves.toBe(0);
+    await expect(dailyPlan.inputValue()).resolves.toBe("1");
+    await expect(page.getByRole("button", { name: "Next week", exact: true }).isDisabled()).resolves.toBe(true);
+    await page.getByRole("button", { name: "Approve idea and create draft: Publish customer taste-test Reel" }).click();
+    const openDraft = page.getByRole("button", { name: "Open draft in Create: Publish customer taste-test Reel" });
+    await openDraft.waitFor();
+    expect(suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
+    await expect.poll(() => page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
-    await page.screenshot({ path: "evidence/sunlit-strategy.png", fullPage: true });
-    expect(generationPayload).toEqual({
-      horizonDays: 30,
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
+    expect(generationPayload).toMatchObject({
+      durationDays: 14,
       locale: "en",
-      objective: "Increase qualified Instagram inquiries over the next 30 days"
+      objective: "Increase qualified Instagram inquiries",
+      publishesPerDay: 1,
+      startsAt: expect.any(String)
     });
+
+    await openDraft.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
+    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
+    const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
+    await campaignLink.waitFor();
+    await expect(campaignLink.getAttribute("href")).resolves.toBe("/en/app/campaigns?campaign=campaign-snacklab-generated");
+
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar", exact: true }).waitFor();
+    await page.getByRole("button", { name: /Unscheduled/ }).click();
+    await expect.poll(() => page.getByText("Publish customer taste-test...", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByText("Campaign · Week 2", { exact: true }).isVisible()).toBe(true);
     await page.close();
-  });
+  }, 60_000);
 
   it("renders the desktop overview, Create, and honest Insights destinations", async () => {
     const page = await sessionPage();
@@ -178,268 +373,77 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
-    await expect(page.getByRole("button", { name: /Start a blank post/ }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("button", { name: /Draft with MARKOS AI/ }).isVisible()).resolves.toBe(true);
+    await page.getByRole("heading", { name: "What would you like to create?" }).waitFor();
+    await expect.poll(() => page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Insights", exact: true }).waitFor();
-    await expect(page.getByText("No synced insight data yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.getByText("No synced insights yet", { exact: true }).waitFor();
     await expect(page.getByText("Live", { exact: true }).count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
-    await page.close();
-  });
 
-  it("opens a saved blank post without calling AI", async () => {
-    const page = await sessionPage();
-    const blankRecord = {
-      ...studioContentRecord(),
-      callToAction: undefined,
-      captionAr: undefined,
-      captionEn: undefined,
-      contentPillar: undefined,
-      hashtags: []
-    };
-    let blankCreateCalls = 0;
-    let aiGenerateCalls = 0;
-
-    await mockApi(page, async (route, pathname) => {
-      const method = route.request().method();
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/content" && method === "POST") {
-        blankCreateCalls += 1;
-        expect(route.request().postDataJSON()).toEqual({ contentType: "POST" });
-        return route.fulfill(json(blankRecord));
-      }
-      if (pathname === "/v1/content/generate" && method === "POST") {
-        aiGenerateCalls += 1;
-      }
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Start a blank post/ }).click();
-    await page.getByText("Blank draft saved. Start writing whenever you are ready.", { exact: true }).waitFor();
-    await expect(page.getByRole("heading", { name: "Feed Post" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByPlaceholder("Write the caption for this post.").isEnabled()).resolves.toBe(true);
-    expect(blankCreateCalls).toBe(1);
-    expect(aiGenerateCalls).toBe(0);
-    await page.close();
-  });
-
-  it("creates, edits, uploads, generates media, approves, schedules, and cancels a saved content item", async () => {
-    const page = await sessionPage();
-    let record: ReturnType<typeof studioContentRecord> & { scheduledAt?: string; status: string } = studioContentRecord();
-    const mediaAssets: Array<Record<string, unknown>> = [];
-    let generationPayload: Record<string, unknown> | undefined;
-    let updatePayload: Record<string, unknown> | undefined;
-    let uploadPayload: Record<string, unknown> | undefined;
-    let imageGenerationPayload: Record<string, unknown> | undefined;
-    let schedulePayload: Record<string, unknown> | undefined;
-    let unscheduleCalls = 0;
-    let deleteCalls = 0;
-    const statusTransitions: string[] = [];
-
-    await mockApi(page, async (route, pathname) => {
-      const method = route.request().method();
-
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json(mediaAssets));
-      if (pathname === "/v1/content/generate" && method === "POST") {
-        generationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json([record]));
-      }
-      if (pathname === `/v1/content/${record.id}` && method === "PATCH") {
-        updatePayload = route.request().postDataJSON() as Record<string, unknown>;
-        record = { ...record, ...updatePayload, updatedAt: "2026-08-17T10:01:00.000Z" };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}` && method === "DELETE") {
-        deleteCalls += 1;
-        return route.fulfill(json({ id: record.id }));
-      }
-      if (pathname === "/v1/media/upload" && method === "POST") {
-        uploadPayload = route.request().postDataJSON() as Record<string, unknown>;
-        const asset = {
-          createdAt: "2026-08-17T10:02:00.000Z",
-          filename: uploadPayload.filename,
-          height: uploadPayload.height,
-          id: "media-uploaded",
-          mimeType: uploadPayload.mimeType,
-          publicUrl: onePixelJpegDataUrl,
-          sizeBytes: 631,
-          type: "IMAGE",
-          updatedAt: "2026-08-17T10:02:00.000Z",
-          width: uploadPayload.width,
-          workspaceId: session.workspace.id
-        };
-        mediaAssets.unshift(asset);
-        return route.fulfill(json(asset));
-      }
-      if (pathname === `/v1/content/${record.id}/media` && method === "POST") {
-        const payload = route.request().postDataJSON() as { mediaAssetId: string };
-        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, payload.mediaAssetId])) };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/generate-image` && method === "POST") {
-        imageGenerationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        const mediaAsset = {
-          createdAt: "2026-08-17T10:03:00.000Z",
-          filename: "generated-image.jpg",
-          height: 1280,
-          id: "media-generated",
-          mimeType: "image/jpeg",
-          publicUrl: onePixelJpegDataUrl,
-          sizeBytes: 631,
-          type: "AI_GENERATED",
-          updatedAt: "2026-08-17T10:03:00.000Z",
-          width: 1024,
-          workspaceId: session.workspace.id
-        };
-        mediaAssets.unshift(mediaAsset);
-        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, mediaAsset.id])) };
-        return route.fulfill(json({ contentItem: record, mediaAsset, model: "gpt-image-2", prompt: "saved caption", promptVersion: "image.v2.openai" }));
-      }
-      if (pathname === `/v1/content/${record.id}/status` && method === "POST") {
-        const payload = route.request().postDataJSON() as { status: string };
-        statusTransitions.push(payload.status);
-        record = { ...record, status: payload.status };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/schedule` && method === "POST") {
-        schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
-        record = { ...record, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/unschedule` && method === "POST") {
-        unscheduleCalls += 1;
-        const { scheduledAt: _scheduledAt, ...withoutSchedule } = record;
-        record = { ...withoutSchedule, status: "APPROVED" };
-        return route.fulfill(json(record));
-      }
-
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Draft with MARKOS AI/ }).click();
-    await page.getByPlaceholder(/Describe the content, including/).fill("Launch our new Bahrain dessert subscription to busy professionals.");
-    await page.getByRole("button", { name: "Generate draft" }).click();
-    await page.getByText("Draft generated and saved to this workspace.", { exact: true }).waitFor();
-
-    const captionEditor = page.getByPlaceholder("Write the caption for this post.");
-    await captionEditor.fill("A fresh dessert ritual for busy Bahrain teams.");
-    await page.getByRole("button", { name: "العربية", exact: true }).click();
-    await captionEditor.fill("طقوس حلوة جديدة لفرق العمل في البحرين.");
-    await page.getByRole("button", { name: "Save edits", exact: true }).click();
-    await page.getByText("Edits saved to the workspace draft.", { exact: true }).waitFor();
-
-    const publishableJpegBase64 = await page.evaluate(() => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1080;
-      canvas.height = 1080;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Canvas is unavailable");
-      context.fillStyle = "#d93f7a";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.8).split(",")[1] ?? "";
-    });
-    await page.getByLabel("Upload JPEG").setInputFiles({
-      buffer: Buffer.from(publishableJpegBase64, "base64"),
-      mimeType: "image/jpeg",
-      name: "showcase.jpg"
-    });
-    await page.getByText("showcase.jpg uploaded and attached to this workspace draft.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Expand showcase.jpg" }).click();
-    await expect(page.getByRole("dialog", { name: "Expanded preview of showcase.jpg" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Close expanded image" }).click();
-    await page.getByRole("button", { name: "Generate image", exact: true }).click();
-    await page.getByText("AI image generated, saved, and attached to this draft.", { exact: true }).waitFor();
-    await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
-
-    await page.getByRole("button", { name: "Approve draft", exact: true }).click();
-    await page.getByText("Content approved. It is now eligible for scheduling.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Schedule", exact: true }).click();
-    await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Back to Create" }).click();
-    await page.getByRole("button", { name: /Continue a draft/ }).click();
-    await expect(page.getByRole("heading", { name: "Content and schedule" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Scheduled 1", exact: true }).click();
-    const scheduledItem = page.getByText(/^Scheduled · /);
-    await expect(scheduledItem.isVisible()).resolves.toBe(true);
-    await scheduledItem.click();
-    await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
-    await page.getByText("Schedule cancelled. The approved item has returned to the ready queue.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Edit post", exact: true }).click();
-    await page.getByText("Approval removed. The post is a draft again and its caption, hashtags, and media can be edited.", { exact: true }).waitFor();
-    await expect(captionEditor.isEnabled()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Delete post draft" }).click();
-    await expect(page.getByRole("dialog", { name: "Delete this post draft?" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Yes, delete draft" }).click();
-    await page.getByText("Post draft deleted from MarkOS. Its media files remain in the workspace media library.", { exact: true }).waitFor();
-
-    expect(generationPayload).toEqual({ contentType: "POST", count: 1, topic: "Launch our new Bahrain dessert subscription to busy professionals." });
-    expect(updatePayload).toMatchObject({
-      captionAr: "طقوس حلوة جديدة لفرق العمل في البحرين.",
-      captionEn: "A fresh dessert ritual for busy Bahrain teams."
-    });
-    expect(uploadPayload).toMatchObject({ filename: "showcase.jpg", height: 1080, mimeType: "image/jpeg", type: "IMAGE", width: 1080 });
-    expect(typeof uploadPayload?.base64Data).toBe("string");
-    expect(imageGenerationPayload).toEqual({ aspectRatio: "4:5" });
-    expect(statusTransitions).toEqual(["IN_REVIEW", "APPROVED", "DRAFT"]);
-    expect(typeof schedulePayload?.scheduledAt).toBe("string");
-    expect(unscheduleCalls).toBe(1);
-    expect(deleteCalls).toBe(1);
+    await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Business Profile", exact: true }).waitFor();
+    await expect(page.getByRole("link", { name: /Review and edit profile/ }).getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
+    await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
     await page.close();
   });
 
   it("plans the week, schedules ready content, reschedules safely, and confirms cancellation", async () => {
     const page = await sessionPage();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const updatedAt = new Date().toISOString();
-    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = updatedAt;
     const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const ready = {
       ...studioContentRecord(),
-      captionEn: "Ready campaign post for the dessert subscription.",
+      caption: "Ready campaign post for the dessert subscription.",
       id: "calendar-ready",
+      plannedAt: updatedAt,
       status: "APPROVED",
       updatedAt
     };
     const scheduled = {
       ...studioContentRecord(),
-      captionEn: "Product story scheduled for this week.",
+      caption: "Product story scheduled for this week.",
+      contentType: "REEL",
       id: "calendar-scheduled",
+      plannedAt: updatedAt,
       scheduledAt,
       status: "SCHEDULED",
       updatedAt
     };
     const published = {
       ...studioContentRecord(),
-      captionEn: "Published customer story.",
+      caption: "Published customer story.",
       id: "calendar-published",
       publishedAt,
       status: "PUBLISHED"
     };
     const draft = {
       ...studioContentRecord(),
-      captionEn: "Draft founder story for review.",
+      caption: "Draft founder story for review.",
       id: "calendar-draft",
       status: "DRAFT",
       updatedAt
     };
-    let records = [scheduled, ready, published, draft];
+    const queuedDrafts = Array.from({ length: 12 }, (_, index) => ({
+      ...studioContentRecord(),
+      caption: `Queued draft ${String(index + 1).padStart(2, "0")} for later.`,
+      id: `calendar-queued-${index + 1}`,
+      status: "DRAFT",
+      updatedAt: new Date(Date.now() - (index + 1) * 60_000).toISOString()
+    }));
+    let records = [scheduled, ready, published, draft, ...queuedDrafts];
     let schedulePayload: Record<string, unknown> | undefined;
     let reschedulePayload: Record<string, unknown> | undefined;
     let unscheduleCalls = 0;
 
     await mockApi(page, async (route, pathname) => {
       const method = route.request().method();
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json(records));
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult(records, route.request().url())));
       if (pathname === `/v1/content/${ready.id}/schedule` && method === "POST") {
         schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
         const updated = { ...ready, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
@@ -454,7 +458,7 @@ describe("presentation journey", () => {
       }
       if (pathname === `/v1/content/${scheduled.id}/unschedule` && method === "POST") {
         unscheduleCalls += 1;
-        const { scheduledAt: _scheduledAt, ...withoutSchedule } = scheduled;
+        const { plannedAt: _plannedAt, scheduledAt: _scheduledAt, ...withoutSchedule } = scheduled;
         const updated = { ...withoutSchedule, status: "APPROVED" };
         records = records.map((record) => (record.id === updated.id ? updated : record));
         return route.fulfill(json(updated));
@@ -463,59 +467,434 @@ describe("presentation journey", () => {
       return route.fulfill(json([]));
     });
 
+    await page.setViewportSize({ height: 900, width: 1440 });
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar" }).waitFor();
     await expect(page.getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).resolves.toBe("page");
-    const desktopWeekDay = await page
-      .getByRole("button", { name: /^Open day:/ })
-      .first()
-      .boundingBox();
-    expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(380);
-    const readyCounter = page.getByRole("button", { name: /Ready to schedule/ });
+
+    const desktopSidebar = page.locator("[data-app-sidebar]");
+    const desktopShell = page.locator("[data-sidebar-collapsed]");
+    const expandedSidebarBox = await desktopSidebar.boundingBox();
+    if (!expandedSidebarBox) throw new Error("Expected the desktop sidebar to be visible.");
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+    );
+    await expect(desktopShell.getAttribute("data-sidebar-collapsed")).resolves.toBe("true");
+    await expect(page.evaluate(() => localStorage.getItem("markos.sidebar.collapsed"))).resolves.toBe("true");
+    const collapsedSidebarBox = await desktopSidebar.boundingBox();
+    if (!collapsedSidebarBox) throw new Error("Expected the collapsed desktop sidebar to be visible.");
+    expect(collapsedSidebarBox.width).toBeLessThan(expandedSidebarBox.width);
+
+    const collapsedCalendarLink = page.getByRole("link", { name: "Calendar", exact: true });
+    const expandSidebarButton = page.getByRole("button", { name: "Expand sidebar" });
+    await expect(expandSidebarButton.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(collapsedCalendarLink.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector<HTMLElement>('[data-sidebar-tooltip="calendar"]')!).opacity === "1");
+    await expect(collapsedCalendarLink.getAttribute("aria-current")).resolves.toBe("page");
+    await expandSidebarButton.click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "false" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? 0) > 180
+    );
+    await expect(page.evaluate(() => localStorage.getItem("markos.sidebar.collapsed"))).resolves.toBe("false");
+
+    const firstDayControl = page.getByRole("button", { name: /^Open day:/ }).first();
+    const desktopWeekDay = await firstDayControl.locator("xpath=ancestor::section[1]").boundingBox();
+    expect(desktopWeekDay?.height).toBeGreaterThanOrEqual(350);
+    expect((desktopWeekDay?.y ?? 0) + (desktopWeekDay?.height ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
+    await expect(page.getByLabel("Language switcher").count()).resolves.toBe(0);
+
+    const statusFilters = page.getByRole("group", { name: "Filter by content status" });
+    await expect(statusFilters.getByRole("button", { name: "All", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await statusFilters.getByRole("button", { name: "Draft", exact: true }).click();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get("filter") === "draft");
+    await expect(statusFilters.getByRole("button", { name: "Draft", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await statusFilters.getByRole("button", { name: "All", exact: true }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("filter"));
+
+    await page.getByLabel("Content type").selectOption({ label: "Reel" });
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get("type") === "REEL");
+    await expect.poll(() => page.getByRole("button", { name: /Product story scheduled/ }).isVisible()).toBe(true);
+    await expect(page.getByRole("button", { name: /Ready campaign post/ }).count()).resolves.toBe(0);
+    await page.getByLabel("Content type").selectOption({ label: "All types" });
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("type"));
+
+    const readyCounter = statusFilters.getByRole("button", { name: /Ready to schedule/ });
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     await readyCounter.click();
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("true");
     await readyCounter.click();
-    await page.getByText("Ready campaign post for the dessert subscription", { exact: true }).click();
-    await page.getByText("Draft founder story for review", { exact: true }).waitFor();
-    await page.getByRole("button", { name: /Ready campaign post/ }).click();
-    await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
+    const unscheduled = page.getByRole("button", { name: /Unscheduled · 13/ });
+    await unscheduled.click();
+    await expect.poll(() => page.getByRole("link", { name: /Draft founder story/ }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Load more" }).isVisible()).toBe(true);
+    await page.getByRole("button", { name: "Load more" }).click();
+    await page.getByRole("link", { name: /Queued draft 12/ }).waitFor();
+    await page.getByRole("button", { name: "Load more" }).waitFor({ state: "detached" });
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog", { name: /Unscheduled · 13/ }).waitFor({ state: "detached" });
+
+    const directReadyItem = page.getByRole("button", { name: /Ready: Ready campaign post/ });
+    await directReadyItem.click();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("item"));
+    const focusSurface = page.locator('[data-calendar-motion="focus-surface"]');
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("calendar-to-record");
+    await expect(
+      focusSurface.evaluate((element) => element.getAnimations({ subtree: true }).some((animation) => animation.playState === "running"))
+    ).resolves.toBe(true);
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    await expect.poll(() => page.getByRole("button", { name: "Back to day" }).isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("record-to-day");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    expect(new URL(page.url()).searchParams.has("day")).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label")?.startsWith("Ready: Ready campaign post"));
+    await expect(directReadyItem.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+
+    const readyDayColumn = directReadyItem.locator("xpath=ancestor::section[1]");
+    const readyDayBox = await readyDayColumn.boundingBox();
+    if (!readyDayBox) throw new Error("Expected the ready day surface to be visible.");
+    await readyDayColumn.click({ position: { x: readyDayBox.width / 2, y: readyDayBox.height - 12 } });
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day"));
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("calendar-to-day");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    const dayUrl = new URL(page.url());
+    expect(dayUrl.searchParams.get("day")).toBeTruthy();
+    expect(dayUrl.searchParams.has("item")).toBe(false);
+    const dayDialog = page.getByRole("dialog", { name: /2026/ });
+    await expect(dayDialog.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      dayDialog.evaluate((element) => {
+        const focusable = Array.from(
+          element.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((candidate) => candidate.getClientRects().length > 0 && candidate.getAttribute("aria-hidden") !== "true");
+        return document.activeElement === focusable.at(-1);
+      })
+    ).resolves.toBe(true);
+    await page.keyboard.press("Tab");
+    await expect(dayDialog.getByRole("button", { name: "Back to calendar" }).evaluate((element) => document.activeElement === element)).resolves.toBe(true);
+    await dayDialog.getByRole("button", { name: /Ready campaign post/ }).click();
+    await expect.poll(() => page.getByRole("button", { name: "Back to day" }).isVisible()).toBe(true);
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("day-to-record");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    await expect.poll(() => page.locator('button[aria-current="true"]').getByText("Ready campaign post...", { exact: true }).isVisible()).toBe(true);
+    expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
+
+    const dayContext = page.locator('[data-calendar-motion-part="day-context"]');
+    await expect(
+      dayContext.locator("[data-calendar-status]").evaluateAll((rows) => new Set(rows.map((row) => getComputedStyle(row).backgroundColor)).size)
+    ).resolves.toBeGreaterThan(1);
+    const originalDayContext = await dayContext.elementHandle();
+    if (!originalDayContext) throw new Error("Expected the persistent day context to be mounted.");
+    const alternatePost = dayContext.getByRole("button", { name: /Product story scheduled/ });
+    await alternatePost.click();
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("record-switch");
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    await expect(
+      originalDayContext.evaluate((element) => element.isSameNode(document.querySelector('[data-calendar-motion-part="day-context"]')))
+    ).resolves.toBe(true);
+    await dayContext.getByRole("button", { name: /Ready campaign post/ }).click();
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
+    expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
+
+    await page.goBack();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("item"));
+    await expect.poll(() => page.getByRole("button", { name: "Back to calendar" }).isVisible()).toBe(true);
+    await page.goForward();
+    await page.getByRole("button", { name: "Back to day" }).waitFor();
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
 
     const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
-    await page.getByLabel("Choose publishing time").fill(readyScheduleInput);
-    await page.getByRole("button", { name: "Schedule content" }).click();
+    await focusSurface.getByLabel("Choose publishing time").fill(readyScheduleInput);
+    await focusSurface.getByRole("button", { name: "Schedule content" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
     await page.getByRole("button", { name: "Close" }).click();
-    await page.getByText("Product story scheduled for this week", { exact: true }).click();
-    await page.getByRole("button", { name: /Product story scheduled for this week/ }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await focusSurface.waitFor({ state: "detached" });
+    const scheduledCounter = statusFilters.getByRole("button", { name: /Scheduled in MARKOS/ });
+    await scheduledCounter.click();
+    await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.getByRole("button", { name: /Scheduled in MARKOS: Product story scheduled/ }).click();
+    await page.getByRole("button", { name: "Back to day" }).waitFor();
     const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
     await page.getByLabel("Choose a new time").fill(rescheduleInput);
     await page.getByRole("button", { name: "Save new time" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
-    await page.getByRole("button", { name: "Cancel schedule" }).click();
+    const cancelScheduleButton = page.getByRole("button", { name: "Cancel schedule" });
+    await cancelScheduleButton.click();
     const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
-    await expect(dialog.isVisible()).resolves.toBe(true);
+    await expect.poll(() => dialog.isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => dialog.isVisible()).toBe(false);
+    await expect.poll(() => cancelScheduleButton.evaluate((element) => document.activeElement === element)).toBe(true);
+    await cancelScheduleButton.click();
     await dialog.getByRole("button", { name: "Cancel schedule" }).click();
-    await page.getByText("Schedule cancelled. The content is back in the Ready queue.", { exact: true }).waitFor();
+    const cancellationNotice = page.getByText("Schedule cancelled. The post is Ready and has moved to Unscheduled.", { exact: true });
+    await cancellationNotice.waitFor();
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
+    await expect.poll(() => page.getByRole("button", { name: "Back to calendar" }).isVisible()).toBe(true);
+    const unscheduledDrawer = page.getByRole("dialog", { name: /Unscheduled · 14/ });
+    await unscheduledDrawer.waitFor();
+    await expect.poll(() => unscheduledDrawer.getByRole("link", { name: /Product story scheduled/ }).isVisible()).toBe(true);
+    await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
+    await unscheduledDrawer.getByRole("button", { name: "Close", exact: true }).click();
+    await unscheduledDrawer.waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "Back to calendar" }).click();
+    await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
+    await focusSurface.waitFor({ state: "detached" });
+    await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("false");
+    await expect(page.getByRole("button", { name: /Unscheduled · 14/ }).getAttribute("aria-expanded")).resolves.toBe("false");
 
-    await page.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect(statusFilters.locator("[data-calendar-status]").count()).resolves.toBe(5);
+    await expect(page.getByLabel("Month calendar").getByText("Product story scheduled...", { exact: true }).count()).resolves.toBe(0);
+    const monthCalendar = await page.getByLabel("Month calendar").boundingBox();
+    if (!monthCalendar) throw new Error("Expected the Month calendar to be visible.");
+    expect(monthCalendar.y + monthCalendar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
     await page.screenshot({ path: "evidence/sunlit-calendar.png", fullPage: true });
 
-    await page.setViewportSize({ height: 844, width: 390 });
+    await page.setViewportSize({ height: 768, width: 1366 });
     await page.goto(`${baseUrl}/ar/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "تقويم المحتوى" }).waitFor();
     await expect(page.locator("main").getAttribute("dir")).resolves.toBe("rtl");
     await expect(page.getByRole("link", { name: "التقويم" }).getAttribute("aria-current")).resolves.toBe("page");
-    await page.screenshot({ path: "evidence/sunlit-calendar-rtl-mobile.png", fullPage: true });
+    await expect.poll(() => page.getByRole("group", { name: "تصفية حالة المحتوى" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("نوع المحتوى").isVisible()).toBe(true);
+    await expect(page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).resolves.toBe(false);
+
+    await page.getByRole("button", { name: "طي الشريط الجانبي" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+    );
+    const rtlSidebarGeometry = await desktopSidebar.evaluate((element) => {
+      const sidebar = element.getBoundingClientRect();
+      const activeLink = element.querySelector<HTMLElement>('[aria-current="page"]');
+      const activeAccentStyle = activeLink ? getComputedStyle(activeLink, "::before") : null;
+      return {
+        activeAccentLeft: Number.parseFloat(activeAccentStyle?.left ?? "0"),
+        activeAccentRight: Number.parseFloat(activeAccentStyle?.right ?? "0"),
+        activeAccentWidth: Number.parseFloat(activeAccentStyle?.width ?? "0"),
+        right: sidebar.right,
+        viewportWidth: window.innerWidth
+      };
+    });
+    expect(Math.abs(rtlSidebarGeometry.viewportWidth - rtlSidebarGeometry.right)).toBeLessThan(1);
+    expect(rtlSidebarGeometry.activeAccentRight).toBeLessThan(rtlSidebarGeometry.activeAccentLeft);
+    expect(rtlSidebarGeometry.activeAccentWidth).toBeGreaterThanOrEqual(3);
+    await page.getByRole("button", { name: "توسيع الشريط الجانبي" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "false" &&
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? 0) > 180
+    );
+    await page.screenshot({ path: "evidence/sunlit-calendar-rtl-desktop.png", fullPage: true });
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await page
+      .getByRole("button", { name: /^Open day:/ })
+      .first()
+      .click();
+    await page.locator('[data-calendar-layer="day"]').waitFor();
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-state")).toBe("reduced");
+    // Reduced-motion CSS uses 0.01 ms transitions; Chromium can report these as pending until the next frame.
+    // Inspect total timing (including delays and iterations) so visible motion still fails without waiting it away.
+    await expect(
+      page.locator('[data-calendar-layer="day"]').evaluate((element) =>
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running" || animation.pending)
+          .map((animation) => animation.effect?.getComputedTiming())
+          .filter((timing) => Number(timing?.endTime ?? Number.POSITIVE_INFINITY) > 1)
+      )
+    ).resolves.toEqual([]);
+    await page.keyboard.press("Escape");
+    await page.locator('[data-calendar-layer="overview"]').waitFor();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
 
     expect(schedulePayload).toEqual({ scheduledAt: new Date(`${readyScheduleInput}:00+03:00`).toISOString() });
     expect(reschedulePayload).toEqual({ scheduledAt: new Date(`${rescheduleInput}:00+03:00`).toISOString() });
     expect(unscheduleCalls).toBe(1);
     await page.close();
-  });
+  }, 60_000);
+
+  it("keeps an empty Campaign page dismissible and registers an idea before opening Create", async () => {
+    const emptyPage = await sessionPage();
+    await mockApi(emptyPage, async (route, pathname) => {
+      if (pathname === "/v1/campaigns") return route.fulfill(json([]));
+      return route.fulfill(json([]));
+    });
+
+    await emptyPage.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
+    await closeComposer.waitFor();
+    await emptyPage.keyboard.press("Escape");
+    await closeComposer.waitFor({ state: "detached" });
+    await expect.poll(() => emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).toBe(true);
+    await emptyPage.getByRole("link", { name: "Overview" }).click();
+    await emptyPage.waitForURL(`${baseUrl}/en/app`);
+    await emptyPage.close();
+
+    const page = await sessionPage();
+    const campaign = phaseTwoCampaign();
+    const draft = phaseTwoCampaignDraft(campaign.id);
+    let registeredDraft: typeof draft | undefined;
+    let approvalCalls = 0;
+    let completeApproval!: () => void;
+    const approvalResponse = new Promise<void>((resolve) => {
+      completeApproval = resolve;
+    });
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/campaigns") return route.fulfill(json([campaign]));
+      if (pathname.endsWith("/drafts")) return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname.endsWith("/suggestions/approve")) {
+        approvalCalls += 1;
+        await approvalResponse;
+        registeredDraft = draft;
+        return route.fulfill(json(draft));
+      }
+      if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname === `/v1/content/${draft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
+      return route.fulfill(json([]));
+    });
+
+    await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    const description = "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.";
+    const descriptionNode = page.getByText(description, { exact: true });
+    await descriptionNode.waitFor();
+    await expect(descriptionNode.evaluate((node) => getComputedStyle(node).whiteSpace)).resolves.toBe("normal");
+
+    const beforeApproval = page.url();
+    const approveButton = page.getByRole("button", { name: "Approve idea and create draft: Compare the subscription tiers" });
+    const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
+    await approveButton.click();
+    try {
+      await expect.poll(() => approvalCalls).toBe(1);
+      await expect.poll(() => approveButton.isDisabled()).toBe(true);
+      expect(page.url()).toBe(beforeApproval);
+      await expect(createButton.count()).resolves.toBe(0);
+    } finally {
+      completeApproval();
+    }
+    await page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).waitFor();
+    await createButton.waitFor();
+    expect(page.url()).toBe(beforeApproval);
+    expect(approvalCalls).toBe(1);
+    await page.screenshot({ path: "evidence/phase2-campaign-registered.png" });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await createButton.waitFor();
+    expect(approvalCalls).toBe(1);
+    await createButton.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.close();
+  }, 60_000);
+
+  it("opens unscheduled Calendar content in a right drawer and reuses the existing draft in Create", async () => {
+    const page = await sessionPage();
+    const draft = {
+      ...studioContentRecord(),
+      caption: "A saved SnackLab draft waiting for a publishing date.",
+      id: "calendar-unscheduled-existing",
+      status: "DRAFT",
+      updatedAt: new Date().toISOString()
+    };
+    let createCalls = 0;
+
+    await mockApi(page, async (route, pathname) => {
+      const method = route.request().method();
+      if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult([draft], route.request().url())));
+      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([draft]));
+      if (pathname === `/v1/content/${draft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
+      if (pathname === "/v1/content" && method === "POST") {
+        createCalls += 1;
+        return route.fulfill(json(draft));
+      }
+      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      return route.fulfill(json([]));
+    });
+
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+
+    const calendarSurface = page.locator("section.sunlit-panel").filter({ has: page.getByRole("button", { name: "Week", exact: true }) });
+    const before = await calendarSurface.boundingBox();
+    if (!before) throw new Error("Expected the Calendar surface to be visible.");
+
+    const drawerButton = page.getByRole("button", { name: /Unscheduled · 1/ });
+    await drawerButton.click();
+    const drawer = page.getByRole("dialog", { name: /Unscheduled · 1/ });
+    await drawer.waitFor();
+    const after = await calendarSurface.boundingBox();
+    if (!after) throw new Error("Expected the Calendar surface to remain visible behind the drawer.");
+    expect(after.width).toBe(before.width);
+    await page.screenshot({ path: "evidence/phase2-calendar-drawer.png" });
+
+    const existingDraftLink = drawer.locator(`a[href*="item=${draft.id}"]`);
+    await expect(existingDraftLink.getAttribute("href")).resolves.toBe(`/en/app/content-studio?item=${draft.id}&source=calendar`);
+
+    await page.keyboard.press("Escape");
+    await drawer.waitFor({ state: "detached" });
+
+    await page.setViewportSize({ height: 600, width: 1440 });
+    const shellScroll = page.locator("[data-app-content-scroll]");
+    await expect(shellScroll.evaluate((element) => element.scrollHeight > element.clientHeight)).resolves.toBe(true);
+    await shellScroll.evaluate((element) => element.scrollTo({ top: 160 }));
+    await expect(page.evaluate(() => window.scrollY)).resolves.toBe(0);
+    await expect(page.locator("[data-app-sidebar]").evaluate((element) => Math.round(element.getBoundingClientRect().top))).resolves.toBe(0);
+    await shellScroll.evaluate((element) => element.scrollTo({ top: 0 }));
+    await page.setViewportSize({ height: 900, width: 1440 });
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await expect(page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).resolves.toBe(true);
+    await drawerButton.click();
+    await drawer.waitFor();
+    await page.waitForTimeout(50);
+    await expect(
+      drawer.evaluate((element) =>
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running" || animation.pending)
+          .filter((animation) => Number(animation.effect?.getComputedTiming().duration ?? 0) > 20)
+          .map((animation) => ({ duration: animation.effect?.getComputedTiming().duration, playState: animation.playState }))
+      )
+    ).resolves.toEqual([]);
+    await page.keyboard.press("Escape");
+    await drawer.waitFor({ state: "detached" });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Content calendar" }).waitFor();
+    await drawerButton.click();
+    await existingDraftLink.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
+    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
+    expect(createCalls).toBe(0);
+    await page.close();
+  }, 60_000);
 });
 
 async function sessionPage(): Promise<Page> {
@@ -531,6 +910,123 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
     await handler(route, pathname);
   });
+}
+
+function approvedOnboardingState(updatedAt: string) {
+  const modules = ["company", "story", "products", "audience", "competitors", "brand", "objectives"].map((module) => ({
+    completed: true,
+    module,
+    sections: module === "brand" ? ["TONE"] : [module.toUpperCase()],
+    skipped: false
+  }));
+
+  return {
+    businessProfile: { interactionId: "profile-1", profile: null, status: "APPROVED", updatedAt },
+    modules,
+    onboardingScore: 100,
+    readyForProfile: true,
+    status: "COMPLETE",
+    vaultScore: {
+      completedSections,
+      entryCount: completedSections.length,
+      missingSections: [],
+      requiredSections: completedSections,
+      score: 100
+    }
+  };
+}
+
+function emptyOnboardingState() {
+  const sections = ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "TONE", "OBJECTIVES"];
+  const modules = ["company", "story", "products", "audience", "competitors", "brand", "objectives"].map((module, index) => ({
+    completed: false,
+    module,
+    sections: [sections[index]],
+    skipped: false
+  }));
+  return {
+    businessProfile: { interactionId: null, profile: null, status: "MISSING", updatedAt: null },
+    modules,
+    onboardingScore: 0,
+    readyForProfile: false,
+    status: "NOT_STARTED",
+    vaultScore: { completedSections: [], entryCount: 0, missingSections: completedSections, requiredSections: completedSections, score: 0 }
+  };
+}
+
+function onboardingDocumentAnalysis() {
+  return {
+    id: "01a05c25-3efd-7ed2-bdcf-5de2e04be57e",
+    workspaceId: session.workspace.id,
+    status: "READY",
+    files: [{ id: "file-1", filename: "brand.txt", mimeType: "text/plain", sizeBytes: 32, removed: false }],
+    result: {
+      profile: {
+        company: { name: "SnackLab", industry: "Food and beverage", socials: [], languages: [] },
+        offerings: {
+          items: [{ kind: "PRODUCT", name: "Protein bites", currency: "BHD", confidence: "HIGH", sourceFiles: ["brand.txt"] }],
+          differentiators: [],
+          salesChannels: []
+        },
+        story: { values: [] },
+        audience: { interests: [], locations: [], motivations: [], painPoints: [] },
+        competitors: { items: [] },
+        brand: { aestheticWords: [], colors: ["#2B59FF", "#F97316"], fonts: [], toneWords: ["clear"] },
+        objectives: { goals: [] }
+      },
+      evidence: [{ field: "brand.colors", sourceFiles: ["brand.txt"], confidence: "MEDIUM", basis: "VISUAL_INFERENCE" }],
+      issues: [{ code: "VISUAL_INFERENCE", severity: "INFO", message: "Confirm the inferred brand colors.", field: "brand.colors", sourceFiles: ["brand.txt"] }]
+    },
+    expiresAt: "2026-09-02T08:00:00.000Z",
+    createdAt: "2026-09-01T08:00:00.000Z",
+    updatedAt: "2026-09-01T08:00:00.000Z"
+  };
+}
+
+function calendarReadResult(records: Array<Record<string, unknown>>, requestUrl: string) {
+  const search = new URL(requestUrl).searchParams;
+  const from = search.get("from") ?? "0000-01-01";
+  const to = search.get("to") ?? "9999-12-31";
+  const statuses = new Set((search.get("statuses") ?? "").split(",").filter(Boolean));
+  const contentTypes = new Set((search.get("contentTypes") ?? "").split(",").filter(Boolean));
+  const offset = Number(search.get("unscheduledOffset") ?? 0);
+  const limit = Number(search.get("unscheduledLimit") ?? 12);
+  const matchesType = (record: Record<string, unknown>) => contentTypes.size === 0 || contentTypes.has(String(record.contentType));
+  const matchesStatus = (record: Record<string, unknown>) => statuses.size === 0 || statuses.has(String(record.status));
+  const filtered = records.filter((record) => matchesType(record) && matchesStatus(record));
+  const placement = (record: Record<string, unknown>) => {
+    if (record.status === "PUBLISHED") return record.publishedAt;
+    if (record.status === "SCHEDULED" || record.status === "FAILED") return record.scheduledAt;
+    return record.plannedAt;
+  };
+  const items = filtered.filter((record) => {
+    const value = placement(record);
+    if (typeof value !== "string") return false;
+    const dateKey = value.slice(0, 10);
+    return dateKey >= from && dateKey <= to;
+  });
+  const unscheduled = filtered
+    .filter((record) => ["DRAFT", "IN_REVIEW", "APPROVED"].includes(String(record.status)) && typeof record.plannedAt !== "string")
+    .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+  const page = unscheduled.slice(offset, offset + limit);
+  const summaryRecords = records.filter(matchesType);
+  const nextOffset = offset + page.length;
+
+  return {
+    range: { from, to },
+    items,
+    mediaAssets: [],
+    summary: {
+      scheduledThisWeek: summaryRecords.filter((record) => record.status === "SCHEDULED").length,
+      ready: summaryRecords.filter((record) => record.status === "APPROVED").length,
+      needsAttention: summaryRecords.filter((record) => record.status === "FAILED").length
+    },
+    unscheduled: {
+      items: page,
+      total: unscheduled.length,
+      ...(nextOffset < unscheduled.length ? { nextOffset } : {})
+    }
+  };
 }
 
 function snackLabVault() {
@@ -573,10 +1069,10 @@ function snackLabVault() {
   };
 }
 
-function snackLabStrategy() {
+function snackLabCampaign(): CampaignRecord {
   return {
     content: {
-      horizonDays: 30,
+      durationDays: 14,
       kpis: [{ name: "Qualified inquiries", target: "30" }],
       nextActions: ["Create the first weekly content batch"],
       objectives: ["Build awareness", "Generate subscription inquiries", "Convert recurring customers"],
@@ -589,16 +1085,164 @@ function snackLabStrategy() {
       ],
       retrievedContext: [{ id: "ctx-company", key: "company-info", score: 0.98, section: "COMPANY", value: { name: "SnackLab" }, version: 1 }],
       risks: [],
-      summary: "A Vault-grounded 30-day Instagram strategy for SnackLab.",
-      weeklyCadence: [{ actions: ["Publish one Reel", "Publish one carousel"], focus: "Launch consistency", week: 1 }]
+      publishesPerDay: 1,
+      summary: "A Vault-grounded 14-day Instagram campaign for SnackLab.",
+      weeklyCadence: [
+        {
+          days: campaignWeekDays(1, "Publish origin story Reel"),
+          focus: "Launch consistency",
+          week: 1
+        },
+        {
+          days: campaignWeekDays(8, "Publish customer taste-test Reel"),
+          focus: "Earn trust",
+          week: 2
+        }
+      ]
     },
     createdAt: "2026-08-09T11:35:00.000Z",
-    horizonDays: 30,
-    id: "strategy-snacklab-30",
-    title: "SnackLab 30-Day Instagram Strategy",
+    durationDays: 14,
+    endsAt: "2026-08-22T00:00:00.000Z",
+    id: "campaign-snacklab-14",
+    publishesPerDay: 1,
+    startsAt: "2026-08-09T00:00:00.000Z",
+    status: "REVIEW",
+    title: "SnackLab 14-Day Instagram Campaign",
     updatedAt: "2026-08-09T11:35:00.000Z",
     version: 1,
     workspaceId: session.workspace.id
+  };
+}
+
+function campaignWeekDays(firstDay: number, firstTitle: string) {
+  return Array.from({ length: 7 }, (_, index) => ({
+    day: firstDay + index,
+    posts: [
+      {
+        contentType: "REEL" as const,
+        title: index === 0 ? firstTitle : `SnackLab experiment ${firstDay + index}`,
+        description: "Show a dessert experiment and invite followers to share their response.",
+        goal: "Start qualified conversations",
+        contentPillar: "Sweet experimentation"
+      }
+    ]
+  }));
+}
+
+function snackLabCommunitySprint(): CampaignRecord {
+  const campaign = snackLabCampaign();
+  return {
+    ...campaign,
+    content: {
+      ...campaign.content,
+      durationDays: 7,
+      objectives: ["Start useful customer conversations"],
+      summary: "A focused seven-day community-building sprint.",
+      weeklyCadence: [
+        {
+          days: campaignWeekDays(1, "Ask followers to choose the next experiment"),
+          focus: "Invite participation",
+          week: 1
+        }
+      ]
+    },
+    createdAt: "2026-08-02T11:35:00.000Z",
+    durationDays: 7,
+    endsAt: "2026-08-08T00:00:00.000Z",
+    id: "campaign-snacklab-community",
+    startsAt: "2026-08-02T00:00:00.000Z",
+    title: "SnackLab 7-Day Community Sprint",
+    updatedAt: "2026-08-02T11:35:00.000Z"
+  };
+}
+
+function phaseTwoCampaign() {
+  return {
+    content: {
+      durationDays: 7,
+      kpis: [{ name: "Qualified inquiries", target: "12" }],
+      nextActions: ["Prepare the approved ideas"],
+      objectives: ["Help customers choose a subscription"],
+      pillars: [{ contentAngles: ["Comparison"], name: "Offer education", rationale: "Make the plans easy to compare." }],
+      publishesPerDay: 1,
+      retrievedContext: [],
+      risks: [],
+      summary: "A focused seven-day campaign for SnackLab subscriptions.",
+      weeklyCadence: [
+        {
+          days: [
+            {
+              day: 1,
+              posts: [
+                {
+                  contentPillar: "Offer education",
+                  contentType: "CAROUSEL",
+                  description: "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.",
+                  goal: "Help customers choose a subscription",
+                  title: "Compare the subscription tiers"
+                }
+              ]
+            }
+          ],
+          focus: "Clarify the offer",
+          week: 1
+        }
+      ]
+    },
+    createdAt: "2026-09-03T08:00:00.000Z",
+    durationDays: 7,
+    endsAt: "2026-09-09T00:00:00.000Z",
+    id: "campaign-phase-two",
+    publishesPerDay: 1,
+    startsAt: "2026-09-03T00:00:00.000Z",
+    status: "REVIEW",
+    title: "SnackLab subscription guide",
+    updatedAt: "2026-09-03T08:00:00.000Z",
+    version: 1,
+    workspaceId: session.workspace.id
+  };
+}
+
+function phaseTwoCampaignDraft(campaignId: string) {
+  return {
+    brief:
+      "Compare the subscription tiers\nExplain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.",
+    campaignActionIndex: 0,
+    campaignGoal: "Help customers choose a subscription",
+    campaignId,
+    campaignWeek: 1,
+    contentPillar: "Offer education",
+    contentType: "CAROUSEL" as const,
+    createdAt: "2026-09-03T08:05:00.000Z",
+    caption: "",
+    revision: 1,
+    id: "content-phase-two",
+    mediaIds: [] as string[],
+    plannedAt: "2026-09-03T00:00:00.000Z",
+    platform: "INSTAGRAM" as const,
+    status: "DRAFT" as const,
+    updatedAt: "2026-09-03T08:05:00.000Z",
+    workspaceId: session.workspace.id
+  };
+}
+
+function campaignSuggestionDraft(campaignId = "campaign-snacklab-14") {
+  return {
+    id: "content-campaign-week-2-action-1",
+    workspaceId: session.workspace.id,
+    contentType: "REEL" as const,
+    status: "DRAFT" as const,
+    brief: "Publish customer taste-test Reel",
+    caption: "",
+    revision: 1,
+    platform: "INSTAGRAM" as const,
+    mediaIds: [] as string[],
+    campaignId,
+    campaignGoal: "Earn trust",
+    campaignWeek: 2,
+    campaignActionIndex: 0,
+    createdAt: "2026-09-01T13:00:00.000Z",
+    updatedAt: "2026-09-01T13:00:00.000Z"
   };
 }
 
@@ -617,13 +1261,12 @@ function emptyAnalyticsSummary() {
 
 function studioContentRecord() {
   return {
-    callToAction: "Subscribe today",
-    captionAr: "اكتشفوا اشتراك الحلويات الجديد.",
-    captionEn: "Discover our new dessert subscription.",
+    revision: 1,
+    platform: "INSTAGRAM",
+    caption: "Discover our new dessert subscription.\n\nاكتشفوا اشتراك الحلويات الجديد.\n\nSubscribe today\n\n#SnackLab #Bahrain",
     contentPillar: "Product launch",
     contentType: "POST",
     createdAt: "2026-08-17T10:00:00.000Z",
-    hashtags: ["#SnackLab", "#Bahrain"],
     id: "content-showcase",
     mediaIds: [] as string[],
     status: "DRAFT",
@@ -643,10 +1286,6 @@ function bahrainInputDaysFromNow(days: number, hour: number, minute: number): st
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
-
-const onePixelJpegBase64 =
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
-const onePixelJpegDataUrl = `data:image/jpeg;base64,${onePixelJpegBase64}`;
 
 function json(data: unknown) {
   return { status: 200, contentType: "application/json", body: JSON.stringify({ data }) };

@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AiServiceRequestError } from "../src/ai/request";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { instagramJpegFixture } from "./helpers/jpeg";
 
-const imageMock = vi.hoisted(() => ({ calls: 0 }));
+const imageMock = vi.hoisted(() => ({ calls: 0, error: undefined as Error | undefined }));
 
 vi.mock("../src/ai/image-client", () => ({
   generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
     imageMock.calls += 1;
+    if (imageMock.error) throw imageMock.error;
     const dimensions = {
       "1:1": { height: 1024, width: 1024 },
       "4:5": { height: 1280, width: 1024 },
@@ -31,6 +33,10 @@ vi.mock("../src/ai/image-client", () => ({
     };
   }
 }));
+
+afterEach(() => {
+  imageMock.error = undefined;
+});
 
 describe("media routes", () => {
   it("registers public media and attaches it to content", async () => {
@@ -357,7 +363,7 @@ describe("media routes", () => {
       })
     ).resolves.toMatchObject({
       used: 1n,
-      limit: 20n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -398,6 +404,45 @@ describe("media routes", () => {
     ).resolves.toMatchObject({
       used: BigInt(body.mediaAsset.sizeBytes)
     });
+
+    await app.close();
+  });
+
+  it("returns the honest provider-disabled error without creating fake media", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const content = await createDraftContent(session.workspace.id);
+
+    imageMock.error = new AiServiceRequestError({
+      code: "AI_IMAGE_GENERATION_DISABLED",
+      message: "AI image generation is not available in this environment. Upload an image instead",
+      retryable: false,
+      statusCode: 503
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        aspectRatio: "4:5",
+        prompt: "Premium Bahrain coffee product photo"
+      }
+    });
+    const generatedAssets = await prisma.mediaAsset.count({
+      where: { workspaceId: session.workspace.id, type: "AI_GENERATED" }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "AI_IMAGE_GENERATION_DISABLED",
+        details: [{ retryable: false }],
+        message: "AI image generation is not available in this environment. Upload an image instead"
+      }
+    });
+    expect(generatedAssets).toBe(0);
 
     await app.close();
   });
@@ -494,7 +539,7 @@ describe("media routes", () => {
     await app.close();
   });
 
-  it("blocks media registration when storage quota is exhausted", async () => {
+  it("registers media beyond the former storage allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -523,22 +568,12 @@ describe("media routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "QUOTA_EXCEEDED",
-        details: [
-          {
-            metric: "STORAGE_BYTES"
-          }
-        ]
-      }
-    });
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("blocks AI generated media when the AI image quota is exhausted", async () => {
+  it("registers generated media beyond the former image allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -576,23 +611,12 @@ describe("media routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "QUOTA_EXCEEDED",
-        details: [
-          {
-            metric: "AI_IMAGE"
-          }
-        ]
-      }
-    });
-    expect(storageCounter?.used ?? 0n).toBe(0n);
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("checks the AI image quota before calling the provider", async () => {
+  it("calls the image provider beyond the former image allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -620,19 +644,12 @@ describe("media routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "QUOTA_EXCEEDED",
-        details: [{ metric: "AI_IMAGE" }]
-      }
-    });
-    expect(imageMock.calls).toBe(providerCallsBefore);
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("blocks media upload when billing is cancelled", async () => {
+  it("allows development usage: blocks media upload when billing is cancelled", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -658,17 +675,7 @@ describe("media routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "BILLING_STATUS_INACTIVE",
-        details: [
-          {
-            status: "CANCELLED"
-          }
-        ]
-      }
-    });
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
@@ -714,8 +721,7 @@ async function createDraftContent(workspaceId: string) {
       workspaceId,
       contentType: "POST",
       status: "DRAFT",
-      captionEn: "Draft with media",
-      hashtags: ["#Bahrain"],
+      caption: "Draft with media\n\n#Bahrain",
       mediaIds: []
     }
   });

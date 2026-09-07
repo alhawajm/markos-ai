@@ -20,6 +20,7 @@ import {
   Wand2
 } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
+import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./marketing-landing.module.css";
 
 type WorkspaceKey = "plan" | "create" | "publish" | "insights";
@@ -417,7 +418,7 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
         <header className={`${styles.container} ${styles.header}`}>
           <a className={styles.brand} href={`/${locale}`} aria-label={copy.brand}>
             <span className={styles.brandMark} aria-hidden="true">
-              <Sparkles size={21} strokeWidth={2.4} />
+              <MarkosAiIcon size={21} />
             </span>
             <strong>{copy.brand}</strong>
           </a>
