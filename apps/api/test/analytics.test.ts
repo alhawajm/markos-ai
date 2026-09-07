@@ -137,7 +137,7 @@ describe("analytics routes", () => {
     expect(summaryResponse.json().data.daily.length).toBeGreaterThan(0);
     expect(summaryResponse.json().data.topContent).toEqual([
       expect.objectContaining({
-        caption: "Analytics post",
+        caption: "Analytics post\n\n#MarkosAI",
         contentItemId: content.id,
         contentType: "POST",
         engagement: expect.any(Number)
@@ -533,7 +533,7 @@ describe("analytics routes", () => {
       },
       topContent: [
         expect.objectContaining({
-          caption: "Owner winning format",
+          caption: "Owner winning format\n\n#MarkosAI",
           contentItemId: ownerContent.id
         })
       ]

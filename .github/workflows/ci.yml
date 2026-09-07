@@ -24,7 +24,7 @@ jobs:
       AI_BASE_URL: http://localhost:8000
       AI_CONTENT_TIMEOUT_SECONDS: "50"
       AI_HTTP_TIMEOUT_MS: "130000"
-      AI_IMAGE_PROVIDER: local
+      AI_IMAGE_PROVIDER: disabled
       AI_IMAGE_TIMEOUT_SECONDS: "120"
       AI_PROFILE_TIMEOUT_SECONDS: "50"
       AI_CAMPAIGN_TIMEOUT_SECONDS: "50"
@@ -198,12 +198,12 @@ jobs:
             --header "Authorization: Bearer $INTERNAL_SERVICE_TOKEN" \
             --header "content-type: application/json" \
             --request POST \
-            --data '{"workspace_id":"ci-workspace","duration_days":90,"publishes_per_day":1,"starts_at":"2026-09-01T00:00:00Z","locale":"en","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
+            --data '{"workspace_id":"ci-workspace","duration_days":14,"publishes_per_day":1,"starts_at":"2026-09-01T00:00:00Z","locale":"en","context":[{"section":"COMPANY","key":"profile","value":{"name":"CI Coffee"},"score":1}]}' \
             http://127.0.0.1:8000/ai/campaigns/generate \
             > /tmp/markos-ai-campaign.json
 
           jq --exit-status --arg model "$LLM_LONGFORM_MODEL" \
-            '.model == $model and .campaign.durationDays == 90 and .campaign.publishesPerDay == 1 and .tokens_in > 0 and .tokens_out > 0' \
+            '.model == $model and .campaign.durationDays == 14 and .campaign.publishesPerDay == 1 and ([.campaign.weeklyCadence[].days[]] | length) == 14 and .tokens_in > 0 and .tokens_out > 0' \
             /tmp/markos-ai-campaign.json >/dev/null
 
           curl --fail --silent \
@@ -243,7 +243,7 @@ jobs:
             exit 1
           fi
 
-      - name: Test rendered Settings and onboarding
+      - name: Test rendered application journeys
         env:
           SETTINGS_BROWSER_BASE_URL: http://127.0.0.1:3000
         run: corepack pnpm --filter web test:browser

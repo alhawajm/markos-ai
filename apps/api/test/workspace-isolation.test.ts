@@ -247,6 +247,60 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.contentItem.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
+    model: "ContentConversation",
+    create: async (fixture) => createConversationFixture(fixture),
+    list: (workspaceId) => prisma.contentConversation.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ConversationRun",
+    create: async (fixture) => createConversationRunFixture(fixture),
+    list: (workspaceId) => prisma.conversationRun.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ConversationMessage",
+    create: async (fixture) => {
+      const run = await createConversationRunFixture(fixture);
+      return prisma.conversationMessage.create({
+        data: { workspaceId: fixture.workspaceId, conversationId: run.conversationId, runId: run.id, role: "user", text: "Create a citrus post" },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.conversationMessage.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "MediaGenerationJob",
+    create: async (fixture) => {
+      const content = await createContentFixture(fixture);
+      return prisma.mediaGenerationJob.create({
+        data: { workspaceId: fixture.workspaceId, contentItemId: content.id, prompt: "Show the citrus product", status: "CANCELLED" },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.mediaGenerationJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "PublishJob",
+    create: async (fixture) => createPublishJobFixture(fixture),
+    list: (workspaceId) => prisma.publishJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "PublishAttempt",
+    create: async (fixture) => {
+      const job = await createPublishJobFixture(fixture);
+      return prisma.publishAttempt.create({
+        data: {
+          workspaceId: fixture.workspaceId,
+          contentItemId: job.contentItemId,
+          publishJobId: job.id,
+          attemptNumber: 1,
+          status: "FAILED"
+        },
+        select: { id: true, workspaceId: true }
+      });
+    },
+    list: (workspaceId) => prisma.publishAttempt.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "MediaAsset",
     create: (fixture) =>
       prisma.mediaAsset.create({
@@ -443,6 +497,44 @@ const isolationCases: IsolationCase[] = [
     list: (workspaceId) => prisma.auditLog.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   }
 ];
+
+function createContentFixture(fixture: WorkspaceFixture) {
+  return prisma.contentItem.create({ data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "Isolation test", mediaIds: [] } });
+}
+
+async function createConversationFixture(fixture: WorkspaceFixture) {
+  const content = await createContentFixture(fixture);
+  return prisma.contentConversation.create({ data: { workspaceId: fixture.workspaceId, contentItemId: content.id } });
+}
+
+async function createConversationRunFixture(fixture: WorkspaceFixture) {
+  const conversation = await createConversationFixture(fixture);
+  return prisma.conversationRun.create({
+    data: {
+      workspaceId: fixture.workspaceId,
+      conversationId: conversation.id,
+      userId: fixture.userId,
+      requestId: randomUUID(),
+      instruction: "Create a citrus post",
+      baseRevision: 1,
+      status: "SUCCEEDED"
+    }
+  });
+}
+
+async function createPublishJobFixture(fixture: WorkspaceFixture) {
+  const content = await createContentFixture(fixture);
+  return prisma.publishJob.create({
+    data: {
+      workspaceId: fixture.workspaceId,
+      contentItemId: content.id,
+      trigger: "PUBLISH_NOW",
+      scheduledFor: new Date(),
+      idempotencyKey: randomUUID(),
+      status: "CANCELLED"
+    }
+  });
+}
 
 describe("workspace-owned data isolation", () => {
   it("covers every Prisma model with a workspaceId field", () => {

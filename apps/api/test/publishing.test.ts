@@ -520,7 +520,7 @@ describe("publishing routes", () => {
     await app.close();
   });
 
-  it("meters successful live publishes against the MARKOS post quota", async () => {
+  it("records diagnostic usage for successful live publishes", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);

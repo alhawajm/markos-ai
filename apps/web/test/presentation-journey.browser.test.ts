@@ -1,5 +1,6 @@
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { CampaignRecord } from "@markos/shared-types";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered presentation-journey tests");
@@ -268,6 +269,8 @@ describe("presentation journey", () => {
         return route.fulfill(json(approvedSuggestionDraft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: approvedSuggestionDraft, messages: [], latestRun: null }));
       if (pathname === "/v1/media") return route.fulfill(json([]));
       if (pathname === "/v1/calendar") {
         return route.fulfill(
@@ -288,18 +291,24 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
     await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
-    const campaignLibrary = page.getByRole("region", { name: "Campaign library" });
+    const campaignLibrary = page.getByRole("complementary").filter({ has: page.getByRole("heading", { name: "Your campaigns" }) });
     await expect(campaignLibrary.getByText("2", { exact: true }).isVisible()).resolves.toBe(true);
     await campaignLibrary.getByRole("button", { name: /SnackLab 7-Day Community Sprint/ }).click();
     await page.getByRole("heading", { name: "SnackLab 7-Day Community Sprint" }).waitFor();
 
     await page.getByRole("button", { name: "New campaign" }).click();
-    await expect(page.getByLabel("Duration").inputValue()).resolves.toBe("30");
+    const composer = page.getByRole("dialog");
+    await expect(composer.getByRole("button", { name: "14 days", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    for (const duration of [30, 60, 90]) {
+      await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(true);
+    }
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
-    await page.getByRole("button", { name: "Create Campaign" }).click();
-    await page.getByRole("heading", { name: "SnackLab 30-Day Instagram Campaign" }).waitFor();
+    await composer.getByRole("button", { name: "Create campaign", exact: true }).click();
+    await page.getByRole("heading", { name: "SnackLab 14-Day Instagram Campaign" }).waitFor();
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
+    await expect(page.getByRole("tab", { name: "Week-by-week review" }).getAttribute("aria-selected")).resolves.toBe("true");
+    await page.getByRole("tab", { name: "Overview", exact: true }).click();
     await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByRole("heading", { name: "Campaign map" }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Earn trust", { exact: true }).isVisible()).resolves.toBe(true);
@@ -307,32 +316,35 @@ describe("presentation journey", () => {
     await page.getByRole("tab", { name: "Week-by-week review" }).click();
     await expect(page.getByText("Publish origin story Reel", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
-    const weekOneButton = page.getByRole("button", { name: "Week 1", exact: true });
-    const weekTwoButton = page.getByRole("button", { name: "Week 2", exact: true });
-    await weekTwoButton.click();
+    const dailyPlan = page.getByRole("combobox", { name: "Daily plan" });
+    await expect(dailyPlan.inputValue()).resolves.toBe("0");
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
     await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText("Publish origin story Reel", { exact: true }).count()).resolves.toBe(0);
-    await expect(weekOneButton.getAttribute("aria-current")).resolves.toBe(null);
-    await expect(weekTwoButton.getAttribute("aria-current")).resolves.toBe("step");
+    await expect(dailyPlan.inputValue()).resolves.toBe("1");
+    await expect(page.getByRole("button", { name: "Next week", exact: true }).isDisabled()).resolves.toBe(true);
     await page.getByRole("button", { name: "Approve idea and create draft: Publish customer taste-test Reel" }).click();
-    const openDraft = page.getByRole("link", { name: "Open draft in Create: Publish customer taste-test Reel" });
-    await expect(openDraft.isVisible()).resolves.toBe(true);
+    const openDraft = page.getByRole("button", { name: "Open draft in Create: Publish customer taste-test Reel" });
+    await openDraft.waitFor();
     expect(suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
     await page.waitForTimeout(200);
     await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
     expect(generationPayload).toMatchObject({
-      durationDays: 30,
+      durationDays: 14,
       locale: "en",
-      objective: "Increase qualified Instagram inquiries over the next 30 days",
+      objective: "Increase qualified Instagram inquiries",
       publishesPerDay: 1,
       startsAt: expect.any(String)
     });
 
     await openDraft.click();
-    await page.getByRole("heading", { name: "Publish customer taste-test Reel" }).waitFor();
-    await expect(page.getByText("Campaign draft · Week 2", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
+    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
+    const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
+    await campaignLink.waitFor();
+    await expect(campaignLink.getAttribute("href")).resolves.toBe("/en/app/campaigns?campaign=campaign-snacklab-generated");
 
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar", exact: true }).waitFor();
@@ -527,7 +539,8 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Load more" }).click();
     await page.getByRole("link", { name: /Queued draft 12/ }).waitFor();
     await page.getByRole("button", { name: "Load more" }).waitFor({ state: "detached" });
-    await unscheduled.click();
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog", { name: /Unscheduled · 13/ }).waitFor({ state: "detached" });
 
     const directReadyItem = page.getByRole("button", { name: /Ready: Ready campaign post/ });
     await directReadyItem.click();
@@ -635,14 +648,17 @@ describe("presentation journey", () => {
     await cancellationNotice.waitFor();
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
     await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
+    const unscheduledDrawer = page.getByRole("dialog", { name: /Unscheduled · 14/ });
+    await unscheduledDrawer.waitFor();
+    await expect(unscheduledDrawer.getByRole("link", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
+    await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
+    await unscheduledDrawer.getByRole("button", { name: "Close", exact: true }).click();
+    await unscheduledDrawer.waitFor({ state: "detached" });
     await page.getByRole("button", { name: "Back to calendar" }).click();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
     await focusSurface.waitFor({ state: "detached" });
     await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("false");
-    const movedToUnscheduled = page.getByRole("button", { name: /Unscheduled · 14/ });
-    await expect(movedToUnscheduled.getAttribute("aria-expanded")).resolves.toBe("true");
-    await expect(page.getByRole("link", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
-    await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
+    await expect(page.getByRole("button", { name: /Unscheduled · 14/ }).getAttribute("aria-expanded")).resolves.toBe("false");
 
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
@@ -1033,10 +1049,10 @@ function snackLabVault() {
   };
 }
 
-function snackLabCampaign() {
+function snackLabCampaign(): CampaignRecord {
   return {
     content: {
-      durationDays: 30,
+      durationDays: 14,
       kpis: [{ name: "Qualified inquiries", target: "30" }],
       nextActions: ["Create the first weekly content batch"],
       objectives: ["Build awareness", "Generate subscription inquiries", "Convert recurring customers"],
@@ -1050,45 +1066,50 @@ function snackLabCampaign() {
       retrievedContext: [{ id: "ctx-company", key: "company-info", score: 0.98, section: "COMPANY", value: { name: "SnackLab" }, version: 1 }],
       risks: [],
       publishesPerDay: 1,
-      summary: "A Vault-grounded 30-day Instagram campaign for SnackLab.",
+      summary: "A Vault-grounded 14-day Instagram campaign for SnackLab.",
       weeklyCadence: [
         {
-          actions: ["Publish origin story Reel", "Share subscription carousel"],
+          days: campaignWeekDays(1, "Publish origin story Reel"),
           focus: "Launch consistency",
           week: 1
         },
         {
-          actions: ["Publish customer taste-test Reel", "Run founder Q&A Stories"],
+          days: campaignWeekDays(8, "Publish customer taste-test Reel"),
           focus: "Earn trust",
           week: 2
-        },
-        {
-          actions: ["Publish product comparison carousel", "Share a baking guide"],
-          focus: "Clarify the offer",
-          week: 3
-        },
-        {
-          actions: ["Publish subscription reminder", "Share a customer outcome"],
-          focus: "Convert interest",
-          week: 4
         }
       ]
     },
     createdAt: "2026-08-09T11:35:00.000Z",
-    durationDays: 30,
-    endsAt: "2026-09-08T11:35:00.000Z",
-    id: "campaign-snacklab-30",
+    durationDays: 14,
+    endsAt: "2026-08-22T00:00:00.000Z",
+    id: "campaign-snacklab-14",
     publishesPerDay: 1,
-    startsAt: "2026-08-09T11:35:00.000Z",
+    startsAt: "2026-08-09T00:00:00.000Z",
     status: "REVIEW",
-    title: "SnackLab 30-Day Instagram Campaign",
+    title: "SnackLab 14-Day Instagram Campaign",
     updatedAt: "2026-08-09T11:35:00.000Z",
     version: 1,
     workspaceId: session.workspace.id
   };
 }
 
-function snackLabCommunitySprint() {
+function campaignWeekDays(firstDay: number, firstTitle: string) {
+  return Array.from({ length: 7 }, (_, index) => ({
+    day: firstDay + index,
+    posts: [
+      {
+        contentType: "REEL" as const,
+        title: index === 0 ? firstTitle : `SnackLab experiment ${firstDay + index}`,
+        description: "Show a dessert experiment and invite followers to share their response.",
+        goal: "Start qualified conversations",
+        contentPillar: "Sweet experimentation"
+      }
+    ]
+  }));
+}
+
+function snackLabCommunitySprint(): CampaignRecord {
   const campaign = snackLabCampaign();
   return {
     ...campaign,
@@ -1099,7 +1120,7 @@ function snackLabCommunitySprint() {
       summary: "A focused seven-day community-building sprint.",
       weeklyCadence: [
         {
-          actions: ["Ask followers to choose the next experiment", "Reply to every relevant answer"],
+          days: campaignWeekDays(1, "Ask followers to choose the next experiment"),
           focus: "Invite participation",
           week: 1
         }
@@ -1107,9 +1128,9 @@ function snackLabCommunitySprint() {
     },
     createdAt: "2026-08-02T11:35:00.000Z",
     durationDays: 7,
-    endsAt: "2026-08-09T11:35:00.000Z",
+    endsAt: "2026-08-08T00:00:00.000Z",
     id: "campaign-snacklab-community",
-    startsAt: "2026-08-02T11:35:00.000Z",
+    startsAt: "2026-08-02T00:00:00.000Z",
     title: "SnackLab 7-Day Community Sprint",
     updatedAt: "2026-08-02T11:35:00.000Z"
   };
@@ -1173,7 +1194,8 @@ function phaseTwoCampaignDraft(campaignId: string) {
     contentPillar: "Offer education",
     contentType: "CAROUSEL" as const,
     createdAt: "2026-09-03T08:05:00.000Z",
-    caption: ([] as string[]).join(" "),
+    caption: "",
+    revision: 1,
     id: "content-phase-two",
     mediaIds: [] as string[],
     plannedAt: "2026-09-03T00:00:00.000Z",
@@ -1184,14 +1206,16 @@ function phaseTwoCampaignDraft(campaignId: string) {
   };
 }
 
-function campaignSuggestionDraft(campaignId = "campaign-snacklab-30") {
+function campaignSuggestionDraft(campaignId = "campaign-snacklab-14") {
   return {
     id: "content-campaign-week-2-action-1",
     workspaceId: session.workspace.id,
     contentType: "REEL" as const,
     status: "DRAFT" as const,
     brief: "Publish customer taste-test Reel",
-    caption: ([] as string[]).join(" "),
+    caption: "",
+    revision: 1,
+    platform: "INSTAGRAM" as const,
     mediaIds: [] as string[],
     campaignId,
     campaignGoal: "Earn trust",
@@ -1217,6 +1241,8 @@ function emptyAnalyticsSummary() {
 
 function studioContentRecord() {
   return {
+    revision: 1,
+    platform: "INSTAGRAM",
     caption: "Discover our new dessert subscription.\n\nاكتشفوا اشتراك الحلويات الجديد.\n\nSubscribe today\n\n#SnackLab #Bahrain",
     contentPillar: "Product launch",
     contentType: "POST",

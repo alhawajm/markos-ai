@@ -48,7 +48,12 @@ describe("clean database baseline contract", () => {
       "20260901170000_add_campaign_suggestion_drafts",
       "20260901180000_backfill_campaign_plan_limits",
       "20260902143000_add_content_tone",
-      "20260903090000_add_content_platform"
+      "20260903090000_add_content_platform",
+      "20260903120000_add_media_generation_jobs",
+      "20260903130000_add_durable_publish_jobs",
+      "20260906150000_unified_content_caption",
+      "20260906170000_content_conversations",
+      "20260906171000_conversation_access"
     ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);

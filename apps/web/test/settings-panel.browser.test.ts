@@ -133,8 +133,9 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
-  it("renders the greeting and keeps the reduced onboarding contract honest in both locales", async () => {
+  it("uses manual onboarding with structured offerings and protects unsaved edits in both locales", async () => {
     const page = await browserPage();
+    let offeringPayload: Record<string, unknown> | undefined;
     await page.addInitScript(
       ({ identity }) => {
         localStorage.setItem("markos.session", JSON.stringify(identity));
@@ -154,7 +155,11 @@ describe("active SettingsPanel Instagram interactions", () => {
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
       if (pathname === "/v1/onboarding" && route.request().method() === "GET") return route.fulfill(json(emptyOnboardingState()));
       if (pathname === "/v1/onboarding/company") return route.fulfill(json(onboardingStateWith({ completed: ["company"] })));
-      if (pathname === "/v1/onboarding/story/skip") return route.fulfill(json(onboardingStateWith({ completed: ["company"], skipped: ["story"] })));
+      if (pathname === "/v1/onboarding/products" && route.request().method() === "PUT") {
+        offeringPayload = route.request().postDataJSON() as Record<string, unknown>;
+        return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"] })));
+      }
+      if (pathname === "/v1/onboarding/story/skip") return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"], skipped: ["story"] })));
       return route.fulfill({ status: 404, body: "{}" });
     });
 
@@ -162,7 +167,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       waitUntil: "domcontentloaded"
     });
     await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
-    await page.getByRole("button", { name: "Set up my business" }).click();
+    await page.getByRole("button", { name: "Enter details myself" }).click();
     const basicsHeading = page.getByRole("heading", { name: "Let’s start with the basics" });
     await basicsHeading.waitFor();
     await basicsHeading.evaluate(async (element) => {
@@ -188,37 +193,33 @@ describe("active SettingsPanel Instagram interactions", () => {
     });
 
     await page.getByRole("button", { name: "Save & continue" }).click();
-    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
-    await expect(page.locator("[data-notification-toast]").count()).resolves.toBe(0);
-    await expect
-      .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
-      .toBeLessThanOrEqual(4);
-    await page.getByRole("button", { name: "Skip for now" }).click();
     await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
+    await expect(page.locator("[data-notification-toast]").count()).resolves.toBe(0);
     await expect
       .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
       .toBeLessThanOrEqual(8);
     await expect(page.getByRole("button", { name: "Save & continue" }).isDisabled()).resolves.toBe(true);
     await page.getByRole("button", { name: "Back" }).click();
     await expect(page.getByRole("dialog", { name: "Leave this step?" }).count()).resolves.toBe(0);
-    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
-    await page.getByRole("button", { name: "Skip for now" }).click();
+    await basicsHeading.waitFor();
+    await page.getByRole("button", { name: "Save & continue" }).click();
     await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
-    const offeringField = page.getByLabel("Products and services");
-    await offeringField.fill("Coffee beans and recurring office coffee services.");
+    const offeringField = page.getByRole("textbox", { name: "Name 1", exact: true });
+    await offeringField.fill("Coffee beans");
     await expect(page.getByRole("button", { name: "Save & continue" }).isEnabled()).resolves.toBe(true);
     await page.getByRole("button", { name: "Back" }).click();
     const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
     await expect(backGuard.isVisible()).resolves.toBe(true);
     await backGuard.getByRole("button", { name: "Keep editing" }).click();
-    await expect(offeringField.inputValue()).resolves.toBe("Coffee beans and recurring office coffee services.");
+    await expect(offeringField.inputValue()).resolves.toBe("Coffee beans");
     await page.getByRole("button", { name: "Back" }).click();
     await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
-    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
-    await page.getByRole("button", { name: "Skip for now" }).click();
+    await basicsHeading.waitFor();
+    await page.getByRole("button", { name: "Save & continue" }).click();
     await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
     await expect(offeringField.inputValue()).resolves.toBe("");
-    await offeringField.fill("Coffee beans and recurring office coffee services.");
+    await offeringField.fill("Coffee beans");
+    await page.getByRole("combobox", { name: "Type 1", exact: true }).selectOption("PRODUCT");
     await page.screenshot({
       path: "evidence/onboarding-products-ready.png",
       fullPage: true
@@ -234,6 +235,11 @@ describe("active SettingsPanel Instagram interactions", () => {
       path: "evidence/onboarding-products-mobile.png",
       fullPage: true
     });
+    await page.getByRole("button", { name: "Save & continue" }).click();
+    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
+    expect(offeringPayload).toMatchObject({ items: [{ name: "Coffee beans", kind: "PRODUCT" }] });
+    await page.getByRole("button", { name: "Skip for now" }).click();
+    await page.getByRole("heading", { name: "Who usually buys from you?" }).waitFor();
     await page.close();
 
     const arabic = await browserPage();
@@ -248,7 +254,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       waitUntil: "domcontentloaded"
     });
     await arabic.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
-    await arabic.getByRole("button", { name: "ابدأ إعداد نشاطي" }).click();
+    await arabic.getByRole("button", { name: "الإدخال يدوياً" }).click();
     await arabic.getByRole("heading", { name: "لنبدأ بالأساسيات" }).waitFor();
     await arabic.setViewportSize({ height: 844, width: 390 });
     await expect(arabic.locator('[lang="ar"][dir="rtl"]').count()).resolves.toBeGreaterThan(0);
@@ -296,6 +302,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
       if (pathname === "/v1/onboarding" && request.method() === "GET") return route.fulfill(json(onboarding));
       if (pathname === "/v1/vault") return route.fulfill(json(emptyVault()));
+      if (pathname === "/v1/onboarding/document-analysis" || pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
       if (pathname === "/v1/onboarding/profile/approve") {
         approvalPayload = request.postDataJSON() as Record<string, unknown>;
         return route.fulfill(
@@ -318,6 +325,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     });
     await page.getByRole("heading", { name: "Review your business profile" }).waitFor();
     await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("Pearl Coffee");
+    await page.locator('button[aria-controls="profile-tagline-en-content"]').click();
     await page.getByLabel("Tagline").fill("Bahrain coffee, personally crafted.");
     await page.getByRole("button", { name: "العربية", exact: true }).click();
     await expect(page.getByLabel("Tagline").inputValue()).resolves.toBe(profile.tagline.ar);

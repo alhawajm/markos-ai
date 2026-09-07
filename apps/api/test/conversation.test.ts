@@ -4,6 +4,7 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { processConversationRuns } from "../src/content/conversation-service";
 import { respondToConversation } from "../src/ai/conversation-client";
+import { validateInstagramDatabaseTarget } from "./helpers/instagram-database";
 
 vi.mock("../src/ai/conversation-client", async (original) => ({
   ...(await original<typeof import("../src/ai/conversation-client")>()),
@@ -21,15 +22,11 @@ const output = (changes: object | null = null) => ({
 });
 const patch = (value = caption) => ({ caption: value, brief: null, visualDirection: null, carousel: null, reelScript: null });
 beforeAll(async () => {
-  const url = new URL(process.env.DATABASE_URL ?? "");
-  const integration = new URL(process.env.INSTAGRAM_DATABASE_TEST_URL ?? "");
-  for (const target of [url, integration])
-    if (!["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) || target.pathname !== "/markos_local_test")
-      throw new Error("Use markos_local_test on loopback.");
+  if (!validateInstagramDatabaseTarget(process.env)) throw new Error("Conversation tests require an explicit disposable loopback database.");
   app = await buildApp();
 });
 afterAll(async () => {
-  await app.close();
+  await app?.close();
   await prisma.$disconnect();
 });
 beforeEach(() => {
