@@ -554,36 +554,42 @@ export interface CampaignRecord {
   updatedAt: string;
 }
 
+export {
+  CONTENT_CAPTION_MAX_LENGTH,
+  CONTENT_CAPTION_MAX_HASHTAGS,
+  captionCharacterCount,
+  captionHashtagCount,
+  captionValidationIssue
+} from "./content-caption";
+
 export interface ContentDraft {
   contentType: ContentType;
-  captionEn?: string;
-  captionAr?: string;
+  caption: string;
   visualDirection?: string;
-  hashtags: string[];
-  callToAction?: string;
   contentPillar?: string;
   carousel?: Record<string, unknown>;
   reelScript?: Record<string, unknown>;
 }
 
 export interface ContentToneLock {
-  requiredLanguages: ["ar", "en"];
+  preferredLanguages: Array<"en" | "ar">;
   toneWords: string[];
   voiceNotes?: string;
   brandHints: Record<string, unknown>;
 }
 
+export * from "./conversation";
+
 export interface ContentRecord {
+  revision: number;
+  visualDirection?: string;
   id: string;
   workspaceId: string;
   platform?: ContentPlatform;
   contentType: ContentType;
   status: ContentStatus;
   brief?: string;
-  captionEn?: string;
-  captionAr?: string;
-  hashtags: string[];
-  callToAction?: string;
+  caption: string;
   mediaIds: string[];
   carousel?: Record<string, unknown>;
   reelScript?: Record<string, unknown>;

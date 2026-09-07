@@ -87,8 +87,7 @@ describe("workspace routes", () => {
         workspaceId: session.workspace.id,
         contentType: "POST",
         status: "SCHEDULED",
-        captionEn: "Ready soon",
-        hashtags: ["#Bahrain"],
+        caption: "Ready soon\n\n#Bahrain",
         mediaIds: [],
         scheduledAt: new Date(Date.now() + 60 * 60 * 1000)
       }
@@ -245,9 +244,8 @@ describe("workspace routes", () => {
     });
     await prisma.contentItem.create({
       data: {
-        captionEn: "First content",
+        caption: "First content",
         contentType: "POST",
-        hashtags: [],
         mediaIds: [],
         workspaceId: first.workspace.id
       }
@@ -417,9 +415,8 @@ describe("workspace routes", () => {
     });
     await prisma.contentItem.create({
       data: {
-        captionEn: "Delete this",
+        caption: "Delete this",
         contentType: "POST",
-        hashtags: [],
         mediaIds: [],
         workspaceId: session.workspace.id
       }

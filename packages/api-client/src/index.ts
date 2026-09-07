@@ -27,6 +27,8 @@ import type {
   CampaignRecord,
   CalendarReadResult,
   ContentRecord,
+  ContentConversationRecord,
+  ConversationTurnInput,
   ContentDraft,
   ContentStatus,
   ContentType,
@@ -461,6 +463,14 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async contentConversation(contentItemId: string): Promise<ContentConversationRecord> {
+    return (await this.request<ContentConversationRecord>(`/v1/content/${contentItemId}/conversation`)).data;
+  }
+
+  async sendConversationMessage(contentItemId: string, input: ConversationTurnInput): Promise<ContentConversationRecord> {
+    return (await this.request<ContentConversationRecord>(`/v1/content/${contentItemId}/conversation`, { method: "POST", body: { ...input } })).data;
+  }
+
   async contentItems(): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content");
     return response.data;
@@ -488,10 +498,8 @@ export class MarkosApiClient {
       platform?: "INSTAGRAM";
       contentType?: ContentType;
       brief?: string | null;
-      captionEn?: string | null;
-      captionAr?: string | null;
-      hashtags?: string[];
-      callToAction?: string | null;
+      caption?: string;
+      visualDirection?: string | null;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
@@ -598,10 +606,9 @@ export class MarkosApiClient {
       platform?: "INSTAGRAM";
       contentType?: ContentType;
       brief?: string | null;
-      captionEn?: string | null;
-      captionAr?: string | null;
-      hashtags?: string[];
-      callToAction?: string | null;
+      caption?: string;
+      visualDirection?: string | null;
+      expectedRevision?: number;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
@@ -624,10 +631,15 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async updateContentStatus(contentItemId: string, status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">): Promise<ContentRecord> {
+  async updateContentStatus(
+    contentItemId: string,
+    status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">,
+    expectedRevision?: number
+  ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {
-        status
+        status,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
       },
       method: "POST"
     });

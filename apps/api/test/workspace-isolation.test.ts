@@ -241,7 +241,7 @@ const isolationCases: IsolationCase[] = [
     model: "ContentItem",
     create: (fixture) =>
       prisma.contentItem.create({
-        data: { workspaceId: fixture.workspaceId, contentType: "POST", hashtags: [], mediaIds: [] },
+        data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
         select: { id: true, workspaceId: true }
       }),
     list: (workspaceId) => prisma.contentItem.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })

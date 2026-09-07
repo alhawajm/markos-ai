@@ -30,7 +30,6 @@ import {
   type ContentType,
   type Locale
 } from "@markos/shared-types";
-import { quotaBlockedMessage, quotaErrorMessage, useMeteredActionState } from "./metered-action";
 import { useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 
@@ -55,7 +54,6 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
   const [suggestionMessageKind, setSuggestionMessageKind] = useState<"error" | "success">("success");
   const [isBusy, setIsBusy] = useState(false);
   const vaultGrounding = useVaultGroundingState({ area: "campaigns", locale });
-  const campaignUsage = useMeteredActionState({ fallbackTotal: 3, fallbackUsed: 1, label: t(locale, "title"), metric: "CAMPAIGN" });
   const selectedCampaignId = activeCampaignId ?? campaigns[0]?.id;
 
   useEffect(() => {
@@ -106,7 +104,6 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
 
   async function generate() {
     if (vaultGrounding.blocked) return setMessage(vaultGapMessage(locale));
-    if (campaignUsage.blocked) return setMessage(quotaBlockedMessage(locale));
     if (!session) return setMessage(t(locale, "sessionRequired"));
     setIsBusy(true);
     setMessage("");
@@ -121,7 +118,7 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
       setShowComposer(false);
       setCampaignDrafts([]);
     } catch (error) {
-      setMessage(quotaErrorMessage(locale, error) ?? (error instanceof Error ? error.message : t(locale, "failed")));
+      setMessage(error instanceof Error ? error.message : t(locale, "failed"));
     } finally {
       setIsBusy(false);
     }

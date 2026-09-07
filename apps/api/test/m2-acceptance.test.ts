@@ -10,7 +10,7 @@ const contentMock = vi.hoisted(() => ({
         context: Array<{ key: string; section: string }>;
         contentType: string;
         count: number;
-        toneLock: { requiredLanguages: ["ar", "en"]; toneWords: string[]; voiceNotes?: string };
+        toneLock: { preferredLanguages: ["en", "ar"]; toneWords: string[]; voiceNotes?: string };
         topic: string;
       }
     | undefined
@@ -62,10 +62,14 @@ vi.mock("../src/ai/content-client", () => ({
       drafts: [
         {
           contentType: input.contentType,
-          captionEn: `English ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
-          captionAr: `Arabic ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
-          hashtags: ["#BahrainBusiness", "#PearlCoffee"],
-          callToAction: "Send a DM for the office coffee menu.",
+          caption: [
+            `English ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
+            `Arabic ${input.topic} using ${input.toneLock.toneWords.join(", ")} tone`,
+            "Send a DM for the office coffee menu.",
+            ["#BahrainBusiness", "#PearlCoffee"].join(" ")
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           contentPillar: "Wholesale proof"
         }
       ]
@@ -98,8 +102,8 @@ describe("M2 acceptance", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    const scheduledAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-    const rescheduledAt = new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = futureScheduleTime(4);
+    const rescheduledAt = futureScheduleTime(28);
     const periodStart = monthStart(new Date());
 
     await seedVault(app, headers);
@@ -199,15 +203,15 @@ describe("M2 acceptance", () => {
         contentType: "POST",
         status: "SCHEDULED",
         scheduledAt,
-        captionEn: "English wholesale office coffee leads using warm, clear, confident tone",
-        captionAr: "Arabic wholesale office coffee leads using warm, clear, confident tone",
+        caption:
+          "English wholesale office coffee leads using warm, clear, confident tone\n\nArabic wholesale office coffee leads using warm, clear, confident tone\n\nSend a DM for the office coffee menu.\n\n#BahrainBusiness #PearlCoffee",
         contentPillar: "Wholesale proof"
       }
     });
     expect(contentMock.lastInput).toMatchObject({
       topic: "wholesale office coffee leads",
       toneLock: {
-        requiredLanguages: ["ar", "en"],
+        preferredLanguages: ["en", "ar"],
         toneWords: ["warm", "clear", "confident"],
         voiceNotes: "Helpful, bilingual, and direct."
       },
@@ -415,4 +419,8 @@ function testEmbedding(text: string): number[] {
   const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 
   return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function futureScheduleTime(hours: number): string {
+  return new Date(Math.ceil((Date.now() + hours * 60 * 60 * 1000) / 1_800_000) * 1_800_000).toISOString();
 }

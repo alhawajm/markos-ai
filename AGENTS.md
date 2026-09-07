@@ -18,7 +18,7 @@ MARKOS AI is an Instagram-first AI marketing OS for Bahrain SMBs. It learns a bu
 4. Models are configuration, not constants.
 5. Respect Instagram publish realities: container -> poll -> publish, public media URL, daily cap, App Review in M0.
 6. Money is integer minor units plus ISO-4217. BHD is stored in fils.
-7. Meter every AI token and image; enforce plan quotas.
+7. Retain diagnostic AI usage records. Commercial quotas and billing eligibility gates are deferred during private development; do not reintroduce them without an explicit product decision (2026-09-06).
 8. TypeScript strict, typed Python, bilingual/RTL from the first screen, tests as you go.
 
 When the spec is silent, choose the smallest conventional option and record it in `docs/decisions.md`.

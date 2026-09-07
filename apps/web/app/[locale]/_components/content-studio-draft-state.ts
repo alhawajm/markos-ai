@@ -5,41 +5,35 @@ const BAHRAIN_UTC_OFFSET = "+03:00";
 
 export interface ContentDraftFields {
   brief: string;
-  callToAction: string;
   campaignGoal: string;
-  captionAr: string;
-  captionEn: string;
+  caption: string;
   contentPillar: string;
   contentType: ContentType;
-  hashtagsText: string;
   plannedAtInput: string;
   tone: string;
+  visualDirection: string;
 }
 
 export interface ContentDraftPayload {
   brief: string | null;
-  callToAction: string | null;
   campaignGoal: string | null;
-  captionAr: string | null;
-  captionEn: string | null;
+  caption: string;
   contentType: ContentType;
   contentPillar: string | null;
-  hashtags: string[];
   plannedAt: string | null;
   tone: string | null;
+  visualDirection: string | null;
 }
 
 export function emptyContentDraftFields(contentType: ContentType = "POST"): ContentDraftFields {
   return {
     brief: "",
-    callToAction: "",
     campaignGoal: "",
-    captionAr: "",
-    captionEn: "",
+    caption: "",
     contentPillar: "",
     contentType,
-    hashtagsText: "",
     plannedAtInput: "",
+    visualDirection: "",
     tone: ""
   };
 }
@@ -47,14 +41,12 @@ export function emptyContentDraftFields(contentType: ContentType = "POST"): Cont
 export function contentDraftFieldsFromRecord(record: ContentRecord): ContentDraftFields {
   return {
     brief: record.brief ?? "",
-    callToAction: record.callToAction ?? "",
     campaignGoal: record.campaignGoal ?? "",
-    captionAr: record.captionAr ?? "",
-    captionEn: record.captionEn ?? "",
+    caption: record.caption ?? "",
     contentPillar: record.contentPillar ?? "",
     contentType: record.contentType,
-    hashtagsText: record.hashtags.join(" "),
     plannedAtInput: record.plannedAt ? bahrainInputValue(record.plannedAt) : "",
+    visualDirection: record.visualDirection ?? "",
     tone: record.tone ?? ""
   };
 }
@@ -65,12 +57,10 @@ export function contentDraftHasMeaningfulWork(fields: ContentDraftFields): boole
     normalized.contentType !== "POST" ||
     normalized.brief.length > 0 ||
     normalized.campaignGoal.length > 0 ||
-    normalized.captionEn.length > 0 ||
-    normalized.captionAr.length > 0 ||
+    normalized.caption.trim().length > 0 ||
     normalized.contentPillar.length > 0 ||
-    normalized.hashtags.length > 0 ||
-    normalized.callToAction.length > 0 ||
     normalized.plannedAtInput.length > 0 ||
+    normalized.visualDirection.length > 0 ||
     normalized.tone.length > 0
   );
 }
@@ -82,26 +72,14 @@ export function contentDraftIsDirty(fields: ContentDraftFields, baseline: Conten
 export function contentDraftPayload(fields: ContentDraftFields): ContentDraftPayload {
   return {
     brief: fields.brief.trim() || null,
-    callToAction: fields.callToAction.trim() || null,
     campaignGoal: fields.campaignGoal.trim() || null,
-    captionAr: fields.captionAr.trim() || null,
-    captionEn: fields.captionEn.trim() || null,
+    caption: fields.caption,
     contentType: fields.contentType,
     contentPillar: fields.contentPillar.trim() || null,
-    hashtags: parseDraftHashtags(fields.hashtagsText),
     plannedAt: plannedAtInputToIso(fields.plannedAtInput),
+    visualDirection: fields.visualDirection.trim() || null,
     tone: fields.tone.trim() || null
   };
-}
-
-export function parseDraftHashtags(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-    .filter((tag, index, all) => all.indexOf(tag) === index)
-    .slice(0, 30);
 }
 
 export function plannedAtInputToIso(value: string): string | null {
@@ -136,14 +114,12 @@ export function bahrainInputValue(value: string): string {
 function normalizeContentDraft(fields: ContentDraftFields) {
   return {
     brief: fields.brief.trim(),
-    callToAction: fields.callToAction.trim(),
     campaignGoal: fields.campaignGoal.trim(),
-    captionAr: fields.captionAr.trim(),
-    captionEn: fields.captionEn.trim(),
+    caption: fields.caption,
     contentType: fields.contentType,
     contentPillar: fields.contentPillar.trim(),
-    hashtags: parseDraftHashtags(fields.hashtagsText),
     plannedAtInput: fields.plannedAtInput,
+    visualDirection: fields.visualDirection.trim(),
     tone: fields.tone.trim()
   };
 }

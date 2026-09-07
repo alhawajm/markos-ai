@@ -19,17 +19,10 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { Locale, NotificationRecord } from "@markos/shared-types";
-import {
-  CampaignBuilderPanel,
-  ContentStudioPanel,
-  DailyBriefingPanel,
-  FinalAnalyticsPanel,
-  FinalDashboard,
-  FinalVaultPanel,
-  OpportunitiesPanel
-} from "./final-command-panels";
+import { CampaignBuilderPanel, DailyBriefingPanel, FinalAnalyticsPanel, FinalDashboard, FinalVaultPanel, OpportunitiesPanel } from "./final-command-panels";
 import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
+import { ContentStudioPanel } from "./content-studio-panel";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
 
@@ -331,7 +324,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
             {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
             {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
-            {activeSection === "content-studio" ? <ContentStudioPanel locale={locale} /> : null}
+            {activeSection === "content-studio" ? <ContentStudioPanel key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "calendar" ? <CalendarPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
             {activeSection === "knowledge" ? <FinalVaultPanel locale={locale} /> : null}

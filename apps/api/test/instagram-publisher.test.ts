@@ -7,6 +7,8 @@ import {
   validateInstagramVideoForPublishing
 } from "../src/publishing/instagram-publisher";
 
+const completeCaption = "  English caption 🍊\n\nالنص العربي\n\nMessage us. راسلنا.\n\n#Bahrain #البحرين\n";
+
 describe("InstagramGraphPublisher", () => {
   it("creates, polls, and publishes one JPEG through the constrained Instagram Login transport", async () => {
     const calls: Array<{ authorization?: string; body?: string; method?: string; url: string }> = [];
@@ -71,7 +73,7 @@ describe("InstagramGraphPublisher", () => {
       url: "https://graph.instagram.com/v25.0/17841400000000000/media"
     });
     expect(calls[0]?.body).toContain("image_url=https%3A%2F%2Fbucket.example.test%2Fobject.jpg%3Fsignature%3Dsensitive");
-    expect(calls[0]?.body).toContain("caption=English+caption");
+    expect(new URLSearchParams(calls[0]?.body).get("caption")).toBe(completeCaption);
     expect(calls[1]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
     expect(calls[2]?.url).toBe("https://graph.instagram.com/v25.0/creation-1?fields=status_code");
     expect(calls[3]).toMatchObject({
@@ -147,6 +149,7 @@ describe("InstagramGraphPublisher", () => {
     expect(calls[0]?.body).toContain("media_type=REELS");
     expect(calls[0]?.body).toContain("video_url=https%3A%2F%2Fcdn.example.com%2Freel.mp4");
     expect(calls[0]?.body).toContain("share_to_feed=true");
+    expect(new URLSearchParams(calls[0]?.body).get("caption")).toBe(completeCaption);
   });
 
   it("creates a Business Story container without a feed caption", async () => {
@@ -207,6 +210,9 @@ describe("InstagramGraphPublisher", () => {
     expect(calls[1]?.body).toContain("is_carousel_item=true");
     expect(calls[2]?.body).toContain("media_type=CAROUSEL");
     expect(calls[2]?.body).toContain("children=child-1%2Cchild-2");
+    expect(new URLSearchParams(calls[2]?.body).get("caption")).toBe(completeCaption);
+    expect(new URLSearchParams(calls[0]?.body).has("caption")).toBe(false);
+    expect(new URLSearchParams(calls[1]?.body).has("caption")).toBe(false);
   });
 
   it("returns a sanitized code when a container finishes with an error status", async () => {
@@ -402,21 +408,20 @@ function workspace(): Workspace {
 function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" | "STORY" }): ContentItem {
   return {
     aiPromptUsed: null,
+    revision: 1,
+    visualDirection: null,
     brief: null,
-    callToAction: null,
+    caption: completeCaption,
     campaignActionIndex: null,
     campaignGoal: null,
     campaignId: null,
     campaignWeek: null,
-    captionAr: null,
-    captionEn: "English caption",
     carousel: null,
     contentPillar: null,
     contentType: input.contentType,
     createdAt: new Date(),
     deletedAt: null,
     failureReason: null,
-    hashtags: ["#Bahrain"],
     id: "content-id",
     instagramPostId: null,
     mediaIds: ["media-id"],

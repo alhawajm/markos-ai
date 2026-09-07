@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Protocol, cast
 
 from openai import AsyncOpenAI
+from pydantic import ValidationError
 
 from app.contracts.content import (
     CarouselContent,
@@ -35,7 +36,10 @@ class ContentProvider(Protocol):
 
 class LocalContentProvider:
     async def generate_content(self, request: ContentGenerateRequest) -> ContentGenerateResponse:
-        batch = build_local_content(request)
+        try:
+            batch = build_local_content(request)
+        except ValidationError as error:
+            raise invalid_output_error("content drafts") from error
         prompt = f"{build_content_instructions(request)}\n{build_content_input(request)}"
         model = request.model or settings.llm_primary_model or "local-content-generator"
 
@@ -180,34 +184,38 @@ def build_local_content(request: ContentGenerateRequest) -> ContentDraftBatch:
             f"{request.topic}: مسودة محتوى مبنية على {context_summary}. "
             "تربط قيمة النشاط بدعوة واضحة ومناسبة للجمهور على إنستغرام."
         )
-        call_to_action = "Send a DM to learn more."
+        parts = {
+            "en": shorten_local_caption(caption_en, 800),
+            "ar": shorten_local_caption(caption_ar, 800),
+        }
+        caption = "\n\n".join(
+            [
+                *(parts[language] for language in request.tone_lock.preferred_languages),
+                "Send a DM to learn more.",
+                "#BahrainBusiness #InstagramMarketing #MarkosAI",
+            ]
+        )
 
         if request.revision_instruction is not None and request.current_draft is not None:
             instruction = request.revision_instruction.casefold()
-            caption_en = request.current_draft.caption_en
-            caption_ar = request.current_draft.caption_ar
-            call_to_action = request.current_draft.call_to_action
+            caption = request.current_draft.caption
 
             if "short" in instruction or "أقصر" in instruction:
-                caption_en = shorten_local_caption(caption_en, 80)
-                caption_ar = shorten_local_caption(caption_ar, 80)
+                caption = shorten_local_caption(caption, 80)
             elif "professional" in instruction or "مهني" in instruction:
-                caption_en = f"Professional revision: {caption_en}"
+                caption = f"Professional revision: {caption}"
 
             if "stronger call" in instruction or "دعوة أقوى" in instruction:
-                call_to_action = "Send us a message today to choose the right next step."
+                caption = f"{caption}\n\nSend us a message today to choose the right next step."
 
         drafts.append(
             ContentDraft(
                 contentType=request.content_type,
-                captionEn=caption_en,
-                captionAr=caption_ar,
+                caption=caption,
                 visualDirection=(
                     f"Create a polished {request.content_type.lower()} visual about {request.topic}. "
                     f"Use a {tone_summary} mood, a clear focal subject, uncluttered composition, and brand-aligned colors grounded in {context_summary}."
                 ),
-                hashtags=["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
-                callToAction=call_to_action,
                 contentPillar=pillar,
                 carousel=carousel,
                 reelScript=reel_script,

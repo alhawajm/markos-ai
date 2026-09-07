@@ -361,14 +361,14 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "How would you like to begin?" }).waitFor();
-    await expect(page.getByRole("button", { name: /Start a blank post/ }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("button", { name: /Draft with MARKOS AI/ }).isVisible()).resolves.toBe(true);
+    await page.getByRole("heading", { name: "What would you like to create?" }).waitFor();
+    await expect(page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByLabel("Message MARKOS", { exact: true }).isVisible()).resolves.toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Insights", exact: true }).waitFor();
-    await expect(page.getByText("No synced insights yet", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.getByText("No synced insights yet", { exact: true }).waitFor();
     await expect(page.getByText("Live", { exact: true }).count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
 
@@ -376,239 +376,6 @@ describe("presentation journey", () => {
     await page.getByRole("heading", { name: "Business Profile", exact: true }).waitFor();
     await expect(page.getByRole("link", { name: /Review and edit profile/ }).getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
     await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
-    await page.close();
-  });
-
-  it("keeps a blank manual post local until meaningful work is explicitly saved", async () => {
-    const page = await sessionPage();
-    const blankRecord = {
-      ...studioContentRecord(),
-      callToAction: undefined,
-      captionAr: undefined,
-      captionEn: undefined,
-      contentPillar: undefined,
-      hashtags: []
-    };
-    let blankCreateCalls = 0;
-    let blankCreatePayload: Record<string, unknown> | undefined;
-    let aiGenerateCalls = 0;
-
-    await mockApi(page, async (route, pathname) => {
-      const method = route.request().method();
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/content" && method === "POST") {
-        blankCreateCalls += 1;
-        blankCreatePayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json({ ...blankRecord, ...blankCreatePayload }));
-      }
-      if (pathname === "/v1/content/generate" && method === "POST") {
-        aiGenerateCalls += 1;
-      }
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Start a blank post/ }).click();
-    await page.getByText("This draft is not saved yet. MARKOS will create a record only after you save real work.", { exact: true }).waitFor();
-    await expect(page.getByRole("heading", { name: "New post draft" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByPlaceholder("Write the caption for this post.").isEnabled()).resolves.toBe(true);
-    expect(blankCreateCalls).toBe(0);
-
-    await page.getByRole("button", { name: "Back to Create" }).click();
-    await expect(page.getByRole("dialog", { name: "Save this draft before leaving?" }).count()).resolves.toBe(0);
-    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
-    expect(blankCreateCalls).toBe(0);
-
-    await page.getByRole("button", { name: /Start a blank post/ }).click();
-    await page.getByPlaceholder("Write the caption for this post.").fill("Manual launch reminder for Bahrain.");
-    await page.getByLabel("Planned publication").fill("2026-08-28T18:30");
-    await page.getByRole("button", { name: "Back to Create" }).click();
-    const unsavedDialog = page.getByRole("dialog", { name: "Save this draft before leaving?" });
-    await expect(unsavedDialog.isVisible()).resolves.toBe(true);
-    await unsavedDialog.getByRole("button", { name: "Keep editing" }).click();
-    await expect(page.getByRole("heading", { name: "New post draft" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Back to Create" }).click();
-    await page.getByRole("dialog", { name: "Save this draft before leaving?" }).getByRole("button", { name: "Save draft" }).click();
-    await page.getByRole("heading", { name: "How do you want to start your next post?" }).waitFor();
-    expect(blankCreateCalls).toBe(1);
-    expect(blankCreatePayload).toEqual({
-      callToAction: null,
-      captionAr: null,
-      captionEn: "Manual launch reminder for Bahrain.",
-      contentType: "POST",
-      hashtags: [],
-      plannedAt: "2026-08-28T15:30:00.000Z"
-    });
-    expect(aiGenerateCalls).toBe(0);
-    await page.close();
-  });
-
-  it("creates, edits, uploads, generates media, approves, schedules, and cancels a saved content item", async () => {
-    const page = await sessionPage();
-    let record: ReturnType<typeof studioContentRecord> & { scheduledAt?: string; status: string } = studioContentRecord();
-    const mediaAssets: Array<Record<string, unknown>> = [];
-    let generationPayload: Record<string, unknown> | undefined;
-    let updatePayload: Record<string, unknown> | undefined;
-    let uploadPayload: Record<string, unknown> | undefined;
-    let imageGenerationPayload: Record<string, unknown> | undefined;
-    let schedulePayload: Record<string, unknown> | undefined;
-    let unscheduleCalls = 0;
-    let deleteCalls = 0;
-    const statusTransitions: string[] = [];
-
-    await mockApi(page, async (route, pathname) => {
-      const method = route.request().method();
-
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json(mediaAssets));
-      if (pathname === "/v1/content/generate" && method === "POST") {
-        generationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json([record]));
-      }
-      if (pathname === `/v1/content/${record.id}` && method === "PATCH") {
-        updatePayload = route.request().postDataJSON() as Record<string, unknown>;
-        record = { ...record, ...updatePayload, updatedAt: "2026-08-17T10:01:00.000Z" };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}` && method === "DELETE") {
-        deleteCalls += 1;
-        return route.fulfill(json({ id: record.id }));
-      }
-      if (pathname === "/v1/media/upload" && method === "POST") {
-        uploadPayload = route.request().postDataJSON() as Record<string, unknown>;
-        const asset = {
-          createdAt: "2026-08-17T10:02:00.000Z",
-          filename: uploadPayload.filename,
-          height: uploadPayload.height,
-          id: "media-uploaded",
-          mimeType: uploadPayload.mimeType,
-          publicUrl: onePixelJpegDataUrl,
-          sizeBytes: 631,
-          type: "IMAGE",
-          updatedAt: "2026-08-17T10:02:00.000Z",
-          width: uploadPayload.width,
-          workspaceId: session.workspace.id
-        };
-        mediaAssets.unshift(asset);
-        return route.fulfill(json(asset));
-      }
-      if (pathname === `/v1/content/${record.id}/media` && method === "POST") {
-        const payload = route.request().postDataJSON() as { mediaAssetId: string };
-        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, payload.mediaAssetId])) };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/generate-image` && method === "POST") {
-        imageGenerationPayload = route.request().postDataJSON() as Record<string, unknown>;
-        const mediaAsset = {
-          createdAt: "2026-08-17T10:03:00.000Z",
-          filename: "generated-image.jpg",
-          height: 1280,
-          id: "media-generated",
-          mimeType: "image/jpeg",
-          publicUrl: onePixelJpegDataUrl,
-          sizeBytes: 631,
-          type: "AI_GENERATED",
-          updatedAt: "2026-08-17T10:03:00.000Z",
-          width: 1024,
-          workspaceId: session.workspace.id
-        };
-        mediaAssets.unshift(mediaAsset);
-        record = { ...record, mediaIds: Array.from(new Set([...record.mediaIds, mediaAsset.id])) };
-        return route.fulfill(json({ contentItem: record, mediaAsset, model: "gpt-image-2", prompt: "saved caption", promptVersion: "image.v2.openai" }));
-      }
-      if (pathname === `/v1/content/${record.id}/status` && method === "POST") {
-        const payload = route.request().postDataJSON() as { status: string };
-        statusTransitions.push(payload.status);
-        record = { ...record, status: payload.status };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/schedule` && method === "POST") {
-        schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
-        record = { ...record, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
-        return route.fulfill(json(record));
-      }
-      if (pathname === `/v1/content/${record.id}/unschedule` && method === "POST") {
-        unscheduleCalls += 1;
-        const { scheduledAt: _scheduledAt, ...withoutSchedule } = record;
-        record = { ...withoutSchedule, status: "APPROVED" };
-        return route.fulfill(json(record));
-      }
-
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Draft with MARKOS AI/ }).click();
-    await page.getByPlaceholder(/Describe the content, including/).fill("Launch our new Bahrain dessert subscription to busy professionals.");
-    await page.getByRole("button", { name: "Generate draft" }).click();
-    await page.getByText("Draft generated and saved to this workspace.", { exact: true }).waitFor();
-
-    const captionEditor = page.getByPlaceholder("Write the caption for this post.");
-    await captionEditor.fill("A fresh dessert ritual for busy Bahrain teams.");
-    await page.getByRole("button", { name: "العربية", exact: true }).click();
-    await captionEditor.fill("طقوس حلوة جديدة لفرق العمل في البحرين.");
-    await page.getByRole("button", { name: "Save edits", exact: true }).click();
-    await page.getByText("Edits saved to the workspace draft.", { exact: true }).waitFor();
-
-    const publishableJpegBase64 = await page.evaluate(() => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1080;
-      canvas.height = 1080;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Canvas is unavailable");
-      context.fillStyle = "#d93f7a";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.8).split(",")[1] ?? "";
-    });
-    await page.getByLabel("Upload JPEG").setInputFiles({
-      buffer: Buffer.from(publishableJpegBase64, "base64"),
-      mimeType: "image/jpeg",
-      name: "showcase.jpg"
-    });
-    await page.getByText("showcase.jpg uploaded and attached to this workspace draft.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Expand showcase.jpg" }).click();
-    await expect(page.getByRole("dialog", { name: "Expanded preview of showcase.jpg" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Close expanded image" }).click();
-    await page.getByRole("button", { name: "Generate image", exact: true }).click();
-    await page.getByText("AI image generated, saved, and attached to this draft.", { exact: true }).waitFor();
-    await page.screenshot({ path: "evidence/sunlit-content-studio-flow.png", fullPage: true });
-
-    await page.getByRole("button", { name: "Mark as ready", exact: true }).click();
-    await page.getByText("Content marked Ready. It is now eligible for scheduling.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Schedule", exact: true }).click();
-    await page.getByText("Scheduled for 7:30 PM.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Back to Create" }).click();
-    await page.getByRole("button", { name: /Continue a draft/ }).click();
-    await expect(page.getByRole("heading", { name: "Content and schedule" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Scheduled 1", exact: true }).click();
-    const scheduledItem = page.getByText(/^Scheduled · /);
-    await expect(scheduledItem.isVisible()).resolves.toBe(true);
-    await scheduledItem.click();
-    await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Cancel this scheduled post?" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Yes, cancel schedule" }).click();
-    await page.getByText("Schedule cancelled. The item has returned to the Ready queue.", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Edit post", exact: true }).click();
-    await page.getByText("Ready state removed. The post is a draft again and its caption, hashtags, and media can be edited.", { exact: true }).waitFor();
-    await expect(captionEditor.isEnabled()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Delete post draft" }).click();
-    await expect(page.getByRole("dialog", { name: "Delete this post draft?" }).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Yes, delete draft" }).click();
-    await page.getByText("Post draft deleted from MarkOS. Its media files remain in the workspace media library.", { exact: true }).waitFor();
-
-    expect(generationPayload).toEqual({ contentType: "POST", count: 1, topic: "Launch our new Bahrain dessert subscription to busy professionals." });
-    expect(updatePayload).toMatchObject({
-      captionAr: "طقوس حلوة جديدة لفرق العمل في البحرين.",
-      captionEn: "A fresh dessert ritual for busy Bahrain teams."
-    });
-    expect(uploadPayload).toMatchObject({ filename: "showcase.jpg", height: 1080, mimeType: "image/jpeg", type: "IMAGE", width: 1080 });
-    expect(typeof uploadPayload?.base64Data).toBe("string");
-    expect(imageGenerationPayload).toEqual({ aspectRatio: "4:5" });
-    expect(statusTransitions).toEqual(["IN_REVIEW", "APPROVED", "DRAFT"]);
-    expect(typeof schedulePayload?.scheduledAt).toBe("string");
-    expect(unscheduleCalls).toBe(1);
-    expect(deleteCalls).toBe(1);
     await page.close();
   });
 
@@ -620,7 +387,7 @@ describe("presentation journey", () => {
     const publishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const ready = {
       ...studioContentRecord(),
-      captionEn: "Ready campaign post for the dessert subscription.",
+      caption: "Ready campaign post for the dessert subscription.",
       id: "calendar-ready",
       plannedAt: updatedAt,
       status: "APPROVED",
@@ -628,7 +395,7 @@ describe("presentation journey", () => {
     };
     const scheduled = {
       ...studioContentRecord(),
-      captionEn: "Product story scheduled for this week.",
+      caption: "Product story scheduled for this week.",
       contentType: "REEL",
       id: "calendar-scheduled",
       plannedAt: updatedAt,
@@ -638,21 +405,21 @@ describe("presentation journey", () => {
     };
     const published = {
       ...studioContentRecord(),
-      captionEn: "Published customer story.",
+      caption: "Published customer story.",
       id: "calendar-published",
       publishedAt,
       status: "PUBLISHED"
     };
     const draft = {
       ...studioContentRecord(),
-      captionEn: "Draft founder story for review.",
+      caption: "Draft founder story for review.",
       id: "calendar-draft",
       status: "DRAFT",
       updatedAt
     };
     const queuedDrafts = Array.from({ length: 12 }, (_, index) => ({
       ...studioContentRecord(),
-      captionEn: `Queued draft ${String(index + 1).padStart(2, "0")} for later.`,
+      caption: `Queued draft ${String(index + 1).padStart(2, "0")} for later.`,
       id: `calendar-queued-${index + 1}`,
       status: "DRAFT",
       updatedAt: new Date(Date.now() - (index + 1) * 60_000).toISOString()
@@ -979,6 +746,8 @@ describe("presentation journey", () => {
         return route.fulfill(json(draft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname === `/v1/content/${draft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       return route.fulfill(json([]));
     });
 
@@ -994,7 +763,7 @@ describe("presentation journey", () => {
     await expect(page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" }).isVisible()).resolves.toBe(true);
     expect(approvalCalls).toBe(1);
-    await page.screenshot({ path: ".tmp-phase2-ui/phase2-campaign-registered.png" });
+    await page.screenshot({ path: "evidence/phase2-campaign-registered.png" });
 
     await page.reload({ waitUntil: "domcontentloaded" });
     const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
@@ -1009,7 +778,7 @@ describe("presentation journey", () => {
     const page = await sessionPage();
     const draft = {
       ...studioContentRecord(),
-      captionEn: "A saved SnackLab draft waiting for a publishing date.",
+      caption: "A saved SnackLab draft waiting for a publishing date.",
       id: "calendar-unscheduled-existing",
       status: "DRAFT",
       updatedAt: new Date().toISOString()
@@ -1020,6 +789,8 @@ describe("presentation journey", () => {
       const method = route.request().method();
       if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult([draft], route.request().url())));
       if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([draft]));
+      if (pathname === `/v1/content/${draft.id}/conversation`)
+        return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       if (pathname === "/v1/content" && method === "POST") {
         createCalls += 1;
         return route.fulfill(json(draft));
@@ -1043,7 +814,7 @@ describe("presentation journey", () => {
     const after = await calendarSurface.boundingBox();
     if (!after) throw new Error("Expected the Calendar surface to remain visible behind the drawer.");
     expect(after.width).toBe(before.width);
-    await page.screenshot({ path: ".tmp-phase2-ui/phase2-calendar-drawer.png" });
+    await page.screenshot({ path: "evidence/phase2-calendar-drawer.png" });
 
     const existingDraftLink = drawer.locator(`a[href*="item=${draft.id}"]`);
     await expect(existingDraftLink.getAttribute("href")).resolves.toBe(`/en/app/content-studio?item=${draft.id}&source=calendar`);
@@ -1084,101 +855,8 @@ describe("presentation journey", () => {
     await drawerButton.click();
     await existingDraftLink.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
-    await page.getByRole("heading", { name: "New Instagram post" }).waitFor();
+    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
     expect(createCalls).toBe(0);
-    await page.close();
-  }, 60_000);
-
-  it("keeps the full Create studio manual-first and inserts approved AI ideation into its fields", async () => {
-    const page = await sessionPage();
-    let record: ReturnType<typeof studioContentRecord> | undefined;
-    let ideationCalls = 0;
-    let createCalls = 0;
-    let imagePrompt: string | undefined;
-    const generatedMedia = {
-      createdAt: "2026-09-03T09:10:00.000Z",
-      filename: "assistant-direction.jpg",
-      height: 1280,
-      id: "media-assistant-direction",
-      mimeType: "image/jpeg",
-      publicUrl: onePixelJpegDataUrl,
-      sizeBytes: 631,
-      type: "AI_GENERATED",
-      updatedAt: "2026-09-03T09:10:00.000Z",
-      width: 1024,
-      workspaceId: session.workspace.id
-    };
-
-    await mockApi(page, async (route, pathname) => {
-      const method = route.request().method();
-      if (pathname === "/v1/content" && method === "GET") return route.fulfill(json(record ? [record] : []));
-      if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
-      if (pathname === "/v1/content/ideate" && method === "POST") {
-        ideationCalls += 1;
-        return route.fulfill(
-          json({
-            callToAction: "Ask about a subscription.",
-            captionAr: "اكتشف اشتراك سناك لاب المناسب لك.",
-            captionEn: "Find the SnackLab subscription that fits your week.",
-            contentPillar: "Offer education",
-            contentType: "POST",
-            hashtags: ["#SnackLab", "#Bahrain"],
-            visualDirection: "A warm overhead editorial photograph of three distinct SnackLab subscription boxes on a clean coral and cream surface."
-          })
-        );
-      }
-      if (pathname === "/v1/content" && method === "POST") {
-        createCalls += 1;
-        const payload = route.request().postDataJSON() as Record<string, unknown>;
-        record = { ...studioContentRecord(), ...payload, id: "content-assistant-direction" };
-        return route.fulfill(json(record));
-      }
-      if (record && pathname === `/v1/content/${record.id}` && method === "PATCH") {
-        record = { ...record, ...(route.request().postDataJSON() as Record<string, unknown>) };
-        return route.fulfill(json(record));
-      }
-      if (record && pathname === `/v1/content/${record.id}/generate-image` && method === "POST") {
-        imagePrompt = (route.request().postDataJSON() as { prompt?: string }).prompt;
-        record = { ...record, mediaIds: [generatedMedia.id] };
-        return route.fulfill(json({ contentItem: record, mediaAsset: generatedMedia, model: "test-image", prompt: imagePrompt, promptVersion: "image.test" }));
-      }
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Draft with MARKOS AI/ }).click();
-    await page.getByRole("heading", { name: "New Instagram post" }).waitFor();
-    const contentTypes = page.getByRole("group", { name: "Content types" });
-    await contentTypes.getByRole("button", { name: /Post/ }).click();
-    const studioCaption = page.getByPlaceholder("Write the caption in your own words…");
-    await expect(studioCaption.isEnabled()).resolves.toBe(true);
-    await studioCaption.fill("Manual caption that must not be silently replaced.");
-
-    await page
-      .getByPlaceholder("Describe the goal, offer, audience, or message you want to communicate.")
-      .fill("Help customers compare our three subscriptions.");
-    await page.getByRole("button", { name: "Generate suggestion" }).click();
-    const suggestedCaption = page.getByLabel("Suggested caption");
-    await suggestedCaption.waitFor();
-    await suggestedCaption.fill("Choose the SnackLab subscription that fits your week.");
-    await page
-      .getByLabel("Visual direction", { exact: true })
-      .fill("Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light.");
-    await page.screenshot({ path: ".tmp-phase2-ui/phase2-create-assistant.png" });
-    await page.getByRole("button", { name: "Insert approved direction" }).click();
-    await expect(page.getByText(/already contains a caption or visual direction/).isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Replace studio content" }).click();
-    await expect(studioCaption.inputValue()).resolves.toBe("Choose the SnackLab subscription that fits your week.");
-    await expect(page.getByLabel("Visual direction", { exact: true }).inputValue()).resolves.toBe(
-      "Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light."
-    );
-
-    await page.getByRole("button", { name: "Generate image", exact: true }).click();
-    await page.getByAltText("assistant-direction.jpg").waitFor();
-    expect(ideationCalls).toBe(1);
-    expect(createCalls).toBe(1);
-    expect(imagePrompt).toBe("Three SnackLab boxes arranged on a warm coral and cream surface with natural morning light.");
-    await page.screenshot({ path: ".tmp-phase2-ui/phase2-create-studio.png" });
     await page.close();
   }, 60_000);
 });
@@ -1495,7 +1173,7 @@ function phaseTwoCampaignDraft(campaignId: string) {
     contentPillar: "Offer education",
     contentType: "CAROUSEL" as const,
     createdAt: "2026-09-03T08:05:00.000Z",
-    hashtags: [] as string[],
+    caption: ([] as string[]).join(" "),
     id: "content-phase-two",
     mediaIds: [] as string[],
     plannedAt: "2026-09-03T00:00:00.000Z",
@@ -1513,7 +1191,7 @@ function campaignSuggestionDraft(campaignId = "campaign-snacklab-30") {
     contentType: "REEL" as const,
     status: "DRAFT" as const,
     brief: "Publish customer taste-test Reel",
-    hashtags: [] as string[],
+    caption: ([] as string[]).join(" "),
     mediaIds: [] as string[],
     campaignId,
     campaignGoal: "Earn trust",
@@ -1539,13 +1217,10 @@ function emptyAnalyticsSummary() {
 
 function studioContentRecord() {
   return {
-    callToAction: "Subscribe today",
-    captionAr: "اكتشفوا اشتراك الحلويات الجديد.",
-    captionEn: "Discover our new dessert subscription.",
+    caption: "Discover our new dessert subscription.\n\nاكتشفوا اشتراك الحلويات الجديد.\n\nSubscribe today\n\n#SnackLab #Bahrain",
     contentPillar: "Product launch",
     contentType: "POST",
     createdAt: "2026-08-17T10:00:00.000Z",
-    hashtags: ["#SnackLab", "#Bahrain"],
     id: "content-showcase",
     mediaIds: [] as string[],
     status: "DRAFT",
@@ -1565,10 +1240,6 @@ function bahrainInputDaysFromNow(days: number, hour: number, minute: number): st
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
-
-const onePixelJpegBase64 =
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=";
-const onePixelJpegDataUrl = `data:image/jpeg;base64,${onePixelJpegBase64}`;
 
 function json(data: unknown) {
   return { status: 200, contentType: "application/json", body: JSON.stringify({ data }) };

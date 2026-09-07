@@ -576,3 +576,35 @@ Build the current Insights presentation surface from the existing workspace-scop
 Use the existing lightweight daily chart treatment rather than adding a chart dependency for this bounded dashboard. Show compact performance metrics, selectable reach/impression/interaction trends, period comparison, content-type buckets, ranked content, follower/profile activity when returned, and an explicit demographic-unavailable state. Keep monthly PDF export. Detailed post, Reel, Story, audience-demographic, 90-day/custom-range, and provider-backed recommendation screens remain later work.
 
 Retain Lucide as the single interface icon system because it is already installed and covers the modified navigation and action surfaces; do not add a redundant package based on a stale assumption that no icon library exists. Put the active English/Arabic control directly above Settings, preserve the current route and query while switching, store the choice locally, and let the locale route continue to control RTL.
+
+## 2026-09-06: One Create workspace, existing AI actions, and explicit save boundaries
+
+Khalid approved implementation of the reviewed conversation-and-preview direction and selected **New UI with existing AI actions first**. Supersede the separate Create greetings, manual/AI modes, and dedicated generated-copy review screen. Standalone work, a registered Campaign idea, and a saved Calendar post open the same Create component. Preserve the existing item ID and Campaign identity throughout generation, revision, editing, approval, and scheduling.
+
+The left conversation is a presentation of the existing copy-generation, revision, and ideation actions. It is not a durable agent conversation: previous messages are not sent as model context or retained across refresh. Label the selected action and the persistence/usage boundary before submission. Copy generation or revision first saves the working draft and then updates that same record. Failure keeps the last confirmed copy and the request for retry. Ideation proposes copy and visual direction; the explicit **Use this copy and direction** action replaces the working copy. Image/video generation remains a separate deliberate action using the existing metered API and worker contracts. Do not add undo, conversation tables, new prompts, or a second content model in this pass.
+
+Opening an empty workspace does not create a record. **Save** persists manual fields; **Leave**, opening another item, and **New** protect unsaved edits with **Keep editing**, **Discard changes**, and **Save and leave**. A failed save keeps the editor and exit dialog open. Discard restores the last confirmed save rather than deleting a saved item. Browser reload/unload uses the browser warning where available. Upload, attachment, removal, and media generation explicitly save the working draft before calling their existing persistence APIs. An uploaded asset remains in the workspace library if attachment fails; discarding later text changes does not remove already saved media or refund AI usage.
+
+Keep one foreground mutation at a time so delayed AI/save/media responses cannot replace concurrent edits in this page. Background job refresh may update media and publication status but must preserve unsaved copy and retry transient polling failures. This is not a new multi-tab optimistic-concurrency contract.
+
+**Mark Ready** saves the draft, then uses the existing `DRAFT → IN_REVIEW → APPROVED` transitions. **Return to Draft** explicitly moves an eligible Ready item back to `DRAFT`. Neither action schedules or publishes. Retain separate scheduling, half-hour Bahrain inputs, publish-now, cancellation, and persisted job recovery. Active publishing blocks editing transitions. Provider validation and permission enforcement remain authoritative on the server.
+
+Business Profile direct editing, offering refinements, durable conversational intelligence, provider optimization, and the dedicated mobile workflow remain separate passes. This UI implementation does not establish live AI or Instagram readiness.
+
+
+## 2026-09-06 — One final publication caption
+
+Khalid approved replacing separate English, Arabic, CTA and hashtag fields with one canonical `ContentItem.caption` string. Preserve its exact text and ordering through manual save/reload, AI revision, preview and publishing for Posts, Carousels and Reels. Interface locale controls presentation only. Story copy is supporting draft text, not a caption or automatically rendered overlay.
+
+The content AI contract and prompt `content.v3` return one caption with any languages, CTA and hashtags included once. English then Arabic is the default ordered preference; owner instructions may request other language choices or ordering. Manual captions are revisable without an AI origin or mandatory CTA/hashtags/pillar. Validate the complete caption before persistence and before provider submission; keep the existing 2,200-character and 30-hashtag application caps using Unicode-code-point counting consistently in TypeScript and Python. Invalid output is recoverable and must not replace the saved draft.
+
+The user waived preservation for the planned fresh-data stage. The migration drops all four retired copy columns and gives existing rows an empty caption; no compatibility writer or backfill is retained. It does not reset databases or delete other records. Hosted rollout must coordinate the schema, API, AI and frontend. Local migration execution does not constitute a Railway deployment or reset. This supersedes the earlier Create pass's restriction on prompt/schema changes only for this caption slice; durable chat, undo, content revision history and publication snapshots remain separate work.
+
+
+## 2026-09-06 — Persistent Create conversations and deferred commercial quotas
+
+Khalid selected durable text conversations first, keeping image/video generation in the existing Media controls. Each post owns one saved thread across Create, Campaign and Calendar. Clear draft-text requests apply and save directly; discussion and suggestions remain messages. Messages, request identity, processing state and failed/conflicting outcomes persist. Revision checks protect current copy and approval without adding Undo. The API validates allowed changes and rechecks workspace authorization.
+
+Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
+
+The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.

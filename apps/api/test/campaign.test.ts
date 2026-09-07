@@ -189,7 +189,7 @@ describe("campaign routes", () => {
       })
     ).resolves.toMatchObject({
       used: 1n,
-      limit: 1n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -203,7 +203,7 @@ describe("campaign routes", () => {
       })
     ).resolves.toMatchObject({
       used: 1n,
-      limit: 100n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -451,7 +451,7 @@ describe("campaign routes", () => {
     await app.close();
   });
 
-  it("blocks campaign generation when the plan quota is exhausted", async () => {
+  it("creates a Campaign beyond the former one-Campaign allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -494,33 +494,13 @@ describe("campaign routes", () => {
         startsAt: "2026-09-01T00:00:00.000Z"
       }
     });
-    const aiCounter = await prisma.usageCounter.findUnique({
-      where: {
-        workspaceId_metric_periodStart: {
-          workspaceId: session.workspace.id,
-          metric: "AI_GENERATION",
-          periodStart
-        }
-      }
-    });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "USAGE_QUOTA_EXCEEDED",
-        details: [
-          {
-            metric: "CAMPAIGN"
-          }
-        ]
-      }
-    });
-    expect(aiCounter?.used ?? 0n).toBe(0n);
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("blocks campaign generation when the trial has expired", async () => {
+  it("allows development usage: blocks campaign generation when the trial has expired", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -562,17 +542,7 @@ describe("campaign routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "BILLING_STATUS_INACTIVE",
-        details: [
-          {
-            status: "TRIAL"
-          }
-        ]
-      }
-    });
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });

@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -6,28 +7,27 @@ from app.contracts.campaign import StrictContract, VaultContextChunk
 
 ContentType = Literal["POST", "CAROUSEL", "STORY", "REEL"]
 ContentLanguage = Literal["ar", "en"]
-ContentText = Annotated[str, Field(min_length=1, max_length=2_200)]
-Hashtag = Annotated[str, Field(min_length=2, max_length=80, pattern=r"^#[^\s#]+$")]
+ContentText = Annotated[str, Field(max_length=2_200)]
 ShortContentText = Annotated[str, Field(min_length=1, max_length=500)]
 
 
-def default_required_languages() -> list[ContentLanguage]:
-    return ["ar", "en"]
+def default_preferred_languages() -> list[ContentLanguage]:
+    return ["en", "ar"]
 
 
 class ContentToneLock(StrictContract):
-    required_languages: list[ContentLanguage] = Field(
-        default_factory=default_required_languages, min_length=2, max_length=2
+    preferred_languages: list[ContentLanguage] = Field(
+        default_factory=default_preferred_languages, min_length=1, max_length=2
     )
     tone_words: list[ShortContentText] = Field(default_factory=list, max_length=20)
     voice_notes: str | None = Field(default=None, min_length=1, max_length=2_000)
     brand_hints: dict[str, object] = Field(default_factory=dict)
 
-    @field_validator("required_languages")
+    @field_validator("preferred_languages")
     @classmethod
-    def require_bilingual_output(cls, value: list[ContentLanguage]) -> list[ContentLanguage]:
-        if len(value) != 2 or set(value) != {"ar", "en"}:
-            raise ValueError("Content generation requires Arabic and English")
+    def require_distinct_languages(cls, value: list[ContentLanguage]) -> list[ContentLanguage]:
+        if len(value) != len(set(value)):
+            raise ValueError("Preferred caption languages must be distinct")
 
         return value
 
@@ -54,16 +54,23 @@ class ReelScript(StrictContract):
 
 class ContentDraft(StrictContract):
     content_type: ContentType = Field(alias="contentType")
-    caption_en: ContentText = Field(alias="captionEn")
-    caption_ar: ContentText = Field(alias="captionAr")
+    caption: ContentText
     visual_direction: str | None = Field(
         default=None, alias="visualDirection", min_length=1, max_length=2_000
     )
-    hashtags: list[Hashtag] = Field(min_length=1, max_length=30)
-    call_to_action: str = Field(alias="callToAction", min_length=1, max_length=500)
-    content_pillar: str = Field(alias="contentPillar", min_length=1, max_length=160)
+    content_pillar: str | None = Field(
+        default=None, alias="contentPillar", min_length=1, max_length=160
+    )
     carousel: CarouselContent | None
     reel_script: ReelScript | None = Field(alias="reelScript")
+
+    @field_validator("caption")
+    @classmethod
+    def validate_caption_hashtags(cls, value: str) -> str:
+        # Same complete-caption policy as packages/shared-types/src/content-caption.ts.
+        if len(re.findall(r"#[^\s#]+", value)) > 30:
+            raise ValueError("Use 30 hashtags or fewer in the complete caption")
+        return value
 
 
 class ContentDraftBatch(StrictContract):
@@ -72,7 +79,7 @@ class ContentDraftBatch(StrictContract):
 
 class ContentGenerateRequest(StrictContract):
     workspace_id: str = Field(min_length=1, max_length=120)
-    topic: str = Field(min_length=3, max_length=500)
+    topic: str = Field(min_length=3, max_length=1_000)
     content_type: ContentType = "POST"
     count: int = Field(default=3, ge=1, le=5)
     context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)

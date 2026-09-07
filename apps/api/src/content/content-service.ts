@@ -21,6 +21,8 @@ import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/va
 const contentAgentName = "CONTENT";
 const localCurrency = "BHD";
 
+import { ContentConflictError } from "./content-conflict";
+
 export class ContentContextMissingError extends Error {
   constructor() {
     super("Complete at least one Vault section before generating content");
@@ -47,7 +49,7 @@ export class ContentItemLockedError extends Error {
 
 export class ContentRevisionUnavailableError extends Error {
   constructor() {
-    super("Generate content before requesting a revision");
+    super("Add a caption before requesting a revision");
   }
 }
 
@@ -95,10 +97,8 @@ export async function createWorkspaceContent(workspaceId: string, input: CreateC
       contentType: input.contentType,
       status: "DRAFT",
       ...(input.brief === undefined ? {} : { brief: input.brief }),
-      ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
-      ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
-      hashtags: input.hashtags ?? [],
-      ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
+      ...(input.caption === undefined ? {} : { caption: input.caption }),
+      ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
       ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
       ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
       ...(input.tone === undefined ? {} : { tone: input.tone }),
@@ -158,10 +158,8 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
               workspaceId,
               contentType: draft.contentType,
               status: "DRAFT",
-              ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
-              ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
-              hashtags: draft.hashtags,
-              ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+              ...(draft.caption === undefined ? {} : { caption: draft.caption }),
+              ...(draft.visualDirection === undefined ? {} : { visualDirection: draft.visualDirection }),
               mediaIds: [],
               ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
               ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
@@ -285,6 +283,7 @@ export async function ideateWorkspaceContent(workspaceId: string, input: IdeateC
     return idea;
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
     throw error;
   }
 }
@@ -347,14 +346,12 @@ export async function generateWorkspaceContentForItem(
 
     const saved = await prisma.$transaction(async (tx) => {
       const row = await tx.contentItem.update({
-        where: { id: current.id },
+        where: { id: current.id, revision: current.revision, status: { in: ["DRAFT", "IN_REVIEW"] }, deletedAt: null },
         data: {
           brief: input.topic,
           contentType: draft.contentType,
-          captionEn: draft.captionEn ?? null,
-          captionAr: draft.captionAr ?? null,
-          hashtags: draft.hashtags,
-          callToAction: draft.callToAction ?? null,
+          caption: draft.caption,
+          visualDirection: draft.visualDirection ?? null,
           carousel: draft.carousel === undefined ? Prisma.JsonNull : (draft.carousel as unknown as Prisma.InputJsonValue),
           reelScript: draft.reelScript === undefined ? Prisma.JsonNull : (draft.reelScript as unknown as Prisma.InputJsonValue),
           contentPillar: current.contentPillar ?? draft.contentPillar ?? null,
@@ -395,6 +392,7 @@ export async function generateWorkspaceContentForItem(
     return toContentRecord(saved);
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
     throw error;
   }
 }
@@ -412,21 +410,18 @@ export async function reviseWorkspaceContentItem(workspaceId: string, contentIte
     throw new ContentItemNotFoundError();
   }
 
-  if (!current.aiPromptUsed || !current.captionEn || !current.captionAr || current.hashtags.length === 0 || !current.callToAction || !current.contentPillar) {
+  if (!current.caption.trim()) {
     throw new ContentRevisionUnavailableError();
   }
 
   const currentDraft: ContentDraft = {
     contentType: current.contentType,
-    captionEn: current.captionEn,
-    captionAr: current.captionAr,
-    hashtags: current.hashtags,
-    callToAction: current.callToAction,
-    contentPillar: current.contentPillar,
+    caption: current.caption,
+    ...(current.contentPillar ? { contentPillar: current.contentPillar } : {}),
     ...(current.carousel === null ? {} : { carousel: current.carousel as Record<string, unknown> }),
     ...(current.reelScript === null ? {} : { reelScript: current.reelScript as Record<string, unknown> })
   };
-  const topic = (current.brief?.trim() || current.captionEn.trim() || current.captionAr.trim()).slice(0, 1000);
+  const topic = (current.brief?.trim() || (current.caption.trim().length >= 3 ? current.caption.trim() : "Revise this Instagram caption")).slice(0, 1000);
 
   return generateWorkspaceContentForItem(
     workspaceId,
@@ -484,10 +479,8 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
           contentType: draft.contentType,
           status: "SCHEDULED",
           scheduledAt,
-          ...(draft.captionEn === undefined ? {} : { captionEn: draft.captionEn }),
-          ...(draft.captionAr === undefined ? {} : { captionAr: draft.captionAr }),
-          hashtags: draft.hashtags,
-          ...(draft.callToAction === undefined ? {} : { callToAction: draft.callToAction }),
+          ...(draft.caption === undefined ? {} : { caption: draft.caption }),
+          ...(draft.visualDirection === undefined ? {} : { visualDirection: draft.visualDirection }),
           mediaIds: [],
           ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
           ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
@@ -540,6 +533,7 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
     return toContentRecord(saved);
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
     throw error;
   }
 }
@@ -561,26 +555,32 @@ export async function updateContentItem(workspaceId: string, contentItemId: stri
     throw new ContentItemLockedError();
   }
 
-  const row = await prisma.contentItem.update({
-    where: {
-      id: current.id
-    },
-    data: {
-      ...(input.platform === undefined ? {} : { platform: input.platform }),
-      ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
-      ...(input.brief === undefined ? {} : { brief: input.brief }),
-      ...(input.captionEn === undefined ? {} : { captionEn: input.captionEn }),
-      ...(input.captionAr === undefined ? {} : { captionAr: input.captionAr }),
-      ...(input.hashtags === undefined ? {} : { hashtags: input.hashtags }),
-      ...(input.callToAction === undefined ? {} : { callToAction: input.callToAction }),
-      ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
-      ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
-      ...(input.tone === undefined ? {} : { tone: input.tone }),
-      ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
-      ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
-      ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
-    }
-  });
+  const row = await prisma.contentItem
+    .update({
+      where: {
+        id: current.id,
+        revision: input.expectedRevision ?? current.revision,
+        status: { in: ["DRAFT", "IN_REVIEW"] },
+        deletedAt: null
+      },
+      data: {
+        ...(input.platform === undefined ? {} : { platform: input.platform }),
+        ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
+        ...(input.brief === undefined ? {} : { brief: input.brief }),
+        ...(input.caption === undefined ? {} : { caption: input.caption }),
+        ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
+        ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+        ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
+        ...(input.tone === undefined ? {} : { tone: input.tone }),
+        ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
+        ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
+        ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
+      }
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
+      throw error;
+    });
 
   return toContentRecord(row);
 }
@@ -635,14 +635,22 @@ export async function updateContentItemStatus(workspaceId: string, contentItemId
     throw new ContentStatusTransitionError();
   }
 
-  const row = await prisma.contentItem.update({
-    where: {
-      id: current.id
-    },
-    data: {
-      status: input.status
-    }
-  });
+  const row = await prisma.contentItem
+    .update({
+      where: {
+        id: current.id,
+        revision: input.expectedRevision ?? current.revision,
+        status: current.status,
+        deletedAt: null
+      },
+      data: {
+        status: input.status
+      }
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
+      throw error;
+    });
 
   return toContentRecord(row);
 }
@@ -852,7 +860,7 @@ function parseFutureScheduleTime(value: string): Date {
   return scheduledAt;
 }
 
-async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
+export async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
   const [brandEntries, toneEntries] = await Promise.all([listVaultSection(workspaceId, "BRAND"), listVaultSection(workspaceId, "TONE")]);
   const toneWords = uniqueStrings(
     toneEntries.flatMap((entry) => {
@@ -874,7 +882,7 @@ async function getContentToneLock(workspaceId: string): Promise<{ context: Vault
   return {
     context,
     lock: {
-      requiredLanguages: ["ar", "en"],
+      preferredLanguages: ["en", "ar"],
       toneWords,
       ...(voiceNotes === undefined ? {} : { voiceNotes }),
       brandHints
@@ -920,7 +928,7 @@ function isAllowedContentTransition(current: ContentStatus, next: UpdateContentS
   return allowed[current as UpdateContentStatusInput["status"]]?.includes(next) ?? false;
 }
 
-async function findCampaign(workspaceId: string, campaignId: string | undefined): Promise<CampaignPlan | undefined> {
+export async function findCampaign(workspaceId: string, campaignId: string | undefined): Promise<CampaignPlan | undefined> {
   if (campaignId === undefined) {
     return undefined;
   }
@@ -947,10 +955,9 @@ export function toContentRecord(row: {
   contentType: ContentType;
   status: ContentStatus;
   brief: string | null;
-  captionEn: string | null;
-  captionAr: string | null;
-  hashtags: string[];
-  callToAction: string | null;
+  caption: string;
+  revision: number;
+  visualDirection: string | null;
   mediaIds: string[];
   carousel: Prisma.JsonValue | null;
   reelScript: Prisma.JsonValue | null;
@@ -971,15 +978,14 @@ export function toContentRecord(row: {
 }): ContentRecord {
   return {
     id: row.id,
+    revision: row.revision,
+    ...(row.visualDirection === null ? {} : { visualDirection: row.visualDirection }),
     workspaceId: row.workspaceId,
     platform: row.platform === "INSTAGRAM" ? row.platform : "INSTAGRAM",
     contentType: row.contentType,
     status: row.status,
     ...(row.brief === null ? {} : { brief: row.brief }),
-    ...(row.captionEn === null ? {} : { captionEn: row.captionEn }),
-    ...(row.captionAr === null ? {} : { captionAr: row.captionAr }),
-    hashtags: row.hashtags,
-    ...(row.callToAction === null ? {} : { callToAction: row.callToAction }),
+    caption: row.caption,
     mediaIds: row.mediaIds,
     ...(row.carousel === null ? {} : { carousel: row.carousel as Record<string, unknown> }),
     ...(row.reelScript === null ? {} : { reelScript: row.reelScript as Record<string, unknown> }),

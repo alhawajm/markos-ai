@@ -15,48 +15,44 @@ describe("content studio draft state", () => {
     const baseline = emptyContentDraftFields();
 
     expect(contentDraftHasMeaningfulWork(baseline)).toBe(false);
-    expect(contentDraftIsDirty({ ...baseline, captionEn: "   " }, baseline)).toBe(false);
+    expect(contentDraftIsDirty(baseline, baseline)).toBe(false);
+    expect(contentDraftHasMeaningfulWork({ ...baseline, caption: "   " })).toBe(false);
+    expect(contentDraftIsDirty({ ...baseline, caption: "   " }, baseline)).toBe(true);
   });
 
   it("treats copy or a planned time as meaningful manual work", () => {
     const baseline = emptyContentDraftFields();
 
-    expect(contentDraftHasMeaningfulWork({ ...baseline, captionEn: "A useful caption" })).toBe(true);
+    expect(contentDraftHasMeaningfulWork({ ...baseline, caption: "A useful caption" })).toBe(true);
     expect(contentDraftHasMeaningfulWork({ ...baseline, plannedAtInput: "2026-08-28T18:30" })).toBe(true);
   });
 
-  it("normalizes a populated draft into the create and update payload", () => {
+  it("preserves the exact complete caption while normalizing planning fields", () => {
+    const caption = "  Hello Bahrain 🍊\n\nأهلاً بالبحرين\n\nSend a message\n\n#launch #Bahrain  \n";
     const payload = contentDraftPayload({
       ...emptyContentDraftFields(),
-      callToAction: "  Send a message  ",
-      captionAr: "  أهلاً بالبحرين  ",
-      captionEn: "  Hello Bahrain  ",
-      hashtagsText: "launch, #Bahrain launch",
+      caption,
       plannedAtInput: "2026-08-28T18:30"
     });
 
     expect(payload).toEqual({
       brief: null,
-      callToAction: "Send a message",
+      caption,
       campaignGoal: null,
-      captionAr: "أهلاً بالبحرين",
-      captionEn: "Hello Bahrain",
       contentPillar: null,
       contentType: "POST",
-      hashtags: ["#launch", "#Bahrain"],
       plannedAt: "2026-08-28T15:30:00.000Z",
+      visualDirection: null,
       tone: null
     });
   });
 
   it("hydrates saved content using Bahrain local time", () => {
     const record: ContentRecord = {
-      callToAction: "Visit us",
-      captionAr: "مسودة",
-      captionEn: "Draft",
+      revision: 1,
+      caption: "Draft\n\nمسودة\n\nVisit us\n\n#Bahrain #Markos",
       contentType: "POST",
       createdAt: "2026-08-25T10:00:00.000Z",
-      hashtags: ["#Bahrain", "#Markos"],
       id: "content-1",
       mediaIds: [],
       plannedAt: "2026-08-28T15:30:00.000Z",
@@ -66,7 +62,7 @@ describe("content studio draft state", () => {
     };
 
     expect(contentDraftFieldsFromRecord(record)).toMatchObject({
-      hashtagsText: "#Bahrain #Markos",
+      caption: record.caption,
       plannedAtInput: "2026-08-28T18:30"
     });
     expect(bahrainInputValue(record.plannedAt!)).toBe("2026-08-28T18:30");

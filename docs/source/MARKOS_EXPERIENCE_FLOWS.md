@@ -1,6 +1,6 @@
 # MARKOS AI — Experience and Behavioral Flows
 
-Status date: 2026-08-30.
+Status date: 2026-08-30. Create flows revised 2026-09-06; other dated implementation evidence is unchanged.
 
 > **Purpose:** explain how MARKOS moves end to end: what the user does, what the interface shows, which application boundary acts, what changes, what comes next, and how failure is recovered.
 >
@@ -36,7 +36,7 @@ Every feature should strengthen this loop or remove friction from it.
 1. **Never leave a non-marketer at a blank dead end.** Offer a starting point, example, useful empty state, or clear next action. Do not store a suggestion as a business fact until the user selects or enters it.
 2. **Ground generative work in the active workspace's Vault.** When context is insufficient, explain the gap and link to the relevant Business Profile/Vault action instead of inventing generic facts.
 3. **Make the whole journey bilingual and RTL-safe.** Content and approved business profiles may contain paired Arabic/English fields. Campaigns currently generate in the explicitly requested locale; bilingual product support does not require duplicating every field in one response.
-4. **Check quota before every metered action.** Warn near the limit and block at the limit with a contextual next step. Never charge or consume quota for a failed generation without the documented reservation/refund behavior.
+4. **Commercial quotas are deferred during private development.** Retain diagnostic usage records without blocking actions on plan allowances, trial expiry or billing status. Provider constraints and authorization still apply.
 5. **Nothing publishes without a preview, an explicit approval state, and a clear schedule/publish action.** Provider failures are visible and recoverable, never silent.
 6. **Every consequential surface covers empty, loading, error, success, and limit/blocked states.** Loading copy should describe useful progress; errors must explain what the user can do next.
 7. **Everything is workspace-scoped.** The active workspace governs every read, write, credential, usage counter, and provider action.
@@ -45,7 +45,7 @@ Every feature should strengthen this loop or remove friction from it.
 ### 1.4 Services in motion
 
 - **Web** renders the localized journey and calls the typed API client.
-- **API gateway** owns authentication, workspace context, authorization, data, quota, billing, provider credentials, Vault retrieval, and orchestration.
+- **API gateway** owns authentication, workspace context, authorization, data, diagnostic usage, billing, provider credentials, Vault retrieval, and orchestration.
 - **AI service** receives a bounded, authenticated request and returns a validated result plus usage. Current Campaign and onboarding-profile paths can call OpenAI when explicitly configured; content, image, embedding, and generic-agent paths remain deterministic.
 - **Worker** runs API-owned maintenance loops for publishing, analytics sync/email, token refresh, and usage reset. Current interval workers are not evidence of production queue availability or retries.
 
@@ -70,7 +70,7 @@ Routing uses the browser session plus verified-user and onboarding state. Instag
 | Authentication | Email registration/login, verification, cookie-backed refresh, and MFA are mounted. A backend Google ID-token exchange exists, but Google/Apple controls and password recovery remain honest unavailable states. | Complete and live-verify the provider/recovery journeys before presenting them as active. |
 | Onboarding | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before Campaigns. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path. |
 | Campaigns | The Sunlit UI lists and generates time-bound Campaign records, layers generated plans by week, and provides overview and daily-plan views. Each dated idea has one idempotent Create handoff that registers or restores the same Campaign-linked planning draft in Create and Calendar. | Richer lifecycle and library management, bulk approval, complex campaigns beyond the current generated showcase range, and mounted PDF export. |
-| Content/media | Create normally opens a two-choice greeting: Create with MarkOS or Explore. Campaign handoff bypasses it, preserves the full idea context in one draft, and generates into that same record. Generated copy enters an in-place bilingual review/revision loop before manual editing, approval, media, and scheduling. Calendar adds a bilingual week/month view, an unscheduled queue, dated Campaign plans, and atomic schedule/reschedule/cancel management. | Full queue/recovery states, deployed image-provider proof, content revision history, and all final content-type states. |
+| Content/media | Standalone and Campaign drafts share a conversation-and-preview Create workspace, with persistent text conversations, revision checks, direct editing, Save/Leave protection, media jobs, and Ready/Draft transitions. Calendar retains bilingual planning and explicit publishing schedules. | The learning loop, full media-editor tools, publication snapshots, mobile design, and full live journey verification. |
 | Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
 | Insights | An API-backed 7/30-day professional dashboard mounts real totals, daily trends, immediately preceding-period comparisons, content-type performance, top content, audience availability, honest empty/error/loading states, and monthly PDF download. | Full `AN-01`–`AN-06` drill-downs, live permission-backed sync evidence, 90-day/custom ranges, demographic data when the provider supplies it, provider-backed interpretation, digest/chat, and learning evidence. |
 | Operations | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history. | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal. |
@@ -135,9 +135,9 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - On the Campaigns surface, the user chooses an objective, start date, duration, and publishing intensity and calls `POST /v1/campaigns/generate`.
 - The current contract offers exactly 3, 7, 14, 30, 60, or 90 days, defaults to 30, and accepts one to five publishes per day. Plan availability remains undecided.
-- The API checks the Campaign quota, retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Campaign` and `ai_interaction`, and records provider token use when available.
+- The API retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Campaign` and `ai_interaction`, and records provider token use when available.
 - The current plan shape is `{ summary, durationDays, publishesPerDay, objectives, pillars, weeklyCadence, kpis, risks, nextActions, retrievedContext }`.
-- Provider/schema failure receives only bounded retries and a sanitized recoverable message. A failed attempt follows the quota refund contract.
+- Provider/schema failure receives only bounded retries and a sanitized recoverable message. Failed attempts preserve existing Campaigns and report a recoverable error.
 
 **B2. Review and export**
 
@@ -156,37 +156,38 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **Goal:** turn a grounded topic or planned slot into a saved, reviewable content item.
 
-**C1. Start from Create or a campaign**
+**C1. Start in one workspace**
 
-- With no item selected, Create opens as a compact two-choice greeting rather than an empty editor: **Create with MarkOS** starts grounded generation and **Explore** offers content-idea starting points. Neither choice persists anything merely by being viewed.
-- A Campaign suggestion's one **Create** action bypasses the greeting and opens its saved Campaign draft directly. Create identifies its Campaign and week and presents the transferred topic, fixed Instagram platform context, content type, post objective, content pillar, tone, and planning date for review before generation.
-- `POST /v1/content/:contentItemId/generate` generates or revises copy in that same workspace-owned Campaign draft. It preserves the item ID, Campaign/week/action identity, planning date, goal, and explicit pillar or tone overrides, so a repeated generation request cannot create a duplicate Campaign draft.
-- The broader direct APIs remain `POST /v1/content/generate` and `POST /v1/content/generate-for-slot`. The ordinary blank `POST /v1/content` and saved-record editor contracts continue to exist, but they are no longer separate choices on the normal Create greeting in this presentation slice.
+- Standalone Create, Campaign ideas, and saved Calendar posts open the same conversation-and-preview workspace. There is no manual/AI mode gate. Caption, Media, and Details controls beside the preview open focused direct fields while the assistant stays visible; Done restores the preview.
+- Opening an untouched new workspace creates no record. A Campaign handoff loads its existing workspace-owned draft and preserves its item ID, Campaign/week/action identity, goal, pillar, tone, and planning date.
+- Show one outer Instagram follower viewport at `360:730`, scaled to available space, with feed, carousel, Reel, or Story content inside it. Preview controls and appearance approximate Instagram and do not represent provider output or engagement data.
 
-**C2. Generate copy**
+**C2. Work with MARKOS in a saved conversation**
 
-- The API checks Vault presence and quota, retrieves relevant workspace context and tone, selects a prompt, and calls `POST /ai/content/generate` through the internal bearer boundary.
-- It persists `ContentItem` drafts and an `ai_interaction`, then records token usage.
-- Submitting a valid **Generate draft** request is an explicit first-persistence boundary for the least-cost implementation. The UI states before submission that successful generation creates a saved workspace draft and consumes metered AI usage. Leaving that saved result without later edits requires no unsaved-changes prompt; deleting it remains a separate deliberate action and does not refund consumed usage.
-- Successful generation opens a dedicated bilingual review surface with platform, content type, call to action, hashtags, planning date, and Campaign context. The owner may mark the saved draft Ready or continue to the ordinary manual editor and media tools.
-- `POST /v1/content/:contentItemId/revise` accepts a deliberate revision instruction for an editable AI-generated draft. The AI receives the current full draft, original Campaign/post context, tone lock, and retrieved Vault context. Success updates the same item and records another metered interaction; failure preserves the prior content, and repeated revisions do not create duplicate drafts.
-- AI generation is optional assistance, not a prerequisite for opening or saving a post draft. It must not overwrite manual text without a deliberate user action.
-- Current implementation note: the content AI route now supports the configured OpenAI provider through a strict bilingual structured contract while preserving deterministic local development behavior. The source capability is not staging proof; a browser-to-API-to-AI request and stored OpenAI dashboard response still need external verification.
+- A post has one persistent workspace-owned conversation, shared by its Create, Campaign and Calendar entry points. Sending saves manual changes first, then records the message and queues a durable run. History survives refresh and reopening; leaving the page does not cancel a submitted run.
+- MARKOS distinguishes discussion, suggestions, clarification and requested edits. Greetings and requests for alternatives do not change the post. A selected or clearly requested change saves directly to allowed draft text fields. Media generation remains in the Media controls.
+- Current saved content, approved business context, offerings, Campaign intent, recent messages and a compact summary supply context. The current post overrides historical copy. Conversation statements never automatically update the Business Profile or learning memory.
+- The API validates the structured reply and allowed edits, rechecks authorization, and conditionally applies against the original content revision. A stale result or newly approved post cannot be overwritten. The failed/conflicting result remains identifiable and a proposed caption can be inspected.
+- Duplicate submissions resolve to the existing request. Interrupted or failed work receives a visible outcome without automatically repeating an ambiguous provider call. Safe local mode explicitly identifies its limited behavior; natural text edits use live text mode.
+- Commercial quotas are deferred. Existing diagnostic usage recording continues. See `docs/create-conversation-backend.md` for persistence, processor recovery and current boundaries.
 
-**C3. Edit and attach media**
+**C3. Save, edit, and attach media**
 
-- Selecting a saved draft or starting an unsaved working copy moves Create into one focused Draft Editor. That editor owns the editable bilingual copy, hashtags, CTA, optional planned publication date/time, media, follower-style preview, readiness, schedule/cancel, and eligible delete actions for that item.
-- Leaving an untouched new working copy returns to the action hub without creating a record. In-app navigation away from meaningful unsaved changes offers Save draft, Discard changes, and Keep editing. A saved draft may omit `plannedAt` and appear in Unscheduled, or include `plannedAt` and appear on that Calendar date without becoming scheduled. Confirmed saves are preserved; browser unload uses the native unsaved-changes warning where available.
-- Core edits use `PATCH /v1/content/:contentItemId`.
-- Upload uses `POST /v1/media/upload`; AI image generation uses `POST /v1/content/:contentItemId/generate-image`; attachment uses the content media routes.
-- The mounted Create surface sends JPEGs through the authenticated API, records browser-decoded dimensions for uploads, attaches them to the saved item, and preserves the current edits if upload/generation fails. Generated images use the separately configured provider path, reserve quota before the request, validate exact JPEG bytes/dimensions, meter provider usage, and persist through workspace-owned storage; local mode remains an explicit development fallback.
-- Current working source has workspace-scoped local and S3-compatible storage drivers. The Milestone A live path requires a durable `s3:` key and mints a provider-only signed GET immediately before container creation. Sarah reports Railway provisioning and API credential wiring complete; deployment of the reviewed code plus application-path and external signed-GET validation remain open.
-- Final target includes the rich editor, per-section regeneration, carousel/reel tools, content history/comments, media library, asset detail, storage meter, and a complete Instagram preview.
+- One final caption field contains all desired languages, CTA and hashtags in owner-selected order. Save/reload, full preview and publisher share the exact string; the UI locale must not select or reconstruct publication copy. Validate the complete caption and preserve invalid working text for correction. Story supporting text remains on the draft and is neither sent as a feed caption nor drawn onto media automatically.
+
+- **Save** persists bilingual copy, hashtags, CTA, brief, goal/pillar/tone, content type, and optional planned publication time through the existing content APIs. A planned time does not schedule publication.
+- **Leave**, **New**, and in-app links protect unsaved edits with **Keep editing**, **Discard changes**, and **Save and leave**. Discard preserves the last saved item; failed Save and leave keeps the fields and dialog. Reload/unload uses the browser's native warning where supported, with same-document history protection when the browser permits cancellation.
+- Upload uses `POST /v1/media/upload`; attachment/removal use the existing content-media routes. The UI saves the current draft before these actions and tells the owner that saved assets remain in the library. An attachment failure must not silently delete an uploaded workspace asset.
+- Image/video generation uses the existing metered APIs. Persisted video jobs retain progress, cancel/retry behavior, and worker-owned storage/attachment. Polling retries transient failures and completed jobs update media/status without replacing unsaved copy.
+- One foreground mutation runs at a time. Draft controls pause during an active conversation run, while Leave remains available. Revision checks protect manual saves and approval against stale browser state; background updates preserve unsaved fields.
+- Routine success feedback floats above the page and expires after 4.5 seconds; dismiss/retry remains available for actionable errors. Feedback does not move the working surface.
+- Instagram publishing validation, media retention, storage drivers and external provider checks retain their existing server contracts. This pass does not change provider configuration.
 
 **C4. Review and approve**
 
-- `PATCH /v1/content/:contentItemId/status` enforces valid transitions from `DRAFT` to `IN_REVIEW` to `APPROVED`.
-- Missing required material or an invalid transition stays blocked with a concrete checklist. Approval never implies that the item has been scheduled or published.
+- **Mark Ready** requires a caption and attached media (at least two for a carousel), saves the draft, and uses `POST /v1/content/:contentItemId/status` for `DRAFT → IN_REVIEW → APPROVED`.
+- **Return to Draft** explicitly moves an eligible Ready item back to `DRAFT` before editing. Active publishing blocks this control.
+- Readiness does not schedule or publish. Scheduling, publish-now, reschedule, and cancel remain separate actions. Scheduled and published records are read-only in the editor; cancel scheduling before returning a scheduled item to Draft.
 
 ### Flow D — Connect Instagram safely
 
@@ -255,7 +256,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **Goal:** turn a genuine limit into a transparent choice without corrupting billing state.
 
-- A metered action checks plan status and quota before work. Near the limit, explain remaining use; at the limit, block at the action and offer the relevant upgrade path.
+- Commercial allowance and billing-status checks do not gate development actions. Record diagnostic usage without presenting upgrade warnings.
 - Current billing APIs include `GET /v1/billing/plans`, `GET /v1/billing/summary`, `POST /v1/billing/checkout`, and `POST /v1/billing/upgrade`.
 - BHD is stored in fils, VAT behavior follows the reviewed exclusive/inclusive rules, and invoices preserve net/VAT/gross values.
 - Current CrediMax, BENEFIT, and Stripe adapters are dry-run boundaries. Do not describe a plan or checkout as live until the owning provider certification and payment evidence exist.
@@ -285,7 +286,7 @@ DRAFT -> IN_REVIEW -> APPROVED -> SCHEDULED -> PUBLISHED
 ### 4.2 Publish attempt lifecycle
 
 ```text
-QUEUED -> VALIDATE_APPROVAL_AND_QUOTA -> ENSURE_PUBLIC_MEDIA
+QUEUED -> VALIDATE_APPROVAL_AND_PROVIDER_LIMITS -> ENSURE_PUBLIC_MEDIA
   -> CREATE_CONTAINER -> POLL_PROVIDER -> PUBLISH -> PUBLISHED
   -> provider/cap/configuration failure -> HELD or FAILED -> user-visible recovery
 ```
@@ -325,7 +326,7 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 3. API retrieves up to eight relevant Vault chunks, merges the tone lock, and selects the current prompt template and optional Campaign. Content may remain orphaned when no Campaign is selected.
 4. API calls protected `POST /ai/content/generate` with the bounded structured request.
 5. The AI service currently returns deterministic draft shapes and usage; this step is not provider-backed today.
-6. API validates the result, creates workspace-scoped `ContentItem` rows, writes `ai_interaction`, records token usage, and returns the saved records. On failure it follows the quota-refund path.
+6. API validates the result, creates workspace-scoped `ContentItem` rows, writes `ai_interaction`, records token usage, and returns the saved records. On failure it preserves previous content and reports a recoverable error.
 7. Web renders the saved draft with edit, approve, and schedule actions appropriate to its current state.
 
 ## 6. Failure and edge behavior
@@ -333,8 +334,8 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 | Situation | Required behavior | Current limitation to remember |
 | --- | --- | --- |
 | Vault lacks grounding | Explain the missing section and link to Business Profile/Vault | Do not fill missing facts from placeholders or demo content |
-| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, refund reserved quota when required | Campaign/profile/content-copy and document-analysis paths are provider-capable; other routes remain deterministic where documented |
-| Quota is exhausted | Block at the action and explain the relevant plan/period | Never show invented remaining usage |
+| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, preserve diagnostic usage accuracy | Campaign/profile/content-copy and document-analysis paths are provider-capable; other routes remain deterministic where documented |
+| Former commercial allowance is exhausted | Continue the development action | Quota enforcement is deferred; provider limits still apply |
 | Media generation/upload fails | Preserve content edits and offer retry/manual attachment | Provider image fallback and durable storage are not complete |
 | Instagram credential is missing/expired | Block provider actions and route to secure reconnect | A configuration variable cannot repair an old credential's permissions |
 | Publish container/provider fails | Never claim success; store safe failure and offer retry/reschedule | Complete Sunlit failure/queue UI is still missing |

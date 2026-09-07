@@ -12,12 +12,11 @@ const contentMock = vi.hoisted(() => ({
         revision?: {
           instruction: string;
           currentDraft: {
-            captionAr?: string;
-            captionEn?: string;
+            caption: string;
             contentType: string;
           };
         };
-        toneLock: { requiredLanguages: ["ar", "en"]; toneWords: string[]; voiceNotes?: string };
+        toneLock: { preferredLanguages: ["en", "ar"]; toneWords: string[]; voiceNotes?: string };
         topic: string;
       }
     | undefined
@@ -46,11 +45,15 @@ vi.mock("../src/ai/content-client", () => ({
       tokens_out: 89,
       drafts: Array.from({ length: input.count }, (_, index) => ({
         contentType: input.contentType,
-        captionEn: `${revisionPrefix}English caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
-        captionAr: `${revisionPrefix}Arabic caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+        caption: [
+          `${revisionPrefix}English caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+          `${revisionPrefix}Arabic caption ${index + 1} for ${input.topic} using ${input.toneLock.toneWords.join(", ") || "clear"} tone`,
+          "Send a DM.",
+          ["#BahrainBusiness", "#MarkosAI"].join(" ")
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
         visualDirection: `Editorial visual direction ${index + 1} for ${input.topic}`,
-        hashtags: ["#BahrainBusiness", "#MarkosAI"],
-        callToAction: "Send a DM.",
         contentPillar: "Proof and trust",
         ...(input.contentType === "CAROUSEL" ? { carousel: { slides: [{ title: "Hook" }] } } : {})
       }))
@@ -59,6 +62,66 @@ vi.mock("../src/ai/content-client", () => ({
 }));
 
 describe("content routes", () => {
+  it("saves and reloads exact final captions and rejects invalid or cross-workspace updates", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    try {
+      for (const caption of ["", "English only", "العربية فقط", "  English 🍊\n\nالعربية\n\nMessage us. راسلنا.\n\n#Bahrain #البحرين\n"]) {
+        const created = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption } });
+        expect(created.statusCode).toBe(200);
+        const id = created.json().data.id as string;
+        expect(created.json().data.caption).toBe(caption);
+        expect(await prisma.contentItem.findUniqueOrThrow({ where: { id } })).toMatchObject({ caption });
+        const listed = await app.inject({ method: "GET", url: "/v1/content", headers });
+        expect(listed.json().data.find((item: { id: string }) => item.id === id).caption).toBe(caption);
+        const changed = `${caption}\nOwner edit`;
+        const updated = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: changed } });
+        expect(updated.json().data.caption).toBe(changed);
+        for (const payload of [
+          { caption: "a".repeat(2201) },
+          { caption: Array.from({ length: 31 }, (_, i) => `#tag${i}`).join(" ") },
+          { caption: "discard me", captionEn: "retired field" }
+        ]) {
+          const invalid = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload });
+          expect(invalid.statusCode).toBe(400);
+        }
+        const crossWorkspace = await app.inject({
+          method: "PATCH",
+          url: `/v1/content/${id}`,
+          headers: authHeaders(other.tokens.accessToken),
+          payload: { caption: "cross-workspace change" }
+        });
+        expect(crossWorkspace.statusCode).toBe(404);
+        expect(await prisma.contentItem.findUniqueOrThrow({ where: { id } })).toMatchObject({ caption: changed });
+        const cleared = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: "" } });
+        expect(cleared.json().data.caption).toBe("");
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("revises a manual caption without an AI origin, pillar, CTA or hashtags", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    try {
+      await app.inject({ method: "PUT", url: "/v1/vault/company", headers, payload: { entries: [{ key: "business", value: { name: "Citrus Studio" } }] } });
+      const caption = "العربية أولاً\n\nEnglish follows.";
+      const created = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption } });
+      const id = created.json().data.id as string;
+      const revised = await app.inject({ method: "POST", url: `/v1/content/${id}/revise`, headers, payload: { instruction: "Make the caption shorter" } });
+      expect(revised.statusCode).toBe(200);
+      expect(contentMock.lastInput?.revision?.currentDraft).toEqual({ contentType: "POST", caption });
+      expect(revised.json().data.id).toBe(id);
+      expect(await prisma.contentItem.count({ where: { workspaceId: session.workspace.id } })).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("reads a filtered Calendar range with isolated placed content, referenced media, and paginated Unscheduled items", async () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);
@@ -87,7 +150,7 @@ describe("content routes", () => {
       }
     });
     const base = {
-      hashtags: [],
+      caption: "",
       mediaIds: [] as string[],
       workspaceId: owner.workspace.id
     };
@@ -99,7 +162,7 @@ describe("content routes", () => {
           id: ids.plannedDraft,
           contentType: "POST",
           status: "DRAFT",
-          captionEn: "Planned draft",
+          caption: "Planned draft",
           plannedAt: new Date("2026-08-10T09:00:00+03:00")
         }
       }),
@@ -109,7 +172,7 @@ describe("content routes", () => {
           id: ids.plannedReady,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          captionEn: "Planned ready carousel",
+          caption: "Planned ready carousel",
           mediaIds: [media.id],
           plannedAt: new Date("2026-08-11T10:00:00+03:00")
         }
@@ -120,7 +183,7 @@ describe("content routes", () => {
           id: ids.scheduled,
           contentType: "REEL",
           status: "SCHEDULED",
-          captionEn: "Scheduled reel",
+          caption: "Scheduled reel",
           scheduledAt: new Date("2026-08-27T11:00:00+03:00")
         }
       }),
@@ -130,7 +193,7 @@ describe("content routes", () => {
           id: ids.published,
           contentType: "STORY",
           status: "PUBLISHED",
-          captionEn: "Published story",
+          caption: "Published story",
           publishedAt: new Date("2026-08-13T12:00:00+03:00")
         }
       }),
@@ -140,7 +203,7 @@ describe("content routes", () => {
           id: ids.failed,
           contentType: "POST",
           status: "FAILED",
-          captionEn: "Failed post",
+          caption: "Failed post",
           scheduledAt: new Date("2026-08-14T13:00:00+03:00"),
           failureReason: "Provider rejected the test post"
         }
@@ -151,7 +214,7 @@ describe("content routes", () => {
           id: ids.outside,
           contentType: "POST",
           status: "SCHEDULED",
-          captionEn: "Outside range",
+          caption: "Outside range",
           scheduledAt: new Date("2026-09-02T09:00:00+03:00")
         }
       }),
@@ -161,7 +224,7 @@ describe("content routes", () => {
           id: ids.unscheduledFirst,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          captionEn: "First unscheduled carousel",
+          caption: "First unscheduled carousel",
           updatedAt: new Date("2026-08-25T12:00:00+03:00")
         }
       }),
@@ -171,19 +234,18 @@ describe("content routes", () => {
           id: ids.unscheduledSecond,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          captionEn: "Second unscheduled carousel",
+          caption: "Second unscheduled carousel",
           updatedAt: new Date("2026-08-24T12:00:00+03:00")
         }
       }),
       prisma.contentItem.create({
         data: {
-          hashtags: [],
+          caption: "Other workspace item",
           mediaIds: [],
           workspaceId: other.workspace.id,
           id: ids.otherWorkspace,
           contentType: "POST",
           status: "SCHEDULED",
-          captionEn: "Other workspace item",
           scheduledAt: new Date("2026-08-15T09:00:00+03:00")
         }
       })
@@ -248,7 +310,7 @@ describe("content routes", () => {
         workspaceId: session.workspace.id,
         contentType: "POST",
         status: "DRAFT",
-        hashtags: [],
+        caption: "",
         mediaIds: []
       }
     });
@@ -275,11 +337,8 @@ describe("content routes", () => {
       url: "/v1/content",
       headers: authHeaders(session.tokens.accessToken),
       payload: {
-        callToAction: "Send us a message.",
-        captionAr: "مسودة يدوية",
-        captionEn: "Manual draft",
+        caption: "Manual draft\n\nمسودة يدوية\n\nSend us a message.\n\n#Manual #Bahrain",
         contentType: "POST",
-        hashtags: ["#Manual", "#Bahrain"],
         plannedAt
       }
     });
@@ -287,11 +346,8 @@ describe("content routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       data: {
-        callToAction: "Send us a message.",
-        captionAr: "مسودة يدوية",
-        captionEn: "Manual draft",
+        caption: "Manual draft\n\nمسودة يدوية\n\nSend us a message.\n\n#Manual #Bahrain",
         contentType: "POST",
-        hashtags: ["#Manual", "#Bahrain"],
         plannedAt,
         status: "DRAFT",
         workspaceId: session.workspace.id
@@ -347,7 +403,8 @@ describe("content routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().data).toMatchObject({
-      captionEn: "English caption 1 for Introduce our wholesale coffee service using clear tone",
+      caption:
+        "English caption 1 for Introduce our wholesale coffee service using clear tone\n\nArabic caption 1 for Introduce our wholesale coffee service using clear tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI",
       contentType: "POST",
       visualDirection: "Editorial visual direction 1 for Introduce our wholesale coffee service"
     });
@@ -399,10 +456,8 @@ describe("content routes", () => {
           workspaceId: session.workspace.id,
           contentType: "CAROUSEL",
           status: "DRAFT",
-          captionEn: "English caption 1 for wholesale coffee leads using clear tone",
-          captionAr: "Arabic caption 1 for wholesale coffee leads using clear tone",
-          hashtags: ["#BahrainBusiness", "#MarkosAI"],
-          callToAction: "Send a DM.",
+          caption:
+            "English caption 1 for wholesale coffee leads using clear tone\n\nArabic caption 1 for wholesale coffee leads using clear tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI",
           contentPillar: "Proof and trust",
           carousel: {
             slides: [
@@ -452,7 +507,7 @@ describe("content routes", () => {
       })
     ).resolves.toMatchObject({
       used: 2n,
-      limit: 100n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -538,7 +593,7 @@ describe("content routes", () => {
         contentType: "POST",
         status: "DRAFT",
         brief: "Original campaign idea",
-        hashtags: [],
+        caption: "",
         mediaIds: [],
         campaignId: campaign.id,
         campaignGoal: "Teach followers what each tier includes",
@@ -574,8 +629,8 @@ describe("content routes", () => {
       brief: "Compare the three SnackLab subscription tiers",
       tone: "warm, practical",
       plannedAt: plannedAt.toISOString(),
-      captionEn: "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone",
-      captionAr: "Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+      caption:
+        "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nArabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
     });
     expect(contentMock.lastInput).toMatchObject({
       topic: "Compare the three SnackLab subscription tiers",
@@ -623,14 +678,15 @@ describe("content routes", () => {
       contentPillar: "Tier education",
       tone: "warm, practical",
       plannedAt: plannedAt.toISOString(),
-      captionEn:
-        "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+      caption:
+        "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nRevised for Make it shorter and add a stronger call to action.: Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
     });
     expect(contentMock.lastInput).toMatchObject({
       revision: {
         instruction: "Make it shorter and add a stronger call to action.",
         currentDraft: {
-          captionEn: "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone",
+          caption:
+            "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nArabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI",
           contentType: "CAROUSEL"
         }
       }
@@ -657,8 +713,8 @@ describe("content routes", () => {
     const preserved = await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } });
 
     expect(failedRevision.statusCode).toBe(500);
-    expect(preserved.captionEn).toBe(
-      "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone"
+    expect(preserved.caption).toBe(
+      "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nRevised for Make it shorter and add a stronger call to action.: Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
     );
     await expect(
       prisma.aiInteraction.count({
@@ -752,14 +808,14 @@ describe("content routes", () => {
     expect(response.json()).toMatchObject({
       data: [
         {
-          captionEn: "English caption 1 for wholesale coffee leads using warm, clear, confident tone",
-          captionAr: "Arabic caption 1 for wholesale coffee leads using warm, clear, confident tone"
+          caption:
+            "English caption 1 for wholesale coffee leads using warm, clear, confident tone\n\nArabic caption 1 for wholesale coffee leads using warm, clear, confident tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
         }
       ]
     });
     expect(contentMock.lastInput).toMatchObject({
       toneLock: {
-        requiredLanguages: ["ar", "en"],
+        preferredLanguages: ["en", "ar"],
         toneWords: ["warm", "clear", "confident"],
         voiceNotes: "Helpful, bilingual, and direct."
       },
@@ -770,7 +826,7 @@ describe("content routes", () => {
     });
     expect(interaction.prompt).toMatchObject({
       toneLock: {
-        requiredLanguages: ["ar", "en"],
+        preferredLanguages: ["en", "ar"],
         toneWords: ["warm", "clear", "confident"],
         voiceNotes: "Helpful, bilingual, and direct."
       },
@@ -783,7 +839,7 @@ describe("content routes", () => {
     await app.close();
   });
 
-  it("blocks content generation when the AI generation quota is exhausted", async () => {
+  it("generates content beyond the former AI allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -827,33 +883,13 @@ describe("content routes", () => {
         count: 2
       }
     });
-    const counter = await prisma.usageCounter.findUniqueOrThrow({
-      where: {
-        workspaceId_metric_periodStart: {
-          workspaceId: session.workspace.id,
-          metric: "AI_GENERATION",
-          periodStart
-        }
-      }
-    });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "USAGE_QUOTA_EXCEEDED",
-        details: [
-          {
-            metric: "AI_GENERATION"
-          }
-        ]
-      }
-    });
-    expect(counter.used).toBe(99n);
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("blocks content generation when billing is suspended", async () => {
+  it("generates content during development with suspended billing", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -895,22 +931,12 @@ describe("content routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "BILLING_STATUS_INACTIVE",
-        details: [
-          {
-            status: "SUSPENDED"
-          }
-        ]
-      }
-    });
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
-  it("blocks generated content when AI token usage exceeds the plan quota and refunds the generation reservation", async () => {
+  it("saves generated content beyond the former token allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -946,47 +972,7 @@ describe("content routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "USAGE_QUOTA_EXCEEDED",
-        details: [
-          {
-            metric: "AI_TOKENS_OUT"
-          }
-        ]
-      }
-    });
-    await expect(
-      prisma.contentItem.findMany({
-        where: {
-          workspaceId: session.workspace.id,
-          captionEn: {
-            contains: "token quota proof"
-          }
-        }
-      })
-    ).resolves.toHaveLength(0);
-    await expect(
-      prisma.aiInteraction.findMany({
-        where: {
-          workspaceId: session.workspace.id
-        }
-      })
-    ).resolves.toHaveLength(0);
-    await expect(
-      prisma.usageCounter.findUniqueOrThrow({
-        where: {
-          workspaceId_metric_periodStart: {
-            workspaceId: session.workspace.id,
-            metric: "AI_GENERATION",
-            periodStart
-          }
-        }
-      })
-    ).resolves.toMatchObject({
-      used: 0n
-    });
+    expect(response.statusCode).toBe(200);
 
     await app.close();
   });
@@ -1004,10 +990,7 @@ describe("content routes", () => {
       url: `/v1/content/${itemId}`,
       headers,
       payload: {
-        captionEn: "Edited English caption",
-        captionAr: "Edited Arabic caption",
-        hashtags: ["#Edited", "#Bahrain"],
-        callToAction: "Book a tasting.",
+        caption: "Edited English caption\n\nEdited Arabic caption\n\nBook a tasting.\n\n#Edited #Bahrain",
         contentPillar: "Lead generation",
         plannedAt
       }
@@ -1018,9 +1001,7 @@ describe("content routes", () => {
       data: {
         id: itemId,
         status: "DRAFT",
-        captionEn: "Edited English caption",
-        hashtags: ["#Edited", "#Bahrain"],
-        callToAction: "Book a tasting.",
+        caption: "Edited English caption\n\nEdited Arabic caption\n\nBook a tasting.\n\n#Edited #Bahrain",
         contentPillar: "Lead generation",
         plannedAt
       }
@@ -1047,7 +1028,7 @@ describe("content routes", () => {
       url: `/v1/content/${itemId}`,
       headers,
       payload: {
-        captionEn: "Should not save"
+        caption: "Should not save"
       }
     });
     const invalidTransition = await app.inject({
@@ -1084,7 +1065,7 @@ describe("content routes", () => {
       url: `/v1/content/${created.id}`,
       headers: otherHeaders,
       payload: {
-        captionEn: "Cross workspace edit",
+        caption: "Cross workspace edit",
         plannedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       }
     });
@@ -1121,7 +1102,7 @@ describe("content routes", () => {
       method: "POST",
       url: `/v1/content/${created.id}/schedule`,
       headers: ownerHeaders,
-      payload: { scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+      payload: { scheduledAt: futureScheduleTime(1) }
     });
 
     const crossWorkspace = await app.inject({
@@ -1168,7 +1149,7 @@ describe("content routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const created = await createDraftContent(app, headers);
     const plannedAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const scheduledAt = futureScheduleTime(1);
 
     await app.inject({
       method: "PATCH",
@@ -1346,7 +1327,7 @@ describe("content routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const scheduledAt = futureScheduleTime(2);
     const periodStart = monthStart(new Date());
 
     await app.inject({
@@ -1400,8 +1381,8 @@ describe("content routes", () => {
         contentType: "REEL",
         status: "SCHEDULED",
         scheduledAt,
-        captionEn: "English caption 1 for wholesale coffee leads using clear tone",
-        captionAr: "Arabic caption 1 for wholesale coffee leads using clear tone"
+        caption:
+          "English caption 1 for wholesale coffee leads using clear tone\n\nArabic caption 1 for wholesale coffee leads using clear tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
       }
     });
     expect(calendar.plan).toMatchObject({
@@ -1428,7 +1409,7 @@ describe("content routes", () => {
       })
     ).resolves.toMatchObject({
       used: 1n,
-      limit: 100n
+      limit: 0n
     });
     await expect(
       prisma.usageCounter.findUniqueOrThrow({
@@ -1609,4 +1590,8 @@ function monthStart(date: Date): Date {
 
 function monthEnd(periodStart: Date): Date {
   return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1));
+}
+
+function futureScheduleTime(hours: number): string {
+  return new Date(Math.ceil((Date.now() + hours * 60 * 60 * 1000) / 1_800_000) * 1_800_000).toISOString();
 }

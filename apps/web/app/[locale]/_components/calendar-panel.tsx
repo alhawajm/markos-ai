@@ -1298,7 +1298,7 @@ function CalendarDetails({
   setScheduleValue: (value: string) => void;
 }) {
   const canChooseTime = ["APPROVED", "FAILED", "SCHEDULED"].includes(record.status);
-  const caption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
+  const caption = record.caption;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(20rem,.92fr)] lg:items-start">
@@ -2069,7 +2069,7 @@ function isScheduledInWeek(record: ContentRecord, dateKey: string): boolean {
 }
 
 function contentTitle(record: ContentRecord, locale: Locale): string {
-  const caption = locale === "ar" ? (record.captionAr ?? record.captionEn) : (record.captionEn ?? record.captionAr);
+  const caption = record.caption;
   const title = (record.brief ?? caption ?? record.contentPillar ?? "").split(/[.!?؟\n]/)[0]?.trim();
   if (!title) return contentTypeLabel(record, locale);
   const words = title.split(/\s+/).filter(Boolean);

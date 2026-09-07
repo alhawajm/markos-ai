@@ -531,22 +531,22 @@ model Campaign {
 }
 
 model ContentItem {
-  id                  String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId         String        @db.Uuid
-  platform            String        @default("INSTAGRAM")
+  revision            Int                  @default(1)
+  visualDirection     String?
+  conversation        ContentConversation?
+  id                  String               @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId         String               @db.Uuid
+  platform            String               @default("INSTAGRAM")
   contentType         ContentType
-  status              ContentStatus @default(DRAFT)
+  status              ContentStatus        @default(DRAFT)
   brief               String?
-  captionEn           String?
-  captionAr           String?
-  hashtags            String[]
-  callToAction        String?
-  mediaIds            String[]      @db.Uuid
+  caption             String               @default("")
+  mediaIds            String[]             @db.Uuid
   carousel            Json?
   reelScript          Json?
   contentPillar       String?
-  campaignId          String?       @db.Uuid
-  campaign            Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId          String?              @db.Uuid
+  campaign            Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   campaignGoal        String?
   campaignWeek        Int?
   campaignActionIndex Int?
@@ -557,8 +557,8 @@ model ContentItem {
   publishedAt         DateTime?
   instagramPostId     String?
   failureReason       String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
 
   @@unique([campaignId, campaignWeek, campaignActionIndex], map: "content_items_campaign_suggestion_key")
@@ -680,24 +680,27 @@ model InstagramAnalytics {
 }
 
 model AiInteraction {
-  id            String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
-  workspaceId   String                       @db.Uuid
-  agent         String
-  promptVersion String
-  prompt        Json
-  response      Json
-  accepted      Boolean?
-  edited        Boolean?
-  regenerated   Boolean?
-  tokensIn      Int
-  tokensOut     Int
-  costMinor     Int
-  currency      String                       @default("BHD") @db.VarChar(3)
-  model         String
-  embedding     Unsupported("vector(1536)")?
-  createdAt     DateTime                     @default(now())
-  updatedAt     DateTime                     @updatedAt
-  deletedAt     DateTime?
+  conversationRunId String?                      @db.Uuid
+  contentItemId     String?                      @db.Uuid
+  contentRevision   Int?
+  id                String                       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId       String                       @db.Uuid
+  agent             String
+  promptVersion     String
+  prompt            Json
+  response          Json
+  accepted          Boolean?
+  edited            Boolean?
+  regenerated       Boolean?
+  tokensIn          Int
+  tokensOut         Int
+  costMinor         Int
+  currency          String                       @default("BHD") @db.VarChar(3)
+  model             String
+  embedding         Unsupported("vector(1536)")?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  deletedAt         DateTime?
 
   @@index([workspaceId, agent])
   @@map("ai_interactions")
@@ -850,4 +853,60 @@ model AuditLog {
   @@index([workspaceId, action])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+model ContentConversation {
+  id            String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String                @db.Uuid
+  contentItemId String                @unique @db.Uuid
+  contentItem   ContentItem           @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  summary       String                @default("")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  runs          ConversationRun[]
+  messages      ConversationMessage[]
+
+  @@index([workspaceId])
+  @@map("content_conversations")
+}
+
+model ConversationRun {
+  id             String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String                @db.Uuid
+  conversationId String                @db.Uuid
+  conversation   ContentConversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String                @db.Uuid
+  requestId      String                @db.Uuid
+  instruction    String
+  locale         String                @default("en")
+  baseRevision   Int
+  status         String                @default("QUEUED")
+  result         Json?
+  errorCode      String?
+  leaseExpiresAt DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  messages       ConversationMessage[]
+
+  @@unique([conversationId, requestId])
+  @@index([workspaceId])
+  @@index([status, createdAt])
+  @@map("conversation_runs")
+}
+
+model ConversationMessage {
+  id             String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String              @db.Uuid
+  conversationId String              @db.Uuid
+  conversation   ContentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  runId          String              @db.Uuid
+  run            ConversationRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  role           String
+  text           String
+  createdAt      DateTime            @default(now())
+
+  @@unique([runId, role])
+  @@index([workspaceId])
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
 }

@@ -180,9 +180,8 @@ describe("agent routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const content = await prisma.contentItem.create({
       data: {
-        captionEn: "Analytics proof post",
+        caption: "Analytics proof post\n\n#MarkosAI",
         contentType: "POST",
-        hashtags: ["#MarkosAI"],
         instagramPostId: `ig-${randomUUID()}`,
         mediaIds: [],
         publishedAt: new Date(),

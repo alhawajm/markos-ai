@@ -141,8 +141,7 @@ async function createVideoWorkspace() {
       workspaceId: workspace.id,
       contentType: "REEL",
       status: "DRAFT",
-      captionEn: "Freshly made",
-      hashtags: [],
+      caption: "Freshly made",
       mediaIds: []
     }
   });

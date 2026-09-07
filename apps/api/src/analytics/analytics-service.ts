@@ -479,7 +479,7 @@ function summarizeTopContent(records: InstagramAnalyticsRecord[], contentById: M
     .map((record) => {
       const totals = summarizeMetrics([record]);
       const contentItem = contentById.get(record.contentItemId ?? "");
-      const caption = contentItem?.captionEn ?? contentItem?.captionAr ?? undefined;
+      const caption = contentItem?.caption || undefined;
 
       return {
         ...(caption === undefined ? {} : { caption }),

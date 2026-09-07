@@ -10,6 +10,7 @@ import { assertVerificationEmailConfiguration } from "../auth/verification-email
 import { registerBillingRoutes } from "../billing/billing-routes";
 import { registerCalendarRoutes } from "../calendar/calendar-routes";
 import { env } from "../config/env";
+import { registerConversationRoutes } from "../content/conversation-routes";
 import { registerContentRoutes } from "../content/content-routes";
 import { getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
@@ -80,6 +81,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerOnboardingRoutes(app);
   await registerCampaignRoutes(app);
   await registerContentRoutes(app);
+  await registerConversationRoutes(app);
   await registerMediaRoutes(app);
   await registerMetaRoutes(app);
   await registerNotificationRoutes(app);

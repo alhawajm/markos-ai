@@ -177,7 +177,7 @@ def test_content_generation_contract() -> None:
                 }
             ],
             "tone_lock": {
-                "required_languages": ["ar", "en"],
+                "preferred_languages": ["ar", "en"],
                 "tone_words": ["warm", "clear", "confident"],
                 "voice_notes": "Helpful, bilingual, and direct.",
                 "brand_hints": {"identity": {"colors": ["#123456"]}},
@@ -189,13 +189,13 @@ def test_content_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-content-model"
-    assert body["prompt_version"] == "content.v2.local"
+    assert body["prompt_version"] == "content.v3.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert len(body["drafts"]) == 2
     assert body["drafts"][0]["contentType"] == "CAROUSEL"
-    assert "warm, clear, confident" in body["drafts"][0]["captionEn"]
-    assert body["drafts"][0]["captionAr"]
+    assert "warm, clear, confident" in body["drafts"][0]["caption"]
+    assert "مسودة" in body["drafts"][0]["caption"]
     assert body["drafts"][0]["carousel"]["slides"]
 
 

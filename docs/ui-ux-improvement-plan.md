@@ -2,7 +2,7 @@
 
 - Status: interpreted working backlog
 - Started: 2026-08-23
-- Current focus: treat the implemented Onboarding checkpoint as closed except for focused defects and deferred deployment evidence
+- Current focus: refine the unified Create workspace and settle the content/Campaign data model; the implemented Onboarding checkpoint remains closed except for focused defects and deferred deployment evidence
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
@@ -134,11 +134,22 @@ The current checkpoint reduces effort without pretending optional business conte
 
 ## Create
 
-The already accepted Create information architecture remains: an action hub first, followed by a focused Draft Editor after a blank or AI-assisted draft is created or selected.
+The active Create direction is the September 6 conversation-and-preview workspace in `docs/ui-ux-decisions.md`. It supersedes the action-hub prototype below.
+
+### September 6 implementation initiative
+
+- User/job: a workspace owner develops standalone or Campaign content in one interface, with prominent AI assistance and direct manual correction.
+- Scope: desktop conversation presentation over existing AI actions, one fixed-ratio follower preview, temporary manual editor, Save/Leave recovery, Ready/Draft transitions, and existing media/scheduling handoffs. English and Arabic/RTL are included.
+- Approved input: Khalid's reviewed generated mockup and phone references, followed by explicit implementation approval. The selected scope excludes saved conversations.
+- Acceptance: preserve one content identity, preserve unsaved text on failures and background media completion, block overlapping foreground writes, keep publication explicit, and fit the preview at the three documented desktop sizes.
+- Dependencies: existing workspace/session, content, AI, media, and persisted worker APIs; the subsequently approved one-caption migration updates schema and contracts together. Provider configuration is unchanged.
+- Deferred: durable conversation context, agent orchestration, learning loop, undo, dedicated mobile workflow, and Business Profile editing.
+- Follow-up feedback implemented: enlarge the preview, move targeted editing and publication controls alongside it, remove the simulated Posts header, replace persistent success banners with brief floating notices, and assign spare desktop width to the conversation. The approved caption migration now uses one exact final text across editor, AI, preview and publishing. `docs/content-campaign-model-proposal.md` separates this implemented slice from remaining Campaign/revision model work.
+- Evidence: focused `content-studio.browser.test.ts` and the Campaign/Calendar handoff cases in `presentation-journey.browser.test.ts`; screenshots under the ignored `apps/web/evidence/create-*` paths use explicitly labeled test media. Provider and real-account verification remain separate from fixture-backed UI evidence.
 
 ### Reviewed Create daily-workflow prototype
 
-- Status: interactive prototype reviewed; focused production implementation pending
+- Status: historical August 27 prototype; superseded by the September 6 implementation initiative above
 - Opened: 2026-08-27
 - Primary user: solo workspace owner or social-media marketer managing one Instagram account
 - Primary viewport: desktop `1440x900 @ 1x`; compact checkpoint `1366x768 @ 1x`
@@ -260,7 +271,7 @@ The short written review did not capture all useful verbal feedback from the mee
 
 1. Keep the Onboarding checkpoint frozen except for focused defects; its remaining onboarding-specific gate is deployed-provider validation of the full-business document path.
 2. Preserve the independent Products/Services analyzer and keep future Instagram evidence reconciliation separate from onboarding closure.
-3. Implement the reviewed Create action hub and Draft Editor as one standard Post/JPEG production slice; do not present the prototype-only formats or Media Library as live.
+3. Review the September 6 unified Create implementation, then validate the existing AI/media/publishing integrations against real accounts before adding durable conversational intelligence.
 4. Revisit broader shared palette, bilingual typography, and dark-theme adoption as a separate production-foundation decision. IBM Plex and Tangerine Slate remain prototype candidates.
 5. Refine Campaign duration/review and connect approved Campaign posts into Create and Calendar.
 6. Refine Overview around the recurring planning habit, then apply accepted patterns to Insights, Business Profile, and Settings.

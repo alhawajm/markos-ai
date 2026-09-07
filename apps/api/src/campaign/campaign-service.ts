@@ -131,7 +131,6 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
         contentType: suggestion.contentType,
         status: "DRAFT",
         brief,
-        hashtags: [],
         mediaIds: [],
         campaignId,
         campaignGoal: suggestion.goal,

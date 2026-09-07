@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { captionValidationIssue } from "@markos/shared-types";
 
 export const localeSchema = z.enum(["ar", "en"]);
 
@@ -358,15 +359,22 @@ export const approveBusinessProfileSchema = z
   })
   .strict();
 
+export const contentCaptionSchema = z.string().superRefine((caption, context) => {
+  const issue = captionValidationIssue(caption);
+  if (issue)
+    context.addIssue({
+      code: "custom",
+      message: issue === "length" ? "Keep the complete caption within 2,200 characters." : "Use 30 hashtags or fewer in the complete caption."
+    });
+});
+
 export const createContentSchema = z
   .object({
+    visualDirection: z.string().max(2000).nullable().optional(),
     platform: contentPlatformSchema.default("INSTAGRAM"),
     contentType: contentTypeSchema.default("POST"),
     brief: z.string().max(1000).nullable().optional(),
-    captionEn: z.string().max(2200).nullable().optional(),
-    captionAr: z.string().max(2200).nullable().optional(),
-    hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
-    callToAction: z.string().max(500).nullable().optional(),
+    caption: contentCaptionSchema.optional(),
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
@@ -486,13 +494,12 @@ export const adminUpdateModelSettingSchema = z.object({
 
 export const updateContentSchema = z
   .object({
+    expectedRevision: z.number().int().positive().optional(),
+    visualDirection: z.string().max(2000).nullable().optional(),
     platform: contentPlatformSchema.optional(),
     contentType: contentTypeSchema.optional(),
     brief: z.string().max(1000).nullable().optional(),
-    captionEn: z.string().max(2200).nullable().optional(),
-    captionAr: z.string().max(2200).nullable().optional(),
-    hashtags: z.array(z.string().min(1).max(80)).max(30).optional(),
-    callToAction: z.string().max(500).nullable().optional(),
+    caption: contentCaptionSchema.optional(),
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
@@ -500,11 +507,13 @@ export const updateContentSchema = z
     reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one content field is required"
   });
 
 export const updateContentStatusSchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
   status: z.enum(["DRAFT", "IN_REVIEW", "APPROVED"])
 });
 

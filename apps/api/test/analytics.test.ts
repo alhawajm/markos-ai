@@ -452,11 +452,11 @@ describe("analytics routes", () => {
     const other = await registerTestUser(app);
     const headers = authHeaders(owner.tokens.accessToken);
     const ownerContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "Owner winning format",
+      caption: "Owner winning format",
       publishedAt: new Date()
     });
     const otherContent = await createPublishedContent(other.workspace.id, {
-      captionEn: "Other workspace format",
+      caption: "Other workspace format",
       publishedAt: new Date()
     });
 
@@ -551,15 +551,15 @@ describe("analytics routes", () => {
     const other = await registerTestUser(app);
     const headers = authHeaders(owner.tokens.accessToken);
     const januaryContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "January proof post",
+      caption: "January proof post",
       publishedAt: new Date(Date.UTC(2026, 0, 10))
     });
     const februaryContent = await createPublishedContent(owner.workspace.id, {
-      captionEn: "February proof post",
+      caption: "February proof post",
       publishedAt: new Date(Date.UTC(2026, 1, 10))
     });
     const otherContent = await createPublishedContent(other.workspace.id, {
-      captionEn: "Other workspace post",
+      caption: "Other workspace post",
       publishedAt: new Date(Date.UTC(2026, 0, 10))
     });
 
@@ -776,12 +776,11 @@ async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Rec
   });
 }
 
-async function createPublishedContent(workspaceId: string, input: { captionEn?: string; publishedAt?: Date } = {}) {
+async function createPublishedContent(workspaceId: string, input: { caption?: string; publishedAt?: Date } = {}) {
   return prisma.contentItem.create({
     data: {
-      captionEn: input.captionEn ?? "Analytics post",
+      caption: [input.caption ?? "Analytics post", ["#MarkosAI"].join(" ")].filter(Boolean).join("\n\n"),
       contentType: "POST",
-      hashtags: ["#MarkosAI"],
       instagramPostId: `ig-${randomUUID()}`,
       mediaIds: [],
       publishedAt: input.publishedAt ?? new Date(),

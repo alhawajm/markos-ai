@@ -22,6 +22,7 @@ from app.contracts.campaign import (
     VaultContextChunk,
 )
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
+from app.contracts.conversation import ConversationRequest, ConversationResponse
 from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
 from app.contracts.offering_document import (
     OfferingDocumentAnalysisRequest,
@@ -39,6 +40,7 @@ from app.documents import extract_documents
 from app.providers.business_profile import get_business_profile_provider
 from app.providers.campaign import get_campaign_provider
 from app.providers.content import get_content_provider
+from app.providers.conversation import respond_to_conversation
 from app.providers.image import get_image_provider
 from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
@@ -482,10 +484,7 @@ def build_agent_output(request: AgentRunRequest) -> dict[str, object]:
         return {
             **base,
             "draft": {
-                "captionEn": f"{request.task}: a Vault-grounded Instagram caption with a clear CTA.",
-                "captionAr": f"{request.task}: صياغة إنستغرام مبنية على معرفة النشاط مع دعوة واضحة.",
-                "hashtags": ["#BahrainBusiness", "#InstagramMarketing", "#MarkosAI"],
-                "callToAction": "Send a DM to learn more.",
+                "caption": f"{request.task}: a Vault-grounded Instagram caption.\n\nصياغة إنستغرام مبنية على معرفة النشاط.\n\nSend a DM to learn more.\n\n#BahrainBusiness #InstagramMarketing #MarkosAI",
             },
         }
 
@@ -564,3 +563,8 @@ def human_agent_name(agent: AgentName) -> str:
 
 def agent_prompt_text(request: AgentRunRequest) -> str:
     return f"{request.workspace_id} {request.agent} {request.task} {request.locale} {request.context} {request.inputs}"
+
+
+@app.post("/ai/content/conversation", response_model=ConversationResponse)
+async def content_conversation(request: ConversationRequest) -> ConversationResponse:
+    return await respond_to_conversation(request)

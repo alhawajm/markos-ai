@@ -1,4 +1,5 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
+import { captionValidationIssue } from "@markos/shared-types";
 import { validateInstagramImageMetadata } from "@markos/validation";
 import { env } from "../config/env";
 import { createProviderFetchUrl, MediaStorageError } from "../media/storage-service";
@@ -295,10 +296,10 @@ export function validateInstagramVideoForPublishing(mediaAsset: MediaAsset): str
   return reasons;
 }
 
-export function buildCaption(contentItem: ContentItem): string {
-  const caption = contentItem.captionEn ?? contentItem.captionAr ?? "";
-  const hashtags = contentItem.hashtags.join(" ");
-  return [caption, hashtags].filter(Boolean).join("\n\n");
+export function buildCaption(contentItem: Pick<ContentItem, "caption">): string {
+  const issue = captionValidationIssue(contentItem.caption);
+  if (issue) throw new InstagramPublishError(issue === "length" ? "INSTAGRAM_CAPTION_TOO_LONG" : "INSTAGRAM_CAPTION_TOO_MANY_HASHTAGS");
+  return contentItem.caption;
 }
 
 function buildPayload(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): InstagramPublishPayload {

@@ -42,7 +42,7 @@ describe("maintenance worker", () => {
         status: "FAILED"
       },
       where: {
-        captionEn: "Worker publish",
+        caption: "Worker publish\n\n#MarkosAI",
         status: "SCHEDULED"
       }
     });
@@ -58,7 +58,7 @@ describe("maintenance worker", () => {
           instagramPostId: `ig-${input.contentItem.id}`,
           payload: {
             accountId: input.workspace.instagramAccountId ?? "",
-            caption: input.contentItem.captionEn ?? "",
+            caption: input.contentItem.caption ?? "",
             contentItemId: input.contentItem.id,
             contentType: input.contentItem.contentType,
             mediaCount: input.mediaAssets.length
@@ -342,9 +342,8 @@ async function createPublishableWorkspace(label: string, now = new Date()) {
   });
   const content = await prisma.contentItem.create({
     data: {
-      captionEn: "Worker publish",
+      caption: "Worker publish\n\n#MarkosAI",
       contentType: "POST",
-      hashtags: ["#MarkosAI"],
       mediaIds: [media.id],
       scheduledAt: new Date(now.getTime() - 60 * 1000),
       status: "SCHEDULED",

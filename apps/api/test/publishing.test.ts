@@ -233,8 +233,7 @@ describe("publishing routes", () => {
         workspaceId: session.workspace.id,
         contentType: "POST",
         status: "SCHEDULED",
-        captionEn: "No media yet",
-        hashtags: ["#Bahrain"],
+        caption: "No media yet\n\n#Bahrain",
         mediaIds: [],
         scheduledAt: new Date(Date.now() - 60 * 1000)
       }
@@ -565,7 +564,7 @@ describe("publishing routes", () => {
 
     expect(attempt.status).toBe("PUBLISHED");
     expect(counter).toMatchObject({
-      limit: 30n,
+      limit: 0n,
       used: 1n
     });
 
@@ -621,7 +620,7 @@ describe("publishing routes", () => {
     await app.close();
   });
 
-  it("blocks live publishing when the MARKOS post quota is exhausted", async () => {
+  it("publishes beyond the former MARKOS allowance", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
@@ -647,7 +646,12 @@ describe("publishing routes", () => {
         };
       },
       async publish() {
-        throw new Error("publish should not be called when the MARKOS post quota is exhausted");
+        return {
+          instagramPostId: "development-publish",
+          dryRun: false,
+          status: "PUBLISHED" as const,
+          payload: { accountId: "fixture-account", contentItemId: content.id, caption: content.caption, contentType: "POST" as const, mediaCount: 1 }
+        };
       }
     };
 
@@ -661,16 +665,16 @@ describe("publishing routes", () => {
     expect(attempt).toMatchObject({
       contentItemId: content.id,
       dryRun: false,
-      reasons: ["POST_PUBLISH_QUOTA_EXCEEDED"],
-      status: "BLOCKED"
+      reasons: [],
+      status: "PUBLISHED"
     });
-    expect(after.status).toBe("SCHEDULED");
-    expect(after.publishedAt).toBeNull();
+    expect(after.status).toBe("PUBLISHED");
+    expect(after.publishedAt).not.toBeNull();
 
     await app.close();
   });
 
-  it("blocks live publishing when billing is past due", async () => {
+  it("publishes during development with past-due billing", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
@@ -694,7 +698,12 @@ describe("publishing routes", () => {
         };
       },
       async publish() {
-        throw new Error("publish should not be called when billing is past due");
+        return {
+          instagramPostId: "development-publish",
+          dryRun: false,
+          status: "PUBLISHED" as const,
+          payload: { accountId: "fixture-account", contentItemId: content.id, caption: content.caption, contentType: "POST" as const, mediaCount: 1 }
+        };
       }
     };
 
@@ -708,11 +717,11 @@ describe("publishing routes", () => {
     expect(attempt).toMatchObject({
       contentItemId: content.id,
       dryRun: false,
-      reasons: ["BILLING_STATUS_PAST_DUE"],
-      status: "BLOCKED"
+      reasons: [],
+      status: "PUBLISHED"
     });
-    expect(after.status).toBe("SCHEDULED");
-    expect(after.publishedAt).toBeNull();
+    expect(after.status).toBe("PUBLISHED");
+    expect(after.publishedAt).not.toBeNull();
 
     await app.close();
   });
@@ -854,8 +863,7 @@ async function createPublishableContent(workspaceId: string, scheduledAt: Date) 
       workspaceId,
       contentType: "POST",
       status: "SCHEDULED",
-      captionEn: "Ready to publish",
-      hashtags: ["#Bahrain", "#MarkosAI"],
+      caption: "Ready to publish\n\n#Bahrain #MarkosAI",
       mediaIds: [media.id],
       scheduledAt
     }

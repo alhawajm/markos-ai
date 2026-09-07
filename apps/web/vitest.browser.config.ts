@@ -5,6 +5,7 @@ export default defineConfig({
     fileParallelism: false,
     hookTimeout: 30_000,
     include: [
+      "test/content-studio.browser.test.ts",
       "test/settings-panel.browser.test.ts",
       "test/presentation-journey.browser.test.ts",
       "test/marketing-landing.browser.test.ts",

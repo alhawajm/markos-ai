@@ -2,7 +2,7 @@
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-08-30
+- Last updated: 2026-09-06
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -13,6 +13,24 @@ Product behavior, lifecycle rules, data contracts, security, permissions, and in
 Each surface entry should state what is accepted, what remains deferred or open, and the observable consequence for implementation and review.
 
 ## Create
+
+### 2026-09-06 — Conversation and Instagram preview workspace
+
+**Accepted by Khalid for implementation**
+
+- Supersede the earlier action hub and separate manual/AI entry surfaces. Keep two desktop halves: an open MARKOS conversation and an Instagram follower preview. All standalone, Campaign, and saved-post entry points share this workspace.
+- Use open assistant text with a small coral identity icon, quiet warm user messages, and one textarea composer with an attachment action, explicit existing-AI action selector, and send control. Do not imply retained conversational context.
+- Keep one outer preview viewport at `360:730`, scaled uniformly to available width and height. Media proportions (`1:1`, `4:5`, `9:16`) affect the content inside it. Include feed, carousel navigation, Reel, and Story treatments with no device hardware, invented engagement counts, or publication timestamps. The preview approximates Instagram; it is not provider-rendered output.
+- Follow-up refinement: place Caption, Media, and Details controls beside the preview, with Save/readiness controls in that same narrow column. Opening a focused editor temporarily replaces the preview; Done restores it. Keep the conversation visible throughout.
+- Show saved/unsaved state in the header with Open, New, and Leave. Use a focus-managed dialog for unsaved exits and destructive actions. Ready exposes **Return to Draft** and separate scheduling/publishing controls.
+- Use existing Sunlit tokens and Lucide icons. Give Create a readable local `16px` body baseline without migrating shared typography. Mirror the workspace and controls for Arabic/RTL.
+- Validate desktop at `1440x900`, `1366x768`, and `1920x1080`, DPR 1. Preserve a stacked narrow fallback; dedicated mobile capabilities and composition remain deferred.
+- Following Khalid's rendered feedback, remove the outer preview card and horizontal toolbars, remove the simulated Posts/back header, and raise the preview width ceiling from 360 to 480 CSS pixels while preserving its `360:730` proportions. The available viewport still governs uniform scaling. Keep the larger readable text and button sizes.
+- Routine Create feedback uses a neutral floating notice with a dismiss action and 4.5-second expiry. It must not occupy layout space or move the conversation/preview. Actionable errors remain available for dismissal/retry; they also avoid layout shifts.
+
+Khalid subsequently approved caption consolidation: one editable final text, no EN/AR toggle or separate CTA/hashtag fields. Keep the complete text and ordering through Save, AI revision and preview; changing UI locale must not change it. The preview column now fits its height and action controls, giving surplus desktop width to the conversation. `docs/content-campaign-model-proposal.md` records the implemented caption slice and the remaining proposed ownership work.
+
+The older entries below retain their historical rationale. Their action-hub, separate-preview-shell, and media-save gates are superseded by this decision and the September 6 persistence decision in `docs/decisions.md`.
 
 ### 2026-08-25 — Unsaved working drafts and exit behavior
 
@@ -368,3 +386,12 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - Permanent logos, brand-guideline files, or a reusable brand asset library.
 - A conversational assistant that asks follow-up questions about ambiguous extraction; the current proposal/issues/review flow is the implemented boundary.
 - The dedicated post-onboarding Business Profile knowledge editor described above.
+
+
+## 2026-09-06 — Persistent Create conversations and deferred commercial quotas
+
+Khalid selected durable text conversations first, keeping image/video generation in the existing Media controls. Each post owns one saved thread across Create, Campaign and Calendar. Clear draft-text requests apply and save directly; discussion and suggestions remain messages. Messages, request identity, processing state and failed/conflicting outcomes persist. Revision checks protect current copy and approval without adding Undo. The API validates allowed changes and rechecks workspace authorization.
+
+Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
+
+The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.
