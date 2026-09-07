@@ -87,9 +87,9 @@ describe("presentation journey", () => {
     await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
     await page.locator('input[type="file"]').setInputFiles({ name: "brand.txt", mimeType: "text/plain", buffer: Buffer.from("SnackLab brand information") });
     await page.locator('input[type="file"]').setInputFiles({ name: "offerings.pdf", mimeType: "application/pdf", buffer: Buffer.from("SnackLab offerings") });
-    await expect(page.getByRole("region", { name: "Selected files" }).getByText("brand", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("region", { name: "Selected files" }).getByText("offerings", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("region", { name: "Selected files" }).getByText("2/5", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("brand", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("offerings", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("2/5", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-onboarding-document-selection.png", fullPage: true });
     expect(documentAnalysisPosts).toBe(0);
     await page.getByRole("button", { name: "Analyze files" }).click();
@@ -97,19 +97,19 @@ describe("presentation journey", () => {
     expect(documentAnalysisFileCount).toBe(2);
     expect(documentAnalysisPosts).toBe(1);
     expect(moduleWrites).toBe(0);
-    await expect(page.getByText("Information found in your files").isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Information found in your files").isVisible()).toBe(true);
 
     await page.getByRole("button", { name: /^Tone of voice/ }).click();
     await page.getByRole("heading", { name: "How should the business sound?" }).waitFor();
     await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
-    await expect(page.getByRole("code").filter({ hasText: "#2B59FF" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("code").filter({ hasText: "#F97316" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#2B59FF" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#F97316" }).isVisible()).toBe(true);
     await page.getByLabel("Choose color").fill("#123456");
     await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
     await page.screenshot({ path: "evidence/sunlit-onboarding-color-selection.png", fullPage: true });
     await page.getByRole("button", { name: "Add selected color" }).click();
     await expect(page.locator('input[type="color"]').count()).resolves.toBe(4);
-    await expect(page.getByRole("code").filter({ hasText: "#123456" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("code").filter({ hasText: "#123456" }).isVisible()).toBe(true);
     expect(moduleWrites).toBe(0);
     await page.close();
 
@@ -175,8 +175,8 @@ describe("presentation journey", () => {
 
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     await page.getByText("7 of 7 sections", { exact: true }).waitFor();
-    await expect(page.getByText("100%", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByLabel("Competitors complete").isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("100%", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("Competitors complete").isVisible()).toBe(true);
     await expect(page.getByText("May 15, 2026").count()).resolves.toBe(0);
     await expect(page.getByText("Last updated: Never").count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
@@ -231,7 +231,7 @@ describe("presentation journey", () => {
     await page.getByLabel("Main market").fill("Muharraq, Bahrain");
     await page.getByRole("button", { name: "Back" }).click();
     const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
-    await expect(backGuard.isVisible()).resolves.toBe(true);
+    await expect.poll(() => backGuard.isVisible()).toBe(true);
     await backGuard.getByRole("button", { name: "Keep editing" }).click();
     await expect(page.getByLabel("Main market").inputValue()).resolves.toBe("Muharraq, Bahrain");
     await page.getByRole("button", { name: "Back" }).click();
@@ -292,7 +292,7 @@ describe("presentation journey", () => {
     await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
     await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
     const campaignLibrary = page.getByRole("complementary").filter({ has: page.getByRole("heading", { name: "Your campaigns" }) });
-    await expect(campaignLibrary.getByText("2", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => campaignLibrary.getByText("2", { exact: true }).isVisible()).toBe(true);
     await campaignLibrary.getByRole("button", { name: /SnackLab 7-Day Community Sprint/ }).click();
     await page.getByRole("heading", { name: "SnackLab 7-Day Community Sprint" }).waitFor();
 
@@ -309,17 +309,17 @@ describe("presentation journey", () => {
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
     await expect(page.getByRole("tab", { name: "Week-by-week review" }).getAttribute("aria-selected")).resolves.toBe("true");
     await page.getByRole("tab", { name: "Overview", exact: true }).click();
-    await expect(page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("heading", { name: "Campaign map" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByText("Earn trust", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("heading", { name: "Campaign map" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByText("Earn trust", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
     await page.getByRole("tab", { name: "Week-by-week review" }).click();
-    await expect(page.getByText("Publish origin story Reel", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Publish origin story Reel", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
     const dailyPlan = page.getByRole("combobox", { name: "Daily plan" });
     await expect(dailyPlan.inputValue()).resolves.toBe("0");
     await page.getByRole("button", { name: "Next week", exact: true }).click();
-    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText("Publish origin story Reel", { exact: true }).count()).resolves.toBe(0);
     await expect(dailyPlan.inputValue()).resolves.toBe("1");
     await expect(page.getByRole("button", { name: "Next week", exact: true }).isDisabled()).resolves.toBe(true);
@@ -327,7 +327,7 @@ describe("presentation journey", () => {
     const openDraft = page.getByRole("button", { name: "Open draft in Create: Publish customer taste-test Reel" });
     await openDraft.waitFor();
     expect(suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
-    await expect(page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
     await page.waitForTimeout(200);
     await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
@@ -349,8 +349,8 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar", exact: true }).waitFor();
     await page.getByRole("button", { name: /Unscheduled/ }).click();
-    await expect(page.getByText("Publish customer taste-test...", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByText("Campaign · Week 2", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByText("Publish customer taste-test...", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByText("Campaign · Week 2", { exact: true }).isVisible()).toBe(true);
     await page.close();
   }, 60_000);
 
@@ -374,8 +374,8 @@ describe("presentation journey", () => {
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "What would you like to create?" }).waitFor();
-    await expect(page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByLabel("Message MARKOS", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/analytics`, { waitUntil: "domcontentloaded" });
@@ -522,7 +522,7 @@ describe("presentation journey", () => {
 
     await page.getByLabel("Content type").selectOption({ label: "Reel" });
     await page.waitForFunction(() => new URL(window.location.href).searchParams.get("type") === "REEL");
-    await expect(page.getByRole("button", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: /Product story scheduled/ }).isVisible()).toBe(true);
     await expect(page.getByRole("button", { name: /Ready campaign post/ }).count()).resolves.toBe(0);
     await page.getByLabel("Content type").selectOption({ label: "All types" });
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("type"));
@@ -534,8 +534,8 @@ describe("presentation journey", () => {
     await readyCounter.click();
     const unscheduled = page.getByRole("button", { name: /Unscheduled · 13/ });
     await unscheduled.click();
-    await expect(page.getByRole("link", { name: /Draft founder story/ }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("button", { name: "Load more" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("link", { name: /Draft founder story/ }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Load more" }).isVisible()).toBe(true);
     await page.getByRole("button", { name: "Load more" }).click();
     await page.getByRole("link", { name: /Queued draft 12/ }).waitFor();
     await page.getByRole("button", { name: "Load more" }).waitFor({ state: "detached" });
@@ -546,15 +546,15 @@ describe("presentation journey", () => {
     await directReadyItem.click();
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("item"));
     const focusSurface = page.locator('[data-calendar-motion="focus-surface"]');
-    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("calendar-to-record");
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("calendar-to-record");
     await expect(
       focusSurface.evaluate((element) => element.getAnimations({ subtree: true }).some((animation) => animation.playState === "running"))
     ).resolves.toBe(true);
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
-    await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Back to day" }).isVisible()).toBe(true);
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
-    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("record-to-day");
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("record-to-day");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     expect(new URL(page.url()).searchParams.has("day")).toBe(true);
     await page.keyboard.press("Escape");
@@ -567,7 +567,7 @@ describe("presentation journey", () => {
     if (!readyDayBox) throw new Error("Expected the ready day surface to be visible.");
     await readyDayColumn.click({ position: { x: readyDayBox.width / 2, y: readyDayBox.height - 12 } });
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day"));
-    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("calendar-to-day");
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("calendar-to-day");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     const dayUrl = new URL(page.url());
     expect(dayUrl.searchParams.get("day")).toBeTruthy();
@@ -588,10 +588,10 @@ describe("presentation journey", () => {
     await page.keyboard.press("Tab");
     await expect(dayDialog.getByRole("button", { name: "Back to calendar" }).evaluate((element) => document.activeElement === element)).resolves.toBe(true);
     await dayDialog.getByRole("button", { name: /Ready campaign post/ }).click();
-    await expect(page.getByRole("button", { name: "Back to day" }).isVisible()).resolves.toBe(true);
-    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("day-to-record");
+    await expect.poll(() => page.getByRole("button", { name: "Back to day" }).isVisible()).toBe(true);
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("day-to-record");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
-    await expect(page.locator('button[aria-current="true"]').getByText("Ready campaign post...", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.locator('button[aria-current="true"]').getByText("Ready campaign post...", { exact: true }).isVisible()).toBe(true);
     expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
 
     const dayContext = page.locator('[data-calendar-motion-part="day-context"]');
@@ -602,7 +602,7 @@ describe("presentation journey", () => {
     if (!originalDayContext) throw new Error("Expected the persistent day context to be mounted.");
     const alternatePost = dayContext.getByRole("button", { name: /Product story scheduled/ });
     await alternatePost.click();
-    await expect(focusSurface.getAttribute("data-calendar-motion-kind")).resolves.toBe("record-switch");
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("record-switch");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     await expect(
       originalDayContext.evaluate((element) => element.isSameNode(document.querySelector('[data-calendar-motion-part="day-context"]')))
@@ -613,7 +613,7 @@ describe("presentation journey", () => {
 
     await page.goBack();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("item"));
-    await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Back to calendar" }).isVisible()).toBe(true);
     await page.goForward();
     await page.getByRole("button", { name: "Back to day" }).waitFor();
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
@@ -638,19 +638,19 @@ describe("presentation journey", () => {
     const cancelScheduleButton = page.getByRole("button", { name: "Cancel schedule" });
     await cancelScheduleButton.click();
     const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
-    await expect(dialog.isVisible()).resolves.toBe(true);
+    await expect.poll(() => dialog.isVisible()).toBe(true);
     await page.keyboard.press("Escape");
-    await expect(dialog.isVisible()).resolves.toBe(false);
+    await expect.poll(() => dialog.isVisible()).toBe(false);
     await expect.poll(() => cancelScheduleButton.evaluate((element) => document.activeElement === element)).toBe(true);
     await cancelScheduleButton.click();
     await dialog.getByRole("button", { name: "Cancel schedule" }).click();
     const cancellationNotice = page.getByText("Schedule cancelled. The post is Ready and has moved to Unscheduled.", { exact: true });
     await cancellationNotice.waitFor();
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
-    await expect(page.getByRole("button", { name: "Back to calendar" }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Back to calendar" }).isVisible()).toBe(true);
     const unscheduledDrawer = page.getByRole("dialog", { name: /Unscheduled · 14/ });
     await unscheduledDrawer.waitFor();
-    await expect(unscheduledDrawer.getByRole("link", { name: /Product story scheduled/ }).isVisible()).resolves.toBe(true);
+    await expect.poll(() => unscheduledDrawer.getByRole("link", { name: /Product story scheduled/ }).isVisible()).toBe(true);
     await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
     await unscheduledDrawer.getByRole("button", { name: "Close", exact: true }).click();
     await unscheduledDrawer.waitFor({ state: "detached" });
@@ -674,8 +674,8 @@ describe("presentation journey", () => {
     await page.getByRole("heading", { name: "تقويم المحتوى" }).waitFor();
     await expect(page.locator("main").getAttribute("dir")).resolves.toBe("rtl");
     await expect(page.getByRole("link", { name: "التقويم" }).getAttribute("aria-current")).resolves.toBe("page");
-    await expect(page.getByRole("group", { name: "تصفية حالة المحتوى" }).isVisible()).resolves.toBe(true);
-    await expect(page.getByLabel("نوع المحتوى").isVisible()).resolves.toBe(true);
+    await expect.poll(() => page.getByRole("group", { name: "تصفية حالة المحتوى" }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByLabel("نوع المحتوى").isVisible()).toBe(true);
     await expect(page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).resolves.toBe(false);
 
     await page.getByRole("button", { name: "طي الشريط الجانبي" }).click();
@@ -715,7 +715,7 @@ describe("presentation journey", () => {
       .first()
       .click();
     await page.locator('[data-calendar-layer="day"]').waitFor();
-    await expect(focusSurface.getAttribute("data-calendar-motion-state")).resolves.toBe("reduced");
+    await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-state")).toBe("reduced");
     // Reduced-motion CSS uses 0.01 ms transitions; Chromium can report these as pending until the next frame.
     // Inspect total timing (including delays and iterations) so visible motion still fails without waiting it away.
     await expect(
@@ -748,8 +748,8 @@ describe("presentation journey", () => {
     const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
     await closeComposer.waitFor();
     await emptyPage.keyboard.press("Escape");
-    await expect(closeComposer.count()).resolves.toBe(0);
-    await expect(emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).resolves.toBe(true);
+    await closeComposer.waitFor({ state: "detached" });
+    await expect.poll(() => emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).toBe(true);
     await emptyPage.getByRole("link", { name: "Overview" }).click();
     await emptyPage.waitForURL(`${baseUrl}/en/app`);
     await emptyPage.close();
@@ -759,11 +759,16 @@ describe("presentation journey", () => {
     const draft = phaseTwoCampaignDraft(campaign.id);
     let registeredDraft: typeof draft | undefined;
     let approvalCalls = 0;
+    let completeApproval!: () => void;
+    const approvalResponse = new Promise<void>((resolve) => {
+      completeApproval = resolve;
+    });
     await mockApi(page, async (route, pathname) => {
       if (pathname === "/v1/campaigns") return route.fulfill(json([campaign]));
       if (pathname.endsWith("/drafts")) return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
       if (pathname.endsWith("/suggestions/approve")) {
         approvalCalls += 1;
+        await approvalResponse;
         registeredDraft = draft;
         return route.fulfill(json(draft));
       }
@@ -780,15 +785,24 @@ describe("presentation journey", () => {
     await expect(descriptionNode.evaluate((node) => getComputedStyle(node).whiteSpace)).resolves.toBe("normal");
 
     const beforeApproval = page.url();
-    await page.getByRole("button", { name: "Approve idea and create draft: Compare the subscription tiers" }).click();
-    await expect(page.url()).toBe(beforeApproval);
-    await expect(page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" }).isVisible()).resolves.toBe(true);
+    const approveButton = page.getByRole("button", { name: "Approve idea and create draft: Compare the subscription tiers" });
+    const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
+    await approveButton.click();
+    try {
+      await expect.poll(() => approvalCalls).toBe(1);
+      await expect.poll(() => approveButton.isDisabled()).toBe(true);
+      expect(page.url()).toBe(beforeApproval);
+      await expect(createButton.count()).resolves.toBe(0);
+    } finally {
+      completeApproval();
+    }
+    await page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).waitFor();
+    await createButton.waitFor();
+    expect(page.url()).toBe(beforeApproval);
     expect(approvalCalls).toBe(1);
     await page.screenshot({ path: "evidence/phase2-campaign-registered.png" });
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
     await createButton.waitFor();
     expect(approvalCalls).toBe(1);
     await createButton.click();
