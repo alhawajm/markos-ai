@@ -10,7 +10,7 @@ export type SectionNavigationItem = {
   icon?: LucideIcon;
   locked?: boolean;
   status?: string;
-  statusTone?: "neutral" | "success" | "warning" | "locked";
+  statusTone?: "neutral" | "success" | "warning" | "error" | "locked";
 };
 
 type SectionNavigationProps = {
@@ -85,7 +85,8 @@ export function SectionNavigation({ activeId, className, heading, items, mobileL
         const slotRect = slot.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
         const surfaceHeight = surface.getBoundingClientRect().height;
-        const configuredTop = Number.parseFloat(getComputedStyle(slot).getPropertyValue("--section-menu-top"));
+        // Read a resolved CSS length so rem/calc offsets remain correct at every viewport.
+        const configuredTop = Number.parseFloat(getComputedStyle(slot).scrollMarginBlockStart);
         const topOffset = Number.isFinite(configuredTop) ? configuredTop : 24;
 
         slot.style.minHeight = `${surfaceHeight}px`;
@@ -149,7 +150,7 @@ export function SectionNavigation({ activeId, className, heading, items, mobileL
     <div className={[styles.navigation, className].filter(Boolean).join(" ")} data-section-navigation ref={navigationSlotRef}>
       <div className={styles.navigationSurface} data-section-navigation-surface ref={navigationSurfaceRef}>
         <aside className={styles.desktopMenu}>
-          <p className={styles.heading}>{heading}</p>
+          <p className="sr-only">{heading}</p>
           <nav aria-label={heading}>
             {items.map((item) => {
               const Icon = item.icon;

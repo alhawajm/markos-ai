@@ -1,5 +1,7 @@
 "use client";
 
+import { ThemeSelect } from "../../_components/theme-control";
+
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowLeft,
@@ -40,6 +42,7 @@ import type {
 } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
+import { useModalDialog } from "./use-modal-dialog";
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import {
   createEmptyOnboardingDraft,
@@ -1203,35 +1206,27 @@ export function OnboardingPanel({
 
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
         <a className="flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_14px_30px_rgb(32_33_43_/_18%)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[0_14px_30px_rgb(32_33_43_/_18%)]">
             <MarkosAiIcon size={21} />
           </span>
-          <strong className="text-[16px] font-bold tracking-tight">MARKOS AI</strong>
+          <strong className="text-[16px] font-semibold tracking-tight">MARKOS AI</strong>
         </a>
-        {screen !== "greeting" ? (
-          <span className="rounded-full border border-[var(--sunlit-line)] bg-white/75 px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-muted)] backdrop-blur">
-            {screen === "step"
-              ? copy.step(step, 7)
-              : screen === "review"
-                ? copy.informationCheck
-                : screen === "documents"
-                  ? copy.businessDocuments.analyze
-                  : copy.profile.eyebrow}
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <ThemeSelect locale={locale} />
+        </div>
       </header>
 
       {message ? (
         <div className="relative z-10 mx-auto mb-4 w-full max-w-6xl px-5 sm:px-8" role="alert">
-          <div className="flex items-start gap-3 rounded-2xl border border-[rgb(199_53_80_/_20%)] bg-[rgb(255_244_246_/_96%)] px-4 py-3 text-[15px] text-[var(--sunlit-ink-soft)] shadow-sm">
+          <div className="flex items-start gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--danger)_20%,transparent)] bg-[var(--surface-muted)] px-4 py-3 text-[15px] text-[var(--sunlit-ink-soft)] shadow-sm">
             <Info className="mt-0.5 shrink-0 text-[var(--sunlit-danger)]" size={18} />
             <div className="min-w-0 flex-1">
-              <strong className="block font-bold text-[var(--sunlit-danger)]">{copy.attention}</strong>
+              <strong className="block font-semibold text-[var(--sunlit-danger)]">{copy.attention}</strong>
               <span className="mt-0.5 block leading-6">{message}</span>
             </div>
             <button
               aria-label={copy.dismiss}
-              className="rounded-lg p-1 text-[var(--sunlit-muted)] hover:bg-white hover:text-[var(--sunlit-ink)]"
+              className="rounded-lg p-1 text-[var(--sunlit-muted)] hover:bg-[var(--surface)] hover:text-[var(--sunlit-ink)]"
               onClick={() => setMessage("")}
               type="button"
             >
@@ -1347,16 +1342,15 @@ export function OnboardingPanel({
 
 function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocuments: () => void; onStart: () => void }) {
   return (
-    <section className="mx-auto grid min-h-[calc(100vh-96px)] w-full max-w-6xl place-items-center px-5 pb-[clamp(5rem,12vh,9rem)] pt-2 sm:px-8">
+    <section className="mx-auto grid min-h-[calc(100svh-96px)] w-full max-w-6xl place-items-center px-5 pb-12 pt-2 sm:px-8">
       <div className="w-full max-w-5xl text-center">
-        <p className="text-[15px] font-bold uppercase tracking-[.11em] text-[var(--sunlit-pink)] sm:text-[16px]">{copy.greeting.eyebrow}</p>
-        <h1 className="mx-auto mt-3 max-w-4xl font-display text-[clamp(46px,5.4vw,74px)] font-bold leading-[1.01] tracking-[-0.052em] text-[var(--sunlit-ink)] rtl:tracking-normal">
+        <h1 className="mx-auto max-w-4xl font-display text-[clamp(32px,4vw,48px)] font-semibold leading-tight tracking-tight text-[var(--sunlit-ink)] rtl:tracking-normal">
           {copy.greeting.title}
         </h1>
 
         <div className="mx-auto mt-10 grid max-w-4xl gap-4 text-start md:grid-cols-2">
           <button
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--sunlit-ink)] p-6 text-start text-white shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--sunlit-aqua)] sm:p-7"
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onDocuments}
             type="button"
           >
@@ -1364,19 +1358,21 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
               aria-hidden="true"
               className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[var(--sunlit-aqua)] opacity-20 blur-2xl rtl:-left-12 rtl:right-auto"
             />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12 text-[var(--sunlit-yellow)] ring-1 ring-white/15">
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface)] text-[var(--link)] ring-1 ring-[var(--border)]">
               <UploadCloud size={22} />
             </span>
-            <span className="relative mt-7 block text-[14px] font-bold text-white/64">{copy.greeting.journey[0]}</span>
+            <span className="relative mt-7 block text-[14px] font-semibold text-[var(--on-primary)]">{copy.greeting.journey[0]}</span>
             <span className="relative mt-1 flex items-end justify-between gap-5">
-              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-bold leading-tight tracking-[-0.025em]">{copy.businessDocuments.upload}</strong>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-yellow)] text-[var(--sunlit-ink)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-semibold leading-tight tracking-[-0.025em] rtl:tracking-normal">
+                {copy.businessDocuments.upload}
+              </strong>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-[var(--text)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
                 <ArrowRight className="rtl:rotate-180" size={20} />
               </span>
             </span>
           </button>
           <button
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[rgb(255_105_97_/_28%)] bg-[linear-gradient(145deg,rgb(255_255_255_/_94%),rgb(255_240_234_/_92%))] p-6 text-start shadow-[0_20px_50px_rgb(255_105_97_/_14%)] transition duration-200 hover:-translate-y-1 hover:border-[rgb(255_105_97_/_48%)] hover:shadow-[0_28px_64px_rgb(255_105_97_/_19%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--sunlit-pink)] sm:p-7"
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[linear-gradient(145deg,var(--surface),var(--primary-soft))] p-6 text-start shadow-[0_20px_50px_color-mix(in_srgb,var(--primary)_14%,transparent)] transition duration-200 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--primary)_48%,transparent)] hover:shadow-[0_28px_64px_color-mix(in_srgb,var(--primary)_19%,transparent)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onStart}
             type="button"
           >
@@ -1384,15 +1380,15 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
               aria-hidden="true"
               className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-[var(--sunlit-yellow)] opacity-25 blur-2xl rtl:-right-16 rtl:left-auto"
             />
-            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-pink-soft)] text-[var(--sunlit-pink)] ring-1 ring-[rgb(255_105_97_/_15%)]">
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-pink-soft)] text-[var(--sunlit-pink)] ring-1 ring-[color-mix(in_srgb,var(--primary)_15%,transparent)]">
               <Pencil size={21} />
             </span>
-            <span className="relative mt-7 block text-[14px] font-bold text-[var(--sunlit-muted)]">{copy.greeting.journey[1]}</span>
+            <span className="relative mt-7 block text-[14px] font-semibold text-[var(--sunlit-muted)]">{copy.greeting.journey[1]}</span>
             <span className="relative mt-1 flex items-end justify-between gap-5">
-              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-bold leading-tight tracking-[-0.025em] text-[var(--sunlit-ink)]">
+              <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-semibold leading-tight tracking-[-0.025em] text-[var(--sunlit-ink)] rtl:tracking-normal">
                 {copy.greeting.start}
               </strong>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sunlit-pink)] text-white transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--on-primary)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
                 <ArrowRight className="rtl:rotate-180" size={20} />
               </span>
             </span>
@@ -1453,15 +1449,15 @@ function BusinessDocumentScreen({
 
   return (
     <section className="mx-auto grid min-h-[calc(100vh-105px)] w-full max-w-5xl place-items-center px-5 pb-12 sm:px-8">
-      <article className="sunlit-panel w-full max-w-3xl rounded-[2rem] bg-white/92 p-7 backdrop-blur-xl sm:p-10">
+      <article className="sunlit-panel w-full max-w-3xl rounded-[2rem] bg-[var(--surface)] p-7 backdrop-blur-xl sm:p-10">
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
           <FileText size={23} />
         </span>
-        <h1 className="mt-5 font-display text-[32px] font-bold tracking-tight sm:text-[38px]">{copy.businessDocuments.title}</h1>
+        <h1 className="mt-5 font-display text-[32px] font-semibold tracking-tight sm:text-[38px] rtl:tracking-normal">{copy.businessDocuments.title}</h1>
         <p className="mt-3 max-w-2xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.businessDocuments.body}</p>
 
         <button
-          className="mt-7 flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] px-6 py-8 text-center transition hover:border-[var(--sunlit-aqua-dark)] hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          className="mt-7 flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] px-6 py-8 text-center transition hover:border-[var(--sunlit-aqua-dark)] hover:bg-[var(--surface)] disabled:cursor-wait disabled:opacity-60"
           disabled={waiting || failed}
           onClick={() => inputRef.current?.click()}
           type="button"
@@ -1488,10 +1484,10 @@ function BusinessDocumentScreen({
         />
 
         {selectedFiles.length && !failed ? (
-          <section aria-label={copy.businessDocuments.selected} className="mt-4 rounded-2xl border border-[var(--sunlit-line)] bg-white p-4 sm:p-5">
+          <section aria-label={copy.businessDocuments.selected} className="mt-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-[14px] font-bold text-[var(--sunlit-ink)]">{copy.businessDocuments.selected}</h2>
-              <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-aqua-dark)]">
+              <h2 className="text-[14px] font-semibold text-[var(--sunlit-ink)]">{copy.businessDocuments.selected}</h2>
+              <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)]">
                 {selectedFiles.length}/5
               </span>
             </div>
@@ -1501,20 +1497,18 @@ function BusinessDocumentScreen({
                   className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-3 py-2.5"
                   key={`${file.name}-${file.size}-${index}`}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--sunlit-aqua-dark)] shadow-sm">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--sunlit-aqua-dark)] shadow-sm">
                     <FileText size={17} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-bold text-[var(--sunlit-ink)]" title={file.name}>
+                    <span className="block truncate text-[14px] font-semibold text-[var(--sunlit-ink)]" title={file.name}>
                       {documentDisplayName(file.name)}
                     </span>
-                    <span className="mt-0.5 block text-[11px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">
-                      {documentTypeLabel(file.name)}
-                    </span>
+                    <span className="mt-0.5 block text-[13px] font-semibold text-[var(--sunlit-muted)]">{documentTypeLabel(file.name)}</span>
                   </span>
                   <button
                     aria-label={`${copy.businessDocuments.removeSelected}: ${file.name}`}
-                    className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-white hover:text-[var(--sunlit-danger)] disabled:opacity-50"
+                    className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[var(--surface)] hover:text-[var(--sunlit-danger)] disabled:opacity-50"
                     disabled={waiting}
                     onClick={() => {
                       setSelectedFiles((current) => current.filter((_item, fileIndex) => fileIndex !== index));
@@ -1529,7 +1523,7 @@ function BusinessDocumentScreen({
             </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-[var(--sunlit-line)] pt-4">
               <button
-                className="sunlit-secondary rounded-xl px-4 py-2.5 text-[13px] font-bold"
+                className="sunlit-secondary rounded-xl px-4 py-2.5 text-[15px] font-semibold"
                 disabled={waiting}
                 onClick={() => inputRef.current?.click()}
                 type="button"
@@ -1537,7 +1531,7 @@ function BusinessDocumentScreen({
                 {copy.businessDocuments.choose}
               </button>
               <button
-                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={waiting || !selectedFiles.length}
                 onClick={() => onAnalyze(selectedFiles)}
                 type="button"
@@ -1550,19 +1544,19 @@ function BusinessDocumentScreen({
         ) : null}
 
         {displayedMessage ? (
-          <div className="mt-4 rounded-xl border border-[rgb(199_53_80_/_20%)] bg-[rgb(255_244_246_/_88%)] p-4 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">
+          <div className="mt-4 rounded-xl border border-[color-mix(in_srgb,var(--danger)_20%,transparent)] bg-[var(--surface-muted)] p-4 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">
             {displayedMessage}
           </div>
         ) : null}
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--sunlit-line)] pt-5">
-          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" disabled={waiting} onClick={onBack} type="button">
+          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[15px] font-semibold" disabled={waiting} onClick={onBack} type="button">
             {copy.back}
           </button>
           {failed ? (
             <div className="flex gap-2">
               <button
-                className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+                className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold"
                 disabled={busy}
                 onClick={onDiscard}
                 type="button"
@@ -1570,7 +1564,7 @@ function BusinessDocumentScreen({
                 <Trash2 size={16} /> {copy.businessDocuments.discard}
               </button>
               <button
-                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+                className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold"
                 disabled={busy}
                 onClick={onRetry}
                 type="button"
@@ -1580,7 +1574,7 @@ function BusinessDocumentScreen({
             </div>
           ) : (
             <button
-              className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper)]"
+              className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper)]"
               disabled={waiting}
               onClick={onManual}
               type="button"
@@ -1605,26 +1599,24 @@ function OnboardingBackGuard({
   onDiscard: () => void;
   onKeepEditing: () => void;
 }) {
-  useEffect(() => {
-    function keepEditingOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !busy) onKeepEditing();
-    }
-
-    document.addEventListener("keydown", keepEditingOnEscape);
-    return () => document.removeEventListener("keydown", keepEditingOnEscape);
-  }, [busy, onKeepEditing]);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const { dialogRef, onCancel, onKeyDown } = useModalDialog({
+    onClose: onKeepEditing,
+    closeDisabled: busy,
+    initialFocusRef: keepEditingRef
+  });
 
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-[rgb(32_33_43_/_58%)] p-5 backdrop-blur-sm">
-      <article
-        aria-describedby="onboarding-back-guard-description"
-        aria-labelledby="onboarding-back-guard-title"
-        aria-modal="true"
-        className="sunlit-panel w-full max-w-lg rounded-[1.75rem] p-6 shadow-2xl"
-        role="dialog"
-      >
-        <p className="sunlit-eyebrow">{copy.backGuard.eyebrow}</p>
-        <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]" id="onboarding-back-guard-title">
+    <dialog
+      aria-describedby="onboarding-back-guard-description"
+      aria-labelledby="onboarding-back-guard-title"
+      className="sunlit-modal-shell fixed inset-0 m-auto h-fit max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto rounded-[1.75rem] bg-transparent p-0 text-[var(--text)] backdrop:bg-[var(--overlay)]"
+      onCancel={onCancel}
+      onKeyDown={onKeyDown}
+      ref={dialogRef}
+    >
+      <article className="sunlit-panel w-full max-w-lg rounded-[1.75rem] p-6 shadow-2xl">
+        <h2 className="text-xl font-semibold text-[var(--sunlit-ink)]" id="onboarding-back-guard-title">
           {copy.backGuard.title}
         </h2>
         <p className="mt-4 text-[15px] leading-6 text-[var(--sunlit-muted)]" id="onboarding-back-guard-description">
@@ -1632,15 +1624,16 @@ function OnboardingBackGuard({
         </p>
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button
-            className="sunlit-secondary min-h-11 rounded-xl px-5 text-[14px] font-bold disabled:opacity-50"
+            className="sunlit-secondary min-h-11 rounded-xl px-5 text-[15px] font-semibold disabled:opacity-50"
             disabled={busy}
             onClick={onKeepEditing}
+            ref={keepEditingRef}
             type="button"
           >
             {copy.backGuard.keep}
           </button>
           <button
-            className="min-h-11 rounded-xl border border-[rgb(217_63_122_/_28%)] bg-white px-5 text-[14px] font-bold text-[var(--sunlit-pink)] disabled:opacity-50"
+            className="min-h-11 rounded-xl border border-[var(--danger)] bg-[var(--surface)] px-5 text-[15px] font-semibold text-[var(--danger)] disabled:opacity-50"
             disabled={busy}
             onClick={onDiscard}
             type="button"
@@ -1649,7 +1642,7 @@ function OnboardingBackGuard({
           </button>
         </div>
       </article>
-    </div>
+    </dialog>
   );
 }
 
@@ -1719,27 +1712,27 @@ function StepScreen({
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="sunlit-panel flex min-h-[610px] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-white/90 backdrop-blur-xl">
+        <section className="sunlit-panel flex min-h-[500px] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] backdrop-blur-xl">
           <div className="h-1.5 shrink-0 bg-[var(--sunlit-paper-deep)]">
             <div
               className="h-full rounded-e-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-[width] duration-300"
               style={{ width: `${(step.id / 7) * 100}%` }}
             />
           </div>
-          <div className="min-w-0 flex-1 p-6 sm:p-8 lg:p-10">
+          <div className="min-w-0 flex-1 p-5 sm:p-6 lg:p-7">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
                 <StepIcon size={22} />
               </span>
               <div>
-                <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight sm:text-[32px]">{step.title}</h1>
+                <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight sm:text-[32px] rtl:tracking-normal">{step.title}</h1>
                 <p className="mt-2 max-w-2xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{step.intro}</p>
               </div>
             </div>
 
             {step.suggestions ? (
               <div className="mt-7">
-                <p className="text-[13px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{copy.suggestions}</p>
+                <p className="text-[13px] font-semibold text-[var(--sunlit-muted)]">{copy.suggestions}</p>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {step.suggestions.map((suggestion) => {
                     const target = step.suggestionTarget;
@@ -1750,8 +1743,8 @@ function StepScreen({
                         aria-pressed={active}
                         className={
                           active
-                            ? "rounded-full border border-[rgb(33_191_174_/_35%)] bg-[var(--sunlit-aqua-soft)] px-3.5 py-2 text-[14px] font-bold text-[var(--sunlit-aqua-dark)]"
-                            : "rounded-full border border-[var(--sunlit-line)] bg-white px-3.5 py-2 text-[14px] font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
+                            ? "rounded-full border border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] bg-[var(--sunlit-aqua-soft)] px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)]"
+                            : "rounded-full border border-[var(--sunlit-line)] bg-[var(--surface)] px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
                         }
                         key={suggestion}
                         onClick={() => onSuggestion(suggestion)}
@@ -1812,9 +1805,9 @@ function StepScreen({
             {validationIssue ? <p className="mt-4 text-[14px] font-semibold text-[var(--sunlit-danger)]">{copy.errors[validationIssue]}</p> : null}
           </div>
 
-          <div className="mt-auto flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-white/65 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+          <div className="mt-auto flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-[var(--surface)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
             <button
-              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold"
               disabled={saving || documentBusy || documentAnalysis?.status === "PROCESSING"}
               onClick={onBack}
               type="button"
@@ -1825,7 +1818,7 @@ function StepScreen({
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
               {step.skippable ? (
                 <button
-                  className="rounded-xl px-5 py-3 text-[14px] font-bold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
+                  className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
                   disabled={saving}
                   onClick={onSkip}
                   type="button"
@@ -1834,7 +1827,7 @@ function StepScreen({
                 </button>
               ) : null}
               <button
-                className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+                className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[15px] font-semibold disabled:translate-y-0 disabled:opacity-40"
                 disabled={saving || !canSave}
                 onClick={onSave}
                 type="button"
@@ -1847,13 +1840,13 @@ function StepScreen({
           </div>
         </section>
 
-        <aside className="self-start rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/70 p-5 lg:sticky lg:top-5">
-          <div className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-aqua-dark)]">
+        <aside className="self-start rounded-2xl border border-[color-mix(in_srgb,var(--secondary)_22%,transparent)] bg-[color-mix(in_srgb,var(--sunlit-aqua-soft)_70%,transparent)] p-5 lg:sticky lg:top-5">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)]">
             <Info size={17} />
             {copy.helpTitle}
           </div>
           <p className="mt-3 text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{step.help}</p>
-          <div className="mt-5 flex items-center gap-2 border-t border-[rgb(33_191_174_/_18%)] pt-4 text-[13px] font-bold text-[var(--sunlit-muted)]">
+          <div className="mt-5 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] pt-4 text-[13px] font-semibold text-[var(--sunlit-muted)]">
             {step.skippable ? <CheckCircle2 size={15} /> : <ShieldCheck size={15} />}
             {step.skippable ? copy.optional : copy.essential}
           </div>
@@ -1901,12 +1894,12 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
     <section className="mt-5 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-bold text-[var(--sunlit-ink)]">{label}</h2>
+          <h2 className="text-[15px] font-semibold text-[var(--sunlit-ink)]">{label}</h2>
           <p className="mt-1 text-[13px] leading-5 text-[var(--sunlit-muted)]">{hint}</p>
         </div>
         {colors.length < 7 ? (
           <button
-            className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-bold"
+            className="sunlit-secondary inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[15px] font-semibold"
             onClick={() => addInputRef.current?.click()}
             type="button"
           >
@@ -1926,7 +1919,10 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
         value={pendingColor}
       />
       {hasPendingColor && colors.length < 7 ? (
-        <div aria-live="polite" className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[rgb(33_191_174_/_24%)] bg-white p-3">
+        <div
+          aria-live="polite"
+          className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--secondary)_24%,transparent)] bg-[var(--surface)] p-3"
+        >
           <button
             aria-label={choose}
             className="h-10 w-10 rounded-lg shadow-sm ring-1 ring-black/10"
@@ -1935,11 +1931,11 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
             type="button"
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-[11px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{selected}</span>
-            <code className="mt-0.5 block text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{pendingColor}</code>
+            <span className="block text-[13px] font-semibold text-[var(--sunlit-muted)]">{selected}</span>
+            <code className="mt-0.5 block text-[14px] font-semibold text-[var(--sunlit-ink-soft)]">{pendingColor}</code>
           </span>
           <button
-            className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
+            className="sunlit-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-45"
             disabled={colors.includes(pendingColor)}
             onClick={() => addColor(pendingColor)}
             type="button"
@@ -1951,7 +1947,7 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
       {colors.length ? (
         <div className="mt-4 flex flex-wrap gap-3">
           {colors.map((color, index) => (
-            <div className="flex items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2" key={`${color}-${index}`}>
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-2" key={`${color}-${index}`}>
               <label className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-lg shadow-sm ring-1 ring-black/10" style={{ backgroundColor: color }}>
                 <span className="sr-only">{color}</span>
                 <input
@@ -1962,10 +1958,10 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
                   value={color}
                 />
               </label>
-              <code className="text-[13px] font-bold text-[var(--sunlit-ink-soft)]">{color}</code>
+              <code className="text-[13px] font-semibold text-[var(--sunlit-ink-soft)]">{color}</code>
               <button
                 aria-label={remove}
-                className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_8%)] hover:text-[var(--sunlit-danger)]"
+                className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] hover:text-[var(--sunlit-danger)]"
                 onClick={() => onChange(colors.filter((_item, colorIndex) => colorIndex !== index))}
                 type="button"
               >
@@ -2012,7 +2008,7 @@ function OfferingEditor({
     <section aria-label={copy.offerings.add} className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 sm:p-5">
       <div className="onboarding-offering-table overflow-x-auto pb-1">
         <div className="min-w-[790px]">
-          <div className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] gap-2 px-1 pb-2 text-[12px] font-bold uppercase tracking-[.06em] text-[var(--sunlit-muted)]">
+          <div className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] gap-2 px-1 pb-2 text-[13px] font-semibold text-[var(--sunlit-muted)]">
             <span>{copy.offerings.kind}</span>
             <span>{copy.offerings.name}</span>
             <span>{copy.offerings.description}</span>
@@ -2022,7 +2018,7 @@ function OfferingEditor({
           <div className="space-y-2">
             {items.map((item, index) => (
               <div
-                className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2"
+                className="grid grid-cols-[120px_minmax(170px,1fr)_minmax(230px,1.35fr)_150px_42px] items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-2"
                 key={index}
               >
                 <select
@@ -2062,7 +2058,7 @@ function OfferingEditor({
                 />
                 <button
                   aria-label={`${copy.offerings.remove} ${item.name || index + 1}`}
-                  className="grid h-10 w-10 place-items-center rounded-lg text-[var(--sunlit-muted)] hover:bg-[rgb(199_53_80_/_7%)] hover:text-[var(--sunlit-danger)]"
+                  className="grid h-10 w-10 place-items-center rounded-lg text-[var(--sunlit-muted)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] hover:text-[var(--sunlit-danger)]"
                   onClick={() => removeItem(index)}
                   type="button"
                 >
@@ -2076,7 +2072,7 @@ function OfferingEditor({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <button
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[14px] font-bold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
           disabled={items.length >= 30}
           onClick={() => onItemsChange([...items, emptyOnboardingOffering()])}
           type="button"
@@ -2168,20 +2164,20 @@ function OfferingDocumentLauncher({
   const active = waiting || analysis?.status === "READY" || analysis?.status === "FAILED";
 
   return (
-    <section className="mt-5 border-t border-[rgb(33_191_174_/_18%)] pt-5">
+    <section className="mt-5 border-t border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] pt-5">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-warning)]">
           <FileText size={17} />
         </span>
         <div className="min-w-0">
-          <h2 className="text-[15px] font-bold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
+          <h2 className="text-[15px] font-semibold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
           <p className="mt-1 text-[13px] leading-5 text-[var(--sunlit-ink-soft)]">{copy.documents.body}</p>
         </div>
       </div>
 
       {!active ? (
         <label
-          className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[rgb(33_191_174_/_48%)] bg-white/80 px-3 py-3 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] hover:border-[var(--sunlit-aqua)] hover:bg-white"
+          className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-3 py-3 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)] hover:border-[var(--sunlit-aqua)] hover:bg-[var(--surface)]"
           onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
           onDrop={(event: DragEvent<HTMLLabelElement>) => {
             event.preventDefault();
@@ -2203,13 +2199,13 @@ function OfferingDocumentLauncher({
           />
         </label>
       ) : waiting ? (
-        <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/80 px-3 py-3 text-[13px] font-bold text-[var(--sunlit-ink-soft)]">
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--surface)] px-3 py-3 text-[13px] font-semibold text-[var(--sunlit-ink-soft)]">
           <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={17} />
           {copy.documents.analyzing}
         </div>
       ) : (
         <button
-          className="sunlit-secondary mt-3 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-start text-[13px] font-bold"
+          className="sunlit-secondary mt-3 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-start text-[15px] font-semibold"
           onClick={() => document.getElementById("offering-document-review")?.scrollIntoView({ behavior: "smooth", block: "start" })}
           type="button"
         >
@@ -2218,8 +2214,8 @@ function OfferingDocumentLauncher({
         </button>
       )}
 
-      {!active && message ? <p className="mt-2 text-[12px] font-semibold leading-5 text-[var(--sunlit-danger)]">{message}</p> : null}
-      {!active ? <p className="mt-2 text-[12px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</p> : null}
+      {!active && message ? <p className="mt-2 text-[13px] font-semibold leading-5 text-[var(--sunlit-danger)]">{message}</p> : null}
+      {!active ? <p className="mt-2 text-[13px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</p> : null}
     </section>
   );
 }
@@ -2262,8 +2258,8 @@ function OfferingDocumentAssistant({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[16px] font-bold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
-            <span className="rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-muted)] ring-1 ring-[var(--sunlit-line)]">
+            <h2 className="text-[16px] font-semibold text-[var(--sunlit-ink)]">{copy.documents.title}</h2>
+            <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-[13px] font-semibold text-[var(--sunlit-muted)] ring-1 ring-[var(--sunlit-line)]">
               {copy.documents.optional}
             </span>
           </div>
@@ -2273,7 +2269,7 @@ function OfferingDocumentAssistant({
 
       {analysis === null && !busy ? (
         <label
-          className="mx-4 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-[rgb(33_191_174_/_48%)] bg-white px-4 py-3 hover:border-[var(--sunlit-aqua)] hover:bg-[var(--sunlit-aqua-soft)]/35 sm:mx-5"
+          className="mx-4 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-4 py-3 hover:border-[var(--sunlit-aqua)] hover:bg-[color-mix(in_srgb,var(--sunlit-aqua-soft)_35%,transparent)] sm:mx-5"
           onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
           onDrop={(event: DragEvent<HTMLLabelElement>) => {
             event.preventDefault();
@@ -2283,11 +2279,11 @@ function OfferingDocumentAssistant({
           <span className="flex min-w-0 items-center gap-3">
             <UploadCloud className="shrink-0 text-[var(--sunlit-aqua-dark)]" size={21} />
             <span>
-              <strong className="block text-[14px] font-bold text-[var(--sunlit-ink)]">{copy.documents.choose}</strong>
-              <span className="mt-0.5 block text-[12px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</span>
+              <strong className="block text-[14px] font-semibold text-[var(--sunlit-ink)]">{copy.documents.choose}</strong>
+              <span className="mt-0.5 block text-[13px] leading-5 text-[var(--sunlit-muted)]">{copy.documents.expires}</span>
             </span>
           </span>
-          <span className="sunlit-secondary hidden shrink-0 rounded-lg px-3 py-2 text-[13px] font-bold sm:inline-flex">{copy.documents.analyze}</span>
+          <span className="sunlit-secondary hidden shrink-0 rounded-lg px-3 py-2 text-[13px] font-semibold sm:inline-flex">{copy.documents.analyze}</span>
           <input
             accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             className="sr-only"
@@ -2303,24 +2299,28 @@ function OfferingDocumentAssistant({
       ) : null}
 
       {waiting ? (
-        <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-white px-4 py-4 text-[14px] font-bold text-[var(--sunlit-ink-soft)] sm:mx-5">
+        <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-[var(--surface)] px-4 py-4 text-[14px] font-semibold text-[var(--sunlit-ink-soft)] sm:mx-5">
           <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={19} />
           {copy.documents.analyzing}
         </div>
       ) : null}
 
       {analysis?.status === "FAILED" && !busy ? (
-        <div className="mx-4 mb-4 rounded-xl border border-[rgb(199_53_80_/_18%)] bg-white p-4 sm:mx-5">
+        <div className="mx-4 mb-4 rounded-xl border border-[color-mix(in_srgb,var(--danger)_18%,transparent)] bg-[var(--surface)] p-4 sm:mx-5">
           <p className="text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{offeringDocumentFailureMessage(locale, analysis.failureCode)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {canRetry ? (
-              <button className="sunlit-secondary inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-bold" onClick={onRetry} type="button">
+              <button
+                className="sunlit-secondary inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[15px] font-semibold"
+                onClick={onRetry}
+                type="button"
+              >
                 <RefreshCw size={14} />
                 {copy.documents.retry}
               </button>
             ) : null}
             <button
-              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-bold text-[var(--sunlit-danger)] hover:bg-[rgb(199_53_80_/_7%)]"
+              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
               onClick={onDiscard}
               type="button"
             >
@@ -2332,8 +2332,8 @@ function OfferingDocumentAssistant({
       ) : null}
 
       {analysis?.status === "READY" && catalog && !busy ? (
-        <div className="border-t border-[var(--sunlit-line)] bg-white px-4 py-5 sm:px-5">
-          <h3 className="text-[17px] font-bold text-[var(--sunlit-ink)]">{copy.documents.reviewTitle}</h3>
+        <div className="border-t border-[var(--sunlit-line)] bg-[var(--surface)] px-4 py-5 sm:px-5">
+          <h3 className="text-[17px] font-semibold text-[var(--sunlit-ink)]">{copy.documents.reviewTitle}</h3>
           <p className="mt-1 text-[14px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.documents.reviewBody}</p>
 
           <div className="mt-4">
@@ -2356,14 +2356,14 @@ function OfferingDocumentAssistant({
 
           <div className="mt-5 flex flex-col-reverse gap-2 border-t border-[var(--sunlit-line)] pt-4 sm:flex-row sm:justify-end">
             <button
-              className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-[var(--sunlit-danger)] hover:bg-[rgb(199_53_80_/_7%)]"
+              className="rounded-lg px-4 py-2.5 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
               onClick={onDiscard}
               type="button"
             >
               {copy.documents.discard}
             </button>
             <button
-              className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-bold"
+              className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-[15px] font-semibold"
               onClick={onApprove}
               type="button"
             >
@@ -2384,15 +2384,13 @@ function ContextItem({ current = false, label, muted = false, title }: { current
     <div
       className={
         current
-          ? "rounded-2xl border border-[rgb(217_63_122_/_20%)] bg-white/90 px-3 py-3 text-center shadow-sm"
-          : "rounded-2xl border border-white/55 bg-white/45 px-3 py-3 text-center backdrop-blur"
+          ? "rounded-2xl border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[var(--surface)] px-3 py-3 text-center shadow-sm"
+          : "rounded-2xl border border-white/55 bg-[var(--surface)] px-3 py-3 text-center backdrop-blur"
       }
     >
-      <span className="block text-[12px] font-bold uppercase tracking-[.08em] text-[var(--sunlit-muted)]">{label}</span>
+      <span className="block text-[13px] font-semibold text-[var(--sunlit-muted)]">{label}</span>
       <strong
-        className={
-          muted ? "mt-1 block min-h-5 truncate text-[14px] text-[rgb(98_91_102_/_72%)]" : "mt-1 block min-h-5 truncate text-[14px] text-[var(--sunlit-ink)]"
-        }
+        className={muted ? "mt-1 block min-h-5 truncate text-[14px] text-[var(--muted)]" : "mt-1 block min-h-5 truncate text-[14px] text-[var(--sunlit-ink)]"}
       >
         {title || <span aria-hidden="true">&nbsp;</span>}
       </strong>
@@ -2416,10 +2414,10 @@ function OnboardingField({
   const inputClass = "sunlit-field mt-2 rounded-xl px-4 py-3 text-[15px] leading-6 outline-none";
   return (
     <label className={full ? "sm:col-span-2" : ""}>
-      <span className="flex items-center gap-2 text-[15px] font-bold text-[var(--sunlit-ink-soft)]">
+      <span className="flex items-center gap-2 text-[15px] font-semibold text-[var(--sunlit-ink-soft)]">
         {field.label}
         {field.recommended ? (
-          <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2 py-0.5 text-[12px] font-bold text-[var(--sunlit-pink)]">{copy.recommended}</span>
+          <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2 py-0.5 text-[13px] font-semibold text-[var(--sunlit-pink)]">{copy.recommended}</span>
         ) : null}
       </span>
       {field.area ? (
@@ -2476,27 +2474,27 @@ function ReviewScreen({
   const targets: OnboardingStepId[] = [1, 2, 4, 3, 5, 6, 7];
   return (
     <section className="mx-auto w-full max-w-[1280px] px-5 pb-10 sm:px-8">
-      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-9 lg:p-10">
+      <section className="sunlit-panel rounded-[2rem] bg-[var(--surface)] p-6 backdrop-blur-xl sm:p-9 lg:p-10">
         <div className="max-w-4xl">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <ShieldCheck size={23} />
           </span>
-          <h1 className="mt-5 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.review.title}</h1>
+          <h1 className="mt-5 font-display text-[32px] font-semibold leading-tight tracking-tight sm:text-[38px] rtl:tracking-normal">{copy.review.title}</h1>
           <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.review.body}</p>
         </div>
 
         {documentAnalysis?.status === "READY" && documentAnalysis.result ? (
-          <div className="mt-6 rounded-2xl border border-[rgb(33_191_174_/_22%)] bg-[var(--sunlit-aqua-soft)]/55 p-4 sm:p-5">
+          <div className="mt-6 rounded-2xl border border-[color-mix(in_srgb,var(--secondary)_22%,transparent)] bg-[color-mix(in_srgb,var(--sunlit-aqua-soft)_55%,transparent)] p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <strong className="text-[15px] text-[var(--sunlit-aqua-dark)]">
                 {locale === "ar" ? "معلومات مستخرجة من ملفاتك" : "Information found in your files"}
               </strong>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white/80 px-3 py-1 text-[12px] font-bold text-[var(--sunlit-muted)]">
+                <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-[13px] font-semibold text-[var(--sunlit-muted)]">
                   {documentAnalysis.files.length} {locale === "ar" ? "ملف" : documentAnalysis.files.length === 1 ? "file" : "files"}
                 </span>
                 <button
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-bold text-[var(--sunlit-danger)] transition hover:bg-white/80 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-[var(--sunlit-danger)] transition hover:bg-[var(--surface)] disabled:opacity-50"
                   disabled={saving}
                   onClick={onDiscardDocumentAnalysis}
                   type="button"
@@ -2529,28 +2527,28 @@ function ReviewScreen({
             const required = target === 1 || target === 2;
             return (
               <button
-                className={`group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[rgb(33_191_174_/_32%)] hover:bg-white hover:shadow-sm ${index === copy.review.rows.length - 1 ? "md:col-span-2" : ""}`}
+                className={`group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--secondary)_32%,transparent)] hover:bg-[var(--surface)] hover:shadow-sm ${index === copy.review.rows.length - 1 ? "md:col-span-2" : ""}`}
                 key={title}
                 onClick={() => onEdit(target)}
                 type="button"
               >
                 <span className="min-w-0">
-                  <strong className="block text-[16px] font-bold">{title}</strong>
+                  <strong className="block text-[16px] font-semibold">{title}</strong>
                   <span className="mt-1 block text-[14px] text-[var(--sunlit-muted)]">{note}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <span
                     className={
                       ready
-                        ? "rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-aqua-dark)]"
+                        ? "rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)]"
                         : required
-                          ? "rounded-full bg-[rgb(199_53_80_/_10%)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-danger)]"
-                          : "rounded-full bg-[rgb(98_91_102_/_8%)] px-3 py-1.5 text-[13px] font-bold text-[var(--sunlit-muted)]"
+                          ? "rounded-full bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 py-1.5 text-[13px] font-semibold text-[var(--sunlit-danger)]"
+                          : "rounded-full bg-[var(--surface-muted)] px-3 py-1.5 text-[13px] font-semibold text-[var(--sunlit-muted)]"
                     }
                   >
                     {ready ? copy.review.ready : required ? copy.essential : copy.notAdded}
                   </span>
-                  <span className="hidden items-center gap-1 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] group-hover:flex sm:flex">
+                  <span className="hidden items-center gap-1 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)] group-hover:flex sm:flex">
                     <Pencil size={13} />
                     {copy.edit}
                   </span>
@@ -2561,11 +2559,11 @@ function ReviewScreen({
         </div>
 
         <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" onClick={onBack} type="button">
+          <button className="sunlit-secondary rounded-xl px-5 py-3 text-[15px] font-semibold" onClick={onBack} type="button">
             {copy.back}
           </button>
           <button
-            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[15px] font-semibold disabled:translate-y-0 disabled:opacity-40"
             disabled={!readyForProfile || saving}
             onClick={onCreate}
             type="button"
@@ -2612,11 +2610,13 @@ function ProfileScreen({
     return (
       <section className="mx-auto grid min-h-[calc(100vh-110px)] max-w-4xl place-items-center px-5 pb-12 text-center">
         <div>
-          <span className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)]">
-            <span className="absolute inset-0 animate-ping rounded-[2rem] bg-[rgb(33_191_174_/_10%)]" />
+          <span className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] border border-[color-mix(in_srgb,var(--secondary)_24%,transparent)] bg-[var(--sunlit-aqua-soft)]">
+            <span className="absolute inset-0 animate-ping rounded-[2rem] bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)]" />
             <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} />
           </span>
-          <h1 className="mt-7 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.profile.generatingTitle}</h1>
+          <h1 className="mt-7 font-display text-[32px] font-semibold leading-tight tracking-tight sm:text-[38px] rtl:tracking-normal">
+            {copy.profile.generatingTitle}
+          </h1>
           <p className="mx-auto mt-3 max-w-xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.profile.generatingBody}</p>
         </div>
       </section>
@@ -2626,9 +2626,9 @@ function ProfileScreen({
   if (!profile) {
     return (
       <section className="mx-auto grid min-h-[calc(100vh-110px)] max-w-4xl place-items-center px-5 pb-12 text-center">
-        <div className="sunlit-panel rounded-[2rem] bg-white/90 p-9">
-          <h1 className="font-display text-[32px] font-bold leading-tight">{copy.errors.generate}</h1>
-          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 text-[14px] font-bold" onClick={onRegenerate} type="button">
+        <div className="sunlit-panel rounded-[2rem] bg-[var(--surface)] p-9">
+          <h1 className="font-display text-[32px] font-semibold leading-tight">{copy.errors.generate}</h1>
+          <button className="sunlit-primary mt-6 rounded-xl px-6 py-3 text-[15px] font-semibold" onClick={onRegenerate} type="button">
             {copy.profile.regenerate}
           </button>
         </div>
@@ -2676,19 +2676,16 @@ function ProfileScreen({
 
   return (
     <section className="mx-auto w-full max-w-[1480px] px-5 pb-12 sm:px-8">
-      <section className="sunlit-panel rounded-[2rem] bg-white/92 p-6 backdrop-blur-xl sm:p-8 lg:p-9">
+      <section className="sunlit-panel rounded-[2rem] bg-[var(--surface)] p-6 backdrop-blur-xl sm:p-8 lg:p-9">
         <div className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-3xl">
-            <span className="sunlit-eyebrow inline-flex items-center gap-2">
-              <Sparkles size={14} />
-              {copy.profile.eyebrow}
-            </span>
-            <h1 className="mt-3 font-display text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">{copy.profile.title}</h1>
+            <h1 className="font-display text-[28px] font-semibold leading-tight">{copy.profile.title}</h1>
             <p className="mt-3 text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.profile.body}</p>
           </div>
           <div
             className="inline-flex shrink-0 self-start rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-1"
-            aria-label="Profile language"
+            aria-label={locale === "ar" ? "لغة الملف" : "Profile language"}
+            role="group"
           >
             <LanguageButton active={language === "en"} onClick={() => setLanguage("en")}>
               English
@@ -2707,18 +2704,15 @@ function ProfileScreen({
               }`}
               key={group.key}
             >
-              <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--sunlit-line)] bg-white/75 px-5 py-3">
-                <h2 className="text-[18px] font-bold text-[var(--sunlit-ink)]">{group.title}</h2>
-                <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[12px] font-bold text-[var(--sunlit-aqua-dark)]">
-                  {group.key === "identity" ? group.fields.length + 1 : group.fields.length}
-                </span>
+              <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--sunlit-line)] bg-[var(--surface)] px-5 py-3">
+                <h2 className="text-[18px] font-semibold text-[var(--sunlit-ink)]">{group.title}</h2>
               </header>
 
               {group.key === "identity" ? (
                 <label className="block px-5 py-4">
-                  <span className="text-[14px] font-bold text-[var(--sunlit-ink-soft)]">{copy.profile.businessName}</span>
+                  <span className="text-[14px] font-semibold text-[var(--sunlit-ink-soft)]">{copy.profile.businessName}</span>
                   <input
-                    className="sunlit-field mt-2 min-h-12 w-full rounded-xl px-4 font-display text-[20px] font-bold outline-none"
+                    className="sunlit-field mt-2 min-h-12 w-full rounded-xl px-4 font-display text-[20px] font-semibold outline-none"
                     dir="auto"
                     onChange={(event) => updateBusinessName(event.target.value)}
                     value={profile.businessName}
@@ -2734,24 +2728,24 @@ function ProfileScreen({
                   return (
                     <article className={index > 0 ? "border-t border-[var(--sunlit-line)] px-5 py-4" : "px-5 py-4"} key={field}>
                       <div className="flex items-center justify-between gap-3">
-                        <label className="text-[15px] font-bold text-[var(--sunlit-ink-soft)]" htmlFor={fieldId}>
+                        <label className="text-[15px] font-semibold text-[var(--sunlit-ink-soft)]" htmlFor={fieldId}>
                           {copy.profile.fields[field]}
                         </label>
                         <button
                           aria-controls={`${fieldId}-content`}
                           aria-expanded={expanded}
-                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-bold text-[var(--sunlit-aqua-dark)] transition hover:bg-[var(--sunlit-aqua-soft)]"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] transition hover:bg-[var(--sunlit-aqua-soft)]"
                           onClick={() => toggleExpanded(field)}
                           type="button"
                         >
                           <ChevronDown className={`transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} size={15} />
-                          {expanded ? (locale === "ar" ? "طي" : "Collapse") : locale === "ar" ? "عرض وتعديل" : "Review & edit"}
+                          {expanded ? (locale === "ar" ? "طي" : "Collapse") : locale === "ar" ? "تعديل" : "Edit"}
                         </button>
                       </div>
                       <div id={`${fieldId}-content`}>
                         {expanded ? (
                           <textarea
-                            className="onboarding-prose-field mt-3 h-36 w-full resize-none rounded-xl border border-[var(--sunlit-line-strong)] bg-white px-4 py-3 text-[16px] leading-7 outline-none"
+                            className="onboarding-prose-field mt-3 h-36 w-full resize-none rounded-xl border border-[var(--sunlit-line-strong)] bg-[var(--surface)] px-4 py-3 text-[16px] leading-7 outline-none"
                             dir={language === "ar" ? "rtl" : "ltr"}
                             id={fieldId}
                             onChange={(event) => updateProfileField(field, language, event.target.value)}
@@ -2774,18 +2768,18 @@ function ProfileScreen({
           ))}
         </div>
 
-        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[rgb(246_196_83_/_38%)] bg-[rgb(246_196_83_/_14%)] p-4">
+        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--secondary)_38%,transparent)] bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] p-4">
           <Languages className="mt-0.5 shrink-0 text-[var(--sunlit-warning)]" size={18} />
           <p className="text-[15px] leading-6 text-[var(--sunlit-ink-soft)]">{copy.profile.editHint}</p>
         </div>
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <button className="sunlit-secondary rounded-xl px-5 py-3 text-[14px] font-bold" disabled={saving} onClick={onBack} type="button">
+            <button className="sunlit-secondary rounded-xl px-5 py-3 text-[15px] font-semibold" disabled={saving} onClick={onBack} type="button">
               {copy.profile.back}
             </button>
             <button
-              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
+              className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold"
               disabled={saving}
               onClick={onRegenerate}
               type="button"
@@ -2795,7 +2789,7 @@ function ProfileScreen({
             </button>
           </div>
           <button
-            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold disabled:translate-y-0 disabled:opacity-40"
+            className="sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[15px] font-semibold disabled:translate-y-0 disabled:opacity-40"
             disabled={saving || !valid}
             onClick={onApprove}
             type="button"
@@ -2812,10 +2806,11 @@ function ProfileScreen({
 function LanguageButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
   return (
     <button
+      aria-pressed={active}
       className={
         active
-          ? "rounded-lg bg-[var(--sunlit-ink)] px-4 py-2 text-[14px] font-bold text-white shadow-sm"
-          : "rounded-lg px-4 py-2 text-[14px] font-bold text-[var(--sunlit-muted)]"
+          ? "rounded-lg bg-[var(--primary)] px-4 py-2 text-[15px] font-semibold text-[var(--on-primary)] shadow-sm"
+          : "rounded-lg px-4 py-2 text-[15px] font-semibold text-[var(--sunlit-muted)]"
       }
       onClick={onClick}
       type="button"

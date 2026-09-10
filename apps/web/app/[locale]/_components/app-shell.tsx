@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useModalDialog } from "./use-modal-dialog";
 import Link from "next/link";
 import {
   BarChart3,
@@ -189,22 +191,22 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip lg:h-screen lg:overflow-hidden" dir={locale === "ar" ? "rtl" : "ltr"}>
       <div
-        className={`grid min-h-screen lg:h-screen ${sidebarCollapsed ? "lg:grid-cols-[5.75rem_minmax(0,1fr)]" : "lg:grid-cols-[15.25rem_minmax(0,1fr)]"} ${
+        className={`grid min-h-screen lg:h-screen ${sidebarCollapsed ? "lg:grid-cols-[6rem_minmax(0,1fr)]" : "lg:grid-cols-[15.25rem_minmax(0,1fr)]"} ${
           sidebarPreferenceReady ? "lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out motion-reduce:transition-none" : ""
         }`}
         data-sidebar-collapsed={sidebarCollapsed}
       >
         <aside
-          className="relative hidden border-e border-[var(--sunlit-line)] bg-white/95 px-6 py-5 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-visible"
+          className={`relative hidden min-w-0 border-e border-[var(--sunlit-line)] bg-[var(--surface)] py-5 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-visible ${sidebarCollapsed ? "px-4" : "px-6"}`}
           data-app-sidebar
         >
           <Link
             className={`grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl text-[var(--sunlit-ink)] ${
-              sidebarCollapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
+              sidebarCollapsed ? "mx-auto w-[2.75rem] gap-0" : "w-full gap-2"
             }`}
             href={`/${locale}/app`}
           >
-            <span className="grid h-[40px] w-[40px] shrink-0 place-items-center justify-self-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)] shadow-[0_10px_24px_rgb(32_33_43_/_16%)]">
+            <span className="grid h-[40px] w-[40px] shrink-0 place-items-center justify-self-center rounded-xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[0_10px_24px_rgb(32_33_43_/_16%)]">
               <MarkosAiIcon size={21} />
             </span>
             <span
@@ -213,7 +215,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               }`}
             >
               <span className="block text-lg font-bold tracking-tight">MARKOS AI</span>
-              <span className="block text-xs font-semibold text-[var(--sunlit-muted)]">{locale === "ar" ? "استوديو التسويق" : "Marketing studio"}</span>
             </span>
           </Link>
 
@@ -223,18 +224,18 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             aria-label={
               sidebarCollapsed ? (locale === "ar" ? "توسيع الشريط الجانبي" : "Expand sidebar") : locale === "ar" ? "طي الشريط الجانبي" : "Collapse sidebar"
             }
-            className="group absolute -end-[20px] top-[54px] z-50 grid h-[40px] w-[40px] place-items-center rounded-full outline-none"
+            className="group absolute -end-[22px] top-[52px] z-50 grid h-[44px] w-[44px] place-items-center rounded-full outline-none"
             onClick={toggleSidebar}
             type="button"
           >
-            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-white text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--sunlit-coral)] group-hover:text-[var(--sunlit-coral-deep)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--sunlit-aqua)]">
+            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-[var(--surface)] text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--sunlit-coral)] group-hover:text-[var(--link)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--focus)]">
               <SidebarToggleIcon aria-hidden="true" size={14} strokeWidth={2.4} />
             </span>
           </button>
 
           <nav
-            aria-label="Primary"
-            className="mt-8 grid min-h-0 flex-1 content-start gap-2 overflow-y-auto overscroll-contain pe-1"
+            aria-label={locale === "ar" ? "التنقل الرئيسي" : "Primary"}
+            className={`mt-8 grid min-h-0 min-w-0 flex-1 content-start gap-1.5 overflow-x-hidden overflow-y-auto overscroll-contain ${sidebarCollapsed ? "justify-items-center" : "pe-1"}`}
             id="markos-primary-navigation"
           >
             {primaryNavItems.map((item) => (
@@ -242,7 +243,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             ))}
           </nav>
 
-          <div className="mt-auto grid gap-2 border-t border-[var(--sunlit-line)] pt-4">
+          <div className={`mt-auto grid gap-2 border-t border-[var(--sunlit-line)] pt-4 ${sidebarCollapsed ? "justify-items-center" : ""}`}>
             <SidebarNotificationsButton
               collapsed={sidebarCollapsed}
               count={notifications.filter((notification) => !notification.readAt).length}
@@ -255,22 +256,22 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </aside>
 
         <section className="sunlit-card-scroll min-w-0 lg:h-screen lg:overflow-y-auto lg:overscroll-contain" data-app-content-scroll>
-          <header className="sticky top-0 z-30 border-b border-[var(--sunlit-line)] bg-white/92 px-5 py-3 backdrop-blur-xl sm:px-7 lg:hidden">
+          <header className="sticky top-0 z-30 border-b border-[var(--sunlit-line)] bg-[var(--surface)] px-5 py-3 backdrop-blur-xl sm:px-7 lg:hidden">
             <div className="mx-auto flex max-w-[1500px] items-center gap-3">
               <Link
                 aria-label="MARKOS AI"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)]"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--primary)] text-[var(--on-primary)]"
                 href={`/${locale}/app`}
               >
                 <MarkosAiIcon size={19} />
               </Link>
-              <p className="truncate text-lg font-bold tracking-tight text-[var(--sunlit-ink)]">{sectionLabel(locale, activeSection)}</p>
+              <span className="text-lg font-semibold tracking-tight text-[var(--sunlit-ink)]">MARKOS AI</span>
             </div>
           </header>
 
           <nav
-            className="flex gap-2 overflow-x-auto border-b border-[var(--sunlit-line)] bg-white/75 px-4 py-3 lg:hidden"
-            aria-label="Mobile primary"
+            className="flex gap-2 overflow-x-auto border-b border-[var(--sunlit-line)] bg-[var(--surface)] px-4 py-3 lg:hidden"
+            aria-label={locale === "ar" ? "التنقل الرئيسي للجوال" : "Mobile primary"}
             ref={mobileNavRef}
           >
             {primaryNavItems.map((item) => {
@@ -281,8 +282,8 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
                   aria-current={active ? "page" : undefined}
                   className={
                     active
-                      ? "flex shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 font-bold text-[var(--sunlit-pink)]"
-                      : "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 font-bold text-[var(--sunlit-muted)]"
+                      ? "flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
+                      : "flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
                   }
                   href={localizedHref(locale, item.slug)}
                   key={item.slug}
@@ -292,19 +293,23 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
                 </Link>
               );
             })}
-            <button className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 font-bold text-[var(--sunlit-muted)]" onClick={switchLocale} type="button">
+            <button
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
+              onClick={switchLocale}
+              type="button"
+            >
               <Languages aria-hidden="true" size={16} />
               {locale === "ar" ? "العربية" : "English"}
             </button>
             <button
-              className="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 font-bold text-[var(--sunlit-muted)]"
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
               onClick={() => setNotificationsOpen(true)}
               type="button"
             >
               <Bell aria-hidden="true" size={16} />
               {locale === "ar" ? "التنبيهات" : "Notifications"}
               {notifications.some((notification) => !notification.readAt) ? (
-                <span className="grid min-w-5 place-items-center rounded-full bg-[var(--sunlit-pink)] px-1 text-[10px] text-white">
+                <span className="grid min-w-5 place-items-center rounded-full bg-[var(--primary)] px-1 text-xs text-[var(--on-primary)]">
                   {notifications.filter((notification) => !notification.readAt).length}
                 </span>
               ) : null}
@@ -312,13 +317,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             <MobileNavLink activeSection={activeSection} item={settingsNavItem} locale={locale} />
           </nav>
 
-          <div
-            className={
-              activeSection === "calendar"
-                ? "mx-auto w-full max-w-[1500px] min-w-0 px-5 py-5 sm:px-7 xl:px-8 xl:py-6 2xl:px-10"
-                : "mx-auto w-full max-w-[1500px] min-w-0 px-5 py-5 sm:px-7 xl:px-8 xl:py-6 2xl:px-10"
-            }
-          >
+          <div className="mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8">
             {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
@@ -347,7 +346,7 @@ function SidebarNotificationsButton({ collapsed, count, locale, onClick }: { col
   return (
     <button
       aria-label={locale === "ar" ? `التنبيهات غير المقروءة: ${count}` : `Notifications, ${count} unread`}
-      className={`group relative grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent font-bold text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] ${
+      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       }`}
       onClick={onClick}
@@ -355,13 +354,13 @@ function SidebarNotificationsButton({ collapsed, count, locale, onClick }: { col
     >
       <span className="relative grid h-9 w-9 place-items-center justify-self-center rounded-lg text-[var(--sunlit-muted)]">
         <Bell size={20} />
-        {count > 0 ? <span className="absolute end-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-[var(--sunlit-pink)]" /> : null}
+        {count > 0 ? <span className="absolute end-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-[var(--primary)]" /> : null}
       </span>
       <span
-        className={`min-w-0 overflow-hidden whitespace-nowrap text-start text-sm transition-[max-width,opacity] ${collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"}`}
+        className={`min-w-0 overflow-hidden whitespace-nowrap text-start transition-[max-width,opacity] ${collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"}`}
       >
         {locale === "ar" ? "التنبيهات" : "Notifications"}
-        {count > 0 ? <span className="ms-2 rounded-full bg-[var(--sunlit-coral-soft)] px-2 py-0.5 text-xs text-[var(--sunlit-pink)]">{count}</span> : null}
+        {count > 0 ? <span className="ms-2 rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-xs text-[var(--sunlit-pink)]">{count}</span> : null}
       </span>
     </button>
   );
@@ -378,25 +377,33 @@ function NotificationDrawer({
   onClose: () => void;
   onRead: (notification: NotificationRecord) => void;
 }) {
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [onClose]);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const { dialogRef, onCancel, onKeyDown } = useModalDialog({ onClose, initialFocusRef: headingRef });
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-end bg-[rgb(32_33_43_/_35%)] rtl:justify-start" role="presentation">
-      <button aria-label={locale === "ar" ? "إغلاق التنبيهات" : "Close notifications"} className="absolute inset-0" onClick={onClose} type="button" />
+    <dialog
+      aria-labelledby="workspace-notifications-title"
+      className="sunlit-modal-shell z-[100] flex justify-end bg-[rgb(32_33_43_/_35%)]"
+      onCancel={onCancel}
+      onKeyDown={onKeyDown}
+      ref={dialogRef}
+    >
+      <button
+        aria-label={locale === "ar" ? "إغلاق التنبيهات" : "Close notifications"}
+        className="absolute inset-0"
+        onClick={onClose}
+        tabIndex={-1}
+        type="button"
+      />
       <aside
         aria-label={locale === "ar" ? "التنبيهات" : "Notifications"}
-        className="sunlit-card-scroll relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white p-6 shadow-2xl"
+        className="sunlit-card-scroll relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-[var(--surface)] p-6 shadow-2xl"
       >
         <header className="flex items-center justify-between gap-4 border-b border-[var(--sunlit-line)] pb-5">
           <div>
-            <p className="sunlit-eyebrow">MARKOS</p>
-            <h2 className="mt-2 text-3xl font-bold text-[var(--sunlit-ink)]">{locale === "ar" ? "التنبيهات" : "Notifications"}</h2>
+            <h2 className="text-3xl font-bold text-[var(--sunlit-ink)] outline-none" id="workspace-notifications-title" ref={headingRef} tabIndex={-1}>
+              {locale === "ar" ? "التنبيهات" : "Notifications"}
+            </h2>
           </div>
           <button
             aria-label={locale === "ar" ? "إغلاق" : "Close"}
@@ -415,11 +422,11 @@ function NotificationDrawer({
           ) : (
             notifications.map((notification) => (
               <article
-                className={`rounded-2xl border p-4 ${notification.readAt ? "border-[var(--sunlit-line)] bg-white" : "border-[#E8A8B2] bg-[#FFF7F8]"}`}
+                className={`rounded-2xl border p-4 ${notification.readAt ? "border-[var(--sunlit-line)] bg-[var(--surface)]" : "border-[var(--danger)] bg-[var(--danger-soft)]"}`}
                 key={notification.id}
               >
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
+                  <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--surface)] text-[var(--sunlit-pink)]">
                     <Bell size={17} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -452,7 +459,7 @@ function NotificationDrawer({
           )}
         </div>
       </aside>
-    </div>
+    </dialog>
   );
 }
 
@@ -463,7 +470,7 @@ function SidebarLanguageToggle({ collapsed, locale, onSwitch }: { collapsed: boo
   return (
     <button
       aria-label={switchLabel}
-      className={`group relative grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent font-bold text-[var(--sunlit-ink-soft)] outline-none transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)] ${
+      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] outline-none transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)] ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       }`}
       onClick={onSwitch}
@@ -477,21 +484,9 @@ function SidebarLanguageToggle({ collapsed, locale, onSwitch }: { collapsed: boo
           collapsed ? "max-w-0 opacity-0" : "max-w-40 opacity-100"
         }`}
       >
-        <span className="block text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">
-          {locale === "ar" ? "اللغة" : "Language"}
-        </span>
-        <span className="block text-sm">{activeLanguage}</span>
+        {activeLanguage}
       </span>
-      {collapsed ? (
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none absolute top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg bg-[var(--sunlit-ink)] px-3 py-2 text-xs font-extrabold text-white opacity-0 shadow-[0_12px_30px_rgb(32_33_43_/_20%)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
-            locale === "ar" ? "right-full mr-6" : "left-full ml-6"
-          }`}
-        >
-          {locale === "ar" ? `اللغة · ${activeLanguage}` : `Language · ${activeLanguage}`}
-        </span>
-      ) : null}
+      {collapsed ? <SidebarTooltip label={locale === "ar" ? `اللغة · ${activeLanguage}` : `Language · ${activeLanguage}`} locale={locale} /> : null}
     </button>
   );
 }
@@ -505,8 +500,8 @@ function MobileNavLink({ activeSection, item, locale }: { activeSection: Section
       aria-current={active ? "page" : undefined}
       className={
         active
-          ? "flex shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 font-bold text-[var(--sunlit-pink)]"
-          : "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 font-bold text-[var(--sunlit-muted)]"
+          ? "flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
+          : "flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
       }
       href={localizedHref(locale, item.slug)}
     >
@@ -524,20 +519,18 @@ function SidebarNavLink({ activeSection, collapsed, item, locale }: { activeSect
   return (
     <Link
       aria-current={active ? "page" : undefined}
-      className={`group relative grid min-h-[44px] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border outline-none transition ${
+      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border text-[15px] outline-none transition ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       } ${
         active
-          ? "sunlit-sidebar-link-active border-[rgb(255_102_90_/_26%)] bg-[var(--sunlit-paper-deep)] font-extrabold text-[var(--sunlit-ink)]"
-          : "border-transparent font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]"
+          ? "sunlit-sidebar-link-active border-[color-mix(in_srgb,var(--primary)_26%,transparent)] bg-[var(--sunlit-paper-deep)] font-semibold text-[var(--sunlit-ink)]"
+          : "border-transparent font-medium text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]"
       }`}
       href={localizedHref(locale, item.slug)}
     >
       <span
         className={`grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg transition ${
-          active
-            ? "bg-white text-[var(--sunlit-coral-deep)] shadow-[0_5px_14px_rgb(255_102_90_/_10%)]"
-            : "text-[var(--sunlit-muted)] group-hover:text-[var(--sunlit-ink)]"
+          active ? "text-[var(--link)]" : "text-[var(--sunlit-muted)] group-hover:text-[var(--sunlit-ink)]"
         }`}
       >
         <Icon aria-hidden="true" size={20} strokeWidth={active ? 2.35 : 1.95} />
@@ -549,18 +542,84 @@ function SidebarNavLink({ activeSection, collapsed, item, locale }: { activeSect
       >
         {label}
       </span>
-      {collapsed ? (
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none absolute top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-lg bg-[var(--sunlit-ink)] px-3 py-2 text-xs font-extrabold text-white opacity-0 shadow-[0_12px_30px_rgb(32_33_43_/_20%)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
-            locale === "ar" ? "right-full mr-6" : "left-full ml-6"
-          }`}
-          data-sidebar-tooltip={item.slug}
-        >
-          {label}
-        </span>
-      ) : null}
+      {collapsed ? <SidebarTooltip label={label} locale={locale} section={item.slug} /> : null}
     </Link>
+  );
+}
+
+function SidebarTooltip({ label, locale, section }: { label: string; locale: Locale; section?: SectionSlug }) {
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const tooltipHovered = useRef(false);
+  const [position, setPosition] = useState<{ top: number; inline: number } | null>(null);
+
+  useEffect(() => {
+    const control = markerRef.current?.parentElement;
+    if (!control) return;
+    function show() {
+      clearTimeout(hideTimer.current);
+      const rect = control!.getBoundingClientRect();
+      const sidebar = control!.closest("[data-app-sidebar]")?.getBoundingClientRect() ?? rect;
+      setPosition({ top: rect.top + rect.height / 2, inline: locale === "ar" ? window.innerWidth - sidebar.left + 12 : sidebar.right + 12 });
+    }
+    function hide() {
+      clearTimeout(hideTimer.current);
+      tooltipHovered.current = false;
+      setPosition(null);
+    }
+    function leaveControl() {
+      if (document.activeElement === control) return;
+      hideTimer.current = setTimeout(() => {
+        if (!tooltipHovered.current && document.activeElement !== control) hide();
+      }, 180);
+    }
+    function dismiss(event: KeyboardEvent) {
+      if (event.key === "Escape") hide();
+    }
+    control.addEventListener("mouseenter", show);
+    control.addEventListener("mouseleave", leaveControl);
+    control.addEventListener("focus", show);
+    control.addEventListener("blur", hide);
+    window.addEventListener("keydown", dismiss);
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      control.removeEventListener("mouseenter", show);
+      control.removeEventListener("mouseleave", leaveControl);
+      control.removeEventListener("focus", show);
+      control.removeEventListener("blur", hide);
+      window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+      clearTimeout(hideTimer.current);
+    };
+  }, [locale]);
+
+  return (
+    <>
+      <span className="hidden" ref={markerRef} />
+      {position &&
+        createPortal(
+          <span
+            aria-hidden="true"
+            className="fixed z-[60] -translate-y-1/2 whitespace-nowrap rounded-lg bg-[var(--text)] px-3 py-2 text-xs font-semibold text-[var(--background)] shadow-lg"
+            onMouseEnter={() => {
+              tooltipHovered.current = true;
+              clearTimeout(hideTimer.current);
+            }}
+            onMouseLeave={() => {
+              tooltipHovered.current = false;
+              if (document.activeElement !== markerRef.current?.parentElement) setPosition(null);
+            }}
+            data-sidebar-tooltip={section}
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            style={{ top: position.top, ...(locale === "ar" ? { right: position.inline } : { left: position.inline }) }}
+          >
+            {label}
+          </span>,
+          document.body
+        )}
+    </>
   );
 }
 

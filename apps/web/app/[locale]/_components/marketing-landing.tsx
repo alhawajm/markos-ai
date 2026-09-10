@@ -20,11 +20,12 @@ import {
   Wand2
 } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
+import { ThemeSelect } from "../../_components/theme-control";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./marketing-landing.module.css";
 
 type WorkspaceKey = "plan" | "create" | "publish" | "insights";
-type FooterLinkKey = "capabilities" | "how" | "insights" | "plans" | "faq" | "contact" | "terms" | "privacy";
+type FooterLinkKey = "capabilities" | "how" | "insights" | "terms" | "privacy";
 
 const workspaceIcons: Record<WorkspaceKey, LucideIcon> = {
   plan: Compass,
@@ -179,15 +180,7 @@ const copyByLocale = {
           links: [
             { key: "capabilities", label: "What it does" },
             { key: "how", label: "How it works" },
-            { key: "insights", label: "Insights" },
-            { key: "plans", label: "Plans" }
-          ]
-        },
-        {
-          title: "Help",
-          links: [
-            { key: "faq", label: "FAQs" },
-            { key: "contact", label: "Contact" }
+            { key: "insights", label: "Insights" }
           ]
         },
         {
@@ -339,15 +332,7 @@ const copyByLocale = {
           links: [
             { key: "capabilities", label: "ما الذي يقدمه" },
             { key: "how", label: "كيف يعمل" },
-            { key: "insights", label: "الرؤى" },
-            { key: "plans", label: "الباقات" }
-          ]
-        },
-        {
-          title: "المساعدة",
-          links: [
-            { key: "faq", label: "الأسئلة الشائعة" },
-            { key: "contact", label: "تواصل معنا" }
+            { key: "insights", label: "الرؤى" }
           ]
         },
         {
@@ -370,7 +355,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
   const localeLabel = isArabic ? "English" : "العربية";
   const signupHref = `/${locale}/signup`;
   const loginHref = `/${locale}/login`;
-  const plansHref = `/${locale}/plans`;
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceKey>("plan");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeTab = copy.workspace.tabs.find((tab) => tab.key === activeWorkspace) ?? copy.workspace.tabs[0];
@@ -379,9 +363,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
     capabilities: "#capabilities",
     how: "#how",
     insights: "#example",
-    plans: plansHref,
-    faq: `/${locale}/faq`,
-    contact: `/${locale}/contact`,
     terms: `/${locale}/terms`,
     privacy: `/${locale}/privacy`
   };
@@ -427,10 +408,10 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
             <a href="#capabilities">{copy.nav.capabilities}</a>
             <a href="#how">{copy.nav.how}</a>
             <a href="#example">{copy.nav.insights}</a>
-            <a href={plansHref}>{copy.nav.plans}</a>
           </nav>
 
           <div className={styles.headerActions}>
+            <ThemeSelect locale={locale} />
             <a className={styles.languageLink} href={localeHref}>
               <Globe2 aria-hidden="true" size={18} />
               <span>{localeLabel}</span>
@@ -483,7 +464,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
                 </span>
                 {copy.workspace.label}
               </span>
-              <span className={styles.workspaceTour}>{copy.workspace.tourLabel}</span>
             </figcaption>
 
             <div className={styles.workspaceTabs} role="tablist" aria-label={copy.workspace.tabListLabel}>
@@ -721,8 +701,8 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
               {copy.actions.getStarted}
               <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={19} />
             </a>
-            <a className={`${styles.button} ${styles.buttonGhostLight}`} href={plansHref}>
-              {copy.actions.viewPlans}
+            <a className={`${styles.button} ${styles.buttonGhostLight}`} href="#how">
+              {copy.actions.seeHow}
             </a>
           </div>
         </section>

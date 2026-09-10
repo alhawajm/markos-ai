@@ -11,6 +11,7 @@ import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
 import { MediaStorageError } from "./storage-service";
+import { ContentMediaValidationError } from "./content-media-integrity";
 import {
   attachMediaToContent,
   deleteMediaAsset,
@@ -350,6 +351,11 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 }
 
 function handleMediaMutationError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {
+  if (error instanceof ContentMediaValidationError) {
+    return reply
+      .status(409)
+      .send(errorEnvelope(error.code, error.message, error.mediaAssetId ? [{ mediaAssetId: error.mediaAssetId, savedToLibrary: true }] : []));
+  }
   if (error instanceof MediaContentItemNotFoundError) {
     return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
   }

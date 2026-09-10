@@ -51,6 +51,9 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
+import { ContentStatusBadge } from "./content-status-badge";
+import { contentStatusLabel } from "./content-status";
+import { NotificationToast } from "./notification-toast";
 
 type Accent = "amber" | "gold" | "teal";
 type IconType = typeof Sparkles;
@@ -76,22 +79,22 @@ interface DashboardLiveState {
 
 const accent = {
   amber: {
-    bg: "rgba(244, 164, 96, .12)",
-    border: "rgba(244, 164, 96, .28)",
-    className: "text-[#F4A460]",
-    hex: "#F4A460"
+    bg: "color-mix(in srgb, var(--primary) 12%, transparent)",
+    border: "color-mix(in srgb, var(--primary) 28.000000000000004%, transparent)",
+    className: "text-[var(--link)]",
+    hex: "var(--primary)"
   },
   gold: {
-    bg: "rgba(212, 175, 55, .12)",
-    border: "rgba(212, 175, 55, .28)",
-    className: "text-[#D4AF37]",
-    hex: "#D4AF37"
+    bg: "color-mix(in srgb, var(--accent) 12%, transparent)",
+    border: "color-mix(in srgb, var(--accent) 28.000000000000004%, transparent)",
+    className: "text-[var(--accent)]",
+    hex: "var(--accent)"
   },
   teal: {
-    bg: "rgba(129, 216, 208, .12)",
-    border: "rgba(129, 216, 208, .28)",
-    className: "text-[#81D8D0]",
-    hex: "#81D8D0"
+    bg: "color-mix(in srgb, var(--secondary) 12%, transparent)",
+    border: "color-mix(in srgb, var(--secondary) 28.000000000000004%, transparent)",
+    className: "text-[var(--sunlit-aqua-dark)]",
+    hex: "var(--secondary)"
   }
 } as const;
 
@@ -123,25 +126,11 @@ function contentTypeLabel(type: ContentType): string {
 }
 
 function statusLabel(status: ContentStatus): string {
-  if (status === "APPROVED") return "Ready";
-
-  return status
-    .toLowerCase()
-    .replace("_", " ")
-    .replace(/^\w/, (letter) => letter.toUpperCase());
+  return contentStatusLabel(status, "en");
 }
 
 function localizedContentStatusLabel(status: ContentStatus, locale: Locale): string {
-  if (locale === "en") return statusLabel(status);
-
-  return {
-    APPROVED: "جاهز",
-    DRAFT: "مسودة",
-    FAILED: "يحتاج إلى مراجعة",
-    IN_REVIEW: "قيد المراجعة",
-    PUBLISHED: "منشور",
-    SCHEDULED: "مجدول"
-  }[status];
+  return contentStatusLabel(status, locale);
 }
 
 function localizedContentTypeLabel(type: ContentType, locale: Locale): string {
@@ -337,7 +326,6 @@ const performanceRows = [
 ];
 
 export function FinalDashboard({ locale }: { locale: Locale }) {
-  const now = useMemo(() => new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(new Date()), [locale]);
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [liveState, setLiveState] = useState<DashboardLiveState>({
@@ -350,12 +338,9 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   });
   const firstName = session?.user.fullName.split(/\s+/)[0] || "there";
   const workspaceName = session?.workspace.name || "your workspace";
-  const readyItems = liveState.contentItems.filter(
-    (item) => item.status === "DRAFT" || item.status === "IN_REVIEW" || item.status === "APPROVED" || item.status === "SCHEDULED"
-  );
-  const topContent = liveState.contentItems[0];
+  const readyItems = liveState.contentItems.filter((item) => item.status !== "PUBLISHED");
+  const topContent = readyItems[0];
   const analyticsTotals = liveState.analytics?.totals;
-  const missionTitle = topContent ? recordTitle(topContent) : locale === "ar" ? "أنشئ أول مسودة محتوى" : "Create your first content draft";
   const missionCta = topContent
     ? topContent.status === "APPROVED"
       ? locale === "ar"
@@ -450,14 +435,13 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
 
   return (
     <section className="min-w-0 space-y-6 xl:space-y-7">
-      <section className="sunlit-panel rounded-[1.75rem] border-s-4 border-s-[var(--sunlit-coral)] p-5 sm:p-6">
+      <header>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-pink)]">
-              {copy.today} {workspaceName} · {now}
+            <h1 className="text-3xl font-semibold text-[var(--text)]">{copy.greeting}</h1>
+            <p className="mt-2 text-base text-[var(--text-muted)]" dir="auto">
+              {workspaceName}
             </p>
-            <h2 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.greeting}</h2>
-            <p className="mt-2 max-w-3xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
@@ -468,31 +452,34 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
             </a>
           </div>
         </div>
-      </section>
+      </header>
 
       {!session ? (
         <article className="sunlit-panel-soft rounded-2xl p-5">
-          <p className="font-extrabold text-[var(--sunlit-ink)]">Live work needs a workspace session.</p>
-          <p className="mt-2 text-[var(--sunlit-muted)]">Sign in or complete onboarding first so work can be saved to the correct workspace.</p>
+          <p className="font-semibold text-[var(--text)]">{locale === "ar" ? "سجّل الدخول لفتح مساحة العمل." : "Sign in to open your workspace."}</p>
         </article>
       ) : liveState.loading ? (
         <article className="sunlit-panel rounded-2xl p-5">
-          <p className="font-extrabold text-[var(--sunlit-ink)]">Loading workspace...</p>
-          <p className="mt-2 text-[var(--sunlit-muted)]">Checking content, schedule, insights, and your Business Profile.</p>
+          <p role="status" className="font-medium text-[var(--text-muted)]">
+            {locale === "ar" ? "جارٍ تحميل مساحة العمل…" : "Loading workspace…"}
+          </p>
         </article>
       ) : liveState.error ? (
-        <article className="rounded-2xl border border-[rgb(199_53_80_/_24%)] bg-[rgb(199_53_80_/_7%)] p-5">
-          <p className="font-extrabold text-[var(--sunlit-danger)]">The workspace could not be loaded.</p>
+        <article className="rounded-2xl border border-[color-mix(in_srgb,var(--danger)_24%,transparent)] bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] p-5">
+          <p className="font-semibold text-[var(--danger)]">
+            {locale === "ar" ? "تعذّر تحميل بعض بيانات مساحة العمل." : "Some workspace data could not be loaded."}
+          </p>
           <p className="mt-2 text-[var(--sunlit-ink-soft)]">{liveState.error}</p>
         </article>
       ) : liveState.vaultScore?.entryCount === 0 ? (
         <article className="sunlit-panel-soft rounded-2xl p-5">
-          <p className="font-extrabold text-[var(--sunlit-ink)]">Your Business Profile needs more detail.</p>
-          <p className="mt-2 text-[var(--sunlit-muted)]">Add business context before generating grounded work.</p>
+          <p className="font-semibold text-[var(--text)]">
+            {locale === "ar" ? "أكمل ملف نشاطك قبل توليد المحتوى." : "Complete your Business Profile before generating content."}
+          </p>
         </article>
       ) : null}
 
-      <section className="grid min-w-0 gap-4 md:grid-cols-3">
+      <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SunlitMetricCard
           icon={Palette}
           label={copy.workspaceContent}
@@ -503,7 +490,13 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
         <SunlitMetricCard
           icon={Calendar}
           label={copy.scheduled}
-          note={liveState.publishingQueue[0]?.scheduledAt ? formatShortTime(liveState.publishingQueue[0].scheduledAt) : copy.noData}
+          note={
+            liveState.publishingQueue[0]?.scheduledAt
+              ? formatShortTime(liveState.publishingQueue[0].scheduledAt)
+              : locale === "ar"
+                ? "لا توجد منشورات مجدولة"
+                : "Nothing scheduled"
+          }
           tone="yellow"
           value={String(liveState.publishingQueue.length)}
         />
@@ -512,39 +505,21 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           label={copy.insight}
           note={copy.latest}
           tone="aqua"
-          value={analyticsTotals?.reach ? formatCompactNumber(analyticsTotals.reach) : "—"}
+          value={
+            liveState.analytics?.records.length && analyticsTotals?.reach !== null && analyticsTotals?.reach !== undefined
+              ? formatCompactNumber(analyticsTotals.reach)
+              : "—"
+          }
         />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(19rem,.75fr)]">
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-              <Target size={22} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="sunlit-eyebrow">{copy.next}</p>
-              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-[var(--sunlit-ink)]">{missionTitle}</h2>
-              <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{topContent ? copy.subtitle : copy.contentEmpty}</p>
-              <a className="sunlit-primary mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
-                {missionCta} <ArrowRight size={17} />
-              </a>
-            </div>
-          </div>
-        </article>
-
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+        <article className="sunlit-panel rounded-2xl p-5">
           <div className="flex items-center justify-between gap-4">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
-              <Brain size={22} />
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--secondary-soft)] text-[var(--text-soft)]">
+              <Brain size={20} />
             </span>
             <span className="text-3xl font-bold text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
           </div>
-          <h2 className="mt-5 text-xl font-bold text-[var(--sunlit-ink)]">{copy.profileReady}</h2>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--sunlit-paper-deep)]">
-            <div className="h-full rounded-full bg-[var(--sunlit-aqua)]" style={{ width: `${liveState.vaultScore?.score ?? 0}%` }} />
-          </div>
-          <a className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-aqua-dark)]" href={`/${locale}/app/knowledge`}>
+          <h2 className="mt-4 text-base font-semibold text-[var(--text)]">{copy.profileReady}</h2>
+          <a className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-[var(--interactive)]" href={`/${locale}/app/knowledge`}>
             {copy.businessProfile} <ArrowRight size={16} />
           </a>
         </article>
@@ -558,28 +533,22 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
       </div>
       {readyItems.length > 0 ? (
         <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {readyItems.slice(0, 4).map((item, index) => (
+          {readyItems.slice(0, 4).map((item) => (
             <a
-              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[rgb(217_63_122_/_24%)]"
+              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
               href={`/${locale}/app/content-studio?item=${item.id}`}
               key={item.id}
             >
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className={
-                    index % 2 === 0
-                      ? "grid h-10 w-10 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]"
-                      : "grid h-10 w-10 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
-                  }
-                >
-                  <Palette size={18} />
-                </span>
-                <span className="rounded-full bg-[var(--sunlit-paper)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--sunlit-muted)]">
-                  {statusLabel(item.status)}
-                </span>
+                <span className="text-sm text-[var(--text-muted)]">{localizedContentTypeLabel(item.contentType, locale)}</span>
+                <ContentStatusBadge status={item.status} locale={locale} />
               </div>
-              <h3 className="mt-5 line-clamp-2 font-bold leading-6 text-[var(--sunlit-ink)]">{recordTitle(item)}</h3>
-              <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--sunlit-muted)]">{recordSubtitle(item)}</p>
+              <h3 className="mt-4 line-clamp-2 font-semibold leading-6 text-[var(--text)]" dir="auto">
+                {recordTitle(item)}
+              </h3>
+              <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--text-muted)]">
+                {contentPipelineTimestamp(item, locale) || campaignOriginLabel(item, locale)}
+              </p>
             </a>
           ))}
         </section>
@@ -616,7 +585,7 @@ function SunlitMetricCard({
     tone === "aqua"
       ? "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
       : tone === "yellow"
-        ? "bg-[rgb(246_196_83_/_20%)] text-[var(--sunlit-warning)]"
+        ? "bg-[color-mix(in_srgb,var(--secondary)_20%,transparent)] text-[var(--sunlit-warning)]"
         : "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]";
   return (
     <article className="sunlit-panel rounded-2xl p-5">
@@ -626,7 +595,7 @@ function SunlitMetricCard({
         </span>
         <strong className="text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
       </div>
-      <p className="mt-5 font-extrabold text-[var(--sunlit-ink)]">{label}</p>
+      <p className="mt-4 font-semibold text-[var(--sunlit-ink)]">{label}</p>
       <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--sunlit-muted)]">{note}</p>
     </article>
   );
@@ -635,21 +604,29 @@ function SunlitMetricCard({
 export function DailyBriefingPanel({ locale }: { locale: Locale }) {
   return (
     <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={Calendar} subtitle="Thursday, June 18" title="Daily Marketing Briefing" />
+      <HeroTitle
+        icon={Calendar}
+        subtitle={
+          locale === "ar"
+            ? "معاينة توضيحية. هذه الصفحة غير متصلة ببيانات أداء نشاطك بعد."
+            : "Illustrative preview. This page is not connected to your workspace performance yet."
+        }
+        title={locale === "ar" ? "الموجز التسويقي" : "Marketing briefing"}
+      />
       <article className="lux-card rounded-[1.5rem] p-5 sm:p-6 xl:p-8">
-        <h2 className="font-display text-2xl font-bold text-white xl:text-3xl">Executive Summary</h2>
-        <div className="mt-5 space-y-4 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">
+        <h2 className="font-display text-2xl font-bold text-[var(--text)] xl:text-3xl">Executive Summary</h2>
+        <div className="mt-5 space-y-4 text-base leading-relaxed text-[var(--text)] xl:text-lg">
           <p>
-            <span className="font-bold text-[#81D8D0]">Strong momentum continues.</span> Your luxury jewelry content is resonating exceptionally well with your
-            target audience, driving 3.2x higher engagement than your baseline.
+            <span className="font-bold text-[var(--sunlit-aqua-dark)]">Strong momentum continues.</span> Your luxury jewelry content is resonating exceptionally
+            well with your target audience, driving 3.2x higher engagement than your baseline.
           </p>
           <p>
-            I have identified a <span className="font-bold text-[#D4AF37]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your audience will
-            be most receptive.
+            I have identified a <span className="font-bold text-[var(--accent)]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your audience
+            will be most receptive.
           </p>
           <p>
-            <span className="font-bold text-[#00C9A7]">24-hour growth: +847 followers</span> with engagement rate at 92%, significantly above your industry
-            benchmark of 4.2%.
+            <span className="font-bold text-[var(--success)]">24-hour growth: +847 followers</span> with engagement rate at 92%, significantly above your
+            industry benchmark of 4.2%.
           </p>
         </div>
       </article>
@@ -668,9 +645,12 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
             <div className="flex gap-5">
               <IconTile accentName={item.accent} icon={item.icon} />
               <div>
-                <h3 className="text-xl font-bold text-white">{item.title}</h3>
-                <p className="mt-3 text-base leading-relaxed text-[#D6DEEA] xl:text-lg">{item.body}</p>
-                <a className="mt-5 inline-flex items-center gap-2 text-base font-bold text-[#81D8D0] xl:text-lg" href={`/${locale}/app/campaign-builder`}>
+                <h3 className="text-xl font-bold text-[var(--text)]">{item.title}</h3>
+                <p className="mt-3 text-base leading-relaxed text-[var(--text)] xl:text-lg">{item.body}</p>
+                <a
+                  className="mt-5 inline-flex items-center gap-2 text-base font-bold text-[var(--sunlit-aqua-dark)] xl:text-lg"
+                  href={`/${locale}/app/campaign-builder`}
+                >
                   {item.cta} <ArrowRight size={19} />
                 </a>
               </div>
@@ -691,17 +671,17 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
             className={
               index === 0
                 ? "grid gap-4 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"
-                : "grid gap-4 border-t border-[#81D8D0]/10 py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"
+                : "grid gap-4 border-t border-[color-mix(in_srgb,var(--secondary)_10%,transparent)] py-5 md:grid-cols-[120px_1fr_auto] xl:grid-cols-[130px_1fr_auto]"
             }
             key={time}
           >
-            <p className="font-mono text-base font-bold text-[#81D8D0] xl:text-lg">{time}</p>
+            <p className="font-mono text-base font-bold text-[var(--sunlit-aqua-dark)] xl:text-lg">{time}</p>
             <div>
-              <p className="text-lg font-bold text-white xl:text-xl">{title}</p>
-              <p className="mt-1 text-base text-[#9AA7BD] xl:text-lg">{duration}</p>
+              <p className="text-lg font-bold text-[var(--text)] xl:text-xl">{title}</p>
+              <p className="mt-1 text-base text-[var(--muted)] xl:text-lg">{duration}</p>
             </div>
             <a
-              className="rounded-full bg-[#C7CDD8]/18 px-5 py-2.5 text-center font-bold text-white transition hover:bg-[#81D8D0]/20 xl:px-7 xl:py-3"
+              className="rounded-full bg-[color-mix(in_srgb,var(--muted)_18%,transparent)] px-5 py-2.5 text-center font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_20%,transparent)] xl:px-7 xl:py-3"
               href={`/${locale}/app/campaign-builder`}
             >
               Schedule
@@ -718,8 +698,12 @@ export function OpportunitiesPanel({ locale }: { locale: Locale }) {
     <section className="space-y-6 xl:space-y-8">
       <HeroTitle
         icon={Sparkles}
-        subtitle="I've discovered 3 high-impact opportunities by analyzing your audience behavior, industry trends, and competitor strategies."
-        title="Content Opportunities"
+        subtitle={
+          locale === "ar"
+            ? "أمثلة توضيحية؛ ليست توصيات مبنية على أداء نشاطك."
+            : "Illustrative examples, not recommendations based on your workspace performance."
+        }
+        title={locale === "ar" ? "فرص المحتوى" : "Content opportunities"}
       />
       <div className="grid gap-6">
         {opportunityCards.map((card) => (
@@ -815,49 +799,60 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="space-y-6 xl:space-y-8">
-      <HeroTitle icon={MarkosAiIcon} subtitle="I'll help you create a high-performing campaign in minutes, not days." title="AI Campaign Builder">
+      <HeroTitle
+        icon={MarkosAiIcon}
+        subtitle={
+          locale === "ar"
+            ? "محرّر الحملات السابق. استخدم صفحة الحملات للتخطيط الحالي."
+            : "Legacy campaign builder. Use Campaigns for the current planning workflow."
+        }
+        title={locale === "ar" ? "محرّر الحملات" : "Campaign builder"}
+      >
+        <a className="mt-3 inline-flex text-sm font-medium text-[var(--interactive)]" href={`/${locale}/app/campaigns`}>
+          {locale === "ar" ? "فتح الحملات" : "Open Campaigns"}
+        </a>
         <div className="mt-8 grid gap-4 text-base md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center xl:mt-10 xl:text-lg">
           {["Campaign Goal", "AI Generation", "Review & Launch"].map((label, index) => (
             <div className="contents" key={label}>
               <button
-                className={step === index + 1 ? "flex items-center gap-4 text-white" : "flex items-center gap-4 text-[#6F7B8F]"}
+                className={step === index + 1 ? "flex items-center gap-4 text-[var(--text)]" : "flex items-center gap-4 text-[var(--muted)]"}
                 onClick={() => setStep(index + 1)}
                 type="button"
               >
                 <span
                   className={
                     step === index + 1
-                      ? "grid h-12 w-12 place-items-center rounded-full bg-[#81D8D0] font-bold text-[#0F1419]"
-                      : "grid h-12 w-12 place-items-center rounded-full bg-white/14 font-bold"
+                      ? "grid h-12 w-12 place-items-center rounded-full bg-[var(--secondary)] font-bold text-[var(--on-primary)]"
+                      : "grid h-12 w-12 place-items-center rounded-full bg-[var(--surface)] font-bold"
                   }
                 >
                   {index + 1}
                 </span>
                 <span className="font-bold">{label}</span>
               </button>
-              {index < 2 ? <span className="hidden h-px bg-white/20 md:block" /> : null}
+              {index < 2 ? <span className="hidden h-px bg-[var(--surface)] md:block" /> : null}
             </div>
           ))}
         </div>
       </HeroTitle>
 
       {campaignMessage ? (
-        <article className="lux-card-muted rounded-[1.25rem] border-[#81D8D0]/20 p-5">
-          <p className="font-semibold text-[#D6DEEA]">{campaignMessage}</p>
+        <article className="lux-card-muted rounded-[1.25rem] border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] p-5">
+          <p className="font-semibold text-[var(--text)]">{campaignMessage}</p>
         </article>
       ) : null}
 
       {step === 1 ? (
         <>
           <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
-            <h2 className="text-2xl font-bold text-white">Campaign Brief</h2>
+            <h2 className="text-2xl font-bold text-[var(--text)]">Campaign Brief</h2>
             <textarea
-              className="mt-5 min-h-28 w-full resize-none rounded-[1.25rem] border border-[#81D8D0]/10 bg-white/[.045] p-4 text-base leading-relaxed text-white outline-none placeholder:text-[#8B95A8] focus:border-[#81D8D0]/45 xl:min-h-32 xl:p-5 xl:text-lg"
+              className="mt-5 min-h-28 w-full resize-none rounded-[1.25rem] border border-[color-mix(in_srgb,var(--secondary)_10%,transparent)] bg-[var(--surface)] p-4 text-base leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--focus)] xl:min-h-32 xl:p-5 xl:text-lg"
               onChange={(event) => setCampaignPrompt(event.target.value)}
               value={campaignPrompt}
             />
             <button
-              className="mt-5 inline-flex items-center gap-3 rounded-full border border-[#81D8D0]/20 bg-[#81D8D0]/10 px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#81D8D0]/18 disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
+              className="mt-5 inline-flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] px-6 py-3.5 text-base font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_18%,transparent)] disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
               disabled={generatingCampaign}
               onClick={generateCampaignDrafts}
               type="button"
@@ -870,7 +865,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
           <section className="grid gap-5 lg:grid-cols-3 xl:gap-6">
             {templates.map(([title, body, posts, days, Icon]) => (
               <button
-                className="lux-card-muted rounded-[1.5rem] p-5 text-left transition hover:border-[#81D8D0]/45 hover:bg-[#81D8D0]/8 xl:p-6"
+                className="lux-card-muted rounded-[1.5rem] p-5 text-left transition hover:border-[color-mix(in_srgb,var(--secondary)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--secondary)_8%,transparent)] xl:p-6"
                 key={title}
                 onClick={() => {
                   setCampaignPrompt(
@@ -880,13 +875,13 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
                 type="button"
               >
                 <IconTile accentName="teal" icon={Icon} />
-                <h3 className="mt-5 text-xl font-bold text-white xl:mt-6 xl:text-2xl">{title}</h3>
-                <p className="mt-4 text-base text-[#AAB5C7] xl:text-lg">{body}</p>
-                <div className="mt-7 flex justify-between text-base text-[#9AA7BD]">
+                <h3 className="mt-5 text-xl font-bold text-[var(--text)] xl:mt-6 xl:text-2xl">{title}</h3>
+                <p className="mt-4 text-base text-[var(--muted)] xl:text-lg">{body}</p>
+                <div className="mt-7 flex justify-between text-base text-[var(--muted)]">
                   <span>{posts}</span>
                   <span>{days}</span>
                 </div>
-                <span className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-[#81D8D0]">
+                <span className="mt-10 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] px-6 py-3 font-bold text-[var(--sunlit-aqua-dark)]">
                   Select Template <ArrowRight size={18} />
                 </span>
               </button>
@@ -900,7 +895,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
           <div className="flex items-center justify-between">
             <SectionHeading title="AI-Generated Campaign Preview" />
             <button
-              className="rounded-full border border-[#81D8D0]/20 px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] px-6 py-3 font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={generatingCampaign}
               onClick={generateCampaignDrafts}
               type="button"
@@ -912,8 +907,8 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
             <div className="mb-6 flex items-center gap-4 xl:mb-8 xl:gap-5">
               <IconTile accentName="teal" icon={Sparkles} />
               <div>
-                <h3 className="text-xl font-bold text-white xl:text-2xl">Workspace Campaign Drafts</h3>
-                <p className="mt-2 text-base text-[#D6DEEA] xl:text-lg">
+                <h3 className="text-xl font-bold text-[var(--text)] xl:text-2xl">Workspace Campaign Drafts</h3>
+                <p className="mt-2 text-base text-[var(--text)] xl:text-lg">
                   {timelineRecords.length || 0} saved content pieces - approval required before scheduling
                 </p>
               </div>
@@ -922,28 +917,30 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               <div className="grid gap-4">
                 {timelineRecords.map((record, index) => (
                   <a
-                    className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[#81D8D0]/35 md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
+                    className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
                     href={`/${locale}/app/content-studio?item=${record.id}`}
                     key={record.id}
                   >
                     <div className="border-r border-white/10 pr-5">
-                      <p className="text-2xl font-bold text-white xl:text-3xl">{index + 1}</p>
-                      <p className="text-[#9AA7BD]">Day</p>
+                      <p className="text-2xl font-bold text-[var(--text)] xl:text-3xl">{index + 1}</p>
+                      <p className="text-[var(--muted)]">Day</p>
                     </div>
                     <div>
-                      <p className="text-xl font-bold text-white">{recordTitle(record)}</p>
-                      <p className="mt-2 text-lg text-[#9AA7BD]">
+                      <p className="text-xl font-bold text-[var(--text)]">{recordTitle(record)}</p>
+                      <p className="mt-2 text-lg text-[var(--muted)]">
                         {record.scheduledAt ? formatShortTime(record.scheduledAt) : "7:30 PM"} - {contentTypeLabel(record.contentType)}
                       </p>
                     </div>
-                    <span className="self-center rounded-full bg-[#81D8D0]/12 px-4 py-2 font-bold text-[#81D8D0]">{statusLabel(record.status)}</span>
+                    <span className="self-center rounded-full bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] px-4 py-2 font-bold text-[var(--sunlit-aqua-dark)]">
+                      {statusLabel(record.status)}
+                    </span>
                   </a>
                 ))}
               </div>
             ) : (
               <article className="lux-card-muted rounded-[1.25rem] p-6">
-                <p className="text-lg font-bold text-white">No campaign drafts generated yet.</p>
-                <p className="mt-2 text-[#B8C4D8]">Return to the brief step and generate a saved campaign batch first.</p>
+                <p className="text-lg font-bold text-[var(--text)]">No campaign drafts generated yet.</p>
+                <p className="mt-2 text-[var(--muted)]">Return to the brief step and generate a saved campaign batch first.</p>
               </article>
             )}
           </article>
@@ -956,7 +953,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
           </section>
           <div className="flex flex-wrap items-center justify-between gap-5">
             <button
-              className="inline-flex items-center gap-3 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl"
+              className="inline-flex items-center gap-3 text-lg font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50 xl:text-xl"
               disabled={schedulingCampaign || campaignRecords.length === 0}
               onClick={scheduleCampaign}
               type="button"
@@ -964,7 +961,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               <Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : "Schedule Campaign"} <ArrowRight size={24} />
             </button>
             <button
-              className="rounded-[1.5rem] bg-white/16 px-8 py-4 text-lg font-bold text-white transition hover:bg-[#81D8D0]/16 xl:px-10 xl:py-5 xl:text-xl"
+              className="rounded-[1.5rem] bg-[var(--surface)] px-8 py-4 text-lg font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_16%,transparent)] xl:px-10 xl:py-5 xl:text-xl"
               onClick={() => setSaved(true)}
               type="button"
             >
@@ -986,6 +983,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"error" | "success">("error");
 
   useEffect(() => {
     if (!session) {
@@ -1003,7 +1001,10 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
         if (!cancelled) setSummary(nextSummary);
       })
       .catch((error) => {
-        if (!cancelled) setMessage(contentStudioError(error));
+        if (!cancelled) {
+          setMessageTone("error");
+          setMessage(contentStudioError(error));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1016,7 +1017,8 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
 
   async function exportReport() {
     if (!session) {
-      setMessage("Sign in before exporting workspace insights.");
+      setMessageTone("error");
+      setMessage(locale === "ar" ? "سجّل الدخول قبل تصدير الإحصاءات." : "Sign in before exporting workspace insights.");
       return;
     }
 
@@ -1031,8 +1033,10 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
       link.download = `markos-insights-${new Date().toISOString().slice(0, 7)}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
-      setMessage("Monthly report downloaded.");
+      setMessageTone("success");
+      setMessage(locale === "ar" ? "تم تنزيل التقرير الشهري." : "Monthly report downloaded.");
     } catch (error) {
+      setMessageTone("error");
       setMessage(contentStudioError(error));
     } finally {
       setExporting(false);
@@ -1126,13 +1130,11 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
 
   return (
     <section aria-busy={loading} className="space-y-5 xl:space-y-6">
-      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+      <header>
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-3xl">
-            <p className="sunlit-eyebrow">Instagram performance</p>
-            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
-            <p className="mt-2 max-w-2xl text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-[var(--sunlit-muted)]">
+            <h1 className="text-3xl font-semibold text-[var(--text)]">{copy.heading}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
               <span>
                 {copy.reportWindow}: {periodLabel || copy.range}
               </span>
@@ -1147,7 +1149,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                 <button
                   aria-pressed={days === option}
                   className={`min-h-9 rounded-lg px-4 text-sm font-extrabold transition ${
-                    days === option ? "bg-white text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                    days === option ? "bg-[var(--surface)] text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
                   }`}
                   key={option}
                   onClick={() => setDays(option)}
@@ -1168,32 +1170,35 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
             </button>
           </div>
         </div>
-      </section>
+      </header>
 
       {message ? (
-        <article
-          className="rounded-2xl border border-[var(--sunlit-line-strong)] bg-white/85 p-4 text-sm font-bold text-[var(--sunlit-ink-soft)]"
-          role="status"
-        >
-          {message}
-        </article>
+        <NotificationToast
+          body={message}
+          title={messageTone === "error" ? (locale === "ar" ? "تعذّر إكمال الطلب" : "Could not complete the request") : copy.heading}
+          tone={messageTone}
+          dismissLabel={locale === "ar" ? "إغلاق التنبيه" : "Dismiss notification"}
+          onDismiss={() => setMessage("")}
+        />
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {metricCards.map((item) => (
-          <InsightsMetricCard
-            change={comparison?.percentageChanges[item.metric] ?? null}
-            comparisonAvailable={comparison?.totals[item.metric] !== null && comparison?.totals[item.metric] !== undefined}
-            icon={item.icon}
-            key={item.metric}
-            label={item.label}
-            loading={loading && !summary}
-            locale={locale}
-            tone={item.tone}
-            value={totals?.[item.metric] ?? null}
-          />
-        ))}
-      </section>
+      {hasAnalytics || loading ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {metricCards.map((item) => (
+            <InsightsMetricCard
+              change={comparison?.percentageChanges[item.metric] ?? null}
+              comparisonAvailable={comparison?.totals[item.metric] !== null && comparison?.totals[item.metric] !== undefined}
+              icon={item.icon}
+              key={item.metric}
+              label={item.label}
+              loading={loading && !summary}
+              locale={locale}
+              tone={item.tone}
+              value={totals?.[item.metric] ?? null}
+            />
+          ))}
+        </section>
+      ) : null}
 
       {!loading && !hasAnalytics ? (
         <section className="sunlit-panel grid min-h-56 place-items-center rounded-[1.75rem] p-8 text-center">
@@ -1201,164 +1206,187 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
             <BarChart3 className="mx-auto text-[var(--sunlit-aqua-dark)]" size={42} />
             <h2 className="mt-4 text-xl font-bold text-[var(--sunlit-ink)]">{copy.noSync}</h2>
             <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.empty}</p>
+            <a className="sunlit-secondary mt-5 inline-flex items-center rounded-xl px-4" href={`/${locale}/app/settings#connections`}>
+              {locale === "ar" ? "إعدادات إنستغرام" : "Instagram settings"}
+            </a>
           </div>
         </section>
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,.55fr)]">
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="sunlit-eyebrow">{copy.trend}</p>
-              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{periodLabel || copy.range}</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["reach", "impressions", "engagement"] as const).map((metric) => (
-                <button
-                  aria-pressed={trendMetric === metric}
-                  className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition ${
-                    trendMetric === metric
-                      ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
-                      : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
-                  }`}
-                  key={metric}
-                  onClick={() => setTrendMetric(metric)}
-                  type="button"
-                >
-                  {insightsMetricLabel(locale, metric)}
-                </button>
-              ))}
-            </div>
-          </div>
-          {daily.length > 0 ? (
-            <div className="mt-6 overflow-x-auto rounded-2xl bg-[var(--sunlit-paper)] px-4 pb-4 pt-6">
-              <div className="flex h-64 min-w-[34rem] items-end gap-2" role="img" aria-label={`${insightsMetricLabel(locale, trendMetric)} · ${periodLabel}`}>
-                {daily.map((item) => (
-                  <div className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-2" key={item.dataDate}>
-                    <span className="rounded-md bg-white px-2 py-1 text-[10px] font-bold text-[var(--sunlit-ink)] opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100">
-                      {formatMetricValue(item.totals[trendMetric])}
-                    </span>
-                    <div
-                      className="w-full min-w-2 rounded-t-md bg-gradient-to-t from-[var(--sunlit-aqua)] to-[var(--sunlit-coral)] transition-[height]"
-                      style={{ height: `${Math.max(8, ((item.totals[trendMetric] ?? 0) / maximumTrendValue) * 178)}px` }}
-                      title={`${formatInsightsDay(locale, item.dataDate)}: ${formatMetricValue(item.totals[trendMetric])}`}
-                    />
-                    <span className="text-[10px] font-bold text-[var(--sunlit-muted)]">{formatInsightsDay(locale, item.dataDate)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <InsightsUnavailableState label={copy.unavailable} locale={locale} />
-          )}
-        </article>
-
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">{copy.comparison}</p>
-          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">{previousPeriodLabel || copy.previous}</h2>
-          <div className="mt-5 grid gap-1">
-            {(["reach", "impressions", "engagement", "profileViews"] as const).map((metric) => (
-              <InsightsComparisonRow
-                change={comparison?.percentageChanges[metric] ?? null}
-                current={totals?.[metric] ?? null}
-                key={metric}
-                label={insightsMetricLabel(locale, metric)}
-                locale={locale}
-                previous={comparison?.totals[metric] ?? null}
-              />
-            ))}
-          </div>
-          {!comparison || !Object.values(comparison.totals).some((value) => value !== null) ? (
-            <p className="mt-4 rounded-xl bg-[var(--sunlit-paper)] p-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.comparisonEmpty}</p>
-          ) : null}
-        </article>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="sunlit-eyebrow">{copy.contentPerformance}</p>
-              <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
-                {syncedContentCount} {copy.published}
-              </h2>
-            </div>
-            <Activity aria-hidden="true" className="text-[var(--sunlit-coral-deep)]" size={24} />
-          </div>
-          {contentBuckets.length > 0 ? (
-            <div className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-              {contentBuckets.map((bucket) => (
-                <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={bucket.metricType}>
-                  <p className="text-sm font-extrabold text-[var(--sunlit-ink)]">{insightsContentBucketLabel(locale, bucket.metricType)}</p>
-                  <dl className="mt-3 grid gap-2 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-[var(--sunlit-muted)]">{copy.reach}</dt>
-                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.reach)}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-[var(--sunlit-muted)]">{copy.contentInteractions}</dt>
-                      <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.engagement)}</dd>
-                    </div>
-                  </dl>
+      {hasAnalytics ? (
+        <>
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,.55fr)]">
+            <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-[var(--text)]">{copy.trend}</h2>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <InsightsUnavailableState label={copy.noContent} locale={locale} />
-          )}
-        </article>
-
-        <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-          <p className="sunlit-eyebrow">{copy.topContent}</p>
-          <h2 className="mt-2 text-xl font-bold text-[var(--sunlit-ink)]">
-            {locale === "ar" ? "ما الذي حقق أفضل استجابة" : "What earned the strongest response"}
-          </h2>
-          <div className="mt-6 grid gap-3">
-            {summary?.topContent.length ? (
-              summary.topContent.slice(0, 4).map((item, index) => (
-                <a
-                  className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--sunlit-line-strong)]"
-                  href={`/${locale}/app/content-studio?item=${item.contentItemId}`}
-                  key={item.contentItemId}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-bold text-[var(--sunlit-pink)]">
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 font-extrabold leading-6 text-[var(--sunlit-ink)]">{item.caption || contentTypeLabel(item.contentType)}</p>
-                      <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
-                        {formatMetricValue(item.metrics.reach)} {copy.reach} · {formatMetricValue(item.engagement)} {copy.contentInteractions}
-                      </p>
-                    </div>
-                  </div>
-                </a>
-              ))
-            ) : (
-              <div className="rounded-2xl bg-[var(--sunlit-paper)] p-5">
-                <p className="font-extrabold text-[var(--sunlit-ink)]">{copy.noContent}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(["reach", "impressions", "engagement"] as const).map((metric) => (
+                    <button
+                      aria-pressed={trendMetric === metric}
+                      className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition ${
+                        trendMetric === metric
+                          ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
+                          : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                      }`}
+                      key={metric}
+                      onClick={() => setTrendMetric(metric)}
+                      type="button"
+                    >
+                      {insightsMetricLabel(locale, metric)}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
-        </article>
-      </section>
+              {daily.length > 0 ? (
+                <div className="mt-6 overflow-x-auto rounded-2xl bg-[var(--sunlit-paper)] px-4 pb-4 pt-6">
+                  <div
+                    className="flex h-64 items-end gap-3"
+                    style={{ minWidth: `${Math.max(34, daily.length * 3.5)}rem` }}
+                    role="list"
+                    aria-label={`${insightsMetricLabel(locale, trendMetric)} · ${periodLabel}`}
+                  >
+                    {daily.map((item) => (
+                      <div
+                        className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-2"
+                        role="listitem"
+                        tabIndex={0}
+                        aria-label={`${formatInsightsDay(locale, item.dataDate)}: ${formatMetricValue(item.totals[trendMetric])}`}
+                        key={item.dataDate}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="rounded-md bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--text)] opacity-0 shadow-sm transition group-hover:opacity-100 group-focus:opacity-100"
+                        >
+                          {formatMetricValue(item.totals[trendMetric])}
+                        </span>
+                        <div
+                          className="w-full min-w-2 rounded-t-md bg-[var(--info)] transition-[height]"
+                          style={{ height: `${Math.max(8, ((item.totals[trendMetric] ?? 0) / maximumTrendValue) * 178)}px` }}
+                          title={`${formatInsightsDay(locale, item.dataDate)}: ${formatMetricValue(item.totals[trendMetric])}`}
+                        />
+                        <span aria-hidden="true" className="whitespace-nowrap text-xs text-[var(--text-muted)]">
+                          {formatInsightsDay(locale, item.dataDate)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <InsightsUnavailableState label={copy.unavailable} locale={locale} />
+              )}
+            </article>
 
-      <section className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,.45fr)_minmax(0,.55fr)] lg:items-center">
-          <div>
-            <p className="sunlit-eyebrow">{copy.audience}</p>
-            <div className="mt-3 flex items-end gap-3">
-              <p className="text-4xl font-bold tracking-tight text-[var(--sunlit-ink)]">
-                {formatMetricValue(audienceBucket?.totals.followers ?? totals?.followers ?? null)}
-              </p>
-              <p className="pb-1 text-sm font-bold text-[var(--sunlit-muted)]">{copy.followers}</p>
+            <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+              <h2 className="text-xl font-semibold text-[var(--text)]">{copy.comparison}</h2>
+              {previousPeriodLabel ? <p className="mt-2 text-sm text-[var(--text-muted)]">{previousPeriodLabel}</p> : null}
+              {comparison && Object.values(comparison.totals).some((value) => value !== null) ? (
+                <div className="mt-5 grid gap-1">
+                  {(["reach", "impressions", "engagement", "profileViews"] as const).map((metric) => (
+                    <InsightsComparisonRow
+                      change={comparison?.percentageChanges[metric] ?? null}
+                      current={totals?.[metric] ?? null}
+                      key={metric}
+                      label={insightsMetricLabel(locale, metric)}
+                      locale={locale}
+                      previous={comparison?.totals[metric] ?? null}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {!comparison || !Object.values(comparison.totals).some((value) => value !== null) ? (
+                <p className="mt-4 rounded-xl bg-[var(--sunlit-paper)] p-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy.comparisonEmpty}</p>
+              ) : null}
+            </article>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
+            <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-[var(--text)]">{copy.contentPerformance}</h2>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    {syncedContentCount} {copy.published}
+                  </p>
+                </div>
+                <Activity aria-hidden="true" className="text-[var(--link)]" size={24} />
+              </div>
+              {contentBuckets.length > 0 ? (
+                <div className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                  {contentBuckets.map((bucket) => (
+                    <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4" key={bucket.metricType}>
+                      <p className="text-sm font-extrabold text-[var(--sunlit-ink)]">{insightsContentBucketLabel(locale, bucket.metricType)}</p>
+                      <dl className="mt-3 grid gap-2 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-[var(--sunlit-muted)]">{copy.reach}</dt>
+                          <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.reach)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-[var(--sunlit-muted)]">{copy.contentInteractions}</dt>
+                          <dd className="font-bold text-[var(--sunlit-ink)]">{formatMetricValue(bucket.totals.engagement)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <InsightsUnavailableState label={copy.noContent} locale={locale} />
+              )}
+            </article>
+
+            <article className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+              <h2 className="text-xl font-semibold text-[var(--text)]">{copy.topContent}</h2>
+              <div className="mt-6 grid gap-3">
+                {summary?.topContent.length ? (
+                  summary.topContent.slice(0, 4).map((item, index) => (
+                    <a
+                      className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--sunlit-line-strong)]"
+                      href={`/${locale}/app/content-studio?item=${item.contentItemId}`}
+                      key={item.contentItemId}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-bold text-[var(--sunlit-pink)]">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="line-clamp-2 font-semibold leading-6 text-[var(--text)]" dir="auto">
+                            {item.caption || localizedContentTypeLabel(item.contentType, locale)}
+                          </p>
+                          <p className="mt-1 text-sm text-[var(--sunlit-muted)]">
+                            {formatMetricValue(item.metrics.reach)} {copy.reach} · {formatMetricValue(item.engagement)} {copy.contentInteractions}
+                          </p>
+                        </div>
+                      </div>
+                    </a>
+                  ))
+                ) : (
+                  <div className="rounded-2xl bg-[var(--sunlit-paper)] p-5">
+                    <p className="font-extrabold text-[var(--sunlit-ink)]">{copy.noContent}</p>
+                  </div>
+                )}
+              </div>
+            </article>
+          </section>
+
+          <section className="sunlit-panel rounded-[1.75rem] p-6 sm:p-7">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,.45fr)_minmax(0,.55fr)] lg:items-center">
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--text)]">{copy.audience}</h2>
+                <div className="mt-3 flex items-end gap-3">
+                  <p className="text-4xl font-bold tracking-tight text-[var(--sunlit-ink)]">
+                    {formatMetricValue(audienceBucket?.totals.followers ?? totals?.followers ?? null)}
+                  </p>
+                  <p className="pb-1 text-sm font-bold text-[var(--sunlit-muted)]">{copy.followers}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy.audienceUnavailable}</p>
+              </div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-5">
-            <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy.audienceUnavailable}</p>
-          </div>
-        </div>
-      </section>
+          </section>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -1384,8 +1412,8 @@ function InsightsMetricCard({
 }) {
   const tones = {
     aqua: "bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]",
-    coral: "bg-[rgb(255_102_90_/_12%)] text-[var(--sunlit-coral-deep)]",
-    pink: "bg-[rgb(226_56_123_/_10%)] text-[var(--sunlit-pink)]",
+    coral: "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--link)]",
+    pink: "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--sunlit-pink)]",
     yellow: "bg-[var(--sunlit-yellow-soft)] text-[var(--sunlit-ink)]"
   } as const;
   const changeLabel = formatInsightsChange(locale, change, comparisonAvailable);
@@ -1402,12 +1430,14 @@ function InsightsMetricCard({
           <Icon aria-hidden="true" size={20} strokeWidth={2} />
         </span>
       </div>
-      <p
-        className={`mt-3 inline-flex items-center gap-1 text-xs font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}
-      >
-        {change !== null ? <ChangeIcon aria-hidden="true" size={14} /> : null}
-        {changeLabel}
-      </p>
+      {comparisonAvailable ? (
+        <p
+          className={`mt-3 inline-flex items-center gap-1 text-xs font-extrabold ${change !== null && change < 0 ? "text-[var(--sunlit-danger)]" : "text-[var(--sunlit-aqua-dark)]"}`}
+        >
+          {change !== null ? <ChangeIcon aria-hidden="true" size={14} /> : null}
+          {changeLabel}
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -1571,10 +1601,24 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
 
     return finalVaultModules.map((module) => ({
       ...module,
+      title:
+        locale === "ar"
+          ? ((
+              {
+                COMPANY: "معلومات النشاط",
+                STORY: "قصة النشاط",
+                PRODUCTS: "المنتجات والخدمات",
+                AUDIENCE: "الجمهور المستهدف",
+                COMPETITORS: "المنافسون",
+                BRAND: "هوية العلامة",
+                OBJECTIVES: "الأهداف التسويقية"
+              } as Partial<Record<VaultSection, string>>
+            )[module.sections[0]!] ?? module.title)
+          : module.title,
       completed: module.sections.every((section) => completedSections.has(section)),
       updatedAt: latestVaultUpdate(data?.vault, module.sections)
     }));
-  }, [data]);
+  }, [data, locale]);
 
   const completedCount = modules.filter((module) => module.completed).length;
   const score = data?.score.score ?? 0;
@@ -1588,7 +1632,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "أقسام الملف",
           refresh: "تحديث",
           refreshing: "جارٍ التحديث...",
-          subtitle: "المعلومات المعتمدة التي يستخدمها MARKOS لتوجيه استراتيجية النشاط والحملات والمحتوى.",
+          subtitle: "تؤثر التغييرات على الاستراتيجية التسويقية والحملات والمحتوى المستقبلي. لن يتغير العمل المحفوظ سابقاً.",
           updated: "آخر تحديث"
         }
       : {
@@ -1599,17 +1643,16 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
           modules: "Profile sections",
           refresh: "Refresh",
           refreshing: "Refreshing...",
-          subtitle: "The approved business context MARKOS uses to guide business strategy, Campaigns, and content.",
+          subtitle: "Changes inform future marketing strategy, Campaigns, and content. Existing saved work stays unchanged.",
           updated: "Last updated"
         };
 
   return (
     <section className="space-y-6 xl:space-y-7">
-      <section className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+      <header>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-center">
           <div className="max-w-3xl">
-            <p className="sunlit-eyebrow">{copy.modules}</p>
-            <h1 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-3xl">{copy.heading}</h1>
+            <h1 className="text-3xl font-semibold text-[var(--text)]">{copy.heading}</h1>
             <p className="mt-2 text-base leading-7 text-[var(--sunlit-muted)]">{copy.subtitle}</p>
             <a
               className="sunlit-primary mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold"
@@ -1618,12 +1661,18 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
               {copy.edit} <ArrowRight size={17} />
             </a>
           </div>
-          <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-5">
+          <div className="sunlit-panel rounded-2xl p-5">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-sm font-extrabold uppercase tracking-[.12em] text-[var(--sunlit-muted)]">Profile readiness</p>
+                <p className="text-sm font-medium text-[var(--text-muted)]">{locale === "ar" ? "جاهزية الملف" : "Profile readiness"}</p>
                 <p className="mt-2 text-base font-bold text-[var(--sunlit-ink-soft)]">
-                  {loading && !data ? "Loading profile..." : `${completedCount} of ${modules.length} sections`}
+                  {loading && !data
+                    ? locale === "ar"
+                      ? "جارٍ تحميل الملف…"
+                      : "Loading profile…"
+                    : locale === "ar"
+                      ? `${completedCount} من ${modules.length} أقسام`
+                      : `${completedCount} of ${modules.length} sections`}
                 </p>
               </div>
               <p className="text-3xl font-bold text-[var(--sunlit-pink)]">{score}%</p>
@@ -1641,28 +1690,21 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
             </button>
           </div>
         </div>
-      </section>
+      </header>
 
       {error ? (
-        <p className="rounded-2xl border border-[rgb(199_53_80_/_22%)] bg-[rgb(199_53_80_/_7%)] p-5 text-sm font-semibold text-[var(--sunlit-danger)]">
+        <p className="rounded-2xl border border-[color-mix(in_srgb,var(--danger)_22%,transparent)] bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] p-5 text-sm font-semibold text-[var(--sunlit-danger)]">
           {error}
         </p>
       ) : null}
 
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.modules}</h2>
-        <span className="text-sm font-bold text-[var(--sunlit-muted)]">
-          {completedCount}/{modules.length}
-        </span>
       </div>
       <section className="grid gap-4 lg:grid-cols-2">
         {modules.map((module, index) => (
           <article
-            className={
-              module.completed
-                ? "sunlit-panel rounded-[1.75rem] p-5 xl:p-6"
-                : "rounded-[1.75rem] border border-[var(--sunlit-line)] bg-[rgb(245_242_239_/_72%)] p-5 opacity-75 xl:p-6"
-            }
+            className={module.completed ? "sunlit-panel rounded-2xl p-5" : "rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-5"}
             key={module.title}
           >
             <div className="flex items-start justify-between gap-4">
@@ -1671,16 +1713,15 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                   className={
                     module.completed
                       ? "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
-                      : "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-muted)]"
+                      : "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--surface)] text-[var(--sunlit-muted)]"
                   }
                 >
                   {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
                 </span>
                 <div>
-                  <h3 className="text-xl font-bold text-[var(--sunlit-ink)]">{module.title}</h3>
-                  <p className="mt-2 text-base leading-6 text-[var(--sunlit-muted)]">{module.description}</p>
-                  <p className="mt-4 text-xs font-bold text-[var(--sunlit-muted)]">
-                    {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : "Never"}
+                  <h3 className="text-lg font-semibold text-[var(--text)]">{module.title}</h3>
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">
+                    {copy.updated}: {module.updatedAt ? formatVaultUpdatedAt(module.updatedAt, locale) : locale === "ar" ? "لم يُحدّث بعد" : "Never"}
                   </p>
                 </div>
               </div>
@@ -1688,28 +1729,16 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                 className={
                   module.completed
                     ? "inline-flex items-center gap-1.5 rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]"
-                    : "inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-muted)]"
+                    : "inline-flex items-center rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-muted)]"
                 }
               >
-                {module.completed ? <CheckCircle2 aria-label={`${module.title} complete`} size={15} /> : null}
+                {module.completed ? <CheckCircle2 aria-hidden="true" size={15} /> : null}
                 {module.completed ? copy.complete : copy.incomplete}
               </span>
             </div>
           </article>
         ))}
       </section>
-      <article className="sunlit-panel-soft flex items-start gap-4 rounded-[1.75rem] p-6">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-pink)]">
-          <Lightbulb size={20} />
-        </span>
-        <div>
-          <h2 className="text-lg font-bold text-[var(--sunlit-ink)]">One profile, used across MARKOS</h2>
-          <p className="mt-2 max-w-4xl text-base leading-7 text-[var(--sunlit-muted)]">
-            Changes to approved business context can influence future business strategy, Campaigns, and content. Existing saved work remains unchanged until you
-            create a new version.
-          </p>
-        </div>
-      </article>
     </section>
   );
 }
@@ -1749,7 +1778,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-3 rounded-full border border-[#81D8D0]/18 bg-[#111920] px-4 py-2.5 text-white shadow-[0_16px_50px_rgba(0,0,0,.28)] transition hover:border-[#81D8D0]/35 hover:bg-[#14222A]"
+        className="flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[0_16px_50px_rgba(0,0,0,.28)] transition hover:border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] hover:bg-[var(--surface-raised)]"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -1758,37 +1787,37 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
         }}
         type="button"
       >
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[#81D8D0] to-[#D4AF37] text-base font-bold text-[#0F1419]">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[var(--secondary)] to-[var(--accent)] text-base font-bold text-[var(--on-primary)]">
           M
         </span>
         <span className="text-lg font-bold">{name}</span>
-        <Settings size={18} className="text-[#9AA7BD]" />
-        {open ? <ChevronUp size={18} className="text-[#9AA7BD]" /> : <ChevronDown size={18} className="text-[#9AA7BD]" />}
+        <Settings size={18} className="text-[var(--muted)]" />
+        {open ? <ChevronUp size={18} className="text-[var(--muted)]" /> : <ChevronDown size={18} className="text-[var(--muted)]" />}
       </button>
 
       {open ? (
         <div
-          className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[22rem] rounded-[1.5rem] border border-[#81D8D0]/22 bg-[#111920] p-2 shadow-[0_28px_90px_rgba(0,0,0,.62)]"
+          className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[22rem] rounded-[1.5rem] border border-[color-mix(in_srgb,var(--secondary)_22%,transparent)] bg-[var(--surface)] p-2 shadow-[0_28px_90px_rgba(0,0,0,.62)]"
           role="menu"
         >
-          <div className="rounded-[1.2rem] border border-[#81D8D0]/10 bg-[#16232B] p-2">
+          <div className="rounded-[1.2rem] border border-[color-mix(in_srgb,var(--secondary)_10%,transparent)] bg-[var(--surface-muted)] p-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
                 <a
-                  className="flex items-center gap-4 rounded-2xl px-4 py-3 text-base font-semibold text-[#D6DEEA] transition hover:bg-[#81D8D0]/10 hover:text-white focus:bg-[#81D8D0]/10 focus:text-white focus:outline-none"
+                  className="flex items-center gap-4 rounded-2xl px-4 py-3 text-base font-semibold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] hover:text-[var(--text)] focus:bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] focus:text-[var(--text)] focus:outline-none"
                   href={item.href}
                   key={item.label}
                   onClick={() => setOpen(false)}
                   role="menuitem"
                 >
-                  <Icon size={19} className="text-[#9AA7BD]" />
+                  <Icon size={19} className="text-[var(--muted)]" />
                   {item.label}
                 </a>
               );
             })}
             <button
-              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-base font-semibold text-[#FF6B6B] transition hover:bg-[#FF6B6B]/10 focus:bg-[#FF6B6B]/10 focus:outline-none"
+              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-base font-semibold text-[var(--danger)] transition hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus:outline-none"
               onClick={() => {
                 setLogoutQueued(true);
                 void logoutBrowserSession(locale);
@@ -1809,26 +1838,26 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
 function HeroTitle({ children, icon, subtitle, title }: { children?: ReactNode; icon: IconType; subtitle: string; title: string }) {
   const Icon = icon;
   return (
-    <section className="lux-card min-w-0 rounded-[1.5rem] p-5 sm:p-6 xl:p-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-        <IconTile accentName="teal" icon={Icon} size="lg" />
+    <header className="min-w-0">
+      <div className="flex items-start gap-3">
+        <Icon aria-hidden="true" className="mt-1 shrink-0 text-[var(--text-muted)]" size={24} />
         <div>
-          <h1 className="min-w-0 font-display text-3xl font-bold tracking-normal text-white sm:text-4xl">{title}</h1>
-          <p className="mt-3 min-w-0 max-w-5xl text-base leading-relaxed text-[#D6DEEA] sm:text-lg xl:text-xl">{subtitle}</p>
+          <h1 className="min-w-0 text-3xl font-semibold text-[var(--text)]">{title}</h1>
+          <p className="mt-2 max-w-3xl text-base leading-relaxed text-[var(--text-muted)]">{subtitle}</p>
         </div>
       </div>
       {children}
-    </section>
+    </header>
   );
 }
 
 function SectionHeading({ title }: { title: string }) {
-  return <h2 className="font-display text-2xl font-bold text-white xl:text-3xl">{title}</h2>;
+  return <h2 className="text-xl font-semibold text-[var(--text)]">{title}</h2>;
 }
 
 function SectionLabel({ accentName, label }: { accentName: Accent; label: string }) {
   return (
-    <h2 className="flex items-center gap-3 text-sm font-bold uppercase tracking-[.14em] text-[#9AA7BD]">
+    <h2 className="flex items-center gap-3 text-xl font-semibold text-[var(--text)]">
       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent[accentName].hex }} />
       {label}
     </h2>
@@ -1856,14 +1885,17 @@ function MetricRingCard({ accentName, icon, label, sub, value }: { accentName: A
     <article className="lux-card-muted rounded-[1.5rem] p-5 text-center xl:p-6">
       <div
         className="mx-auto grid h-28 w-28 place-items-center rounded-full xl:h-32 xl:w-32"
-        style={{ background: `conic-gradient(${color} 0 82%, rgba(255,255,255,.08) 82% 100%)`, filter: `drop-shadow(0 0 16px ${color}44)` }}
+        style={{
+          background: `conic-gradient(${color} 0 82%, var(--border) 82% 100%)`,
+          filter: `drop-shadow(0 0 16px color-mix(in srgb, ${color} 27%, transparent))`
+        }}
       >
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-[#111920] xl:h-24 xl:w-24">
+        <div className="grid h-20 w-20 place-items-center rounded-full bg-[var(--surface)] xl:h-24 xl:w-24">
           <Icon className={accent[accentName].className} size={32} />
         </div>
       </div>
-      <p className="mt-4 text-sm text-[#9AA7BD] xl:mt-5 xl:text-base">{label}</p>
-      <p className="mt-2 font-display text-3xl font-bold text-white xl:text-4xl">{value}</p>
+      <p className="mt-4 text-sm text-[var(--muted)] xl:mt-5 xl:text-base">{label}</p>
+      <p className="mt-2 font-display text-3xl font-bold text-[var(--text)] xl:text-4xl">{value}</p>
       <p className={`mt-3 text-sm font-bold xl:mt-4 xl:text-base ${accent[accentName].className}`}>
         {sub} <ArrowRight className="inline" size={15} />
       </p>
@@ -1877,7 +1909,7 @@ function MiniStat({ accentName, icon, label, value }: { accentName: Accent; icon
     <div className="flex items-center gap-3">
       <Icon className={accent[accentName].className} size={20} />
       <div>
-        <p className="text-[#9AA7BD]">{label}</p>
+        <p className="text-[var(--muted)]">{label}</p>
         <p className={`text-xl font-bold ${accent[accentName].className}`}>{value}</p>
       </div>
     </div>
@@ -1890,28 +1922,28 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
   const borderColor = accent[accentName].border;
   const previewBackground =
     accentName === "teal"
-      ? "linear-gradient(135deg, rgba(129,216,208,.18), rgba(212,175,55,.08), rgba(244,164,96,.14))"
+      ? "linear-gradient(135deg, color-mix(in srgb, var(--secondary) 18%, transparent), color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--primary) 14.000000000000002%, transparent))"
       : accentName === "gold"
-        ? "linear-gradient(135deg, rgba(212,175,55,.18), rgba(244,164,96,.12), rgba(129,216,208,.08))"
-        : "linear-gradient(135deg, rgba(244,164,96,.18), rgba(129,216,208,.08), rgba(212,175,55,.12))";
+        ? "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--primary) 12%, transparent), color-mix(in srgb, var(--secondary) 8%, transparent))"
+        : "linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, transparent), color-mix(in srgb, var(--secondary) 8%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
 
   function previewArtwork() {
     if (label === "Carousel") {
       return (
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <div className="flex items-center justify-between">
-            <span className="h-2 w-2 rounded-full bg-[#81D8D0] shadow-[0_0_14px_rgba(129,216,208,.75)]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--secondary)] shadow-[0_0_14px_color-mix(in_srgb,var(--secondary)_75%,transparent)]" />
             <div className="flex gap-1">
-              <span className="h-1 w-12 rounded-full bg-[#81D8D0]" />
-              <span className="h-1 w-12 rounded-full bg-[#81D8D0]/30" />
-              <span className="h-1 w-12 rounded-full bg-[#81D8D0]/30" />
+              <span className="h-1 w-12 rounded-full bg-[var(--secondary)]" />
+              <span className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--secondary)_30%,transparent)]" />
+              <span className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--secondary)_30%,transparent)]" />
             </div>
           </div>
           <div className="text-center">
-            <p className="font-display text-2xl font-bold text-white">{title}</p>
-            <p className="mt-2 text-sm font-semibold text-[#81D8D0]">{subtitle}</p>
+            <p className="font-display text-2xl font-bold text-[var(--text)]">{title}</p>
+            <p className="mt-2 text-sm font-semibold text-[var(--sunlit-aqua-dark)]">{subtitle}</p>
           </div>
-          <p className="text-center text-xs text-[#9AA7BD]">
+          <p className="text-center text-xs text-[var(--muted)]">
             Swipe for details <ArrowRight className="inline" size={12} />
           </p>
         </div>
@@ -1922,16 +1954,16 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
       return (
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <div className="flex justify-end">
-            <span className="grid h-8 w-8 place-items-center rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/16 text-[#D4AF37]">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]">
               <Play size={15} fill="currentColor" />
             </span>
           </div>
           <div className="space-y-2">
-            <span className="block h-1 w-16 rounded-full bg-[#D4AF37]/60" />
-            <span className="block h-1 w-24 rounded-full bg-[#D4AF37]/35" />
-            <span className="block h-1 w-20 rounded-full bg-[#D4AF37]/25" />
+            <span className="block h-1 w-16 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+            <span className="block h-1 w-24 rounded-full bg-[color-mix(in_srgb,var(--accent)_35%,transparent)]" />
+            <span className="block h-1 w-20 rounded-full bg-[color-mix(in_srgb,var(--accent)_25%,transparent)]" />
           </div>
-          <p className="text-xs font-bold text-[#D6DEEA]">{subtitle}</p>
+          <p className="text-xs font-bold text-[var(--text)]">{subtitle}</p>
         </div>
       );
     }
@@ -1941,16 +1973,23 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <div className="flex gap-1">
             {[0, 1, 2, 3].map((index) => (
-              <span className={index === 0 ? "h-0.5 flex-1 rounded-full bg-[#F4A460]" : "h-0.5 flex-1 rounded-full bg-[#F4A460]/35"} key={index} />
+              <span
+                className={
+                  index === 0
+                    ? "h-0.5 flex-1 rounded-full bg-[var(--primary)]"
+                    : "h-0.5 flex-1 rounded-full bg-[color-mix(in_srgb,var(--primary)_35%,transparent)]"
+                }
+                key={index}
+              />
             ))}
           </div>
           <div className="text-center">
-            <span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-[#F4A460]/45 bg-[#F4A460]/22 text-[#F4A460]">
+            <span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full border border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_22%,transparent)] text-[var(--link)]">
               <Heart size={24} />
             </span>
-            <p className="text-xs font-bold text-[#D6DEEA]">{title}</p>
+            <p className="text-xs font-bold text-[var(--text)]">{title}</p>
           </div>
-          <p className="text-center text-xs text-[#9AA7BD]">{subtitle}</p>
+          <p className="text-center text-xs text-[var(--muted)]">{subtitle}</p>
         </div>
       );
     }
@@ -1958,25 +1997,28 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
     return (
       <div className="absolute inset-0 grid place-items-center p-6">
         <div className="text-center">
-          <span className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-[#81D8D0]/30 bg-[#81D8D0]/18 text-[#81D8D0]">
+          <span className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--secondary)_30%,transparent)] bg-[color-mix(in_srgb,var(--secondary)_18%,transparent)] text-[var(--sunlit-aqua-dark)]">
             <Eye size={32} />
           </span>
-          <p className="font-display text-xl font-bold text-white">{title}</p>
-          <p className="mt-1 text-sm font-bold text-[#D4AF37]">{subtitle}</p>
+          <p className="font-display text-xl font-bold text-[var(--text)]">{title}</p>
+          <p className="mt-1 text-sm font-bold text-[var(--accent)]">{subtitle}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <article className="group overflow-hidden rounded-[1.5rem] border bg-[#111920]/82 transition hover:bg-[#132129]" style={{ borderColor }}>
+    <article
+      className="group overflow-hidden rounded-[1.5rem] border bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] transition hover:bg-[var(--surface-raised)]"
+      style={{ borderColor }}
+    >
       <div className="relative aspect-square overflow-hidden" style={{ background: previewBackground }}>
         <div className="absolute inset-0 bg-[#0F1419]/14 transition group-hover:bg-transparent" />
         {previewArtwork()}
       </div>
-      <div className="bg-[#111920]/92 p-4">
+      <div className="bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4">
         <div className="mb-3 flex items-center justify-between gap-4">
-          <p className="text-base font-bold text-white">{label}</p>
+          <p className="text-base font-bold text-[var(--text)]">{label}</p>
           <span className="rounded-full border px-3 py-1 text-xs font-bold" style={{ background: accent[accentName].bg, borderColor, color }}>
             {status}
           </span>
@@ -1999,15 +2041,15 @@ function PerformanceCard({ accent: accentName, icon, label, meta, sub, value }: 
       <div className="flex items-center gap-4 xl:gap-6">
         <IconTile accentName={accentName} icon={icon} />
         <div>
-          <p className="font-display text-2xl font-bold text-white xl:text-3xl">{value}</p>
-          <p className="text-base text-white xl:text-lg">{label}</p>
+          <p className="font-display text-2xl font-bold text-[var(--text)] xl:text-3xl">{value}</p>
+          <p className="text-base text-[var(--text)] xl:text-lg">{label}</p>
         </div>
       </div>
       <div className="mt-5 flex justify-between text-base xl:mt-7 xl:text-lg">
-        <span className="text-[#9AA7BD]">{meta}</span>
+        <span className="text-[var(--muted)]">{meta}</span>
         <span className={`font-bold ${accent[accentName].className}`}>{sub}</span>
       </div>
-      <div className="mt-5 h-2 rounded-full bg-[#182436]">
+      <div className="mt-5 h-2 rounded-full bg-[var(--surface-muted)]">
         <div className="h-full w-[78%] rounded-full" style={{ background: accent[accentName].hex }} />
       </div>
     </article>
@@ -2030,15 +2072,15 @@ function OpportunityCard({
     <article className="lux-card rounded-[1.5rem] p-5 xl:p-6" style={{ borderColor: accent[accentName].border }}>
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="text-base font-bold text-[#D6DEEA] xl:text-lg">{theme}</p>
-          <h2 className="mt-4 font-display text-2xl font-bold text-white xl:text-3xl">{title}</h2>
-          <p className="mt-4 max-w-5xl text-base leading-relaxed text-[#B8C4D8] xl:text-lg">
+          <p className="text-base font-bold text-[var(--text)] xl:text-lg">{theme}</p>
+          <h2 className="mt-4 font-display text-2xl font-bold text-[var(--text)] xl:text-3xl">{title}</h2>
+          <p className="mt-4 max-w-5xl text-base leading-relaxed text-[var(--muted)] xl:text-lg">
             Your audience is showing strong interest in this content angle. MARKOS can convert it into a campaign or a content batch immediately.
           </p>
         </div>
         <div className="text-right">
-          <p className="font-display text-3xl font-bold text-white xl:text-4xl">{confidence}</p>
-          <p className="text-base text-[#9AA7BD] xl:text-lg">Confidence</p>
+          <p className="font-display text-3xl font-bold text-[var(--text)] xl:text-4xl">{confidence}</p>
+          <p className="text-base text-[var(--muted)] xl:text-lg">Confidence</p>
         </div>
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-3 xl:mt-8 xl:gap-5">
@@ -2048,18 +2090,18 @@ function OpportunityCard({
       </div>
       <div className="mt-6 grid gap-5 lg:grid-cols-2 xl:mt-8 xl:gap-6">
         <div>
-          <h3 className="text-lg font-bold text-white">Why This Will Work</h3>
-          <ul className="mt-4 space-y-3 text-base text-[#B8C4D8]">
+          <h3 className="text-lg font-bold text-[var(--text)]">Why This Will Work</h3>
+          <ul className="mt-4 space-y-3 text-base text-[var(--muted)]">
             {why.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </div>
         <div>
-          <h3 className="text-lg font-bold text-white">Suggested Content Pieces</h3>
+          <h3 className="text-lg font-bold text-[var(--text)]">Suggested Content Pieces</h3>
           <div className="mt-4 flex flex-wrap gap-3">
             {pieces.map((piece) => (
-              <span className="rounded-full bg-white/10 px-4 py-2 font-semibold text-[#D6DEEA]" key={piece}>
+              <span className="rounded-full bg-[var(--surface)] px-4 py-2 font-semibold text-[var(--text)]" key={piece}>
                 {piece}
               </span>
             ))}
@@ -2073,11 +2115,14 @@ function OpportunityCard({
         >
           <Sparkles size={20} /> Generate Content <ArrowRight size={20} />
         </a>
-        <a className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-white xl:px-7 xl:py-3.5" href={`/${locale}/app/analytics`}>
+        <a
+          className="rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
+          href={`/${locale}/app/analytics`}
+        >
           View Analysis
         </a>
         <a
-          className="rounded-full border border-[#81D8D0]/18 px-6 py-3 text-base font-bold text-[#D6DEEA] xl:px-7 xl:py-3.5"
+          className="rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
           href={`/${locale}/app/campaign-builder`}
         >
           Schedule Later
@@ -2091,11 +2136,11 @@ function GlassStat({ icon, label, value }: { icon: IconType; label: string; valu
   const Icon = icon;
   return (
     <div className="lux-card-quiet rounded-[1.35rem] p-4 xl:p-5">
-      <p className="flex items-center gap-3 text-[#9AA7BD]">
+      <p className="flex items-center gap-3 text-[var(--muted)]">
         <Icon size={18} />
         {label}
       </p>
-      <p className="mt-4 font-display text-2xl font-bold text-white xl:text-3xl">{value}</p>
+      <p className="mt-4 font-display text-2xl font-bold text-[var(--text)] xl:text-3xl">{value}</p>
     </div>
   );
 }
@@ -2104,21 +2149,21 @@ function ObjectiveCard({ icon, label, sub, value }: { icon: IconType; label: str
   const Icon = icon;
   return (
     <article className="lux-card-muted rounded-[1.5rem] p-5 xl:p-7">
-      <p className="flex items-center gap-3 text-lg font-bold text-white xl:gap-4 xl:text-xl">
+      <p className="flex items-center gap-3 text-lg font-bold text-[var(--text)] xl:gap-4 xl:text-xl">
         <Icon size={24} /> {label}
       </p>
-      <p className="mt-5 font-display text-3xl font-bold text-white xl:mt-6 xl:text-4xl">{value}</p>
-      <p className="mt-3 text-base text-[#9AA7BD] xl:text-lg">{sub}</p>
+      <p className="mt-5 font-display text-3xl font-bold text-[var(--text)] xl:mt-6 xl:text-4xl">{value}</p>
+      <p className="mt-3 text-base text-[var(--muted)] xl:text-lg">{sub}</p>
     </article>
   );
 }
 
 function ScoreBadge({ score }: { score: string }) {
   return (
-    <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: "conic-gradient(#81D8D0 0 78%, rgba(255,255,255,.08) 78% 100%)" }}>
-      <div className="grid h-20 w-20 place-items-center rounded-full bg-[#111920] text-center">
-        <span className="text-2xl font-bold text-[#81D8D0]">{score}</span>
-        <span className="text-xs uppercase text-[#9AA7BD]">Score</span>
+    <div className="grid h-28 w-28 place-items-center rounded-full" style={{ background: "conic-gradient(var(--secondary) 0 78%, var(--border) 78% 100%)" }}>
+      <div className="grid h-20 w-20 place-items-center rounded-full bg-[var(--surface)] text-center">
+        <span className="text-2xl font-bold text-[var(--sunlit-aqua-dark)]">{score}</span>
+        <span className="text-xs uppercase text-[var(--muted)]">Score</span>
       </div>
     </div>
   );

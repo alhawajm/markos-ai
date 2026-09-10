@@ -7,15 +7,50 @@ import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-
 import {
   approveCampaignSuggestion,
   CampaignContextMissingError,
+  CampaignListInputError,
   CampaignNotFoundError,
   CampaignSuggestionNotFoundError,
   exportCampaignPdf,
   generateWorkspaceCampaign,
   listCampaignDrafts,
-  listCampaigns
+  listCampaigns,
+  listCampaignSummaries,
+  readCampaignReview
 } from "./campaign-service";
 
 export async function registerCampaignRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/campaigns/summaries", { config: { workspaceRequired: true, permissions: ["campaign:read", "content:read"] } }, async (request, reply) => {
+    const query = request.query as Record<string, unknown>;
+    if (Object.entries(query).some(([key, value]) => !["limit", "cursor", "query"].includes(key) || typeof value !== "string")) {
+      return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid campaign page or search request"));
+    }
+    const { workspaceId } = requireWorkspaceContext();
+    try {
+      return ok(await listCampaignSummaries(workspaceId, query as { limit?: string; cursor?: string; query?: string }));
+    } catch (error) {
+      if (error instanceof CampaignListInputError) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", error.message));
+      throw error;
+    }
+  });
+
+  app.get(
+    "/v1/campaigns/:campaignId/review",
+    { config: { workspaceRequired: true, permissions: ["campaign:read", "content:read", "media:read"] } },
+    async (request, reply) => {
+      const { campaignId } = request.params as { campaignId: string };
+      if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(campaignId)) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid campaign id"));
+      }
+      const { workspaceId } = requireWorkspaceContext();
+      try {
+        return ok(await readCampaignReview(workspaceId, campaignId));
+      } catch (error) {
+        if (error instanceof CampaignNotFoundError) return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
+        throw error;
+      }
+    }
+  );
+
   app.get(
     "/v1/campaigns",
     {

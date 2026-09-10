@@ -1,260 +1,367 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  LayoutDashboard,
-  ListChecks,
-  Plus,
-  RefreshCcw,
-  Sparkles,
-  Target,
-  X,
-  Zap
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronRight, Plus, RefreshCcw, Search, Sparkles, X, Zap } from "lucide-react";
 import {
   campaignDurations,
   campaignGenerationDurations,
   type CampaignGenerationDurationDays,
   type CampaignRecord,
-  type CampaignWeek,
+  type CampaignReviewRecord,
+  type CampaignSummary,
   type ContentRecord,
-  type ContentType,
   type Locale
 } from "@markos/shared-types";
 import { useVaultGroundingState, vaultGapMessage } from "./vault-grounding";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
+import { useModalDialog } from "./use-modal-dialog";
+import { CampaignCounts, CampaignReview } from "./campaign-review";
+import {
+  campaignPostCounts,
+  campaignPosts,
+  initialReviewSelection,
+  reviewCount,
+  reviewRange,
+  validReviewSelection,
+  type ReviewPost,
+  type ReviewSelection
+} from "./campaign-review-model";
+import styles from "./campaign-review.module.css";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
+  const session = useMarkosSession();
+  return <CampaignWorkspacePanel key={session?.workspace.id ?? "signed-out"} locale={locale} />;
+}
+
+function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
   const router = useRouter();
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
-  const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
+  const vaultGrounding = useVaultGroundingState({ area: "campaigns", locale });
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [listLoaded, setListLoaded] = useState(false);
+  const [listBusy, setListBusy] = useState(false);
+  const [listError, setListError] = useState("");
+  const [query, setQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [objective, setObjective] = useState(t(locale, "defaultObjective"));
   const [durationDays, setDurationDays] = useState<CampaignGenerationDurationDays>(14);
   const [publishesPerDay, setPublishesPerDay] = useState(1);
   const [startsAt, setStartsAt] = useState(todayForDateInput);
-  const [activeCampaignId, setActiveCampaignId] = useState<string>();
-  const [activeWeekIndex, setActiveWeekIndex] = useState(0);
-  const [reviewMode, setReviewMode] = useState<"overview" | "week">("week");
   const [showComposer, setShowComposer] = useState(false);
-  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(() => new Set());
-  const [message, setMessage] = useState("");
-  const [campaignDrafts, setCampaignDrafts] = useState<ContentRecord[]>([]);
-  const [approvingSuggestion, setApprovingSuggestion] = useState<string>();
-  const [suggestionMessage, setSuggestionMessage] = useState("");
-  const [suggestionMessageKind, setSuggestionMessageKind] = useState<"error" | "success">("success");
-  const [isBusy, setIsBusy] = useState(false);
-  const vaultGrounding = useVaultGroundingState({ area: "campaigns", locale });
-  const selectedCampaignId = activeCampaignId ?? campaigns[0]?.id;
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
+  const [activeId, setActiveId] = useState<string>();
+  const [lastId, setLastId] = useState<string>();
+  const [review, setReview] = useState<CampaignReviewRecord>();
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pendingKey, setPendingKey] = useState<string>();
+  const [selections, setSelections] = useState<Record<string, ReviewSelection>>({});
+  const listRequest = useRef(0);
+  const reviewRequest = useRef(0);
+  const actionPending = useRef(false);
+  const generationPending = useRef(false);
+  const openedInitial = useRef<string | undefined>(undefined);
+  const workspaceLifetime = useRef(0);
 
   useEffect(() => {
+    const lifetime = workspaceLifetime;
+    return () => {
+      lifetime.current++;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const refreshCampaigns = useCallback(
+    async (nextCursor?: string) => {
+      if (!session) return;
+      const request = ++listRequest.current;
+      setListBusy(true);
+      setListError("");
+      try {
+        const page = await client.campaignSummaries({
+          limit: 20,
+          ...(nextCursor ? { cursor: nextCursor } : {}),
+          ...(searchQuery ? { query: searchQuery } : {})
+        });
+        if (request !== listRequest.current) return;
+        setCampaigns((current) => (nextCursor ? [...current, ...page.items.filter((item) => !current.some((entry) => entry.id === item.id))] : page.items));
+        setCursor(page.nextCursor);
+        setListLoaded(true);
+      } catch (error) {
+        if (request === listRequest.current) setListError(error instanceof Error ? error.message : t(locale, "failed"));
+      } finally {
+        if (request === listRequest.current) setListBusy(false);
+      }
+    },
+    [client, locale, searchQuery, session]
+  );
+
+  useEffect(() => {
+    const requests = listRequest;
     if (session) void refreshCampaigns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      requests.current++;
+    };
+  }, [session, refreshCampaigns]);
+  useEffect(() => {
+    if (!session || openedInitial.current === session.workspace.id) return;
+    openedInitial.current = session.workspace.id;
+    const requestedId = new URLSearchParams(window.location.search).get("campaign");
+    if (requestedId) {
+      setActiveId(requestedId);
+      setLastId(requestedId);
+    }
   }, [session]);
 
+  const loadReview = useCallback(
+    async (id: string) => {
+      const request = ++reviewRequest.current;
+      setReviewBusy(true);
+      setReviewError("");
+      setActionError("");
+      try {
+        const result = await client.campaignReview(id);
+        if (request !== reviewRequest.current) return;
+        setReview(result);
+        setSelections((current) => ({ ...current, [id]: validReviewSelection(result.campaign, current[id] ?? selectionFromUrl(result.campaign)) }));
+        setCampaigns((current) => current.map((entry) => (entry.id === id ? summaryFromReview(result) : entry)));
+      } catch (error) {
+        if (request === reviewRequest.current) setReviewError(error instanceof Error ? error.message : t(locale, "failed"));
+      } finally {
+        if (request === reviewRequest.current) setReviewBusy(false);
+      }
+    },
+    [client, locale]
+  );
+
   useEffect(() => {
-    if (!session || !selectedCampaignId) {
-      setCampaignDrafts([]);
-      return;
-    }
-    let cancelled = false;
-    setCampaignDrafts([]);
-    setSuggestionMessage("");
-    setSuggestionMessageKind("success");
-    void client
-      .campaignDrafts(selectedCampaignId)
-      .then((drafts) => {
-        if (!cancelled) setCampaignDrafts(drafts);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSuggestionMessageKind("error");
-          setSuggestionMessage(t(locale, "suggestionLoadFailed"));
-        }
-      });
+    const requests = reviewRequest;
+    if (!activeId || !session) return;
+    void loadReview(activeId);
     return () => {
-      cancelled = true;
+      requests.current++;
     };
-  }, [client, locale, selectedCampaignId, session]);
+  }, [activeId, loadReview, session]);
 
-  async function refreshCampaigns() {
-    if (!session) return setCampaigns([]);
-    setIsBusy(true);
-    setMessage("");
-    try {
-      const next = await client.campaigns();
-      setCampaigns(next);
-      setActiveCampaignId((current) => (next.some((campaign) => campaign.id === current) ? current : next[0]?.id));
-      if (next.length === 0) setShowComposer(true);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : t(locale, "failed"));
-    } finally {
-      setIsBusy(false);
-    }
+  function openCampaign(id: string) {
+    setReview(undefined);
+    setReviewError("");
+    setActionError("");
+    setNotice("");
+    setActiveId(id);
+    setLastId(id);
+    updateCampaignUrl(id, selections[id]);
   }
-
+  function closeCampaign() {
+    if (actionPending.current) return;
+    setActiveId(undefined);
+    setReview(undefined);
+    setNotice("");
+    updateCampaignUrl();
+  }
+  function selectReview(next: ReviewSelection) {
+    if (!activeId) return;
+    setSelections((current) => ({ ...current, [activeId]: next }));
+    updateCampaignUrl(activeId, next);
+  }
   async function generate() {
-    if (vaultGrounding.blocked) return setMessage(vaultGapMessage(locale));
-    if (!session) return setMessage(t(locale, "sessionRequired"));
-    setIsBusy(true);
-    setMessage("");
+    if (generationPending.current) return;
+    if (vaultGrounding.blocked) return setGenerationError(vaultGapMessage(locale));
+    if (!session) return setGenerationError(t(locale, "sessionRequired"));
+    generationPending.current = true;
+    const lifetime = workspaceLifetime.current;
+    setGenerating(true);
+    setGenerationError("");
     try {
       const base = { durationDays, locale, publishesPerDay, startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString() };
       const campaign = await client.generateCampaign(objective.trim() ? { ...base, objective: objective.trim() } : base);
-      setCampaigns((current) => [campaign, ...current.filter((item) => item.id !== campaign.id)]);
-      setActiveCampaignId(campaign.id);
-      setActiveWeekIndex(0);
-      setReviewMode("week");
-      setCollapsedDays(new Set());
+      if (lifetime !== workspaceLifetime.current) return;
+      const result = { campaign, items: [], mediaAssets: [] };
+      setCampaigns((current) => [summaryFromReview(result), ...current.filter((item) => item.id !== campaign.id)]);
+      setQuery("");
+      setSearchQuery("");
       setShowComposer(false);
-      setCampaignDrafts([]);
+      setReview(result);
+      setSelections((current) => ({ ...current, [campaign.id]: initialReviewSelection(campaign) }));
+      setActiveId(campaign.id);
+      setLastId(campaign.id);
+      setReviewError("");
+      setActionError("");
+      updateCampaignUrl(campaign.id, initialReviewSelection(campaign));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t(locale, "failed"));
+      if (lifetime === workspaceLifetime.current) setGenerationError(error instanceof Error ? error.message : t(locale, "failed"));
     } finally {
-      setIsBusy(false);
+      generationPending.current = false;
+      if (lifetime === workspaceLifetime.current) setGenerating(false);
     }
   }
-
-  const active = campaigns.find((campaign) => campaign.id === activeCampaignId) ?? campaigns[0];
-  const detailed = active ? isDetailedCampaign(active) : false;
-  const activeWeek = active && detailed ? active.content.weeklyCadence[activeWeekIndex] : undefined;
-
-  function selectCampaign(id: string) {
-    setActiveCampaignId(id);
-    setActiveWeekIndex(0);
-    setReviewMode("week");
-    setCollapsedDays(new Set());
-    setCampaignDrafts([]);
-    setSuggestionMessage("");
-    setSuggestionMessageKind("success");
-  }
-
-  function changeWeek(index: number) {
-    setActiveWeekIndex(index);
-    setCollapsedDays(new Set());
-  }
-
-  function toggleDay(day: number) {
-    setCollapsedDays((current) => {
-      const next = new Set(current);
-      if (next.has(day)) next.delete(day);
-      else next.add(day);
-      return next;
-    });
-  }
-
-  async function approveSuggestion(campaign: CampaignRecord, week: number, actionIndex: number) {
-    const key = suggestionKey(week, actionIndex);
-    if (approvingSuggestion) return;
-    setApprovingSuggestion(key);
-    setSuggestionMessage("");
+  async function createDraft(post: ReviewPost) {
+    if (!activeId || actionPending.current) return;
+    actionPending.current = true;
+    const lifetime = workspaceLifetime.current;
+    setPendingKey(post.key);
+    setActionError("");
+    setNotice("");
     try {
-      const draft = await client.approveCampaignSuggestion(campaign.id, { week, actionIndex });
-      setCampaignDrafts((current) => [draft, ...current.filter((item) => item.id !== draft.id)]);
-      setSuggestionMessageKind("success");
-      setSuggestionMessage(t(locale, "draftRegistered"));
-    } catch {
-      setSuggestionMessageKind("error");
-      setSuggestionMessage(t(locale, "suggestionApprovalFailed"));
+      const draft = await client.approveCampaignSuggestion(activeId, { week: post.week, actionIndex: post.actionIndex });
+      if (lifetime !== workspaceLifetime.current) return;
+      setReview((current) => {
+        if (!current || current.campaign.id !== activeId) return current;
+        return { ...current, items: [draft, ...current.items.filter((item) => item.id !== draft.id)] };
+      });
+      // The review selection is already in the current history entry; Back restores it.
+      openDraftInCreate(draft);
+    } catch (error) {
+      if (lifetime === workspaceLifetime.current) setActionError(error instanceof Error ? error.message : t(locale, "suggestionApprovalFailed"));
     } finally {
-      setApprovingSuggestion(undefined);
+      actionPending.current = false;
+      if (lifetime === workspaceLifetime.current) setPendingKey(undefined);
     }
   }
-
+  // Keep index counts synchronized with the actual reviewer result, including an explicit new draft.
+  useEffect(() => {
+    if (review) setCampaigns((current) => current.map((entry) => (entry.id === review.campaign.id ? summaryFromReview(review) : entry)));
+  }, [review]);
   function openDraftInCreate(draft: ContentRecord) {
     router.push(`/${locale}/app/content-studio?item=${draft.id}&source=campaign`);
   }
 
   return (
-    <section className="flex min-w-0 flex-col gap-4 xl:h-[calc(100dvh-4.5rem)] xl:min-h-[690px] xl:overflow-hidden">
-      <CampaignHeader
-        count={campaigns.length}
-        isBusy={isBusy}
-        locale={locale}
-        onNew={() => setShowComposer(true)}
-        onRefresh={() => void refreshCampaigns()}
-        session={Boolean(session)}
-      />
-      <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <CampaignLibrary active={active} campaigns={campaigns} locale={locale} onNew={() => setShowComposer(true)} onSelect={selectCampaign} />
-        <article className="sunlit-panel min-h-0 min-w-0 overflow-hidden rounded-[1.6rem]">
-          {active ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <CampaignHero campaign={active} locale={locale} />
-              {detailed ? (
-                <>
-                  <div className="shrink-0 px-5 pt-3 sm:px-6">
-                    <div className="inline-flex rounded-xl bg-[var(--sunlit-paper)] p-1" role="tablist">
-                      <ReviewTab
-                        active={reviewMode === "overview"}
-                        icon={<LayoutDashboard size={15} />}
-                        label={t(locale, "overview")}
-                        onClick={() => setReviewMode("overview")}
-                      />
-                      <ReviewTab
-                        active={reviewMode === "week"}
-                        icon={<ListChecks size={15} />}
-                        label={t(locale, "weekReview")}
-                        onClick={() => setReviewMode("week")}
-                      />
+    <section className={styles.page}>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
+        <h1 className="font-display text-[2rem] font-semibold">{t(locale, "title")}</h1>
+        <div className="flex gap-2">
+          <button className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns()} type="button">
+            <RefreshCcw aria-hidden="true" size={18} className={listBusy ? "animate-spin" : ""} />
+            {t(locale, "refresh")}
+          </button>
+          <button
+            className={`${styles.button} ${styles.primaryButton}`}
+            onClick={() => {
+              setGenerationError("");
+              setShowComposer(true);
+            }}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={18} />
+            {t(locale, "newCampaign")}
+          </button>
+        </div>
+      </header>
+      <div className={styles.indexTools}>
+        <label className={styles.search}>
+          <Search aria-hidden="true" size={19} />
+          <input
+            aria-label={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+            placeholder={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+            maxLength={120}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
+      <div className={styles.indexScroll} aria-busy={listBusy}>
+        {listError && (
+          <p className={styles.error} role="alert">
+            {listError}
+          </p>
+        )}
+        {!listLoaded && listBusy ? (
+          <div className={styles.empty} role="status">
+            {locale === "ar" ? "جارٍ تحميل الحملات…" : "Loading campaigns…"}
+          </div>
+        ) : campaigns.length ? (
+          <div className={styles.cardList}>
+            {campaigns.map((campaign) => (
+              <article className={styles.card} data-selected={campaign.id === lastId} key={campaign.id}>
+                <div className={styles.cardHeader}>
+                  <div>
+                    <h2>{campaign.title}</h2>
+                    <div className={styles.dates}>
+                      <span>
+                        <CalendarDays aria-hidden="true" size={17} />
+                        {reviewRange(locale, campaign.startsAt, campaign.endsAt)}
+                      </span>
+                      <span>{reviewCount(locale, campaign.durationDays, "days")}</span>
                     </div>
                   </div>
-                  <div className="sunlit-card-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 sm:px-6 sm:pb-6">
-                    {reviewMode === "overview" ? (
-                      <CampaignOverview
-                        campaign={active}
-                        locale={locale}
-                        onReviewWeek={(index) => {
-                          changeWeek(index);
-                          setReviewMode("week");
-                        }}
-                      />
-                    ) : activeWeek ? (
-                      <WeeklyReview
-                        activeWeek={activeWeek}
-                        activeWeekIndex={activeWeekIndex}
-                        approvingSuggestion={approvingSuggestion}
-                        campaign={active}
-                        campaignDrafts={campaignDrafts}
-                        collapsedDays={collapsedDays}
-                        locale={locale}
-                        onApprove={approveSuggestion}
-                        onChangeWeek={changeWeek}
-                        onOpenCreate={openDraftInCreate}
-                        onToggleDay={toggleDay}
-                        suggestionMessageKind={suggestionMessageKind}
-                        suggestionMessage={suggestionMessage}
-                      />
-                    ) : null}
-                    <CampaignRationale campaign={active} locale={locale} />
-                  </div>
-                </>
-              ) : (
-                <LegacyNotice locale={locale} onNew={() => setShowComposer(true)} />
-              )}
+                </div>
+                {campaign.objective && <p className={styles.objective}>{campaign.objective}</p>}
+                <div className={styles.cardFooter}>
+                  <CampaignCounts counts={campaign.postCounts} locale={locale} total />
+                  <button
+                    type="button"
+                    className={styles.button}
+                    onClick={() => openCampaign(campaign.id)}
+                    aria-label={`${locale === "ar" ? "فتح الحملة" : "Open campaign"}: ${campaign.title}`}
+                  >
+                    {locale === "ar" ? "فتح الحملة" : "Open campaign"}
+                    <ChevronRight aria-hidden="true" size={18} className="rtl:rotate-180" />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : listLoaded && !listError ? (
+          searchQuery ? (
+            <div className={styles.empty}>
+              <h2>{locale === "ar" ? "لا توجد حملات مطابقة" : "No matching campaigns"}</h2>
             </div>
           ) : (
             <CampaignEmpty locale={locale} onNew={() => setShowComposer(true)} />
-          )}
-        </article>
-      </section>
-      {showComposer ? (
+          )
+        ) : null}
+        {cursor && (
+          <div className={styles.loadMore}>
+            <button type="button" className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns(cursor)}>
+              {listBusy ? (locale === "ar" ? "جارٍ التحميل…" : "Loading…") : locale === "ar" ? "تحميل المزيد" : "Load more"}
+            </button>
+          </div>
+        )}
+      </div>
+      {activeId && (
+        <CampaignReview
+          key={activeId}
+          locale={locale}
+          data={review}
+          selection={selections[activeId] ?? { zoom: "week", day: 1, postKey: null, screen: "plan" }}
+          loading={reviewBusy}
+          error={reviewError}
+          actionError={actionError}
+          notice={notice}
+          pendingKey={pendingKey}
+          onSelection={selectReview}
+          onClose={closeCampaign}
+          onRefresh={() => void loadReview(activeId)}
+          onCreateDraft={(post) => void createDraft(post)}
+          onOpenCreate={openDraftInCreate}
+        />
+      )}
+      {showComposer && (
         <CampaignComposer
           durationDays={durationDays}
-          isBusy={isBusy}
+          isBusy={generating}
           locale={locale}
-          message={message}
+          message={generationError}
           objective={objective}
-          onClose={() => setShowComposer(false)}
+          onClose={() => {
+            if (!generating) setShowComposer(false);
+          }}
           onDuration={setDurationDays}
           onGenerate={() => void generate()}
           onIntensity={setPublishesPerDay}
@@ -263,374 +370,56 @@ export function CampaignPanel({ locale }: { locale: Locale }) {
           publishesPerDay={publishesPerDay}
           startsAt={startsAt}
         />
-      ) : null}
+      )}
     </section>
   );
 }
 
-function CampaignHeader({
-  count,
-  isBusy,
-  locale,
-  onNew,
-  onRefresh,
-  session
-}: {
-  count: number;
-  isBusy: boolean;
-  locale: Locale;
-  onNew: () => void;
-  onRefresh: () => void;
-  session: boolean;
-}) {
-  return (
-    <header className="sunlit-panel flex shrink-0 flex-col gap-4 rounded-[1.5rem] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="font-display text-2xl font-bold tracking-[-.035em] text-[var(--sunlit-ink)] sm:text-[2rem]">{t(locale, "title")}</h1>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--sunlit-aqua-dark)]">
-            <Target size={13} />
-            {session ? t(locale, "businessInformed") : t(locale, "previewMode")}
-          </span>
-          <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--sunlit-ink-soft)]">
-            {count} {count === 1 ? t(locale, "campaign") : t(locale, "campaigns")}
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{t(locale, "subtitle")}</p>
-      </div>
-      <div className="flex shrink-0 gap-2">
-        <button
-          className="sunlit-secondary inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
-          disabled={isBusy}
-          onClick={onRefresh}
-          type="button"
-        >
-          <RefreshCcw className={isBusy ? "animate-spin" : ""} size={15} />
-          {t(locale, "refresh")}
-        </button>
-        <button className="sunlit-primary inline-flex h-10 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" onClick={onNew} type="button">
-          <Plus size={16} />
-          {t(locale, "newCampaign")}
-        </button>
-      </div>
-    </header>
-  );
+function summaryFromReview({ campaign, items }: CampaignReviewRecord): CampaignSummary {
+  return {
+    id: campaign.id,
+    workspaceId: campaign.workspaceId,
+    title: campaign.title,
+    ...(campaign.objective === undefined ? {} : { objective: campaign.objective }),
+    status: campaign.status,
+    startsAt: campaign.startsAt,
+    endsAt: campaign.endsAt,
+    durationDays: campaign.durationDays,
+    publishesPerDay: campaign.publishesPerDay,
+    version: campaign.version,
+    createdAt: campaign.createdAt,
+    updatedAt: campaign.updatedAt,
+    postCounts: campaignPostCounts(campaignPosts(campaign), items)
+  };
 }
-
-function CampaignLibrary({
-  active,
-  campaigns,
-  locale,
-  onNew,
-  onSelect
-}: {
-  active: CampaignRecord | undefined;
-  campaigns: CampaignRecord[];
-  locale: Locale;
-  onNew: () => void;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <aside className="sunlit-panel flex min-h-[360px] flex-col overflow-hidden rounded-[1.6rem] p-4 xl:min-h-0">
-      <div className="shrink-0 px-1 pb-3">
-        <p className="sunlit-eyebrow">{t(locale, "campaignLibrary")}</p>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-extrabold text-[var(--sunlit-ink)]">{t(locale, "yourCampaigns")}</h2>
-          <span className="rounded-full bg-[var(--sunlit-paper-deep)] px-2.5 py-1 text-xs font-extrabold">{campaigns.length}</span>
-        </div>
-      </div>
-      <div className="sunlit-card-scroll min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
-        {campaigns.map((campaign) => {
-          const selected = campaign.id === active?.id;
-          return (
-            <button
-              aria-pressed={selected}
-              className={`w-full rounded-2xl border p-4 text-start transition ${selected ? "border-[rgb(33_191_174_/_52%)] bg-[linear-gradient(145deg,var(--sunlit-aqua-soft),rgb(255_250_244_/_86%))] shadow-[0_9px_24px_rgb(33_191_174_/_10%)]" : "border-[var(--sunlit-line)] bg-white hover:border-[rgb(33_191_174_/_35%)]"}`}
-              key={campaign.id}
-              onClick={() => onSelect(campaign.id)}
-              type="button"
-            >
-              <span className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-[.09em] text-[var(--sunlit-aqua-dark)]">
-                  ● {statusLabel(locale, campaign.status)}
-                </span>
-                <span className="text-[11px] font-bold text-[var(--sunlit-muted)]">
-                  {campaign.durationDays} {t(locale, "days")}
-                </span>
-              </span>
-              <span className="mt-2 block text-[15px] font-extrabold leading-5 text-[var(--sunlit-ink)]">{campaign.title}</span>
-              <span className="mt-2 block text-xs leading-5 text-[var(--sunlit-muted)]">{formatDateRange(locale, campaign.startsAt, campaign.endsAt)}</span>
-            </button>
-          );
-        })}
-      </div>
-      <button
-        className="mt-3 inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--sunlit-line-strong)] text-sm font-extrabold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-coral)]"
-        onClick={onNew}
-        type="button"
-      >
-        <Plus size={15} />
-        {t(locale, "addAnother")}
-      </button>
-    </aside>
-  );
+function selectionFromUrl(campaign: CampaignRecord): ReviewSelection {
+  const initial = initialReviewSelection(campaign);
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("campaign") !== campaign.id) return initial;
+  const zoom = params.get("view");
+  const day = Number(params.get("day"));
+  const postKey = params.get("post");
+  return {
+    zoom: zoom === "overview" || zoom === "month" || zoom === "week" ? zoom : initial.zoom,
+    day: Number.isInteger(day) && day > 0 ? day : initial.day,
+    postKey,
+    screen: postKey ? "post" : "plan"
+  };
 }
-
-function CampaignHero({ campaign, locale }: { campaign: CampaignRecord; locale: Locale }) {
-  return (
-    <header className="shrink-0 border-b border-[var(--sunlit-line)] px-5 pb-3 pt-5 sm:px-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--sunlit-aqua-dark)]">
-          <CheckCircle2 size={13} />
-          {statusLabel(locale, campaign.status)}
-        </span>
-        <span className="text-xs font-bold text-[var(--sunlit-muted)]">{formatDateRange(locale, campaign.startsAt, campaign.endsAt)}</span>
-      </div>
-      <h2 className="mt-2 font-display text-2xl font-bold tracking-[-.03em] text-[var(--sunlit-ink)] sm:text-[1.8rem]">{campaign.title}</h2>
-      <p className="mt-1 line-clamp-2 max-w-5xl text-sm leading-5 text-[var(--sunlit-muted)]">{campaign.content.summary}</p>
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--sunlit-line)] pt-3">
-        <HeroStat color="#21BFAE" label={t(locale, "duration")} value={`${campaign.durationDays} ${t(locale, "days")}`} />
-        <HeroStat color="#F6C453" label={t(locale, "weeks")} value={campaign.content.weeklyCadence.length.toString()} />
-        <HeroStat color="#FF665A" label={t(locale, "intensity")} value={`${campaign.publishesPerDay} ${t(locale, "perDay")}`} />
-        <HeroStat color="#8B86F8" label={t(locale, "totalSlots")} value={(campaign.durationDays * campaign.publishesPerDay).toString()} />
-      </div>
-    </header>
-  );
+function updateCampaignUrl(id?: string, selection?: ReviewSelection) {
+  const url = new URL(window.location.href);
+  for (const key of ["campaign", "view", "day", "post"]) url.searchParams.delete(key);
+  if (id) url.searchParams.set("campaign", id);
+  if (id && selection) {
+    url.searchParams.set("view", selection.zoom);
+    url.searchParams.set("day", String(selection.day));
+    if (selection.screen === "post" && selection.postKey) url.searchParams.set("post", selection.postKey);
+  }
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
-
-function ReviewTab({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      aria-selected={active}
-      className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-extrabold ${active ? "bg-white text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)]"}`}
-      onClick={onClick}
-      role="tab"
-      type="button"
-    >
-      {icon}
-      {label}
-    </button>
-  );
+function todayForDateInput(): string {
+  return new Date().toISOString().slice(0, 10);
 }
-
-function CampaignOverview({ campaign, locale, onReviewWeek }: { campaign: CampaignRecord; locale: Locale; onReviewWeek: (index: number) => void }) {
-  return (
-    <div className="grid gap-4" role="tabpanel">
-      <section className="grid gap-3 lg:grid-cols-2">
-        <CompactList items={campaign.content.objectives} label={t(locale, "objectives")} />
-        <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4">
-          <h3 className="text-sm font-extrabold">{t(locale, "campaignMap")}</h3>
-          <div className="mt-3 grid gap-2">
-            {campaign.content.weeklyCadence.map((week, index) => (
-              <button
-                className="flex items-center gap-3 rounded-xl bg-white p-3 text-start hover:bg-[var(--sunlit-aqua-soft)]"
-                key={week.week}
-                onClick={() => onReviewWeek(index)}
-                type="button"
-              >
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--sunlit-ink)] text-xs font-extrabold text-white">{week.week}</span>
-                <span className="min-w-0">
-                  <span className="block text-[10px] font-extrabold uppercase text-[var(--sunlit-muted)]">
-                    {t(locale, "week")} {week.week}
-                  </span>
-                  <span className="block truncate text-sm font-extrabold">{week.focus}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-      <section className="grid gap-3 md:grid-cols-2">
-        <CompactList items={campaign.content.kpis.map((kpi) => `${kpi.name}: ${kpi.target}`)} label={t(locale, "kpis")} />
-        <CompactList items={campaign.content.nextActions} label={t(locale, "nextActions")} />
-      </section>
-    </div>
-  );
-}
-
-function WeeklyReview({
-  activeWeek,
-  activeWeekIndex,
-  approvingSuggestion,
-  campaign,
-  campaignDrafts,
-  collapsedDays,
-  locale,
-  onApprove,
-  onChangeWeek,
-  onOpenCreate,
-  onToggleDay,
-  suggestionMessageKind,
-  suggestionMessage
-}: {
-  activeWeek: CampaignWeek;
-  activeWeekIndex: number;
-  approvingSuggestion: string | undefined;
-  campaign: CampaignRecord;
-  campaignDrafts: ContentRecord[];
-  collapsedDays: Set<number>;
-  locale: Locale;
-  onApprove: (campaign: CampaignRecord, week: number, actionIndex: number) => Promise<void>;
-  onChangeWeek: (index: number) => void;
-  onOpenCreate: (draft: ContentRecord) => void;
-  onToggleDay: (day: number) => void;
-  suggestionMessageKind: "error" | "success";
-  suggestionMessage: string;
-}) {
-  const allCollapsed = activeWeek.days.every((day) => collapsedDays.has(day.day));
-  return (
-    <div role="tabpanel">
-      <label className="mb-2 flex max-w-xs items-center gap-3 text-xs font-extrabold text-[var(--sunlit-ink-soft)]">
-        <span className="shrink-0">{t(locale, "dailyPlan")}</span>
-        <select
-          aria-label={t(locale, "dailyPlan")}
-          className="sunlit-field h-10 min-w-0 flex-1 rounded-xl px-3 text-sm font-extrabold outline-none"
-          onChange={(event) => onChangeWeek(Number(event.target.value))}
-          value={activeWeekIndex}
-        >
-          {campaign.content.weeklyCadence.map((week, index) => (
-            <option key={week.week} value={index}>
-              {t(locale, "week")} {week.week} · {week.focus}
-            </option>
-          ))}
-        </select>
-      </label>
-      <section className="rounded-[1.35rem] border border-[rgb(33_191_174_/_30%)] bg-[linear-gradient(145deg,rgb(239_253_250_/_82%),rgb(255_250_244_/_88%))] p-3 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgb(33_191_174_/_18%)] pb-3">
-          <div>
-            <p className="sunlit-eyebrow">
-              {t(locale, "week")} {activeWeek.week} · {formatCampaignWeekRange(locale, campaign.startsAt, activeWeek)}
-            </p>
-            <h3 className="mt-1 text-base font-extrabold">{activeWeek.focus}</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <ContentLegend locale={locale} />
-            <button
-              className="sunlit-secondary inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[11px] font-extrabold"
-              onClick={() => {
-                if (allCollapsed) activeWeek.days.forEach((day) => onToggleDay(day.day));
-                else activeWeek.days.filter((day) => !collapsedDays.has(day.day)).forEach((day) => onToggleDay(day.day));
-              }}
-              type="button"
-            >
-              {allCollapsed ? t(locale, "expandAll") : t(locale, "collapseAll")}
-              {allCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 space-y-2">
-          {activeWeek.days.map((day, dayIndex) => {
-            const collapsed = collapsedDays.has(day.day);
-            return (
-              <section className="overflow-hidden rounded-xl border border-[var(--sunlit-line)] bg-white/90" key={day.day}>
-                <button
-                  className="flex h-9 w-full items-center gap-2 border-b border-[var(--sunlit-line)] px-3 text-start text-[11px] font-extrabold uppercase tracking-[.06em]"
-                  onClick={() => onToggleDay(day.day)}
-                  type="button"
-                >
-                  {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                  {t(locale, "day")} {day.day} · {formatCampaignDay(locale, campaign.startsAt, day.day)}
-                </button>
-                {!collapsed ? (
-                  <div className="divide-y divide-[var(--sunlit-line)]">
-                    {day.posts.map((post, postIndex) => {
-                      const actionIndex = weekPostIndex(activeWeek, dayIndex, postIndex);
-                      const key = suggestionKey(activeWeek.week, actionIndex);
-                      const linkedDraft = campaignDrafts.find((draft) => suggestionKey(draft.campaignWeek, draft.campaignActionIndex) === key);
-                      return (
-                        <div
-                          className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2"
-                          key={`${day.day}-${postIndex}-${post.title}`}
-                        >
-                          <ContentTypeBadge locale={locale} type={post.contentType} />
-                          <div className="min-w-0 py-0.5">
-                            <p className="break-words text-sm font-extrabold leading-5">{post.title}</p>
-                            <p className="mt-0.5 break-words text-xs leading-5 text-[var(--sunlit-muted)]">{post.description}</p>
-                          </div>
-                          <button
-                            aria-label={`${linkedDraft ? t(locale, "openDraftInCreate") : t(locale, "approveSuggestion")}: ${post.title}`}
-                            className={`${linkedDraft ? "sunlit-secondary min-w-[4.7rem] px-3" : "w-9 border border-[rgb(33_191_174_/_42%)] bg-[var(--sunlit-aqua-soft)] px-0 text-[var(--sunlit-aqua-dark)] hover:bg-[rgb(207_247_240)]"} inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-extrabold disabled:opacity-50`}
-                            disabled={Boolean(approvingSuggestion)}
-                            onClick={() => (linkedDraft ? onOpenCreate(linkedDraft) : void onApprove(campaign, activeWeek.week, actionIndex))}
-                            title={linkedDraft ? t(locale, "draftAdded") : t(locale, "approveSuggestion")}
-                            type="button"
-                          >
-                            {approvingSuggestion === key ? (
-                              <RefreshCcw className="animate-spin" size={15} />
-                            ) : linkedDraft ? (
-                              t(locale, "create")
-                            ) : (
-                              <Check size={17} />
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
-        <p
-          aria-live="polite"
-          className={`mt-2 min-h-4 text-sm font-semibold ${suggestionMessageKind === "error" ? "text-[var(--sunlit-pink)]" : "text-[var(--sunlit-aqua-dark)]"}`}
-        >
-          {suggestionMessage}
-        </p>
-      </section>
-      <div className="mt-3 flex justify-between gap-2">
-        <button
-          className="sunlit-secondary inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-extrabold disabled:opacity-35"
-          disabled={activeWeekIndex === 0}
-          onClick={() => onChangeWeek(activeWeekIndex - 1)}
-          type="button"
-        >
-          {locale === "ar" ? <ArrowRight size={15} /> : <ArrowLeft size={15} />}
-          {t(locale, "previousWeek")}
-        </button>
-        <button
-          className="sunlit-secondary inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-extrabold disabled:opacity-35"
-          disabled={activeWeekIndex === campaign.content.weeklyCadence.length - 1}
-          onClick={() => onChangeWeek(activeWeekIndex + 1)}
-          type="button"
-        >
-          {t(locale, "nextWeek")}
-          {locale === "ar" ? <ArrowLeft size={15} /> : <ArrowRight size={15} />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CampaignRationale({ campaign, locale }: { campaign: CampaignRecord; locale: Locale }) {
-  return (
-    <div className="mt-4 grid gap-3 border-t border-[var(--sunlit-line)] pt-4 lg:grid-cols-2">
-      <details className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4">
-        <summary className="flex cursor-pointer list-none justify-between text-sm font-extrabold">
-          <span>{t(locale, "contentPillars")}</span>
-          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-[var(--sunlit-pink)]">{campaign.content.pillars.length}</span>
-        </summary>
-        <div className="mt-3 grid gap-2">
-          {campaign.content.pillars.map((pillar) => (
-            <div className="rounded-lg bg-white p-3" key={pillar.name}>
-              <p className="text-xs font-extrabold">{pillar.name}</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--sunlit-muted)]">{pillar.rationale}</p>
-            </div>
-          ))}
-        </div>
-      </details>
-      <details className="rounded-xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4">
-        <summary className="flex cursor-pointer list-none justify-between text-sm font-extrabold">
-          <span>{t(locale, "whyTitle")}</span>
-          <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-2.5 py-1 text-[11px] text-[var(--sunlit-aqua-dark)]">{t(locale, "viewDetails")}</span>
-        </summary>
-        <p className="mt-3 text-xs leading-5 text-[var(--sunlit-muted)]">{t(locale, "whyBody")}</p>
-      </details>
-    </div>
-  );
-}
-
 function CampaignComposer({
   durationDays,
   isBusy,
@@ -660,53 +449,44 @@ function CampaignComposer({
   publishesPerDay: number;
   startsAt: string;
 }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
+  const { dialogRef, onCancel, onKeyDown } = useModalDialog({ onClose, closeDisabled: isBusy });
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[rgb(32_33_43_/_32%)] p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <dialog
+      aria-label={t(locale, "generate")}
+      className="sunlit-modal-shell m-auto h-fit w-[min(42rem,calc(100vw-2rem))] max-h-[90dvh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[var(--text)] shadow-2xl backdrop:bg-[var(--overlay)] sm:p-7"
+      ref={dialogRef}
+      onCancel={onCancel}
+      onKeyDown={onKeyDown}
     >
-      <section
-        aria-modal="true"
-        className="sunlit-panel relative w-full max-w-2xl rounded-[1.75rem] p-5 shadow-[0_28px_90px_rgb(32_33_43_/_24%)] sm:p-7"
-        role="dialog"
+      <button
+        aria-label={t(locale, "closeComposer")}
+        className="sunlit-secondary absolute end-5 top-5 grid min-h-11 w-10 place-items-center rounded-xl"
+        disabled={isBusy}
+        onClick={onClose}
+        type="button"
       >
-        <button
-          aria-label={t(locale, "closeComposer")}
-          className="sunlit-secondary absolute end-5 top-5 grid h-10 w-10 place-items-center rounded-xl"
-          onClick={onClose}
-          type="button"
-        >
-          <X size={17} />
-        </button>
-        <div className="flex items-center gap-3 pe-12">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-            <Sparkles size={20} />
-          </span>
-          <div>
-            <h2 className="font-display text-2xl font-bold">{t(locale, "generate")}</h2>
-            <p className="text-sm text-[var(--sunlit-muted)]">{t(locale, "generateSub")}</p>
-          </div>
+        <X size={17} />
+      </button>
+      <div className="flex items-center gap-3 pe-12">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
+          <Sparkles size={20} />
+        </span>
+        <div>
+          <h2 className="font-display text-2xl font-bold">{t(locale, "generate")}</h2>
+          <p className="text-sm text-[var(--sunlit-muted)]">{t(locale, "generateSub")}</p>
         </div>
+      </div>
+      <fieldset className="min-w-0" disabled={isBusy}>
         <label className="mt-5 block">
-          <span className="text-xs font-extrabold uppercase tracking-[.08em]">{t(locale, "objective")}</span>
+          <span className="text-sm font-semibold">{t(locale, "objective")}</span>
           <input
-            className="sunlit-field mt-2 h-12 rounded-xl px-4 text-[15px] outline-none"
+            className="sunlit-field mt-2 h-12 rounded-xl px-4 text-base outline-none"
             onChange={(event) => onObjective(event.target.value)}
             value={objective}
           />
         </label>
         <fieldset className="mt-4">
-          <legend className="text-xs font-extrabold uppercase tracking-[.08em]">{t(locale, "duration")}</legend>
+          <legend className="text-sm font-semibold">{t(locale, "duration")}</legend>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {campaignDurations.map((days) => {
               const supported = campaignGenerationDurations.includes(days as CampaignGenerationDurationDays);
@@ -714,28 +494,23 @@ function CampaignComposer({
               return (
                 <button
                   aria-pressed={selected}
-                  className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_rgb(255_102_90_/_12%)]" : supported ? "border-[var(--sunlit-line)] bg-white hover:border-[var(--sunlit-coral)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
+                  className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : supported ? "border-[var(--sunlit-line)] bg-[var(--surface)] hover:border-[var(--sunlit-coral)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
                   disabled={!supported}
                   key={days}
                   onClick={() => supported && onDuration(days as CampaignGenerationDurationDays)}
                   type="button"
                 >
-                  <span className="block text-lg font-extrabold">{days}</span>
-                  <span className="block text-[10px] font-bold uppercase">{t(locale, "days")}</span>
-                  {!supported ? (
-                    <span className="absolute -top-1 end-1 rounded-full bg-[var(--sunlit-ink)] px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-white">
-                      {t(locale, "soon")}
-                    </span>
-                  ) : null}
+                  <span className="block text-lg font-semibold">{days}</span>
+                  <span className="block text-xs font-medium">{t(locale, "days")}</span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-xs text-[var(--sunlit-muted)]">{t(locale, "futureDurations")}</p>
+          <p className="mt-2 text-sm text-[var(--sunlit-muted)]">{t(locale, "futureDurations")}</p>
         </fieldset>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label>
-            <span className="text-xs font-extrabold uppercase tracking-[.08em]">{t(locale, "startDate")}</span>
+            <span className="text-sm font-semibold">{t(locale, "startDate")}</span>
             <input
               className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-bold outline-none"
               min={todayForDateInput()}
@@ -745,12 +520,12 @@ function CampaignComposer({
             />
           </label>
           <fieldset>
-            <legend className="text-xs font-extrabold uppercase tracking-[.08em]">{t(locale, "intensity")}</legend>
+            <legend className="text-sm font-semibold">{t(locale, "intensity")}</legend>
             <div className="mt-2 grid h-12 grid-cols-3 gap-2">
               {[1, 2, 3].map((count) => (
                 <button
                   aria-pressed={publishesPerDay === count}
-                  className={`rounded-xl border text-sm font-extrabold ${publishesPerDay === count ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]" : "border-[var(--sunlit-line)] bg-white text-[var(--sunlit-muted)]"}`}
+                  className={`rounded-xl border text-sm font-semibold ${publishesPerDay === count ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]" : "border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-muted)]"}`}
                   key={count}
                   onClick={() => onIntensity(count)}
                   type="button"
@@ -761,22 +536,22 @@ function CampaignComposer({
             </div>
           </fieldset>
         </div>
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p aria-live="polite" className="min-h-5 text-sm text-[var(--sunlit-pink)]">
-            {message}
-          </p>
-          <button
-            className="sunlit-primary inline-flex h-12 shrink-0 items-center gap-2 rounded-xl px-6 text-sm font-extrabold disabled:opacity-50"
-            disabled={isBusy}
-            onClick={onGenerate}
-            type="button"
-          >
-            {isBusy ? <RefreshCcw className="animate-spin" size={16} /> : <Zap size={16} />}
-            {isBusy ? t(locale, "generating") : t(locale, "generateCta")}
-          </button>
-        </div>
-      </section>
-    </div>
+      </fieldset>
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p role={message ? "alert" : "status"} className="min-h-5 text-sm text-[var(--danger)]">
+          {message}
+        </p>
+        <button
+          className="sunlit-primary inline-flex h-12 shrink-0 items-center gap-2 rounded-xl px-6 text-sm font-semibold disabled:opacity-50"
+          disabled={isBusy}
+          onClick={onGenerate}
+          type="button"
+        >
+          {isBusy ? <RefreshCcw className="animate-spin" size={16} /> : <Zap size={16} />}
+          {isBusy ? t(locale, "generating") : t(locale, "generateCta")}
+        </button>
+      </div>
+    </dialog>
   );
 }
 
@@ -788,136 +563,12 @@ function CampaignEmpty({ locale, onNew }: { locale: Locale; onNew: () => void })
       </span>
       <h2 className="mt-5 font-display text-2xl font-bold">{t(locale, "emptyTitle")}</h2>
       <p className="mt-2 max-w-md text-sm leading-6 text-[var(--sunlit-muted)]">{t(locale, "emptyBody")}</p>
-      <button className="sunlit-primary mt-5 inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" onClick={onNew} type="button">
+      <button className="sunlit-primary mt-5 inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-semibold" onClick={onNew} type="button">
         <Plus size={16} />
         {t(locale, "newCampaign")}
       </button>
     </div>
   );
-}
-
-function LegacyNotice({ locale, onNew }: { locale: Locale; onNew: () => void }) {
-  return (
-    <div className="m-auto flex max-w-lg flex-col items-center px-6 py-10 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-        <FileText size={24} />
-      </span>
-      <h3 className="mt-4 text-xl font-extrabold">{t(locale, "legacyTitle")}</h3>
-      <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{t(locale, "legacyBody")}</p>
-      <button className="sunlit-primary mt-5 inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" onClick={onNew} type="button">
-        <Sparkles size={16} />
-        {t(locale, "generateDetailed")}
-      </button>
-    </div>
-  );
-}
-
-function CompactList({ items, label }: { items: string[]; label: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4">
-      <h3 className="text-sm font-extrabold">{label}</h3>
-      <ul className="mt-3 space-y-2">
-        {items.slice(0, 5).map((item) => (
-          <li className="flex gap-2 text-xs leading-5 text-[var(--sunlit-muted)]" key={item}>
-            <Check className="mt-0.5 shrink-0 text-[var(--sunlit-aqua-dark)]" size={14} />
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ContentLegend({ locale }: { locale: Locale }) {
-  return (
-    <div className="hidden items-center gap-1.5 2xl:flex">
-      {(["REEL", "CAROUSEL", "POST", "STORY"] as ContentType[]).map((type) => (
-        <ContentTypeBadge compact key={type} locale={locale} type={type} />
-      ))}
-    </div>
-  );
-}
-
-function ContentTypeBadge({ compact = false, locale, type }: { compact?: boolean; locale: Locale; type: ContentType }) {
-  const styles: Record<ContentType, string> = {
-    CAROUSEL: "bg-[#FFF1E5] text-[#C76520]",
-    POST: "bg-[#E9F0FF] text-[#4267B2]",
-    REEL: "bg-[#FFE8F0] text-[#D93D78]",
-    STORY: "bg-[#EAF7E7] text-[#4E8B3B]"
-  };
-  const labels: Record<ContentType, Record<Locale, string>> = {
-    CAROUSEL: { ar: "كاروسيل", en: "Carousel" },
-    POST: { ar: "منشور", en: "Post" },
-    REEL: { ar: "ريل", en: "Reel" },
-    STORY: { ar: "قصة", en: "Story" }
-  };
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-md font-extrabold ${styles[type]} ${compact ? "h-6 px-2 text-[9px]" : "h-7 min-w-[76px] justify-center px-2 text-[10px]"}`}
-    >
-      {labels[type][locale]}
-    </span>
-  );
-}
-
-function HeroStat({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-xs text-[var(--sunlit-muted)]">{label}:</span>
-      <span className="text-xs font-bold">{value}</span>
-    </div>
-  );
-}
-
-function isDetailedCampaign(campaign: CampaignRecord): boolean {
-  return campaign.content.weeklyCadence.length > 0 && campaign.content.weeklyCadence.every((week) => Array.isArray((week as CampaignWeek).days));
-}
-
-function weekPostIndex(week: CampaignWeek, dayIndex: number, postIndex: number): number {
-  return week.days.slice(0, dayIndex).reduce((total, day) => total + day.posts.length, 0) + postIndex;
-}
-
-function suggestionKey(week?: number, actionIndex?: number): string {
-  return `${week ?? "none"}:${actionIndex ?? "none"}`;
-}
-
-function formatCampaignWeekRange(locale: Locale, startsAt: string, week: CampaignWeek): string {
-  const first = week.days[0]?.day ?? 1;
-  const last = week.days.at(-1)?.day ?? first;
-  return formatDateRange(locale, dateForCampaignDay(startsAt, first), dateForCampaignDay(startsAt, last));
-}
-
-function formatCampaignDay(locale: Locale, startsAt: string, day: number): string {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-GB", { weekday: "short", day: "numeric", month: "short" }).format(
-    new Date(dateForCampaignDay(startsAt, day))
-  );
-}
-
-function dateForCampaignDay(startsAt: string, day: number): string {
-  const date = new Date(startsAt);
-  date.setUTCDate(date.getUTCDate() + day - 1);
-  return date.toISOString();
-}
-
-function statusLabel(locale: Locale, status: CampaignRecord["status"]): string {
-  const labels: Record<CampaignRecord["status"], Record<Locale, string>> = {
-    ACTIVE: { ar: "نشطة", en: "Active" },
-    APPROVED: { ar: "معتمدة", en: "Approved" },
-    ARCHIVED: { ar: "مؤرشفة", en: "Archived" },
-    COMPLETED: { ar: "مكتملة", en: "Completed" },
-    REVIEW: { ar: "للمراجعة", en: "In review" }
-  };
-  return labels[status][locale];
-}
-
-function formatDateRange(locale: Locale, startsAt: string, endsAt: string): string {
-  const formatter = new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
-  return `${formatter.format(new Date(startsAt))} – ${formatter.format(new Date(endsAt))}`;
-}
-
-function todayForDateInput(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function t(locale: Locale, key: string): string {

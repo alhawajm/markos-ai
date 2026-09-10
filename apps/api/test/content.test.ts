@@ -62,6 +62,111 @@ vi.mock("../src/ai/content-client", () => ({
 }));
 
 describe("content routes", () => {
+  it("preserves media on an incompatible type change and allows repairing a legacy invalid draft", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    try {
+      const images = await Promise.all([createContentTestMedia(session.workspace.id), createContentTestMedia(session.workspace.id)]);
+      const mediaIds = images.map((image) => image.id);
+      const item = await prisma.contentItem.create({
+        data: { workspaceId: session.workspace.id, contentType: "CAROUSEL", status: "DRAFT", caption: "Owner caption", mediaIds }
+      });
+      const switchType = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${item.id}`,
+        headers,
+        payload: { contentType: "POST", caption: "Must not save" }
+      });
+      expect(switchType.statusCode).toBe(409);
+      expect(switchType.json().error.code).toBe("CONTENT_MEDIA_SINGLE_ITEM_LIMIT");
+      expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } })).toMatchObject({
+        contentType: "CAROUSEL",
+        caption: "Owner caption",
+        mediaIds
+      });
+      // Records created before enforcement may already contain extra media.
+      await prisma.contentItem.update({ where: { id: item.id }, data: { contentType: "POST" } });
+      const saveCopy = await app.inject({
+        method: "PATCH",
+        url: `/v1/content/${item.id}`,
+        headers,
+        payload: { contentType: "POST", caption: "Keep this repair caption" }
+      });
+      expect(saveCopy.statusCode).toBe(200);
+      expect((await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "IN_REVIEW" } })).statusCode).toBe(200);
+      const prematureReady = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
+      expect(prematureReady.statusCode).toBe(409);
+      const remove = await app.inject({ method: "DELETE", url: `/v1/content/${item.id}/media/${images[1]!.id}`, headers });
+      expect(remove.statusCode).toBe(200);
+      expect(remove.json().data).toMatchObject({ caption: "Keep this repair caption", mediaIds: [images[0]!.id] });
+      const ready = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
+      expect(ready.statusCode).toBe(200);
+      expect(await prisma.mediaAsset.findUniqueOrThrow({ where: { id: images[1]!.id } })).toMatchObject({ deletedAt: null });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("requires complete compatible media before Ready but permits empty working drafts", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    try {
+      const image = await createContentTestMedia(session.workspace.id);
+      const video = await createContentTestMedia(session.workspace.id, "video/mp4");
+      const cases = [
+        { contentType: "POST", mediaIds: [], code: "CONTENT_MEDIA_REQUIRED" },
+        { contentType: "CAROUSEL", mediaIds: [image.id], code: "CONTENT_MEDIA_CAROUSEL_MINIMUM" },
+        { contentType: "REEL", mediaIds: [image.id], code: "CONTENT_MEDIA_TYPE_INCOMPATIBLE" },
+        { contentType: "CAROUSEL", mediaIds: [image.id, video.id], code: "CONTENT_MEDIA_TYPE_INCOMPATIBLE" },
+        { contentType: "STORY", mediaIds: [randomUUID()], code: "CONTENT_MEDIA_UNAVAILABLE" }
+      ] as const;
+      for (const value of cases) {
+        const item = await prisma.contentItem.create({
+          data: {
+            workspaceId: session.workspace.id,
+            contentType: value.contentType,
+            status: "IN_REVIEW",
+            caption: "A complete caption",
+            mediaIds: [...value.mediaIds]
+          }
+        });
+        const response = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
+        expect(response.statusCode).toBe(409);
+        expect(response.json().error.code).toBe(value.code);
+        expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe("IN_REVIEW");
+      }
+      const empty = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption: "", contentType: "REEL" } });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json().data.mediaIds).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("serializes content-type changes with concurrent media attachment", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    try {
+      const image = await createContentTestMedia(session.workspace.id);
+      const item = await prisma.contentItem.create({
+        data: { workspaceId: session.workspace.id, contentType: "POST", status: "DRAFT", caption: "Keep this caption", mediaIds: [] }
+      });
+      const responses = await Promise.all([
+        app.inject({ method: "PATCH", url: `/v1/content/${item.id}`, headers, payload: { contentType: "REEL" } }),
+        app.inject({ method: "POST", url: `/v1/content/${item.id}/media`, headers, payload: { mediaAssetId: image.id } })
+      ]);
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+      const saved = await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } });
+      if (saved.contentType === "REEL") expect(saved.mediaIds).toEqual([]);
+      else expect(saved).toMatchObject({ contentType: "POST", mediaIds: [image.id] });
+      expect(saved.caption).toBe("Keep this caption");
+    } finally {
+      await app.close();
+    }
+  });
   it("saves and reloads exact final captions and rejects invalid or cross-workspace updates", async () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);
@@ -1494,7 +1599,28 @@ async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, hea
     }
   });
 
-  return response.json().data[0];
+  expect(response.statusCode).toBe(200);
+  const item = response.json().data[0];
+  const media = await createContentTestMedia(item.workspaceId);
+  const attached = await app.inject({ method: "POST", url: `/v1/content/${item.id}/media`, headers, payload: { mediaAssetId: media.id } });
+  expect(attached.statusCode).toBe(200);
+  return attached.json().data;
+}
+
+async function createContentTestMedia(workspaceId: string, mimeType = "image/jpeg") {
+  return prisma.mediaAsset.create({
+    data: {
+      workspaceId,
+      type: mimeType === "video/mp4" ? "VIDEO" : "IMAGE",
+      filename: `content-${randomUUID()}`,
+      s3Key: `external:${randomUUID()}`,
+      mimeType,
+      cdnUrl: `https://cdn.example.com/${randomUUID()}`,
+      sizeBytes: 1000,
+      width: 1080,
+      height: 1350
+    }
+  });
 }
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
