@@ -64,18 +64,18 @@ export function SettingsPage({ locale }: { locale: Locale }) {
 
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <header className="sticky top-0 z-40 border-b border-[var(--sunlit-line)] bg-[rgb(255_250_245_/_90%)] px-5 py-3 backdrop-blur-xl sm:px-7 xl:px-10">
+      <header className="sticky top-0 z-40 border-b border-[var(--sunlit-line)] bg-[var(--surface-muted)] px-5 py-3 backdrop-blur-xl sm:px-7 xl:px-10">
         <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               aria-label={locale === "ar" ? "العودة إلى مساحة العمل" : "Back to workspace"}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-white text-[var(--sunlit-ink)] transition hover:border-[var(--sunlit-line-strong)]"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink)] transition hover:border-[var(--sunlit-line-strong)]"
               href={returnTo}
             >
               <BackIcon size={19} />
             </Link>
             <Link className="flex min-w-0 items-center gap-3" href={`/${locale}/app`}>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-ink)] text-[var(--sunlit-yellow)]">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--primary)] text-[var(--on-primary)]">
                 <MarkosAiIcon size={18} />
               </span>
               <span className="hidden sm:block">
@@ -86,7 +86,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <div className="flex items-center rounded-xl border border-[var(--sunlit-line)] bg-white/80 p-1" aria-label="Language switcher">
+            <div className="flex items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-1" aria-label="Language switcher">
               <Link
                 className={locale === "ar" ? activeLanguageClass : languageClass}
                 href="/ar/app/settings"
@@ -108,7 +108,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
                 English
               </Link>
             </div>
-            <div className="hidden min-h-11 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white px-3.5 font-bold text-[var(--sunlit-ink)] sm:flex">
+            <div className="hidden min-h-11 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-3.5 font-bold text-[var(--sunlit-ink)] sm:flex">
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
                 <UserRound size={15} />
               </span>
@@ -125,6 +125,6 @@ export function SettingsPage({ locale }: { locale: Locale }) {
   );
 }
 
-const activeLanguageClass = "shrink-0 rounded-lg bg-[var(--sunlit-ink)] px-3 py-2 text-xs font-extrabold text-white";
+const activeLanguageClass = "shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-extrabold text-[var(--on-primary)]";
 const languageClass =
   "shrink-0 rounded-lg px-3 py-2 text-xs font-extrabold text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]";

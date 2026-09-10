@@ -2,18 +2,37 @@
 
 - Status: interpreted working backlog
 - Started: 2026-08-23
-- Current focus: refine the unified Create workspace and settle the content/Campaign data model; the implemented Onboarding checkpoint remains closed except for focused defects and deferred deployment evidence
+- Current focus: preserve the validated September 10 bilingual typography and shared UI refinement; preserve current backend contracts and the separately approved Business Profile editing plan
 
 This document records the product team's interpretation of the August 2026 review and subsequent discussion. It is not a transcription of stakeholder feedback. Suggestions remain challengeable and do not override the build specification, experience flows, or durable decisions.
 
 Accepted UI-specific decisions belong in docs/ui-ux-decisions.md. Product behavior and data-contract decisions belong in docs/decisions.md. This file keeps the design problems, proposed directions, and validation questions visible while they are being explored.
 
+**September 10 update:** Khalid approved the light/dark palettes, with latest dark text `#f2faf7`, and then selected local IBM Plex Sans plus IBM Plex Sans Arabic, a stable 16px root, readable controls and metadata, concise copy, and less prominent Appearance access. See [the adopted foundation](ui-design-foundation.md#core-palette--approved-2026-09-10) and [the refinement decision](ui-ux-decisions.md#2026-09-10--readable-bilingual-typography-and-coherent-page-refinement). The August palette and font comparisons below remain historical research; their approval deferrals are superseded.
+
+**Refinement checkpoint:** bounded passes 0–6 are complete across the foundation, shell, shared patterns, core pages, Settings/onboarding, and public/auth/legal surfaces. QA and the production build passed for that checkpoint; [the refinement audit](analysis/ui-refinement-audit-2026-09-10.md) records exact check totals and limitations. Browser fixtures demonstrate the mounted UI, not live services or deployment behavior.
+
+**Current focused follow-ups:** Create keeps conversation primary, with an explicit View preview control and a shorter `9:19` preview. The collapsed rail is now 96px, with the same comfortable icon targets. Media integrity passed focused editor/API/generation-worker checks. Khalid and Mohamed approved the full-screen Campaign reviewer, now connected to the application; Khalid owns its visual verification to conserve usage. The dedicated Business Profile editor remains a later integration pass. See [the focused delivery plan](analysis/focused-product-followups-2026-09-10.md) for current status and evidence. These changes supersede the earlier preview ratio; they do not alter the agreed Create workflow.
+
 ## Decision states
 
 - Accepted direction — the problem and intended outcome are clear; visual details may still need review.
+- Implemented locally — the bounded UI change is present; its verification state and limits are recorded separately.
 - Prototype — create and compare a concrete interaction before implementation.
 - Product decision — behavior or data contracts must be resolved first.
 - Later — valid work outside the current UI pass.
+
+## Deferred Create conversation work — September 10
+
+**Accepted direction; future AI/backend pass.** Choosing a content type must not be a prerequisite for starting a conversation. Remove the current type-first save/send gate as part of a coherent conversation contract, rather than making the UI silently pretend the owner chose Post.
+
+- A greeting such as “hi” receives a short greeting and a question about what the user has in mind, optionally with a few relevant ideas. It must not generate, rewrite, save invented copy, or spend on media without content intent.
+- MARKOS may select the content type after explicit agreement or a clear implicit agreement, such as “Let's make a reel about this.” Ambiguous intent should prompt a brief question. Preserve manual selection and make the agreed type visible and editable.
+- Decide how a saved conversation exists before the format is known. Check the content type's current default, validation, conversation request/response contract, permitted AI edits, and persistence together; an invisible POST default is not evidence of agreement.
+- Type changes must respect attached media and existing lifecycle/revision guards. Never discard media, replace owner copy, mark Ready, schedule, or publish merely because a format was discussed.
+- Verify English/Arabic greetings, ambiguous requests, explicit/implicit format agreement, refresh continuity, manual overrides, and incompatible-media recovery. Keep media generation explicit until separately approved.
+
+The current required-type behavior remains in this UI/media pass. This item is tracked for the next conversation backend pass; no prompt or AI behavior change is implied by the sidebar/media work.
 
 ## Cross-product foundation
 
@@ -21,15 +40,15 @@ Accepted UI-specific decisions belong in docs/ui-ux-decisions.md. Product behavi
 | --- | --- | --- |
 | Internal or implementation-oriented labels leak into the interface | Run a plain-language naming pass. Prefer the user's object or task, such as Workspace, Create, Calendar, and Business Profile. | Accepted direction |
 | The shell and individual pages can repeat navigation, title, or explanatory chrome | Give each page one authoritative heading. Keep global context compact and remove duplicate top bars or oversized introductions. | Accepted direction |
-| Earlier UI documents still describe dark backgrounds and retired routes | Sunlit is the only active customer-facing visual direction. Preserve useful behavior and QA guidance, then archive the old documents. | Accepted direction |
+| Earlier UI documents still describe the retired dark-luxury layout and routes | Preserve the current product structure and useful behavior/QA guidance. The September 10 light/dark palette supersedes the earlier light-only color direction without restoring retired layouts. | Accepted direction |
 | UI work previously began from vague requests without a shared visual target | Use annotated references and a visually reviewed prototype for consequential layout or journey changes. | Accepted direction |
 | English-first composition can break in Arabic | Design and review English and Arabic together, including reading order, control direction, copy expansion, and locale formatting. | Accepted direction |
-| The current Sunlit palette was selected before enough product-wide color-system research | Revisit brand, neutral, surface, action, semantic-status, data-visualization, focus, and disabled colors as one accessible token system. Compare a small number of researched directions in representative dense and quiet screens before changing runtime tokens. | Prototype |
-| The current typography has not been evaluated as a bilingual product system | Review type families, Arabic/Latin pairing, numerals, weights, scale, density, licensing, loading, and fallback behavior. Test candidates in real MARKOS controls and content rather than approving a font from isolated specimens. | Prototype |
+| The site needs one consistent color system across light and dark modes | Apply the exact September 10 palette through shared semantic roles for surfaces, actions, status, data visualization, focus, and disabled controls. Verify representative dense and quiet application screens. | Implemented locally; local QA passed |
+| Tiny text, inconsistent weights, and implicit Arabic fallback undermine readability | Apply the approved local Plex families and fixed 16px root; use 16px body, 15px controls, 14px labels, and 13px metadata with occasional 12px secondary detail. Normalize individual pages, reduce redundant copy, and verify English/Arabic density. | Implemented locally; local QA passed |
 
 ## Shared shell and visual-foundation research checkpoint
 
-- Status: prototype direction selected; production font/palette migration deferred
+- Status: historical research checkpoint; September 10 supersedes palette, dark-mode, font-selection, and root-scale deferrals
 - Opened: 2026-08-27
 - Primary surface: authenticated desktop shell
 - Representative validation surfaces: the frozen Calendar overview and one quiet form/content surface in both English and Arabic
@@ -248,7 +267,7 @@ Khalid approved these five defaults as the baseline for the first connected prot
 | Three large summary cards duplicate the status filters and consume working space | Use a compact title/action row plus one larger-type filter toolbar. Embed the stable Ready, scheduled-this-week, and needs-attention counts in the matching filter controls. | Accepted direction |
 | Month needs useful density without tiny content cards | Keep cells titleless. Show total volume, at most three prioritized status markers, and one `+N` remainder; use the persistent filter row as the color key. | Accepted direction |
 | Day and Post Focus previously felt disconnected or slow | Preserve `Calendar → Day → Post` history, focus, and URL state while using short Motion transitions to explain scope changes. Keep reduced-motion behavior and eliminate heavy blur or broad layout work. | Accepted direction |
-| Statuses are difficult to distinguish in dense review states | Use semantic slate, blue, orange, green, rose, and violet markers with labels, icons, counts, and logical-edge accents on predominantly white surfaces. Treat the exact palette as reviewable design tokens, not immutable brand law. | Accepted direction |
+| Statuses are difficult to distinguish in dense review states | Apply the September 10 semantic roles in both themes: Draft neutral, Ready teal, Scheduled violet/blue, Published green, Failed red, review/attention amber. Preserve labels, icons, counts, and logical-edge accents independently of color. | Accepted direction |
 | Dragging could accelerate planning but an accidental move is dangerous | Keep drag-and-drop deferred until eligibility, activation, time selection, exact source/destination confirmation, cancellation, and accessible non-drag controls are designed together. | Later |
 
 **Checkpoint — 2026-08-27:** Freeze the current desktop Calendar as the accepted working baseline. Its remaining source-aware motion polish, interrupted-transition hardening, mobile composition, and safeguarded drag-and-drop are separate future passes rather than incidental work during another page's refinement.
@@ -272,7 +291,7 @@ The short written review did not capture all useful verbal feedback from the mee
 1. Keep the Onboarding checkpoint frozen except for focused defects; its remaining onboarding-specific gate is deployed-provider validation of the full-business document path.
 2. Preserve the independent Products/Services analyzer and keep future Instagram evidence reconciliation separate from onboarding closure.
 3. Review the September 6 unified Create implementation, then validate the existing AI/media/publishing integrations against real accounts before adding durable conversational intelligence.
-4. Revisit broader shared palette, bilingual typography, and dark-theme adoption as a separate production-foundation decision. IBM Plex and Tangerine Slate remain prototype candidates.
+4. Follow the active September 10 refinement passes for local Plex typography, readable scale, concise copy, and the approved light/dark palette. Keep the earlier Tangerine Slate compositions as historical comparison evidence.
 5. Refine Campaign duration/review and connect approved Campaign posts into Create and Calendar.
 6. Refine Overview around the recurring planning habit, then apply accepted patterns to Insights, Business Profile, and Settings.
 7. Complete responsive capability decisions, Arabic/RTL, accessibility, and cross-browser hardening across each connected journey.

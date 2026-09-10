@@ -20,27 +20,51 @@ describe("first-time onboarding profile review", () => {
 
   afterAll(async () => browser?.close());
 
-  it("shows grouped previews and expands a field for editing without changing edit mode", async () => {
-    const context = await browser.newContext({ viewport: { height: 900, width: 1440 } });
+  it.each([
+    { locale: "en", theme: "light" },
+    { locale: "en", theme: "dark" },
+    { locale: "ar", theme: "light" },
+    { locale: "ar", theme: "dark" }
+  ] as const)("keeps grouped profile editing readable in $locale / $theme", async ({ locale, theme }) => {
+    const context = await browser.newContext({ viewport: { height: 900, width: 1440 }, colorScheme: theme });
     const page = await context.newPage();
     await mockApi(page);
 
-    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "networkidle" });
-    await page.getByRole("heading", { level: 1, name: "Review your business profile" }).waitFor();
+    await page.goto(`${baseUrl}/${locale}/onboarding`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { level: 1, name: locale === "ar" ? "راجع ملف نشاطك" : "Review your business profile" }).waitFor();
 
-    for (const name of ["Business identity", "Brand information", "Audience", "Goals", "Tone and preferences"]) {
+    const headings =
+      locale === "ar"
+        ? ["هوية النشاط", "معلومات العلامة", "الجمهور", "الأهداف", "النبرة والتفضيلات"]
+        : ["Business identity", "Brand information", "Audience", "Goals", "Tone and preferences"];
+    for (const name of headings) {
       await expect(page.getByRole("heading", { level: 2, name }).isVisible()).resolves.toBe(true);
     }
 
-    const overviewButton = page.locator('button[aria-controls="profile-overview-en-content"]');
+    const overviewButton = page.locator(`button[aria-controls="profile-overview-${locale}-content"]`);
     await expect(overviewButton.getAttribute("aria-expanded")).resolves.toBe("false");
     await overviewButton.click();
-    const overview = page.getByLabel("Business overview");
+    const overview = page.getByLabel(locale === "ar" ? "نبذة عن النشاط" : "Business overview");
     await overview.waitFor();
     await expect(overviewButton.getAttribute("aria-expanded")).resolves.toBe("true");
     await expect(overview.evaluate((element) => getComputedStyle(element).resize)).resolves.toBe("none");
+    await expect(overview.getAttribute("dir")).resolves.toBe(locale === "ar" ? "rtl" : "ltr");
+    const revised = locale === "ar" ? "نساعد الأنشطة المحلية على تسويق منتجاتها." : "We help local businesses market their products.";
+    await overview.fill(revised);
+    await overviewButton.click();
+    await overviewButton.click();
+    await expect(overview.inputValue()).resolves.toBe(revised);
+    const layout = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      rootSize: getComputedStyle(document.documentElement).fontSize,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    }));
+    expect(layout).toEqual({ theme, rootSize: "16px", overflow: false });
 
-    if (screenshotDir) await page.screenshot({ fullPage: true, path: path.join(screenshotDir, "phase2-onboarding-profile-review.png") });
+    if (screenshotDir) {
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({ fullPage: true, path: path.join(screenshotDir, `onboarding-profile-review-${locale}-${theme}.png`) });
+    }
     await context.close();
   });
 });

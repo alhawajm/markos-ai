@@ -1,7 +1,9 @@
 .legalPage {
   min-height: 100vh;
   overflow-x: clip;
-  background: radial-gradient(circle at 8% 5%, rgb(246 196 83 / 19%), transparent 24rem), linear-gradient(180deg, var(--paper), #fff 42%);
+  background:
+    radial-gradient(circle at 8% 5%, color-mix(in srgb, var(--secondary) 19%, transparent), transparent 24rem),
+    linear-gradient(180deg, var(--paper), var(--surface) 42%);
   color: var(--ink);
   font-family: inherit;
 }
@@ -34,7 +36,7 @@
   justify-content: space-between;
   gap: 24px;
   margin-inline: auto;
-  border-bottom: 1px solid rgb(32 33 43 / 10%);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .brand {
@@ -49,15 +51,15 @@
   place-items: center;
   flex: 0 0 auto;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--coral), var(--pink));
-  color: var(--white);
-  box-shadow: 0 10px 24px rgb(217 63 122 / 24%);
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .brand strong {
-  font-size: 0.91rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: normal;
 }
 
 .header nav {
@@ -68,13 +70,13 @@
 .languageLink {
   gap: 7px;
   color: var(--ink-soft);
-  font-size: 0.92rem;
-  font-weight: 780;
+  font-size: var(--type-control);
+  font-weight: 600;
 }
 
 .backLink:hover,
 .languageLink:hover {
-  color: var(--pink);
+  color: var(--link);
 }
 
 .draftBanner {
@@ -85,10 +87,10 @@
   gap: 13px;
   margin: 38px auto 0;
   padding: 15px 18px;
-  border: 1px solid rgb(246 196 83 / 60%);
+  border: 1px solid color-mix(in srgb, var(--secondary) 60%, transparent);
   border-radius: 16px;
-  background: #fff7d9;
-  color: #59420b;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .draftBanner > span {
@@ -97,19 +99,19 @@
   height: 38px;
   place-items: center;
   border-radius: 12px;
-  background: rgb(246 196 83 / 40%);
+  background: color-mix(in srgb, var(--secondary) 40%, transparent);
 }
 
 .draftBanner p {
   margin: 0;
-  font-size: 0.91rem;
-  font-weight: 590;
+  font-size: var(--type-control);
+  font-weight: 500;
   line-height: 1.5;
 }
 
 .draftBanner strong {
   margin-inline-end: 8px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .documentShell {
@@ -123,12 +125,12 @@
 
 .contents {
   --section-menu-top: 28px;
-  --section-menu-background: rgb(255 255 255 / 82%);
-  --section-menu-active: linear-gradient(135deg, #fff0e9, #fff8df);
-  --section-menu-active-border: rgb(255 102 90 / 24%);
-  --section-menu-active-text: #a62960;
+  --section-menu-background: color-mix(in srgb, var(--surface) 82%, transparent);
+  --section-menu-active: linear-gradient(135deg, var(--primary-soft), var(--secondary-soft));
+  --section-menu-active-border: color-mix(in srgb, var(--primary) 24%, transparent);
+  --section-menu-active-text: var(--link);
   --section-menu-accent: var(--coral);
-  --section-menu-focus: rgb(33 191 174 / 48%);
+  --section-menu-focus: var(--focus);
 }
 
 .document {
@@ -137,7 +139,7 @@
 
 .documentHeading {
   padding-block-end: 42px;
-  border-bottom: 1px solid rgb(32 33 43 / 12%);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .documentIcon {
@@ -148,23 +150,23 @@
   margin-block-end: 23px;
   border-radius: 17px;
   background: var(--aqua-soft);
-  color: #087d71;
+  color: var(--sunlit-aqua-dark);
 }
 
 .eyebrow {
   margin: 0 0 11px;
-  color: #b52f68;
-  font-size: 0.83rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: var(--link);
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .documentHeading h1 {
   max-width: 14ch;
   margin: 0;
   font-size: clamp(2.5rem, 6vw, 4.25rem);
-  font-weight: 910;
+  font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 0.99;
 }
@@ -174,7 +176,7 @@
   margin: 21px 0 0;
   color: var(--ink-soft);
   font-size: 1.06rem;
-  font-weight: 560;
+  font-weight: 500;
   line-height: 1.68;
 }
 
@@ -184,8 +186,8 @@
   gap: 9px;
   margin-block-start: 23px;
   color: var(--muted);
-  font-size: 0.83rem;
-  font-weight: 700;
+  font-size: var(--type-control);
+  font-weight: 600;
 }
 
 .documentMeta i {
@@ -200,7 +202,7 @@
 
 .sections section {
   padding: 38px 0;
-  border-bottom: 1px solid rgb(32 33 43 / 10%);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   scroll-margin-block-start: 28px;
 }
 
@@ -208,7 +210,7 @@
   margin: 0 0 16px;
   color: var(--ink);
   font-size: clamp(1.35rem, 2.5vw, 1.72rem);
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.2;
 }
@@ -217,7 +219,7 @@
   margin: 0;
   color: var(--ink-soft);
   font-size: 1rem;
-  font-weight: 530;
+  font-weight: 500;
   line-height: 1.75;
 }
 
@@ -231,10 +233,10 @@
   gap: 22px;
   margin-inline: auto;
   padding: 30px 0 38px;
-  border-top: 1px solid rgb(32 33 43 / 10%);
+  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   color: var(--muted);
-  font-size: 0.83rem;
-  font-weight: 660;
+  font-size: var(--type-control);
+  font-weight: 600;
 }
 
 .footer > span:last-child {
@@ -243,7 +245,7 @@
 
 .footer a:hover,
 .footer a[aria-current="page"] {
-  color: var(--pink);
+  color: var(--link);
 }
 
 .footer i {
@@ -252,7 +254,7 @@
 }
 
 .legalPage :is(a, button):focus-visible {
-  outline: 3px solid rgb(33 191 174 / 48%);
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -284,7 +286,7 @@
   }
 
   .brand strong {
-    font-size: 0.78rem;
+    font-size: var(--type-meta);
   }
 
   .backLink {
@@ -329,4 +331,9 @@
   .legalPage * {
     scroll-behavior: auto !important;
   }
+}
+
+.legalPage[dir="rtl"] :is(h1, h2, h3),
+.legalPage[dir="rtl"] :is(h1, h2, h3) span {
+  letter-spacing: normal;
 }

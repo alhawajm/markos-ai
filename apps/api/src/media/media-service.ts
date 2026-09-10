@@ -16,6 +16,7 @@ import { toContentRecord } from "../content/content-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { inspectJpegDimensions } from "./jpeg-inspection";
 import { deleteStoredMedia, readStoredMedia, storageKeysForRoute, storeWorkspaceMedia } from "./storage-service";
+import { assertStoredContentMedia, ContentMediaValidationError, lockContentForMedia, validateStoredContentMedia } from "./content-media-integrity";
 
 export class MediaAssetNotFoundError extends Error {
   constructor() {
@@ -182,6 +183,7 @@ export async function generateImageForContent(
   }
 
   assertMediaEditable(contentItem.status);
+  await assertStoredContentMedia(prisma, contentItem, { addition: { id: "pending-generated-image", mimeType: "image/jpeg" } });
 
   const prompt = input.prompt?.trim() || promptFromContent(contentItem);
   const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`);
@@ -189,6 +191,7 @@ export async function generateImageForContent(
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
   let reservedStorageBytes = 0;
   let stored: Awaited<ReturnType<typeof storeWorkspaceMedia>> | undefined;
+  let outputPersisted = false;
 
   try {
     const generated = await generateImageAsset({
@@ -210,7 +213,8 @@ export async function generateImageForContent(
       bytes
     });
     stored = storedMedia;
-    const { mediaAsset, updatedContent } = await prisma.$transaction(async (tx) => {
+    const { mediaAsset, updatedContent, attachmentError } = await prisma.$transaction(async (tx) => {
+      const latest = await lockContentForMedia(tx, workspaceId, contentItemId);
       const asset = await tx.mediaAsset.create({
         data: {
           workspaceId,
@@ -224,19 +228,20 @@ export async function generateImageForContent(
           height: verifiedImageDimensions.height
         }
       });
-      const content = await tx.contentItem.update({
-        where: {
-          id: contentItem.id
-        },
-        data: {
-          mediaIds: Array.from(new Set([...contentItem.mediaIds, asset.id]))
-        }
-      });
+      const issue = !latest
+        ? "CONTENT_NOT_FOUND"
+        : !["DRAFT", "IN_REVIEW"].includes(latest.status)
+          ? "CONTENT_LOCKED"
+          : await validateStoredContentMedia(tx, latest, { addition: asset });
+      const attachmentError = issue ? new ContentMediaValidationError(issue, asset.id) : null;
+      const content =
+        latest && !attachmentError ? await tx.contentItem.update({ where: { id: latest.id }, data: { mediaIds: [...latest.mediaIds, asset.id] } }) : null;
 
       await tx.aiInteraction.create({
         data: {
           workspaceId,
           agent: imageAgentName,
+          accepted: !attachmentError,
           promptVersion,
           prompt: {
             aspectRatio: input.aspectRatio,
@@ -268,9 +273,13 @@ export async function generateImageForContent(
 
       return {
         mediaAsset: asset,
-        updatedContent: content
+        updatedContent: content,
+        attachmentError
       };
     });
+    outputPersisted = true;
+    if (attachmentError) throw attachmentError;
+    if (!updatedContent) throw new Error("Generated image attachment did not return a content item");
 
     return {
       contentItem: toContentRecord(updatedContent),
@@ -280,6 +289,7 @@ export async function generateImageForContent(
       promptVersion
     };
   } catch (error) {
+    if (outputPersisted) throw error;
     if (stored !== undefined) {
       try {
         await deleteStoredMedia(workspaceId, stored.key);
@@ -317,71 +327,64 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
 }
 
 export async function attachMediaToContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
-  const [contentItem, mediaAsset] = await Promise.all([
-    prisma.contentItem.findFirst({
-      where: {
-        id: contentItemId,
-        workspaceId,
-        deletedAt: null
-      }
-    }),
-    prisma.mediaAsset.findFirst({
+  return prisma.$transaction(async (tx) => {
+    const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
+    const mediaAsset = await tx.mediaAsset.findFirst({
       where: {
         id: mediaAssetId,
         workspaceId,
         deletedAt: null
       }
-    })
-  ]);
+    });
 
-  if (!contentItem) {
-    throw new MediaContentItemNotFoundError();
-  }
-
-  if (!mediaAsset) {
-    throw new MediaAssetNotFoundError();
-  }
-
-  assertMediaEditable(contentItem.status);
-
-  const mediaIds = Array.from(new Set([...contentItem.mediaIds, mediaAsset.id]));
-  const row = await prisma.contentItem.update({
-    where: {
-      id: contentItem.id
-    },
-    data: {
-      mediaIds
+    if (!contentItem) {
+      throw new MediaContentItemNotFoundError();
     }
-  });
 
-  return toContentRecord(row);
+    if (!mediaAsset) {
+      throw new MediaAssetNotFoundError();
+    }
+
+    assertMediaEditable(contentItem.status);
+    if (contentItem.mediaIds.includes(mediaAsset.id)) return toContentRecord(contentItem);
+    await assertStoredContentMedia(tx, contentItem, { addition: mediaAsset });
+
+    const mediaIds = Array.from(new Set([...contentItem.mediaIds, mediaAsset.id]));
+    const row = await tx.contentItem.update({
+      where: {
+        id: contentItem.id
+      },
+      data: {
+        mediaIds
+      }
+    });
+
+    return toContentRecord(row);
+  });
 }
 
 export async function detachMediaFromContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
-  const contentItem = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
+  return prisma.$transaction(async (tx) => {
+    const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
+
+    if (!contentItem) {
+      throw new MediaContentItemNotFoundError();
     }
+
+    assertMediaEditable(contentItem.status);
+
+    if (!contentItem.mediaIds.includes(mediaAssetId)) return toContentRecord(contentItem);
+    const row = await tx.contentItem.update({
+      where: {
+        id: contentItem.id
+      },
+      data: {
+        mediaIds: contentItem.mediaIds.filter((id) => id !== mediaAssetId)
+      }
+    });
+
+    return toContentRecord(row);
   });
-
-  if (!contentItem) {
-    throw new MediaContentItemNotFoundError();
-  }
-
-  assertMediaEditable(contentItem.status);
-
-  const row = await prisma.contentItem.update({
-    where: {
-      id: contentItem.id
-    },
-    data: {
-      mediaIds: contentItem.mediaIds.filter((id) => id !== mediaAssetId)
-    }
-  });
-
-  return toContentRecord(row);
 }
 
 export async function deleteMediaAsset(workspaceId: string, mediaAssetId: string): Promise<{ id: string }> {

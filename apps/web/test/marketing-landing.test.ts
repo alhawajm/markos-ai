@@ -30,7 +30,9 @@ describe("Sunlit Social Studio marketing landing", () => {
     expect(componentSource).toContain("What MARKOS noticed");
     expect(componentSource).toContain("Terms of Service");
     expect(componentSource).toContain("Privacy Policy");
-    expect(componentSource).toContain("FAQs");
+    expect(componentSource).not.toContain("/${locale}/faq");
+    expect(componentSource).not.toContain("/${locale}/plans");
+    expect(componentSource).not.toContain("/${locale}/contact");
     expect(componentSource).toContain("Powered by Ra'edat Software");
     expect(componentSource).toContain("© 2026 Ra'edat Software L.L.C.");
   });
