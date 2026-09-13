@@ -27,12 +27,88 @@ import { attachMediaToContent } from "../src/media/media-service";
 import { updateContentItem } from "../src/content/content-service";
 import { retryMediaGenerationJob } from "../src/media/video-generation-service";
 import { env } from "../src/config/env";
+import { AiServiceRequestError } from "../src/ai/request";
 
 describe("durable video generation", () => {
   beforeEach(() => {
     provider.download.mockReset();
     provider.status.mockReset();
     provider.start.mockReset();
+  });
+
+  it.each(["AI_PROVIDER_TIMEOUT", "AI_SERVICE_TIMEOUT", "AI_SERVICE_RESPONSE_INVALID"])(
+    "stops an ambiguous %s submission until an intentional retry",
+    async (code) => {
+      const { content, workspace } = await createVideoWorkspace();
+      const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+      const now = new Date(Date.now() + 1000);
+      provider.start.mockRejectedValueOnce(new AiServiceRequestError({ code, message: "Request failed", retryable: true, statusCode: 504 }));
+      await processDueVideoGenerationJobs({ limit: 1, now });
+      await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+        status: "FAILED",
+        providerJobId: null,
+        errorCode: "AI_VIDEO_START_RESULT_UNKNOWN",
+        errorMessage: expect.stringContaining("another charge")
+      });
+      await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 300_000) });
+      expect(provider.start).toHaveBeenCalledOnce();
+      await retryMediaGenerationJob(workspace.id, job.id);
+      provider.start.mockResolvedValueOnce(providerState("in_progress"));
+      await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
+      expect(provider.start).toHaveBeenCalledTimes(2);
+      await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "GENERATING", errorCode: null });
+      await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
+    }
+  );
+
+  it("does not submit a recovered STARTING job whose provider identity was never saved", async () => {
+    const { content, workspace } = await createVideoWorkspace();
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const now = new Date(Date.now() + 1000);
+    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "STARTING", attempts: 1, leaseExpiresAt: new Date(now.getTime() - 1) } });
+    await processDueVideoGenerationJobs({ limit: 1, now });
+    expect(provider.start).not.toHaveBeenCalled();
+    await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+      status: "FAILED",
+      errorCode: "AI_VIDEO_START_RESULT_UNKNOWN"
+    });
+  });
+
+  it.each(["status", "download"] as const)("retries a %s timeout against the saved video without starting another generation", async (stage) => {
+    const { content, workspace } = await createVideoWorkspace();
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const now = new Date(Date.now() + 1000);
+    provider.start.mockResolvedValueOnce(providerState(stage === "download" ? "completed" : "in_progress"));
+    provider[stage].mockRejectedValueOnce(new AiServiceRequestError({ code: "AI_PROVIDER_TIMEOUT", message: "Timed out", retryable: true, statusCode: 504 }));
+    await processDueVideoGenerationJobs({ limit: 1, now });
+    if (stage === "status") await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 60_000) });
+    const waiting = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(waiting).toMatchObject({ providerJobId: "video-provider-job", errorCode: "AI_PROVIDER_TIMEOUT" });
+    expect(waiting.status).not.toBe("FAILED");
+    provider.status.mockResolvedValueOnce(providerState("completed"));
+    provider.download.mockResolvedValueOnce(Buffer.from("video-bytes"));
+    await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 120_000) });
+    expect(provider.start).toHaveBeenCalledOnce();
+    expect(provider.status).toHaveBeenLastCalledWith("video-provider-job");
+    await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "COMPLETED" });
+  });
+
+  it("retries an explicit rate-limit rejection instead of treating it as an accepted video", async () => {
+    const { content, workspace } = await createVideoWorkspace();
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const now = new Date(Date.now() + 1000);
+    provider.start.mockRejectedValueOnce(
+      new AiServiceRequestError({ code: "AI_PROVIDER_RATE_LIMITED", message: "Rate limited", retryable: true, statusCode: 503 })
+    );
+    await processDueVideoGenerationJobs({ limit: 1, now });
+    await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+      status: "QUEUED",
+      errorCode: "AI_PROVIDER_RATE_LIMITED"
+    });
+    provider.start.mockResolvedValueOnce(providerState("in_progress"));
+    await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 60_000) });
+    expect(provider.start).toHaveBeenCalledTimes(2);
+    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
   });
 
   it.each(["response", "error"])("does not let a stale worker's %s overwrite a newer claim", async (outcome) => {
