@@ -1,4 +1,56 @@
 /* Prototype composition; colors and button treatments come from the runtime Sunlit stylesheet. */
+@font-face {
+  font-family: "Business Profile Plex";
+  src: url("../../apps/web/app/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex";
+  src: url("../../apps/web/app/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex";
+  src: url("../../apps/web/app/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex";
+  src: url("../../apps/web/app/fonts/IBMPlexSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex Arabic";
+  src: url("../../apps/web/app/fonts/IBMPlexSansArabic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex Arabic";
+  src: url("../../apps/web/app/fonts/IBMPlexSansArabic-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex Arabic";
+  src: url("../../apps/web/app/fonts/IBMPlexSansArabic-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Business Profile Plex Arabic";
+  src: url("../../apps/web/app/fonts/IBMPlexSansArabic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+:root {
+  --font-plex-latin: "Business Profile Plex";
+  --font-plex-arabic: "Business Profile Plex Arabic";
+}
 * {
   box-sizing: border-box;
 }
@@ -925,7 +977,7 @@ dialog::backdrop {
   transform: rotate(180deg);
 }
 [dir="rtl"] .sunlit-theme {
-  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-family: var(--font-plex-arabic), var(--font-plex-latin), Arial, sans-serif;
 }
 @media (min-width: 1750px) {
   main {
