@@ -14,6 +14,9 @@ class ConversationMessage(StrictContract):
 class ConversationChanges(StrictContract):
     caption: str | None = Field(max_length=2_200)
     brief: str | None = Field(max_length=1_000)
+    content_pillar: str | None = Field(alias="contentPillar", max_length=160)
+    campaign_goal: str | None = Field(alias="campaignGoal", max_length=500)
+    tone: str | None = Field(max_length=200)
     visual_direction: str | None = Field(alias="visualDirection", max_length=2_000)
     carousel: CarouselContent | None
     reel_script: ReelScript | None = Field(alias="reelScript")

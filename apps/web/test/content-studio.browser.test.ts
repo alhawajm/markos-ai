@@ -636,6 +636,45 @@ describe("unified Create", () => {
       await close();
     }
   });
+  it("refreshes separate Details fields after an assistant edit and retains them on reload", async () => {
+    const details = {
+      contentPillar: "Behind the scenes",
+      campaignGoal: "Encourage bakery enquiries",
+      tone: "Warm and conversational",
+      brief: "Show the morning bake."
+    };
+    const { page, state, close } = await setup([draft()]);
+    state.aiChanges = details;
+    try {
+      await open(page, "saved-post");
+      await page.getByRole("button", { name: "Edit post details", exact: true }).click();
+      await page.getByLabel("Message MARKOS", { exact: true }).fill("Apply the agreed pillar, objective, tone and brief to this post.");
+      await page.getByRole("button", { name: "Send to MARKOS", exact: true }).click();
+      await expect.poll(() => state.items[0]?.revision).toBe(2);
+      for (const [label, value] of [
+        ["Content pillar", details.contentPillar],
+        ["Post objective", details.campaignGoal],
+        ["Tone", details.tone],
+        ["Brief", details.brief]
+      ] as const) {
+        await expect.poll(() => page.getByLabel(label, { exact: true }).inputValue()).toBe(value);
+      }
+      expect(state.items[0]?.caption).toBe(draft().caption);
+      await page.reload();
+      await page.getByRole("button", { name: "Edit post details", exact: true }).click();
+      for (const [label, value] of [
+        ["Content pillar", details.contentPillar],
+        ["Post objective", details.campaignGoal],
+        ["Tone", details.tone],
+        ["Brief", details.brief]
+      ] as const) {
+        expect(await page.getByLabel(label, { exact: true }).inputValue()).toBe(value);
+      }
+    } finally {
+      await close();
+    }
+  });
+
   it("refreshes the applied Reel direction and sends that persisted value to video generation", async () => {
     const direction = "A little citrus sunshine.\n\nClose up of pouring glaze.\n\nReveal the pastry beside a coffee.";
     const { page, state, close } = await setup([draft({ contentType: "REEL", mediaIds: [], visualDirection: "" })]);

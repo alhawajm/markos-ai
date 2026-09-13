@@ -56,7 +56,7 @@ def request() -> ConversationRequest:
 
 def test_provider_receives_current_draft_history_and_returns_exact_caption() -> None:
     caption = "  شمس صغيرة 🍊\n\nA little sunshine.\n\n#Bahrain\n"
-    result: dict[str, object] = {"reply": "Updated the caption.", "summary": "Owner selected option two, Arabic first.", "changes": {"caption": caption, "brief": None, "visualDirection": None, "carousel": None, "reelScript": None}}
+    result: dict[str, object] = {"reply": "Updated the caption.", "summary": "Owner selected option two, Arabic first.", "changes": {"caption": caption, "brief": None, "contentPillar": None, "campaignGoal": None, "tone": None, "visualDirection": None, "carousel": None, "reelScript": None}}
     client = Client(result)
     response = asyncio.run(respond_to_conversation(request(), client))
     assert response.result.changes is not None
@@ -76,11 +76,30 @@ def test_discussion_can_return_no_changes() -> None:
     assert response.result.changes is None
 
 
+def test_details_edit_exposes_distinct_fields_to_the_model() -> None:
+    changes = {"caption": None, "brief": "Show the morning bake.", "contentPillar": "Behind the scenes", "campaignGoal": "Encourage enquiries", "tone": "Warm", "visualDirection": None, "carousel": None, "reelScript": None}
+    client = Client({"reply": "Prepared the details.", "summary": "Owner approved the plan.", "changes": changes})
+    response = asyncio.run(respond_to_conversation(request(), client))
+    assert response.result.changes is not None
+    assert response.result.changes.model_dump(by_alias=True) == changes
+    schema = client.fake.request["text"]
+    assert isinstance(schema, dict)
+    assert all(field in json.dumps(schema) for field in ("contentPillar", "campaignGoal", "tone"))
+    assert "put each agreed value in its respective field" in str(client.fake.request["instructions"])
+
+
+@pytest.mark.parametrize(("field", "limit"), [("contentPillar", 160), ("campaignGoal", 500), ("tone", 200)])
+def test_details_field_limits_reject_the_whole_edit(field: str, limit: int) -> None:
+    changes = {"caption": None, "brief": None, "contentPillar": None, "campaignGoal": None, "tone": None, "visualDirection": None, "carousel": None, "reelScript": None, field: "x" * (limit + 1)}
+    with pytest.raises(ValidationError):
+        ConversationChanges.model_validate(changes)
+
+
 def test_approved_reel_direction_returns_the_video_input_as_a_draft_edit() -> None:
     direction = "Macro shot of citrus glaze. Reveal the pastry beside a coffee."
     script = {"hook": "Citrus sunshine", "beats": ["Pour glaze", "Reveal pastry"], "durationSeconds": 8}
     client = Client({"reply": "Prepared your selected direction.", "summary": "Second direction selected.", "changes": {
-        "caption": None, "brief": None, "visualDirection": direction, "carousel": None, "reelScript": script,
+        "caption": None, "brief": None, "contentPillar": None, "campaignGoal": None, "tone": None, "visualDirection": direction, "carousel": None, "reelScript": script,
     }})
     turn = request().model_copy(update={"message": "Use the second direction and build the reel script", "current": {"contentType": "REEL", "status": "DRAFT"}})
     response = asyncio.run(respond_to_conversation(turn, client))
@@ -96,7 +115,7 @@ def test_approved_reel_direction_returns_the_video_input_as_a_draft_edit() -> No
 @pytest.mark.parametrize("caption", ["🍊" * 2201, " ".join(f"#tag{i}" for i in range(31))])
 def test_invalid_caption_is_rejected(caption: str) -> None:
     with pytest.raises(ValidationError):
-        ConversationChanges(caption=caption, brief=None, visualDirection=None, carousel=None, reelScript=None)
+        ConversationChanges(caption=caption, brief=None, contentPillar=None, campaignGoal=None, tone=None, visualDirection=None, carousel=None, reelScript=None)
 
 
 def test_unknown_publication_action_is_rejected_by_provider_boundary() -> None:
