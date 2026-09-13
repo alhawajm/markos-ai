@@ -10,6 +10,7 @@ import {
   legacyOnboardingDraftKey,
   onboardingStepHasChanges,
   onboardingDraftKey,
+  unscopedOnboardingDraftKey,
   payloadForOnboardingStep,
   previousOnboardingDraftKey,
   restoreOnboardingStep,
@@ -55,8 +56,11 @@ describe("onboarding draft contract", () => {
     expect(draft.offer).toBe("");
     expect(draft.competitors).toBe("");
     expect(JSON.stringify(draft)).not.toMatch(/Zain|Batelco|STC|zain_bh/i);
-    expect(onboardingDraftKey).not.toBe(previousOnboardingDraftKey);
-    expect(onboardingDraftKey).not.toBe(legacyOnboardingDraftKey);
+    const key = onboardingDraftKey("owner", "workspace");
+    expect([legacyOnboardingDraftKey, previousOnboardingDraftKey, unscopedOnboardingDraftKey]).not.toContain(key);
+    expect(key).not.toBe(onboardingDraftKey("another-owner", "workspace"));
+    expect(key).not.toBe(onboardingDraftKey("owner", "another-workspace"));
+    expect(onboardingDraftKey("owner:a", "b")).not.toBe(onboardingDraftKey("owner", "a:b"));
   });
 
   it("restores both the simplified contract and older rich Vault answers", () => {

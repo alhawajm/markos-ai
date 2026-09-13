@@ -57,6 +57,7 @@ import {
   onboardingClearedFields,
   onboardingDraftWithCatalog,
   previousOnboardingDraftKey,
+  unscopedOnboardingDraftKey,
   restoreOnboardingStep,
   splitOnboardingList,
   validateOnboardingStep,
@@ -674,12 +675,14 @@ export function OnboardingPanel({
   const client = useMarkosClient(locale);
   const router = useRouter();
   const session = useMarkosSession();
+  const storageKey = session ? onboardingDraftKey(session.user.id, session.workspace.id) : null;
   const [draft, setDraft] = useState<OnboardingDraft>(() => initialDraft ?? createEmptyOnboardingDraft());
   const [screen, setScreen] = useState<Screen>(() => initialScreen(initialState, editMode));
   const [step, setStep] = useState<OnboardingStepId>(() => initialStep(initialState));
   const [runtimeState, setRuntimeState] = useState(initialState);
   const [editingFromReview, setEditingFromReview] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
+  const hydrated = storageKey !== null && hydratedStorageKey === storageKey;
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -719,29 +722,31 @@ export function OnboardingPanel({
   );
 
   useEffect(() => {
+    if (!storageKey) return;
     window.localStorage.removeItem(legacyOnboardingDraftKey);
     window.localStorage.removeItem(previousOnboardingDraftKey);
+    window.localStorage.removeItem(unscopedOnboardingDraftKey);
     const baseDraft = initialDraft ?? createEmptyOnboardingDraft();
-    const stored = editMode ? null : window.localStorage.getItem(onboardingDraftKey);
+    const stored = editMode ? null : window.localStorage.getItem(storageKey);
 
     if (stored) {
       try {
         setDraft({ ...baseDraft, ...(JSON.parse(stored) as Partial<OnboardingDraft>) });
       } catch {
-        window.localStorage.removeItem(onboardingDraftKey);
+        window.localStorage.removeItem(storageKey);
         setDraft(baseDraft);
       }
     } else {
       setDraft(baseDraft);
     }
 
-    setHydrated(true);
-  }, [editMode, initialDraft]);
+    setHydratedStorageKey(storageKey);
+  }, [editMode, initialDraft, storageKey]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(onboardingDraftKey, JSON.stringify(draft));
-  }, [draft, hydrated]);
+    if (!hydrated || !storageKey || editMode) return;
+    window.localStorage.setItem(storageKey, JSON.stringify(draft));
+  }, [draft, editMode, hydrated, storageKey]);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -1178,7 +1183,7 @@ export function OnboardingPanel({
     setMessage("");
     try {
       await client.approveBusinessProfile({ interactionId: profileInteractionId, profile: profileDraft });
-      window.localStorage.removeItem(onboardingDraftKey);
+      window.localStorage.removeItem(onboardingDraftKey(session.user.id, session.workspace.id));
       router.push(`/${locale}/app/campaigns`);
     } catch (error) {
       showError(error instanceof Error ? error.message : copy.errors.approve);
@@ -1194,7 +1199,7 @@ export function OnboardingPanel({
 
     setSaving(true);
     setMessage("");
-    window.localStorage.removeItem(onboardingDraftKey);
+    window.localStorage.removeItem(onboardingDraftKey(session.user.id, session.workspace.id));
     router.push(`/${locale}/app/knowledge`);
   }
 
@@ -1348,6 +1353,7 @@ export function OnboardingPanel({
 }
 
 function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocuments: () => void; onStart: () => void }) {
+  const reducedMotion = useReducedMotion();
   return (
     <section className="mx-auto grid min-h-[calc(100svh-96px)] w-full max-w-6xl place-items-center px-5 pb-12 pt-2 sm:px-8">
       <div className="w-full max-w-5xl text-center">
@@ -1356,8 +1362,13 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
         </h1>
 
         <div className="mx-auto mt-10 grid max-w-4xl gap-4 text-start md:grid-cols-2">
-          <button
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
+          <motion.button
+            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reducedMotion ? 0 : 0.28, delay: 0 }}
+            whileHover={reducedMotion ? {} : { y: -3 }}
+            whileTap={reducedMotion ? {} : { y: -1, scale: 0.995 }}
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition-shadow duration-200 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onDocuments}
             type="button"
           >
@@ -1373,13 +1384,18 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
               <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-semibold leading-tight tracking-[-0.025em] rtl:tracking-normal">
                 {copy.businessDocuments.upload}
               </strong>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-[var(--text)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-[var(--text)] transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 motion-reduce:transform-none motion-reduce:transition-none">
                 <ArrowRight className="rtl:rotate-180" size={20} />
               </span>
             </span>
-          </button>
-          <button
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[linear-gradient(145deg,var(--surface),var(--primary-soft))] p-6 text-start shadow-[0_20px_50px_color-mix(in_srgb,var(--primary)_14%,transparent)] transition duration-200 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--primary)_48%,transparent)] hover:shadow-[0_28px_64px_color-mix(in_srgb,var(--primary)_19%,transparent)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
+          </motion.button>
+          <motion.button
+            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reducedMotion ? 0 : 0.28, delay: 0.08 }}
+            whileHover={reducedMotion ? {} : { y: -3 }}
+            whileTap={reducedMotion ? {} : { y: -1, scale: 0.995 }}
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[linear-gradient(145deg,var(--surface),var(--primary-soft))] p-6 text-start shadow-[0_20px_50px_color-mix(in_srgb,var(--primary)_14%,transparent)] transition-shadow duration-200 hover:border-[color-mix(in_srgb,var(--primary)_48%,transparent)] hover:shadow-[0_28px_64px_color-mix(in_srgb,var(--primary)_19%,transparent)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onStart}
             type="button"
           >
@@ -1395,11 +1411,11 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
               <strong className="max-w-sm text-[clamp(23px,2.5vw,30px)] font-semibold leading-tight tracking-[-0.025em] text-[var(--sunlit-ink)] rtl:tracking-normal">
                 {copy.greeting.start}
               </strong>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--on-primary)] transition group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--on-primary)] transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 motion-reduce:transform-none motion-reduce:transition-none">
                 <ArrowRight className="rtl:rotate-180" size={20} />
               </span>
             </span>
-          </button>
+          </motion.button>
         </div>
       </div>
     </section>

@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale, OnboardingState } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
-import { createOnboardingDraftFromVault, onboardingDraftWithCatalog, type OnboardingDraft } from "./onboarding-draft";
+import {
+  createOnboardingDraftFromVault,
+  onboardingDraftWithCatalog,
+  onboardingDraftKey,
+  legacyOnboardingDraftKey,
+  previousOnboardingDraftKey,
+  unscopedOnboardingDraftKey,
+  type OnboardingDraft
+} from "./onboarding-draft";
 import { OnboardingPanel } from "./onboarding-panel";
 
 type RouteStatus = "checking" | "allowed" | "failed";
@@ -13,6 +21,8 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
   const client = useMarkosClient(locale);
   const router = useRouter();
   const session = useMarkosSession();
+  const ownerKey = session ? onboardingDraftKey(session.user.id, session.workspace.id) : null;
+  const [loadedOwnerKey, setLoadedOwnerKey] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [initialDraft, setInitialDraft] = useState<OnboardingDraft | null>(null);
   const [initialState, setInitialState] = useState<OnboardingState | null>(null);
@@ -39,7 +49,14 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
         if (!active) return;
 
         if (!editMode && state.status === "COMPLETE" && state.businessProfile.status === "APPROVED") {
-          window.localStorage.removeItem("markos.onboarding.draft.v2");
+          for (const key of [
+            legacyOnboardingDraftKey,
+            previousOnboardingDraftKey,
+            unscopedOnboardingDraftKey,
+            onboardingDraftKey(session.user.id, session.workspace.id)
+          ]) {
+            window.localStorage.removeItem(key);
+          }
           router.replace(`/${locale}/app/campaigns`);
           return;
         }
@@ -51,6 +68,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
         }
 
         setInitialState(state);
+        setLoadedOwnerKey(onboardingDraftKey(session.user.id, session.workspace.id));
         setStatus("allowed");
       } catch (error) {
         if (!active) return;
@@ -75,8 +93,10 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
 
   useEffect(() => checkOnboarding(), [attempt, checkOnboarding]);
 
-  if (status === "allowed" && initialState) {
-    return <OnboardingPanel editMode={editMode} initialState={initialState} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />;
+  if (status === "allowed" && initialState && ownerKey && loadedOwnerKey === ownerKey) {
+    return (
+      <OnboardingPanel key={ownerKey} editMode={editMode} initialState={initialState} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />
+    );
   }
 
   return (

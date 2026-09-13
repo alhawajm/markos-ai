@@ -169,6 +169,28 @@ describe("business knowledge maintenance", () => {
   });
 });
 
+it("does not expose another workspace's approved facts to a newly registered account", async () => {
+  const first = await setup();
+  const fresh = await setup();
+  try {
+    await saveBusinessKnowledge(first.session.workspace.id, { expectedVersion: 0, module: "company", changes: { name: "SnackLab", industry: "Bakery" } });
+    await prisma.workspace.update({ where: { id: fresh.session.workspace.id }, data: { onboardingStatus: "NOT_STARTED" } });
+    const own = await first.app.inject({ method: "GET", url: "/v1/business-profile", headers: first.headers });
+    expect(own.statusCode).toBe(200);
+    expect(own.json().data.modules.company.name).toBe("SnackLab");
+    const knowledge = await fresh.app.inject({ method: "GET", url: "/v1/business-profile", headers: fresh.headers });
+    const onboarding = await fresh.app.inject({ method: "GET", url: "/v1/onboarding", headers: fresh.headers });
+    expect(knowledge.statusCode).toBe(200);
+    expect(onboarding.statusCode).toBe(200);
+    expect(knowledge.json().data).toMatchObject({ approved: false, version: 0, catalog: null, modules: { company: {} } });
+    expect(onboarding.json().data).toMatchObject({ status: "NOT_STARTED", businessProfile: { profile: null } });
+    expect(knowledge.body + onboarding.body).not.toContain("SnackLab");
+  } finally {
+    await first.app.close();
+    await fresh.app.close();
+  }
+});
+
 async function setup() {
   const app = await buildApp();
   const response = await app.inject({
