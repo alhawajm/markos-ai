@@ -66,6 +66,67 @@ async function fixture() {
 }
 
 describe("durable post conversations", () => {
+  it.each([null, "Macro shot of citrus glaze, then a slow reveal of the finished pastry."])(
+    "applies an approved Reel script to the persisted video direction (provider direction: %s)",
+    async (visualDirection) => {
+      const f = await fixture();
+      await prisma.contentItem.update({ where: { id: f.item.id }, data: { contentType: "REEL" } });
+      const initial = await f.get();
+      await f.send({ ...f.input, expectedRevision: initial.contentItem.revision, message: "Suggest two reel directions" });
+      await processConversationRuns(f.session.workspace.id);
+      expect((await f.get()).contentItem.visualDirection).toBeUndefined();
+      const reelScript = { hook: "A little citrus sunshine.", beats: ["Close up of pouring glaze.", "Reveal the pastry beside a coffee."], durationSeconds: 8 };
+      respond.mockResolvedValue(output({ ...patch(), caption: null, reelScript, visualDirection }) as Awaited<ReturnType<typeof respond>>);
+      await f.send({
+        ...f.input,
+        requestId: randomUUID(),
+        expectedRevision: initial.contentItem.revision,
+        message: "Use the second direction and build the reel script."
+      });
+      await processConversationRuns(f.session.workspace.id);
+      const expectedDirection = visualDirection ?? [reelScript.hook, ...reelScript.beats].join("\n\n");
+      const persisted = await prisma.contentItem.findUniqueOrThrow({ where: { id: f.item.id } });
+      expect(persisted).toMatchObject({ reelScript, visualDirection: expectedDirection, caption: "Original", revision: initial.contentItem.revision + 1 });
+      const refreshed = await f.get();
+      expect(refreshed.contentItem.visualDirection).toBe(expectedDirection);
+      expect(refreshed.latestRun.status).toBe("SUCCEEDED");
+      expect(refreshed.messages.at(-1).text).toContain("Updated and saved visual direction, Reel script in the draft.");
+      expect(respond.mock.lastCall?.[0].history).toHaveLength(2);
+    }
+  );
+
+  it("does not claim that an empty edit was applied", async () => {
+    const f = await fixture();
+    respond.mockResolvedValue(output({ ...patch(), caption: null }) as Awaited<ReturnType<typeof respond>>);
+    await f.send();
+    await processConversationRuns(f.session.workspace.id);
+    const saved = await f.get();
+    expect(saved.latestRun).toMatchObject({ status: "FAILED", errorCode: "AI_OUTPUT_INVALID" });
+    expect(saved.messages.at(-1).text).toContain("No changes from it were saved");
+    expect(saved.contentItem.revision).toBe(1);
+  });
+
+  it("reports failure without a success reply when the database rejects a Reel edit", async () => {
+    const f = await fixture();
+    await prisma.contentItem.update({ where: { id: f.item.id }, data: { contentType: "REEL" } });
+    const initial = await f.get();
+    respond.mockResolvedValue(
+      output({
+        ...patch(),
+        caption: null,
+        visualDirection: "Glaze\u0000Reveal",
+        reelScript: { hook: "Citrus", beats: ["Glaze", "Reveal"], durationSeconds: 8 }
+      }) as Awaited<ReturnType<typeof respond>>
+    );
+    await f.send({ ...f.input, expectedRevision: initial.contentItem.revision, message: "Build the reel script" });
+    await processConversationRuns(f.session.workspace.id);
+    const saved = await f.get();
+    expect(saved.latestRun.status).toBe("FAILED");
+    expect(saved.contentItem.visualDirection).toBeUndefined();
+    expect(saved.contentItem.reelScript).toBeUndefined();
+    expect(saved.messages.at(-1).text).toContain("No changes from it were saved");
+  });
+
   it("saves a greeting and reply without modifying content; reopens the same thread", async () => {
     const f = await fixture();
     expect((await f.get()).id).toBeNull();

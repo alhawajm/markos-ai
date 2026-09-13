@@ -9,6 +9,53 @@ import { InstagramGraphPublisher, InstagramPublishError, type InstagramPublisher
 import { publishContentItem } from "../src/publishing/publishing-service";
 
 describe("publishing routes", () => {
+  it("publishes carousel slides in the owner's saved order rather than upload order", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const { content, media } = await createPublishableDueContent(session.workspace.id);
+    await persistTestInstagramConnection({ workspaceId: session.workspace.id, actorId: session.user.id, accessToken: "test-token" });
+    const second = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: session.workspace.id,
+        type: "IMAGE",
+        filename: "second.jpg",
+        s3Key: "external:second",
+        cdnUrl: "https://cdn.example.com/second.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 120000,
+        width: 1080,
+        height: 1080
+      }
+    });
+    await prisma.contentItem.update({ where: { id: content.id }, data: { contentType: "CAROUSEL", mediaIds: [second.id, media.id] } });
+    const publisher: InstagramPublisher = {
+      async publish(input) {
+        expect(input.mediaAssets.map((asset) => asset.id)).toEqual([second.id, media.id]);
+        return {
+          dryRun: false,
+          instagramPostId: "carousel-ordered",
+          status: "PUBLISHED",
+          payload: {
+            accountId: input.workspace.instagramAccountId!,
+            contentItemId: content.id,
+            caption: input.contentItem.caption,
+            contentType: "CAROUSEL",
+            mediaCount: 2
+          }
+        };
+      }
+    };
+    try {
+      expect((await publishContentItem(session.workspace.id, content.id, { publisher })).status).toBe("PUBLISHED");
+      await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).resolves.toMatchObject({
+        status: "PUBLISHED",
+        instagramPostId: "carousel-ordered"
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("reports live publishing readiness blockers before Instagram Login is configured", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

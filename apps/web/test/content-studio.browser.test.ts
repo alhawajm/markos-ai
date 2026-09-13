@@ -72,6 +72,7 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
     generatedImageErrorCode: "CONTENT_MEDIA_SINGLE_ITEM_LIMIT",
     attachConflict: null as MediaAssetRecord | null,
     aiHold: null as Promise<void> | null,
+    aiChanges: null as Partial<ContentRecord> | null,
     jobStatus: null as string | null,
     jobOutputId: null as string | null,
     jobErrorCode: null as string | null,
@@ -152,8 +153,13 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
             if (state.aiHold) await state.aiHold;
             const discussion = /hello|explore|options/i.test(body.message);
             if (!discussion) {
-              item.caption = "Shorter citrus caption.\n\nنص عربي محدّث.\n\nTry it today";
-              item.visualDirection = "An overhead photo with orange slices.";
+              Object.assign(
+                item,
+                state.aiChanges ?? {
+                  caption: "Shorter citrus caption.\n\nنص عربي محدّث.\n\nTry it today",
+                  visualDirection: "An overhead photo with orange slices."
+                }
+              );
               item.revision += 1;
             }
             conversation.messages.push({
@@ -259,6 +265,50 @@ async function edit(page: Page, caption: string) {
 }
 
 describe("unified Create", () => {
+  it("lets readers scroll through history across polling updates and resumes following near the bottom", async () => {
+    const item = draft();
+    const { page, state, close } = await setup([item]);
+    const messages: ContentConversationRecord["messages"] = Array.from({ length: 30 }, (_, index) => ({
+      id: `history-${index}`,
+      runId: `run-${index}`,
+      role: index % 2 ? "assistant" : "user",
+      text: `Message ${index}: ${"A useful detail about this campaign. ".repeat(7)}`,
+      createdAt: item.createdAt
+    }));
+    state.conversations[item.id] = { id: "conversation-history", contentItem: item, messages, latestRun: null };
+    try {
+      await open(page, item.id);
+      const log = page.locator(".studio-conversation-log");
+      await log.getByText(/^Message 29:/).waitFor();
+      const distance = () => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+      await expect.poll(distance).toBeLessThan(2);
+      await log.hover();
+      await page.mouse.wheel(0, -700);
+      await expect.poll(distance).toBeGreaterThan(300);
+      const position = await log.evaluate((el) => el.scrollTop);
+      messages.push({ id: "incoming", runId: "incoming-run", role: "assistant", text: "Incoming answer", createdAt: item.createdAt });
+      await log.getByText("Incoming answer", { exact: true }).waitFor();
+      expect(Math.abs((await log.evaluate((el) => el.scrollTop)) - position)).toBeLessThan(2);
+      messages[messages.length - 1]!.text = "Incoming answer with additional streamed text";
+      await log.getByText("Incoming answer with additional streamed text", { exact: true }).waitFor();
+      expect(Math.abs((await log.evaluate((el) => el.scrollTop)) - position)).toBeLessThan(2);
+      await log.hover();
+      await page.mouse.wheel(0, 100000);
+      await expect.poll(distance).toBeLessThan(2);
+      messages.push({
+        id: "following",
+        runId: "following-run",
+        role: "assistant",
+        text: `Following again. ${"More detail. ".repeat(60)}`,
+        createdAt: item.createdAt
+      });
+      await log.getByText(/^Following again/).waitFor();
+      await expect.poll(distance).toBeLessThan(2);
+    } finally {
+      await close();
+    }
+  });
+
   it("opens a new Reel directly with video generation and compatible media controls", async () => {
     const { page, state, close } = await setup();
     try {
@@ -586,6 +636,37 @@ describe("unified Create", () => {
       await close();
     }
   });
+  it("refreshes the applied Reel direction and sends that persisted value to video generation", async () => {
+    const direction = "A little citrus sunshine.\n\nClose up of pouring glaze.\n\nReveal the pastry beside a coffee.";
+    const { page, state, close } = await setup([draft({ contentType: "REEL", mediaIds: [], visualDirection: "" })]);
+    state.aiChanges = {
+      visualDirection: direction,
+      reelScript: { hook: "A little citrus sunshine.", beats: ["Close up of pouring glaze.", "Reveal the pastry beside a coffee."], durationSeconds: 8 }
+    };
+    try {
+      await open(page, "saved-post");
+      await page.getByLabel("Message MARKOS", { exact: true }).fill("Use the second direction and build the reel script.");
+      await page.getByRole("button", { name: "Send to MARKOS", exact: true }).click();
+      await expect.poll(() => state.items[0]?.revision).toBe(2);
+      await page.getByRole("button", { name: "Edit media", exact: true }).click();
+      await page.getByText("Generate media", { exact: true }).click();
+      await expect.poll(() => page.getByLabel("Visual direction", { exact: true }).inputValue()).toBe(direction);
+      expect(state.items[0]?.caption).toBe(draft().caption);
+      await page.reload();
+      await page.getByRole("button", { name: "Edit media", exact: true }).click();
+      await page.getByText("Generate media", { exact: true }).click();
+      await expect.poll(() => page.getByLabel("Visual direction", { exact: true }).inputValue()).toBe(direction);
+      await page.route("**/v1/content/saved-post/generate-video", (route) =>
+        route.fulfill(json({ id: "video-job", contentItemId: "saved-post", status: "QUEUED", progress: 0 }))
+      );
+      const requested = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/generate-video"));
+      await page.getByRole("button", { name: "Generate video", exact: true }).click();
+      expect((await requested).postDataJSON()).toMatchObject({ prompt: direction, aspectRatio: "9:16", durationSeconds: 8 });
+    } finally {
+      await close();
+    }
+  });
+
   it("reconnects to an in-progress conversation after refresh without sending again", async () => {
     const { page, state, close } = await setup([draft()]);
     let release = () => {};

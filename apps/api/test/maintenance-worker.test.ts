@@ -1,6 +1,6 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
 import { InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
@@ -8,8 +8,131 @@ import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { decryptCredential } from "../src/security/credential-encryption";
 import { env } from "../src/config/env";
+import { processDuePublishJobs, queuePublishNow } from "../src/publishing/publish-job-service";
 
 describe("maintenance worker", () => {
+  it("renews a long publish lease and prevents a second worker and repeated ticks from publishing it", async () => {
+    const now = new Date("2026-01-05T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-long-publish", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    let calls = 0;
+    const publisher: InstagramPublisher = {
+      async publish(input) {
+        if (input.contentItem.id === target.content.id) {
+          calls += 1;
+          // Renew a nearly expired lease at the provider boundary, then simulate
+          // another worker checking after the original lease would have expired.
+          await prisma.publishJob.update({ where: { id: job.id }, data: { leaseExpiresAt: new Date(now.getTime() + 60_000) } });
+          await input.beforeRequest?.();
+          const current = await prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } });
+          expect(current.leaseExpiresAt!.getTime()).toBeGreaterThanOrEqual(now.getTime() + 5 * 60_000);
+          const second = await processDuePublishJobs({ now: new Date(now.getTime() + 2 * 60_000), publisher });
+          expect(second.processed).toBe(0);
+        }
+        return {
+          dryRun: false,
+          status: "PUBLISHED",
+          instagramPostId: `ig-${input.contentItem.id}`,
+          payload: {
+            accountId: input.workspace.instagramAccountId!,
+            contentItemId: input.contentItem.id,
+            caption: input.contentItem.caption,
+            contentType: input.contentItem.contentType,
+            mediaCount: input.mediaAssets.length
+          }
+        };
+      }
+    };
+    await processDuePublishJobs({ now, publisher });
+    await processDuePublishJobs({ now: new Date(now.getTime() + 6 * 60_000), publisher });
+    expect(calls).toBe(1);
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "PUBLISHED", attempts: 1 });
+  });
+
+  it("does not republish an expired in-flight attempt with an unknown external result", async () => {
+    const now = new Date("2026-01-06T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-interrupted", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status: "PROCESSING", attempts: 1, leaseExpiresAt: new Date(now.getTime() - 1) } });
+    const publish = vi.fn();
+    await processDuePublishJobs({ now, publisher: { publish } });
+    expect(publish).not.toHaveBeenCalled();
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+      status: "FAILED",
+      lastErrorCode: "INSTAGRAM_PUBLISH_RESULT_UNKNOWN"
+    });
+  });
+
+  it("keeps retry backoff and succeeds once after a known pre-publication failure", async () => {
+    const now = new Date("2026-01-07T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-retry", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    let calls = 0;
+    const publisher: InstagramPublisher = {
+      async publish(input) {
+        calls += 1;
+        if (calls === 1) throw new InstagramPublishError("INSTAGRAM_PROVIDER_NETWORK_ERROR", true);
+        return {
+          dryRun: false,
+          status: "PUBLISHED",
+          instagramPostId: "ig-retried",
+          payload: {
+            accountId: input.workspace.instagramAccountId!,
+            contentItemId: input.contentItem.id,
+            caption: input.contentItem.caption,
+            contentType: input.contentItem.contentType,
+            mediaCount: 1
+          }
+        };
+      }
+    };
+    await processDuePublishJobs({ now, publisher });
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "RETRY_WAIT", attempts: 1 });
+    await processDuePublishJobs({ now: new Date(now.getTime() + 60_000), publisher });
+    expect(calls).toBe(1);
+    await processDuePublishJobs({ now: new Date(now.getTime() + 3 * 60_000), publisher });
+    await processDuePublishJobs({ now: new Date(now.getTime() + 4 * 60_000), publisher });
+    expect(calls).toBe(2);
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "PUBLISHED", attempts: 2 });
+  });
+
+  it("recovers an already-saved publication after worker interruption without publishing again", async () => {
+    const now = new Date("2026-01-08T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-saved-publication", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status: "PROCESSING", attempts: 1, leaseExpiresAt: new Date(now.getTime() - 1) } });
+    await prisma.contentItem.update({ where: { id: target.content.id }, data: { status: "PUBLISHED", instagramPostId: "ig-already-saved", publishedAt: now } });
+    const publish = vi.fn();
+    await processDuePublishJobs({ now, publisher: { publish } });
+    expect(publish).not.toHaveBeenCalled();
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "PUBLISHED", lastErrorCode: null });
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } })).resolves.toMatchObject({
+      status: "PUBLISHED",
+      instagramPostId: "ig-already-saved"
+    });
+  });
+
+  it("stops external work when its publishing lease is no longer valid", async () => {
+    const now = new Date("2026-01-09T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-lost-lease", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    let published = false;
+    const publisher: InstagramPublisher = {
+      async publish(input) {
+        await prisma.publishJob.update({ where: { id: job.id }, data: { leaseExpiresAt: new Date(now.getTime() - 1) } });
+        await input.beforeRequest?.();
+        published = true;
+        throw new Error("Must not reach the provider after losing the lease");
+      }
+    };
+    await processDuePublishJobs({ now, publisher });
+    expect(published).toBe(false);
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+      status: "FAILED",
+      lastErrorCode: "INSTAGRAM_PUBLISH_LEASE_LOST"
+    });
+  });
+
   it("expires temporary offering document analyses", async () => {
     const workspace = await createWorkspace("worker-document-cleanup");
     const analysis = await prisma.offeringDocumentAnalysis.create({

@@ -197,6 +197,7 @@ export function startMaintenanceWorker(
   const timer = setInterval(() => {
     void runNow();
   }, publishingIntervalMs);
+  logger.info("Maintenance worker started", { publishingIntervalMs });
 
   if (input.runImmediately === true) {
     void runNow();

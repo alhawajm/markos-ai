@@ -28,14 +28,22 @@ export interface InstagramPublishingLimit {
 
 export interface InstagramPublisher {
   getPublishingLimit?(input: { workspace: Workspace }): Promise<InstagramPublishingLimit>;
-  publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult>;
+  publish(input: InstagramPublishInput): Promise<InstagramPublishResult>;
+}
+
+export interface InstagramPublishInput {
+  contentItem: ContentItem;
+  mediaAssets: MediaAsset[];
+  workspace: Workspace;
+  /** Renew and verify the worker's existing lease before external work. */
+  beforeRequest?: () => Promise<void>;
 }
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type ProviderUrlResolver = (input: { workspaceId: string; storageKey: string; publicUrl: string }) => Promise<string>;
 
 export class DryRunInstagramPublisher implements InstagramPublisher {
-  async publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult> {
+  async publish(input: InstagramPublishInput): Promise<InstagramPublishResult> {
     return {
       dryRun: true,
       payload: buildPayload(input),
@@ -103,17 +111,25 @@ export class InstagramGraphPublisher implements InstagramPublisher {
     };
   }
 
-  async publish(input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace }): Promise<InstagramPublishResult> {
+  async publish(input: InstagramPublishInput): Promise<InstagramPublishResult> {
     const { accountId, accessToken } = requiredConnection(input.workspace);
     const payload = buildPayload(input);
     const creationId = await this.createPublishContainer(input, accountId, accessToken, payload.caption);
 
-    await this.waitForContainer(creationId, accessToken);
+    await this.waitForContainer(creationId, accessToken, input.beforeRequest);
 
-    const published = await this.post(accountId, "media_publish", accessToken, {
-      creation_id: creationId
-    });
-    const instagramPostId = requiredIdentifier(published.id, "INSTAGRAM_PUBLISH_RESPONSE_INVALID");
+    await input.beforeRequest?.();
+    let instagramPostId: string;
+    try {
+      const published = await this.post(accountId, "media_publish", accessToken, { creation_id: creationId });
+      instagramPostId = requiredIdentifier(published.id, "INSTAGRAM_PUBLISH_RESPONSE_INVALID");
+    } catch (error) {
+      // A timeout/5xx/malformed response can follow a successful publish. A new
+      // job attempt would create another container and could duplicate the post.
+      if (error instanceof InstagramPublishError && (error.retryable || error.code !== "INSTAGRAM_PROVIDER_HTTP_ERROR"))
+        throw new InstagramPublishError("INSTAGRAM_PUBLISH_RESULT_UNKNOWN");
+      throw error;
+    }
 
     return {
       dryRun: false,
@@ -123,12 +139,7 @@ export class InstagramGraphPublisher implements InstagramPublisher {
     };
   }
 
-  private async createPublishContainer(
-    input: { contentItem: ContentItem; mediaAssets: MediaAsset[]; workspace: Workspace },
-    accountId: string,
-    accessToken: string,
-    caption: string
-  ): Promise<string> {
+  private async createPublishContainer(input: InstagramPublishInput, accountId: string, accessToken: string, caption: string): Promise<string> {
     const { contentType } = input.contentItem;
 
     if (contentType === "CAROUSEL") {
@@ -136,16 +147,22 @@ export class InstagramGraphPublisher implements InstagramPublisher {
         throw new InstagramPublishError("INSTAGRAM_CAROUSEL_REQUIRES_TWO_TO_TEN_ITEMS");
       }
       const children: string[] = [];
+      // Validate every slide before leaving partially-created containers behind.
       for (const asset of input.mediaAssets) {
         const reason = validateInstagramImageForPublishing(asset)[0];
         if (reason) throw new InstagramPublishError(reason);
+      }
+      for (const asset of input.mediaAssets) {
         const url = await this.resolveMediaUrl(asset);
+        await input.beforeRequest?.();
         const child = await this.post(accountId, "media", accessToken, {
           image_url: url,
           is_carousel_item: "true"
         });
         children.push(requiredIdentifier(child.id, "INSTAGRAM_CONTAINER_RESPONSE_INVALID"));
       }
+      await Promise.all(children.map((child) => this.waitForContainer(child, accessToken, input.beforeRequest)));
+      await input.beforeRequest?.();
       const parent = await this.post(accountId, "media", accessToken, {
         caption,
         children: children.join(","),
@@ -163,6 +180,7 @@ export class InstagramGraphPublisher implements InstagramPublisher {
       const reason = validateInstagramVideoForPublishing(asset)[0];
       if (reason) throw new InstagramPublishError(reason);
       const providerUrl = await this.resolveMediaUrl(asset);
+      await input.beforeRequest?.();
       const container = await this.post(accountId, "media", accessToken, {
         caption,
         media_type: "REELS",
@@ -176,6 +194,7 @@ export class InstagramGraphPublisher implements InstagramPublisher {
       const reason = asset.mimeType.startsWith("video/") ? validateInstagramVideoForPublishing(asset)[0] : validateInstagramStoryImageForPublishing(asset)[0];
       if (reason) throw new InstagramPublishError(reason);
       const providerUrl = await this.resolveMediaUrl(asset);
+      await input.beforeRequest?.();
       const container = await this.post(accountId, "media", accessToken, {
         media_type: "STORIES",
         ...(asset.mimeType.startsWith("video/") ? { video_url: providerUrl } : { image_url: providerUrl })
@@ -186,6 +205,7 @@ export class InstagramGraphPublisher implements InstagramPublisher {
     const reason = validateInstagramImageForPublishing(asset)[0];
     if (reason) throw new InstagramPublishError(reason);
     const providerUrl = await this.resolveMediaUrl(asset);
+    await input.beforeRequest?.();
     const container = await this.post(accountId, "media", accessToken, {
       caption,
       image_url: providerUrl
@@ -209,8 +229,9 @@ export class InstagramGraphPublisher implements InstagramPublisher {
     return providerUrl;
   }
 
-  private async waitForContainer(creationId: string, accessToken: string): Promise<void> {
+  private async waitForContainer(creationId: string, accessToken: string, beforeRequest?: () => Promise<void>): Promise<void> {
     for (let attempt = 0; attempt < this.pollAttempts; attempt += 1) {
+      await beforeRequest?.();
       const response = await this.get(creationId, undefined, accessToken, {
         fields: "status_code"
       });

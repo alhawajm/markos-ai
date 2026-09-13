@@ -1,5 +1,5 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   InstagramGraphPublisher,
   validateInstagramImageForPublishing,
@@ -190,8 +190,8 @@ describe("InstagramGraphPublisher", () => {
         });
         if (calls.length === 1) return jsonResponse({ id: "child-1" });
         if (calls.length === 2) return jsonResponse({ id: "child-2" });
-        if (calls.length === 3) return jsonResponse({ id: "carousel-parent" });
-        if (calls.length === 4) return jsonResponse({ status_code: "FINISHED" });
+        if (calls.length === 3 || calls.length === 4 || calls.length === 6) return jsonResponse({ status_code: "FINISHED" });
+        if (calls.length === 5) return jsonResponse({ id: "carousel-parent" });
         return jsonResponse({ id: "ig-carousel" });
       },
       pollAttempts: 1,
@@ -208,11 +208,87 @@ describe("InstagramGraphPublisher", () => {
 
     expect(calls[0]?.body).toContain("is_carousel_item=true");
     expect(calls[1]?.body).toContain("is_carousel_item=true");
-    expect(calls[2]?.body).toContain("media_type=CAROUSEL");
-    expect(calls[2]?.body).toContain("children=child-1%2Cchild-2");
-    expect(new URLSearchParams(calls[2]?.body).get("caption")).toBe(completeCaption);
+    expect(calls[2]?.url).toContain("/child-1?fields=status_code");
+    expect(calls[3]?.url).toContain("/child-2?fields=status_code");
+    expect(calls[4]?.body).toContain("media_type=CAROUSEL");
+    expect(calls[4]?.body).toContain("children=child-1%2Cchild-2");
+    expect(new URLSearchParams(calls[4]?.body).get("caption")).toBe(completeCaption);
     expect(new URLSearchParams(calls[0]?.body).has("caption")).toBe(false);
     expect(new URLSearchParams(calls[1]?.body).has("caption")).toBe(false);
+  });
+
+  it("waits for delayed Reel processing and checks lease ownership before final publishing", async () => {
+    const steps: string[] = [];
+    let polls = 0;
+    const publisher = new InstagramGraphPublisher({
+      pollAttempts: 3,
+      pollDelayMs: 0,
+      fetchImpl: async (url, init) => {
+        steps.push(init?.method === "GET" ? "poll" : String(url).endsWith("/media_publish") ? "publish" : "create");
+        if (init?.method === "GET") return jsonResponse({ status_code: ++polls < 3 ? "IN_PROGRESS" : "FINISHED" });
+        return jsonResponse({ id: "reel-id" });
+      }
+    });
+    await publisher.publish({
+      contentItem: contentItem({ contentType: "REEL" }),
+      mediaAssets: [videoAsset({})],
+      workspace: workspace(),
+      beforeRequest: async () => {
+        steps.push("lease");
+      }
+    });
+    expect(steps).toEqual(["lease", "create", "lease", "poll", "lease", "poll", "lease", "poll", "lease", "publish"]);
+  });
+
+  it("does not create the carousel parent if a child fails processing", async () => {
+    const bodies: string[] = [];
+    const publisher = new InstagramGraphPublisher({
+      pollAttempts: 1,
+      pollDelayMs: 0,
+      fetchImpl: async (_url, init) => {
+        if (init?.method === "GET") return jsonResponse({ status_code: "ERROR" });
+        bodies.push(String(init?.body));
+        return jsonResponse({ id: `child-${bodies.length}` });
+      }
+    });
+    await expect(
+      publisher.publish({
+        contentItem: contentItem({ contentType: "CAROUSEL" }),
+        mediaAssets: [mediaAsset({ id: "a" }), mediaAsset({ id: "b" })],
+        workspace: workspace()
+      })
+    ).rejects.toThrow("INSTAGRAM_CONTAINER_PROCESSING_FAILED");
+    expect(bodies).toHaveLength(2);
+    expect(bodies.every((body) => new URLSearchParams(body).get("is_carousel_item") === "true")).toBe(true);
+  });
+
+  it.each(["network", "server", "invalid"])("does not automatically retry an ambiguous final publish response: %s", async (failure) => {
+    let published = 0;
+    const publisher = new InstagramGraphPublisher({
+      pollAttempts: 1,
+      pollDelayMs: 0,
+      fetchImpl: async (url, init) => {
+        if (init?.method === "GET") return jsonResponse({ status_code: "FINISHED" });
+        if (String(url).endsWith("/media_publish")) {
+          published += 1;
+          if (failure === "network") throw new Error("connection lost after publishing");
+          if (failure === "server") return new Response(JSON.stringify({ error: { code: 2 } }), { status: 503 });
+          return jsonResponse({});
+        }
+        return jsonResponse({ id: "container" });
+      }
+    });
+    await expect(
+      publisher.publish({ contentItem: contentItem({ contentType: "REEL" }), mediaAssets: [videoAsset({})], workspace: workspace() })
+    ).rejects.toMatchObject({ code: "INSTAGRAM_PUBLISH_RESULT_UNKNOWN", retryable: false });
+    expect(published).toBe(1);
+  });
+
+  it("keeps a pre-publication network failure retryable", async () => {
+    const publisher = new InstagramGraphPublisher({ fetchImpl: vi.fn().mockRejectedValue(new Error("unavailable")) });
+    await expect(
+      publisher.publish({ contentItem: contentItem({ contentType: "REEL" }), mediaAssets: [videoAsset({})], workspace: workspace() })
+    ).rejects.toMatchObject({ code: "INSTAGRAM_PROVIDER_NETWORK_ERROR", retryable: true });
   });
 
   it("returns a sanitized code when a container finishes with an error status", async () => {

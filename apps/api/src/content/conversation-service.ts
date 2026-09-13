@@ -202,6 +202,15 @@ export async function processConversationRuns(workspaceId?: string) {
     const changes = result.changes;
     if ((changes?.carousel && current.contentType !== "CAROUSEL") || (changes?.reelScript && current.contentType !== "REEL"))
       throw new ConversationError("AI_OUTPUT_INVALID", "Unexpected format change.");
+    // Video generation consumes visualDirection, not the structured script.
+    // Keep script-only provider edits usable without introducing another field.
+    if (changes?.reelScript && !changes.visualDirection?.trim()) {
+      changes.visualDirection = [changes.reelScript.hook, ...changes.reelScript.beats].join("\n\n");
+      if (changes.visualDirection.length > 2000)
+        throw new ConversationError("AI_OUTPUT_INVALID", "The Reel script needs a video direction of at most 2000 characters.");
+    }
+    const data = Object.fromEntries(Object.entries(changes ?? {}).filter(([, value]) => value !== null));
+    if (changes && !Object.keys(data).length) throw new ConversationError("AI_OUTPUT_INVALID", "An edit response must include a draft change.");
     await prisma.$transaction(async (tx) => {
       const owned = await tx.conversationRun.updateMany({
         where: { id: candidate.id, status: "RUNNING", leaseExpiresAt: { gt: new Date() } },
@@ -211,7 +220,6 @@ export async function processConversationRuns(workspaceId?: string) {
       if (!(await canContinue(candidate.workspaceId, candidate.userId, tx))) throw new ConversationError("CONVERSATION_ACCESS_CHANGED", "Access changed.");
       let conflict = false;
       let revision = current.revision;
-      const data = Object.fromEntries(Object.entries(changes ?? {}).filter(([, value]) => value !== null));
       if (Object.keys(data).length) {
         const applied = await tx.contentItem.updateMany({
           where: { id: current.id, workspaceId: candidate.workspaceId, revision: current.revision, deletedAt: null, status: { in: ["DRAFT", "IN_REVIEW"] } },
@@ -236,7 +244,9 @@ export async function processConversationRuns(workspaceId?: string) {
               (changes?.caption == null
                 ? ""
                 : `\n\n${candidate.locale === "ar" ? "النص المقترح الذي لم يُحفظ:" : "Proposed caption, not saved:"}\n${changes.caption}`)
-            : result.reply
+            : changes
+              ? appliedChangesText(candidate.locale, Object.keys(data))
+              : result.reply
         }
       });
       if (!conflict) await tx.contentConversation.update({ where: { id: conversation.id }, data: { summary: result.summary } });
@@ -263,4 +273,16 @@ export async function processConversationRuns(workspaceId?: string) {
     // Do not automatically repeat an ambiguous provider request or an application write.
     await failRun(candidate.id, error instanceof AiServiceRequestError || error instanceof ConversationError ? error.code : "CONVERSATION_FAILED");
   }
+}
+
+function appliedChangesText(locale: string, fields: string[]): string {
+  const labels: Record<string, [string, string]> = {
+    caption: ["caption", "النص"],
+    brief: ["brief", "الموجز"],
+    visualDirection: ["visual direction", "التوجيه البصري"],
+    carousel: ["carousel plan", "خطة المنشور المتعدد"],
+    reelScript: ["Reel script", "سيناريو الريل"]
+  };
+  const names = fields.map((field) => labels[field]?.[locale === "ar" ? 1 : 0] ?? field).join(locale === "ar" ? "، " : ", ");
+  return locale === "ar" ? `تم تحديث وحفظ ${names} في المسودة.` : `Updated and saved ${names} in the draft.`;
 }

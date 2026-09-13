@@ -273,7 +273,7 @@ export async function publishDueContentForAllWorkspaces(
 export async function publishContentItem(
   workspaceId: string,
   contentItemId: string,
-  options: { now?: Date; publisher?: InstagramPublisher } = {}
+  options: { now?: Date; publisher?: InstagramPublisher; beforeRequest?: () => Promise<void> } = {}
 ): Promise<PublishAttemptRecord> {
   const guardKey = `${workspaceId}:${contentItemId}`;
 
@@ -299,7 +299,7 @@ export async function publishContentItem(
 async function executePublishContentItem(
   workspaceId: string,
   contentItemId: string,
-  options: { now?: Date; publisher?: InstagramPublisher } = {}
+  options: { now?: Date; publisher?: InstagramPublisher; beforeRequest?: () => Promise<void> } = {}
 ): Promise<PublishAttemptRecord> {
   const now = options.now ?? new Date();
   const publisher = options.publisher ?? createInstagramPublisher();
@@ -325,17 +325,19 @@ async function executePublishContentItem(
   }
   const workspace = await withSecureInstagramCredential(storedWorkspace);
 
-  const mediaAssets = await prisma.mediaAsset.findMany({
+  const storedMedia = await prisma.mediaAsset.findMany({
     where: {
       id: {
         in: contentItem.mediaIds
       },
       workspaceId,
       deletedAt: null
-    },
-    orderBy: {
-      createdAt: "asc"
     }
+  });
+  const mediaById = new Map(storedMedia.map((asset) => [asset.id, asset]));
+  const mediaAssets = contentItem.mediaIds.flatMap((id) => {
+    const asset = mediaById.get(id);
+    return asset ? [asset] : [];
   });
   const reasons = validatePublishAttempt({
     contentItem,
@@ -367,7 +369,8 @@ async function executePublishContentItem(
           contentItemId,
           dryRun: false,
           reasons: [error.message],
-          status: "BLOCKED"
+          status: "BLOCKED",
+          retryable: error.retryable
         };
       }
 
@@ -417,7 +420,7 @@ async function executePublishContentItem(
       }
     }
 
-    result = await publisher.publish({ contentItem, mediaAssets, workspace });
+    result = await publisher.publish({ contentItem, mediaAssets, workspace, ...(options.beforeRequest ? { beforeRequest: options.beforeRequest } : {}) });
   } catch (error) {
     if (publishUsageReserved) {
       await refundWorkspaceUsage({ workspaceId, metric: "POST_PUBLISH", now });
@@ -452,17 +455,22 @@ async function executePublishContentItem(
   }
 
   if (!result.dryRun && result.instagramPostId) {
-    await prisma.contentItem.update({
-      where: {
-        id: contentItem.id
-      },
-      data: {
-        failureReason: null,
-        instagramPostId: result.instagramPostId,
-        publishedAt: now,
-        status: "PUBLISHED"
-      }
-    });
+    try {
+      await prisma.contentItem.update({
+        where: {
+          id: contentItem.id
+        },
+        data: {
+          failureReason: null,
+          instagramPostId: result.instagramPostId,
+          publishedAt: now,
+          status: "PUBLISHED"
+        }
+      });
+    } catch {
+      // The external publication succeeded. Do not retry it if saving the ID fails.
+      return { contentItemId, dryRun: false, reasons: ["INSTAGRAM_PUBLISH_RESULT_UNKNOWN"], status: "FAILED", retryable: false };
+    }
   }
 
   return {
