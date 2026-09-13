@@ -11,6 +11,49 @@ import { env } from "../src/config/env";
 import { processDuePublishJobs, queuePublishNow } from "../src/publishing/publish-job-service";
 
 describe("maintenance worker", () => {
+  it("claims simultaneous publishes from three workspaces once even when workers compete", async () => {
+    const now = new Date("2026-01-04T12:00:00Z");
+    const targets = await Promise.all(["a", "b", "c"].map((suffix) => createPublishableWorkspace(`worker-three-${suffix}`, now)));
+    await Promise.all(targets.map(({ workspace, content }) => queuePublishNow(workspace.id, content.id, now)));
+    const published: string[] = [];
+    const publisher: InstagramPublisher = {
+      async publish(input) {
+        const target = targets.find(({ content }) => content.id === input.contentItem.id);
+        expect(target).toBeDefined();
+        expect(input.workspace.id).toBe(target!.workspace.id);
+        expect(input.mediaAssets.map((asset) => asset.id)).toEqual([target!.media.id]);
+        published.push(input.contentItem.id);
+        await input.beforeRequest?.();
+        return {
+          dryRun: false,
+          instagramPostId: `ig-${input.contentItem.id}`,
+          payload: {
+            accountId: input.workspace.instagramAccountId ?? "",
+            caption: input.contentItem.caption ?? "",
+            contentItemId: input.contentItem.id,
+            contentType: input.contentItem.contentType,
+            mediaCount: input.mediaAssets.length
+          },
+          status: "PUBLISHED"
+        };
+      }
+    };
+    await Promise.all([1, 2, 3].map(() => processDuePublishJobs({ now, publisher })));
+    // A losing compare-and-swap can end a tick; the next tick must finish the queue.
+    await processDuePublishJobs({ now, publisher });
+    expect(published.sort()).toEqual(targets.map(({ content }) => content.id).sort());
+    for (const { workspace, content } of targets) {
+      await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).resolves.toMatchObject({
+        workspaceId: workspace.id,
+        status: "PUBLISHED",
+        instagramPostId: `ig-${content.id}`
+      });
+      const job = await prisma.publishJob.findFirstOrThrow({ where: { contentItemId: content.id } });
+      expect(job).toMatchObject({ workspaceId: workspace.id, status: "PUBLISHED", attempts: 1 });
+      expect(await prisma.publishAttempt.count({ where: { publishJobId: job.id } })).toBe(1);
+    }
+  }, 60_000);
+
   it("publishes a queued Reel only after processing finishes and persists its final media ID", async () => {
     const now = new Date("2026-01-03T12:00:00Z");
     const target = await createPublishableWorkspace("worker-publish-now-reel", now);

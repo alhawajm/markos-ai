@@ -14,6 +14,20 @@ This is the staging setup for MARKOS's durable publishing and video-generation w
 
 The worker process starts immediately, runs a maintenance tick on boot, and then scans for due scheduled content, Publish now jobs, and video-generation jobs every minute by default. Its other current jobs retain their source defaults: analytics email every 24 hours, analytics sync every 6 hours, token refresh every hour, and usage-period maintenance every hour.
 
+## Focused worker role split
+
+The worker now accepts `WORKER_ROLE=all|delivery|maintenance`. The default is `all`, preserving the existing single-service setup. Both roles use the same Dockerfile, entrypoint, shared configuration parser and database; this is a task split, not a new queue or AI-agent framework.
+
+| Role | Tasks |
+| --- | --- |
+| `delivery` | Scheduled/Publish now jobs and video generation jobs |
+| `maintenance` | Instagram token refresh, Insights synchronization, temporary document cleanup, monthly analytics email task and usage-period maintenance |
+| `all` | All of the above; compatibility mode for one service |
+
+To activate the split after this code is deployed, run one instance of each role. Stop and drain the existing `all` worker before starting the two role-specific services; do not leave an `all` worker alongside them. Keep the existing minute interval and each maintenance task's current cadence. Confirm the `role` in each startup log and task names in subsequent logs. Deployment shutdown must allow the application's 30-second drain to finish. No live configuration has been changed by this implementation.
+
+The delivery process no longer waits for maintenance Insights or cleanup. Publishing and video still execute sequentially within delivery, and Meta processing time remains external; this change does not promise publication within one minute. Default `all` is also the rollback configuration after both split workers have stopped and drained. Review uncertain in-flight publishing outcomes before retrying, as described below.
+
 ## 1. Create the service
 
 In the staging environment:

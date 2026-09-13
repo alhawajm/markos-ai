@@ -126,6 +126,7 @@ export async function runMaintenanceWorkerTick(
 
 export function startMaintenanceWorker(
   input: {
+    role?: "all" | "delivery" | "maintenance";
     analyticsEmailIntervalMs?: number;
     analyticsEmailProvider?: AnalyticsEmailProvider;
     analyticsProvider?: InstagramAnalyticsProvider;
@@ -139,6 +140,9 @@ export function startMaintenanceWorker(
   } = {}
 ): MaintenanceWorkerHandle {
   const logger = input.logger ?? workerLogger;
+  const role = input.role ?? env.WORKER_ROLE;
+  const delivery = role !== "maintenance";
+  const maintenance = role !== "delivery";
   const publishingIntervalMs = input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
   const analyticsEmailIntervalMs = input.analyticsEmailIntervalMs ?? env.WORKER_ANALYTICS_EMAIL_INTERVAL_MS;
   const analyticsSyncIntervalMs = env.WORKER_ANALYTICS_SYNC_INTERVAL_MS;
@@ -166,10 +170,10 @@ export function startMaintenanceWorker(
     });
     const now = new Date();
     const tickStarted = performance.now();
-    const shouldEmailAnalytics = now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
-    const shouldRefreshTokens = now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
-    const shouldSyncAnalytics = now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
-    const shouldResetUsage = now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
+    const shouldEmailAnalytics = maintenance && now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
+    const shouldRefreshTokens = maintenance && now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
+    const shouldSyncAnalytics = maintenance && now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
+    const shouldResetUsage = maintenance && now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
 
     try {
       const result = await runMaintenanceWorkerTick({
@@ -178,10 +182,11 @@ export function startMaintenanceWorker(
         logger,
         shouldStop: () => stopping,
         runAnalyticsSync: shouldSyncAnalytics,
-        runPublishing: true,
+        runPublishing: delivery,
+        runDocumentCleanup: maintenance,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
-        runVideoGeneration: true,
+        runVideoGeneration: delivery,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
         ...(input.analyticsEmailProvider === undefined ? {} : { analyticsEmailProvider: input.analyticsEmailProvider }),
         ...(input.analyticsProvider === undefined ? {} : { analyticsProvider: input.analyticsProvider }),
@@ -218,7 +223,7 @@ export function startMaintenanceWorker(
   const timer = setInterval(() => {
     void runNow();
   }, publishingIntervalMs);
-  logger.info("Maintenance worker started", { publishingIntervalMs });
+  logger.info("Maintenance worker started", { role, publishingIntervalMs });
 
   if (input.runImmediately === true) {
     void runNow();

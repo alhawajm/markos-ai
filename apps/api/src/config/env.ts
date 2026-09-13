@@ -86,6 +86,7 @@ export const envSchema = z
     INSTAGRAM_PUBLISH_MODE: z.enum(["dry_run", "live"]).default("dry_run"),
     INSTAGRAM_CONTAINER_POLL_ATTEMPTS: z.coerce.number().int().positive().default(6),
     INSTAGRAM_CONTAINER_POLL_DELAY_MS: z.coerce.number().int().nonnegative().default(60_000),
+    WORKER_ROLE: z.enum(["all", "delivery", "maintenance"]).default("all"),
     WORKER_PUBLISHING_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     WORKER_ANALYTICS_EMAIL_INTERVAL_MS: z.coerce
       .number()
