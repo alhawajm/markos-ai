@@ -42,17 +42,17 @@ export function useMeteredActionState(input: MeteredActionInput): MeteredUsageSt
 export function MeteredActionNotice({ locale, usage }: { locale: Locale; usage: MeteredUsageState }) {
   if (usage.tone === "ok") {
     return (
-      <div className="rounded-xl border border-[#E8ECF2] bg-canvas px-3 py-2 text-xs text-muted">
+      <div className="rounded-xl border border-[var(--border)] bg-canvas px-3 py-2 text-xs text-muted">
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 font-semibold text-navy">
-            <Sparkles size={13} className="text-accent" />
+            <Sparkles size={13} className="text-[var(--link)]" />
             {usage.label}
           </span>
           <span className="font-bold text-muted">
             {usage.used.toLocaleString()} / {usage.total.toLocaleString()}
           </span>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
           <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(usage.percent, 100)}%` }} />
         </div>
       </div>
@@ -66,8 +66,8 @@ export function MeteredActionNotice({ locale, usage }: { locale: Locale; usage: 
     <div
       className={
         blocked
-          ? "rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5 text-xs text-accent"
-          : "rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"
+          ? "rounded-xl border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] bg-[var(--accent-soft)] px-3 py-2.5 text-xs text-[var(--link)]"
+          : "rounded-xl border border-[var(--warning)] bg-[var(--warning-soft)] px-3 py-2.5 text-xs text-[var(--warning)]"
       }
     >
       <div className="flex items-start gap-2">

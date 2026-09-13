@@ -29,6 +29,7 @@ import {
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
 import type { AuthSession, Locale } from "@markos/shared-types";
 import { loginSchema, registerSchema } from "@markos/validation";
+import { ThemeSelect } from "../../_components/theme-control";
 import { getBrowserApiBaseUrl } from "./api-base-url";
 import { refreshBrowserSession, setBrowserSession, useMarkosSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
@@ -193,7 +194,7 @@ const copyByLocale = {
       body: "Enter the email you use for MARKOS.",
       action: "Send reset link",
       emailRequired: "Enter a valid email address.",
-      unavailable: "Password recovery is not connected yet. Please use an existing password for this presentation.",
+      unavailable: "Password recovery is not available yet. Sign in with your current password.",
       sentTitle: "Check your email",
       sentBody: "If an account exists for this address, a password reset link will be sent.",
       sendAgain: "Send again",
@@ -205,7 +206,7 @@ const copyByLocale = {
       action: "Update password",
       mismatch: "The passwords do not match.",
       passwordRequired: "Use a password with at least 12 characters.",
-      unavailable: "Password reset is not connected yet. Request support before changing a password.",
+      unavailable: "Password reset is not available yet. You can still sign in with your current password.",
       successTitle: "Password updated",
       successBody: "You can now log in with your new password.",
       login: "Continue to login",
@@ -369,7 +370,7 @@ const copyByLocale = {
       body: "أدخل البريد الإلكتروني الذي تستخدمه مع MARKOS.",
       action: "إرسال رابط الاستعادة",
       emailRequired: "أدخل بريدًا إلكترونيًا صالحًا.",
-      unavailable: "استعادة كلمة المرور غير متصلة بعد. استخدم كلمة مرور حالية لهذا العرض.",
+      unavailable: "استعادة كلمة المرور غير متاحة حالياً. سجّل الدخول بكلمة مرورك الحالية.",
       sentTitle: "تحقق من بريدك الإلكتروني",
       sentBody: "إذا كان هناك حساب مرتبط بهذا العنوان، فسيتم إرسال رابط استعادة كلمة المرور.",
       sendAgain: "إرسال مرة أخرى",
@@ -381,7 +382,7 @@ const copyByLocale = {
       action: "تحديث كلمة المرور",
       mismatch: "كلمتا المرور غير متطابقتين.",
       passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل.",
-      unavailable: "إعادة تعيين كلمة المرور غير متصلة بعد. تواصل مع الدعم قبل تغيير كلمة المرور.",
+      unavailable: "إعادة تعيين كلمة المرور غير متاحة حالياً. يمكنك تسجيل الدخول بكلمة مرورك الحالية.",
       successTitle: "تم تحديث كلمة المرور",
       successBody: "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.",
       login: "المتابعة إلى تسجيل الدخول",
@@ -441,6 +442,7 @@ export function AuthPage({
   const [forgotSent, setForgotSent] = useState(false);
   const [fullName, setFullName] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
+  const [isInteractive, setInteractive] = useState(false);
   const [localVerificationToken, setLocalVerificationToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
@@ -451,6 +453,8 @@ export function AuthPage({
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => setInteractive(true), []);
 
   useEffect(() => {
     if (mode !== "login") return;
@@ -505,11 +509,6 @@ export function AuthPage({
     setNotice({ tone: "error", text: copy.legal.required });
     legalCheckboxRef.current?.focus();
     return false;
-  }
-
-  function handleProvider(provider: "Apple" | "Google") {
-    if (!requireLegalAcceptance()) return;
-    setNotice({ tone: "info", text: copy.provider.unavailable(provider) });
   }
 
   async function submitSignup(event: FormEvent<HTMLFormElement>) {
@@ -702,6 +701,7 @@ export function AuthPage({
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المصادقة" : "Authentication navigation"}>
+          <ThemeSelect locale={locale} />
           {mode === "login" ? null : (
             <a className={styles.backLink} href={landingHref}>
               <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
@@ -716,49 +716,51 @@ export function AuthPage({
         {mode === "login" ? (
           <>
             <section className={`${styles.authCard} ${styles.loginCard}`} data-login-card>
-              <AuthHeading body={copy.login.body} eyebrow={copy.login.eyebrow} title={copy.login.title} />
+              <AuthHeading title={copy.login.title} />
               <form aria-busy={isSubmitting} className={styles.loginForm} noValidate onSubmit={(event) => void submitLogin(event)}>
-                <div className={styles.formStack}>
-                  <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                  <PasswordField
-                    autoComplete="current-password"
-                    copy={copy.fields}
-                    onChange={setPassword}
-                    password={password}
-                    placeholder={copy.fields.passwordPlaceholder}
-                    revealVariant="text"
-                    show={showPassword}
-                    toggle={() => setShowPassword((current) => !current)}
-                  />
-                  {mfaRequired ? (
-                    <Field id="mfa-code" label={copy.fields.mfaCode}>
-                      <span className={styles.inputWrap}>
-                        <ShieldCheck aria-hidden="true" size={19} />
-                        <input
-                          autoComplete="one-time-code"
-                          id="mfa-code"
-                          inputMode="numeric"
-                          maxLength={6}
-                          onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                          placeholder={copy.fields.mfaPlaceholder}
-                          value={mfaCode}
-                        />
-                      </span>
-                    </Field>
-                  ) : null}
-                </div>
-                <div className={styles.forgotRow}>
-                  <a className={styles.inlineAction} href={forgotHref}>
-                    {copy.login.forgot}
-                  </a>
-                </div>
-                <NoticeMessage notice={notice} />
-                <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
-                  {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
-                </button>
+                <fieldset className="contents" disabled={!isInteractive}>
+                  <div className={styles.formStack}>
+                    <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                    <PasswordField
+                      autoComplete="current-password"
+                      copy={copy.fields}
+                      onChange={setPassword}
+                      password={password}
+                      placeholder={copy.fields.passwordPlaceholder}
+                      revealVariant="text"
+                      show={showPassword}
+                      toggle={() => setShowPassword((current) => !current)}
+                    />
+                    {mfaRequired ? (
+                      <Field id="mfa-code" label={copy.fields.mfaCode}>
+                        <span className={styles.inputWrap}>
+                          <ShieldCheck aria-hidden="true" size={19} />
+                          <input
+                            autoComplete="one-time-code"
+                            id="mfa-code"
+                            inputMode="numeric"
+                            maxLength={6}
+                            onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                            placeholder={copy.fields.mfaPlaceholder}
+                            value={mfaCode}
+                          />
+                        </span>
+                      </Field>
+                    ) : null}
+                  </div>
+                  <div className={styles.forgotRow}>
+                    <a className={styles.inlineAction} href={forgotHref}>
+                      {copy.login.forgot}
+                    </a>
+                  </div>
+                  <NoticeMessage notice={notice} />
+                  <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                    {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
+                  </button>
+                </fieldset>
               </form>
               <Divider label={copy.provider.compactDivider} />
-              <ProviderButtons compact copy={copy.provider} onProvider={handleProvider} />
+              <ProviderButtons compact copy={copy.provider} />
               <AuthSwitch action={copy.login.switchAction} href={signupHref} prefix={copy.login.switchPrefix} />
             </section>
             <LoginInsightsPreview locale={locale} />
@@ -769,43 +771,45 @@ export function AuthPage({
               {mode === "signup" ? (
                 <>
                   <AuthHeading body={copy.signup.body} title={copy.signup.title} />
-                  <ProviderButtons copy={copy.provider} onProvider={handleProvider} />
+                  <ProviderButtons copy={copy.provider} />
                   <Divider label={copy.provider.divider} />
                   <form aria-busy={isSubmitting} noValidate onSubmit={(event) => void submitSignup(event)}>
-                    <div className={styles.formStack}>
-                      <Field id="full-name" label={copy.fields.fullName}>
-                        <input
-                          autoComplete="name"
-                          id="full-name"
-                          onChange={(event) => setFullName(event.target.value)}
-                          placeholder={copy.fields.fullNamePlaceholder}
-                          type="text"
-                          value={fullName}
+                    <fieldset className="contents" disabled={!isInteractive}>
+                      <div className={styles.formStack}>
+                        <Field id="full-name" label={copy.fields.fullName}>
+                          <input
+                            autoComplete="name"
+                            id="full-name"
+                            onChange={(event) => setFullName(event.target.value)}
+                            placeholder={copy.fields.fullNamePlaceholder}
+                            type="text"
+                            value={fullName}
+                          />
+                        </Field>
+                        <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                        <PasswordField
+                          copy={copy.fields}
+                          onChange={setPassword}
+                          password={password}
+                          requirement
+                          show={showPassword}
+                          toggle={() => setShowPassword((current) => !current)}
                         />
-                      </Field>
-                      <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                      <PasswordField
-                        copy={copy.fields}
-                        onChange={setPassword}
-                        password={password}
-                        requirement
-                        show={showPassword}
-                        toggle={() => setShowPassword((current) => !current)}
+                      </div>
+                      <LegalConsent
+                        accepted={acceptedTerms}
+                        checkboxRef={legalCheckboxRef}
+                        copy={copy.legal}
+                        onChange={setAcceptedTerms}
+                        privacyHref={privacyHref}
+                        termsHref={termsHref}
                       />
-                    </div>
-                    <LegalConsent
-                      accepted={acceptedTerms}
-                      checkboxRef={legalCheckboxRef}
-                      copy={copy.legal}
-                      onChange={setAcceptedTerms}
-                      privacyHref={privacyHref}
-                      termsHref={termsHref}
-                    />
-                    <NoticeMessage notice={notice} />
-                    <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
-                      {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
-                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                    </button>
+                      <NoticeMessage notice={notice} />
+                      <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                        {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
+                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                      </button>
+                    </fieldset>
                   </form>
                   <AuthSwitch action={copy.signup.switchAction} href={loginHref} prefix={copy.signup.switchPrefix} />
                 </>
@@ -827,16 +831,18 @@ export function AuthPage({
                   </StatusPanel>
                 ) : (
                   <>
-                    <AuthHeading body={copy.forgot.body} icon={KeyRound} title={copy.forgot.title} />
+                    <AuthHeading body={copy.forgot.unavailable} icon={KeyRound} title={copy.forgot.title} />
                     <form noValidate onSubmit={submitForgot}>
-                      <div className={styles.formStack}>
-                        <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                      </div>
-                      <NoticeMessage notice={notice} />
-                      <button className={styles.primaryButton} type="submit">
-                        {copy.forgot.action}
-                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                      </button>
+                      <fieldset className="contents" disabled={!isInteractive}>
+                        <div className={styles.formStack}>
+                          <EmailField copy={copy.fields} email={email} onChange={setEmail} />
+                        </div>
+                        <NoticeMessage notice={notice} />
+                        <button className={styles.primaryButton} type="submit">
+                          {copy.forgot.action}
+                          <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                        </button>
+                      </fieldset>
                     </form>
                     <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
                       {copy.forgot.back}
@@ -864,34 +870,36 @@ export function AuthPage({
                   </StatusPanel>
                 ) : (
                   <>
-                    <AuthHeading body={copy.reset.body} icon={Lock} title={copy.reset.title} />
+                    <AuthHeading body={copy.reset.unavailable} icon={Lock} title={copy.reset.title} />
                     <form noValidate onSubmit={submitReset}>
-                      <div className={styles.formStack}>
-                        <PasswordField
-                          copy={copy.fields}
-                          id="new-password"
-                          label={copy.fields.newPassword}
-                          onChange={setPassword}
-                          password={password}
-                          requirement
-                          show={showPassword}
-                          toggle={() => setShowPassword((current) => !current)}
-                        />
-                        <PasswordField
-                          copy={copy.fields}
-                          id="confirm-password"
-                          label={copy.fields.confirmPassword}
-                          onChange={setConfirmPassword}
-                          password={confirmPassword}
-                          show={showConfirmPassword}
-                          toggle={() => setShowConfirmPassword((current) => !current)}
-                        />
-                      </div>
-                      <NoticeMessage notice={notice} />
-                      <button className={styles.primaryButton} type="submit">
-                        {copy.reset.action}
-                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                      </button>
+                      <fieldset className="contents" disabled={!isInteractive}>
+                        <div className={styles.formStack}>
+                          <PasswordField
+                            copy={copy.fields}
+                            id="new-password"
+                            label={copy.fields.newPassword}
+                            onChange={setPassword}
+                            password={password}
+                            requirement
+                            show={showPassword}
+                            toggle={() => setShowPassword((current) => !current)}
+                          />
+                          <PasswordField
+                            copy={copy.fields}
+                            id="confirm-password"
+                            label={copy.fields.confirmPassword}
+                            onChange={setConfirmPassword}
+                            password={confirmPassword}
+                            show={showConfirmPassword}
+                            toggle={() => setShowConfirmPassword((current) => !current)}
+                          />
+                        </div>
+                        <NoticeMessage notice={notice} />
+                        <button className={styles.primaryButton} type="submit">
+                          {copy.reset.action}
+                          <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                        </button>
+                      </fieldset>
                     </form>
                   </>
                 )
@@ -1068,15 +1076,15 @@ function LoginInsightsPreview({ locale }: { locale: Locale }) {
           <svg aria-label={isArabic ? "مخطط وصول صاعد" : "Rising reach chart"} role="img" viewBox="0 0 420 190">
             <defs>
               <linearGradient id="auth-reach-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#21bfae" stopOpacity=".34" />
-                <stop offset="100%" stopColor="#21bfae" stopOpacity="0" />
+                <stop offset="0%" stopColor="var(--secondary)" stopOpacity=".34" />
+                <stop offset="100%" stopColor="var(--secondary)" stopOpacity="0" />
               </linearGradient>
             </defs>
             <path d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24 L420 190 L0 190 Z" fill="url(#auth-reach-fill)" />
             <path
               d="M0 154 C50 142 76 160 116 124 S174 128 210 92 S280 108 318 61 S380 70 420 24"
               fill="none"
-              stroke="#078c7d"
+              stroke="var(--sunlit-aqua-dark)"
               strokeLinecap="round"
               strokeWidth="5"
             />
@@ -1136,7 +1144,7 @@ function AuthLanguageSelector({ arabicHref, englishHref, locale }: { arabicHref:
   );
 }
 
-function AuthHeading({ body, eyebrow, icon: Icon, title }: { body: string; eyebrow?: string; icon?: LucideIcon; title: string }) {
+function AuthHeading({ body, icon: Icon, title }: { body?: string; icon?: LucideIcon; title: string }) {
   return (
     <div className={styles.authHeading}>
       {Icon ? (
@@ -1144,34 +1152,28 @@ function AuthHeading({ body, eyebrow, icon: Icon, title }: { body: string; eyebr
           <Icon size={22} />
         </span>
       ) : null}
-      {eyebrow ? <p className={styles.authEyebrow}>{eyebrow}</p> : null}
       <h1>{title}</h1>
-      <p>{body}</p>
+      {body ? <p>{body}</p> : null}
     </div>
   );
 }
 
-function ProviderButtons({
-  compact = false,
-  copy,
-  onProvider
-}: {
-  compact?: boolean;
-  copy: (typeof copyByLocale)[Locale]["provider"];
-  onProvider: (provider: "Apple" | "Google") => void;
-}) {
+function ProviderButtons({ compact = false, copy }: { compact?: boolean; copy: (typeof copyByLocale)[Locale]["provider"] }) {
   return (
-    <div className={`${styles.providerStack} ${compact ? styles.providerCompact : ""}`}>
-      <button className={styles.providerButton} onClick={() => onProvider("Google")} type="button">
-        <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/auth/providers/google-signin.svg" unoptimized width={32} />
-        {compact ? copy.compactGoogle : copy.google}
-      </button>
-      <button className={styles.providerButton} onClick={() => onProvider("Apple")} type="button">
-        <span className={styles.appleLogoFrame} aria-hidden="true">
-          <Image alt="" className={styles.appleLogo} height={23} src="/auth/providers/apple-signin.png" unoptimized width={18} />
-        </span>
-        {compact ? copy.compactApple : copy.apple}
-      </button>
+    <div>
+      <div className={`${styles.providerStack} ${compact ? styles.providerCompact : ""}`}>
+        <button className={styles.providerButton} disabled title={copy.unavailable("Google")} type="button">
+          <Image alt="" aria-hidden="true" className={styles.googleLogo} height={32} src="/auth/providers/google-signin.svg" unoptimized width={32} />
+          {compact ? copy.compactGoogle : copy.google}
+        </button>
+        <button className={styles.providerButton} disabled title={copy.unavailable("Apple")} type="button">
+          <span className={styles.appleLogoFrame} aria-hidden="true">
+            <Image alt="" className={styles.appleLogo} height={23} src="/auth/providers/apple-signin.png" unoptimized width={18} />
+          </span>
+          {compact ? copy.compactApple : copy.apple}
+        </button>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">{copy.unavailable("Google / Apple")}</p>
     </div>
   );
 }

@@ -1,22 +1,21 @@
 /**
- * Legacy production UI tokens.
- *
- * Keep these exports until the currently mounted production surfaces have
- * migrated. New Sunlit work must use the scoped variables in
- * `apps/web/app/sunlit-theme.css` instead of extending this palette.
+ * Semantic UI tokens. The exact light and dark palettes live in
+ * `apps/web/app/theme-tokens.css`; these exports follow the selected theme.
  */
 export const colors = {
-  navy: "#1A1A2E",
-  midnavy: "#0F3460",
-  accent: "#E94560",
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#D8DEE9",
-  text: "#1A1A2E",
-  muted: "#5A6072",
-  success: "#22C55E",
-  warning: "#F59E0B",
-  error: "#EF4444"
+  navy: "var(--text)",
+  midnavy: "var(--text-soft)",
+  primary: "var(--primary)",
+  secondary: "var(--secondary)",
+  accent: "var(--accent)",
+  bg: "var(--background)",
+  card: "var(--surface)",
+  border: "var(--border)",
+  text: "var(--text)",
+  muted: "var(--muted)",
+  success: "var(--success)",
+  warning: "var(--warning)",
+  error: "var(--danger)"
 } as const;
 
 export const spacing = {
@@ -38,11 +37,11 @@ export const radii = {
 } as const;
 
 export const typography = {
-  fontFamily: "Inter",
-  displayFamily: "Inter",
+  fontFamily: "var(--font-ui)",
+  displayFamily: "var(--font-ui)",
   sizes: {
-    caption: 12,
-    body: 14,
+    caption: 13,
+    body: 16,
     bodyLg: 16,
     h3: 18,
     h2: 22,

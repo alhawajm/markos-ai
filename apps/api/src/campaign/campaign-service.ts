@@ -1,11 +1,12 @@
 import { Prisma, type CampaignStatus } from "@prisma/client";
-import type { CampaignPlan, CampaignRecord, ContentRecord } from "@markos/shared-types";
+import type { CampaignPlan, CampaignPostCounts, CampaignRecord, CampaignReviewRecord, CampaignSummaryPage, ContentRecord } from "@markos/shared-types";
 import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
 import { toContentRecord } from "../content/content-service";
 import { generateCampaignPlan } from "../ai/campaign-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { toMediaAssetRecord } from "../media/media-service";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
@@ -29,6 +30,110 @@ export class CampaignSuggestionNotFoundError extends Error {
   constructor() {
     super("Campaign suggestion was not found");
   }
+}
+
+export class CampaignListInputError extends Error {
+  constructor() {
+    super("Invalid campaign page or search request");
+  }
+}
+
+export async function listCampaignSummaries(workspaceId: string, input: { limit?: string; cursor?: string; query?: string }): Promise<CampaignSummaryPage> {
+  const limit = input.limit === undefined ? 20 : Number(input.limit);
+  const query = input.query?.trim() ?? "";
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50 || query.length > 120) throw new CampaignListInputError();
+  let cursor: { id: string; createdAt: string; query: string } | undefined;
+  if (input.cursor !== undefined) {
+    try {
+      if (input.cursor.length > 1000) throw new Error();
+      const decoded = JSON.parse(Buffer.from(input.cursor, "base64url").toString("utf8")) as typeof cursor;
+      if (
+        !decoded ||
+        typeof decoded.id !== "string" ||
+        !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(decoded.id) ||
+        typeof decoded.createdAt !== "string" ||
+        !Number.isFinite(Date.parse(decoded.createdAt)) ||
+        decoded.query !== query
+      )
+        throw new Error();
+      cursor = decoded;
+    } catch {
+      throw new CampaignListInputError();
+    }
+  }
+  const rows = await prisma.campaign.findMany({
+    where: {
+      workspaceId,
+      deletedAt: null,
+      AND: [
+        ...(query
+          ? [{ OR: [{ title: { contains: query, mode: "insensitive" as const } }, { objective: { contains: query, mode: "insensitive" as const } }] }]
+          : []),
+        ...(cursor ? [{ OR: [{ createdAt: { lt: new Date(cursor.createdAt) } }, { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } }] }] : [])
+      ]
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1
+  });
+  const page = rows.slice(0, limit);
+  const linked = page.length
+    ? await prisma.contentItem.findMany({
+        where: { workspaceId, campaignId: { in: page.map((row) => row.id) }, deletedAt: null, campaignWeek: { not: null }, campaignActionIndex: { not: null } },
+        select: { campaignId: true, campaignWeek: true, campaignActionIndex: true, status: true }
+      })
+    : [];
+  const items = page.map((row) => {
+    const { content, ...metadata } = toCampaignRecord(row);
+    const bySlot = new Map(
+      linked.filter((item) => item.campaignId === row.id).map((item) => [`${item.campaignWeek}:${item.campaignActionIndex}`, item.status])
+    );
+    const postCounts: CampaignPostCounts = { total: 0, idea: 0, draft: 0, inReview: 0, ready: 0, scheduled: 0, published: 0, failed: 0 };
+    for (const week of content.weeklyCadence) {
+      let actionIndex = 0;
+      for (const day of Array.isArray(week.days) ? week.days : [])
+        for (const _suggestion of day.posts) {
+          const status = bySlot.get(`${week.week}:${actionIndex++}`);
+          postCounts.total++;
+          switch (status) {
+            case "DRAFT":
+              postCounts.draft++;
+              break;
+            case "IN_REVIEW":
+              postCounts.inReview++;
+              break;
+            case "APPROVED":
+              postCounts.ready++;
+              break;
+            case "SCHEDULED":
+              postCounts.scheduled++;
+              break;
+            case "PUBLISHED":
+              postCounts.published++;
+              break;
+            case "FAILED":
+              postCounts.failed++;
+              break;
+            default:
+              postCounts.idea++;
+          }
+        }
+    }
+    return { ...metadata, postCounts };
+  });
+  const last = page.at(-1);
+  return {
+    items,
+    nextCursor:
+      rows.length > limit && last ? Buffer.from(JSON.stringify({ id: last.id, createdAt: last.createdAt.toISOString(), query })).toString("base64url") : null
+  };
+}
+
+export async function readCampaignReview(workspaceId: string, campaignId: string): Promise<CampaignReviewRecord> {
+  const campaign = toCampaignRecord(await findWorkspaceCampaign(workspaceId, campaignId));
+  const items = await listCampaignDrafts(workspaceId, campaignId);
+  const mediaIds = Array.from(new Set(items.flatMap((item) => item.mediaIds)));
+  const media = mediaIds.length ? await prisma.mediaAsset.findMany({ where: { workspaceId, id: { in: mediaIds }, deletedAt: null } }) : [];
+  return { campaign, items, mediaAssets: media.map(toMediaAssetRecord) };
 }
 
 export async function listCampaigns(workspaceId: string): Promise<CampaignRecord[]> {

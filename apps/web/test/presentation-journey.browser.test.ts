@@ -176,7 +176,8 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     await page.getByText("7 of 7 sections", { exact: true }).waitFor();
     await expect.poll(() => page.getByText("100%", { exact: true }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByLabel("Competitors complete").isVisible()).toBe(true);
+    const competitors = page.locator("article").filter({ has: page.getByRole("heading", { name: "Competitors", exact: true }) });
+    await expect.poll(() => competitors.getByText("Complete", { exact: true }).isVisible()).toBe(true);
     await expect(page.getByText("May 15, 2026").count()).resolves.toBe(0);
     await expect(page.getByText("Last updated: Never").count()).resolves.toBe(0);
     await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
@@ -249,16 +250,48 @@ describe("presentation journey", () => {
 
   it("selects among Campaigns, generates a new plan, and reviews only one detailed week at a time", async () => {
     const page = await sessionPage();
+    let failRefresh = false;
+    let failGeneration = true;
+    let releaseGeneration = () => {};
+    const generationHold = new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
     let generationPayload: Record<string, unknown> | undefined;
     let suggestionApprovalPayload: Record<string, unknown> | undefined;
     let approvedSuggestionDraft: ReturnType<typeof campaignSuggestionDraft> | undefined;
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/campaigns" && route.request().method() === "GET") {
-        return route.fulfill(json([snackLabCampaign(), snackLabCommunitySprint()]));
+      if (pathname === "/v1/campaigns/summaries" && route.request().method() === "GET") {
+        if (failRefresh)
+          return route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Campaign refresh is unavailable. Try again." } })
+          });
+        return route.fulfill(
+          json({ items: [campaignSummaryFixture(snackLabCampaign()), campaignSummaryFixture(snackLabCommunitySprint())], nextCursor: null })
+        );
       }
       if (pathname === "/v1/campaigns/generate" && route.request().method() === "POST") {
         generationPayload = route.request().postDataJSON() as Record<string, unknown>;
+        await generationHold;
+        if (failGeneration)
+          return route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Campaign generation is unavailable. Try again." } })
+          });
         return route.fulfill(json({ ...snackLabCampaign(), id: "campaign-snacklab-generated" }));
+      }
+      if (pathname.endsWith("/review") && pathname.startsWith("/v1/campaigns/")) {
+        if (failRefresh)
+          return route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Campaign refresh is unavailable. Try again." } })
+          });
+        const id = pathname.split("/")[3]!;
+        const campaign = id === "campaign-snacklab-community" ? snackLabCommunitySprint() : { ...snackLabCampaign(), id };
+        return route.fulfill(json({ campaign, items: approvedSuggestionDraft ? [approvedSuggestionDraft] : [], mediaAssets: [] }));
       }
       if (pathname.endsWith("/drafts") && pathname.startsWith("/v1/campaigns/")) {
         return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
@@ -288,16 +321,21 @@ describe("presentation journey", () => {
     });
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/en/app/campaigns?campaign=campaign-snacklab-community`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
     await expect(page.getByRole("link", { name: "Campaigns" }).getAttribute("aria-current")).resolves.toBe("page");
-    const campaignLibrary = page.getByRole("complementary").filter({ has: page.getByRole("heading", { name: "Your campaigns" }) });
-    await expect.poll(() => campaignLibrary.getByText("2", { exact: true }).isVisible()).toBe(true);
-    await campaignLibrary.getByRole("button", { name: /SnackLab 7-Day Community Sprint/ }).click();
-    await page.getByRole("heading", { name: "SnackLab 7-Day Community Sprint" }).waitFor();
-
+    const reviewer = page.getByRole("dialog", { name: "SnackLab 7-Day Community Sprint", exact: true });
+    await reviewer.waitFor();
+    await reviewer.getByRole("button", { name: "Close campaign", exact: true }).click();
+    await page.getByRole("button", { name: "Open campaign: SnackLab 14-Day Instagram Campaign", exact: true }).click();
+    await page.getByRole("dialog", { name: "SnackLab 14-Day Instagram Campaign", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Close campaign", exact: true }).click();
     await page.getByRole("button", { name: "New campaign" }).click();
-    const composer = page.getByRole("dialog");
+    const composer = page.getByRole("dialog", { name: "Create a campaign", exact: true });
+    await composer.waitFor();
+    expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Shift+Tab");
+    expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     await expect(composer.getByRole("button", { name: "14 days", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     for (const duration of [30, 60, 90]) {
       await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(true);
@@ -305,32 +343,32 @@ describe("presentation journey", () => {
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
     await composer.getByRole("button", { name: "Create campaign", exact: true }).click();
-    await page.getByRole("heading", { name: "SnackLab 14-Day Instagram Campaign" }).waitFor();
+    await expect.poll(() => composer.getByRole("button", { name: "Close campaign composer" }).isDisabled()).toBe(true);
+    await page.keyboard.press("Escape");
+    expect(await composer.isVisible()).toBe(true);
+    releaseGeneration();
+    await composer.getByRole("alert").filter({ hasText: "Campaign generation is unavailable. Try again." }).waitFor();
+    expect(await composer.getByLabel("Campaign objective").inputValue()).toBe("Increase qualified Instagram inquiries");
+    failGeneration = false;
+    await composer.getByRole("button", { name: "Create campaign", exact: true }).click();
+    const generatedReview = page.getByRole("dialog", { name: "SnackLab 14-Day Instagram Campaign", exact: true });
+    await generatedReview.waitFor();
     await expect(page.getByRole("button", { name: "Export" }).count()).resolves.toBe(0);
-    await expect(page.getByRole("tab", { name: "Week-by-week review" }).getAttribute("aria-selected")).resolves.toBe("true");
-    await page.getByRole("tab", { name: "Overview", exact: true }).click();
-    await expect.poll(() => page.getByText("Create the first weekly content batch", { exact: true }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByRole("heading", { name: "Campaign map" }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByText("Earn trust", { exact: true }).isVisible()).toBe(true);
-    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
-    await page.getByRole("tab", { name: "Week-by-week review" }).click();
-    await expect.poll(() => page.getByText("Publish origin story Reel", { exact: true }).isVisible()).toBe(true);
-    await expect(page.getByText("Publish customer taste-test Reel", { exact: true }).count()).resolves.toBe(0);
-    const dailyPlan = page.getByRole("combobox", { name: "Daily plan" });
-    await expect(dailyPlan.inputValue()).resolves.toBe("0");
-    await page.getByRole("button", { name: "Next week", exact: true }).click();
-    await expect.poll(() => page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).toBe(true);
-    await expect(page.getByText("Publish origin story Reel", { exact: true }).count()).resolves.toBe(0);
-    await expect(dailyPlan.inputValue()).resolves.toBe("1");
-    await expect(page.getByRole("button", { name: "Next week", exact: true }).isDisabled()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Approve idea and create draft: Publish customer taste-test Reel" }).click();
-    const openDraft = page.getByRole("button", { name: "Open draft in Create: Publish customer taste-test Reel" });
-    await openDraft.waitFor();
-    expect(suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
-    await expect.poll(() => page.getByText("Why MARKOS recommended this", { exact: true }).isVisible()).toBe(true);
-    await expect(page.getByText(/COMPANY \/ company-info/).count()).resolves.toBe(0);
-    await page.waitForTimeout(200);
-    await page.screenshot({ path: "evidence/sunlit-campaigns.png", fullPage: true });
+    await generatedReview.getByRole("button", { name: "Overview", exact: true }).last().click();
+    await generatedReview.getByText("Priority actions", { exact: true }).click();
+    await expect.poll(() => generatedReview.getByText("Create the first weekly content batch", { exact: true }).isVisible()).toBe(true);
+    await generatedReview.getByRole("button", { name: "Week", exact: true }).click();
+    await expect.poll(() => generatedReview.getByText("Publish origin story Reel", { exact: true }).isVisible()).toBe(true);
+    const nextWeek = generatedReview.getByRole("button", { name: "Next week", exact: true });
+    const previousPosition = await nextWeek.boundingBox();
+    await nextWeek.click();
+    expect(await nextWeek.boundingBox()).toEqual(previousPosition);
+    await expect.poll(() => generatedReview.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).toBe(true);
+    await expect(nextWeek.isDisabled()).resolves.toBe(true);
+    await generatedReview.getByRole("button", { name: /Publish customer taste-test Reel/ }).click();
+    await generatedReview.getByRole("button", { name: "Month", exact: true }).click();
+    await generatedReview.getByRole("button", { name: /16 August,/ }).click();
+    await generatedReview.getByRole("button", { name: /Publish customer taste-test Reel/ }).click();
     expect(generationPayload).toMatchObject({
       durationDays: 14,
       locale: "en",
@@ -339,9 +377,19 @@ describe("presentation journey", () => {
       startsAt: expect.any(String)
     });
 
-    await openDraft.click();
+    failRefresh = true;
+    await generatedReview.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Campaign refresh is unavailable. Try again." }).waitFor();
+    expect(await composer.count()).toBe(0);
+    failRefresh = false;
+    await generatedReview.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect.poll(() => generatedReview.getByRole("alert").count()).toBe(0);
+
+    await generatedReview.getByRole("button", { name: "Create draft: Publish customer taste-test Reel", exact: true }).click();
+    await expect.poll(() => suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
-    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
+    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
+    expect(await page.locator(".studio-instagram").count()).toBe(0);
     const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
     await campaignLink.waitFor();
     await expect(campaignLink.getAttribute("href")).resolves.toBe("/en/app/campaigns?campaign=campaign-snacklab-generated");
@@ -349,7 +397,7 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/calendar`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Content calendar", exact: true }).waitFor();
     await page.getByRole("button", { name: /Unscheduled/ }).click();
-    await expect.poll(() => page.getByText("Publish customer taste-test...", { exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByText("Publish customer taste-test Reel", { exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByText("Campaign · Week 2", { exact: true }).isVisible()).toBe(true);
     await page.close();
   }, 60_000);
@@ -373,7 +421,7 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "What would you like to create?" }).waitFor();
+    await page.getByRole("heading", { name: "How can MARKOS help?" }).waitFor();
     await expect.poll(() => page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
@@ -410,6 +458,7 @@ describe("presentation journey", () => {
       caption: "Product story scheduled for this week.",
       contentType: "REEL",
       id: "calendar-scheduled",
+      mediaIds: ["calendar-video"],
       plannedAt: updatedAt,
       scheduledAt,
       status: "SCHEDULED",
@@ -437,13 +486,34 @@ describe("presentation journey", () => {
       updatedAt: new Date(Date.now() - (index + 1) * 60_000).toISOString()
     }));
     let records = [scheduled, ready, published, draft, ...queuedDrafts];
+    const video = {
+      id: "calendar-video",
+      workspaceId: session.workspace.id,
+      type: "VIDEO",
+      mimeType: "video/webm",
+      filename: "calendar-video.webm",
+      publicUrl: "https://media.markos.test/calendar-video.webm",
+      sizeBytes: 0,
+      createdAt: updatedAt,
+      updatedAt
+    };
+    await page.route(video.publicUrl, (route) => route.fulfill({ status: 200, contentType: "video/webm", body: "" }));
     let schedulePayload: Record<string, unknown> | undefined;
     let reschedulePayload: Record<string, unknown> | undefined;
     let unscheduleCalls = 0;
+    let unscheduledPageAttempts = 0;
 
     await mockApi(page, async (route, pathname) => {
       const method = route.request().method();
-      if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult(records, route.request().url())));
+      if (pathname === "/v1/calendar" && method === "GET") {
+        if (Number(new URL(route.request().url()).searchParams.get("unscheduledOffset")) > 0 && ++unscheduledPageAttempts === 1)
+          return route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "More unscheduled posts could not be loaded. Try again." } })
+          });
+        return route.fulfill(json({ ...calendarReadResult(records, route.request().url()), mediaAssets: [video] }));
+      }
       if (pathname === `/v1/content/${ready.id}/schedule` && method === "POST") {
         schedulePayload = route.request().postDataJSON() as Record<string, unknown>;
         const updated = { ...ready, scheduledAt: schedulePayload.scheduledAt as string, status: "SCHEDULED" };
@@ -480,7 +550,7 @@ describe("presentation journey", () => {
     await page.waitForFunction(
       () =>
         document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
-        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 120
     );
     await expect(desktopShell.getAttribute("data-sidebar-collapsed")).resolves.toBe("true");
     await expect(page.evaluate(() => localStorage.getItem("markos.sidebar.collapsed"))).resolves.toBe("true");
@@ -527,7 +597,7 @@ describe("presentation journey", () => {
     await page.getByLabel("Content type").selectOption({ label: "All types" });
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("type"));
 
-    const readyCounter = statusFilters.getByRole("button", { name: /Ready to schedule/ });
+    const readyCounter = statusFilters.getByRole("button", { name: /Ready/ });
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("false");
     await readyCounter.click();
     await expect(readyCounter.getAttribute("aria-pressed")).resolves.toBe("true");
@@ -537,7 +607,14 @@ describe("presentation journey", () => {
     await expect.poll(() => page.getByRole("link", { name: /Draft founder story/ }).isVisible()).toBe(true);
     await expect.poll(() => page.getByRole("button", { name: "Load more" }).isVisible()).toBe(true);
     await page.getByRole("button", { name: "Load more" }).click();
+    const openBucket = page.getByRole("dialog", { name: /Unscheduled · 13/ });
+    await openBucket.getByRole("alert").waitFor();
+    await expect(openBucket.getByRole("alert").innerText()).resolves.toContain("More unscheduled posts could not be loaded");
+    await expect(openBucket.getByRole("link", { name: /Draft founder story/ }).isVisible()).resolves.toBe(true);
+    expect(new URL(page.url()).searchParams.has("day")).toBe(false);
+    await openBucket.getByRole("button", { name: "Retry", exact: true }).click();
     await page.getByRole("link", { name: /Queued draft 12/ }).waitFor();
+    await expect(openBucket.getByRole("alert").count()).resolves.toBe(0);
     await page.getByRole("button", { name: "Load more" }).waitFor({ state: "detached" });
     await page.keyboard.press("Escape");
     await page.getByRole("dialog", { name: /Unscheduled · 13/ }).waitFor({ state: "detached" });
@@ -591,7 +668,9 @@ describe("presentation journey", () => {
     await expect.poll(() => page.getByRole("button", { name: "Back to day" }).isVisible()).toBe(true);
     await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("day-to-record");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
-    await expect.poll(() => page.locator('button[aria-current="true"]').getByText("Ready campaign post...", { exact: true }).isVisible()).toBe(true);
+    await expect
+      .poll(() => page.locator('button[aria-current="true"]').getByText("Ready campaign post for the dessert subscription", { exact: true }).isVisible())
+      .toBe(true);
     expect(new URL(page.url()).searchParams.get("item")).toBe(ready.id);
 
     const dayContext = page.locator('[data-calendar-motion-part="day-context"]');
@@ -602,6 +681,10 @@ describe("presentation journey", () => {
     if (!originalDayContext) throw new Error("Expected the persistent day context to be mounted.");
     const alternatePost = dayContext.getByRole("button", { name: /Product story scheduled/ });
     await alternatePost.click();
+    await focusSurface.locator("video").waitFor();
+    await expect(focusSurface.locator("video").getAttribute("src")).resolves.toBe(video.publicUrl);
+    await expect(focusSurface.locator("video").evaluate((element) => (element as HTMLVideoElement).controls)).resolves.toBe(true);
+    await expect(focusSurface.locator('img[src="' + video.publicUrl + '"]').count()).resolves.toBe(0);
     await expect.poll(() => focusSurface.getAttribute("data-calendar-motion-kind")).toBe("record-switch");
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
     await expect(
@@ -626,10 +709,10 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Close" }).click();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day") && !new URL(window.location.href).searchParams.has("item"));
     await focusSurface.waitFor({ state: "detached" });
-    const scheduledCounter = statusFilters.getByRole("button", { name: /Scheduled in MARKOS/ });
+    const scheduledCounter = statusFilters.getByRole("button", { name: /Scheduled/ });
     await scheduledCounter.click();
     await expect(scheduledCounter.getAttribute("aria-pressed")).resolves.toBe("true");
-    await page.getByRole("button", { name: /Scheduled in MARKOS: Product story scheduled/ }).click();
+    await page.getByRole("button", { name: /Scheduled: Product story scheduled/ }).click();
     await page.getByRole("button", { name: "Back to day" }).waitFor();
     const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
     await page.getByLabel("Choose a new time").fill(rescheduleInput);
@@ -639,6 +722,7 @@ describe("presentation journey", () => {
     await cancelScheduleButton.click();
     const dialog = page.getByRole("dialog", { name: "Cancel this content schedule?" });
     await expect.poll(() => dialog.isVisible()).toBe(true);
+    await expect(dialog.getByText(/Its planned date and publishing time will be cleared/).count()).resolves.toBe(1);
     await page.keyboard.press("Escape");
     await expect.poll(() => dialog.isVisible()).toBe(false);
     await expect.poll(() => cancelScheduleButton.evaluate((element) => document.activeElement === element)).toBe(true);
@@ -652,8 +736,11 @@ describe("presentation journey", () => {
     await unscheduledDrawer.waitFor();
     await expect.poll(() => unscheduledDrawer.getByRole("link", { name: /Product story scheduled/ }).isVisible()).toBe(true);
     await cancellationNotice.waitFor({ state: "hidden", timeout: 6_000 });
-    await unscheduledDrawer.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(unscheduledDrawer.evaluate((element) => element.matches(":modal") && element.contains(document.activeElement))).resolves.toBe(true);
+    await page.keyboard.press("Escape");
     await unscheduledDrawer.waitFor({ state: "detached" });
+    expect(new URL(page.url()).searchParams.has("day")).toBe(true);
+    await expect(focusSurface.evaluate((element) => element.contains(document.activeElement))).resolves.toBe(true);
     await page.getByRole("button", { name: "Back to calendar" }).click();
     await page.waitForFunction(() => !new URL(window.location.href).searchParams.has("day"));
     await focusSurface.waitFor({ state: "detached" });
@@ -663,7 +750,7 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: "Month", exact: true }).click();
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     await expect(statusFilters.locator("[data-calendar-status]").count()).resolves.toBe(5);
-    await expect(page.getByLabel("Month calendar").getByText("Product story scheduled...", { exact: true }).count()).resolves.toBe(0);
+    await expect(page.getByLabel("Month calendar").getByText("Product story scheduled for this week", { exact: true }).count()).resolves.toBe(0);
     const monthCalendar = await page.getByLabel("Month calendar").boundingBox();
     if (!monthCalendar) throw new Error("Expected the Month calendar to be visible.");
     expect(monthCalendar.y + monthCalendar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
@@ -682,7 +769,7 @@ describe("presentation journey", () => {
     await page.waitForFunction(
       () =>
         document.querySelector<HTMLElement>("[data-sidebar-collapsed]")?.dataset.sidebarCollapsed === "true" &&
-        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 90
+        (document.querySelector<HTMLElement>("[data-app-sidebar]")?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY) < 120
     );
     const rtlSidebarGeometry = await desktopSidebar.evaluate((element) => {
       const sidebar = element.getBoundingClientRect();
@@ -740,11 +827,12 @@ describe("presentation journey", () => {
   it("keeps an empty Campaign page dismissible and registers an idea before opening Create", async () => {
     const emptyPage = await sessionPage();
     await mockApi(emptyPage, async (route, pathname) => {
-      if (pathname === "/v1/campaigns") return route.fulfill(json([]));
+      if (pathname === "/v1/campaigns/summaries") return route.fulfill(json({ items: [], nextCursor: null }));
       return route.fulfill(json([]));
     });
 
     await emptyPage.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await emptyPage.getByRole("button", { name: "New campaign", exact: true }).first().click();
     const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
     await closeComposer.waitFor();
     await emptyPage.keyboard.press("Escape");
@@ -764,7 +852,8 @@ describe("presentation journey", () => {
       completeApproval = resolve;
     });
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/campaigns") return route.fulfill(json([campaign]));
+      if (pathname === "/v1/campaigns/summaries") return route.fulfill(json({ items: [campaignSummaryFixture(campaign)], nextCursor: null }));
+      if (pathname.endsWith("/review")) return route.fulfill(json({ campaign, items: registeredDraft ? [registeredDraft] : [], mediaAssets: [] }));
       if (pathname.endsWith("/drafts")) return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
       if (pathname.endsWith("/suggestions/approve")) {
         approvalCalls += 1;
@@ -779,14 +868,16 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /^Open campaign:/ }).click();
+    await page.getByRole("button", { name: /Compare the subscription tiers/ }).click();
     const description = "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.";
     const descriptionNode = page.getByText(description, { exact: true });
     await descriptionNode.waitFor();
     await expect(descriptionNode.evaluate((node) => getComputedStyle(node).whiteSpace)).resolves.toBe("normal");
 
     const beforeApproval = page.url();
-    const approveButton = page.getByRole("button", { name: "Approve idea and create draft: Compare the subscription tiers" });
-    const createButton = page.getByRole("button", { name: "Open draft in Create: Compare the subscription tiers" });
+    const approveButton = page.getByRole("button", { name: "Create draft: Compare the subscription tiers" });
+    const createButton = page.getByRole("button", { name: "Open draft: Compare the subscription tiers" });
     await approveButton.click();
     try {
       await expect.poll(() => approvalCalls).toBe(1);
@@ -796,11 +887,12 @@ describe("presentation journey", () => {
     } finally {
       completeApproval();
     }
-    await page.getByText("Idea registered as a draft. You can open it in Create now.", { exact: true }).waitFor();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    expect(approvalCalls).toBe(1);
+    await page.goBack({ waitUntil: "domcontentloaded" });
     await createButton.waitFor();
     expect(page.url()).toBe(beforeApproval);
     expect(approvalCalls).toBe(1);
-    await page.screenshot({ path: "evidence/phase2-campaign-registered.png" });
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await createButton.waitFor();
@@ -891,7 +983,9 @@ describe("presentation journey", () => {
     await drawerButton.click();
     await existingDraftLink.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
-    await page.getByRole("heading", { name: "Instagram preview", exact: true }).waitFor();
+    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Edit caption", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Caption", exact: true }).inputValue()).resolves.toBe(draft.caption);
     expect(createCalls).toBe(0);
     await page.close();
   }, 60_000);
@@ -1069,6 +1163,10 @@ function snackLabVault() {
   };
 }
 
+function campaignSummaryFixture(campaign: CampaignRecord) {
+  const total = campaign.content.weeklyCadence.reduce((count, week) => count + week.days.reduce((sum, day) => sum + day.posts.length, 0), 0);
+  return { ...campaign, postCounts: { total, idea: total, draft: 0, inReview: 0, ready: 0, scheduled: 0, published: 0, failed: 0 } };
+}
 function snackLabCampaign(): CampaignRecord {
   return {
     content: {
@@ -1156,7 +1254,7 @@ function snackLabCommunitySprint(): CampaignRecord {
   };
 }
 
-function phaseTwoCampaign() {
+function phaseTwoCampaign(): CampaignRecord {
   return {
     content: {
       durationDays: 7,

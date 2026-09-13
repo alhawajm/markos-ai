@@ -14,6 +14,7 @@ import type {
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { assertStoredContentMedia, lockContentForMedia } from "../media/content-media-integrity";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
@@ -345,6 +346,9 @@ export async function generateWorkspaceContentForItem(
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
     const saved = await prisma.$transaction(async (tx) => {
+      const latest = await lockContentForMedia(tx, workspaceId, current.id);
+      if (!latest) throw new ContentItemNotFoundError();
+      if (latest.contentType !== draft.contentType) await assertStoredContentMedia(tx, latest, { contentType: draft.contentType });
       const row = await tx.contentItem.update({
         where: { id: current.id, revision: current.revision, status: { in: ["DRAFT", "IN_REVIEW"] }, deletedAt: null },
         data: {
@@ -539,50 +543,49 @@ export async function generateWorkspaceContentForSlot(workspaceId: string, input
 }
 
 export async function updateContentItem(workspaceId: string, contentItemId: string, input: UpdateContentInput): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
+  return prisma.$transaction(async (tx) => {
+    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+
+    if (!current) {
+      throw new ContentItemNotFoundError();
     }
+
+    if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
+      throw new ContentItemLockedError();
+    }
+    if (input.contentType !== undefined && input.contentType !== current.contentType) {
+      await assertStoredContentMedia(tx, current, { contentType: input.contentType });
+    }
+
+    const row = await tx.contentItem
+      .update({
+        where: {
+          id: current.id,
+          revision: input.expectedRevision ?? current.revision,
+          status: { in: ["DRAFT", "IN_REVIEW"] },
+          deletedAt: null
+        },
+        data: {
+          ...(input.platform === undefined ? {} : { platform: input.platform }),
+          ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
+          ...(input.brief === undefined ? {} : { brief: input.brief }),
+          ...(input.caption === undefined ? {} : { caption: input.caption }),
+          ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
+          ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
+          ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
+          ...(input.tone === undefined ? {} : { tone: input.tone }),
+          ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
+          ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
+          ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
+        throw error;
+      });
+
+    return toContentRecord(row);
   });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
-    throw new ContentItemLockedError();
-  }
-
-  const row = await prisma.contentItem
-    .update({
-      where: {
-        id: current.id,
-        revision: input.expectedRevision ?? current.revision,
-        status: { in: ["DRAFT", "IN_REVIEW"] },
-        deletedAt: null
-      },
-      data: {
-        ...(input.platform === undefined ? {} : { platform: input.platform }),
-        ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
-        ...(input.brief === undefined ? {} : { brief: input.brief }),
-        ...(input.caption === undefined ? {} : { caption: input.caption }),
-        ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
-        ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
-        ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
-        ...(input.tone === undefined ? {} : { tone: input.tone }),
-        ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
-        ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
-        ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
-      }
-    })
-    .catch((error: unknown) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-      throw error;
-    });
-
-  return toContentRecord(row);
 }
 
 export async function deleteContentItem(workspaceId: string, contentItemId: string): Promise<{ id: string }> {
@@ -619,40 +622,37 @@ export async function deleteContentItem(workspaceId: string, contentItemId: stri
 }
 
 export async function updateContentItemStatus(workspaceId: string, contentItemId: string, input: UpdateContentStatusInput): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
+  return prisma.$transaction(async (tx) => {
+    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+
+    if (!current) {
+      throw new ContentItemNotFoundError();
     }
+
+    if (!isAllowedContentTransition(current.status, input.status)) {
+      throw new ContentStatusTransitionError();
+    }
+    if (input.status === "APPROVED") await assertStoredContentMedia(tx, current, { requireReady: true });
+
+    const row = await tx.contentItem
+      .update({
+        where: {
+          id: current.id,
+          revision: input.expectedRevision ?? current.revision,
+          status: current.status,
+          deletedAt: null
+        },
+        data: {
+          status: input.status
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
+        throw error;
+      });
+
+    return toContentRecord(row);
   });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (!isAllowedContentTransition(current.status, input.status)) {
-    throw new ContentStatusTransitionError();
-  }
-
-  const row = await prisma.contentItem
-    .update({
-      where: {
-        id: current.id,
-        revision: input.expectedRevision ?? current.revision,
-        status: current.status,
-        deletedAt: null
-      },
-      data: {
-        status: input.status
-      }
-    })
-    .catch((error: unknown) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-      throw error;
-    });
-
-  return toContentRecord(row);
 }
 
 export async function scheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {

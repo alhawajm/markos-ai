@@ -7,11 +7,13 @@ import { prisma } from "../db/prisma";
 import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { deleteStoredMedia, storeWorkspaceMedia } from "./storage-service";
 import { MediaContentItemNotFoundError, MediaContentLockedError } from "./media-service";
+import { assertStoredContentMedia, ContentMediaValidationError, lockContentForMedia, validateStoredContentMedia } from "./content-media-integrity";
 
 const pollDelayMs = 15_000;
 const retryDelayMs = 30_000;
 const leaseMs = 2 * 60_000;
 const localCurrency = "BHD";
+const activeJobStatuses: MediaGenerationStatus[] = ["QUEUED", "STARTING", "GENERATING", "PROCESSING"];
 
 export class MediaVideoGenerationUnsupportedError extends Error {
   constructor() {
@@ -36,8 +38,9 @@ export async function queueVideoGeneration(workspaceId: string, contentItemId: s
     where: { id: contentItemId, workspaceId, deletedAt: null }
   });
   if (!content) throw new MediaContentItemNotFoundError();
-  if (!["DRAFT", "IN_REVIEW", "APPROVED"].includes(content.status)) throw new MediaContentLockedError();
+  if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
   if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
+  await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
 
   const active = await prisma.mediaGenerationJob.findFirst({
     where: {
@@ -99,8 +102,8 @@ export async function cancelMediaGenerationJob(workspaceId: string, jobId: strin
   if (!job) throw new MediaGenerationJobNotFoundError();
   if (["COMPLETED", "FAILED", "CANCELLED"].includes(job.status)) throw new MediaGenerationJobStateError();
 
-  const cancelled = await prisma.mediaGenerationJob.update({
-    where: { id: job.id },
+  const result = await prisma.mediaGenerationJob.updateMany({
+    where: { id: job.id, status: { in: activeJobStatuses } },
     data: {
       status: "CANCELLED",
       cancelledAt: new Date(),
@@ -108,6 +111,8 @@ export async function cancelMediaGenerationJob(workspaceId: string, jobId: strin
       leasedAt: null
     }
   });
+  if (result.count !== 1) throw new MediaGenerationJobStateError();
+  const cancelled = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
   if (!job.providerJobId) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: job.createdAt });
   }
@@ -118,6 +123,13 @@ export async function retryMediaGenerationJob(workspaceId: string, jobId: string
   const job = await prisma.mediaGenerationJob.findFirst({ where: { id: jobId, workspaceId } });
   if (!job) throw new MediaGenerationJobNotFoundError();
   if (job.status !== "FAILED") throw new MediaGenerationJobStateError("Only failed video jobs can be retried");
+  if (job.outputMediaAssetId)
+    throw new MediaGenerationJobStateError("The generated video is already saved in the Media Library. Attach that file after removing incompatible media.");
+  const content = await prisma.contentItem.findFirst({ where: { id: job.contentItemId, workspaceId, deletedAt: null } });
+  if (!content) throw new MediaContentItemNotFoundError();
+  if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
+  if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
+  await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
 
   const active = await prisma.mediaGenerationJob.findFirst({
     where: {
@@ -133,7 +145,7 @@ export async function retryMediaGenerationJob(workspaceId: string, jobId: string
   try {
     return toMediaGenerationJobRecord(
       await prisma.mediaGenerationJob.update({
-        where: { id: job.id },
+        where: { id: job.id, status: "FAILED", outputMediaAssetId: null },
         data: {
           status: "QUEUED",
           providerJobId: null,
@@ -214,7 +226,13 @@ async function claimVideoGenerationJob(now: Date): Promise<MediaGenerationJob | 
 
 async function processClaimedJob(job: MediaGenerationJob, now: Date): Promise<"completed" | "failed" | "waiting"> {
   if (!job.providerJobId) {
-    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "STARTING" } });
+    const content = await prisma.contentItem.findFirst({ where: { id: job.contentItemId, workspaceId: job.workspaceId, deletedAt: null } });
+    if (!content) throw new MediaContentItemNotFoundError();
+    if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
+    if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
+    await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
+    const starting = await prisma.mediaGenerationJob.updateMany({ where: { id: job.id, status: { in: activeJobStatuses } }, data: { status: "STARTING" } });
+    if (starting.count !== 1) return "waiting";
     const started = await startVideoGeneration({
       workspaceId: job.workspaceId,
       prompt: job.prompt,
@@ -240,7 +258,7 @@ async function persistProviderState(job: MediaGenerationJob, providerJob: VideoP
 
   if (providerJob.status !== "completed") {
     await prisma.mediaGenerationJob.updateMany({
-      where: { id: job.id, status: { not: "CANCELLED" } },
+      where: { id: job.id, status: { in: activeJobStatuses } },
       data: {
         providerJobId: providerJob.provider_job_id,
         status: "GENERATING",
@@ -258,16 +276,16 @@ async function persistProviderState(job: MediaGenerationJob, providerJob: VideoP
     return "waiting";
   }
 
-  await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { not: "CANCELLED" } },
+  const processing = await prisma.mediaGenerationJob.updateMany({
+    where: { id: job.id, status: { in: activeJobStatuses } },
     data: { status: "PROCESSING", progress: 100, providerJobId: providerJob.provider_job_id, model: providerJob.model }
   });
+  if (processing.count !== 1) return "waiting";
   const video = await downloadGeneratedVideo(providerJob.provider_job_id);
-  await completeVideoJob(job, providerJob, video, now);
-  return "completed";
+  return completeVideoJob(job, providerJob, video, now);
 }
 
-async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProviderJob, video: Buffer, now: Date): Promise<void> {
+async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProviderJob, video: Buffer, now: Date): Promise<"completed" | "failed"> {
   await reserveWorkspaceUsage({ workspaceId: job.workspaceId, metric: "STORAGE_BYTES", amount: video.byteLength, now });
   let stored: Awaited<ReturnType<typeof storeWorkspaceMedia>> | undefined;
   try {
@@ -277,10 +295,12 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
       contentType: "video/mp4",
       bytes: video
     });
-    await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx) => {
+      const content = await lockContentForMedia(tx, job.workspaceId, job.contentItemId);
+      await tx.$queryRaw`SELECT "id" FROM "media_generation_jobs" WHERE "id" = ${job.id}::uuid FOR UPDATE`;
       const currentJob = await tx.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
-      if (currentJob.status === "CANCELLED") throw new MediaGenerationJobStateError("Video generation was cancelled");
-      const content = await tx.contentItem.findFirstOrThrow({ where: { id: job.contentItemId, workspaceId: job.workspaceId, deletedAt: null } });
+      if (!activeJobStatuses.includes(currentJob.status)) throw new MediaGenerationJobStateError("Video generation is no longer active");
+      if (currentJob.outputMediaAssetId) throw new MediaGenerationJobStateError("The generated video was already saved");
       const mediaAsset = await tx.mediaAsset.create({
         data: {
           workspaceId: job.workspaceId,
@@ -295,10 +315,15 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
           durationSeconds: providerJob.duration_seconds
         }
       });
-      await tx.contentItem.update({
-        where: { id: content.id },
-        data: { mediaIds: [...new Set([...content.mediaIds, mediaAsset.id])] }
-      });
+      const issue = !content
+        ? "CONTENT_NOT_FOUND"
+        : !["DRAFT", "IN_REVIEW"].includes(content.status)
+          ? "CONTENT_LOCKED"
+          : await validateStoredContentMedia(tx, content, { addition: mediaAsset });
+      const attachmentError = issue ? new ContentMediaValidationError(issue, mediaAsset.id) : null;
+      if (content && !attachmentError) {
+        await tx.contentItem.update({ where: { id: content.id }, data: { mediaIds: [...content.mediaIds, mediaAsset.id] } });
+      }
       await tx.aiInteraction.create({
         data: {
           workspaceId: job.workspaceId,
@@ -313,7 +338,7 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
             durationSeconds: providerJob.duration_seconds,
             mediaAssetId: mediaAsset.id
           },
-          accepted: true,
+          accepted: !attachmentError,
           edited: false,
           regenerated: false,
           tokensIn: 0,
@@ -326,18 +351,19 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
       await tx.mediaGenerationJob.update({
         where: { id: job.id },
         data: {
-          status: "COMPLETED",
+          status: attachmentError ? "FAILED" : "COMPLETED",
           outputMediaAssetId: mediaAsset.id,
           completedAt: now,
           progress: 100,
           nextAttemptAt: now,
           leasedAt: null,
           leaseExpiresAt: null,
-          errorCode: null,
-          errorMessage: null,
-          retryable: null
+          errorCode: attachmentError?.code ?? null,
+          errorMessage: attachmentError?.message ?? null,
+          retryable: attachmentError ? false : null
         }
       });
+      return attachmentError ? "failed" : "completed";
     });
   } catch (error) {
     if (stored) await deleteStoredMedia(job.workspaceId, stored.key).catch(() => undefined);
@@ -347,6 +373,23 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
 }
 
 async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: Date): Promise<"failed" | "waiting"> {
+  if (
+    error instanceof ContentMediaValidationError ||
+    error instanceof MediaContentLockedError ||
+    error instanceof MediaContentItemNotFoundError ||
+    error instanceof MediaVideoGenerationUnsupportedError
+  ) {
+    const code =
+      error instanceof ContentMediaValidationError
+        ? error.code
+        : error instanceof MediaContentLockedError
+          ? "CONTENT_LOCKED"
+          : error instanceof MediaContentItemNotFoundError
+            ? "CONTENT_NOT_FOUND"
+            : "CONTENT_MEDIA_TYPE_INCOMPATIBLE";
+    await markJobFailed(job, code, error.message, false);
+    return "failed";
+  }
   if (error instanceof AiServiceRequestError && !error.retryable) {
     await markJobFailed(job, error.code, error.message, false);
     return "failed";
@@ -354,7 +397,7 @@ async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: D
   const code = error instanceof AiServiceRequestError ? error.code : "AI_VIDEO_PROCESSING_FAILED";
   const message = error instanceof Error ? error.message : "Video generation could not be completed";
   await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { not: "CANCELLED" } },
+    where: { id: job.id, status: { in: activeJobStatuses } },
     data: {
       nextAttemptAt: new Date(now.getTime() + retryDelayMs),
       leasedAt: null,
@@ -369,7 +412,7 @@ async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: D
 
 async function markJobFailed(job: MediaGenerationJob, code: string, message: string, retryable: boolean): Promise<void> {
   const updated = await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { not: "CANCELLED" } },
+    where: { id: job.id, status: { in: activeJobStatuses } },
     data: {
       status: "FAILED",
       errorCode: code,

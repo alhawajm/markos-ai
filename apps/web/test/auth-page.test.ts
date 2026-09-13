@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const authPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.tsx", import.meta.url));
 const authStylesPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.module.css", import.meta.url));
 const sunlitThemePath = fileURLToPath(new URL("../app/sunlit-theme.css", import.meta.url));
+const themeTokensPath = fileURLToPath(new URL("../app/theme-tokens.css", import.meta.url));
 const legalPath = fileURLToPath(new URL("../app/[locale]/_components/legal-document.tsx", import.meta.url));
 const termsPagePath = fileURLToPath(new URL("../app/[locale]/terms/page.tsx", import.meta.url));
 const privacyPagePath = fileURLToPath(new URL("../app/[locale]/privacy/page.tsx", import.meta.url));
@@ -12,6 +13,7 @@ const privacyPagePath = fileURLToPath(new URL("../app/[locale]/privacy/page.tsx"
 const authSource = readFileSync(authPath, "utf8");
 const authStyles = readFileSync(authStylesPath, "utf8");
 const sunlitTheme = readFileSync(sunlitThemePath, "utf8");
+const themeTokens = readFileSync(themeTokensPath, "utf8");
 const legalSource = readFileSync(legalPath, "utf8");
 const termsPageSource = readFileSync(termsPagePath, "utf8");
 const privacyPageSource = readFileSync(privacyPagePath, "utf8");
@@ -66,9 +68,14 @@ describe("Sunlit authentication pages", () => {
     expect(authStyles).toContain(".insightsPreview");
   });
 
-  it("keeps browser autofill and text selection within the bright field theme", () => {
+  it("keeps browser autofill and text selection aligned with the selected theme", () => {
     expect(authSource).toContain("sunlit-theme");
-    expect(sunlitTheme).toContain("color-scheme: light");
+    expect(sunlitTheme).toContain('@import "./theme-tokens.css"');
+    expect(themeTokens).toContain(':root[data-theme="light"]');
+    expect(themeTokens).toContain(':root[data-theme="dark"]');
+    expect(themeTokens).toContain("color-scheme: light");
+    expect(themeTokens).toContain("color-scheme: dark");
+    expect(authStyles).toContain("1000px var(--surface) inset");
     expect(authStyles).toContain("input:-webkit-autofill");
     expect(authStyles).toContain("-webkit-text-fill-color: var(--ink)");
     expect(authStyles).toContain("input::selection");

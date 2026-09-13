@@ -16,23 +16,23 @@ import {
   LogOut,
   RefreshCcw,
   ShieldCheck,
+  Sun,
   UserRound,
   type LucideIcon
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { MarkosApiClient } from "@markos/api-client";
 import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, Locale, MfaStatus, MfaTotpSetup } from "@markos/shared-types";
-import { SurfaceState } from "./surface-state";
 import { NotificationToast } from "./notification-toast";
 import { SectionNavigation, type SectionNavigationItem } from "./section-navigation";
 import { logoutBrowserSession, setBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { instagramStatusLabel, sanitizedCallbackUrl } from "./instagram-settings-state";
+import { AppearanceSettings } from "../../_components/theme-control";
 
-type AuditState = "loading" | "error" | "success" | "limit";
 type NotificationTone = "error" | "info" | "success" | "warning";
-type SettingsSectionId = "profile" | "connections" | "security" | "billing" | "data";
+type SettingsSectionId = "profile" | "appearance" | "connections" | "security" | "billing" | "data";
 
-const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "connections", "security", "billing", "data"];
+const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "appearance", "connections", "security", "billing", "data"];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -48,7 +48,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [auditState, setAuditState] = useState<AuditState | null>(null);
   const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
   const [, setMfaWindowTick] = useState(0);
 
@@ -65,12 +64,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const requestedState = params.get("state");
     const instagramResult = params.get("instagram");
 
-    if (isAuditState(requestedState)) {
-      setAuditState(requestedState);
-    }
     if (instagramResult === "connected") {
       setNotificationTone("success");
       setMessage(copy(locale, "connected"));
@@ -101,20 +96,18 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   async function refreshAllSettings() {
     if (!session) {
-      setAuditState("success");
       setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
       return;
     }
 
     setIsBusy(true);
-    setAuditState("loading");
     setMessage("");
     setDisconnectWarningUrl(null);
 
     const loaded = await refreshSettings(client, setConnection, setBilling, setAuditLogs, setMfaStatus, setMessage);
-    if (!loaded) setNotificationTone("error");
-    setAuditState(loaded ? "success" : "error");
+    setNotificationTone(loaded ? "success" : "error");
+    if (loaded) setMessage(copy(locale, "refreshed"));
     setIsBusy(false);
   }
 
@@ -390,6 +383,17 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const mfaStepUpActive = hasActiveMfaStepUp(session);
   const instagramReady = Boolean(session?.user.isVerified && mfaStatus?.enabled && mfaStepUpActive);
   const latestMedia = activeConnection.connected ? activeConnection.recentMedia?.[0] : undefined;
+  const connectionState = instagramStatusLabel(activeConnection);
+  const connectionLabel = copy(
+    locale,
+    {
+      connected: "connectedStatus",
+      disconnected: "disconnectedStatus",
+      connecting: "connectingStatus",
+      reauthorize: "reconnectRequired",
+      failed: "connectionFailed"
+    }[connectionState]
+  );
   const navigationItems: SectionNavigationItem[] = [
     {
       id: "profile",
@@ -399,12 +403,25 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       statusTone: session?.user.isVerified ? "success" : "warning"
     },
     {
+      id: "appearance",
+      icon: Sun,
+      label: locale === "ar" ? "المظهر" : "Appearance"
+    },
+    {
       id: "connections",
       icon: Instagram,
       label: copy(locale, "channels"),
       locked: !instagramReady,
-      status: activeConnection.connected ? copy(locale, "connectedStatus") : copy(locale, "disconnectedStatus"),
-      statusTone: instagramReady ? (activeConnection.connected ? "success" : "neutral") : "locked"
+      status: connectionLabel,
+      statusTone: !instagramReady
+        ? "locked"
+        : connectionState === "failed"
+          ? "error"
+          : connectionState === "reauthorize"
+            ? "warning"
+            : activeConnection.connected
+              ? "success"
+              : "neutral"
     },
     {
       id: "security",
@@ -417,7 +434,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       id: "billing",
       icon: CreditCard,
       label: copy(locale, "billing"),
-      status: subscription?.planCode ?? "STARTER"
+      ...(subscription ? { status: formatAction(subscription.planCode) } : {})
     },
     {
       id: "data",
@@ -439,7 +456,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         action={
           disconnectWarningUrl ? (
             <a
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#F4A460]/30 bg-[#F4A460]/10 px-4 text-sm font-extrabold text-[#F4A460] transition hover:bg-[#F4A460]/15"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 text-[15px] font-semibold text-[var(--warning)] transition hover:bg-[color-mix(in_srgb,var(--warning)_15%,transparent)]"
               href={disconnectWarningUrl}
               rel="noreferrer"
               target="_blank"
@@ -456,53 +473,19 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         tone={notificationTone}
       />
       <header className="flex flex-col gap-5 border-b border-[var(--sunlit-line)] pb-7 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="sunlit-eyebrow inline-flex items-center gap-2">
-              <ShieldCheck size={13} />
-              {copy(locale, "eyebrow")}
-            </div>
-            <h1 className="mt-3 text-4xl font-bold leading-tight tracking-[-0.035em] text-[var(--sunlit-ink)] sm:text-5xl">{copy(locale, "title")}</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--sunlit-muted)] sm:text-base">{copy(locale, "subtitle")}</p>
-          </div>
+        <div>
+          <h1 className="text-[28px] font-semibold leading-tight text-[var(--sunlit-ink)]">{copy(locale, "title")}</h1>
         </div>
         <button
-          className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-extrabold disabled:opacity-50"
+          className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold disabled:opacity-50"
           disabled={isBusy || !session}
           onClick={refreshAllSettings}
           type="button"
         >
-          <RefreshCcw size={16} />
-          {copy(locale, "refresh")}
+          <RefreshCcw className={isBusy ? "animate-spin motion-reduce:animate-none" : undefined} size={16} />
+          {copy(locale, isBusy ? "loading" : "refresh")}
         </button>
       </header>
-
-      {isBusy || auditState ? (
-        <div className="mt-5">
-          <SurfaceState
-            action={
-              auditState === "limit" ? (
-                <a className="sunlit-primary inline-flex h-10 items-center rounded-xl px-4 text-sm font-extrabold" href={`/${locale}/admin`}>
-                  {copy(locale, "openAdmin")}
-                </a>
-              ) : (
-                <button
-                  className="sunlit-secondary inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-extrabold disabled:opacity-50"
-                  disabled={isBusy || !session}
-                  onClick={refreshAllSettings}
-                  type="button"
-                >
-                  <RefreshCcw size={15} />
-                  {copy(locale, "refresh")}
-                </button>
-              )
-            }
-            body={auditStateText(locale, isBusy ? "loading" : auditState).body}
-            title={auditStateText(locale, isBusy ? "loading" : auditState).title}
-            tone={auditState === "error" ? "error" : auditState === "success" ? "success" : auditState === "limit" ? "limit" : "loading"}
-          />
-        </div>
-      ) : null}
 
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[15rem_minmax(0,1fr)]">
         <SectionNavigation
@@ -515,17 +498,21 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         />
 
         <div className="grid min-w-0 gap-5">
+          <article className={`${selectedSection === "appearance" ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`} id="appearance">
+            <h2 className="mb-5 text-xl font-semibold text-[var(--text)]">{locale === "ar" ? "المظهر" : "Appearance"}</h2>
+            <AppearanceSettings locale={locale} />
+          </article>
           <div className="grid gap-5">
-            <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} kicker={copy(locale, "account")} title={userName} body={userEmail}>
+            <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} title={userName} body={userEmail}>
               <div className="mt-4 grid gap-2">
                 <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
-                <SettingRow label={copy(locale, "role")} value={(session?.roles ?? ["OWNER"]).join(", ")} />
+                <SettingRow label={copy(locale, "role")} value={session?.roles.map(formatAction).join(", ") ?? "—"} />
                 <SettingRow label={copy(locale, "verified")} value={session?.user.isVerified ? copy(locale, "yes") : copy(locale, "pending")} />
               </div>
               <div className="mt-5 flex flex-col gap-3 border-t border-[var(--sunlit-line)] pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "logoutBody")}</p>
+                <p className="text-[15px] leading-6 text-[var(--sunlit-muted)]">{copy(locale, "logoutBody")}</p>
                 <button
-                  className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold text-[var(--sunlit-coral-deep)] disabled:opacity-50"
+                  className="sunlit-secondary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold text-[var(--link)] disabled:opacity-50"
                   disabled={isLoggingOut || !session}
                   onClick={() => void logOut()}
                   type="button"
@@ -540,41 +527,33 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               active={selectedSection === "billing"}
               id="billing"
               icon={CreditCard}
-              kicker={copy(locale, "billing")}
-              title={subscription?.planCode ?? "STARTER"}
-              body={subscription?.status ?? copy(locale, "trial")}
+              title={subscription ? formatAction(subscription.planCode) : copy(locale, "billing")}
+              body={subscription ? formatAction(subscription.status) : copy(locale, "billingUnavailable")}
             >
               <div className="mt-4 grid gap-2">
-                <SettingRow label={copy(locale, "currency")} value="BHD" />
-                <SettingRow label={copy(locale, "invoices")} value={String(billing?.invoices.length ?? 0)} />
-                <SettingRow label={copy(locale, "payments")} value={String(billing?.payments.length ?? 0)} />
+                <SettingRow label={copy(locale, "currency")} value={billing ? "BHD" : "—"} />
+                <SettingRow label={copy(locale, "invoices")} value={billing ? String(billing.invoices.length) : "—"} />
+                <SettingRow label={copy(locale, "payments")} value={billing ? String(billing.payments.length) : "—"} />
               </div>
             </Panel>
           </div>
 
           <div className="grid gap-5">
             <div className="grid gap-5">
-              <Panel
-                active={selectedSection === "connections"}
-                id="connections"
-                icon={Instagram}
-                kicker={copy(locale, "channels")}
-                title={copy(locale, "instagram")}
-                body={copy(locale, activeConnection.connected ? "connectedStatus" : "disconnectedStatus")}
-              >
+              <Panel active={selectedSection === "connections"} id="connections" icon={Instagram} title={copy(locale, "instagram")} body={connectionLabel}>
                 {!instagramReady ? (
-                  <div className="mt-5 flex flex-col gap-4 rounded-[1.25rem] border border-[rgb(155_91_0_/_22%)] bg-[#fff8df] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-5 flex flex-col gap-4 rounded-[1.25rem] border border-[color-mix(in_srgb,var(--warning)_22%,transparent)] bg-[var(--warning-soft)] p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[var(--sunlit-warning)]">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--surface)] text-[var(--sunlit-warning)]">
                         <LockKeyhole size={18} />
                       </span>
                       <div>
-                        <p className="font-extrabold text-[var(--sunlit-ink)]">{copy(locale, "securityRequired")}</p>
-                        <p className="mt-1 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "securityRequiredBody")}</p>
+                        <p className="font-semibold text-[var(--sunlit-ink)]">{copy(locale, "securityRequired")}</p>
+                        <p className="mt-1 text-[15px] leading-6 text-[var(--sunlit-muted)]">{copy(locale, "securityRequiredBody")}</p>
                       </div>
                     </div>
                     <button
-                      className="sunlit-secondary inline-flex shrink-0 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-extrabold"
+                      className="sunlit-secondary inline-flex shrink-0 items-center justify-center rounded-xl px-4 py-2.5 text-[15px] font-semibold"
                       onClick={() => selectSettingsSection("security")}
                       type="button"
                     >
@@ -596,21 +575,26 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           </span>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-lg font-bold text-[var(--sunlit-ink)]">
+                          <p className="truncate text-lg font-semibold text-[var(--sunlit-ink)]">
                             {activeConnection.username ? `@${activeConnection.username}` : (activeConnection.accountId ?? copy(locale, "noAccountConnected"))}
                           </p>
-                          <p className="mt-0.5 text-sm font-semibold text-[var(--sunlit-muted)]">
+                          <p className="mt-0.5 text-[15px] font-semibold text-[var(--sunlit-muted)]">
                             {activeConnection.accountType ?? copy(locale, "instagramBusiness")}
                           </p>
                         </div>
                         <span
+                          data-instagram-status={connectionState}
                           className={
-                            activeConnection.connected
-                              ? "rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-aqua-dark)]"
-                              : "rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-xs font-extrabold text-[var(--sunlit-muted)]"
+                            connectionState === "failed"
+                              ? "rounded-full bg-[var(--danger-soft)] px-3 py-1.5 text-[13px] font-semibold text-[var(--danger)]"
+                              : connectionState === "reauthorize"
+                                ? "rounded-full bg-[var(--warning-soft)] px-3 py-1.5 text-[13px] font-semibold text-[var(--warning)]"
+                                : activeConnection.connected
+                                  ? "rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)]"
+                                  : "rounded-full bg-[var(--sunlit-paper-deep)] px-3 py-1.5 text-[13px] font-semibold text-[var(--sunlit-muted)]"
                           }
                         >
-                          {instagramStatusLabel(activeConnection)}
+                          {connectionLabel}
                         </span>
                       </div>
 
@@ -619,7 +603,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           label={copy(locale, "lastSync")}
                           value={activeConnection.lastSyncedAt ? new Date(activeConnection.lastSyncedAt).toLocaleString(locale) : copy(locale, "pending")}
                         />
-                        <SettingRow label={copy(locale, "publishMode")} value={copy(locale, "dryRun")} />
                         <SettingRow
                           label={copy(locale, "expires")}
                           value={
@@ -643,7 +626,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           className="h-full min-h-44 w-full object-cover transition duration-300 hover:scale-[1.03]"
                           src={latestMedia.thumbnailUrl ?? latestMedia.mediaUrl}
                         />
-                        <span className="absolute bottom-2 start-2 rounded-lg bg-black/65 px-2 py-1 text-[11px] font-bold text-white">
+                        <span className="absolute bottom-2 start-2 rounded-lg bg-black/65 px-2 py-1 text-[13px] font-semibold text-white">
                           {copy(locale, "latestPost")}
                         </span>
                       </a>
@@ -677,7 +660,6 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 active={selectedSection === "security"}
                 id="security"
                 icon={LockKeyhole}
-                kicker={copy(locale, "security")}
                 title={copy(locale, "securityTitle")}
                 body={copy(locale, "securityBody")}
               >
@@ -703,11 +685,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       })}
                     />
                   ) : null}
-                  <p className="mt-3 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaInstagramBody")}</p>
+                  <p className="mt-3 text-[15px] leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaInstagramBody")}</p>
                 </div>
 
                 {mfaSetup && !mfaSetup.enabled ? (
-                  <div className="mt-4 grid gap-4 rounded-[1.25rem] border border-[rgb(246_196_83_/_36%)] bg-[#fff8df] p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                  <div className="mt-4 grid gap-4 rounded-[1.25rem] border border-[color-mix(in_srgb,var(--secondary)_36%,transparent)] bg-[var(--warning-soft)] p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
                     <div className="mx-auto rounded-2xl bg-white p-2 shadow-[var(--sunlit-shadow-sm)] sm:mx-0">
                       <QRCodeSVG
                         bgColor="#FFFFFF"
@@ -720,16 +702,16 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                       />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-lg font-bold text-[var(--sunlit-ink)]">{copy(locale, "mfaScanTitle")}</p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaScanBody")}</p>
-                      <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sunlit-muted)]">{copy(locale, "manualKey")}</p>
-                      <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-white p-2">
-                        <code className="min-w-0 flex-1 break-all text-xs font-bold tracking-[0.12em] text-[var(--sunlit-aqua-dark)]" dir="ltr">
+                      <p className="text-lg font-semibold text-[var(--sunlit-ink)]">{copy(locale, "mfaScanTitle")}</p>
+                      <p className="mt-2 text-[15px] leading-6 text-[var(--sunlit-muted)]">{copy(locale, "mfaScanBody")}</p>
+                      <p className="mt-4 text-[13px] font-semibold text-[var(--sunlit-muted)]">{copy(locale, "manualKey")}</p>
+                      <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-2">
+                        <code className="min-w-0 flex-1 break-all text-[13px] font-semibold tracking-[0.12em] text-[var(--sunlit-aqua-dark)]" dir="ltr">
                           {mfaSetup.secret}
                         </code>
                         <button
                           aria-label={copy(locale, "copyKey")}
-                          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)] transition hover:brightness-95"
+                          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[color-mix(in_srgb,var(--secondary)_24%,transparent)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)] transition hover:brightness-95"
                           onClick={() => void copyMfaSecret()}
                           title={copy(locale, "copyKey")}
                           type="button"
@@ -737,7 +719,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                           {mfaSecretCopied ? <Check size={16} /> : <CopyIcon size={16} />}
                         </button>
                       </div>
-                      {mfaSecretCopied ? <p className="mt-2 text-xs font-semibold text-[var(--sunlit-aqua-dark)]">{copy(locale, "keyCopied")}</p> : null}
+                      {mfaSecretCopied ? <p className="mt-2 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)]">{copy(locale, "keyCopied")}</p> : null}
                     </div>
                   </div>
                 ) : null}
@@ -747,7 +729,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                     <input
                       aria-label={copy(locale, "mfaCode")}
                       autoComplete="one-time-code"
-                      className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none disabled:opacity-50"
+                      className="sunlit-field rounded-xl px-4 py-3 text-[15px] font-semibold outline-none disabled:opacity-50"
                       disabled={!mfaSetup || isBusy}
                       inputMode="numeric"
                       onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -766,11 +748,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 ) : null}
 
                 {mfaStatus?.enabled && !mfaStepUpActive ? (
-                  <div className="mt-4 grid gap-3 rounded-[1.25rem] border border-[rgb(33_191_174_/_24%)] bg-[var(--sunlit-aqua-soft)] p-4 md:grid-cols-[1fr_auto]">
+                  <div className="mt-4 grid gap-3 rounded-[1.25rem] border border-[color-mix(in_srgb,var(--secondary)_24%,transparent)] bg-[var(--sunlit-aqua-soft)] p-4 md:grid-cols-[1fr_auto]">
                     <input
                       aria-label={copy(locale, "mfaCode")}
                       autoComplete="one-time-code"
-                      className="sunlit-field rounded-xl px-4 py-3 text-sm font-semibold outline-none"
+                      className="sunlit-field rounded-xl px-4 py-3 text-[15px] font-semibold outline-none"
                       disabled={isBusy}
                       inputMode="numeric"
                       onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -802,14 +784,13 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               active={selectedSection === "data"}
               id="data"
               icon={Database}
-              kicker={copy(locale, "dataControls")}
               title={copy(locale, "dataActivityTitle")}
               body={copy(locale, "dataControlsBody")}
             >
               <div className="mt-5 flex flex-wrap gap-2">
                 <ActionButton disabled={isBusy} icon={Download} label={copy(locale, "exportData")} onClick={exportData} />
                 <a
-                  className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold"
+                  className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[15px] font-semibold"
                   href={`/${locale}/app/knowledge`}
                 >
                   {copy(locale, "openVault")}
@@ -818,20 +799,20 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
               </div>
 
               <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
-                <h3 className="text-base font-bold text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
-                <p className="mt-1 text-sm text-[var(--sunlit-muted)]">{copy(locale, "auditBody")}</p>
+                <h3 className="text-base font-semibold text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
+                <p className="mt-1 text-[15px] text-[var(--sunlit-muted)]">{copy(locale, "auditBody")}</p>
                 {auditLogs.length === 0 ? (
-                  <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-sm text-[var(--sunlit-muted)]">
+                  <div className="mt-4 rounded-[1.25rem] border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] p-6 text-[15px] text-[var(--sunlit-muted)]">
                     {copy(locale, "auditEmpty")}
                   </div>
                 ) : (
                   <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)]">
                     {auditLogs.slice(0, 8).map((log) => (
                       <div
-                        className="grid gap-1 border-b border-[var(--sunlit-line)] px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
+                        className="grid gap-1 border-b border-[var(--sunlit-line)] px-4 py-3 text-[15px] last:border-b-0 md:grid-cols-[minmax(160px,1fr)_160px_180px]"
                         key={log.id}
                       >
-                        <span className="font-extrabold text-[var(--sunlit-ink)]">{formatAction(log.action)}</span>
+                        <span className="font-semibold text-[var(--sunlit-ink)]">{formatAction(log.action)}</span>
                         <span className="text-[var(--sunlit-muted)]">{log.targetType}</span>
                         <span className="text-[var(--sunlit-muted)]">{new Date(log.createdAt).toLocaleString(locale)}</span>
                       </div>
@@ -853,7 +834,6 @@ function Panel({
   children,
   id,
   icon: Icon,
-  kicker,
   title
 }: {
   active: boolean;
@@ -861,18 +841,16 @@ function Panel({
   children?: React.ReactNode;
   id?: string;
   icon: LucideIcon;
-  kicker: string;
   title: string;
 }) {
   return (
     <article className={`${active ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`} id={id}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="sunlit-eyebrow">{kicker}</p>
-          <h2 className="mt-2 break-words text-xl font-bold text-[var(--sunlit-ink)]">{title}</h2>
-          <p className="mt-1 break-words text-sm leading-6 text-[var(--sunlit-muted)]">{body}</p>
+          <h2 className="break-words text-xl font-semibold text-[var(--sunlit-ink)]">{title}</h2>
+          <p className="mt-1 break-words text-[15px] leading-6 text-[var(--sunlit-muted)]">{body}</p>
         </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[rgb(33_191_174_/_20%)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
           <Icon size={21} strokeWidth={1.8} />
         </div>
       </div>
@@ -883,9 +861,9 @@ function Panel({
 
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-[var(--sunlit-muted)]">{label}</span>
-      <span className="min-w-0 break-words text-end font-extrabold text-[var(--sunlit-ink)]">{value}</span>
+    <div className="flex items-start justify-between gap-4 text-[15px]">
+      <span className="text-[14px] text-[var(--sunlit-muted)]">{label}</span>
+      <span className="min-w-0 break-words text-end font-semibold text-[var(--sunlit-ink)]">{value}</span>
     </div>
   );
 }
@@ -907,8 +885,8 @@ function ActionButton({
     <button
       className={
         tone === "primary"
-          ? "sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold disabled:opacity-45"
-          : "sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold disabled:opacity-40"
+          ? "sunlit-primary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold disabled:opacity-45"
+          : "sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold disabled:opacity-40"
       }
       disabled={disabled}
       onClick={onClick}
@@ -962,54 +940,6 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
   return settingsSectionIds.includes(value as SettingsSectionId);
 }
 
-function isAuditState(value: string | null): value is AuditState {
-  return value === "loading" || value === "error" || value === "success" || value === "limit";
-}
-
-function auditStateText(locale: Locale, state: AuditState | null): { body: string; title: string } {
-  const resolved = state ?? "success";
-  const dictionary: Record<Locale, Record<AuditState, { body: string; title: string }>> = {
-    ar: {
-      error: {
-        body: "تعذر تحميل إعدادات مساحة العمل. لن يتم تنفيذ التغييرات الحساسة حتى تعود بيانات الحساب والفوترة والقنوات.",
-        title: "تعذر تحميل الإعدادات"
-      },
-      limit: {
-        body: "بعض تغييرات الخطة أو القنوات تحتاج ترقية أو مراجعة حدود الاشتراك قبل المتابعة.",
-        title: "تحتاج مراجعة الخطة"
-      },
-      loading: {
-        body: "يتم تحميل الحساب، الفوترة، اتصال Instagram، وسجل التدقيق لمساحة العمل الحالية.",
-        title: "جار تحديث الإعدادات"
-      },
-      success: {
-        body: "الإعدادات جاهزة. يمكنك إدارة القنوات، الأمان، الفوترة، والبيانات مع بقاء كل شيء مرتبطاً بمساحة العمل.",
-        title: "الإعدادات جاهزة"
-      }
-    },
-    en: {
-      error: {
-        body: "Workspace settings could not be loaded. Sensitive changes stay blocked until account, billing, and channel data return.",
-        title: "Settings load failed"
-      },
-      limit: {
-        body: "Some plan or channel changes need a subscription upgrade or plan review before they can continue.",
-        title: "Plan review needed"
-      },
-      loading: {
-        body: "Loading account, billing, Instagram connection, and audit history for the current workspace.",
-        title: "Refreshing settings"
-      },
-      success: {
-        body: "Settings are ready. Manage channels, security, billing, and data controls while everything remains workspace-scoped.",
-        title: "Settings ready"
-      }
-    }
-  };
-
-  return dictionary[locale][resolved];
-}
-
 function copy(locale: Locale, key: string): string {
   const dictionary = {
     ar: {
@@ -1018,19 +948,23 @@ function copy(locale: Locale, key: string): string {
       attention: "تنبيه",
       dismissNotification: "إغلاق الإشعار",
       authorizationFailed: "تعذر إكمال تفويض Instagram. حاول الاتصال مجدداً.",
-      auditBody: "آخر أحداث مساحة العمل والإعدادات الحساسة.",
+      auditBody: "آخر تغييرات الحساب ومساحة العمل.",
       auditEmpty: "لا توجد أحداث تدقيق بعد.",
-      auditTitle: "سجل التدقيق",
+      auditTitle: "النشاط الأخير",
       billing: "الفوترة",
+      billingUnavailable: "تفاصيل الفوترة غير متاحة.",
       channels: "القنوات",
       connected: "تم حفظ اتصال إنستغرام.",
       connectedStatus: "متصل",
+      connectingStatus: "جارٍ الاتصال",
+      reconnectRequired: "أعِد ربط الحساب",
+      connectionFailed: "تعذّر الاتصال",
       copyFailed: "تعذر نسخ المفتاح. يمكنك تحديده ونسخه يدوياً.",
       copyKey: "نسخ المفتاح اليدوي",
       currency: "العملة",
-      dataControls: "البيانات والذاكرة",
+      dataControls: "البيانات والنشاط",
       dataActivityTitle: "البيانات والنشاط",
-      dataControlsBody: "التصدير والتدقيق والذاكرة التجارية تبقى مرتبطة بمساحة العمل.",
+      dataControlsBody: "نزّل بيانات مساحة العمل أو راجع آخر التغييرات.",
       disconnect: "فصل",
       disconnected: "تم فصل إنستغرام.",
       disconnectedRevoked: "تم فصل إنستغرام وإلغاء وصول MARKOS لدى Meta.",
@@ -1059,7 +993,7 @@ function copy(locale: Locale, key: string): string {
       mfaCode: "رمز التحقق",
       mfaCodeRequired: "أدخل رمز المصادقة المكون من ستة أرقام.",
       mfaEnabled: "تم تفعيل MFA.",
-      mfaInstagramBody: "يفتح تحقق MFA إعدادات Instagram الحساسة لمدة 15 دقيقة، ويستمر خلال تحديث الجلسة والعودة من Instagram.",
+      mfaInstagramBody: "يتيح لك التحقق إدارة اتصال Instagram لمدة 15 دقيقة.",
       mfaInstagramRequired: "أكمل إعداد MFA أدناه قبل ربط Instagram.",
       mfaReady: "امسح الرمز في تطبيق المصادقة ثم أدخل الكود.",
       mfaQrTitle: "رمز QR لإعداد المصادقة متعددة العوامل في MARKOS",
@@ -1071,7 +1005,7 @@ function copy(locale: Locale, key: string): string {
       manualKey: "المفتاح اليدوي",
       keyCopied: "تم نسخ المفتاح.",
       notEnabled: "غير مفعّل",
-      oauth: "اتصال OAuth",
+      oauth: "ربط Instagram",
       latestPost: "أحدث منشور",
       latestPostPreview: "معاينة أحدث منشور في Instagram",
       loggingOut: "جارٍ تسجيل الخروج...",
@@ -1087,14 +1021,15 @@ function copy(locale: Locale, key: string): string {
       previewWorkspace: "معاينة محلية",
       publishMode: "وضع النشر",
       refresh: "تحديث",
+      refreshed: "تم تحديث الإعدادات.",
       refreshToken: "تحديث الرمز",
       reconnect: "إعادة الاتصال",
       role: "الدور",
       save: "حفظ",
       secret: "السر",
       security: "الأمان",
-      securityBody: "MFA، صلاحيات الوصول، وتصدير البيانات الحساسة.",
-      securityTitle: "ضوابط الوصول",
+      securityBody: "احمِ حسابك باستخدام تطبيق المصادقة.",
+      securityTitle: "أمان الحساب",
       setupMfa: "إعداد MFA",
       securityLoading: "يتم تحميل حالة الأمان. حاول بعد لحظة.",
       securityRequired: "أكمل إعدادات الأمان أولاً",
@@ -1120,19 +1055,23 @@ function copy(locale: Locale, key: string): string {
       attention: "Attention",
       dismissNotification: "Dismiss notification",
       authorizationFailed: "Instagram authorization could not be completed. Try connecting again.",
-      auditBody: "Recent workspace and sensitive settings events.",
+      auditBody: "Recent account and workspace changes.",
       auditEmpty: "No audit events yet.",
-      auditTitle: "Audit trail",
+      auditTitle: "Recent activity",
       billing: "Billing",
+      billingUnavailable: "Billing details are not available.",
       channels: "Channels",
       connected: "Instagram connection saved.",
       connectedStatus: "Connected",
+      connectingStatus: "Connecting",
+      reconnectRequired: "Reconnect required",
+      connectionFailed: "Connection failed",
       copyFailed: "The key could not be copied. Select and copy it manually.",
       copyKey: "Copy manual key",
       currency: "Currency",
-      dataControls: "Data and memory",
+      dataControls: "Data and activity",
       dataActivityTitle: "Data and activity",
-      dataControlsBody: "Export, audit, and business memory stay workspace-scoped.",
+      dataControlsBody: "Download your workspace data or review recent changes.",
       disconnect: "Disconnect",
       disconnected: "Instagram disconnected.",
       disconnectedRevoked: "Instagram disconnected and Meta confirmed that MARKOS access was revoked.",
@@ -1161,7 +1100,7 @@ function copy(locale: Locale, key: string): string {
       mfaCode: "Verification code",
       mfaCodeRequired: "Enter the six-digit authenticator code.",
       mfaEnabled: "MFA enabled.",
-      mfaInstagramBody: "One MFA check opens sensitive Instagram settings for 15 minutes, including through session refresh and the return from Instagram.",
+      mfaInstagramBody: "Verification lets you manage Instagram for 15 minutes.",
       mfaInstagramRequired: "Set up MFA below before connecting Instagram.",
       mfaReady: "Scan the QR code in your authenticator, then enter the code.",
       mfaQrTitle: "QR code for setting up MARKOS multi-factor authentication",
@@ -1173,7 +1112,7 @@ function copy(locale: Locale, key: string): string {
       manualKey: "Manual setup key",
       keyCopied: "Key copied.",
       notEnabled: "Not enabled",
-      oauth: "Connect OAuth",
+      oauth: "Connect Instagram",
       latestPost: "Latest post",
       latestPostPreview: "Preview the latest Instagram post",
       loggingOut: "Logging out...",
@@ -1189,14 +1128,15 @@ function copy(locale: Locale, key: string): string {
       previewWorkspace: "Local preview",
       publishMode: "Publish mode",
       refresh: "Refresh",
+      refreshed: "Settings refreshed.",
       refreshToken: "Refresh token",
       reconnect: "Reconnect",
       role: "Role",
       save: "Save",
       secret: "Secret",
       security: "Security",
-      securityBody: "MFA, access permissions, and sensitive data export controls.",
-      securityTitle: "Access controls",
+      securityBody: "Protect your account with an authenticator app.",
+      securityTitle: "Account security",
       setupMfa: "Set up MFA",
       securityLoading: "Security status is still loading. Try again in a moment.",
       securityRequired: "Complete security first",

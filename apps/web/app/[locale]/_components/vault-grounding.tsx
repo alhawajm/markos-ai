@@ -37,13 +37,13 @@ export function useVaultGroundingState(input: VaultGroundingInput): VaultGroundi
 export function VaultGroundingNotice({ locale, state }: { locale: Locale; state: VaultGroundingState }) {
   if (state.blocked) {
     return (
-      <div className="rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5 text-xs text-accent">
+      <div className="rounded-xl border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] bg-[var(--accent-soft)] px-3 py-2.5 text-xs text-[var(--link)]">
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 shrink-0" size={15} />
           <div className="min-w-0 flex-1">
             <p className="font-extrabold">{groundingCopy(locale, "gapTitle")}</p>
             <p className="mt-1 leading-5">{groundingCopy(locale, `${state.area}GapBody`)}</p>
-            <a className="mt-2 inline-flex items-center gap-1.5 font-extrabold text-accent underline-offset-4 hover:underline" href={`/${locale}/vault`}>
+            <a className="mt-2 inline-flex items-center gap-1.5 font-extrabold text-[var(--link)] underline-offset-4 hover:underline" href={`/${locale}/vault`}>
               <Database size={13} />
               {groundingCopy(locale, "fixVault")}
             </a>
@@ -54,16 +54,16 @@ export function VaultGroundingNotice({ locale, state }: { locale: Locale; state:
   }
 
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700">
+    <div className="rounded-xl border border-[var(--success)] bg-[var(--success-soft)] px-3 py-2.5 text-xs text-[var(--success)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
           <CheckCircle2 className="mt-0.5 shrink-0" size={15} />
           <div className="min-w-0">
             <p className="font-extrabold">{groundingCopy(locale, "groundedTitle")}</p>
-            <p className="mt-1 leading-5 text-emerald-800/75">{state.sources.join(" · ")}</p>
+            <p className="mt-1 leading-5 text-[var(--muted)]">{state.sources.join(" · ")}</p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-white px-2 py-1 font-extrabold text-emerald-600">{state.confidence}</span>
+        <span className="shrink-0 rounded-full bg-[var(--surface)] px-2 py-1 font-extrabold text-[var(--success)]">{state.confidence}</span>
       </div>
     </div>
   );

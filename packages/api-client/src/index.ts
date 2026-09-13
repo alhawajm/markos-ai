@@ -25,6 +25,8 @@ import type {
   BusinessProfile,
   CampaignGenerationDurationDays,
   CampaignRecord,
+  CampaignReviewRecord,
+  CampaignSummaryPage,
   CalendarReadResult,
   ContentRecord,
   ContentConversationRecord,
@@ -368,6 +370,20 @@ export class MarkosApiClient {
 
   async campaigns(): Promise<CampaignRecord[]> {
     const response = await this.request<CampaignRecord[]>("/v1/campaigns");
+    return response.data;
+  }
+
+  async campaignSummaries(input: { limit?: number; cursor?: string; query?: string } = {}): Promise<CampaignSummaryPage> {
+    const query = new URLSearchParams();
+    if (input.limit !== undefined) query.set("limit", String(input.limit));
+    if (input.cursor !== undefined) query.set("cursor", input.cursor);
+    if (input.query !== undefined) query.set("query", input.query);
+    const response = await this.request<CampaignSummaryPage>(`/v1/campaigns/summaries${query.size ? `?${query}` : ""}`);
+    return response.data;
+  }
+
+  async campaignReview(campaignId: string): Promise<CampaignReviewRecord> {
+    const response = await this.request<CampaignReviewRecord>(`/v1/campaigns/${encodeURIComponent(campaignId)}/review`);
     return response.data;
   }
 

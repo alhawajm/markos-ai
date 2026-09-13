@@ -1,5 +1,6 @@
 import { ArrowLeft, FileText, Globe2, ShieldCheck } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
+import { ThemeSelect } from "../../_components/theme-control";
 import { SectionNavigation } from "./section-navigation";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./legal-document.module.css";
@@ -316,6 +317,7 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المستند" : "Document navigation"}>
+          <ThemeSelect locale={locale} />
           <a className={styles.backLink} href={signupHref}>
             <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
             {copy.back}
@@ -353,7 +355,6 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
             <span className={styles.documentIcon} aria-hidden="true">
               {kind === "privacy" ? <ShieldCheck size={25} /> : <FileText size={25} />}
             </span>
-            <p className={styles.eyebrow}>{document.eyebrow}</p>
             <h1>{document.title}</h1>
             <p className={styles.intro}>{document.intro}</p>
             <div className={styles.documentMeta}>

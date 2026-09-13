@@ -68,11 +68,11 @@ describe("active SettingsPanel Instagram interactions", () => {
     await expect(page.getByRole("heading", { name: "Settings", exact: true }).isVisible()).resolves.toBe(true);
     await expect(page.locator(".bg-card, .bg-canvas, .text-navy").count()).resolves.toBe(0);
     await expect(page.getByText("No account connected", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByText("Dry run", { exact: true }).isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Dry run", { exact: true }).count()).resolves.toBe(0);
     await expect(page.getByText("Zain Arabia").count()).resolves.toBe(0);
     await expect(page.getByRole("button", { name: "Refresh token" }).isDisabled()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: "Disconnect" }).isDisabled()).resolves.toBe(true);
-    const connect = page.getByRole("button", { name: "Connect OAuth" });
+    const connect = page.getByRole("button", { name: "Connect Instagram" });
     let pending: Route | undefined;
     await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/workspace\/instagram\/oauth\/start$/, async (route) => {
       requests.push(route.request().url());
@@ -115,6 +115,23 @@ describe("active SettingsPanel Instagram interactions", () => {
 
     expect(requests.filter((url) => url.endsWith("/v1/auth/logout"))).toHaveLength(1);
     await expect(page.evaluate(() => localStorage.getItem("markos.session"))).resolves.toBeNull();
+    await page.close();
+  });
+
+  it("does not invent a billing plan and refreshes without moving the settings panel", async () => {
+    const { page } = await settingsPage(disconnected, "/en/app/settings?state=limit#billing");
+    const panel = page.locator("#billing");
+    await panel.getByText("Billing details are not available.").waitFor();
+    await expect(page.getByText("STARTER", { exact: true }).count()).resolves.toBe(0);
+    await expect(page.getByText("Trial", { exact: true }).count()).resolves.toBe(0);
+    await expect(page.getByText("Plan review needed", { exact: true }).count()).resolves.toBe(0);
+    const before = await panel.boundingBox();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    const notification = page.locator('[data-notification-toast][role="status"]');
+    await notification.getByText("Settings refreshed.").waitFor();
+    expect((await panel.boundingBox())?.y).toBe(before?.y);
+    await notification.waitFor({ state: "detached", timeout: 8000 });
+    await expect(page.getByText("Settings ready", { exact: true }).count()).resolves.toBe(0);
     await page.close();
   });
 
@@ -210,7 +227,18 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.getByRole("button", { name: "Back" }).click();
     const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
     await expect(backGuard.isVisible()).resolves.toBe(true);
-    await backGuard.getByRole("button", { name: "Keep editing" }).click();
+    const dialogBounds = await backGuard.boundingBox();
+    const viewportHeight = page.viewportSize()!.height;
+    expect(dialogBounds!.height).toBeLessThan(viewportHeight - 32);
+    expect(Math.abs(dialogBounds!.y + dialogBounds!.height / 2 - viewportHeight / 2)).toBeLessThan(2);
+    await expect(backGuard.evaluate((element) => getComputedStyle(element, "::backdrop").backgroundColor)).resolves.not.toBe("rgba(0, 0, 0, 0)");
+    const keepEditing = backGuard.getByRole("button", { name: "Keep editing" });
+    await expect(keepEditing.evaluate((element) => element === document.activeElement)).resolves.toBe(true);
+    await page.keyboard.press("Shift+Tab");
+    await expect(backGuard.evaluate((element) => element.contains(document.activeElement))).resolves.toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(backGuard.count()).resolves.toBe(0);
+    await expect(page.getByRole("button", { name: "Back", exact: true }).evaluate((element) => element === document.activeElement)).resolves.toBe(true);
     await expect(offeringField.inputValue()).resolves.toBe("Coffee beans");
     await page.getByRole("button", { name: "Back" }).click();
     await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
@@ -401,10 +429,10 @@ describe("active SettingsPanel Instagram interactions", () => {
       connected: false,
       status: "REAUTHORIZE_REQUIRED"
     });
-    await expired.page.getByText("reauthorize", { exact: true }).waitFor();
-    await expect(expired.page.getByText("reauthorize", { exact: true }).isVisible()).resolves.toBe(true);
+    await expired.page.locator('[data-instagram-status="reauthorize"]').getByText("Reconnect required", { exact: true }).waitFor();
+    await expect(expired.page.locator('[data-instagram-status="reauthorize"]').isVisible()).resolves.toBe(true);
     await expect(expired.page.getByText(/revoked/i).count()).resolves.toBe(0);
-    await expect(expired.page.getByRole("button", { name: "Connect OAuth" }).isEnabled()).resolves.toBe(true);
+    await expect(expired.page.getByRole("button", { name: "Connect Instagram" }).isEnabled()).resolves.toBe(true);
     await expect(expired.page.getByRole("button", { name: "Refresh token" }).isDisabled()).resolves.toBe(true);
     await expired.page.close();
   });
@@ -469,6 +497,24 @@ describe("active SettingsPanel Instagram interactions", () => {
     const mfaStatusRow = page.getByText("MFA", { exact: true }).locator("..");
     expect(await mfaStatusRow.innerText()).toContain("Verified for 15 minutes");
     await page.locator('[data-notification-toast][role="status"]').waitFor({ state: "detached", timeout: 8000 });
+    await page.close();
+  });
+
+  it("shows a failed Instagram connection in Arabic without a success color", async () => {
+    const { page } = await settingsPage({ ...connected, status: "REFRESH_FAILED" }, "/ar/app/settings#connections");
+    const status = page.locator('[data-instagram-status="failed"]');
+    await status.getByText("تعذّر الاتصال", { exact: true }).waitFor();
+    const colors = await status.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      const probe = document.createElement("span");
+      probe.style.color = "var(--danger)";
+      element.appendChild(probe);
+      const danger = getComputedStyle(probe).color;
+      probe.remove();
+      return { color: styles.color, danger };
+    });
+    expect(colors.color).toBe(colors.danger);
+    await expect(page.getByText("failed", { exact: true }).count()).resolves.toBe(0);
     await page.close();
   });
 

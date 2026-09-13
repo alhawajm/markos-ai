@@ -82,7 +82,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
   return (
     <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
       <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
-        <span className="mx-auto block h-16 w-16 animate-pulse rounded-2xl bg-[var(--sunlit-aqua-soft)] shadow-[inset_0_0_0_1px_rgb(33_191_174_/_22%)]" />
+        <span className="mx-auto block h-16 w-16 animate-pulse rounded-2xl bg-[var(--sunlit-aqua-soft)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--secondary)_22%,transparent)]" />
         <h1 className="mt-7 text-3xl font-bold text-[var(--sunlit-ink)]">
           {status === "failed"
             ? locale === "ar"

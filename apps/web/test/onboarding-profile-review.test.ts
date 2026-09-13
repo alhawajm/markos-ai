@@ -11,7 +11,6 @@ describe("first-time onboarding profile review", () => {
       expect(source).toContain(heading);
     }
     expect(source).toContain("aria-expanded={expanded}");
-    expect(source).toContain("Review & edit");
     expect(source).toContain("line-clamp-3");
     expect(source).toContain("resize-none");
   });

@@ -2,7 +2,7 @@
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-09-06
+- Last updated: 2026-09-10
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -12,7 +12,54 @@ Product behavior, lifecycle rules, data contracts, security, permissions, and in
 
 Each surface entry should state what is accepted, what remains deferred or open, and the observable consequence for implementation and review.
 
+## Shared visual foundation
+
+### 2026-09-10 — Adopt the light and dark site palette
+
+**Approved by Khalid for direct application to the project**
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--text` | `#20212b` | `#f2faf7` |
+| `--background` | `#f7fafa` | `#151821` |
+| `--primary` | `#d88fa3` | `#8fe3da` |
+| `--secondary` | `#81d8d0` | `#7b6af0` |
+| `--accent` | `#6c3ce8` | `#d9a0b1` |
+
+- Apply both palettes to the real public and authenticated site, including shared controls, forms, cards, dialogs, navigation, and data displays. A sandbox or prototype-only update does not satisfy this decision.
+- Preserve these base values and derive the supporting semantic roles centrally. Map surviving Sunlit and legacy aliases to the same theme so older components do not retain unrelated brand colors.
+- Use the supplied dark dashboard image as a reference for quiet dark surfaces, violet support panels, aqua emphasis, and rose highlights. It does not approve new dashboard content, navigation, or product behavior.
+- Preserve readable typography, generous controls, English/Arabic parity, and keyboard focus. Use contrasting on-color labels; do not put white normal text on pastel actions or assume the dark secondary violet is a suitable normal-text link.
+- Keep status labels, icons, and semantic success/warning/error distinctions. Theme selection must change presentation consistently without altering business data or application state.
+- This decision supersedes earlier light-only instructions, coral/yellow brand treatments, and the deferred palette/dark-mode status in the August foundation experiments. The follow-up below records the separately approved font and refinement choices; the retired dark-luxury layout remains superseded.
+
+**Verification boundary:** palette choice is approved. Implementation must still be checked in the actual application for both themes, across representative public/authenticated forms and dense working surfaces, including Arabic/RTL. Record completed checks separately; the supplied screenshot and this decision are not runtime evidence.
+
+**Local implementation checkpoint, 2026-09-10:** the mounted site now uses `apps/web/app/theme-tokens.css`, with persistent Light/Dark/System controls and a pre-paint theme initializer. Web typecheck, ESLint, formatting, 41 unit tests, and 21 focused browser tests passed. Browser checks cover the exact palettes, readable primary-action contrast, keyboard switching, refresh/locale persistence, system changes, and existing presentation/authentication/public/legal journeys. Additional dark-mode screenshots reviewed Overview, Create and its caption editor, Business Profile, Settings, login, and Arabic signup, including Create at 390px. Authenticated visual checks used browser-local API fixtures; this checkpoint does not establish live backend or deployment behavior. Local screenshots and diagnostics are in the ignored `docs_khalid/ui-evidence/theme-20260910/` folder.
+
+### 2026-09-10 — Readable bilingual typography and coherent page refinement
+
+**Approved for direct implementation**
+
+- Replace Inter with IBM Plex Sans for English and IBM Plex Sans Arabic for Arabic. Both use local normal-weight 400/500/600/700 WOFF2 files, loaded through `next/font/local`; source and license evidence is in [the asset README](../apps/web/app/fonts/README.md). Readex Pro is only the fallback proposal if maintaining the two families proves impractical.
+- Use a fixed 16px root across viewports, 16px body, 15px controls, 14px labels, and 13px metadata. Reserve occasional 12px text for secondary metadata; remove normal UI at 10px or 11px. Prefer 400–600 weights and occasional 700, with readable Arabic line height and normal Arabic tracking.
+- Remove decorative eyebrows, redundant captions, repeated state narration, and excessively small all-caps labels. Keep instructions that change a user's decision, honest unavailable states, illustrative-data labels, security requirements, destructive consequences, and recovery actions.
+- Make Settings the primary home of Appearance. Any visitor/user-menu quick access is compact and secondary; Light/Dark/System preference and refresh/locale/system-change behavior remain available.
+- Correct dark primary text to `#f2faf7`, superseding the initial `#f2f4f7` used in the earlier palette checkpoint. Keep all other approved base values. Use Draft neutral, Ready teal, Scheduled violet/blue, Published green, Failed red, and review/attention amber with shared semantic foreground/background/border roles and text labels.
+- Preserve the existing backend, workspace records, approvals, publishing, sessions, onboarding behavior, and manual-only Business Profile increment. This refinement does not activate deferred commercial limits, provider features, or learning-loop functionality.
+
+**Local implementation checkpoint:** bounded passes 0–6 are complete, covering the audit, foundation, shell, shared patterns, core pages, and remaining Settings/onboarding/public/auth/legal surfaces. Routine feedback is temporary, unsupported billing/provider claims are removed, and native dialogs use shared focus and scroll handling. Final review corrected page-level negative tracking on Arabic headings. The earlier palette test totals above remain evidence for that earlier checkpoint; the [refinement audit and execution record](analysis/ui-refinement-audit-2026-09-10.md) records current checks and limitations. Final QA is complete: the full browser suite passed against the production build. The audit records exact outcomes and evidence boundaries. These are local UI checks, including fictional browser fixtures, not evidence of live database, provider, Instagram, or deployment readiness.
+
 ## Create
+
+### 2026-09-10 — Retain the refined Create workspace
+
+**Accepted by Khalid**
+
+- Keep the refined composition with manual editing alongside the MARKOS companion. Caption, media, and post-detail controls remain available without requiring an AI action.
+- Show the preview only when media is present and preserve the `6:19` outer preview ratio. Content type changes the media presentation within that consistent canvas.
+- Preserve saved conversations, the unified final caption, existing draft records, Save/Leave handling, readiness, scheduling, and publication contracts. This is a UI refinement; it does not introduce backend or learning-loop behavior.
+- This accepted composition supersedes earlier ratios and editor arrangements below where they conflict. Final browser/build verification is tracked in the September 10 refinement audit.
 
 ### 2026-09-06 — Conversation and Instagram preview workspace
 
@@ -395,3 +442,24 @@ Khalid selected durable text conversations first, keeping image/video generation
 Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
 
 The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.
+
+## 2026-09-07: Business Profile uses focused editing and explicit consequences
+
+Khalid emphasized simplicity, contrast, consistency, low cognitive load, user control, and user understanding. Apply these principles to the planned Business Profile editor: show readable saved knowledge, reveal focused editing in modals, and prevent overlapping editing tasks in the page. Use confirmation for meaningful discard/archive consequences; an ordinary Save does not need another confirmation. Preserve readable typography and comfortable controls, and avoid persistent routine notifications that move page content.
+
+The detailed candidate is recorded in [the Business Profile plan](business-profile-plan.md): a wide profile surface, searchable and filterable offering rows, and one offering editor at a time. Khalid narrowed the first increment to manual editing; remove the earlier assistant panel and AI change-review states from this candidate, and do not reserve empty space or show disabled AI controls. The layout remains a prototype proposal awaiting visual review. Keep crowded forms, nested dialogs, and bulk editing out of the first candidate; preserve keyboard accessibility and Arabic/RTL parity.
+
+Use **Marketing strategy** as the section name. Add a simple owner-reported establishment-stage field to Business basics in Onboarding and the corresponding Business Profile editor. Its wording must describe how established the business is without claiming to score its quality, size, or competence. Prefer stable, readable business information over a page that pressures the owner to keep changing it.
+
+## 2026-09-10 — Focused sidebar, Create, and review follow-ups
+
+- Widen the collapsed rail enough to preserve comfortable icon targets without horizontal scrolling. Keep expanded navigation unchanged and preserve hover/focus labels outside the navigation's clipping area.
+- After Khalid's width feedback, settle the collapsed rail at **96px** instead of the first follow-up's 104px. Reduce its inline padding with the rail so icon targets and tooltip behavior retain their usable space.
+- Keep Create's conversation primary, including when a saved post already has media. A persistent thumbnail with **View preview** opens the preview deliberately; **Back to MARKOS** returns to the conversation. New attachments briefly emphasize the preview control without changing the view or focus. Replace the earlier narrow 6:19 outer preview with 9:19, bounded to a desktop maximum of 342 × 722px. Preserve the manual editor and existing lifecycle controls.
+- Use recognizable icons with visible names for new content-type choices. Emphasize the unset choice briefly, honor reduced motion, and keep an existing type compact. Replace the visible MARKOS working sentence with one accessible spinner in the companion heading.
+- Plan Campaign review as a full-screen hierarchy with overview, period, day, and post scales. Do not introduce a saved reviewed state; retain the working 3/7/14-day generation range while developing the interface for longer plans.
+- Reuse the existing five-section Business Profile prototype for the manual editing integration. Its approved direction remains relevant; its simulated saves have not yet been connected to the mounted application. See [the focused pass plan](analysis/focused-product-followups-2026-09-10.md) for backend dependencies and verification boundaries.
+
+### Campaign reviewer approved by Khalid and Mohamed
+
+The September 10 full-screen Campaign review prototype is approved for implementation. Preserve its Campaign index → Overview/Week/Month → Day → Post hierarchy and direct short-plan entry. Use independent panel scrolling where useful, without requiring visible panel borders. Frequently used Previous/Next actions must stay visible and in a stable position while navigating or scrolling. Apply restrained semantic color to status/count/category distinctions where the real data benefits; labels remain visible. These refinements do not add a reviewed state, expand generation beyond 3/7/14 days, or change the same-record Create handoff.

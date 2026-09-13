@@ -59,6 +59,192 @@ vi.mock("../src/ai/campaign-client", () => ({
 }));
 
 describe("campaign routes", () => {
+  it("paginates lightweight summaries with stable ties and reads an older campaign directly", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const createdAt = new Date("2026-09-01T00:00:00.000Z");
+    const originals = await Promise.all(
+      Array.from({ length: 23 }, (_, index) => storedCampaign(session.workspace.id, { title: `Saved campaign ${index}`, createdAt }))
+    );
+    await storedCampaign(other.workspace.id, { title: "Other workspace", createdAt });
+    await storedCampaign(session.workspace.id, { title: "Deleted campaign", createdAt, deletedAt: new Date() });
+    const first = await app.inject({ method: "GET", url: "/v1/campaigns/summaries?limit=7", headers });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.items).toHaveLength(7);
+    expect(first.json().data.items[0]).not.toHaveProperty("content");
+    const ids: string[] = first.json().data.items.map((item: { id: string }) => item.id);
+    let cursor = first.json().data.nextCursor as string | null;
+    await storedCampaign(session.workspace.id, { title: "New arrival", createdAt: new Date("2026-09-02T00:00:00.000Z") });
+    while (cursor) {
+      const next = await app.inject({ method: "GET", url: `/v1/campaigns/summaries?limit=7&cursor=${encodeURIComponent(cursor)}`, headers });
+      expect(next.statusCode).toBe(200);
+      ids.push(...next.json().data.items.map((item: { id: string }) => item.id));
+      cursor = next.json().data.nextCursor;
+    }
+    expect(ids).toEqual(
+      originals
+        .map((row) => row.id)
+        .sort()
+        .reverse()
+    );
+    const oldest = ids.at(-1)!;
+    const legacy = await app.inject({ method: "GET", url: "/v1/campaigns", headers });
+    expect(legacy.json().data).toHaveLength(20);
+    expect(legacy.json().data[0]).toHaveProperty("content.weeklyCadence");
+    const detail = await app.inject({ method: "GET", url: `/v1/campaigns/${oldest}/review`, headers });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data).toMatchObject({ campaign: { id: oldest }, items: [], mediaAssets: [] });
+    await app.close();
+  });
+
+  it("searches all campaign titles and objectives and validates bounded page inputs", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const matched = await storedCampaign(session.workspace.id, { title: "Autumn coffee", objective: "Reach wholesale buyers" });
+    const older = await storedCampaign(session.workspace.id, { title: "Summer drinks" });
+    // Older campaign plans have weekly actions without detailed day/post slots.
+    await prisma.campaign.update({
+      where: { id: older.id },
+      data: { content: { weeklyCadence: [{ week: 1, focus: "Summer", actions: ["Introduce drinks"] }] } }
+    });
+    const all = await app.inject({ method: "GET", url: "/v1/campaigns/summaries", headers });
+    expect(all.statusCode).toBe(200);
+    expect(all.json().data.items).toHaveLength(2);
+    for (const query of ["AUTUMN", "wholesale", "  autumn  "]) {
+      const response = await app.inject({ method: "GET", url: `/v1/campaigns/summaries?query=${encodeURIComponent(query)}`, headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.items.map((item: { id: string }) => item.id)).toEqual([matched.id]);
+    }
+    for (const query of ["limit=0", "limit=51", "limit=1.5", "cursor=invalid", `query=${"a".repeat(121)}`]) {
+      const response = await app.inject({ method: "GET", url: `/v1/campaigns/summaries?${query}`, headers });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    }
+    const invalidId = await app.inject({ method: "GET", url: "/v1/campaigns/not-a-uuid/review", headers });
+    expect(invalidId.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("derives each summary count from actual cadence slots and nondeleted content states", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const campaign = await storedCampaign(session.workspace.id);
+    const statuses = ["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
+    await prisma.contentItem.createMany({
+      data: statuses.map((status, index) => ({
+        workspaceId: session.workspace.id,
+        campaignId: campaign.id,
+        campaignWeek: 1,
+        campaignActionIndex: index,
+        status,
+        contentType: "POST",
+        mediaIds: []
+      }))
+    });
+    await prisma.contentItem.createMany({
+      data: [
+        {
+          workspaceId: session.workspace.id,
+          campaignId: campaign.id,
+          campaignWeek: 2,
+          campaignActionIndex: 0,
+          status: "DRAFT",
+          contentType: "POST",
+          mediaIds: [],
+          deletedAt: new Date()
+        },
+        {
+          workspaceId: session.workspace.id,
+          campaignId: campaign.id,
+          campaignWeek: 2,
+          campaignActionIndex: 99,
+          status: "DRAFT",
+          contentType: "POST",
+          mediaIds: []
+        }
+      ]
+    });
+    const response = await app.inject({ method: "GET", url: "/v1/campaigns/summaries", headers: authHeaders(session.tokens.accessToken) });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.items[0].postCounts).toEqual({ total: 10, idea: 4, draft: 1, inReview: 1, ready: 1, scheduled: 1, published: 1, failed: 1 });
+    await app.close();
+  });
+
+  it("scopes review content and attached media to the workspace without returning the full library", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const campaign = await storedCampaign(session.workspace.id);
+    const media = await prisma.mediaAsset.create({
+      data: {
+        workspaceId: session.workspace.id,
+        type: "IMAGE",
+        filename: "used.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 100,
+        s3Key: `test/${randomUUID()}`,
+        cdnUrl: "https://example.test/used.jpg"
+      }
+    });
+    await prisma.mediaAsset.create({
+      data: {
+        workspaceId: session.workspace.id,
+        type: "IMAGE",
+        filename: "unrelated.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 100,
+        s3Key: `test/${randomUUID()}`,
+        cdnUrl: "https://example.test/unrelated.jpg"
+      }
+    });
+    const item = await prisma.contentItem.create({
+      data: {
+        workspaceId: session.workspace.id,
+        campaignId: campaign.id,
+        campaignWeek: 1,
+        campaignActionIndex: 0,
+        status: "DRAFT",
+        contentType: "POST",
+        mediaIds: [media.id],
+        caption: "Owner caption"
+      }
+    });
+    const response = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}/review`, headers: authHeaders(session.tokens.accessToken) });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.items.map((record: { id: string }) => record.id)).toEqual([item.id]);
+    expect(response.json().data.mediaAssets.map((asset: { id: string }) => asset.id)).toEqual([media.id]);
+    const forbidden = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}/review`, headers: authHeaders(other.tokens.accessToken) });
+    expect(forbidden.statusCode).toBe(404);
+    await prisma.campaign.update({ where: { id: campaign.id }, data: { deletedAt: new Date() } });
+    const deleted = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}/review`, headers: authHeaders(session.tokens.accessToken) });
+    expect(deleted.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("reuses one draft for simultaneous idea handoffs and preserves later owner work", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const campaign = await storedCampaign(session.workspace.id);
+    const request = {
+      method: "POST" as const,
+      url: `/v1/campaigns/${campaign.id}/suggestions/approve`,
+      headers: authHeaders(session.tokens.accessToken),
+      payload: { week: 1, actionIndex: 0 }
+    };
+    const responses = await Promise.all([app.inject(request), app.inject(request), app.inject(request)]);
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200]);
+    const ids = responses.map((response) => response.json().data.id);
+    expect(new Set(ids).size).toBe(1);
+    const saved = await prisma.contentItem.update({ where: { id: ids[0] }, data: { caption: "Owner's saved caption", status: "APPROVED" } });
+    const repeated = await app.inject(request);
+    expect(repeated.json().data).toMatchObject({ id: ids[0], caption: saved.caption, status: saved.status, revision: saved.revision });
+    expect(await prisma.contentItem.count({ where: { campaignId: campaign.id, campaignWeek: 1, campaignActionIndex: 0 } })).toBe(1);
+    await app.close();
+  });
+
   it("keeps future campaign durations out of the generation contract", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -547,6 +733,47 @@ describe("campaign routes", () => {
     await app.close();
   });
 });
+
+function storedCampaign(workspaceId: string, input: { title?: string; objective?: string; createdAt?: Date; deletedAt?: Date } = {}) {
+  return prisma.campaign.create({
+    data: {
+      workspaceId,
+      title: input.title ?? "Saved campaign",
+      ...input,
+      startsAt: new Date("2026-09-01T00:00:00.000Z"),
+      endsAt: new Date("2026-09-14T00:00:00.000Z"),
+      durationDays: 14,
+      publishesPerDay: 1,
+      content: {
+        summary: "A stored campaign",
+        durationDays: 14,
+        publishesPerDay: 1,
+        objectives: [],
+        pillars: [],
+        kpis: [],
+        risks: [],
+        nextActions: [],
+        retrievedContext: [],
+        weeklyCadence: [6, 4].map((count, index) => ({
+          week: index + 1,
+          focus: "Introduce the offering",
+          days: [
+            {
+              day: index * 7 + 1,
+              posts: Array.from({ length: count }, (_, action) => ({
+                contentType: "POST",
+                title: `Idea ${action + 1}`,
+                description: "Describe the offer",
+                goal: "Awareness",
+                contentPillar: "Offerings"
+              }))
+            }
+          ]
+        }))
+      }
+    }
+  });
+}
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   const email = `campaign-${randomUUID()}@markos.test`;

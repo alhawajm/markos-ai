@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { SurfaceState } from "./surface-state";
 
@@ -21,12 +21,17 @@ export function NotificationToast({
   title: string;
   tone?: NotificationTone;
 }) {
+  const dismissRef = useRef(onDismiss);
+  useEffect(() => {
+    dismissRef.current = onDismiss;
+  }, [onDismiss]);
+
   useEffect(() => {
     if (!body || tone === "error" || tone === "warning") return;
 
-    const timer = window.setTimeout(onDismiss, 6000);
+    const timer = window.setTimeout(() => dismissRef.current(), 6000);
     return () => window.clearTimeout(timer);
-  }, [body, onDismiss, tone]);
+  }, [body, tone]);
 
   if (!body) return null;
 
@@ -40,14 +45,14 @@ export function NotificationToast({
       data-notification-toast=""
       role={urgent ? "alert" : "status"}
     >
-      <div className="pointer-events-auto w-full max-w-xl shadow-[0_24px_70px_rgba(0,0,0,.45)]" data-notification-tone={tone}>
+      <div className="pointer-events-auto w-full max-w-xl rounded-2xl shadow-[var(--shadow-md)]" data-notification-tone={tone}>
         <SurfaceState
           action={
             <div className="flex items-center gap-2">
               {action}
               <button
                 aria-label={dismissLabel}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 bg-black/15 text-[#C7CDD8] transition hover:border-white/30 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#81D8D0]/35"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:border-[var(--sunlit-line-strong)] hover:text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
                 onClick={onDismiss}
                 title={dismissLabel}
                 type="button"

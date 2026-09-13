@@ -608,3 +608,31 @@ Khalid selected durable text conversations first, keeping image/video generation
 Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
 
 The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.
+
+## 2026-09-07: Business Profile owns ongoing business edits
+
+Khalid accepted a dedicated versioned profile, the existing canonical Offering Catalog, and direct editing after onboarding. The initial assistant proposal was subsequently narrowed to the manual-only increment and future permission boundary below. This supersedes the August 20 return-to-onboarding editor as the target behavior; runtime implementation is still pending. AI interaction logs retain history, while Vault retrieval representations must follow current approved facts. Updating business knowledge does not rewrite saved Campaigns or posts.
+
+Keep one foreground editing task in the UI, with focused modals and explicit save/discard boundaries. Preserve only the necessary backend safeguards: validation, workspace authorization, atomic writes, and revision checks against unseen concurrent changes. Do not implement automatic conflict merging or Undo. Offering renames must preserve their IDs; archiving preserves history. See [the Business Profile plan](business-profile-plan.md) for proposed interactions, dependencies, and acceptance criteria.
+
+## 2026-09-07: Stable business facts, evidence-backed marketing proposals, manual editing first
+
+Business Profile holds information that rarely changes and materially influences AI behavior. General facts, including name, location, website/social accounts, offerings, and story, must remain owner-editable only; future Business Profile AI must not propose or apply changes to them. Restrict any future AI change proposals to explicitly allowed marketing fields such as **marketing strategy**, tone, writing preferences, and business goals. Require real performance insights, clear reasoning, a credible meaningful benefit, and owner review before Save. Enforce field restrictions in application code, not only prompts. Do not equate a populated section with AI permission to edit every field in it.
+
+Record an owner-reported establishment stage in Onboarding and Business Profile. It can inform a later learning-loop policy for suggestion frequency and how readily MARKOS challenges existing marketing decisions, with greater restraint for established businesses. It does not replace performance evidence or authorize changes to business facts. Exact choices and presentation remain a prototype decision.
+
+The current increment is **manual editing only**: profile/catalog reads and saves, establishment-stage capture, onboarding consistency, and current retrieval context. Do not implement a profile assistant, conversation tables, marketing suggestion engine, automated profile rewriting, or suggestion-frequency logic in this pass. Use the term **Marketing strategy** rather than Marketing direction. The existing reviewed onboarding extraction workflow remains separate from permission to change established business information through future profile AI.
+
+## 2026-09-10 — Defer intent-aware content-type selection to the conversation pass
+
+Khalid requested that a new Create conversation start without requiring a content type. MARKOS should respond conversationally to greetings, ask what the user has in mind, and choose a format only after explicit or sufficiently clear implicit agreement. Manual selection remains available. The change needs coherent conversation persistence, allowed AI mutations, and media/lifecycle safeguards; it is intentionally deferred while the current passes address UI and media integrity. See [the tracked acceptance criteria](ui-ux-improvement-plan.md#deferred-create-conversation-work--september-10). This records future work, not implemented behavior.
+
+## 2026-09-10 — Enforce media compatibility before publication
+
+Reuse the application's existing media rules throughout Create and the API: one JPEG for Post, one MP4 for Reel, one JPEG or MP4 for Story, and up to ten JPEG images for Carousel. Ready requires media and at least two images for a carousel; an empty draft remains valid. These are current application constraints, not a statement about all formats supported by Instagram.
+
+Validate current stored media under a content-row lock for attachment, format changes, readiness, and generated output attachment. Preserve explicit removal and text-only repairs for older invalid records. A late generated image or video that no longer fits must stay in the workspace library, with an honest recovery message, while the current draft remains unchanged. A retained video output is terminal and cannot be retried as a new generation. No schema change, commercial quota gate, automatic file replacement, or conversation-format behavior is part of this increment.
+
+## 2026-09-10 — Campaign review reads and existing Create handoff
+
+Connect the reviewer approved by Khalid and Mohamed using paginated, searchable Campaign summaries and a direct workspace-scoped review read containing the plan, linked content, and attached media. Derive counts from existing plan slots and content states; do not create a reviewed state or persist navigation as approval. Preserve idempotent suggestion-to-draft registration and direct opening of that same draft in Create, plus the working 3/7/14-day generation contract. These additive reads require no schema migration. Longer-plan prototype fixtures do not authorize longer generation.

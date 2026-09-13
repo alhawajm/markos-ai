@@ -2,9 +2,9 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-08-30
+- Last updated: 2026-09-10
 
-This document is the active visual and interaction reference for MARKOS. It replaces the dark "AI Marketing Command Center" export. The canonical marketing, authentication, onboarding, legal, and application routes are now the coded reference; there is no separate design-preview route family.
+This document is the active visual and interaction reference for MARKOS. The September 10 light/dark palette replaces the earlier Sunlit colors and light-only guidance. It does not restore the retired "AI Marketing Command Center" composition. The canonical marketing, authentication, onboarding, legal, and application routes are the coded reference; there is no separate design-preview route family.
 
 Product behavior still comes from:
 
@@ -28,10 +28,10 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 
 ## Experience principles
 
-### Bright, capable, and human
+### Clear, capable, and human
 
-- Use a warm, bright canvas rather than the former dark command-center theme.
-- Balance coral and pink energy with aqua trust, yellow warmth, and dark ink for clarity.
+- Support the approved light and dark themes across the same product surfaces, with consistent hierarchy, readable contrast, and user control.
+- Use rose, aqua, and violet in the semantic roles below. Preserve the quiet canvas and distinguish adjacent surfaces without adding decorative complexity.
 - Keep the interface polished without making it feel futuristic, robotic, or overly "AI."
 - Prefer purposeful examples and lightweight interaction over decorative complexity.
 
@@ -40,6 +40,7 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 - Lead with what the user can do or understand next.
 - Use plain language and short supporting copy.
 - Do not place a promotional paragraph under every heading.
+- Omit decorative eyebrows, repeated section captions, and all-caps micro-labels when a heading or control already communicates the task. Keep useful instructions, consequences, security requirements, availability disclosures, and recovery guidance.
 - Avoid vague AI phrases, exaggerated claims, and repetitive slogans.
 - Prefer **insights** to **results** when describing analysis and learning.
 
@@ -58,51 +59,56 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 
 ## Visual foundation
 
-### Core palette
+### Core palette — approved 2026-09-10
 
-| Role | Token reference | Value | Primary use |
-| --- | --- | --- | --- |
-| Ink | `--ink` | `#20212B` | Primary text, dark surfaces, strong secondary actions |
-| Ink soft | `--ink-soft` | `#4D4853` | Supporting text with strong contrast |
-| Muted | `--muted` | `#625B66` | Secondary metadata; avoid beside oversized headings when too small |
-| Paper | `--paper` | `#FFFDFB` | Near-white warm page canvas |
-| Paper deep | `--paper-deep` | `#FFF4EE` | Warm secondary surfaces and hover states |
-| White | `--white` | `#FFFFFF` | Cards, fields, and high-contrast text on dark surfaces |
-| Coral | `--coral` | `#FF665A` | Primary-action gradients and energetic accents |
-| Coral deep | `--coral-deep` | `#DC3F64` | Strong accent text and gradient depth |
-| Pink | `--pink` | `#D93F7A` | Brand emphasis, links, selected states |
-| Aqua | `--aqua` | `#21BFAE` | Selection, progress, focus, and insight accents |
-| Aqua dark | `--aqua-dark` | `#087D71` | Accessible text on pale aqua surfaces |
-| Aqua soft | `--aqua-soft` | `#DFF8F2` | Success and informational backgrounds |
-| Yellow | `--yellow` | `#F6C453` | Warm highlights, attention, and selected accents |
+Khalid explicitly selected both palettes for the actual site. These exact base values supersede the former coral/berry/yellow palette and the unimplemented Tangerine Slate experiments.
 
-Use semantic roles in shared production tokens instead of copying these raw values into every component. Warning, error, disabled, border, focus, and overlay roles must also be centralized during migration.
+| Role | Token reference | Light | Dark | Primary use |
+| --- | --- | --- | --- | --- |
+| Text | `--text` | `#20212b` | `#f2faf7` | Primary text and readable hierarchy |
+| Background | `--background` | `#f7fafa` | `#151821` | Application and public-page canvas |
+| Primary | `--primary` | `#d88fa3` | `#8fe3da` | Primary actions and key emphasis |
+| Secondary | `--secondary` | `#81d8d0` | `#7b6af0` | Supporting accents, selected surfaces, and charts |
+| Accent | `--accent` | `#6c3ce8` | `#d9a0b1` | Focus, emphasis, and supporting highlights |
 
-Calendar currently establishes the first explicit lifecycle-status token set: Draft slate, Ready blue, Scheduled orange, Published green, Needs attention rose, and review violet. These colors support labels, icons, counts, and accessible names; they never replace those cues. Treat them as semantic status roles rather than additions to the brand-accent palette.
+Keep the exact base tokens. Derive semantic surfaces, borders, muted text, links, focus, overlays, and on-color text centrally; do not scatter independent replacements across components. Preserve separate warning, error, success, disabled, and lifecycle roles so brand color changes do not erase status meaning.
 
-The IBM Plex plus Tangerine Slate light/dark compositions under `docs/prototypes/` are reviewed experiments, not production tokens. The current Sunlit palette above remains the runtime truth until a separate shared-foundation implementation deliberately replaces it.
+The latest September 10 refinement changes dark text from the initial `#f2f4f7` to `#f2faf7`. The other approved base colors remain unchanged.
+
+Use dark labels on the light primary and secondary fills and on the dark primary and accent fills. Light-theme violet supports white labels and readable links. Do not assume that white text works on every brand fill: white on the dark secondary violet is only about `4.07:1`, below the normal-text target. Use an appropriately contrasting on-color or a tinted surface with regular text. Light primary and secondary are also too pale to serve as ordinary text links or the sole focus indicator against the light canvas.
+
+The September 10 semantic lifecycle roles supersede the earlier Calendar palette: Draft neutral, Ready teal, Scheduled violet/blue, Published green, Failed red, and review/attention amber where distinct from failure. Shared foreground, background, and border tokens support each status in both themes. Preserve labels, icons, counts, and accessible names; color never replaces those cues and must not change lifecycle meaning.
+
+The IBM Plex plus Tangerine Slate compositions under `docs/prototypes/` remain historical experiments. The approved palette above and the typography below govern implementation. An approval does not by itself constitute completed browser or accessibility verification.
 
 ### Runtime token scope
 
-The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the `.sunlit-theme` class. Every migrated Sunlit surface opts into that class. Keep the variables scoped and do not reuse the legacy `luxury-*` names, because admin and any still-unmigrated surfaces may retain independent presentation until deliberately updated.
+The canonical palette lives in `apps/web/app/theme-tokens.css`, with root light/dark tokens selected through `data-theme`. `apps/web/app/sunlit-theme.css` imports those tokens, and the shared Sunlit stylesheet and surviving legacy/Tailwind aliases stay connected to that one palette, including public pages, authentication, onboarding, Settings, and the authenticated shell. Existing alias names are compatibility layers, not permission to maintain separate old palettes. New components should use semantic roles instead of adding `luxury-*` values.
+
+The shared Appearance control offers Light, Dark, and System. Settings is its primary home; any quick access before sign-in or in a user menu should remain compact and secondary. Do not give appearance the same prominence as the user's main task. Preserve the browser-local preference across navigation and refresh; System follows the operating system. Apply the saved choice before the page paints, and keep explicit switching available when browser storage cannot persist it.
 
 ### Gradients and surfaces
 
-- Primary actions use coral-to-yellow or coral-to-pink gradients with dark readable text where appropriate.
-- Dark ink panels are reserved for contrast moments, demonstrations, and important calls to action; they must not take over the whole application canvas.
-- Cards use white or near-white surfaces, subtle borders, generous radii, and restrained shadows.
-- Ambient radial gradients may add warmth or freshness, but must not reduce text contrast or compete with content.
+- Primary actions use the theme's primary fill and a contrasting label. Reserve gradients for a small number of intentional brand or summary surfaces.
+- Light mode uses the approved near-white canvas with clear card and input surfaces. Dark mode uses the approved dark canvas with slightly raised neutral surfaces and restrained violet, aqua, or rose accents.
+- Cards use theme-aware surfaces, visible borders, generous radii, and restrained shadows. Dark surfaces must remain distinguishable from the page and from modal backdrops.
+- Ambient gradients may use the approved palette, but must not reduce text contrast or compete with content.
 - Large effects should remain uncommon so important panels retain emphasis.
 
 ### Typography
 
-- Inter is the current baseline because the preview inherits the application font stack.
-- Headings are bold, compact, and high contrast. Do not use the 900/`font-black` weight in the active web UI; use 700/`font-bold` and create hierarchy through size, spacing, and color instead.
-- Body copy should normally remain around 1rem with comfortable line height.
-- Small utility text must retain sufficient size and contrast; muted gray text must not disappear beside large headings.
+- Use **IBM Plex Sans** for English and **IBM Plex Sans Arabic** for Arabic, including script-appropriate fallback for mixed content. Inter is superseded. Readex Pro was only a fallback option if the two-family setup proved impractical; it is not the adopted font.
+- `apps/web/app/fonts.ts` loads the pinned local WOFF2 files through `next/font/local`. Normal weights 400, 500, 600, and 700 are included; use these real faces rather than requesting synthetic 800–950 weights. Source revision and the included OFL license are recorded in [the font asset README](../apps/web/app/fonts/README.md).
+- Keep the root at **16px** at every viewport. Use **16px body**, **15px controls**, **14px labels**, and **13px secondary metadata** as the default scale. Occasional 12px text is reserved for genuinely secondary metadata; 10px or 11px text is unsuitable for normal UI.
+- Use 400 for ordinary body text, 500 for labels or moderate emphasis, 600 for headings and actions, and 700 sparingly for stronger emphasis. Create hierarchy through spacing, size, and contrast rather than making every label bold.
+- Keep comfortable line heights, with more vertical room for Arabic. Do not force Latin tracking onto Arabic. Reduce content density or reflow a surface instead of shrinking the whole document.
+- Small utility text must retain sufficient size and contrast; muted text must not disappear beside large headings.
 - Keep readable line lengths, generally around 45–70 characters for explanatory copy.
 - A separate display typeface is not yet part of the approved foundation.
-- IBM Plex Sans plus IBM Plex Sans Arabic is the leading lab candidate, not the current application font. Do not describe the prototype pairing as mounted until the production font-loading and token migration are implemented and verified.
+
+**Local implementation checkpoint, September 10:** bounded passes 0–6 are complete: the audit, local font and token foundation, shell and Appearance placement, shared controls/status/feedback/dialog patterns, core pages, and remaining Settings/onboarding/public/auth/legal surfaces. Arabic headings explicitly retain normal tracking where page styles previously overrode the RTL ancestor. Final visual QA, the complete browser suite against the production build, and the build itself passed. The [refinement audit and execution record](analysis/ui-refinement-audit-2026-09-10.md) owns current check totals and verification boundaries.
+
+This is mounted-frontend evidence, with fictional browser-local sessions, API responses, and media where needed. It does not establish live database, AI provider, Instagram, or Railway behavior. The separate Business Profile editor prototype and larger architectural work remain outside this refinement checkpoint.
 
 ### Shape and spacing
 
@@ -137,6 +143,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - Use one persistent section menu as the top-level navigation on desktop and a select control on narrow screens.
 - Render one selected section at a time; do not combine this menu with top-level accordions.
 - Keep locale switching in the standalone Settings header; language does not need its own settings section or a repeated control above every authenticated page.
+- Keep Appearance in Settings as a deliberate preference, with Light, Dark, and System choices. Avoid a prominent appearance selector in every page header.
 - Order sections by the user's likely job: Account, Connected accounts, Security, Plan and billing, then Data and activity.
 - Keep nested disclosures only for local details such as MFA setup steps or advanced data controls.
 - Show gated sections, such as Instagram connection before MFA, in a visible but clearly locked state.
@@ -149,8 +156,9 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - MARKOS is desktop-first during the current product-definition stage. Use the available width to keep planning context, working controls, and previews visible together.
 - At large breakpoints, keep the desktop sidebar pinned to the viewport while the page canvas scrolls. It starts as a labeled navigation surface and may be collapsed explicitly into a compact icon rail; never make hover the only way to reveal or control it. Preserve accessible link names and keyboard/focus tooltips in the compact state, keep the active-language switch directly above **Settings** at the bottom, and store both display preferences locally. Do not add a second desktop workspace header above every page. The primary navigation is **Overview**, **Campaigns**, **Create**, **Calendar**, **Insights**, and **Business Profile**.
 - Compose pages around the user's next decision or action. Overview should surface live state and the next useful task; Campaigns should put generation controls beside the current time-bound Campaign; Create should lead with the creation controls; Insights should put the performance pulse and time range first.
+- Retain the September 10 refined Create composition: manual editing alongside the MARKOS companion, with the preview shown only when media is present and a consistent `6:19` outer preview ratio. Keep caption, media, and post-detail controls available without requiring AI. The final validation record must cover this retained composition; historical Create ratios and editor arrangements are not its implementation baseline.
 - Do not use oversized static welcome or description panels. A page introduction should normally be a compact header or action strip, leaving the first viewport for live data and working controls.
-- Keep the main canvas warm and bright. Reserve dark ink surfaces for high-priority summaries and contrast moments rather than using a dark application background.
+- Keep the main canvas and all ordinary working surfaces consistent with the selected light or dark theme. Preserve the same hierarchy, density, and readable controls in both.
 - Use a generous content ceiling, currently about 1500px, so dense planning and creation pages do not collapse into narrow mobile-like columns on desktop.
 - Keep narrow layouts functional and non-broken, but defer detailed mobile optimization until the desktop workflow and main feature inventory are stable. Mobile support remains required before launch.
 - Give each page one authoritative heading. Where the desktop sidebar is unavailable, a compact responsive shell header may identify the active destination without becoming a second page-level heading in the accessibility tree.
@@ -177,7 +185,7 @@ The canonical runtime palette lives in `apps/web/app/sunlit-theme.css` under the
 - Use the localized route and set both `lang` and `dir` correctly.
 - Mirror directional layout and icons where their meaning changes in RTL.
 - Preserve semantic headings, labels, field descriptions, accessible names, and keyboard operation.
-- Maintain visible focus treatment; the current aqua focus ring is the preferred direction.
+- Maintain visible, theme-aware focus treatment. Verify its contrast against the adjacent surface instead of assuming that a brand color is always suitable.
 - Verify text and controls against WCAG AA contrast expectations before production migration.
 - Test reduced motion, keyboard navigation, desktop, tablet, and mobile layouts.
 
@@ -222,7 +230,7 @@ These routes preserve their existing session, workspace, API, approval, and fail
 
 ## Current implementation boundary
 
-- `apps/web/app/sunlit-theme.css` and the canonical localized routes are the active visual reference.
+- `apps/web/app/theme-tokens.css`, the shared Sunlit stylesheet, and the canonical localized routes are the active visual reference.
 - Landing, authentication, verification, legal pages, application shell, onboarding, Overview, Campaigns, Create, Calendar, Insights, Business Profile, and Settings use the adopted UI.
 - The former `/design-preview` routes and duplicate dark public/authentication components were removed rather than retained as fallbacks.
 - `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.

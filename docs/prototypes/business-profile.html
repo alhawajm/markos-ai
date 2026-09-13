@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Interactive MARKOS Business Profile design draft. Sample data only; no business records are changed." />
+    <title>Business profile · MARKOS UI draft</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../apps/web/app/sunlit-theme.css" />
+    <link rel="stylesheet" href="business-profile.css" />
+    <script src="business-profile.js" defer></script>
+  </head>
+  <body class="sunlit-theme sunlit-app">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <aside class="sidebar" id="sidebar"></aside>
+    <main id="main" tabindex="-1">
+      <header class="page-heading" id="page-heading"></header>
+      <nav class="section-tabs" id="section-tabs" aria-label="Profile sections"></nav>
+      <div id="content" aria-live="polite"></div>
+      <footer class="page-footer" id="page-footer"></footer>
+    </main>
+    <dialog id="editor" aria-labelledby="dialog-title" aria-describedby="dialog-description"></dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </body>
+</html>

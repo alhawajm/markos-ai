@@ -1,0 +1,176 @@
+/* MARKOS palette approved September 10, 2026. All application themes inherit here. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --text: #20212b;
+  --background: #f7fafa;
+  --primary: #d88fa3;
+  --secondary: #81d8d0;
+  --accent: #6c3ce8;
+
+  --surface: #ffffff;
+  --surface-muted: #edf2f3;
+  --surface-raised: #ffffff;
+  --text-soft: #454956;
+  --muted: #606572;
+  --border: #dbe1e5;
+  --border-strong: #808794;
+  --on-primary: #20212b;
+  --on-secondary: #20212b;
+  --on-accent: #ffffff;
+  --link: #6c3ce8;
+  --focus: #6c3ce8;
+  --success: #18734f;
+  --warning: #855100;
+  --danger: #b52647;
+  --on-danger: #ffffff;
+  --info: #3c52ad;
+  --feature-surface: #262139;
+  --on-feature: #f2f4f7;
+  --shadow-sm: 0 12px 34px rgb(32 33 43 / 6%);
+  --shadow-md: 0 24px 70px rgb(32 33 43 / 12%);
+
+  --status-draft: #596273;
+  --status-ready: #006d73;
+  --status-scheduled: #6244ac;
+  --status-published: #246b3b;
+  --status-failed: #b4233d;
+  --status-review: #875500;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --text: #f2faf7;
+  --background: #151821;
+  --primary: #8fe3da;
+  --secondary: #7b6af0;
+  --accent: #d9a0b1;
+
+  --surface: #1d202b;
+  --surface-muted: #242836;
+  --surface-raised: #2b3040;
+  --text-soft: #d1d5e0;
+  --muted: #a8afbf;
+  --border: #353b4d;
+  --border-strong: #717b92;
+  --on-primary: #20212b;
+  --on-secondary: #10121b;
+  --on-accent: #20212b;
+  --link: #d9a0b1;
+  --focus: #8fe3da;
+  --success: #8fe3bd;
+  --warning: #efc582;
+  --danger: #ffa4b5;
+  --on-danger: #20212b;
+  --info: #acb9ff;
+  --feature-surface: #302a51;
+  --shadow-sm: 0 12px 34px rgb(0 0 0 / 16%);
+  --shadow-md: 0 24px 70px rgb(0 0 0 / 28%);
+
+  --status-draft: #b3bdd1;
+  --status-ready: #79d8df;
+  --status-scheduled: #baa7ff;
+  --status-published: #95dda9;
+  --status-failed: #ffa1b2;
+  --status-review: #efc582;
+}
+
+:root {
+  --font-ui: var(--font-plex-latin), var(--font-plex-arabic), Arial, sans-serif;
+  --type-body: 1rem;
+  --type-control: 0.9375rem;
+  --type-label: 0.875rem;
+  --type-meta: 0.8125rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --page-gutter: clamp(1rem, 2.2vw, 2rem);
+  --panel-padding: 1.5rem;
+  --control-height: 2.75rem;
+  --text-muted: var(--muted);
+  --text-subtle: var(--muted);
+  --surface-elevated: var(--surface-raised);
+  --interactive: var(--link);
+  --interactive-soft: var(--accent-soft);
+  --selected: var(--secondary-soft);
+  --overlay: rgb(9 12 20 / 55%);
+  --primary-soft: color-mix(in srgb, var(--primary) 15%, var(--surface));
+  --secondary-soft: color-mix(in srgb, var(--secondary) 20%, var(--surface));
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --success-soft: color-mix(in srgb, var(--success) 10%, var(--surface));
+  --warning-soft: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  --danger-soft: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  --info-soft: color-mix(in srgb, var(--info) 10%, var(--surface));
+
+  /* Compatibility names keep existing components on the same palette. */
+  --sunlit-ink: var(--text);
+  --sunlit-ink-soft: var(--text-soft);
+  --sunlit-muted: var(--muted);
+  --sunlit-paper: var(--background);
+  --sunlit-paper-deep: var(--primary-soft);
+  --sunlit-surface: var(--surface);
+  --sunlit-coral: var(--primary);
+  --sunlit-coral-deep: var(--primary);
+  --sunlit-pink: var(--link);
+  --sunlit-aqua: var(--secondary);
+  --sunlit-aqua-dark: var(--success);
+  --sunlit-aqua-soft: var(--secondary-soft);
+  --sunlit-yellow: var(--secondary);
+  --sunlit-yellow-soft: var(--secondary-soft);
+  --sunlit-line: var(--border);
+  --sunlit-line-strong: var(--border-strong);
+  --sunlit-danger: var(--danger);
+  --sunlit-warning: var(--warning);
+  --sunlit-shadow-sm: var(--shadow-sm);
+  --sunlit-shadow-md: var(--shadow-md);
+  --sunlit-status-draft: var(--status-draft);
+  --sunlit-status-ready: var(--status-ready);
+  --sunlit-status-scheduled: var(--status-scheduled);
+  --sunlit-status-published: var(--status-published);
+  --sunlit-status-failed: var(--status-failed);
+  --sunlit-status-review: var(--status-review);
+  --sunlit-status-draft-soft: color-mix(in srgb, var(--sunlit-status-draft) 10%, var(--surface));
+  --sunlit-status-ready-soft: color-mix(in srgb, var(--sunlit-status-ready) 10%, var(--surface));
+  --sunlit-status-scheduled-soft: color-mix(in srgb, var(--status-scheduled) 10%, var(--surface));
+  --sunlit-status-published-soft: color-mix(in srgb, var(--status-published) 10%, var(--surface));
+  --sunlit-status-failed-soft: color-mix(in srgb, var(--status-failed) 10%, var(--surface));
+  --sunlit-status-review-soft: color-mix(in srgb, var(--status-review) 10%, var(--surface));
+  --status-draft-bg: var(--sunlit-status-draft-soft);
+  --status-ready-bg: var(--sunlit-status-ready-soft);
+  --status-scheduled-bg: var(--sunlit-status-scheduled-soft);
+  --status-published-bg: var(--sunlit-status-published-soft);
+  --status-failed-bg: var(--sunlit-status-failed-soft);
+  --status-review-bg: var(--sunlit-status-review-soft);
+  --status-draft-border: color-mix(in srgb, var(--status-draft) 35%, var(--surface));
+  --status-ready-border: color-mix(in srgb, var(--status-ready) 35%, var(--surface));
+  --status-scheduled-border: color-mix(in srgb, var(--status-scheduled) 35%, var(--surface));
+  --status-published-border: color-mix(in srgb, var(--status-published) 35%, var(--surface));
+  --status-failed-border: color-mix(in srgb, var(--status-failed) 35%, var(--surface));
+  --status-review-border: color-mix(in srgb, var(--status-review) 35%, var(--surface));
+  --ink: var(--text);
+  --ink-soft: var(--text-soft);
+  --paper: var(--background);
+  --paper-deep: var(--primary-soft);
+  --white: var(--surface);
+  --coral: var(--primary);
+  --coral-deep: var(--link);
+  --pink: var(--link);
+  --aqua: var(--secondary);
+  --aqua-dark: var(--success);
+  --aqua-soft: var(--secondary-soft);
+  --yellow: var(--secondary);
+  --line: var(--border);
+  --luxury-turquoise: var(--primary);
+  --luxury-turquoise-dark: var(--primary);
+  --luxury-gold: var(--accent);
+  --luxury-gold-light: var(--accent);
+  --luxury-charcoal: var(--on-primary);
+  --luxury-border: var(--border);
+  --luxury-text: var(--text);
+  --luxury-shadow: var(--shadow-md);
+  --luxury-glow-turquoise: 0 0 34px color-mix(in srgb, var(--primary) 20%, transparent);
+  --luxury-glow-gold: 0 0 34px color-mix(in srgb, var(--accent) 20%, transparent);
+}

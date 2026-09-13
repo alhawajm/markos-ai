@@ -1,3 +1,5 @@
+export { contentMediaConstraints, contentMediaIssue, type ContentMediaIssue } from "./content-media";
+
 export const locales = ["ar", "en"] as const;
 export type Locale = (typeof locales)[number];
 
@@ -552,6 +554,33 @@ export interface CampaignRecord {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Counts describe existing idea slots and content states; they do not add a review lifecycle. */
+export interface CampaignPostCounts {
+  total: number;
+  idea: number;
+  draft: number;
+  inReview: number;
+  ready: number;
+  scheduled: number;
+  published: number;
+  failed: number;
+}
+
+export interface CampaignSummary extends Omit<CampaignRecord, "content"> {
+  postCounts: CampaignPostCounts;
+}
+
+export interface CampaignSummaryPage {
+  items: CampaignSummary[];
+  nextCursor: string | null;
+}
+
+export interface CampaignReviewRecord {
+  campaign: CampaignRecord;
+  items: ContentRecord[];
+  mediaAssets: MediaAssetRecord[];
 }
 
 export {

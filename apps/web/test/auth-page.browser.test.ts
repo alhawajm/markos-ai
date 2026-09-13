@@ -72,12 +72,9 @@ describe("rendered Sunlit authentication", () => {
       page.locator('img[src="/auth/providers/apple-signin.png"]').evaluate((image) => (image as HTMLImageElement).naturalWidth)
     ).resolves.toBeGreaterThan(0);
 
-    await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page.locator('[data-tone="error"][role="alert"]').textContent()).resolves.toContain("Agree to the Terms of Service");
-
+    await expect(page.getByRole("button", { name: "Continue with Google" }).isDisabled()).resolves.toBe(true);
+    await expect(page.getByText("Google / Apple sign-in is not available yet. Use email for now.").isVisible()).resolves.toBe(true);
     await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page.getByRole("status").textContent()).resolves.toContain("not available yet");
 
     await page.getByLabel("Full name").fill("Mariam Ali");
     await page.getByLabel("Email").fill(unverifiedSession.user.email);
@@ -181,7 +178,9 @@ describe("rendered Sunlit authentication", () => {
     await page.getByRole("link", { name: "Forgot password?" }).click();
     await page.getByLabel("Email").fill("account@example.com");
     await page.getByRole("button", { name: "Send reset link" }).click();
-    await expect(page.getByRole("status").textContent()).resolves.toContain("not connected yet");
+    await expect(page.getByRole("status").textContent()).resolves.toContain("not available yet");
+    expect(page.url()).toBe(`${baseUrl}/en/forgot-password`);
+    expect(await page.getByLabel("Email").inputValue()).toBe("account@example.com");
 
     await page.goto(`${baseUrl}/en/terms`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { level: 1, name: "The terms for using MARKOS" }).waitFor();
