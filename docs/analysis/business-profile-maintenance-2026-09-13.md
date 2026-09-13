@@ -44,3 +44,19 @@ Verification on the feature branch:
 - Final subjective visual review remains with Khalid. No general visual audit, theme screenshot tour or snapshot-baseline regeneration was performed.
 
 The preserved prototype asset repair is a separate commit. Feature publication/deployment is outside this local implementation checkpoint.
+
+## Focused visual refinement — September 13
+
+The follow-up pass keeps the same branch, information architecture and persistence contracts. Compact profile fields now share responsive equal-width columns and label/value tracks; long fields retain full width and wrap naturally. Section headings and contextual Edit actions share a consistent alignment.
+
+Products & Services uses a semantic table with Offering, Type, Category, Price, Status and Actions columns. Continuous rows use subtle separators and shared hover/focus surfaces. Prices align at the end of their column. Search, type/status filters, pagination and ID-based editing remain intact. When the available panel width is narrow, rows stack into labeled fields with the edit action at the top/end.
+
+Brand colors have bordered swatches in both themes. A native color picker and text input stay synchronized; malformed six-digit hex values cannot be submitted. The existing ordered string-array payload, reviewed letter case, explicit removal, Save/Cancel and failed-save recovery are preserved. No new dependency or backend/schema change was needed.
+
+Verification for this refinement only:
+
+- Business Profile unit tests: 6 passed, including exact color round-tripping and malformed values.
+- Focused presentation browser tests: 3 passed (existing save/failure recovery, color synchronization/validation, offering columns/filters/editing at 390px). One new test initially used the wrong price-field label; it passed after correcting the selector. No snapshot baselines changed.
+- Web typecheck and ESLint on the four affected TypeScript files passed.
+- Targeted rendered inspection used the local owner's existing business data at 1440×900: Business field alignment before/after, offerings before/after, and Brand colors before/after with view/edit swatches in light and dark themes. Offering table tokens were also checked in both themes. No owner facts were saved or changed during this inspection.
+- Full repository verification/build and unrelated browser routes were not rerun for this frontend-only pass. Changes remain local, with no push or deployment.

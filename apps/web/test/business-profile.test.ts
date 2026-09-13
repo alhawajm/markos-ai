@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseOfferingMoney, profileChanges, profileTab, profileTabs } from "../app/[locale]/_components/business-profile-fields";
+import {
+  isBrandColor,
+  parseOfferingMoney,
+  profileChanges,
+  profileFieldValue,
+  profileSections,
+  profileTab,
+  profileTabs
+} from "../app/[locale]/_components/business-profile-fields";
 import {
   createEmptyOnboardingDraft,
   onboardingClearedFields,
@@ -9,6 +17,17 @@ import {
 import type { OfferingCatalogRecord } from "@markos/shared-types";
 
 describe("business profile editing contracts", () => {
+  it("round-trips brand colors without changing their order or case and rejects malformed edits", () => {
+    const field = profileSections.find((section) => section.id === "identity")!.fields.find((item) => item.key === "colors")!;
+    const colors = ["#FFFFFF", "#aAbB09", "#000000"];
+    expect(profileFieldValue(field, colors)).toEqual(colors);
+    expect(profileChanges([field], { colors })).toEqual({ colors });
+    expect(profileChanges([field], { colors: [] })).toEqual({ colors: [] });
+    for (const color of ["#FFF", "#1234567", "red", "#xyz123", "", " #123456", "#123456\n", "url(example)"]) {
+      expect(isBrandColor(color)).toBe(false);
+      expect(() => profileChanges([field], { colors: [color] })).toThrow("six-digit hex");
+    }
+  });
   it("only clears optional fields shown in the shortened onboarding editor", () => {
     const draft = { ...createEmptyOnboardingDraft(), businessName: "Owner name", market: "Manama" };
     expect(onboardingClearedFields(1, draft)).toEqual(["industry"]);

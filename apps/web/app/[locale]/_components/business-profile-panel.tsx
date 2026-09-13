@@ -8,7 +8,9 @@ import { MarkosApiError } from "@markos/api-client";
 import type { BusinessKnowledgeRecord, Locale, OfferingMaintenanceUpdate, OfferingRecord } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import { useModalDialog } from "./use-modal-dialog";
+import styles from "./business-profile-panel.module.css";
 import {
+  isBrandColor,
   parseOfferingMoney,
   establishmentOptions,
   profileChanges,
@@ -160,8 +162,8 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
               {profileSections
                 .filter((section) => section.tab === tab)
                 .map((section) => (
-                  <section key={section.id} className="sunlit-panel min-w-0 rounded-2xl p-6" aria-labelledby={`profile-${section.id}`}>
-                    <header className="mb-5 flex items-start justify-between gap-4">
+                  <section key={section.id} className={`sunlit-panel min-w-0 rounded-2xl p-6 ${styles.section}`} aria-labelledby={`profile-${section.id}`}>
+                    <header className="mb-6 flex min-h-9 items-center justify-between gap-4">
                       <h2 id={`profile-${section.id}`} className="text-xl font-semibold">
                         {profileText(section.title, locale)}
                       </h2>
@@ -176,10 +178,10 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
                         </button>
                       ) : null}
                     </header>
-                    <dl className="space-y-5">
+                    <dl className={styles.fields}>
                       {section.fields.map((field) => (
-                        <div key={field.key}>
-                          <dt className="mb-1.5 text-sm font-medium text-[var(--muted)]">{profileText(field.label, locale)}</dt>
+                        <div key={field.key} className={`${styles.field} ${field.kind && field.kind !== "stage" ? styles.wideField : ""}`}>
+                          <dt className="text-sm font-medium leading-5 text-[var(--muted)]">{profileText(field.label, locale)}</dt>
                           <dd className="break-words text-base leading-7">
                             <ReadValue field={field} value={data.modules[section.module][field.key]} locale={locale} />
                           </dd>
@@ -275,6 +277,23 @@ function ReadValue({ field, value, locale }: { field: ProfileField; value: unkno
         {Object.entries(value as object).map(([name, target]) => (
           <li key={name} dir="auto">
             {name}: {String(target)}
+          </li>
+        ))}
+      </ul>
+    );
+  if (field.kind === "colors" && Array.isArray(value))
+    return (
+      <ul className="flex flex-wrap gap-x-5 gap-y-3">
+        {value.map((color, index) => (
+          <li key={index} className="inline-flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="inline-block size-8 shrink-0 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)]"
+              style={isBrandColor(String(color)) ? { backgroundColor: String(color) } : undefined}
+            />
+            <span dir="ltr" className="break-all text-sm tabular-nums">
+              {String(color)}
+            </span>
           </li>
         ))}
       </ul>
@@ -539,6 +558,7 @@ function FieldInput({
     field.kind === "stage" ? establishmentOptions.map((option) => [option[0], option[locale === "ar" ? 2 : 1]] as [string, string]) : field.options;
   if (field.kind === "competitors" || field.kind === "targets")
     return <StructuredRows field={field} value={value} locale={locale} disabled={disabled} onChange={onChange} />;
+  if (field.kind === "colors") return <BrandColorsInput colors={Array.isArray(value) ? value : []} locale={locale} disabled={disabled} onChange={onChange} />;
   return (
     <label className="block space-y-2 text-base font-medium">
       <span>{label}</span>
@@ -577,6 +597,76 @@ function FieldInput({
         <span className="block text-sm font-normal text-[var(--muted)]">{locale === "ar" ? "عنصر واحد في كل سطر." : "One item per line."}</span>
       ) : null}
     </label>
+  );
+}
+
+function BrandColorsInput({
+  colors,
+  locale,
+  disabled,
+  onChange
+}: {
+  colors: string[];
+  locale: Locale;
+  disabled: boolean;
+  onChange: (colors: string[]) => void;
+}) {
+  const t = (en: string, ar: string) => (locale === "ar" ? ar : en);
+  const hint = t("Use six-digit hex values, such as #F36A13.", "استخدم رموز ألوان من ست خانات، مثل #F36A13.");
+  function replace(index: number, color: string) {
+    onChange(colors.map((value, i) => (i === index ? color : value)));
+  }
+  return (
+    <fieldset disabled={disabled} aria-describedby="profile-colors-hint" className="min-w-0 space-y-3">
+      <legend className="mb-2 text-base font-medium">{t("Brand colors", "ألوان العلامة")}</legend>
+      <p id="profile-colors-hint" className="text-sm text-[var(--muted)]">
+        {hint}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {colors.map((color, index) => (
+          <div key={index} className="flex min-w-0 items-center gap-2">
+            <label
+              className="relative size-11 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus)]"
+              style={isBrandColor(color) ? { backgroundColor: color } : undefined}
+            >
+              <input
+                type="color"
+                aria-label={t(`Choose brand color ${index + 1}`, `اختيار لون العلامة ${index + 1}`)}
+                className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                value={isBrandColor(color) ? color : "#000000"}
+                onChange={(event) => replace(index, event.target.value)}
+              />
+            </label>
+            <input
+              className={`${fieldClass} min-w-0 font-normal`}
+              aria-label={t(`Brand color ${index + 1} hex value`, `رمز لون العلامة ${index + 1}`)}
+              aria-describedby="profile-colors-hint"
+              dir="ltr"
+              spellCheck={false}
+              autoComplete="off"
+              value={color}
+              required
+              pattern="#[0-9A-Fa-f]{6}"
+              title={hint}
+              maxLength={80}
+              onChange={(event) => replace(index, event.target.value)}
+            />
+            <button
+              type="button"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--danger)]"
+              aria-label={t(`Remove brand color ${index + 1}`, `إزالة لون العلامة ${index + 1}`)}
+              onClick={() => onChange(colors.filter((_, i) => i !== index))}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className={secondary} disabled={disabled || colors.length >= 30} onClick={() => onChange([...colors, ""])}>
+        <Plus size={17} />
+        {t("Add color", "إضافة لون")}
+      </button>
+    </fieldset>
   );
 }
 
@@ -669,7 +759,7 @@ function ProfileEditor({
       initial={values(data)}
       revision={data.version}
       onClose={onClose}
-      onSave={(input, revision) => onSave(profileChanges(section.fields, input), revision)}
+      onSave={(input, revision) => onSave(profileChanges(section.fields, input, locale), revision)}
       onReload={async () => {
         const current = await onReload();
         return { revision: current.version, values: current.modules[section.module] };
@@ -749,7 +839,7 @@ function OfferingCatalogView({
   const pages = Math.max(1, Math.ceil(items.length / 10));
   const currentPage = Math.min(page, pages - 1);
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${styles.catalog}`}>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl space-y-2">
           <h2 className="text-2xl font-semibold">
@@ -842,46 +932,101 @@ function OfferingCatalogView({
         </select>
       </div>
       {items.length ? (
-        <ul className="divide-y divide-[var(--border)] rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          {items.slice(currentPage * 10, currentPage * 10 + 10).map((item) => (
-            <li className="flex flex-wrap items-start gap-4 p-5" key={item.id}>
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="break-words text-lg font-semibold" dir="auto">
-                    {locale === "ar" ? item.nameAr || item.name : item.nameEn || item.name}
-                  </h3>
-                  <span className="rounded-lg bg-[var(--surface-muted)] px-2 py-1 text-sm">
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <table className={styles.table} role="table" aria-label={t("Products & Services", "المنتجات والخدمات")}>
+            <colgroup>
+              <col style={{ width: editable ? "32%" : "36%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: editable ? "19%" : "21%" }} />
+              <col style={{ width: editable ? "16%" : "19%" }} />
+              <col style={{ width: "13%" }} />
+              {editable ? <col style={{ width: "9%" }} /> : null}
+            </colgroup>
+            <thead role="rowgroup">
+              <tr role="row">
+                <th scope="col" role="columnheader">
+                  {t("Offering", "المنتج أو الخدمة")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Type", "النوع")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Category", "الفئة")}
+                </th>
+                <th scope="col" role="columnheader" className={styles.price}>
+                  {t("Price", "السعر")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Status", "الحالة")}
+                </th>
+                {editable ? (
+                  <th scope="col" role="columnheader" className={styles.actions}>
+                    {t("Actions", "الإجراءات")}
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody role="rowgroup">
+              {items.slice(currentPage * 10, currentPage * 10 + 10).map((item) => (
+                <tr key={item.id} role="row">
+                  <th scope="row" role="rowheader" className={`${styles.offering} text-start font-normal`}>
+                    <span className="block text-base font-semibold" dir="auto">
+                      {locale === "ar" ? item.nameAr || item.name : item.nameEn || item.name}
+                    </span>
+                    {item.description ? (
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted)]" dir="auto">
+                        {item.description}
+                      </p>
+                    ) : null}
+                  </th>
+                  <td role="cell">
+                    <span className={styles.mobileLabel} aria-hidden="true">
+                      {t("Type", "النوع")}
+                    </span>
                     {item.kind === "PRODUCT" ? t("Product", "منتج") : item.kind === "SERVICE" ? t("Service", "خدمة") : t("Unspecified", "غير محدد")}
-                  </span>
-                  <span
-                    className={`text-sm font-medium ${item.status === "ACTIVE" ? "text-[var(--success)]" : item.status === "PAUSED" ? "text-[var(--warning)]" : "text-[var(--muted)]"}`}
-                  >
-                    {item.status === "ACTIVE" ? t("Active", "نشط") : item.status === "PAUSED" ? t("Paused", "متوقف مؤقتاً") : t("Archived", "مؤرشف")}
-                  </span>
-                </div>
-                {item.category ? (
-                  <p className="text-sm text-[var(--muted)]" dir="auto">
-                    {item.category}
-                  </p>
-                ) : null}
-                {item.description ? (
-                  <p className="whitespace-pre-wrap break-words leading-7" dir="auto">
-                    {item.description}
-                  </p>
-                ) : null}
-                <p className="font-medium">
-                  <OfferingPrice item={item} locale={locale} />
-                </p>
-              </div>
-              {editable ? (
-                <button className={secondary} onClick={() => onEdit(item)} aria-label={`${t("Edit", "تعديل")} ${item.name}`}>
-                  <Pencil size={17} />
-                  {t("Edit", "تعديل")}
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                  </td>
+                  <td role="cell">
+                    <span className={styles.mobileLabel} aria-hidden="true">
+                      {t("Category", "الفئة")}
+                    </span>
+                    <span dir="auto" className="text-[var(--muted)]">
+                      {item.category || t("Not specified", "غير محدد")}
+                    </span>
+                  </td>
+                  <td role="cell" className={`${styles.price} font-medium`}>
+                    <span className={styles.mobileLabel} aria-hidden="true">
+                      {t("Price", "السعر")}
+                    </span>
+                    <OfferingPrice item={item} locale={locale} />
+                  </td>
+                  <td role="cell">
+                    <span className={styles.mobileLabel} aria-hidden="true">
+                      {t("Status", "الحالة")}
+                    </span>
+                    <span
+                      className={`inline-flex items-baseline gap-2 text-sm font-medium ${item.status === "ACTIVE" ? "text-[var(--success)]" : item.status === "PAUSED" ? "text-[var(--warning)]" : "text-[var(--muted)]"}`}
+                    >
+                      <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current" />
+                      {item.status === "ACTIVE" ? t("Active", "نشط") : item.status === "PAUSED" ? t("Paused", "متوقف مؤقتاً") : t("Archived", "مؤرشف")}
+                    </span>
+                  </td>
+                  {editable ? (
+                    <td role="cell" className={styles.actions}>
+                      <button
+                        className="sunlit-secondary inline-flex size-11 items-center justify-center rounded-xl"
+                        onClick={() => onEdit(item)}
+                        aria-label={`${t("Edit", "تعديل")} ${item.name}`}
+                        title={`${t("Edit", "تعديل")} ${item.name}`}
+                      >
+                        <Pencil size={18} />
+                      </button>
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="rounded-2xl bg-[var(--surface-muted)] px-6 py-12 text-center">
           <Package size={30} className="mx-auto mb-4 text-[var(--muted)]" />

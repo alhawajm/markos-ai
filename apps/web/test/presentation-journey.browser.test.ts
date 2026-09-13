@@ -193,6 +193,97 @@ describe("presentation journey", () => {
     await page.close();
   });
 
+  it("synchronizes Business Profile color pickers and hex values without saving malformed colors", async () => {
+    const page = await sessionPage();
+    let writes = 0;
+    let savedColors: string[] = [];
+    await mockApi(page, async (route) => route.fulfill(json([])));
+    await page.route("**/v1/business-profile", async (route) => {
+      const current = snackLabKnowledge();
+      if (route.request().method() === "PATCH") {
+        writes += 1;
+        const input = route.request().postDataJSON();
+        expect(input).toMatchObject({ expectedVersion: 1, module: "brand" });
+        savedColors = input.changes.colors;
+      }
+      return route.fulfill(
+        json({ ...current, modules: { ...current.modules, brand: { ...current.modules.brand, colors: writes ? savedColors : ["#FFFFFF", "#000000"] } } })
+      );
+    });
+    await page.goto(`${baseUrl}/en/app/knowledge?tab=brand-voice`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Edit Brand identity" }).click();
+    const editor = page.getByRole("dialog", { name: "Brand identity", exact: true });
+    const hex = editor.getByRole("textbox", { name: "Brand color 1 hex value", exact: true });
+    const picker = editor.getByLabel("Choose brand color 1", { exact: true });
+    await hex.fill("#12zzzz");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect(writes).toBe(0);
+    await expect(hex.evaluate((input) => (input as HTMLInputElement).validity.patternMismatch)).resolves.toBe(true);
+    await expect(hex.inputValue()).resolves.toBe("#12zzzz");
+    await hex.fill("#aAbB09");
+    await expect(picker.inputValue()).resolves.toBe("#aabb09");
+    await picker.fill("#123456");
+    await expect(hex.inputValue()).resolves.toBe("#123456");
+    await editor.getByRole("button", { name: "Add color", exact: true }).click();
+    await editor.getByRole("textbox", { name: "Brand color 3 hex value", exact: true }).fill("#fFfFfF");
+    await editor.getByRole("button", { name: "Remove brand color 2", exact: true }).click();
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await editor.waitFor({ state: "detached" });
+    expect(savedColors).toEqual(["#123456", "#fFfFfF"]);
+    expect(writes).toBe(1);
+    await expect(page.getByRole("region", { name: "Brand identity", exact: true }).getByText("#fFfFfF", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.close();
+  });
+
+  it("keeps Business Profile offering columns, filters and stable edit actions usable on narrow screens", async () => {
+    const page = await sessionPage();
+    await mockApi(page, async (route) => route.fulfill(json([])));
+    await page.route("**/v1/business-profile", async (route) =>
+      route.fulfill(
+        json({
+          ...snackLabKnowledge(),
+          catalog: {
+            version: 1,
+            salesChannels: [],
+            offerings: [
+              {
+                id: "product-1",
+                name: "Pastries",
+                kind: "PRODUCT",
+                category: "Bakery",
+                description: "Small batch pastries",
+                currency: "BHD",
+                priceType: "FIXED",
+                priceMinor: 3125,
+                status: "ACTIVE"
+              },
+              { id: "service-1", name: "Baking class", kind: "SERVICE", category: "Classes", currency: "BHD", priceType: "QUOTE", status: "PAUSED" }
+            ]
+          }
+        })
+      )
+    );
+    await page.goto(`${baseUrl}/en/app/knowledge?tab=products-services`, { waitUntil: "domcontentloaded" });
+    const table = page.getByRole("table", { name: "Products & Services", exact: true });
+    await table.waitFor();
+    await expect(table.getByRole("columnheader").allTextContents()).resolves.toEqual(["Offering", "Type", "Category", "Price", "Status", "Actions"]);
+    expect(await table.getByRole("rowheader").count()).toBe(2);
+    await page.getByRole("combobox", { name: "Offering type", exact: true }).selectOption("SERVICE");
+    await expect(table.getByRole("rowheader").allTextContents()).resolves.toEqual(["Baking class"]);
+    await page.getByRole("combobox", { name: "Offering type", exact: true }).selectOption("ALL");
+    await page.getByRole("combobox", { name: "Offering status", exact: true }).selectOption("ACTIVE");
+    expect(await table.getByRole("rowheader").count()).toBe(1);
+    await page.getByRole("textbox", { name: "Search offerings", exact: true }).fill("Pastries");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await table.getByRole("button", { name: "Edit Pastries", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit offering", exact: true });
+    await expect(editor.getByLabel("Name", { exact: true }).inputValue()).resolves.toBe("Pastries");
+    await expect(editor.getByLabel("Fixed / starting price", { exact: true }).inputValue()).resolves.toBe("3.125");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.close();
+  });
+
   it("retains the optional populated onboarding edit route for an approved Business Profile", async () => {
     const page = await sessionPage();
     let completionRequests = 0;

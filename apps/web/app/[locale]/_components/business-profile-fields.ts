@@ -13,7 +13,7 @@ export const profileTab = (value: string | null): ProfileTab => profileTabs.find
 export interface ProfileField {
   key: string;
   label: [string, string];
-  kind?: "long" | "list" | "url" | "email" | "stage" | "competitors" | "targets" | "asset";
+  kind?: "long" | "list" | "colors" | "url" | "email" | "stage" | "competitors" | "targets" | "asset";
   max?: number;
   required?: boolean;
 }
@@ -109,7 +109,7 @@ export const profileSections: ProfileSection[] = [
     title: ["Brand identity", "هوية العلامة"],
     fields: [
       { key: "aestheticWords", label: ["Personality & visual direction", "الشخصية والتوجه البصري"], kind: "list" },
-      { key: "colors", label: ["Brand colors", "ألوان العلامة"], kind: "list" },
+      { key: "colors", label: ["Brand colors", "ألوان العلامة"], kind: "colors" },
       { key: "fonts", label: ["Brand fonts", "خطوط العلامة"], kind: "list" }
     ]
   },
@@ -186,16 +186,24 @@ export const profileSections: ProfileSection[] = [
 ];
 
 export function profileFieldValue(field: ProfileField, value: unknown): unknown {
+  if (field.kind === "colors") return Array.isArray(value) ? value : [];
   if (field.kind === "list") return Array.isArray(value) ? value.join("\n") : "";
   if (field.kind === "competitors") return Array.isArray(value) ? value : [];
   if (field.kind === "targets") return value && typeof value === "object" ? Object.entries(value).map(([name, target]) => ({ name, target })) : [];
   return typeof value === "string" ? value : field.kind === "stage" ? "UNSPECIFIED" : "";
 }
 
-export function profileChanges(fields: ProfileField[], values: Record<string, unknown>): Record<string, unknown> {
+export const isBrandColor = (value: string): boolean => value.length === 7 && /^#[0-9a-f]{6}$/i.test(value);
+
+export function profileChanges(fields: ProfileField[], values: Record<string, unknown>, locale: Locale = "en"): Record<string, unknown> {
   return Object.fromEntries(
     fields.map((field) => {
       const value = values[field.key];
+      if (field.kind === "colors") {
+        if (!Array.isArray(value) || value.some((color) => typeof color !== "string" || !isBrandColor(color)))
+          throw new Error(locale === "ar" ? "أدخل رمز لون صالحاً من ست خانات، مثل #F36A13." : "Enter a valid six-digit hex color, such as #F36A13.");
+        return [field.key, value];
+      }
       if (field.kind === "list")
         return [
           field.key,
