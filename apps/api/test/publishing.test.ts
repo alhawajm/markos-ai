@@ -388,7 +388,7 @@ describe("publishing routes", () => {
     await app.close();
   });
 
-  it("queues Publish now durably and returns the same active job on repeated clicks", async () => {
+  it.each([false, true])("queues Publish now without step-up (MFA enabled: %s) and deduplicates repeated clicks", async (mfaEnabled) => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const { content } = await createPublishableDueContent(session.workspace.id);
@@ -396,26 +396,8 @@ describe("publishing routes", () => {
       where: { id: content.id },
       data: { status: "APPROVED", scheduledAt: null }
     });
-    const headers = authHeaders(await steppedUpToken(session.user.id, session.workspace.id));
-
-    const withoutMfa = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/publish-now`,
-      headers: authHeaders(session.tokens.accessToken),
-      payload: {}
-    });
-    expect(withoutMfa.statusCode).toBe(403);
-    expect(withoutMfa.json().error.code).toBe("MFA_SETUP_REQUIRED");
-    await prisma.user.update({ where: { id: session.user.id }, data: { mfaEnabled: true } });
-    const withoutStepUp = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/publish-now`,
-      headers: authHeaders(session.tokens.accessToken),
-      payload: {}
-    });
-    expect(withoutStepUp.statusCode).toBe(403);
-    expect(withoutStepUp.json().error.code).toBe("MFA_REQUIRED");
-    expect(await prisma.publishJob.count({ where: { contentItemId: content.id } })).toBe(0);
+    await prisma.user.update({ where: { id: session.user.id }, data: { mfaEnabled } });
+    const headers = authHeaders(session.tokens.accessToken);
 
     const first = await app.inject({
       method: "POST",
@@ -447,6 +429,41 @@ describe("publishing routes", () => {
     expect(after.scheduledAt).not.toBeNull();
 
     await app.close();
+  });
+
+  it("still enforces Publish now authentication, verification, permissions, workspace isolation and draft readiness", async () => {
+    const app = await buildApp();
+    try {
+      const session = await registerTestUser(app);
+      const other = await registerTestUser(app);
+      const { content } = await createPublishableDueContent(session.workspace.id);
+      const url = `/v1/content/${content.id}/publish-now`;
+      const headers = authHeaders(session.tokens.accessToken);
+      expect((await app.inject({ method: "POST", url })).statusCode).toBe(401);
+
+      await prisma.user.update({ where: { id: session.user.id }, data: { isVerified: false } });
+      const unverified = await app.inject({ method: "POST", url, headers });
+      expect(unverified.statusCode).toBe(403);
+      expect(unverified.json().error.code).toBe("EMAIL_VERIFICATION_REQUIRED");
+      await prisma.user.update({ where: { id: session.user.id }, data: { isVerified: true } });
+
+      await prisma.workspaceMember.updateMany({ where: { workspaceId: session.workspace.id, userId: session.user.id }, data: { role: "VIEWER" } });
+      const forbidden = await app.inject({ method: "POST", url, headers });
+      expect(forbidden.statusCode).toBe(403);
+      expect(forbidden.json().error.code).toBe("RBAC_FORBIDDEN");
+      await prisma.workspaceMember.updateMany({ where: { workspaceId: session.workspace.id, userId: session.user.id }, data: { role: "OWNER" } });
+
+      const foreign = await app.inject({ method: "POST", url, headers: authHeaders(other.tokens.accessToken) });
+      expect(foreign.statusCode).toBe(404);
+      expect(foreign.json().error.code).toBe("CONTENT_NOT_FOUND");
+      await prisma.contentItem.update({ where: { id: content.id }, data: { status: "DRAFT", scheduledAt: null } });
+      const draft = await app.inject({ method: "POST", url, headers });
+      expect(draft.statusCode).toBe(409);
+      expect(draft.json().error.code).toBe("PUBLISH_NOW_STATE_INVALID");
+      expect(await prisma.publishJob.count({ where: { contentItemId: content.id } })).toBe(0);
+    } finally {
+      await app.close();
+    }
   });
 
   it("blocks a live provider call until the account is reconnected for the release scopes", async () => {

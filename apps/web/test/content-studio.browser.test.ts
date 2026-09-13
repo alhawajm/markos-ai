@@ -1066,7 +1066,13 @@ describe("unified Create", () => {
       await page.reload();
       await page.getByRole("button", { name: "Mark Ready", exact: true }).click();
       await page.getByRole("button", { name: "Schedule / publish", exact: true }).click();
-      await page.getByLabel("Publish date and time", { exact: true }).fill("2027-01-05T12:30");
+      await page.getByLabel("Publish date", { exact: true }).fill("2027-01-05");
+      const time = page.getByLabel("Publish time", { exact: true });
+      await time.waitFor();
+      const slots = await time.locator("option:not([value=''])").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+      expect(slots).toHaveLength(48);
+      expect(slots.every((slot) => /:(00|30)$/.test(slot))).toBe(true);
+      await time.selectOption("12:30");
       await page.getByRole("button", { name: "Confirm schedule", exact: true }).click();
       await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
       expect(state.items[0]?.scheduledAt).toBe("2027-01-05T09:30:00.000Z");

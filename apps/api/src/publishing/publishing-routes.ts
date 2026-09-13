@@ -20,7 +20,6 @@ export async function registerPublishingRoutes(app: FastifyInstance): Promise<vo
     "/v1/content/:contentItemId/publish-now",
     {
       config: {
-        mfaRequired: true,
         workspaceRequired: true,
         verifiedUserRequired: true,
         permissions: ["publishing:run"]

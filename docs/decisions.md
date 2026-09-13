@@ -665,3 +665,9 @@ Owner edits require an expected profile/catalog revision and commit facts, proje
 Offering changes use stable IDs and catalog revisions, preserve supported prices/localized names/lifecycle, and project ACTIVE items only. Name collisions require explicit resolution, never an inferred name-based identity match. Pausing/archiving does not rewrite historical content. The editable catalog can exceed the document extractor's 30-item batch; the bulk maintenance round-trip accepts up to 500 items.
 
 This increment adds no Intelligence or recommendation surface. Marketing Strategy remains current approved data and can later receive conditional recommendations above its sections. Owner-reported establishment stage is captured without applying a learning policy. Final visual review belongs to Khalid; automated verification is primary.
+
+## 2026-09-13 — Publish now without MFA step-up; explicit half-hour scheduling controls
+
+At Khalid's request, Publish now no longer requires MFA enrollment or a fresh step-up. This supersedes the MFA requirement retained in the earlier publishing-priority decision. Authentication, verified email, workspace membership, publishing permission, eligible content state and durable job deduplication remain enforced. Other MFA-protected operations and login behavior are unchanged.
+
+Create and Calendar share a date picker and a time dropdown containing only :00 and :30 slots. Native datetime-local step validation did not constrain the browser's minute picker. Keep the existing Bahrain timezone conversion and server-side half-hour validation; the worker still checks due posts every minute.
