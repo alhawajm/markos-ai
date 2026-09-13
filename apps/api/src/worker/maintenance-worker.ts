@@ -63,6 +63,22 @@ export async function runMaintenanceWorkerTick(
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
   const now = input.now ?? new Date();
+  const tokenRefresh =
+    input.runTokenRefresh === false
+      ? undefined
+      : await refreshDueInstagramTokens({
+          now,
+          ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl })
+        });
+  // Due publications must not wait behind unrelated email, cleanup, or Insights
+  // requests. Retain token refresh first and the existing single-tick guard.
+  const publishing =
+    input.runPublishing === false
+      ? undefined
+      : await processDuePublishJobs({
+          now,
+          ...(input.publisher === undefined ? {} : { publisher: input.publisher })
+        });
   const documentCleanup =
     input.runDocumentCleanup === false
       ? undefined
@@ -81,26 +97,12 @@ export async function runMaintenanceWorkerTick(
           ...(input.analyticsEmailProvider === undefined ? {} : { provider: input.analyticsEmailProvider })
         });
   const usageReset = input.runUsageReset === false ? undefined : await ensureCurrentUsagePeriods({ now });
-  const tokenRefresh =
-    input.runTokenRefresh === false
-      ? undefined
-      : await refreshDueInstagramTokens({
-          now,
-          ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl })
-        });
   const analyticsSync =
     input.runAnalyticsSync === false
       ? undefined
       : await syncInstagramAnalyticsForAllWorkspaces({
           now,
           ...(input.analyticsProvider === undefined ? {} : { provider: input.analyticsProvider })
-        });
-  const publishing =
-    input.runPublishing === false
-      ? undefined
-      : await processDuePublishJobs({
-          now,
-          ...(input.publisher === undefined ? {} : { publisher: input.publisher })
         });
   const videoGeneration = input.runVideoGeneration === false ? undefined : await processDueVideoGenerationJobs({ now });
 

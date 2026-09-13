@@ -1017,6 +1017,44 @@ describe("unified Create", () => {
     }
   });
 
+  it("queues Publish now for a ready Reel and follows the job to its published state", async () => {
+    const { page, state, close } = await setup([draft({ contentType: "REEL", status: "APPROVED", mediaIds: ["clip"] })], [videoAsset()]);
+    let queued = false;
+    let completed = false;
+    let requests = 0;
+    const job = () => ({
+      id: "publish-job",
+      contentItemId: "saved-post",
+      status: completed ? "PUBLISHED" : "QUEUED",
+      trigger: "PUBLISH_NOW",
+      attempts: completed ? 1 : 0
+    });
+    try {
+      await page.route("**/v1/content/saved-post/publish-job/latest", (route) => route.fulfill(json(queued ? job() : null)));
+      await page.route("**/v1/content/saved-post/publish-now", async (route) => {
+        expect(route.request().method()).toBe("POST");
+        expect(route.request().postDataJSON()).toEqual({});
+        requests++;
+        queued = true;
+        Object.assign(state.items[0]!, { status: "SCHEDULED", scheduledAt: new Date().toISOString() });
+        await route.fulfill(json(job()));
+      });
+      await open(page, "saved-post");
+      await page.getByRole("button", { name: "Schedule / publish", exact: true }).click();
+      await page.getByRole("button", { name: "Publish now", exact: true }).click();
+      await page.getByText("Queued to publish now.", { exact: true }).waitFor();
+      expect(requests).toBe(1);
+      await page.getByRole("dialog", { name: "Publishing time" }).waitFor({ state: "hidden" });
+      completed = true;
+      Object.assign(state.items[0]!, { status: "PUBLISHED", instagramPostId: "published-reel", publishedAt: new Date().toISOString() });
+      await page.getByText("Published to Instagram", { exact: true }).waitFor();
+      expect(await page.getByRole("button", { name: "Schedule / publish", exact: true }).count()).toBe(0);
+      expect(requests).toBe(1);
+    } finally {
+      await close();
+    }
+  });
+
   it("saves readiness changes, returns Ready to Draft, and schedules in Bahrain time", async () => {
     const { page, state, close } = await setup([draft()]);
     try {

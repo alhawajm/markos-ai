@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
-import { InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
+import { InstagramGraphPublisher, InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
 import { runMaintenanceWorkerTick } from "../src/worker/maintenance-worker";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { decryptCredential } from "../src/security/credential-encryption";
@@ -11,6 +11,56 @@ import { env } from "../src/config/env";
 import { processDuePublishJobs, queuePublishNow } from "../src/publishing/publish-job-service";
 
 describe("maintenance worker", () => {
+  it("publishes a queued Reel only after processing finishes and persists its final media ID", async () => {
+    const now = new Date("2026-01-03T12:00:00Z");
+    const target = await createPublishableWorkspace("worker-publish-now-reel", now);
+    await prisma.mediaAsset.update({
+      where: { id: target.media.id },
+      data: { filename: "reel.mp4", mimeType: "video/mp4", width: 720, height: 1280, durationSeconds: 8 }
+    });
+    await prisma.contentItem.update({ where: { id: target.content.id }, data: { contentType: "REEL", status: "APPROVED", scheduledAt: null } });
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    const steps: string[] = [];
+    let polls = 0;
+    const publisher = new InstagramGraphPublisher({
+      pollDelayMs: 0,
+      providerUrlResolver: async () => "https://cdn.example.com/reel.mp4",
+      fetchImpl: async (url, init) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith("/content_publishing_limit"))
+          return Response.json({ data: [{ quota_usage: 0, config: { quota_total: 100, quota_duration: 86400 } }] });
+        if (path.endsWith("/media")) {
+          const body = new URLSearchParams(String(init?.body));
+          expect(body.get("media_type")).toBe("REELS");
+          expect(body.get("video_url")).toBe("https://cdn.example.com/reel.mp4");
+          steps.push("container");
+          return Response.json({ id: "reel-container" });
+        }
+        if (path.endsWith("/reel-container")) {
+          polls++;
+          steps.push(polls === 1 ? "processing" : "finished");
+          return Response.json({ status_code: polls === 1 ? "IN_PROGRESS" : "FINISHED" });
+        }
+        if (path.endsWith("/media_publish")) {
+          expect(new URLSearchParams(String(init?.body)).get("creation_id")).toBe("reel-container");
+          expect(steps.at(-1)).toBe("finished");
+          steps.push("publish");
+          return Response.json({ id: "reel-published-id" });
+        }
+        throw new Error("Unexpected test transport request");
+      }
+    });
+    await processDuePublishJobs({ now, publisher });
+    await processDuePublishJobs({ now, publisher });
+    expect(steps).toEqual(["container", "processing", "finished", "publish"]);
+    expect(await prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: "PUBLISHED", attempts: 1 });
+    expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } })).toMatchObject({
+      status: "PUBLISHED",
+      instagramPostId: "reel-published-id"
+    });
+    expect(await prisma.publishAttempt.findMany({ where: { publishJobId: job.id } })).toMatchObject([{ status: "PUBLISHED" }]);
+  });
+
   it("renews a long publish lease and prevents a second worker and repeated ticks from publishing it", async () => {
     const now = new Date("2026-01-05T12:00:00Z");
     const target = await createPublishableWorkspace("worker-long-publish", now);
