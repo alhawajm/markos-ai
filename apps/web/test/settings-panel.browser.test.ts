@@ -176,6 +176,43 @@ describe("active SettingsPanel Instagram interactions", () => {
         offeringPayload = route.request().postDataJSON() as Record<string, unknown>;
         return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"] })));
       }
+      if (pathname === "/v1/business-profile" && route.request().method() === "GET") {
+        const timestamp = "2026-09-13T08:00:00.000Z";
+        return route.fulfill(
+          json({
+            version: 1,
+            approved: false,
+            updatedAt: timestamp,
+            modules: {},
+            catalog: {
+              id: "browser-catalog",
+              workspaceId: session.workspace.id,
+              version: 1,
+              projectionStatus: "READY",
+              projectedVersion: 1,
+              differentiators: [],
+              salesChannels: [],
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              offerings: [
+                {
+                  id: "saved-coffee-beans",
+                  workspaceId: session.workspace.id,
+                  catalogId: "browser-catalog",
+                  name: "Coffee beans",
+                  kind: "PRODUCT",
+                  status: "ACTIVE",
+                  priceType: "UNSPECIFIED",
+                  currency: "BHD",
+                  version: 1,
+                  createdAt: timestamp,
+                  updatedAt: timestamp
+                }
+              ]
+            }
+          })
+        );
+      }
       if (pathname === "/v1/onboarding/story/skip") return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"], skipped: ["story"] })));
       return route.fulfill({ status: 404, body: "{}" });
     });
@@ -266,6 +303,12 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.getByRole("button", { name: "Save & continue" }).click();
     await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
     expect(offeringPayload).toMatchObject({ items: [{ name: "Coffee beans", kind: "PRODUCT" }] });
+    await expect
+      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.onboarding.draft.v3") ?? "{}")))
+      .toMatchObject({
+        catalogVersion: 1,
+        offerings: [{ id: "saved-coffee-beans", version: 1, name: "Coffee beans" }]
+      });
     await page.getByRole("button", { name: "Skip for now" }).click();
     await page.getByRole("heading", { name: "Who usually buys from you?" }).waitFor();
     await page.close();

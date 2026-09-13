@@ -1719,14 +1719,14 @@ function StepScreen({
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="sunlit-panel flex min-h-[500px] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] backdrop-blur-xl">
+        <section className="sunlit-panel flex min-h-[500px] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] backdrop-blur-xl lg:h-[calc(100svh-240px)]">
           <div className="h-1.5 shrink-0 bg-[var(--sunlit-paper-deep)]">
             <div
               className="h-full rounded-e-full bg-[linear-gradient(90deg,var(--sunlit-coral),var(--sunlit-yellow))] transition-[width] duration-300"
               style={{ width: `${(step.id / 7) * 100}%` }}
             />
           </div>
-          <div className="min-w-0 flex-1 p-5 sm:p-6 lg:p-7">
+          <div className="min-h-0 min-w-0 flex-1 p-5 sm:p-6 lg:overflow-y-auto lg:p-7">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
                 <StepIcon size={22} />
@@ -1833,7 +1833,7 @@ function StepScreen({
             {validationIssue ? <p className="mt-4 text-[14px] font-semibold text-[var(--sunlit-danger)]">{copy.errors[validationIssue]}</p> : null}
           </div>
 
-          <div className="mt-auto flex flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-[var(--surface)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+          <div className="mt-auto flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--sunlit-line)] bg-[var(--surface)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
             <button
               className="sunlit-secondary inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-[15px] font-semibold"
               disabled={saving || documentBusy || documentAnalysis?.status === "PROCESSING"}
