@@ -1,5 +1,7 @@
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { cancelUnclaimedPublishJobs, ContentScheduleError } from "../content/content-service";
+import { lockContentForMedia } from "../media/content-media-integrity";
 import { env } from "../config/env";
 import { hasCanonicalReleaseScopeSet, INSTAGRAM_RELEASE_SCOPES } from "../config/instagram-contract";
 import { refundWorkspaceUsage, reserveWorkspaceUsage, UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -61,8 +63,8 @@ export class PublishContentItemNotFoundError extends Error {
 }
 
 export class PublishRescheduleInvalidError extends Error {
-  constructor() {
-    super("Only failed publishing items can be rescheduled from the publishing queue");
+  constructor(message = "Only failed publishing items can be rescheduled from the publishing queue") {
+    super(message);
   }
 }
 
@@ -169,33 +171,33 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
 }
 
 export async function rescheduleFailedPublish(workspaceId: string, contentItemId: string, input: { scheduledAt: string }): Promise<ContentItem> {
-  const contentItem = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!contentItem) {
-    throw new PublishContentItemNotFoundError();
-  }
-
-  if (contentItem.status !== "FAILED") {
-    throw new PublishRescheduleInvalidError();
-  }
-
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
-
-  return prisma.contentItem.update({
-    where: {
-      id: contentItem.id
-    },
-    data: {
-      failureReason: null,
-      scheduledAt,
-      status: "SCHEDULED"
+  return prisma.$transaction(async (tx) => {
+    const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
+    if (!contentItem) {
+      throw new PublishContentItemNotFoundError();
     }
+
+    if (contentItem.status !== "FAILED") {
+      throw new PublishRescheduleInvalidError();
+    }
+
+    try {
+      await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
+    } catch (error) {
+      if (error instanceof ContentScheduleError) throw new PublishRescheduleInvalidError(error.message);
+      throw error;
+    }
+    return tx.contentItem.update({
+      where: {
+        id: contentItem.id
+      },
+      data: {
+        failureReason: null,
+        scheduledAt,
+        status: "SCHEDULED"
+      }
+    });
   });
 }
 

@@ -1,6 +1,6 @@
-import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
+import type { ContentItem, MediaAsset, PublishJob, Workspace } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import type { AnalyticsEmailProvider } from "../src/analytics/analytics-email-service";
 import { InstagramGraphPublisher, InstagramPublishError, type InstagramPublisher } from "../src/publishing/instagram-publisher";
@@ -9,8 +9,125 @@ import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { decryptCredential } from "../src/security/credential-encryption";
 import { env } from "../src/config/env";
 import { processDuePublishJobs, queuePublishNow } from "../src/publishing/publish-job-service";
+import { ContentScheduleError, rescheduleContentItem, scheduleContentItem, unscheduleContentItem } from "../src/content/content-service";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+function scheduleTestClock() {
+  // Use the same isolated historical window as the existing worker fixtures,
+  // including Date.now() for the public API's future-schedule validation.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  return new Date();
+}
 
 describe("maintenance worker", () => {
+  it.each(["QUEUED", "RETRY_WAIT"] as const)("cancels a %s job atomically with unscheduling", async (status) => {
+    const now = scheduleTestClock();
+    const target = await createPublishableWorkspace(`worker-cancel-${status}`, now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status } });
+    await unscheduleContentItem(target.workspace.id, target.content.id);
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "CANCELLED" });
+    const publisher = successfulPublisher();
+    await processDuePublishJobs({ now, publisher });
+    expect(publisher.publish).not.toHaveBeenCalled();
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } })).resolves.toMatchObject({
+      status: "APPROVED",
+      scheduledAt: null,
+      failureReason: null
+    });
+  });
+
+  it.each(["QUEUED", "RETRY_WAIT"] as const)("replaces a %s schedule without publishing at its old time", async (status) => {
+    const now = scheduleTestClock();
+    const later = new Date(Math.ceil((now.getTime() + 3_600_000) / 1_800_000) * 1_800_000);
+    const target = await createPublishableWorkspace(`worker-reschedule-${status}`, now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    await prisma.publishJob.update({ where: { id: job.id }, data: { status } });
+    await rescheduleContentItem(target.workspace.id, target.content.id, { scheduledAt: later.toISOString() });
+    const publisher = successfulPublisher();
+    await processDuePublishJobs({ now, publisher });
+    expect(publisher.publish).not.toHaveBeenCalled();
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "CANCELLED" });
+    await processDuePublishJobs({ now: later, publisher });
+    expect(publisher.publish).toHaveBeenCalledOnce();
+    expect(publisher.publish.mock.calls[0]![0].contentItem.id).toBe(target.content.id);
+  });
+
+  it("rejects schedule edits while the claimed publish is inside the provider", async () => {
+    const now = scheduleTestClock();
+    const later = new Date(Math.ceil((now.getTime() + 3_600_000) / 1_800_000) * 1_800_000);
+    const target = await createPublishableWorkspace("worker-edit-claimed", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    const publisher = successfulPublisher();
+    let checked = false;
+    const original = publisher.publish.getMockImplementation()!;
+    publisher.publish.mockImplementation(async (input) => {
+      await expect(unscheduleContentItem(target.workspace.id, target.content.id)).rejects.toThrow("Publishing has started");
+      await expect(rescheduleContentItem(target.workspace.id, target.content.id, { scheduledAt: later.toISOString() })).rejects.toThrow(ContentScheduleError);
+      await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "PROCESSING" });
+      checked = true;
+      return original(input);
+    });
+    await processDuePublishJobs({ now, publisher });
+    expect(checked).toBe(true);
+    await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: target.content.id } })).resolves.toMatchObject({ status: "PUBLISHED" });
+  });
+
+  it("honors cancellation after candidate discovery but before the worker claims it", async () => {
+    const now = scheduleTestClock();
+    const target = await createPublishableWorkspace("worker-cancel-race", now);
+    const job = await queuePublishNow(target.workspace.id, target.content.id, now);
+    const find = prisma.publishJob.findFirst.bind(prisma.publishJob);
+    let discovered!: () => void;
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      discovered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const store: { findFirst: (args?: Parameters<typeof prisma.publishJob.findFirst>[0]) => Promise<PublishJob | null> } = prisma.publishJob;
+    const spy = vi.spyOn(store, "findFirst").mockImplementationOnce(async (args) => {
+      const candidate = await find(args);
+      discovered();
+      await held;
+      return candidate;
+    });
+    const publisher = successfulPublisher();
+    const running = processDuePublishJobs({ now, publisher });
+    try {
+      await ready;
+      await unscheduleContentItem(target.workspace.id, target.content.id);
+    } finally {
+      release();
+      await running;
+      spy.mockRestore();
+    }
+    expect(publisher.publish).not.toHaveBeenCalled();
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "CANCELLED", attempts: 0 });
+  });
+
+  it("allows a cancelled time to be scheduled again without reusing its cancelled job", async () => {
+    const now = scheduleTestClock();
+    const later = new Date(Math.ceil((now.getTime() + 3_600_000) / 1_800_000) * 1_800_000);
+    const target = await createPublishableWorkspace("worker-same-time", now);
+    await prisma.contentItem.update({ where: { id: target.content.id }, data: { status: "APPROVED", scheduledAt: null } });
+    await scheduleContentItem(target.workspace.id, target.content.id, { scheduledAt: later.toISOString() });
+    await processDuePublishJobs({ now: later, shouldStop: () => true });
+    const old = await prisma.publishJob.findFirstOrThrow({ where: { contentItemId: target.content.id } });
+    await unscheduleContentItem(target.workspace.id, target.content.id);
+    await scheduleContentItem(target.workspace.id, target.content.id, { scheduledAt: later.toISOString() });
+    const publisher = successfulPublisher();
+    await processDuePublishJobs({ now: later, publisher });
+    expect(publisher.publish).toHaveBeenCalledOnce();
+    await expect(prisma.publishJob.findUniqueOrThrow({ where: { id: old.id } })).resolves.toMatchObject({ status: "CANCELLED" });
+    expect(await prisma.publishJob.count({ where: { contentItemId: target.content.id, status: "PUBLISHED" } })).toBe(1);
+  });
+
   it("claims simultaneous publishes from three workspaces once even when workers compete", async () => {
     const now = new Date("2026-01-04T12:00:00Z");
     const targets = await Promise.all(["a", "b", "c"].map((suffix) => createPublishableWorkspace(`worker-three-${suffix}`, now)));
@@ -147,6 +264,7 @@ describe("maintenance worker", () => {
     const target = await createPublishableWorkspace("worker-interrupted", now);
     const job = await queuePublishNow(target.workspace.id, target.content.id, now);
     await prisma.publishJob.update({ where: { id: job.id }, data: { status: "PROCESSING", attempts: 1, leaseExpiresAt: new Date(now.getTime() - 1) } });
+    await expect(unscheduleContentItem(target.workspace.id, target.content.id)).rejects.toThrow("Publishing has started");
     const publish = vi.fn();
     await processDuePublishJobs({ now, publisher: { publish } });
     expect(publish).not.toHaveBeenCalled();
@@ -571,6 +689,23 @@ async function createPublishableWorkspace(label: string, now = new Date()) {
     content,
     media,
     workspace
+  };
+}
+
+function successfulPublisher() {
+  return {
+    publish: vi.fn<InstagramPublisher["publish"]>(async (input) => ({
+      dryRun: false,
+      status: "PUBLISHED",
+      instagramPostId: `ig-${input.contentItem.id}`,
+      payload: {
+        accountId: input.workspace.instagramAccountId!,
+        contentItemId: input.contentItem.id,
+        caption: input.contentItem.caption,
+        contentType: input.contentItem.contentType,
+        mediaCount: input.mediaAssets.length
+      }
+    }))
   };
 }
 
