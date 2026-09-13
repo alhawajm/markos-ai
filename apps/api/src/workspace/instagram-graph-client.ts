@@ -50,7 +50,7 @@ export class InstagramGraphClient {
 
   async get(
     objectId: string,
-    edge: "content_publishing_limit" | "insights" | undefined,
+    edge: "content_publishing_limit" | "insights" | "media" | "stories" | undefined,
     accessToken: string,
     query: Record<string, string>
   ): Promise<Record<string, unknown>> {

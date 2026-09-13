@@ -66,6 +66,50 @@ async function fixture() {
 }
 
 describe("durable post conversations", () => {
+  it("saves each Details field separately and preserves unrelated copy on later edits", async () => {
+    const f = await fixture();
+    const details = {
+      contentPillar: "Behind the scenes",
+      campaignGoal: "Encourage bakery enquiries",
+      tone: "Warm and conversational",
+      brief: "Show the morning bake."
+    };
+    respond.mockResolvedValue(output({ ...patch(), caption: null, ...details }) as Awaited<ReturnType<typeof respond>>);
+    await f.send({ ...f.input, message: "Apply the agreed pillar, objective, tone and brief to this post." });
+    await processConversationRuns(f.session.workspace.id);
+    expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: f.item.id } })).toMatchObject({ ...details, caption: "Original", revision: 2 });
+    const saved = await f.get();
+    expect(saved.contentItem).toMatchObject(details);
+    expect(saved.messages.at(-1).text).toContain("content pillar, post objective, tone");
+    respond.mockResolvedValue(output({ ...patch(), caption: null, contentPillar: null, campaignGoal: null, tone: "" }) as Awaited<ReturnType<typeof respond>>);
+    await f.send({ ...f.input, requestId: randomUUID(), expectedRevision: 2, message: "Clear only the tone." });
+    await processConversationRuns(f.session.workspace.id);
+    expect(respond.mock.lastCall?.[0].current).toMatchObject(details);
+    expect((await f.get()).contentItem).toMatchObject({
+      contentPillar: details.contentPillar,
+      campaignGoal: details.campaignGoal,
+      brief: details.brief,
+      caption: "Original",
+      revision: 3
+    });
+    expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: f.item.id } })).tone).toBe("");
+  });
+
+  it.each([
+    ["contentPillar", 160],
+    ["campaignGoal", 500],
+    ["tone", 200]
+  ] as const)("rejects oversized %s without saving any of the edit", async (field, limit) => {
+    const f = await fixture();
+    respond.mockResolvedValue(output({ ...patch(), [field]: "x".repeat(limit + 1) }) as Awaited<ReturnType<typeof respond>>);
+    await f.send();
+    await processConversationRuns(f.session.workspace.id);
+    const saved = await f.get();
+    expect(saved.latestRun.status).toBe("FAILED");
+    expect(saved.contentItem).toMatchObject({ caption: "Original", brief: "Citrus post", revision: 1 });
+    expect(saved.messages.at(-1).text).toContain("No changes from it were saved");
+  });
+
   it.each([null, "Macro shot of citrus glaze, then a slow reveal of the finished pastry."])(
     "applies an approved Reel script to the persisted video direction (provider direction: %s)",
     async (visualDirection) => {

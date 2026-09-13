@@ -5,7 +5,7 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import type { InstagramAnalyticsProvider } from "../src/analytics/instagram-analytics-provider";
-import { syncInstagramAnalytics, syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
+import { getAnalyticsSummary, syncInstagramAnalytics, syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
 
 vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
@@ -36,6 +36,111 @@ vi.mock("../src/ai/agent-client", () => ({
 }));
 
 describe("analytics routes", () => {
+  it("persists external media by Instagram identity and separates exact period totals from lifetime metrics", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const now = new Date("2026-09-13T12:00:00Z");
+    const today = dayStart(now);
+    const monthFrom = new Date(today.getTime() - 29 * 86400000);
+    const weekFrom = new Date(today.getTime() - 6 * 86400000);
+    const publishedDate = new Date("2026-09-10T00:00:00Z");
+    const local = await createPublishedContent(session.workspace.id);
+    let linkExternal = false;
+    const provider: InstagramAnalyticsProvider = {
+      mode: "dry_run",
+      async syncWorkspace() {
+        return {
+          diagnostics: { status: "COMPLETE", discovered: 2, synced: 2, linked: linkExternal ? 1 : 0, warnings: [] },
+          snapshots: [
+            {
+              dataDate: today,
+              metricType: "ACCOUNT",
+              metrics: { _scope: "account_total", _from: monthFrom.toISOString(), _to: today.toISOString(), reach: 20, views: 90, engagement: 5 }
+            },
+            {
+              dataDate: today,
+              metricType: "ACCOUNT",
+              metrics: { _scope: "account_total", _from: weekFrom.toISOString(), _to: today.toISOString(), reach: 3, views: 10, engagement: 0 }
+            },
+            { dataDate: today, metricType: "ACCOUNT", metrics: { _scope: "account_current", followers: 1 } },
+            { dataDate: publishedDate, metricType: "ACCOUNT", metrics: { _scope: "account_day", reach: 2 } },
+            { dataDate: today, metricType: "ACCOUNT", metrics: { _scope: "account_day", reach: 0 } },
+            {
+              ...(linkExternal ? { contentItemId: local.id } : {}),
+              dataDate: publishedDate,
+              metricType: "POST",
+              metrics: {
+                _scope: "media_lifetime",
+                instagramMediaId: "external-one",
+                permalink: "https://www.instagram.com/p/external-one/",
+                views: 100,
+                reach: 30,
+                likes: 0
+              }
+            },
+            { dataDate: publishedDate, metricType: "POST", metrics: { _scope: "media_lifetime", instagramMediaId: "external-two", views: 200, reach: 40 } }
+          ]
+        };
+      }
+    };
+    try {
+      await syncInstagramAnalytics(session.workspace.id, { now, days: 30, provider });
+      linkExternal = true;
+      await syncInstagramAnalytics(session.workspace.id, { now, days: 30, provider });
+      expect(await prisma.instagramAnalytics.count({ where: { workspaceId: session.workspace.id } })).toBe(7);
+      const month = await getAnalyticsSummary(session.workspace.id, { days: 30, to: now });
+      const week = await getAnalyticsSummary(session.workspace.id, { days: 7, to: now });
+      expect(month.totals).toMatchObject({ reach: 20, views: 90, followers: 1, engagement: 5, impressions: null });
+      expect(week.totals).toMatchObject({ reach: 3, views: 10, followers: 1, engagement: 0 });
+      expect(week.daily.map((point) => point.totals.reach)).toEqual([2, 0]);
+      expect(week.topContent).toHaveLength(2);
+      expect(week.topContent.find((post) => post.instagramMediaId === "external-one")?.contentItemId).toBe(local.id);
+      expect(week.topContent.find((post) => post.instagramMediaId === "external-two")?.metrics).toMatchObject({ views: 200, engagement: null });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("persists useful partial results and diagnostics without marking the sync complete", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const now = new Date();
+    const today = dayStart(now);
+    const from = new Date(today.getTime() - 6 * 86400000);
+    const diagnostics = {
+      status: "PARTIAL" as const,
+      discovered: 1,
+      synced: 1,
+      linked: 0,
+      warnings: [{ stage: "account", code: "INSTAGRAM_PROVIDER_HTTP_ERROR", metric: "profile_views", providerCode: 100 }]
+    };
+    const provider: InstagramAnalyticsProvider = {
+      mode: "dry_run",
+      async syncWorkspace() {
+        return {
+          diagnostics,
+          snapshots: [
+            {
+              dataDate: today,
+              metricType: "ACCOUNT",
+              metrics: { _scope: "account_total", _from: from.toISOString(), _to: today.toISOString(), _sync: diagnostics, reach: 0 }
+            }
+          ]
+        };
+      }
+    };
+    try {
+      const result = await syncInstagramAnalytics(session.workspace.id, { now, days: 7, provider });
+      expect(result.diagnostics).toEqual(diagnostics);
+      expect(result.learning).toBeUndefined();
+      const summary = await getAnalyticsSummary(session.workspace.id, { days: 7, to: now });
+      expect(summary.lastSync).toEqual(diagnostics);
+      expect(summary.totals).toMatchObject({ reach: 0, profileViews: null, views: null });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("reports live analytics readiness blockers before real Meta sync", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

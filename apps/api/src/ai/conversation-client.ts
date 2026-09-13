@@ -11,6 +11,10 @@ export const conversationResultSchema = z
       .object({
         caption: contentCaptionSchema.nullable(),
         brief: z.string().max(1000).nullable(),
+        // Optional for stored older responses and independent API/AI deployments.
+        contentPillar: z.string().max(160).nullable().optional(),
+        campaignGoal: z.string().max(500).nullable().optional(),
+        tone: z.string().max(200).nullable().optional(),
         visualDirection: z.string().max(2000).nullable(),
         carousel: z
           .object({

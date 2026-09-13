@@ -863,6 +863,7 @@ export interface InstagramAnalyticsRecord {
 }
 
 export interface AnalyticsSummary {
+  lastSync?: AnalyticsSyncDiagnostics;
   days: number;
   byMetricType: Array<{
     metricType: InstagramMetricType;
@@ -883,6 +884,8 @@ export interface AnalyticsSummary {
   latestSyncedAt?: string;
   topContent: Array<{
     contentItemId: string;
+    instagramMediaId?: string;
+    permalink?: string;
     contentType: ContentType;
     caption?: string;
     dataDate: string;
@@ -907,6 +910,7 @@ export interface AnalyticsMetricTotals {
 }
 
 export interface AnalyticsSyncResult {
+  diagnostics?: AnalyticsSyncDiagnostics;
   created: number;
   from: string;
   learning?: AnalyticsLearningResult;
@@ -914,6 +918,14 @@ export interface AnalyticsSyncResult {
   records: InstagramAnalyticsRecord[];
   to: string;
   workspaceId: string;
+}
+
+export interface AnalyticsSyncDiagnostics {
+  status: "COMPLETE" | "PARTIAL" | "FAILED";
+  discovered: number;
+  synced: number;
+  linked: number;
+  warnings: Array<{ stage: string; code: string; metric?: string; mediaId?: string; providerCode?: string | number }>;
 }
 
 export interface AnalyticsLearningResult {

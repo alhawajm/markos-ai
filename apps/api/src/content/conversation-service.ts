@@ -279,6 +279,9 @@ function appliedChangesText(locale: string, fields: string[]): string {
   const labels: Record<string, [string, string]> = {
     caption: ["caption", "النص"],
     brief: ["brief", "الموجز"],
+    contentPillar: ["content pillar", "محور المحتوى"],
+    campaignGoal: ["post objective", "هدف المنشور"],
+    tone: ["tone", "النبرة"],
     visualDirection: ["visual direction", "التوجيه البصري"],
     carousel: ["carousel plan", "خطة المنشور المتعدد"],
     reelScript: ["Reel script", "سيناريو الريل"]

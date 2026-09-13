@@ -1005,7 +1005,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       {label}
                       <input
                         aria-label={label}
-                        maxLength={key === "tone" ? 200 : 500}
+                        maxLength={key === "tone" ? 200 : key === "contentPillar" ? 160 : 500}
                         value={fields[key]}
                         onChange={(event) => field(key, event.target.value)}
                       />

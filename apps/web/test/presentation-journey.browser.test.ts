@@ -894,11 +894,20 @@ describe("presentation journey", () => {
     expect(page.url()).toBe(beforeApproval);
     expect(approvalCalls).toBe(1);
 
+    // Reopen immediately after Back, while Next still has the Create route cached.
+    await createButton.click();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await createButton.waitFor();
+    expect(approvalCalls).toBe(1);
+
     await page.reload({ waitUntil: "domcontentloaded" });
     await createButton.waitFor();
     expect(approvalCalls).toBe(1);
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.close();
   }, 60_000);
 

@@ -1,10 +1,11 @@
-import type { ContentItem, InstagramAnalytics } from "@prisma/client";
+import { Prisma, type ContentItem, type InstagramAnalytics } from "@prisma/client";
 import type {
   AnalyticsLearningResult,
   AnalyticsLiveReadiness,
   AnalyticsMetricTotals,
   AnalyticsSummary,
   AnalyticsSyncResult,
+  AnalyticsSyncDiagnostics,
   InstagramAnalyticsRecord,
   InstagramMetricType,
   Locale
@@ -24,6 +25,7 @@ export class AnalyticsWorkspaceNotFoundError extends Error {
 
 export interface AnalyticsSyncForAllWorkspacesResult {
   attempted: number;
+  failures?: Array<{ workspaceId: string; code: string }>;
   results: AnalyticsSyncResult[];
 }
 
@@ -54,8 +56,8 @@ export async function getAnalyticsSummary(workspaceId: string, input: { days?: n
     }
   });
   const allRecords = rows.map(toInstagramAnalyticsRecord);
-  const records = allRecords.filter((record) => new Date(record.dataDate).getTime() >= range.from.getTime());
-  const comparisonRecords = allRecords.filter((record) => new Date(record.dataDate).getTime() < range.from.getTime());
+  const records = recordsInRange(allRecords, range);
+  const comparisonRecords = recordsInRange(allRecords, comparisonRange);
   const totals = summarizeMetrics(records);
   const comparisonTotals = summarizeMetrics(comparisonRecords);
   const contentItems = await prisma.contentItem.findMany({
@@ -67,8 +69,10 @@ export async function getAnalyticsSummary(workspaceId: string, input: { days?: n
     }
   });
   const contentById = new Map(contentItems.map((item) => [item.id, item]));
+  const latestSync = [...allRecords].sort((a, b) => b.syncedAt.localeCompare(a.syncedAt)).find((record) => isRecord(record.metrics._sync));
 
   return {
+    ...(latestSync ? { lastSync: latestSync.metrics._sync as unknown as AnalyticsSyncDiagnostics } : {}),
     byMetricType: summarizeByMetricType(records),
     comparison: {
       from: comparisonRange.from.toISOString(),
@@ -203,10 +207,6 @@ export async function syncInstagramAnalytics(
       instagramPostId: {
         not: null
       },
-      publishedAt: {
-        gte: dayStart(from),
-        lte: endOfDay(to)
-      },
       status: "PUBLISHED"
     }
   });
@@ -221,12 +221,14 @@ export async function syncInstagramAnalytics(
   }
 
   const providerWorkspace = await withSecureInstagramCredential(workspace);
-  const snapshots = await provider.syncWorkspace({
+  const providerResult = await provider.syncWorkspace({
     contentItems,
     from: dayStart(from),
     to: dayStart(to),
     workspace: providerWorkspace
   });
+  const snapshots = Array.isArray(providerResult) ? providerResult : providerResult.snapshots;
+  const diagnostics = Array.isArray(providerResult) ? undefined : providerResult.diagnostics;
   const syncedAt = options.now ?? new Date();
   const records: InstagramAnalyticsRecord[] = [];
   const allowedContentItemIds = new Set(contentItems.map((item) => item.id));
@@ -235,46 +237,57 @@ export async function syncInstagramAnalytics(
     throw new InstagramAnalyticsProviderError("INSTAGRAM_ANALYTICS_CONTENT_SCOPE_INVALID");
   }
 
-  for (const snapshot of snapshots) {
-    const existing = await prisma.instagramAnalytics.findFirst({
-      where: {
-        contentItemId: snapshot.contentItemId ?? null,
-        dataDate: snapshot.dataDate,
-        deletedAt: null,
-        metricType: snapshot.metricType,
-        workspaceId
-      }
-    });
-    const row =
-      existing === null
-        ? await prisma.instagramAnalytics.create({
-            data: {
-              ...(snapshot.contentItemId === undefined ? {} : { contentItemId: snapshot.contentItemId }),
-              dataDate: snapshot.dataDate,
-              metricType: snapshot.metricType,
-              metrics: snapshot.metrics,
-              syncedAt,
-              workspaceId
-            }
-          })
-        : await prisma.instagramAnalytics.update({
-            data: {
-              metrics: snapshot.metrics,
-              syncedAt
-            },
-            where: {
-              id: existing.id
-            }
-          });
+  await prisma.$transaction(
+    async (tx) => {
+      // Serialize worker/manual sync persistence without holding a lock during Meta requests.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${workspaceId}, 0))`;
+      for (const snapshot of snapshots) {
+        const identity = ["_scope", "_from", "_to", "instagramMediaId"].filter((key) => typeof snapshot.metrics[key] === "string");
+        const existing = await tx.instagramAnalytics.findFirst({
+          where: {
+            ...(typeof snapshot.metrics.instagramMediaId === "string" ? {} : { contentItemId: snapshot.contentItemId ?? null }),
+            dataDate: snapshot.dataDate,
+            deletedAt: null,
+            metricType: snapshot.metricType,
+            workspaceId,
+            AND: identity.map((key) => ({ metrics: { path: [key], equals: snapshot.metrics[key] as string } }))
+          }
+        });
+        const row =
+          existing === null
+            ? await tx.instagramAnalytics.create({
+                data: {
+                  ...(snapshot.contentItemId === undefined ? {} : { contentItemId: snapshot.contentItemId }),
+                  dataDate: snapshot.dataDate,
+                  metricType: snapshot.metricType,
+                  metrics: snapshot.metrics as Prisma.InputJsonObject,
+                  syncedAt,
+                  workspaceId
+                }
+              })
+            : await tx.instagramAnalytics.update({
+                data: {
+                  metrics: snapshot.metrics as Prisma.InputJsonObject,
+                  contentItemId: snapshot.contentItemId ?? null,
+                  syncedAt
+                },
+                where: {
+                  id: existing.id
+                }
+              });
 
-    records.push(toInstagramAnalyticsRecord(row));
-  }
-  const learning = await writeAnalyticsLearningToVault(workspaceId, { days, now: syncedAt });
+        records.push(toInstagramAnalyticsRecord(row));
+      }
+    },
+    { timeout: 30_000 }
+  );
+  const learning = diagnostics && diagnostics.status !== "COMPLETE" ? undefined : await writeAnalyticsLearningToVault(workspaceId, { days, now: syncedAt });
 
   return {
+    ...(diagnostics ? { diagnostics } : {}),
     created: records.length,
     from: dayStart(from).toISOString(),
-    learning,
+    ...(learning ? { learning } : {}),
     mode: provider.mode,
     records,
     to: dayStart(to).toISOString(),
@@ -354,6 +367,7 @@ export async function syncInstagramAnalyticsForAllWorkspaces(
     select: { workspaceId: true }
   });
   const results: AnalyticsSyncResult[] = [];
+  const failures: Array<{ workspaceId: string; code: string }> = [];
 
   for (const connection of connections) {
     try {
@@ -368,11 +382,13 @@ export async function syncInstagramAnalyticsForAllWorkspaces(
       if (!(error instanceof InstagramAnalyticsProviderError)) {
         throw error;
       }
+      failures.push({ workspaceId: connection.workspaceId, code: error.code });
     }
   }
 
   return {
-    attempted: results.length,
+    attempted: connections.length,
+    failures,
     results
   };
 }
@@ -406,15 +422,27 @@ function emptyTotals(): AnalyticsMetricTotals {
   };
 }
 
+function recordsInRange(records: InstagramAnalyticsRecord[], range: { from: Date; to: Date }): InstagramAnalyticsRecord[] {
+  return records.filter((record) => {
+    const date = new Date(record.dataDate);
+    if (date < range.from || date > range.to) return false;
+    return record.metrics._scope !== "account_total" || (record.metrics._from === range.from.toISOString() && record.metrics._to === range.to.toISOString());
+  });
+}
+
 function summarizeMetrics(records: InstagramAnalyticsRecord[]): AnalyticsMetricTotals {
   const totals = emptyTotals();
+  // Period account totals already include content created outside MarkOS.
+  // Never add lifetime media counts or daily unique reach to those totals.
+  const modernAccount = records.some((record) => record.metricType === "ACCOUNT" && typeof record.metrics._scope === "string");
+  if (modernAccount) records = records.filter((record) => record.metrics._scope === "account_total" || record.metrics._scope === "account_current");
 
   for (const record of records) {
     for (const key of Object.keys(totals) as Array<keyof AnalyticsMetricTotals>) {
       const value = record.metrics[key];
 
       if (typeof value === "number") {
-        totals[key] = (totals[key] ?? 0) + value;
+        totals[key] = key === "followers" ? (totals[key] ?? value) : (totals[key] ?? 0) + value;
       }
     }
   }
@@ -459,8 +487,10 @@ function summarizeByMetricType(records: InstagramAnalyticsRecord[]): AnalyticsSu
 
 function summarizeDaily(records: InstagramAnalyticsRecord[]): AnalyticsSummary["daily"] {
   const grouped = new Map<string, InstagramAnalyticsRecord[]>();
+  if (records.some((record) => record.metrics._scope === "account_day")) records = records.filter((record) => record.metrics._scope === "account_day");
 
   for (const record of records) {
+    if (record.metricType !== "ACCOUNT" || (record.metrics._scope !== undefined && record.metrics._scope !== "account_day")) continue;
     const key = dayStart(new Date(record.dataDate)).toISOString();
     grouped.set(key, [...(grouped.get(key) ?? []), record]);
   }
@@ -468,29 +498,33 @@ function summarizeDaily(records: InstagramAnalyticsRecord[]): AnalyticsSummary["
   return [...grouped.entries()]
     .map(([dataDate, dateRecords]) => ({
       dataDate,
-      totals: summarizeMetrics(dateRecords)
+      totals: summarizeMetrics(dateRecords.map((record) => ({ ...record, metrics: { ...record.metrics, _scope: undefined } })))
     }))
     .sort((left, right) => left.dataDate.localeCompare(right.dataDate));
 }
 
 function summarizeTopContent(records: InstagramAnalyticsRecord[], contentById: Map<string, ContentItem>): AnalyticsSummary["topContent"] {
   return records
-    .filter((record) => record.contentItemId !== undefined)
+    .filter((record) => record.contentItemId !== undefined || typeof record.metrics.instagramMediaId === "string")
     .map((record) => {
       const totals = summarizeMetrics([record]);
       const contentItem = contentById.get(record.contentItemId ?? "");
-      const caption = contentItem?.caption || undefined;
+      const caption = contentItem?.caption || (typeof record.metrics.caption === "string" ? record.metrics.caption : undefined);
 
       return {
         ...(caption === undefined ? {} : { caption }),
         contentItemId: record.contentItemId ?? "",
-        contentType: contentItem?.contentType ?? "POST",
+        ...(typeof record.metrics.instagramMediaId === "string" ? { instagramMediaId: record.metrics.instagramMediaId } : {}),
+        ...(typeof record.metrics.permalink === "string" ? { permalink: record.metrics.permalink } : {}),
+        contentType:
+          contentItem?.contentType ??
+          (record.metrics.contentType === "CAROUSEL" ? "CAROUSEL" : record.metricType === "REEL" ? "REEL" : record.metricType === "STORY" ? "STORY" : "POST"),
         dataDate: record.dataDate,
         engagement: totals.engagement,
         metrics: totals
       };
     })
-    .filter((item) => item.engagement !== null)
+    .filter((item) => Object.values(item.metrics).some((value) => value !== null))
     .sort((left, right) => (right.engagement ?? -1) - (left.engagement ?? -1))
     .slice(0, 10);
 }

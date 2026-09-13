@@ -1048,7 +1048,11 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
   const viewsMetric: keyof AnalyticsMetricTotals = totals?.views !== null && totals?.views !== undefined ? "views" : "impressions";
   const daily = summary?.daily.filter((item) => item.totals[trendMetric] !== null) ?? [];
   const maximumTrendValue = Math.max(...daily.map((item) => item.totals[trendMetric] ?? 0), 1);
-  const syncedContentCount = new Set(summary?.records.flatMap((record) => (record.contentItemId ? [record.contentItemId] : [])) ?? []).size;
+  const syncedContentCount = new Set(
+    summary?.records.flatMap((record) =>
+      typeof record.metrics.instagramMediaId === "string" ? [record.metrics.instagramMediaId] : record.contentItemId ? [record.contentItemId] : []
+    ) ?? []
+  ).size;
   const contentBuckets = summary?.byMetricType.filter((item) => item.metricType === "POST" || item.metricType === "REEL" || item.metricType === "STORY") ?? [];
   const audienceBucket = summary?.byMetricType.find((item) => item.metricType === "AUDIENCE");
   const hasAnalytics = (summary?.records.length ?? 0) > 0 && totals !== undefined && Object.values(totals).some((value) => value !== null);
@@ -1171,6 +1175,14 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
           </div>
         </div>
       </header>
+
+      {summary?.lastSync && summary.lastSync.status !== "COMPLETE" ? (
+        <p role="alert" className="rounded-xl border border-[var(--warning)] bg-[var(--warning-soft)] p-4 text-[var(--text)]">
+          {locale === "ar"
+            ? "مزامنة إنستغرام غير مكتملة. حُفظت البيانات المتاحة؛ تعذّر جلب بعض الطلبات."
+            : "Instagram sync is incomplete. Available data was saved; some requests failed."}
+        </p>
+      ) : null}
 
       {message ? (
         <NotificationToast
@@ -1309,6 +1321,11 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                   <p className="mt-2 text-sm text-[var(--text-muted)]">
                     {syncedContentCount} {copy.published}
                   </p>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    {locale === "ar"
+                      ? "إجماليات عمر المحتوى المنشور خلال الفترة، بما فيه المنشور خارج MarkOS."
+                      : "Lifetime totals for content published in this period, including posts created outside MarkOS."}
+                  </p>
                 </div>
                 <Activity aria-hidden="true" className="text-[var(--link)]" size={24} />
               </div>
@@ -1342,8 +1359,8 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                   summary.topContent.slice(0, 4).map((item, index) => (
                     <a
                       className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--sunlit-line-strong)]"
-                      href={`/${locale}/app/content-studio?item=${item.contentItemId}`}
-                      key={item.contentItemId}
+                      href={item.contentItemId ? `/${locale}/app/content-studio?item=${item.contentItemId}` : item.permalink}
+                      key={item.contentItemId || item.instagramMediaId}
                     >
                       <div className="flex items-start gap-3">
                         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sunlit-paper-deep)] text-sm font-bold text-[var(--sunlit-pink)]">
