@@ -97,7 +97,9 @@ class OpenAIVideoProvider:
             OpenAIVideoClient,
             AsyncOpenAI(
                 api_key=settings.openai_api_key.get_secret_value(),
-                max_retries=settings.openai_max_retries,
+                # Worker owns retries. Retrying creation here can hide an accepted
+                # job behind a lost response and create a second paid generation.
+                max_retries=0,
                 timeout=settings.ai_video_timeout_seconds,
             ),
         )

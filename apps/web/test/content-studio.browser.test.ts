@@ -481,6 +481,31 @@ describe("unified Create", () => {
     }
   });
 
+  it.each(["en", "ar"])("explains an unknown video submission and waits for an intentional retry in %s", async (locale) => {
+    const { page, state, close } = await setup([draft({ contentType: "REEL", mediaIds: [] })], []);
+    state.jobStatus = "FAILED";
+    state.jobErrorCode = "AI_VIDEO_START_RESULT_UNKNOWN";
+    let retries = 0;
+    await page.route("**/v1/media-generation/video-job/retry", (route) => {
+      retries++;
+      state.jobStatus = "QUEUED";
+      state.jobErrorCode = null;
+      return route.fulfill(json({ id: "video-job", contentItemId: "saved-post", status: "QUEUED", progress: 0 }));
+    });
+    try {
+      await open(page, "saved-post", locale);
+      await page
+        .getByText(locale === "ar" ? /قد يؤدي الإنشاء مجدداً إلى فيديو آخر ورسوم إضافية/ : /Generating again may create another video and incur another charge/)
+        .waitFor();
+      expect(retries).toBe(0);
+      await page.getByRole("button", { name: locale === "ar" ? "إنشاء مجدداً" : "Generate again", exact: true }).click();
+      await expect.poll(() => retries).toBe(1);
+      await expect.poll(() => page.getByRole("button", { name: locale === "ar" ? "إلغاء الإنشاء" : "Cancel generation", exact: true }).count()).toBe(1);
+    } finally {
+      await close();
+    }
+  });
+
   it("offers an existing video output instead of retrying generation after attachment failure", async () => {
     const { page, state, close } = await setup([draft({ contentType: "REEL", mediaIds: [] })], [{ ...videoAsset("retained-video"), type: "AI_GENERATED" }]);
     state.jobStatus = "FAILED";

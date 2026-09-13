@@ -11,12 +11,9 @@ import type { InstagramTokenRefreshResult } from "@markos/shared-types";
 import { cleanupExpiredOfferingDocumentAnalyses } from "../offerings/offering-document-service";
 import { cleanupExpiredOnboardingDocumentAnalyses } from "../onboarding/onboarding-document-service";
 import { processDueVideoGenerationJobs, type VideoGenerationWorkerResult } from "../media/video-generation-service";
+import { observeWorkerTask, settleWorkerBatch, workerErrorCode, workerLogger, type WorkerLogger } from "./worker-diagnostics";
 
-export interface MaintenanceWorkerLogger {
-  error(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-}
+export type MaintenanceWorkerLogger = WorkerLogger;
 
 export interface MaintenanceWorkerTickResult {
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
@@ -31,19 +28,8 @@ export interface MaintenanceWorkerTickResult {
 export interface MaintenanceWorkerHandle {
   runNow(): Promise<MaintenanceWorkerTickResult>;
   stop(): void;
+  drain(timeoutMs?: number): Promise<boolean>;
 }
-
-const consoleLogger: MaintenanceWorkerLogger = {
-  error(message, meta) {
-    console.error(message, meta ?? {});
-  },
-  info(message, meta) {
-    console.info(message, meta ?? {});
-  },
-  warn(message, meta) {
-    console.warn(message, meta ?? {});
-  }
-};
 
 export async function runMaintenanceWorkerTick(
   input: {
@@ -52,6 +38,8 @@ export async function runMaintenanceWorkerTick(
     analyticsProvider?: InstagramAnalyticsProvider;
     fetchImpl?: typeof fetch;
     now?: Date;
+    logger?: WorkerLogger;
+    shouldStop?: () => boolean;
     publisher?: InstagramPublisher;
     runAnalyticsEmail?: boolean;
     runAnalyticsSync?: boolean;
@@ -62,49 +50,68 @@ export async function runMaintenanceWorkerTick(
     runVideoGeneration?: boolean;
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
-  const now = input.now ?? new Date();
+  const started = Date.now();
+  const base = input.now ?? new Date();
+  const clock = () => new Date(base.getTime() + Date.now() - started);
+  const run = <T>(name: string, work: () => Promise<T>) => observeWorkerTask(input.logger ?? workerLogger, name, work);
   const tokenRefresh =
-    input.runTokenRefresh === false
+    input.runTokenRefresh === false || input.shouldStop?.()
       ? undefined
-      : await refreshDueInstagramTokens({
-          now,
-          ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl })
-        });
+      : await run("tokenRefresh", () =>
+          refreshDueInstagramTokens({
+            now: clock(),
+            ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl })
+          })
+        );
   // Due publications must not wait behind unrelated email, cleanup, or Insights
   // requests. Retain token refresh first and the existing single-tick guard.
   const publishing =
-    input.runPublishing === false
+    input.runPublishing === false || input.shouldStop?.()
       ? undefined
-      : await processDuePublishJobs({
-          now,
-          ...(input.publisher === undefined ? {} : { publisher: input.publisher })
-        });
-  const documentCleanup =
-    input.runDocumentCleanup === false
-      ? undefined
-      : await Promise.all([cleanupExpiredOfferingDocumentAnalyses({ now }), cleanupExpiredOnboardingDocumentAnalyses({ now })]).then(
-          ([offerings, onboarding]) => ({
-            expired: offerings.expired + onboarding.expired,
-            failed: offerings.failed + onboarding.failed
+      : await run("publishing", () =>
+          processDuePublishJobs({
+            now: clock(),
+            shouldStop: input.shouldStop,
+            logger: input.logger,
+            ...(input.publisher === undefined ? {} : { publisher: input.publisher })
           })
         );
+  const documentCleanup =
+    input.runDocumentCleanup === false || input.shouldStop?.()
+      ? undefined
+      : await run("documentCleanup", () =>
+          settleWorkerBatch([cleanupExpiredOfferingDocumentAnalyses({ now: clock() }), cleanupExpiredOnboardingDocumentAnalyses({ now: clock() })]).then(
+            ([offerings, onboarding]) => ({
+              expired: offerings!.expired + onboarding!.expired,
+              failed: offerings!.failed + onboarding!.failed
+            })
+          )
+        );
   const analyticsEmail =
-    input.runAnalyticsEmail === false
+    input.runAnalyticsEmail === false || input.shouldStop?.()
       ? undefined
-      : await sendMonthlyAnalyticsPdfEmailForAllWorkspaces({
-          now,
-          ...(input.analyticsEmailWorkspaceIds === undefined ? {} : { workspaceIds: input.analyticsEmailWorkspaceIds }),
-          ...(input.analyticsEmailProvider === undefined ? {} : { provider: input.analyticsEmailProvider })
-        });
-  const usageReset = input.runUsageReset === false ? undefined : await ensureCurrentUsagePeriods({ now });
+      : await run("analyticsEmail", () =>
+          sendMonthlyAnalyticsPdfEmailForAllWorkspaces({
+            now: clock(),
+            ...(input.analyticsEmailWorkspaceIds === undefined ? {} : { workspaceIds: input.analyticsEmailWorkspaceIds }),
+            ...(input.analyticsEmailProvider === undefined ? {} : { provider: input.analyticsEmailProvider })
+          })
+        );
+  const usageReset =
+    input.runUsageReset === false || input.shouldStop?.() ? undefined : await run("usageReset", () => ensureCurrentUsagePeriods({ now: clock() }));
   const analyticsSync =
-    input.runAnalyticsSync === false
+    input.runAnalyticsSync === false || input.shouldStop?.()
       ? undefined
-      : await syncInstagramAnalyticsForAllWorkspaces({
-          now,
-          ...(input.analyticsProvider === undefined ? {} : { provider: input.analyticsProvider })
-        });
-  const videoGeneration = input.runVideoGeneration === false ? undefined : await processDueVideoGenerationJobs({ now });
+      : await run("analyticsSync", () =>
+          syncInstagramAnalyticsForAllWorkspaces({
+            now: clock(),
+            ...(input.analyticsProvider === undefined ? {} : { provider: input.analyticsProvider })
+          })
+        );
+  const videoGeneration =
+    input.runVideoGeneration === false || input.shouldStop?.()
+      ? undefined
+      : await run("videoGeneration", () => processDueVideoGenerationJobs({ now: clock(), shouldStop: input.shouldStop, logger: input.logger }));
 
   return {
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
@@ -119,6 +126,7 @@ export async function runMaintenanceWorkerTick(
 
 export function startMaintenanceWorker(
   input: {
+    role?: "all" | "delivery" | "maintenance";
     analyticsEmailIntervalMs?: number;
     analyticsEmailProvider?: AnalyticsEmailProvider;
     analyticsProvider?: InstagramAnalyticsProvider;
@@ -131,7 +139,10 @@ export function startMaintenanceWorker(
     usageResetIntervalMs?: number;
   } = {}
 ): MaintenanceWorkerHandle {
-  const logger = input.logger ?? consoleLogger;
+  const logger = input.logger ?? workerLogger;
+  const role = input.role ?? env.WORKER_ROLE;
+  const delivery = role !== "maintenance";
+  const maintenance = role !== "delivery";
   const publishingIntervalMs = input.publishingIntervalMs ?? env.WORKER_PUBLISHING_INTERVAL_MS;
   const analyticsEmailIntervalMs = input.analyticsEmailIntervalMs ?? env.WORKER_ANALYTICS_EMAIL_INTERVAL_MS;
   const analyticsSyncIntervalMs = env.WORKER_ANALYTICS_SYNC_INTERVAL_MS;
@@ -142,29 +153,40 @@ export function startMaintenanceWorker(
   let lastAnalyticsSyncAt = 0;
   let lastUsageResetAt = 0;
   let running = false;
+  let stopping = false;
+  let settled: Promise<void> = Promise.resolve();
 
   async function runNow(): Promise<MaintenanceWorkerTickResult> {
+    if (stopping) return {};
     if (running) {
       logger.warn("Maintenance worker tick skipped because a previous tick is still running");
       return {};
     }
 
     running = true;
+    let finish!: () => void;
+    settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     const now = new Date();
-    const shouldEmailAnalytics = now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
-    const shouldRefreshTokens = now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
-    const shouldSyncAnalytics = now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
-    const shouldResetUsage = now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
+    const tickStarted = performance.now();
+    const shouldEmailAnalytics = maintenance && now.getTime() - lastAnalyticsEmailAt >= analyticsEmailIntervalMs;
+    const shouldRefreshTokens = maintenance && now.getTime() - lastTokenRefreshAt >= tokenRefreshIntervalMs;
+    const shouldSyncAnalytics = maintenance && now.getTime() - lastAnalyticsSyncAt >= analyticsSyncIntervalMs;
+    const shouldResetUsage = maintenance && now.getTime() - lastUsageResetAt >= usageResetIntervalMs;
 
     try {
       const result = await runMaintenanceWorkerTick({
         runAnalyticsEmail: shouldEmailAnalytics,
         now,
+        logger,
+        shouldStop: () => stopping,
         runAnalyticsSync: shouldSyncAnalytics,
-        runPublishing: true,
+        runPublishing: delivery,
+        runDocumentCleanup: maintenance,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
-        runVideoGeneration: true,
+        runVideoGeneration: delivery,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
         ...(input.analyticsEmailProvider === undefined ? {} : { analyticsEmailProvider: input.analyticsEmailProvider }),
         ...(input.analyticsProvider === undefined ? {} : { analyticsProvider: input.analyticsProvider }),
@@ -184,22 +206,24 @@ export function startMaintenanceWorker(
         lastAnalyticsSyncAt = now.getTime();
       }
 
-      logger.info("Maintenance worker tick completed", summarizeTick(result));
+      logger.info("Maintenance worker tick completed", { ...summarizeTick(result), durationMs: Math.round(performance.now() - tickStarted) });
       return result;
     } catch (error) {
       logger.error("Maintenance worker tick failed", {
-        error: error instanceof Error ? error.message : String(error)
+        errorCode: workerErrorCode(error),
+        durationMs: Math.round(performance.now() - tickStarted)
       });
       return {};
     } finally {
       running = false;
+      finish();
     }
   }
 
   const timer = setInterval(() => {
     void runNow();
   }, publishingIntervalMs);
-  logger.info("Maintenance worker started", { publishingIntervalMs });
+  logger.info("Maintenance worker started", { role, publishingIntervalMs });
 
   if (input.runImmediately === true) {
     void runNow();
@@ -208,7 +232,26 @@ export function startMaintenanceWorker(
   return {
     runNow,
     stop() {
+      stopping = true;
       clearInterval(timer);
+    },
+    async drain(timeoutMs = 30_000) {
+      stopping = true;
+      clearInterval(timer);
+      if (!running) return true;
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const completed = await Promise.race([
+          settled.then(() => true),
+          new Promise<boolean>((resolve) => {
+            deadlineTimer = setTimeout(() => resolve(false), timeoutMs);
+          })
+        ]);
+        if (!completed) logger.warn("Worker shutdown grace period expired; active leases retained for recovery", { timeoutMs });
+        return completed;
+      } finally {
+        clearTimeout(deadlineTimer);
+      }
     }
   };
 }

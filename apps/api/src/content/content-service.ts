@@ -656,25 +656,12 @@ export async function updateContentItemStatus(workspaceId: string, contentItemId
 }
 
 export async function scheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (current.status !== "APPROVED") {
-    throw new ContentScheduleError();
-  }
-
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
-
   const row = await prisma.$transaction(async (tx) => {
+    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    if (!current) throw new ContentItemNotFoundError();
+    await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
+    if (current.status !== "APPROVED") throw new ContentScheduleError();
     const updated = await tx.contentItem.update({
       where: {
         id: current.id
@@ -694,24 +681,14 @@ export async function scheduleContentItem(workspaceId: string, contentItemId: st
 }
 
 export async function rescheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (current.status !== "SCHEDULED" && current.status !== "FAILED") {
-    throw new ContentScheduleError("Only scheduled or failed content can be rescheduled");
-  }
-
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const row = await prisma.$transaction(async (tx) => {
+    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    if (!current) throw new ContentItemNotFoundError();
+    await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
+    if (current.status !== "SCHEDULED" && current.status !== "FAILED") {
+      throw new ContentScheduleError("Only scheduled or failed content can be rescheduled");
+    }
     const updated = await tx.contentItem.update({
       where: {
         id: current.id
@@ -735,23 +712,11 @@ export async function rescheduleContentItem(workspaceId: string, contentItemId: 
 }
 
 export async function unscheduleContentItem(workspaceId: string, contentItemId: string): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (current.status !== "SCHEDULED") {
-    throw new ContentScheduleError("Only scheduled content can be unscheduled");
-  }
-
   const row = await prisma.$transaction(async (tx) => {
+    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    if (!current) throw new ContentItemNotFoundError();
+    await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
+    if (current.status !== "SCHEDULED") throw new ContentScheduleError("Only scheduled content can be unscheduled");
     const updated = await tx.contentItem.update({
       where: {
         id: current.id
@@ -771,6 +736,18 @@ export async function unscheduleContentItem(workspaceId: string, contentItemId: 
   });
 
   return toContentRecord(row);
+}
+
+/** Caller holds the content row lock shared with publish queueing/claiming. */
+export async function cancelUnclaimedPublishJobs(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string): Promise<void> {
+  const processing = await tx.publishJob.findFirst({ where: { workspaceId, contentItemId, status: "PROCESSING" }, select: { id: true } });
+  if (processing) {
+    throw new ContentScheduleError("Publishing has started. Wait for the result before changing or cancelling its schedule.");
+  }
+  await tx.publishJob.updateMany({
+    where: { workspaceId, contentItemId, status: { in: ["QUEUED", "RETRY_WAIT"] } },
+    data: { status: "CANCELLED", leasedAt: null, leaseExpiresAt: null }
+  });
 }
 
 async function addToContentCalendar(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string, scheduledAt: Date): Promise<void> {

@@ -4,6 +4,8 @@ import { prisma } from "../db/prisma";
 import { publishContentItem, PublishContentItemNotFoundError, type PublishAttemptRecord } from "./publishing-service";
 import { InstagramPublishError, type InstagramPublisher } from "./instagram-publisher";
 import { env } from "../config/env";
+import { lockContentForMedia } from "../media/content-media-integrity";
+import { workerErrorCode, workerLogger, type WorkerLogger } from "../worker/worker-diagnostics";
 
 const leaseMs = Math.max(5 * 60_000, env.INSTAGRAM_CONTAINER_POLL_DELAY_MS + 60_000, env.INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS + 60_000);
 
@@ -14,18 +16,16 @@ export class PublishNowStateError extends Error {
 }
 
 export async function queuePublishNow(workspaceId: string, contentItemId: string, now = new Date()): Promise<PublishJobRecord> {
-  const content = await prisma.contentItem.findFirst({ where: { id: contentItemId, workspaceId, deletedAt: null } });
-  if (!content) throw new PublishContentItemNotFoundError();
-  if (!["APPROVED", "SCHEDULED", "FAILED"].includes(content.status)) throw new PublishNowStateError();
-
-  const active = await prisma.publishJob.findFirst({
-    where: { contentItemId, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } },
-    orderBy: { createdAt: "desc" }
-  });
-  if (active) return toPublishJobRecord(active);
-
   try {
     const job = await prisma.$transaction(async (tx) => {
+      const content = await lockContentForMedia(tx, workspaceId, contentItemId);
+      if (!content) throw new PublishContentItemNotFoundError();
+      if (!["APPROVED", "SCHEDULED", "FAILED"].includes(content.status)) throw new PublishNowStateError();
+      const active = await tx.publishJob.findFirst({
+        where: { contentItemId, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } },
+        orderBy: { createdAt: "desc" }
+      });
+      if (active) return active;
       await tx.contentItem.update({
         where: { id: content.id },
         data: { status: "SCHEDULED", scheduledAt: now, failureReason: null }
@@ -37,7 +37,7 @@ export async function queuePublishNow(workspaceId: string, contentItemId: string
           trigger: "PUBLISH_NOW",
           scheduledFor: now,
           nextAttemptAt: now,
-          idempotencyKey: `publish-now:${contentItemId}:${now.toISOString()}`
+          idempotencyKey: `publish-now:${contentItemId}:${now.toISOString()}:${content.revision}`
         }
       });
     });
@@ -67,7 +67,9 @@ export interface PublishJobWorkerResult {
   retrying: number;
 }
 
-export async function processDuePublishJobs(input: { limit?: number; now?: Date; publisher?: InstagramPublisher } = {}): Promise<PublishJobWorkerResult> {
+export async function processDuePublishJobs(
+  input: { limit?: number; now?: Date; publisher?: InstagramPublisher; shouldStop?: (() => boolean) | undefined; logger?: WorkerLogger | undefined } = {}
+): Promise<PublishJobWorkerResult> {
   const now = input.now ?? new Date();
   const startedAt = Date.now();
   const clock = () => new Date(now.getTime() + Date.now() - startedAt);
@@ -75,9 +77,19 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
   const result: PublishJobWorkerResult = { attempted: 0, completed: 0, failed: 0, processed: 0, retrying: 0 };
 
   for (let index = 0; index < (input.limit ?? 10); index += 1) {
+    if (input.shouldStop?.()) break;
     const claimed = await claimPublishJob(clock());
     if (!claimed) break;
     const { job, interrupted } = claimed;
+    const jobStarted = performance.now();
+    const logger = input.logger ?? workerLogger;
+    const context = { jobId: job.id, workspaceId: job.workspaceId, contentItemId: job.contentItemId, attempt: job.attempts };
+    logger.info("Publish job claimed", {
+      ...context,
+      queueDelayMs: Math.max(0, clock().getTime() - job.nextAttemptAt.getTime()),
+      scheduleDelayMs: Math.max(0, clock().getTime() - job.scheduledFor.getTime()),
+      interrupted
+    });
     result.processed += 1;
     if (!interrupted) result.attempted += 1;
     const attempt = await prisma.publishAttempt.create({
@@ -115,6 +127,7 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
         });
       }
     } catch (error) {
+      logger.error("Publish job failed unexpectedly", { ...context, errorCode: workerErrorCode(error) });
       outcome = {
         contentItemId: job.contentItemId,
         dryRun: false,
@@ -128,6 +141,12 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
     const owned = await prisma.publishJob.findFirst({ where: { id: job.id, status: "PROCESSING", attempts: job.attempts }, select: { id: true } });
     if (!owned) continue;
     const completedAt = clock();
+    logger.info("Publish attempt completed", {
+      ...context,
+      outcome: outcome.status,
+      errorCode: outcome.reasons[0],
+      durationMs: Math.round(performance.now() - jobStarted)
+    });
     if (outcome.status === "PUBLISHED") {
       await finishPublishAttempt(job, attempt.id, "PUBLISHED", completedAt);
       result.completed += 1;
@@ -173,27 +192,35 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
 async function ensureDueScheduledPublishJobs(now: Date): Promise<void> {
   const contentItems = await prisma.contentItem.findMany({
     where: { status: "SCHEDULED", scheduledAt: { lte: now }, deletedAt: null },
-    select: { id: true, workspaceId: true, scheduledAt: true },
+    select: { id: true, workspaceId: true },
     take: 100
   });
-  if (contentItems.length === 0) return;
-  await prisma.publishJob.createMany({
-    data: contentItems.flatMap((content) =>
-      content.scheduledAt
-        ? [
-            {
-              workspaceId: content.workspaceId,
-              contentItemId: content.id,
-              trigger: "SCHEDULED" as const,
-              scheduledFor: content.scheduledAt,
-              nextAttemptAt: now,
-              idempotencyKey: `scheduled:${content.id}:${content.scheduledAt.toISOString()}`
-            }
-          ]
-        : []
-    ),
-    skipDuplicates: true
-  });
+  for (const candidate of contentItems) {
+    await prisma.$transaction(async (tx) => {
+      const content = await lockContentForMedia(tx, candidate.workspaceId, candidate.id);
+      if (!content || content.status !== "SCHEDULED" || !content.scheduledAt || content.scheduledAt > now) return;
+      // Re-read after locking: a scan must never recreate a job cancelled by a concurrent edit.
+      const active = await tx.publishJob.findFirst({
+        where: { contentItemId: content.id, status: { in: ["QUEUED", "RETRY_WAIT", "PROCESSING"] } },
+        select: { id: true }
+      });
+      if (active) return;
+      await tx.publishJob.createMany({
+        data: [
+          {
+            workspaceId: content.workspaceId,
+            contentItemId: content.id,
+            trigger: "SCHEDULED",
+            scheduledFor: content.scheduledAt,
+            nextAttemptAt: now,
+            // A deliberate reschedule can reuse a previous time; revisions distinguish those schedules.
+            idempotencyKey: `scheduled:${content.id}:${content.scheduledAt.toISOString()}:${content.revision}`
+          }
+        ],
+        skipDuplicates: true
+      });
+    });
+  }
 }
 
 async function claimPublishJob(now: Date): Promise<{ job: PublishJob; interrupted: boolean } | undefined> {
@@ -206,18 +233,32 @@ async function claimPublishJob(now: Date): Promise<{ job: PublishJob; interrupte
     orderBy: { nextAttemptAt: "asc" }
   });
   if (!candidate) return undefined;
-  const claimed = await prisma.publishJob.updateMany({
-    where: {
-      id: candidate.id,
-      status: candidate.status,
-      attempts: candidate.attempts,
-      nextAttemptAt: { lte: now },
-      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }]
-    },
-    data: { status: "PROCESSING", leasedAt: now, leaseExpiresAt: new Date(now.getTime() + leaseMs), attempts: { increment: 1 } }
+  return prisma.$transaction(async (tx) => {
+    const content = await lockContentForMedia(tx, candidate.workspaceId, candidate.contentItemId);
+    if (
+      candidate.status !== "PROCESSING" &&
+      (!content || content.status !== "SCHEDULED" || content.scheduledAt?.getTime() !== candidate.scheduledFor.getTime())
+    ) {
+      await tx.publishJob.updateMany({
+        where: { id: candidate.id, status: { in: ["QUEUED", "RETRY_WAIT"] } },
+        data: { status: "CANCELLED", leasedAt: null, leaseExpiresAt: null }
+      });
+      return undefined;
+    }
+    if (candidate.status !== "PROCESSING" && content?.scheduledAt && content.scheduledAt > now) return undefined;
+    const claimed = await tx.publishJob.updateMany({
+      where: {
+        id: candidate.id,
+        status: candidate.status,
+        attempts: candidate.attempts,
+        nextAttemptAt: { lte: now },
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }]
+      },
+      data: { status: "PROCESSING", leasedAt: now, leaseExpiresAt: new Date(now.getTime() + leaseMs), attempts: { increment: 1 } }
+    });
+    if (claimed.count !== 1) return undefined;
+    return { job: await tx.publishJob.findUniqueOrThrow({ where: { id: candidate.id } }), interrupted: candidate.status === "PROCESSING" };
   });
-  if (claimed.count !== 1) return undefined;
-  return { job: await prisma.publishJob.findUniqueOrThrow({ where: { id: candidate.id } }), interrupted: candidate.status === "PROCESSING" };
 }
 
 async function finishPublishAttempt(job: PublishJob, attemptId: string, status: string, now: Date): Promise<void> {

@@ -1,8 +1,12 @@
 import asyncio
 
+import httpx
 import pytest
+from openai import AsyncOpenAI
+from pydantic import SecretStr
 
 from app.contracts.video import VideoJobResponse, VideoStartRequest
+from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.providers.video import (
     DisabledVideoProvider,
@@ -108,3 +112,40 @@ def test_generated_video_must_be_an_mp4_container() -> None:
     with pytest.raises(AiServiceError) as raised:
         validate_generated_mp4(b"not an mp4")
     assert raised.value.code == "AI_VIDEO_OUTPUT_INVALID"
+
+
+def test_video_submission_timeout_does_not_retry_inside_the_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests = 0
+    clients: list[AsyncOpenAI] = []
+
+    def timeout_response(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        raise httpx.ReadTimeout("Response lost", request=request)
+
+    def build_client(*, api_key: str, max_retries: int, timeout: float) -> AsyncOpenAI:
+        client = AsyncOpenAI(
+            api_key=api_key,
+            max_retries=max_retries,
+            timeout=timeout,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(timeout_response)),
+        )
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-only-placeholder"))
+    monkeypatch.setattr(settings, "openai_max_retries", 3)
+    monkeypatch.setattr("app.providers.video.AsyncOpenAI", build_client)
+
+    async def run() -> None:
+        provider = OpenAIVideoProvider()
+        try:
+            with pytest.raises(AiServiceError) as raised:
+                await provider.start(video_request())
+            assert raised.value.code == "AI_PROVIDER_TIMEOUT"
+            assert requests == 1
+        finally:
+            for client in clients:
+                await client.close()
+
+    asyncio.run(run())

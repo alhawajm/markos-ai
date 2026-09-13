@@ -8,12 +8,39 @@ import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-serv
 import { deleteStoredMedia, storeWorkspaceMedia } from "./storage-service";
 import { MediaContentItemNotFoundError, MediaContentLockedError } from "./media-service";
 import { assertStoredContentMedia, ContentMediaValidationError, lockContentForMedia, validateStoredContentMedia } from "./content-media-integrity";
+import { workerLogger, workerErrorCode, type WorkerLogger } from "../worker/worker-diagnostics";
+import { env } from "../config/env";
 
 const pollDelayMs = 15_000;
 const retryDelayMs = 30_000;
-const leaseMs = 2 * 60_000;
+const leaseMs = Math.max(2 * 60_000, env.AI_HTTP_TIMEOUT_MS + 60_000);
 const localCurrency = "BHD";
 const activeJobStatuses: MediaGenerationStatus[] = ["QUEUED", "STARTING", "GENERATING", "PROCESSING"];
+
+class VideoLeaseLostError extends Error {}
+class VideoStartResultUnknownError extends Error {
+  readonly code = "AI_VIDEO_START_RESULT_UNKNOWN";
+}
+
+const videoStartUnknownMessage =
+  "MARKOS could not confirm whether the provider started this video. It may still finish there. Generating again may create another video and incur another charge.";
+const rejectedVideoStartCodes = new Set([
+  "AI_VIDEO_GENERATION_DISABLED",
+  "AI_VIDEO_MODERATION_BLOCKED",
+  "AI_VIDEO_REQUEST_REJECTED",
+  "AI_PROVIDER_NOT_CONFIGURED",
+  "AI_SERVICE_UNAUTHORIZED",
+  "AI_PROVIDER_RATE_LIMITED"
+]);
+
+function ownedVideoJob(job: MediaGenerationJob, now: Date): Prisma.MediaGenerationJobWhereInput {
+  return { id: job.id, status: { in: activeJobStatuses }, attempts: job.attempts, leasedAt: job.leasedAt, leaseExpiresAt: { gt: now } };
+}
+
+async function renewVideoLease(job: MediaGenerationJob, now: Date): Promise<void> {
+  const renewed = await prisma.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, now), data: { leaseExpiresAt: new Date(now.getTime() + leaseMs) } });
+  if (renewed.count !== 1) throw new VideoLeaseLostError("Video job ownership changed");
+}
 
 export class MediaVideoGenerationUnsupportedError extends Error {
   constructor() {
@@ -175,21 +202,36 @@ export interface VideoGenerationWorkerResult {
   waiting: number;
 }
 
-export async function processDueVideoGenerationJobs(input: { limit?: number; now?: Date } = {}): Promise<VideoGenerationWorkerResult> {
+export async function processDueVideoGenerationJobs(
+  input: { limit?: number; now?: Date; shouldStop?: (() => boolean) | undefined; logger?: WorkerLogger | undefined } = {}
+): Promise<VideoGenerationWorkerResult> {
   const now = input.now ?? new Date();
+  const started = Date.now();
+  const clock = () => new Date(now.getTime() + Date.now() - started);
+  const logger = input.logger ?? workerLogger;
   const result: VideoGenerationWorkerResult = { completed: 0, failed: 0, processed: 0, waiting: 0 };
   const limit = input.limit ?? 5;
 
   for (let index = 0; index < limit; index += 1) {
-    const job = await claimVideoGenerationJob(now);
+    if (input.shouldStop?.()) break;
+    const job = await claimVideoGenerationJob(clock());
     if (!job) break;
     result.processed += 1;
+    const jobStarted = performance.now();
+    const context = { jobId: job.id, workspaceId: job.workspaceId, attempt: job.attempts };
+    logger.info("Video job claimed", { ...context, queueDelayMs: Math.max(0, clock().getTime() - job.nextAttemptAt.getTime()) });
 
     try {
-      const outcome = await processClaimedJob(job, now);
+      const outcome = await processClaimedJob(job, clock);
       result[outcome] += 1;
+      logger.info("Video attempt completed", { ...context, outcome, durationMs: Math.round(performance.now() - jobStarted) });
     } catch (error) {
-      const outcome = await handleWorkerError(job, error, now);
+      logger.warn("Video attempt interrupted", {
+        ...context,
+        errorCode: error instanceof VideoLeaseLostError ? "VIDEO_LEASE_LOST" : workerErrorCode(error),
+        durationMs: Math.round(performance.now() - jobStarted)
+      });
+      const outcome = await handleWorkerError(job, error, clock());
       result[outcome] += 1;
     }
   }
@@ -212,6 +254,8 @@ async function claimVideoGenerationJob(now: Date): Promise<MediaGenerationJob | 
     where: {
       id: candidate.id,
       status: candidate.status,
+      attempts: candidate.attempts,
+      nextAttemptAt: { lte: now },
       OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }]
     },
     data: {
@@ -221,51 +265,63 @@ async function claimVideoGenerationJob(now: Date): Promise<MediaGenerationJob | 
     }
   });
   if (claimed.count !== 1) return undefined;
-  return prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: candidate.id } });
+  return { ...candidate, leasedAt: now, leaseExpiresAt: new Date(now.getTime() + leaseMs), attempts: candidate.attempts + 1 };
 }
 
-async function processClaimedJob(job: MediaGenerationJob, now: Date): Promise<"completed" | "failed" | "waiting"> {
+async function processClaimedJob(job: MediaGenerationJob, clock: () => Date): Promise<"completed" | "failed" | "waiting"> {
   if (!job.providerJobId) {
+    // STARTING is persisted before sending. A recovered claim cannot safely submit again.
+    if (job.status !== "QUEUED") throw new VideoStartResultUnknownError(videoStartUnknownMessage);
     const content = await prisma.contentItem.findFirst({ where: { id: job.contentItemId, workspaceId: job.workspaceId, deletedAt: null } });
     if (!content) throw new MediaContentItemNotFoundError();
     if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
     if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
     await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
-    const starting = await prisma.mediaGenerationJob.updateMany({ where: { id: job.id, status: { in: activeJobStatuses } }, data: { status: "STARTING" } });
+    const starting = await prisma.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, clock()), data: { status: "STARTING" } });
     if (starting.count !== 1) return "waiting";
+    await renewVideoLease(job, clock());
     const started = await startVideoGeneration({
       workspaceId: job.workspaceId,
       prompt: job.prompt,
       durationSeconds: toDuration(job.durationSeconds)
     });
-    return persistProviderState(job, started, now);
+    return persistProviderState(job, started, clock);
   }
 
+  await renewVideoLease(job, clock());
   const providerJob = await getVideoGenerationStatus(job.providerJobId);
-  return persistProviderState(job, providerJob, now);
+  return persistProviderState(job, providerJob, clock);
 }
 
-async function persistProviderState(job: MediaGenerationJob, providerJob: VideoProviderJob, now: Date): Promise<"completed" | "failed" | "waiting"> {
+async function persistProviderState(job: MediaGenerationJob, providerJob: VideoProviderJob, clock: () => Date): Promise<"completed" | "failed" | "waiting"> {
+  await renewVideoLease(job, clock());
+  // Save the provider identity before processing status/output so retries resume this job.
+  const identified = await prisma.mediaGenerationJob.updateMany({
+    where: ownedVideoJob(job, clock()),
+    data: { providerJobId: providerJob.provider_job_id }
+  });
+  if (identified.count !== 1) throw new VideoLeaseLostError("Video job ownership changed");
   if (providerJob.status === "failed") {
     await markJobFailed(
       job,
       providerJob.error_code ?? "AI_VIDEO_GENERATION_FAILED",
       providerJob.error_message ?? "Video generation failed",
-      providerJob.retryable ?? false
+      providerJob.retryable ?? false,
+      clock()
     );
     return "failed";
   }
 
   if (providerJob.status !== "completed") {
     await prisma.mediaGenerationJob.updateMany({
-      where: { id: job.id, status: { in: activeJobStatuses } },
+      where: ownedVideoJob(job, clock()),
       data: {
         providerJobId: providerJob.provider_job_id,
         status: "GENERATING",
         progress: providerJob.progress,
         model: providerJob.model,
         durationSeconds: providerJob.duration_seconds,
-        nextAttemptAt: new Date(now.getTime() + pollDelayMs),
+        nextAttemptAt: new Date(clock().getTime() + pollDelayMs),
         leasedAt: null,
         leaseExpiresAt: null,
         errorCode: null,
@@ -277,15 +333,18 @@ async function persistProviderState(job: MediaGenerationJob, providerJob: VideoP
   }
 
   const processing = await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { in: activeJobStatuses } },
+    where: ownedVideoJob(job, clock()),
     data: { status: "PROCESSING", progress: 100, providerJobId: providerJob.provider_job_id, model: providerJob.model }
   });
   if (processing.count !== 1) return "waiting";
+  await renewVideoLease(job, clock());
   const video = await downloadGeneratedVideo(providerJob.provider_job_id);
-  return completeVideoJob(job, providerJob, video, now);
+  await renewVideoLease(job, clock());
+  return completeVideoJob(job, providerJob, video, clock);
 }
 
-async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProviderJob, video: Buffer, now: Date): Promise<"completed" | "failed"> {
+async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProviderJob, video: Buffer, clock: () => Date): Promise<"completed" | "failed"> {
+  const now = clock();
   await reserveWorkspaceUsage({ workspaceId: job.workspaceId, metric: "STORAGE_BYTES", amount: video.byteLength, now });
   let stored: Awaited<ReturnType<typeof storeWorkspaceMedia>> | undefined;
   try {
@@ -299,7 +358,14 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
       const content = await lockContentForMedia(tx, job.workspaceId, job.contentItemId);
       await tx.$queryRaw`SELECT "id" FROM "media_generation_jobs" WHERE "id" = ${job.id}::uuid FOR UPDATE`;
       const currentJob = await tx.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
-      if (!activeJobStatuses.includes(currentJob.status)) throw new MediaGenerationJobStateError("Video generation is no longer active");
+      if (
+        !activeJobStatuses.includes(currentJob.status) ||
+        currentJob.attempts !== job.attempts ||
+        currentJob.leasedAt?.getTime() !== job.leasedAt?.getTime() ||
+        !currentJob.leaseExpiresAt ||
+        currentJob.leaseExpiresAt <= clock()
+      )
+        throw new VideoLeaseLostError("Video job ownership changed");
       if (currentJob.outputMediaAssetId) throw new MediaGenerationJobStateError("The generated video was already saved");
       const mediaAsset = await tx.mediaAsset.create({
         data: {
@@ -353,7 +419,7 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
         data: {
           status: attachmentError ? "FAILED" : "COMPLETED",
           outputMediaAssetId: mediaAsset.id,
-          completedAt: now,
+          completedAt: clock(),
           progress: 100,
           nextAttemptAt: now,
           leasedAt: null,
@@ -373,6 +439,13 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
 }
 
 async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: Date): Promise<"failed" | "waiting"> {
+  if (error instanceof VideoLeaseLostError) return "waiting";
+  const current = await prisma.mediaGenerationJob.findFirst({ where: ownedVideoJob(job, now) });
+  if (!current) return "waiting";
+  if (!current.providerJobId && current.status !== "QUEUED" && !(error instanceof AiServiceRequestError && rejectedVideoStartCodes.has(error.code))) {
+    await markJobFailed(job, "AI_VIDEO_START_RESULT_UNKNOWN", videoStartUnknownMessage, true, now);
+    return "failed";
+  }
   if (
     error instanceof ContentMediaValidationError ||
     error instanceof MediaContentLockedError ||
@@ -387,18 +460,20 @@ async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: D
           : error instanceof MediaContentItemNotFoundError
             ? "CONTENT_NOT_FOUND"
             : "CONTENT_MEDIA_TYPE_INCOMPATIBLE";
-    await markJobFailed(job, code, error.message, false);
+    await markJobFailed(job, code, error.message, false, now);
     return "failed";
   }
   if (error instanceof AiServiceRequestError && !error.retryable) {
-    await markJobFailed(job, error.code, error.message, false);
+    await markJobFailed(job, error.code, error.message, false, now);
     return "failed";
   }
   const code = error instanceof AiServiceRequestError ? error.code : "AI_VIDEO_PROCESSING_FAILED";
   const message = error instanceof Error ? error.message : "Video generation could not be completed";
   await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { in: activeJobStatuses } },
+    where: ownedVideoJob(job, now),
     data: {
+      // An explicit rejection can be retried; uncertain submissions stopped above.
+      ...(!current.providerJobId ? { status: "QUEUED" as const } : {}),
       nextAttemptAt: new Date(now.getTime() + retryDelayMs),
       leasedAt: null,
       leaseExpiresAt: null,
@@ -410,9 +485,9 @@ async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: D
   return "waiting";
 }
 
-async function markJobFailed(job: MediaGenerationJob, code: string, message: string, retryable: boolean): Promise<void> {
+async function markJobFailed(job: MediaGenerationJob, code: string, message: string, retryable: boolean, now: Date): Promise<void> {
   const updated = await prisma.mediaGenerationJob.updateMany({
-    where: { id: job.id, status: { in: activeJobStatuses } },
+    where: ownedVideoJob(job, now),
     data: {
       status: "FAILED",
       errorCode: code,

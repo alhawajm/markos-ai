@@ -1047,7 +1047,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         `Generating video${videoJob.progress == null ? "…" : ` · ${videoJob.progress}%`}`,
                         `جارٍ إنشاء الفيديو${videoJob.progress == null ? "…" : ` · ${videoJob.progress}%`}`
                       )
-                    : mediaRuleMessage(videoJob.errorCode, locale) || videoJob.errorMessage || text("Video generation failed.", "تعذر إنشاء الفيديو.")}
+                    : videoJob.errorCode === "AI_VIDEO_START_RESULT_UNKNOWN"
+                      ? text(
+                          "MARKOS could not confirm whether the provider started this video. It may still finish there. Generating again may create another video and incur another charge.",
+                          "لم يتمكن MARKOS من تأكيد بدء إنشاء الفيديو لدى المزوّد. قد يكتمل هناك لاحقاً. قد يؤدي الإنشاء مجدداً إلى فيديو آخر ورسوم إضافية."
+                        )
+                      : mediaRuleMessage(videoJob.errorCode, locale) || videoJob.errorMessage || text("Video generation failed.", "تعذر إنشاء الفيديو.")}
                 </p>
                 {videoJob.status === "FAILED" && videoJob.outputMediaAssetId && (
                   <div className="mt-2">
@@ -1073,7 +1078,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     }
                     type="button"
                   >
-                    {activeVideo(videoJob) ? text("Cancel generation", "إلغاء الإنشاء") : text("Retry video", "إعادة محاولة الفيديو")}
+                    {activeVideo(videoJob)
+                      ? text("Cancel generation", "إلغاء الإنشاء")
+                      : videoJob.errorCode === "AI_VIDEO_START_RESULT_UNKNOWN"
+                        ? text("Generate again", "إنشاء مجدداً")
+                        : text("Retry video", "إعادة محاولة الفيديو")}
                   </button>
                 )}
               </div>

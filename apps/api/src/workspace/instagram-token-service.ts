@@ -3,6 +3,7 @@ import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { InstagramBasicClient } from "./instagram-basic-client";
 import { refreshSecureInstagram } from "./instagram-connection-service";
+import { settleWorkerBatch } from "../worker/worker-diagnostics";
 
 export class InstagramTokenRefreshError extends Error {
   constructor(message = "Instagram token refresh failed") {
@@ -43,7 +44,7 @@ export async function refreshDueInstagramTokens(
     select: { workspaceId: true }
   });
 
-  return Promise.all(
+  return settleWorkerBatch(
     connections.map(async ({ workspaceId }) => ({
       ...(await refreshInstagramTokenForWorkspace({
         workspaceId,
