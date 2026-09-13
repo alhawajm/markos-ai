@@ -153,40 +153,138 @@ describe("presentation journey", () => {
     await page.close();
   });
 
-  it("renders live Vault completion and timestamps instead of the fixed presentation fixture", async () => {
+  it("maintains Business Profile facts directly and retains failed edits", async () => {
     const page = await sessionPage();
-    let scoreRequests = 0;
-    let vaultRequests = 0;
+    let writes = 0;
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/vault/score") {
-        scoreRequests += 1;
-        return route.fulfill(
-          json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
-        );
+      if (pathname === "/v1/business-profile" && route.request().method() === "PATCH") {
+        writes += 1;
+        if (writes === 1)
+          return route.fulfill({
+            status: 400,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "VALIDATION_ERROR", message: "Test save failed" } })
+          });
+        const input = route.request().postDataJSON();
+        expect(input).toMatchObject({ expectedVersion: 1, module: "company", changes: { name: "SnackLab Updated" } });
+        const current = snackLabKnowledge();
+        return route.fulfill(json({ ...current, version: 2, modules: { ...current.modules, company: { ...current.modules.company, ...input.changes } } }));
       }
-
-      if (pathname === "/v1/vault") {
-        vaultRequests += 1;
-        return route.fulfill(json(snackLabVault()));
-      }
-
       return route.fulfill(json([]));
     });
-
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
-    await page.getByText("7 of 7 sections", { exact: true }).waitFor();
-    await expect.poll(() => page.getByText("100%", { exact: true }).isVisible()).toBe(true);
-    const competitors = page.locator("article").filter({ has: page.getByRole("heading", { name: "Competitors", exact: true }) });
-    await expect.poll(() => competitors.getByText("Complete", { exact: true }).isVisible()).toBe(true);
-    await expect(page.getByText("May 15, 2026").count()).resolves.toBe(0);
-    await expect(page.getByText("Last updated: Never").count()).resolves.toBe(0);
-    await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
-    expect(scoreRequests).toBeGreaterThan(0);
-    expect(vaultRequests).toBeGreaterThan(0);
+    await page.getByRole("heading", { name: "Current strategy", exact: true }).waitFor();
+    expect(await page.getByRole("link", { name: "Marketing Strategy", exact: true }).getAttribute("aria-current")).toBe("page");
+    await page.getByRole("link", { name: "Business", exact: true }).click();
+    await page.getByRole("button", { name: "Edit Business details", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Business details", exact: true });
+    await expect(editor.getByLabel("Business name", { exact: true }).inputValue()).resolves.toBe("SnackLab");
+    await editor.getByLabel("Business name", { exact: true }).fill("SnackLab Updated");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await editor.getByRole("button", { name: "Keep editing", exact: true }).click();
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await editor.getByText("Test save failed", { exact: true }).waitFor();
+    await expect(editor.getByLabel("Business name", { exact: true }).inputValue()).resolves.toBe("SnackLab Updated");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await editor.waitFor({ state: "detached" });
+    expect(new URL(page.url()).pathname).toBe("/en/app/knowledge");
+    await expect(page.getByText("SnackLab Updated", { exact: true }).isVisible()).resolves.toBe(true);
+    expect(writes).toBe(2);
     await page.close();
   });
 
-  it("opens an approved Business Profile in populated onboarding edit mode", async () => {
+  it("synchronizes Business Profile color pickers and hex values without saving malformed colors", async () => {
+    const page = await sessionPage();
+    let writes = 0;
+    let savedColors: string[] = [];
+    await mockApi(page, async (route) => route.fulfill(json([])));
+    await page.route("**/v1/business-profile", async (route) => {
+      const current = snackLabKnowledge();
+      if (route.request().method() === "PATCH") {
+        writes += 1;
+        const input = route.request().postDataJSON();
+        expect(input).toMatchObject({ expectedVersion: 1, module: "brand" });
+        savedColors = input.changes.colors;
+      }
+      return route.fulfill(
+        json({ ...current, modules: { ...current.modules, brand: { ...current.modules.brand, colors: writes ? savedColors : ["#FFFFFF", "#000000"] } } })
+      );
+    });
+    await page.goto(`${baseUrl}/en/app/knowledge?tab=brand-voice`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Edit Brand identity" }).click();
+    const editor = page.getByRole("dialog", { name: "Brand identity", exact: true });
+    const hex = editor.getByRole("textbox", { name: "Brand color 1 hex value", exact: true });
+    const picker = editor.getByLabel("Choose brand color 1", { exact: true });
+    await hex.fill("#12zzzz");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect(writes).toBe(0);
+    await expect(hex.evaluate((input) => (input as HTMLInputElement).validity.patternMismatch)).resolves.toBe(true);
+    await expect(hex.inputValue()).resolves.toBe("#12zzzz");
+    await hex.fill("#aAbB09");
+    await expect(picker.inputValue()).resolves.toBe("#aabb09");
+    await picker.fill("#123456");
+    await expect(hex.inputValue()).resolves.toBe("#123456");
+    await editor.getByRole("button", { name: "Add color", exact: true }).click();
+    await editor.getByRole("textbox", { name: "Brand color 3 hex value", exact: true }).fill("#fFfFfF");
+    await editor.getByRole("button", { name: "Remove brand color 2", exact: true }).click();
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await editor.waitFor({ state: "detached" });
+    expect(savedColors).toEqual(["#123456", "#fFfFfF"]);
+    expect(writes).toBe(1);
+    await expect(page.getByRole("region", { name: "Brand identity", exact: true }).getByText("#fFfFfF", { exact: true }).isVisible()).resolves.toBe(true);
+    await page.close();
+  });
+
+  it("keeps Business Profile offering columns, filters and stable edit actions usable on narrow screens", async () => {
+    const page = await sessionPage();
+    await mockApi(page, async (route) => route.fulfill(json([])));
+    await page.route("**/v1/business-profile", async (route) =>
+      route.fulfill(
+        json({
+          ...snackLabKnowledge(),
+          catalog: {
+            version: 1,
+            salesChannels: [],
+            offerings: [
+              {
+                id: "product-1",
+                name: "Pastries",
+                kind: "PRODUCT",
+                category: "Bakery",
+                description: "Small batch pastries",
+                currency: "BHD",
+                priceType: "FIXED",
+                priceMinor: 3125,
+                status: "ACTIVE"
+              },
+              { id: "service-1", name: "Baking class", kind: "SERVICE", category: "Classes", currency: "BHD", priceType: "QUOTE", status: "PAUSED" }
+            ]
+          }
+        })
+      )
+    );
+    await page.goto(`${baseUrl}/en/app/knowledge?tab=products-services`, { waitUntil: "domcontentloaded" });
+    const table = page.getByRole("table", { name: "Products & Services", exact: true });
+    await table.waitFor();
+    await expect(table.getByRole("columnheader").allTextContents()).resolves.toEqual(["Offering", "Type", "Category", "Price", "Status", "Actions"]);
+    expect(await table.getByRole("rowheader").count()).toBe(2);
+    await page.getByRole("combobox", { name: "Offering type", exact: true }).selectOption("SERVICE");
+    await expect(table.getByRole("rowheader").allTextContents()).resolves.toEqual(["Baking class"]);
+    await page.getByRole("combobox", { name: "Offering type", exact: true }).selectOption("ALL");
+    await page.getByRole("combobox", { name: "Offering status", exact: true }).selectOption("ACTIVE");
+    expect(await table.getByRole("rowheader").count()).toBe(1);
+    await page.getByRole("textbox", { name: "Search offerings", exact: true }).fill("Pastries");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await table.getByRole("button", { name: "Edit Pastries", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit offering", exact: true });
+    await expect(editor.getByLabel("Name", { exact: true }).inputValue()).resolves.toBe("Pastries");
+    await expect(editor.getByLabel("Fixed / starting price", { exact: true }).inputValue()).resolves.toBe("3.125");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.close();
+  });
+
+  it("retains the optional populated onboarding edit route for an approved Business Profile", async () => {
     const page = await sessionPage();
     let completionRequests = 0;
     await mockApi(page, async (route, pathname) => {
@@ -214,11 +312,7 @@ describe("presentation journey", () => {
       return route.fulfill(json([]));
     });
 
-    await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
-    const editLink = page.getByRole("link", { name: "Review and edit profile" });
-    await expect(editLink.getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
-    await editLink.click({ timeout: 10_000 });
-    await page.waitForURL(`${baseUrl}/en/onboarding?mode=edit`, { timeout: 10_000 });
+    await page.goto(`${baseUrl}/en/onboarding?mode=edit`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor({ timeout: 10_000 });
     await page.getByRole("button", { name: /^Business name/ }).click({ timeout: 10_000 });
     await page.getByRole("heading", { name: "Let’s start with the basics" }).waitFor({ timeout: 10_000 });
@@ -433,9 +527,8 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-insights.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Business Profile", exact: true }).waitFor();
-    await expect(page.getByRole("link", { name: /Review and edit profile/ }).getAttribute("href")).resolves.toBe("/en/onboarding?mode=edit");
-    await page.screenshot({ path: "evidence/sunlit-business-profile.png", fullPage: true });
+    await page.getByRole("heading", { name: "Business profile", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "Current strategy", exact: true }).waitFor();
     await page.close();
   });
 
@@ -1011,6 +1104,7 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
   await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+    if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));
     await handler(route, pathname);
   });
 }
@@ -1396,4 +1490,22 @@ function bahrainInputDaysFromNow(days: number, hour: number, minute: number): st
 
 function json(data: unknown) {
   return { status: 200, contentType: "application/json", body: JSON.stringify({ data }) };
+}
+
+function snackLabKnowledge() {
+  const vault = snackLabVault();
+  return {
+    version: 1,
+    updatedAt: "2026-08-09T11:30:00.000Z",
+    approved: true,
+    catalog: null,
+    modules: {
+      company: vault.COMPANY[0]!.value,
+      story: vault.STORY[0]!.value,
+      audience: vault.AUDIENCE[0]!.value,
+      competitors: vault.COMPETITORS[0]!.value,
+      brand: { ...vault.BRAND[0]!.value, ...vault.TONE[0]!.value },
+      objectives: vault.OBJECTIVES[0]!.value
+    }
+  };
 }

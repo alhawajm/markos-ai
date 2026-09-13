@@ -135,7 +135,6 @@ export async function approveOfferingDocumentAnalysis(
   const result = offeringDocumentExtractionSchema.safeParse(analysis.result);
   if (!result.success) throw new OfferingDocumentAnalysisConflictError("The analysis result is unavailable");
 
-  await cleanupAnalysisFiles(workspaceId, analysis.id);
   await saveOfferingCatalog(workspaceId, input.catalog, { sourceType: "DOCUMENT", sourceRef: analysis.id });
   const vaultScore = await getVaultScore(workspaceId);
   const edited = JSON.stringify(catalogForComparison(result.data.catalog)) !== JSON.stringify(catalogForComparison(input.catalog));
@@ -144,7 +143,7 @@ export async function approveOfferingDocumentAnalysis(
   });
   const interactionResponse = readRecord(interaction.response);
   const approvedAt = new Date();
-  const preserveApprovedProfile = options.preserveApprovedProfile === true && (await getBusinessProfileState(workspaceId)).status === "APPROVED";
+  const preserveApprovedProfile = (await getBusinessProfileState(workspaceId)).status === "APPROVED";
 
   await prisma.$transaction([
     prisma.offeringDocumentAnalysis.update({
@@ -181,6 +180,7 @@ export async function approveOfferingDocumentAnalysis(
     })
   ]);
 
+  await cleanupAnalysisFiles(workspaceId, analysis.id);
   return {
     analysis: await getAnalysisRecord(workspaceId, analysis.id),
     onboarding: await getOnboardingState(workspaceId)

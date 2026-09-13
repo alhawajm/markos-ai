@@ -54,6 +54,8 @@ import {
   onboardingStepHasChanges,
   onboardingDraftKey,
   payloadForOnboardingStep,
+  onboardingClearedFields,
+  onboardingDraftWithCatalog,
   previousOnboardingDraftKey,
   restoreOnboardingStep,
   splitOnboardingList,
@@ -1001,10 +1003,15 @@ export function OnboardingPanel({
     setMessage("");
     try {
       const payload = payloadForOnboardingStep(step, draft);
-      const state = await client.saveOnboardingModule(payload.module, payload.body, { preserveApprovedProfile: editMode });
+      const state = await client.saveOnboardingModule(
+        payload.module,
+        { ...payload.body, clearFields: onboardingClearedFields(step, draft) },
+        { preserveApprovedProfile: editMode }
+      );
       setRuntimeState(state);
       if (step === 2) {
-        setDraft((current) => ({ ...current, offerings: current.offerings.filter((item) => item.name.trim()) }));
+        const knowledge = await client.businessKnowledge();
+        setDraft((current) => onboardingDraftWithCatalog(current, knowledge.catalog));
       }
       advanceAfterStep();
     } catch (error) {
@@ -1778,6 +1785,27 @@ function StepScreen({
               </div>
             ) : null}
 
+            {step.id === 1 ? (
+              <label className="mt-5 block text-base font-medium">
+                {locale === "ar" ? "مرحلة النشاط" : "Business establishment"}
+                <select
+                  className="sunlit-field mt-2 rounded-xl px-4 py-3"
+                  value={draft.establishment || "UNSPECIFIED"}
+                  onChange={(event) => update("establishment", event.target.value)}
+                >
+                  {[
+                    ["UNSPECIFIED", "Not specified", "غير محدد"],
+                    ["PRE_LAUNCH", "Preparing to launch", "قيد التحضير"],
+                    ["NEW", "Newly operating", "حديث التأسيس"],
+                    ["ESTABLISHED", "Established", "راسخ"]
+                  ].map(([value, en, ar]) => (
+                    <option key={value} value={value}>
+                      {locale === "ar" ? ar : en}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {step.id === 6 ? <BusinessColorEditor colors={draft.colors} locale={locale} onChange={(colors) => update("colors", colors)} /> : null}
 
             {step.id === 2 && hasActiveDocumentAnalysis ? (

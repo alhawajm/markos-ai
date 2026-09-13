@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale, OnboardingState } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
-import { createOnboardingDraftFromVault, type OnboardingDraft } from "./onboarding-draft";
+import { createOnboardingDraftFromVault, onboardingDraftWithCatalog, type OnboardingDraft } from "./onboarding-draft";
 import { OnboardingPanel } from "./onboarding-panel";
 
 type RouteStatus = "checking" | "allowed" | "failed";
@@ -45,9 +45,9 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
         }
 
         if (editMode || state.status !== "NOT_STARTED" || state.modules.some((module) => module.completed)) {
-          const vault = await client.vault();
+          const [vault, knowledge] = await Promise.all([client.vault(), client.businessKnowledge()]);
           if (!active) return;
-          setInitialDraft(createOnboardingDraftFromVault(vault));
+          setInitialDraft(onboardingDraftWithCatalog(createOnboardingDraftFromVault(vault), knowledge.catalog));
         }
 
         setInitialState(state);

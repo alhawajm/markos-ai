@@ -26,7 +26,7 @@ Browser checks on 2026-09-10 passed all eight English/Arabic × light/dark × 14
 
 ## Business Profile draft
 
-Run `node scripts/business-profile-preview.mjs` from the repository root and open `http://127.0.0.1:3100`. The server listens only on loopback and serves an explicit allowlist of prototype files plus the current `apps/web/app/sunlit-theme.css`. It requires no app servers, database, package install, or environment files. Stop the foreground server with Ctrl+C when finished.
+Run `node scripts/business-profile-preview.mjs` from the repository root and open `http://127.0.0.1:3100`. The server listens only on loopback and serves an explicit allowlist of prototype files, the current `apps/web/app/sunlit-theme.css` and its imported theme tokens, and local IBM Plex Sans/Arabic fonts. It requires no app servers, database, package install, or environment files. Stop the foreground server with Ctrl+C when finished.
 
 The HTML, CSS, JavaScript, and Lucide SVG sprite are an isolated design aid. They reuse runtime Sunlit styling and the installed Lucide icon artwork; they do not mount React application components. Sample edits last until refresh. Use **Preview tools** to inspect incomplete, loading, and load-error states, or simulate a failed/conflicting next save. UI controls outside Business Profile explain that the destination is outside this draft.
 

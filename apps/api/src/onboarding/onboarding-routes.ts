@@ -336,9 +336,23 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
         return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid onboarding module payload", parsed.error.issues));
       }
 
+      const clearFields = z
+        .array(z.string())
+        .max(30)
+        .safeParse((request.body as Record<string, unknown>).clearFields ?? []);
+      const shape = schema.shape as Record<string, z.ZodType>;
+      if (
+        !clearFields.success ||
+        clearFields.data.some((key) => module.data === "products" || !shape[key]?.isOptional() || Object.hasOwn(request.body as object, key))
+      ) {
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Only omitted optional fields can be cleared."));
+      }
+      const changes = Object.fromEntries(Object.entries(parsed.data).filter(([key]) => Object.hasOwn(request.body as object, key)));
+      for (const key of clearFields.data) changes[key] = null;
+
       const { workspaceId } = requireWorkspaceContext();
       return ok(
-        await saveOnboardingModule(workspaceId, module.data, parsed.data as z.infer<ModuleSchema>, {
+        await saveOnboardingModule(workspaceId, module.data, changes as z.infer<ModuleSchema>, {
           preserveApprovedProfile: editModePreservesApprovedProfile(request.query)
         })
       );

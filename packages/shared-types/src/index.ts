@@ -241,6 +241,22 @@ export interface OnboardingBusinessProfileState {
   updatedAt: string | null;
 }
 
+export type BusinessKnowledgeModule = "company" | "story" | "audience" | "competitors" | "brand" | "objectives";
+
+export interface BusinessKnowledgeRecord {
+  version: number;
+  updatedAt: string | null;
+  approved: boolean;
+  modules: Record<BusinessKnowledgeModule, Record<string, unknown>>;
+  catalog: OfferingCatalogRecord | null;
+}
+
+export interface UpdateBusinessKnowledge {
+  expectedVersion: number;
+  module: BusinessKnowledgeModule;
+  changes: Record<string, unknown>;
+}
+
 export interface OnboardingState {
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
   onboardingScore: number;
@@ -296,8 +312,11 @@ export interface OfferingCatalogRecord {
 }
 
 export interface OfferingCatalogUpdate {
+  expectedVersion?: number;
   summary?: string;
   items?: Array<{
+    id?: string;
+    version?: number;
     kind?: OfferingKind;
     name: string;
     category?: string;
@@ -308,6 +327,12 @@ export interface OfferingCatalogUpdate {
   differentiators?: string[];
   priceRange?: string;
   salesChannels?: string[];
+}
+
+export interface OfferingMaintenanceUpdate {
+  expectedVersion: number;
+  id?: string;
+  offering: Omit<OfferingRecord, "id" | "workspaceId" | "catalogId" | "version" | "createdAt" | "updatedAt">;
 }
 
 export const offeringDocumentAnalysisStatuses = ["PROCESSING", "READY", "FAILED", "APPROVED", "DISCARDED", "EXPIRED"] as const;

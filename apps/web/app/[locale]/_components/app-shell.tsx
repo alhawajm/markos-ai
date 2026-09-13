@@ -21,7 +21,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { Locale, NotificationRecord } from "@markos/shared-types";
-import { CampaignBuilderPanel, DailyBriefingPanel, FinalAnalyticsPanel, FinalDashboard, FinalVaultPanel, OpportunitiesPanel } from "./final-command-panels";
+import { CampaignBuilderPanel, DailyBriefingPanel, FinalAnalyticsPanel, FinalDashboard, OpportunitiesPanel } from "./final-command-panels";
+import { BusinessProfilePanel } from "./business-profile-panel";
 import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
 import { ContentStudioPanel } from "./content-studio-panel";
@@ -326,7 +327,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             {activeSection === "content-studio" ? <ContentStudioPanel key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "calendar" ? <CalendarPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
-            {activeSection === "knowledge" ? <FinalVaultPanel locale={locale} /> : null}
+            {activeSection === "knowledge" ? <BusinessProfilePanel locale={locale} /> : null}
           </div>
         </section>
       </div>

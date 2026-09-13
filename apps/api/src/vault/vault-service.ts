@@ -5,13 +5,16 @@ import { vaultSections } from "@markos/shared-types";
 import { embedVaultTexts } from "../ai/embeddings-client";
 import { prisma } from "../db/prisma";
 
+export const authoritativeProfileKey = "authoritative-profile";
+
 const requiredSections: VaultSection[] = [...vaultSections];
 
 export async function listVault(workspaceId: string): Promise<Record<VaultSection, KnowledgeVaultEntry[]>> {
   const entries = await prisma.knowledgeVault.findMany({
     where: {
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
+      key: { not: authoritativeProfileKey }
     },
     orderBy: [{ section: "asc" }, { key: "asc" }]
   });
@@ -30,7 +33,8 @@ export async function listVaultSection(workspaceId: string, section: VaultSectio
     where: {
       workspaceId,
       section,
-      deletedAt: null
+      deletedAt: null,
+      key: { not: authoritativeProfileKey }
     },
     orderBy: {
       key: "asc"
@@ -55,68 +59,77 @@ export async function listVaultEntryHistory(workspaceId: string, section: VaultS
   return entries.map(toVaultHistoryEntry);
 }
 
-export async function upsertVaultSection(workspaceId: string, section: VaultSection, input: UpsertVaultSectionInput): Promise<KnowledgeVaultEntry[]> {
-  const texts = input.entries.map((entry) => vaultEntryToEmbeddingText(section, entry.key, entry.value));
-  const { embeddings } = await embedVaultTexts(texts);
+/** Serialize knowledge writes, including the first profile/catalog write, within a workspace. */
+export async function lockWorkspaceKnowledge(tx: Prisma.TransactionClient, workspaceId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId}::uuid AND "deletedAt" IS NULL FOR UPDATE`;
+}
+
+/** Caller owns the transaction. Clear embeddings before a new value becomes visible. */
+export async function persistVaultSection(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  section: VaultSection,
+  input: UpsertVaultSectionInput
+): Promise<KnowledgeVaultEntry[]> {
   const saved: KnowledgeVaultEntry[] = [];
+  for (const entry of input.entries) {
+    const existing = await tx.knowledgeVault.findFirst({
+      where: { workspaceId, section, key: entry.key },
+      orderBy: [{ version: "desc" }, { updatedAt: "desc" }]
+    });
+    const row =
+      existing === null
+        ? await tx.knowledgeVault.create({ data: { workspaceId, section, key: entry.key, value: entry.value as Prisma.InputJsonValue } })
+        : await tx.knowledgeVault.update({
+            where: { id: existing.id },
+            data: { value: entry.value as Prisma.InputJsonValue, version: { increment: 1 }, deletedAt: null }
+          });
+    await tx.$executeRaw`UPDATE knowledge_vault SET embedding = NULL WHERE id = ${row.id}::uuid`;
+    await tx.knowledgeVaultHistory.create({
+      data: { workspaceId, knowledgeVaultId: row.id, section, key: row.key, value: row.value as Prisma.InputJsonValue, version: row.version }
+    });
+    saved.push(toVaultEntry(row));
+  }
+  return saved;
+}
 
-  await prisma.$transaction(async (tx) => {
-    for (const [index, entry] of input.entries.entries()) {
-      const existing = await tx.knowledgeVault.findFirst({
-        where: {
-          workspaceId,
-          section,
-          key: entry.key,
-          deletedAt: null
-        },
-        orderBy: {
-          version: "desc"
-        }
-      });
-
-      const row =
-        existing === null
-          ? await tx.knowledgeVault.create({
-              data: {
-                workspaceId,
-                section,
-                key: entry.key,
-                value: entry.value as Prisma.InputJsonValue
-              }
-            })
-          : await tx.knowledgeVault.update({
-              where: {
-                id: existing.id
-              },
-              data: {
-                value: entry.value as Prisma.InputJsonValue,
-                version: {
-                  increment: 1
-                }
-              }
-            });
-
+/** Index only committed revisions. An outage cannot turn an owner edit into a failed save. */
+export async function indexVaultEntries(entries: KnowledgeVaultEntry[]): Promise<boolean> {
+  const eligible = entries.filter((entry) => entry.key !== authoritativeProfileKey);
+  if (!eligible.length) return true;
+  try {
+    const { embeddings } = await embedVaultTexts(eligible.map((entry) => vaultEntryToEmbeddingText(entry.section, entry.key, entry.value)));
+    for (const [index, entry] of eligible.entries()) {
       const embedding = embeddings[index];
-
-      if (embedding === undefined) {
-        throw new Error("Missing embedding for Vault entry");
-      }
-
-      await setVaultEmbedding(tx, row.id, embedding);
-      await tx.knowledgeVaultHistory.create({
-        data: {
-          workspaceId: row.workspaceId,
-          knowledgeVaultId: row.id,
-          section: row.section,
-          key: row.key,
-          value: row.value as Prisma.InputJsonValue,
-          version: row.version
-        }
-      });
-      saved.push(toVaultEntry(row));
+      if (!embedding) throw new Error("Missing embedding for Vault entry");
+      await prisma.$executeRaw`UPDATE knowledge_vault SET embedding = ${toVectorLiteral(embedding)}::vector
+        WHERE id = ${entry.id}::uuid AND "workspaceId" = ${entry.workspaceId}::uuid AND version = ${entry.version} AND "deletedAt" IS NULL`;
     }
-  });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
+export async function upsertVaultSection(
+  workspaceId: string,
+  section: VaultSection,
+  input: UpsertVaultSectionInput,
+  protectManaged = false
+): Promise<KnowledgeVaultEntry[]> {
+  const saved = await prisma.$transaction(async (tx) => {
+    await lockWorkspaceKnowledge(tx, workspaceId);
+    if (
+      input.entries.some((entry) => entry.key === authoritativeProfileKey) ||
+      (protectManaged &&
+        ((await tx.knowledgeVault.findFirst({ where: { workspaceId, section: "COMPANY", key: authoritativeProfileKey, deletedAt: null } })) ||
+          (await tx.workspace.findUnique({ where: { id: workspaceId }, select: { onboardingStatus: true } }))?.onboardingStatus === "COMPLETE"))
+    ) {
+      throw Object.assign(new Error("Edit this information through Business Profile or onboarding."), { statusCode: 409, code: "MANAGED_BUSINESS_KNOWLEDGE" });
+    }
+    return persistVaultSection(tx, workspaceId, section, input);
+  });
+  await indexVaultEntries(saved);
   return saved;
 }
 
@@ -124,7 +137,8 @@ export async function getVaultScore(workspaceId: string): Promise<VaultCompleten
   const sections = await prisma.knowledgeVault.findMany({
     where: {
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
+      key: { not: authoritativeProfileKey }
     },
     distinct: ["section"],
     select: {
@@ -134,7 +148,8 @@ export async function getVaultScore(workspaceId: string): Promise<VaultCompleten
   const entryCount = await prisma.knowledgeVault.count({
     where: {
       workspaceId,
-      deletedAt: null
+      deletedAt: null,
+      key: { not: authoritativeProfileKey }
     }
   });
   const completedSections = sections.map((entry) => entry.section as VaultSection);
@@ -150,58 +165,53 @@ export async function getVaultScore(workspaceId: string): Promise<VaultCompleten
 }
 
 export async function searchVaultContext(workspaceId: string, input: VaultRagSearchInput): Promise<VaultRagChunk[]> {
-  const { embeddings } = await embedVaultTexts([input.query]);
-  const embedding = embeddings[0];
-
-  if (embedding === undefined) {
-    throw new Error("Missing embedding for Vault search query");
-  }
-
-  const vector = toVectorLiteral(embedding);
-  const sectionFilter = input.section === undefined ? Prisma.empty : Prisma.sql`AND section::text = ${input.section}`;
-
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      section: VaultSection;
-      key: string;
-      value: Record<string, unknown>;
-      version: number;
-      score: number;
-    }>
-  >`
-    SELECT
-      id,
-      section::text AS section,
-      key,
-      value,
-      version,
-      1 - (embedding <=> ${vector}::vector) AS score
-    FROM knowledge_vault
-    WHERE "workspaceId" = ${workspaceId}::uuid
-      AND "deletedAt" IS NULL
-      AND embedding IS NOT NULL
+  // Unindexed current facts remain usable during an embedding outage, never superseded values.
+  const fallback = async (): Promise<VaultRagChunk[]> => {
+    const current = await prisma.knowledgeVault.findMany({
+      where: { workspaceId, deletedAt: null, key: { not: authoritativeProfileKey }, ...(input.section ? { section: input.section } : {}) },
+      orderBy: { updatedAt: "desc" },
+      take: input.topK
+    });
+    return current.map((entry) => ({ ...toVaultEntry(entry), score: 0 }));
+  };
+  try {
+    const sectionFilter = input.section === undefined ? Prisma.empty : Prisma.sql`AND section::text = ${input.section}`;
+    const ids = await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM knowledge_vault
+      WHERE "workspaceId" = ${workspaceId}::uuid AND "deletedAt" IS NULL AND embedding IS NULL AND key <> ${authoritativeProfileKey}
+      ${sectionFilter} ORDER BY "updatedAt" DESC LIMIT ${input.topK}`;
+    const unindexed = await prisma.knowledgeVault.findMany({ where: { workspaceId, id: { in: ids.map((row) => row.id) }, deletedAt: null } });
+    const { embeddings } = await embedVaultTexts([
+      input.query,
+      ...unindexed.map((entry) => vaultEntryToEmbeddingText(entry.section, entry.key, entry.value as Record<string, unknown>))
+    ]);
+    const embedding = embeddings[0];
+    if (!embedding) return fallback();
+    for (const [index, entry] of unindexed.entries()) {
+      const vector = embeddings[index + 1];
+      if (vector)
+        await prisma.$executeRaw`UPDATE knowledge_vault SET embedding = ${toVectorLiteral(vector)}::vector
+        WHERE id = ${entry.id}::uuid AND "workspaceId" = ${workspaceId}::uuid AND version = ${entry.version} AND "deletedAt" IS NULL`;
+    }
+    const catalogVersion = (unindexed.find((entry) => entry.section === "PRODUCTS" && entry.key === "catalog")?.value as Record<string, unknown> | undefined)
+      ?.catalogVersion;
+    if (typeof catalogVersion === "number") {
+      await prisma.$executeRaw`UPDATE offering_catalogs SET "projectionStatus" = 'READY', "projectedVersion" = version
+        WHERE "workspaceId" = ${workspaceId}::uuid AND version = ${catalogVersion} AND "deletedAt" IS NULL AND NOT EXISTS (
+          SELECT 1 FROM knowledge_vault WHERE "workspaceId" = ${workspaceId}::uuid AND section = 'PRODUCTS' AND "deletedAt" IS NULL AND embedding IS NULL
+        )`;
+    }
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; section: VaultSection; key: string; value: Record<string, unknown>; version: number; score: number }>
+    >`
+      SELECT id, section::text AS section, key, value, version,
+        CASE WHEN embedding IS NULL THEN 0 ELSE 1 - (embedding <=> ${toVectorLiteral(embedding)}::vector) END AS score
+      FROM knowledge_vault WHERE "workspaceId" = ${workspaceId}::uuid AND "deletedAt" IS NULL AND key <> ${authoritativeProfileKey}
       ${sectionFilter}
-    ORDER BY embedding <=> ${vector}::vector
-    LIMIT ${input.topK}
-  `;
-
-  return rows.map((row) => ({
-    id: row.id,
-    section: row.section,
-    key: row.key,
-    value: row.value,
-    version: row.version,
-    score: Number(row.score)
-  }));
-}
-
-async function setVaultEmbedding(tx: Prisma.TransactionClient, id: string, embedding: number[]): Promise<void> {
-  await tx.$executeRaw`
-    UPDATE knowledge_vault
-    SET embedding = ${toVectorLiteral(embedding)}::vector
-    WHERE id = ${id}::uuid
-  `;
+      ORDER BY (embedding IS NULL) DESC, embedding <=> ${toVectorLiteral(embedding)}::vector, "updatedAt" DESC LIMIT ${input.topK}`;
+    return rows.map((row) => ({ ...row, score: Number(row.score) }));
+  } catch {
+    return fallback();
+  }
 }
 
 function vaultEntryToEmbeddingText(section: VaultSection, key: string, value: Record<string, unknown>): string {

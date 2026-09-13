@@ -2,7 +2,7 @@
 
 Date: 2026-09-07. Branch: `feat/business-profile`.
 
-Status: scope narrowed by Khalid to manual editing only. Detailed layout and implementation remain proposed. This is a planning checkpoint, not implemented behavior or browser verification.
+Status: the approved manual-maintenance design is implemented and automatically verified on `feat/business-profile-maintenance`. See [the September 13 audit and implementation checkpoint](analysis/business-profile-maintenance-2026-09-13.md) for current storage, tab order and verification. The original September 7 rationale below remains the product foundation.
 
 ## Outcome and scope
 
