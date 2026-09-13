@@ -2,9 +2,10 @@ import type { PublishJob } from "@prisma/client";
 import type { PublishJobRecord } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { publishContentItem, PublishContentItemNotFoundError, type PublishAttemptRecord } from "./publishing-service";
-import type { InstagramPublisher } from "./instagram-publisher";
+import { InstagramPublishError, type InstagramPublisher } from "./instagram-publisher";
+import { env } from "../config/env";
 
-const leaseMs = 5 * 60_000;
+const leaseMs = Math.max(5 * 60_000, env.INSTAGRAM_CONTAINER_POLL_DELAY_MS + 60_000, env.INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS + 60_000);
 
 export class PublishNowStateError extends Error {
   constructor(message = "Only ready, scheduled, or failed content can be published now") {
@@ -68,14 +69,17 @@ export interface PublishJobWorkerResult {
 
 export async function processDuePublishJobs(input: { limit?: number; now?: Date; publisher?: InstagramPublisher } = {}): Promise<PublishJobWorkerResult> {
   const now = input.now ?? new Date();
+  const startedAt = Date.now();
+  const clock = () => new Date(now.getTime() + Date.now() - startedAt);
   await ensureDueScheduledPublishJobs(now);
   const result: PublishJobWorkerResult = { attempted: 0, completed: 0, failed: 0, processed: 0, retrying: 0 };
 
   for (let index = 0; index < (input.limit ?? 10); index += 1) {
-    const job = await claimPublishJob(now);
-    if (!job) break;
+    const claimed = await claimPublishJob(clock());
+    if (!claimed) break;
+    const { job, interrupted } = claimed;
     result.processed += 1;
-    result.attempted += 1;
+    if (!interrupted) result.attempted += 1;
     const attempt = await prisma.publishAttempt.create({
       data: {
         workspaceId: job.workspaceId,
@@ -83,45 +87,69 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
         contentItemId: job.contentItemId,
         attemptNumber: job.attempts,
         status: "PROCESSING",
-        startedAt: now
+        startedAt: clock()
       }
     });
 
     let outcome: PublishAttemptRecord;
     try {
-      outcome = await publishContentItem(job.workspaceId, job.contentItemId, {
-        now,
-        ...(input.publisher === undefined ? {} : { publisher: input.publisher })
-      });
+      const content = await prisma.contentItem.findUnique({ where: { id: job.contentItemId }, select: { status: true, instagramPostId: true } });
+      if (content?.status === "PUBLISHED" && content.instagramPostId) {
+        outcome = { contentItemId: job.contentItemId, dryRun: false, reasons: [], status: "PUBLISHED" };
+      } else if (interrupted) {
+        // A crashed worker may have published before saving the result. Never
+        // create a fresh container automatically from an abandoned attempt.
+        outcome = { contentItemId: job.contentItemId, dryRun: false, reasons: ["INSTAGRAM_PUBLISH_RESULT_UNKNOWN"], status: "FAILED" };
+      } else {
+        outcome = await publishContentItem(job.workspaceId, job.contentItemId, {
+          now: clock(),
+          beforeRequest: async () => {
+            const current = clock();
+            const renewed = await prisma.publishJob.updateMany({
+              where: { id: job.id, status: "PROCESSING", attempts: job.attempts, leaseExpiresAt: { gt: current } },
+              data: { leaseExpiresAt: new Date(current.getTime() + leaseMs) }
+            });
+            if (renewed.count !== 1) throw new InstagramPublishError("INSTAGRAM_PUBLISH_LEASE_LOST");
+          },
+          ...(input.publisher === undefined ? {} : { publisher: input.publisher })
+        });
+      }
     } catch (error) {
       outcome = {
         contentItemId: job.contentItemId,
         dryRun: false,
         reasons: ["PUBLISH_WORKER_UNEXPECTED_ERROR"],
         status: "FAILED",
-        retryable: true
+        retryable: false
       };
     }
 
+    // A worker that lost its lease must not finalize another worker's claim.
+    const owned = await prisma.publishJob.findFirst({ where: { id: job.id, status: "PROCESSING", attempts: job.attempts }, select: { id: true } });
+    if (!owned) continue;
+    const completedAt = clock();
     if (outcome.status === "PUBLISHED") {
-      await finishPublishAttempt(job, attempt.id, "PUBLISHED", now);
+      await finishPublishAttempt(job, attempt.id, "PUBLISHED", completedAt);
       result.completed += 1;
     } else if (outcome.status === "DRY_RUN") {
       await prisma.$transaction([
-        prisma.publishAttempt.update({ where: { id: attempt.id }, data: { status: "DRY_RUN", completedAt: now } }),
-        prisma.publishJob.update({ where: { id: job.id }, data: { status: "CANCELLED", leasedAt: null, leaseExpiresAt: null } })
+        prisma.publishAttempt.update({ where: { id: attempt.id }, data: { status: "DRY_RUN", completedAt } }),
+        prisma.publishJob.update({
+          where: { id: job.id, status: "PROCESSING", attempts: job.attempts },
+          data: { status: "CANCELLED", leasedAt: null, leaseExpiresAt: null }
+        })
       ]);
       result.completed += 1;
     } else if (outcome.retryable && job.attempts < job.maxAttempts) {
-      const nextAttemptAt = new Date(now.getTime() + retryDelay(job.attempts));
+      const nextAttemptAt = new Date(completedAt.getTime() + retryDelay(job.attempts));
       const errorCode = outcome.reasons[0] ?? "INSTAGRAM_PUBLISH_RETRY_REQUIRED";
       await prisma.$transaction([
         prisma.publishAttempt.update({
           where: { id: attempt.id },
-          data: { status: outcome.status, errorCode, retryable: true, completedAt: now }
+          data: { status: outcome.status, errorCode, retryable: true, completedAt }
         }),
         prisma.publishJob.update({
-          where: { id: job.id },
+          where: { id: job.id, status: "PROCESSING", attempts: job.attempts },
           data: {
             status: "RETRY_WAIT",
             nextAttemptAt,
@@ -134,7 +162,7 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
       ]);
       result.retrying += 1;
     } else {
-      await failPublishJob(job, attempt.id, outcome, now);
+      await failPublishJob(job, attempt.id, outcome, completedAt);
       result.failed += 1;
     }
   }
@@ -168,7 +196,7 @@ async function ensureDueScheduledPublishJobs(now: Date): Promise<void> {
   });
 }
 
-async function claimPublishJob(now: Date): Promise<PublishJob | undefined> {
+async function claimPublishJob(now: Date): Promise<{ job: PublishJob; interrupted: boolean } | undefined> {
   const candidate = await prisma.publishJob.findFirst({
     where: {
       status: { in: ["QUEUED", "RETRY_WAIT", "PROCESSING"] },
@@ -179,18 +207,24 @@ async function claimPublishJob(now: Date): Promise<PublishJob | undefined> {
   });
   if (!candidate) return undefined;
   const claimed = await prisma.publishJob.updateMany({
-    where: { id: candidate.id, status: candidate.status, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }] },
+    where: {
+      id: candidate.id,
+      status: candidate.status,
+      attempts: candidate.attempts,
+      nextAttemptAt: { lte: now },
+      OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }]
+    },
     data: { status: "PROCESSING", leasedAt: now, leaseExpiresAt: new Date(now.getTime() + leaseMs), attempts: { increment: 1 } }
   });
   if (claimed.count !== 1) return undefined;
-  return prisma.publishJob.findUniqueOrThrow({ where: { id: candidate.id } });
+  return { job: await prisma.publishJob.findUniqueOrThrow({ where: { id: candidate.id } }), interrupted: candidate.status === "PROCESSING" };
 }
 
 async function finishPublishAttempt(job: PublishJob, attemptId: string, status: string, now: Date): Promise<void> {
   await prisma.$transaction([
     prisma.publishAttempt.update({ where: { id: attemptId }, data: { status, completedAt: now } }),
     prisma.publishJob.update({
-      where: { id: job.id },
+      where: { id: job.id, status: "PROCESSING", attempts: job.attempts },
       data: { status: "PUBLISHED", publishedAt: now, leasedAt: null, leaseExpiresAt: null, lastErrorCode: null, lastErrorMessage: null }
     })
   ]);
@@ -205,7 +239,7 @@ async function failPublishJob(job: PublishJob, attemptId: string, outcome: Publi
       data: { status: outcome.status, errorCode, retryable: outcome.retryable ?? false, completedAt: now }
     });
     await tx.publishJob.update({
-      where: { id: job.id },
+      where: { id: job.id, status: "PROCESSING", attempts: job.attempts },
       data: {
         status: "FAILED",
         leasedAt: null,
@@ -244,6 +278,8 @@ function retryDelay(attempt: number): number {
 
 function safePublishMessage(code: string | undefined): string {
   if (!code) return "MARKOS could not publish this content. Review it and try again.";
+  if (code === "INSTAGRAM_PUBLISH_RESULT_UNKNOWN" || code === "INSTAGRAM_PUBLISH_LEASE_LOST" || code === "PUBLISH_WORKER_UNEXPECTED_ERROR")
+    return "Publishing was interrupted or its result could not be confirmed. Check the Instagram account before retrying to avoid a duplicate post.";
   if (code === "INSTAGRAM_DAILY_PUBLISHING_LIMIT_REACHED") return "Instagram's publishing limit was reached. Choose a later time.";
   if (code.includes("TOKEN") || code.includes("RECONNECT") || code === "INSTAGRAM_NOT_CONNECTED") return "Reconnect Instagram before publishing this content.";
   if (code.includes("MEDIA")) return "Review the attached media before trying to publish again.";

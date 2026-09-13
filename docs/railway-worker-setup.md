@@ -114,7 +114,7 @@ The worker's remaining Instagram Graph, scope, request-limit, token-refresh, and
 1. Review Railway's staged changes and deploy the worker.
 2. In the build log, confirm Railway uses `/apps/api/worker.Dockerfile` and completes the API TypeScript build.
 3. In the deployment log, confirm the process starts with `pnpm --filter api worker`.
-4. Confirm the first runtime tick logs `Maintenance worker tick completed`. A zero count is healthy when nothing is due.
+4. Confirm `Maintenance worker started` logs `publishingIntervalMs: 60000`, then the first runtime tick logs `Maintenance worker tick completed`. A zero count is healthy when nothing is due.
 5. Leave the service running and verify it remains on one active replica.
 
 The completion log contains bounded counts such as:
@@ -138,7 +138,9 @@ A task-level failure logs `Maintenance worker tick failed`; inspect the accompan
 4. Watch the worker log for `attemptedPublishes: 1`.
 5. Confirm MarkOS changes the item to `PUBLISHED`, stores the Instagram media ID and publication time, and the post appears on the connected Instagram account.
 
-The one-minute worker interval creates up to roughly one minute of scan delay. Meta container processing may still take several minutes after selection. Retryable provider failures remain in a persisted retry state with a bounded next-attempt time and no more than three total attempts; terminal or exhausted failures move the item and job to `FAILED` and create a persistent owner notification. Inspect the job attempt history and safe error code before retrying manually.
+The existing `WORKER_PUBLISHING_INTERVAL_MS=60000` interval checks once per minute. A tick is skipped while the previous tick is running, so long processing can delay the next scan. Meta container processing may itself take several minutes. The active publishing lease is renewed before container requests and status polls; carousel children must finish before their parent is created, and the parent must finish before publication.
+
+Known retryable failures before final publication retain bounded backoff and no more than three attempts. An abandoned in-flight attempt, an ambiguous final publish response, or a failure to save the published ID must not automatically create and publish another container. These outcomes stop with `INSTAGRAM_PUBLISH_RESULT_UNKNOWN` and an owner notification. Check the connected Instagram account before manually retrying to avoid duplicates. If the published ID was already saved, recovery completes the job without another publish. Terminal and exhausted failures also move the item/job to `FAILED`.
 
 ## OpenSearch decision for tomorrow
 

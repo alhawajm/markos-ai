@@ -76,6 +76,23 @@ def test_discussion_can_return_no_changes() -> None:
     assert response.result.changes is None
 
 
+def test_approved_reel_direction_returns_the_video_input_as_a_draft_edit() -> None:
+    direction = "Macro shot of citrus glaze. Reveal the pastry beside a coffee."
+    script = {"hook": "Citrus sunshine", "beats": ["Pour glaze", "Reveal pastry"], "durationSeconds": 8}
+    client = Client({"reply": "Prepared your selected direction.", "summary": "Second direction selected.", "changes": {
+        "caption": None, "brief": None, "visualDirection": direction, "carousel": None, "reelScript": script,
+    }})
+    turn = request().model_copy(update={"message": "Use the second direction and build the reel script", "current": {"contentType": "REEL", "status": "DRAFT"}})
+    response = asyncio.run(respond_to_conversation(turn, client))
+    assert response.result.changes is not None
+    assert response.result.changes.visual_direction == direction
+    assert response.result.changes.reel_script is not None
+    assert response.result.changes.reel_script.hook == "Citrus sunshine"
+    instructions = str(client.fake.request["instructions"])
+    assert "visualDirection is the editable input actually sent to video generation" in instructions
+    assert "confirmation only after saving succeeds" in instructions
+
+
 @pytest.mark.parametrize("caption", ["🍊" * 2201, " ".join(f"#tag{i}" for i in range(31))])
 def test_invalid_caption_is_rejected(caption: str) -> None:
     with pytest.raises(ValidationError):

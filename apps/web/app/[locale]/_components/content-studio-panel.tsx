@@ -113,6 +113,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const followTranscript = useRef(true);
   const dirty = contentDraftIsDirty(fields, baseline);
   const canEdit = !loading && !loadError && (!record || ["DRAFT", "IN_REVIEW"].includes(record.status));
   const disabled = !!busy || loading || !!loadError || activeConversation || (!!record && !conversation && !conversationError);
@@ -311,9 +312,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     };
   }, [client, record?.id, locale]);
 
-  useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "instant" });
-  }, [turns, busy]);
+  useLayoutEffect(() => {
+    followTranscript.current = true;
+  }, [record?.id]);
+
+  useLayoutEffect(() => {
+    if (followTranscript.current) transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "instant" });
+  }, [turns, busy, companionView]);
 
   useEffect(() => {
     if (!notice) return;
@@ -1205,7 +1210,14 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             </div>
           ) : (
             <section id="studio-assistant-panel" className="studio-conversation" aria-label={text("MARKOS assistant", "مساعد MARKOS")}>
-              <div className="studio-conversation-log" ref={transcriptRef}>
+              <div
+                className="studio-conversation-log"
+                ref={transcriptRef}
+                onScroll={(event) => {
+                  const log = event.currentTarget;
+                  followTranscript.current = log.scrollHeight - log.scrollTop - log.clientHeight <= 64;
+                }}
+              >
                 {loading ? (
                   <p className="mt-10 text-[var(--sunlit-muted)]">{text("Opening your workspace…", "جارٍ فتح مساحة العمل…")}</p>
                 ) : (
