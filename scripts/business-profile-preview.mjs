@@ -10,8 +10,15 @@ const files = new Map([
   ["/docs/prototypes/business-profile.css", ["docs/prototypes/business-profile.css", "text/css"]],
   ["/docs/prototypes/business-profile.js", ["docs/prototypes/business-profile.js", "text/javascript"]],
   ["/docs/prototypes/business-profile-icons.svg", ["docs/prototypes/business-profile-icons.svg", "image/svg+xml"]],
-  ["/apps/web/app/sunlit-theme.css", ["apps/web/app/sunlit-theme.css", "text/css"]]
+  ["/apps/web/app/sunlit-theme.css", ["apps/web/app/sunlit-theme.css", "text/css"]],
+  ["/apps/web/app/theme-tokens.css", ["apps/web/app/theme-tokens.css", "text/css"]]
 ]);
+for (const family of ["IBMPlexSans", "IBMPlexSansArabic"]) {
+  for (const weight of ["Regular", "Medium", "SemiBold", "Bold"]) {
+    const path = `apps/web/app/fonts/${family}-${weight}.woff2`;
+    files.set(`/${path}`, [path, "font/woff2"]);
+  }
+}
 const server = createServer(async (request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname;
   if (path === "/") {
@@ -27,7 +34,11 @@ const server = createServer(async (request, response) => {
   }
   try {
     const body = await readFile(resolve(root, file[0]));
-    response.writeHead(200, { "Content-Type": `${file[1]}; charset=utf-8`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+    response.writeHead(200, {
+      "Content-Type": `${file[1]}${file[1].startsWith("text/") ? "; charset=utf-8" : ""}`,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
     response.end(request.method === "HEAD" ? undefined : body);
   } catch {
     response.writeHead(500);

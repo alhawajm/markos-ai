@@ -398,6 +398,25 @@ describe("publishing routes", () => {
     });
     const headers = authHeaders(await steppedUpToken(session.user.id, session.workspace.id));
 
+    const withoutMfa = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/publish-now`,
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {}
+    });
+    expect(withoutMfa.statusCode).toBe(403);
+    expect(withoutMfa.json().error.code).toBe("MFA_SETUP_REQUIRED");
+    await prisma.user.update({ where: { id: session.user.id }, data: { mfaEnabled: true } });
+    const withoutStepUp = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/publish-now`,
+      headers: authHeaders(session.tokens.accessToken),
+      payload: {}
+    });
+    expect(withoutStepUp.statusCode).toBe(403);
+    expect(withoutStepUp.json().error.code).toBe("MFA_REQUIRED");
+    expect(await prisma.publishJob.count({ where: { contentItemId: content.id } })).toBe(0);
+
     const first = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/publish-now`,

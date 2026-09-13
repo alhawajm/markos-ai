@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
+import { isManagedKnowledgeKey } from "../business-profile/knowledge-service";
 import { getVaultScore, listVault, listVaultEntryHistory, listVaultSection, searchVaultContext, upsertVaultSection } from "./vault-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
@@ -120,7 +121,14 @@ export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const { workspaceId } = requireWorkspaceContext();
-      return ok(await upsertVaultSection(workspaceId, section, parsed.data));
+      return ok(
+        await upsertVaultSection(
+          workspaceId,
+          section,
+          parsed.data,
+          parsed.data.entries.some((entry) => isManagedKnowledgeKey(section, entry.key))
+        )
+      );
     }
   );
 }

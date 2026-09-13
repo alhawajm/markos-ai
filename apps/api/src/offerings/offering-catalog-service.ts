@@ -1,13 +1,65 @@
 import type { Offering, OfferingCatalog, OfferingKind, OfferingPriceType, OfferingSourceType, Prisma } from "@prisma/client";
 import type { OfferingCatalogRecord, OfferingRecord } from "@markos/shared-types";
-import { productsOnboardingSchema } from "@markos/validation";
+import { productsOnboardingSchema, offeringMaintenanceSchema, type OfferingMaintenanceInput } from "@markos/validation";
 import type { z } from "zod";
 import { prisma } from "../db/prisma";
-import { upsertVaultSection } from "../vault/vault-service";
+import { indexVaultEntries, lockWorkspaceKnowledge, persistVaultSection } from "../vault/vault-service";
+import { KnowledgeConflictError, readStoredKnowledge, persistKnowledge, retireProfileSummary } from "../business-profile/knowledge-service";
 
 export type OfferingCatalogInput = z.infer<typeof productsOnboardingSchema>;
 
+export async function maintainOffering(workspaceId: string, input: OfferingMaintenanceInput): Promise<OfferingCatalogRecord> {
+  const result = await prisma.$transaction(async (tx) => {
+    await lockWorkspaceKnowledge(tx, workspaceId);
+    const { stored } = await readStoredKnowledge(tx, workspaceId);
+    if (!stored.approved) throw new KnowledgeConflictError("Complete onboarding before maintaining products and services.");
+    const existing = await tx.offeringCatalog.findUnique({ where: { workspaceId } });
+    if ((existing?.version ?? 0) !== input.expectedVersion) throw new KnowledgeConflictError();
+    const catalog = existing ?? (await tx.offeringCatalog.create({ data: { workspaceId } }));
+    const current = input.id ? await tx.offering.findFirst({ where: { workspaceId, catalogId: catalog.id, id: input.id, deletedAt: null } }) : null;
+    if (input.id && !current) throw new KnowledgeConflictError("This offering is no longer available. Reload the catalog.");
+    const value = input.offering;
+    const normalizedName = normalizeOfferingName(value.name);
+    const collision = await tx.offering.findFirst({ where: { workspaceId, normalizedName, ...(input.id ? { id: { not: input.id } } : {}) } });
+    if (collision) throw new KnowledgeConflictError("An offering with this name already exists. Edit that offering or choose a different name.");
+    const data = {
+      ...value,
+      normalizedName,
+      nameEn: value.nameEn ?? null,
+      nameAr: value.nameAr ?? null,
+      category: value.category ?? null,
+      description: value.description ?? null,
+      priceMinor: value.priceMinor ?? null,
+      minPriceMinor: value.minPriceMinor ?? null,
+      maxPriceMinor: value.maxPriceMinor ?? null,
+      sourceType: "OWNER" as const,
+      sourceRef: null
+    };
+    const offering = current
+      ? await tx.offering.update({ where: { id: current.id }, data: { ...data, version: { increment: 1 } } })
+      : await tx.offering.create({ data: { ...data, workspaceId, catalogId: catalog.id } });
+    await writeOfferingRevision(tx, offering);
+    const updated = await tx.offeringCatalog.update({ where: { id: catalog.id }, data: { version: { increment: 1 }, projectionStatus: "PENDING" } });
+    const offerings = await tx.offering.findMany({ where: { workspaceId, catalogId: catalog.id, deletedAt: null } });
+    await tx.offeringCatalogRevision.create({
+      data: { workspaceId, catalogId: catalog.id, version: updated.version, snapshot: catalogSnapshot(updated, offerings), sourceType: "OWNER" }
+    });
+    await tx.knowledgeVault.updateMany({ where: { workspaceId, section: "PRODUCTS", deletedAt: null }, data: { deletedAt: new Date() } });
+    const entries = await persistVaultSection(tx, workspaceId, "PRODUCTS", { entries: projectionEntries(updated, offerings) });
+    stored.summaryCurrent = false;
+    await persistKnowledge(tx, workspaceId, stored);
+    await retireProfileSummary(tx, workspaceId);
+    return { entries, catalog: updated };
+  });
+  await prisma.offeringCatalog.updateMany({
+    where: { workspaceId, id: result.catalog.id, version: result.catalog.version },
+    data: { projectedVersion: result.catalog.version }
+  });
+  return (await getOfferingCatalog(workspaceId))!;
+}
+
 interface SaveOfferingCatalogOptions {
+  indexImmediately?: boolean;
   sourceRef?: string;
   sourceType?: OfferingSourceType;
 }
@@ -17,16 +69,17 @@ interface CanonicalSaveResult {
   changed: boolean;
   needsProjection: boolean;
   offerings: Offering[];
+  projectedEntries: import("@markos/shared-types").KnowledgeVaultEntry[];
 }
 
-export async function getOfferingCatalog(workspaceId: string): Promise<OfferingCatalogRecord | null> {
-  const catalog = await prisma.offeringCatalog.findFirst({
+export async function getOfferingCatalog(workspaceId: string, client: Prisma.TransactionClient = prisma): Promise<OfferingCatalogRecord | null> {
+  const catalog = await client.offeringCatalog.findFirst({
     where: { workspaceId, deletedAt: null }
   });
 
   if (catalog === null) return null;
 
-  const offerings = await prisma.offering.findMany({
+  const offerings = await client.offering.findMany({
     where: { workspaceId, catalogId: catalog.id, deletedAt: null },
     orderBy: [{ status: "asc" }, { name: "asc" }]
   });
@@ -42,27 +95,12 @@ export async function saveOfferingCatalog(
   const sourceType = options.sourceType ?? "OWNER";
   const canonical = await saveCanonicalCatalog(workspaceId, input, sourceType, options.sourceRef);
 
-  if (canonical.needsProjection) {
-    try {
-      await upsertVaultSection(workspaceId, "PRODUCTS", {
-        entries: projectionEntries(canonical.catalog, canonical.offerings)
-      });
-      await prisma.offeringCatalog.update({
-        where: { id: canonical.catalog.id },
-        data: {
-          projectionStatus: "READY",
-          projectedVersion: canonical.catalog.version
-        }
-      });
-    } catch (error) {
-      await prisma.offeringCatalog
-        .update({
-          where: { id: canonical.catalog.id },
-          data: { projectionStatus: "FAILED" }
-        })
-        .catch(() => undefined);
-      throw error;
-    }
+  if (canonical.needsProjection && options.indexImmediately !== false) {
+    const indexed = await indexVaultEntries(canonical.projectedEntries);
+    await prisma.offeringCatalog.updateMany({
+      where: { id: canonical.catalog.id, workspaceId, version: canonical.catalog.version },
+      data: { projectionStatus: indexed ? "READY" : "FAILED", projectedVersion: canonical.catalog.version }
+    });
   }
 
   const saved = await getOfferingCatalog(workspaceId);
@@ -77,7 +115,9 @@ async function saveCanonicalCatalog(
   sourceRef: string | undefined
 ): Promise<CanonicalSaveResult> {
   return prisma.$transaction(async (tx) => {
+    await lockWorkspaceKnowledge(tx, workspaceId);
     const existingCatalog = await tx.offeringCatalog.findUnique({ where: { workspaceId } });
+    if (input.expectedVersion !== undefined && input.expectedVersion !== (existingCatalog?.version ?? 0)) throw new KnowledgeConflictError();
     const catalog =
       existingCatalog === null
         ? await tx.offeringCatalog.create({
@@ -150,7 +190,16 @@ async function saveCanonicalCatalog(
       update: {}
     });
 
-    return { catalog: nextCatalog, offerings, changed, needsProjection };
+    const projectedEntries = needsProjection
+      ? await persistVaultSection(tx, workspaceId, "PRODUCTS", { entries: projectionEntries(nextCatalog, offerings) })
+      : [];
+    if (changed) {
+      const { stored } = await readStoredKnowledge(tx, workspaceId);
+      stored.summaryCurrent = false;
+      await persistKnowledge(tx, workspaceId, stored);
+      await retireProfileSummary(tx, workspaceId);
+    }
+    return { catalog: nextCatalog, offerings, changed, needsProjection, projectedEntries };
   });
 }
 
@@ -162,26 +211,43 @@ async function reconcileOfferings(
   sourceType: OfferingSourceType,
   sourceRef: string | undefined
 ): Promise<boolean> {
-  const existingByName = new Map(existing.map((offering) => [offering.normalizedName, offering]));
-  const desiredNames = new Set(items.map((item) => normalizeOfferingName(item.name)));
+  const existingById = new Map(existing.map((offering) => [offering.id, offering]));
+  const desiredIds = new Set(items.map((item) => item.id).filter(Boolean));
   let changed = false;
 
   for (const item of items) {
     const normalizedName = normalizeOfferingName(item.name);
-    const current = existingByName.get(normalizedName);
+    const current = item.id ? existingById.get(item.id) : undefined;
+    if (item.id && (!current || (item.version !== undefined && current.version !== item.version))) throw new KnowledgeConflictError();
+    if (existing.some((other) => other.normalizedName === normalizedName && other.id !== current?.id))
+      throw new KnowledgeConflictError("An offering with this name already exists. Open that offering to edit it, or choose a different name.");
     const desired = {
-      kind: (item.kind ?? "UNSPECIFIED") as OfferingKind,
-      name: item.name.trim(),
+      kind: (item.kind ?? current?.kind ?? "UNSPECIFIED") as OfferingKind,
+      name: item.name,
       normalizedName,
-      category: item.category?.trim() || null,
-      description: item.description?.trim() || null,
-      priceType: (item.priceMinor === undefined ? "UNSPECIFIED" : "FIXED") as OfferingPriceType,
-      priceMinor: item.priceMinor ?? null,
+      category: item.category ?? current?.category ?? null,
+      description: item.description ?? current?.description ?? null,
+      priceType: (item.priceType ?? (item.priceMinor === undefined ? (current?.priceType ?? "UNSPECIFIED") : "FIXED")) as OfferingPriceType,
+      priceMinor: item.priceMinor ?? current?.priceMinor ?? null,
       currency: item.currency,
-      status: "ACTIVE" as const,
+      status: item.status ?? current?.status ?? "ACTIVE",
+      nameEn: item.nameEn ?? current?.nameEn ?? null,
+      nameAr: item.nameAr ?? current?.nameAr ?? null,
+      minPriceMinor: item.minPriceMinor ?? current?.minPriceMinor ?? null,
+      maxPriceMinor: item.maxPriceMinor ?? current?.maxPriceMinor ?? null,
       sourceType,
       sourceRef: sourceRef ?? null
     };
+
+    if (!["FIXED", "FROM"].includes(desired.priceType)) desired.priceMinor = null;
+    if (desired.priceType !== "RANGE") {
+      desired.minPriceMinor = null;
+      desired.maxPriceMinor = null;
+    }
+    const { normalizedName: _normalizedName, sourceType: _sourceType, sourceRef: _sourceRef, ...ownerFields } = desired;
+    const checked = offeringMaintenanceSchema.shape.offering.safeParse(Object.fromEntries(Object.entries(ownerFields).filter(([, value]) => value !== null)));
+    if (!checked.success)
+      throw Object.assign(new Error(checked.error.issues.map((issue) => issue.message).join("; ")), { statusCode: 400, code: "VALIDATION_ERROR" });
 
     if (current === undefined) {
       const created = await tx.offering.create({
@@ -203,7 +269,7 @@ async function reconcileOfferings(
   }
 
   for (const current of existing) {
-    if (current.status === "ARCHIVED" || desiredNames.has(current.normalizedName)) continue;
+    if (current.status === "ARCHIVED" || desiredIds.has(current.id)) continue;
     const archived = await tx.offering.update({
       where: { id: current.id },
       data: {
@@ -234,7 +300,7 @@ async function writeOfferingRevision(tx: Prisma.TransactionClient, offering: Off
 }
 
 function projectionEntries(catalog: OfferingCatalog, offerings: Offering[]) {
-  const active = offerings.filter((offering) => offering.status !== "ARCHIVED");
+  const active = offerings.filter((offering) => offering.status === "ACTIVE");
   const catalogValue = {
     ...(catalog.summary === null ? {} : { summary: catalog.summary }),
     items: active.map(offeringProjectionValue),
@@ -313,10 +379,18 @@ function sameOffering(
     priceType: OfferingPriceType;
     sourceRef: string | null;
     sourceType: OfferingSourceType;
-    status: "ACTIVE";
+    status: Offering["status"];
+    nameEn: string | null;
+    nameAr: string | null;
+    minPriceMinor: number | null;
+    maxPriceMinor: number | null;
   }
 ): boolean {
   return (
+    current.nameEn === desired.nameEn &&
+    current.nameAr === desired.nameAr &&
+    current.minPriceMinor === desired.minPriceMinor &&
+    current.maxPriceMinor === desired.maxPriceMinor &&
     current.name === desired.name &&
     current.kind === desired.kind &&
     current.category === desired.category &&

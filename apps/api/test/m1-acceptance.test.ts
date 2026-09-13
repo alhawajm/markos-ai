@@ -161,7 +161,7 @@ describe("M1 acceptance", () => {
         expect.objectContaining({
           section: "COMPANY",
           key: "profile",
-          value: expect.objectContaining({ name: "Pearl Coffee Roasters" })
+          value: expect.objectContaining({ name: acceptanceBusinessProfile().businessName })
         }),
         expect.objectContaining({
           section: "PRODUCTS",
@@ -200,7 +200,7 @@ describe("M1 acceptance", () => {
         expect.objectContaining({
           section: "COMPANY",
           key: "profile",
-          value: expect.objectContaining({ name: "Pearl Coffee Roasters" })
+          value: expect.objectContaining({ name: acceptanceBusinessProfile().businessName })
         }),
         expect.objectContaining({
           section: "OBJECTIVES",
@@ -216,7 +216,7 @@ describe("M1 acceptance", () => {
       retrievedContext: expect.arrayContaining([
         expect.objectContaining({
           section: "COMPANY",
-          value: expect.objectContaining({ name: "Pearl Coffee Roasters" })
+          value: expect.objectContaining({ name: acceptanceBusinessProfile().businessName })
         })
       ])
     });

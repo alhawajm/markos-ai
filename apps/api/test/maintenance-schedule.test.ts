@@ -11,8 +11,10 @@ vi.mock("../src/onboarding/onboarding-document-service", () => ({
 }));
 vi.mock("../src/media/video-generation-service", () => ({ processDueVideoGenerationJobs: vi.fn().mockResolvedValue({}) }));
 
-import { startMaintenanceWorker } from "../src/worker/maintenance-worker";
+import { runMaintenanceWorkerTick, startMaintenanceWorker } from "../src/worker/maintenance-worker";
 import { processDuePublishJobs } from "../src/publishing/publish-job-service";
+import { syncInstagramAnalyticsForAllWorkspaces } from "../src/analytics/analytics-service";
+import { sendMonthlyAnalyticsPdfEmailForAllWorkspaces } from "../src/analytics/analytics-email-service";
 import { env } from "../src/config/env";
 
 afterEach(() => {
@@ -20,6 +22,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("maintenance scheduling", () => {
+  it.each(["email", "insights"])("processes due publishes before a failing %s task", async (task) => {
+    const failing = task === "email" ? sendMonthlyAnalyticsPdfEmailForAllWorkspaces : syncInstagramAnalyticsForAllWorkspaces;
+    vi.mocked(failing).mockRejectedValueOnce(new Error("Unrelated service unavailable"));
+    await expect(runMaintenanceWorkerTick()).rejects.toThrow("Unrelated service unavailable");
+    expect(processDuePublishJobs).toHaveBeenCalledOnce();
+  });
   it("checks publishing every minute, skips overlapping ticks and stops its existing timer", async () => {
     expect(env.WORKER_PUBLISHING_INTERVAL_MS).toBe(60_000);
     vi.useFakeTimers();

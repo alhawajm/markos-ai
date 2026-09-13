@@ -131,7 +131,7 @@ describe("offering catalogue", () => {
       payload: {
         summary: "Updated catalogue",
         items: [
-          { name: "Pearl Blend", priceMinor: 4000, currency: "BHD" },
+          { id: initialPearl.id, version: initialPearl.version, name: "Pearl Blend", priceMinor: 4000, currency: "BHD" },
           { kind: "SERVICE", name: "Event Coffee Bar", currency: "BHD" }
         ]
       }
@@ -154,7 +154,7 @@ describe("offering catalogue", () => {
     await app.close();
   });
 
-  it("removes stale Products projections when embedding fails and can safely retry", async () => {
+  it("persists current Products facts when embedding fails and can safely retry", async () => {
     const app = await buildApp();
     const session = await registerVerifiedUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -163,13 +163,16 @@ describe("offering catalogue", () => {
     embedVaultTextsMock.mockRejectedValueOnce(new Error("test embedding failure"));
     const failed = await app.inject({ method: "PUT", url: "/v1/onboarding/products", headers, payload: { summary: "Changed catalogue" } });
 
-    expect(failed.statusCode).toBe(500);
+    expect(failed.statusCode).toBe(200);
     await expect(prisma.offeringCatalog.findUniqueOrThrow({ where: { workspaceId: session.workspace.id } })).resolves.toMatchObject({
       summary: "Changed catalogue",
       projectionStatus: "FAILED",
       version: 2
     });
-    await expect(prisma.knowledgeVault.count({ where: { workspaceId: session.workspace.id, section: "PRODUCTS", deletedAt: null } })).resolves.toBe(0);
+    await expect(prisma.knowledgeVault.count({ where: { workspaceId: session.workspace.id, section: "PRODUCTS", deletedAt: null } })).resolves.toBe(1);
+    await expect(
+      prisma.knowledgeVault.findFirstOrThrow({ where: { workspaceId: session.workspace.id, section: "PRODUCTS", deletedAt: null } })
+    ).resolves.toMatchObject({ value: { summary: "Changed catalogue" } });
 
     const retried = await app.inject({ method: "PUT", url: "/v1/onboarding/products", headers, payload: { summary: "Changed catalogue" } });
 

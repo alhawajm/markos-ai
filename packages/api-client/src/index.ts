@@ -23,6 +23,8 @@ import type {
   BillingUpgradeResult,
   BillingVatComplianceReport,
   BusinessProfile,
+  BusinessKnowledgeRecord,
+  UpdateBusinessKnowledge,
   CampaignGenerationDurationDays,
   CampaignRecord,
   CampaignReviewRecord,
@@ -55,6 +57,7 @@ import type {
   ApprovedOnboardingDocumentProfile,
   ApproveOnboardingDocumentAnalysisResult,
   OfferingCatalogUpdate,
+  OfferingMaintenanceUpdate,
   OfferingDocumentAnalysisRecord,
   ApproveOfferingDocumentAnalysisResult,
   PromptTemplateRecord,
@@ -335,6 +338,22 @@ export class MarkosApiClient {
       method: "POST"
     });
     return response.data;
+  }
+
+  async businessKnowledge(): Promise<BusinessKnowledgeRecord> {
+    return (await this.request<BusinessKnowledgeRecord>("/v1/business-profile")).data;
+  }
+
+  async updateBusinessKnowledge(input: UpdateBusinessKnowledge): Promise<BusinessKnowledgeRecord> {
+    return (await this.request<BusinessKnowledgeRecord>("/v1/business-profile", { method: "PATCH", body: { ...input } })).data;
+  }
+
+  async maintainOffering(input: OfferingMaintenanceUpdate): Promise<BusinessKnowledgeRecord> {
+    return (await this.request<BusinessKnowledgeRecord>("/v1/business-profile/offerings", { method: "PUT", body: { ...input } })).data;
+  }
+
+  async updateBusinessCatalog(input: Omit<OfferingCatalogUpdate, "items"> & { expectedVersion: number }): Promise<BusinessKnowledgeRecord> {
+    return (await this.request<BusinessKnowledgeRecord>("/v1/business-profile/catalog", { method: "PATCH", body: input })).data;
   }
 
   async vault(): Promise<Record<VaultSection, KnowledgeVaultEntry[]>> {
