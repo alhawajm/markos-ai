@@ -26,12 +26,50 @@ import { processDueVideoGenerationJobs, queueVideoGeneration } from "../src/medi
 import { attachMediaToContent } from "../src/media/media-service";
 import { updateContentItem } from "../src/content/content-service";
 import { retryMediaGenerationJob } from "../src/media/video-generation-service";
+import { env } from "../src/config/env";
 
 describe("durable video generation", () => {
   beforeEach(() => {
     provider.download.mockReset();
     provider.status.mockReset();
     provider.start.mockReset();
+  });
+
+  it.each(["response", "error"])("does not let a stale worker's %s overwrite a newer claim", async (outcome) => {
+    const { content, workspace } = await createVideoWorkspace();
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    provider.start.mockImplementationOnce(async () => {
+      const claimed = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
+      expect(claimed.leaseExpiresAt!.getTime() - claimed.leasedAt!.getTime()).toBeGreaterThan(env.AI_HTTP_TIMEOUT_MS);
+      // A cancellation/retry or recovery claim supersedes the old provider request.
+      // Reusing the attempt number proves leasedAt also fences old ownership.
+      await prisma.mediaGenerationJob.update({
+        where: { id: job.id },
+        data: {
+          leasedAt: new Date(claimed.leasedAt!.getTime() + 1),
+          providerJobId: "new-owner-provider-job",
+          status: "GENERATING",
+          progress: 65
+        }
+      });
+      if (outcome === "error") throw new Error("Old request failed");
+      return providerState("in_progress");
+    });
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    expect(await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000), logger })).toEqual({
+      completed: 0,
+      failed: 0,
+      processed: 1,
+      waiting: 1
+    });
+    await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
+      status: "GENERATING",
+      providerJobId: "new-owner-provider-job",
+      progress: 65,
+      errorCode: null
+    });
+    expect(provider.download).not.toHaveBeenCalled();
+    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
   });
 
   it("keeps one active job, survives provider polling, and attaches the completed MP4", async () => {

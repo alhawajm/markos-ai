@@ -22,6 +22,58 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("maintenance scheduling", () => {
+  it("drains an active publish and skips subsequent tasks and future claims on shutdown", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    vi.mocked(processDuePublishJobs).mockImplementationOnce(async (input) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      expect(input?.shouldStop?.()).toBe(true);
+      return { attempted: 1, completed: 1, failed: 0, processed: 1, retrying: 0 };
+    });
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const worker = startMaintenanceWorker({ logger });
+    const running = worker.runNow();
+    await vi.advanceTimersByTimeAsync(0);
+    const drained = vi.fn();
+    const shutdown = worker.drain(30_000).then(drained);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(drained).not.toHaveBeenCalled();
+    finish();
+    await running;
+    await shutdown;
+    expect(drained).toHaveBeenCalledWith(true);
+    expect(sendMonthlyAnalyticsPdfEmailForAllWorkspaces).not.toHaveBeenCalled();
+    expect(syncInstagramAnalyticsForAllWorkspaces).not.toHaveBeenCalled();
+    await worker.runNow();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(processDuePublishJobs).toHaveBeenCalledOnce();
+    expect(logger.info).toHaveBeenCalledWith("Worker task completed", expect.objectContaining({ task: "publishing", durationMs: 10_000 }));
+  });
+
+  it("bounds shutdown without releasing ownership of unfinished work", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    vi.mocked(processDuePublishJobs).mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return { attempted: 1, completed: 1, failed: 0, processed: 1, retrying: 0 };
+    });
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const worker = startMaintenanceWorker({ logger });
+    const running = worker.runNow();
+    await vi.advanceTimersByTimeAsync(0);
+    const shutdown = worker.drain(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await shutdown).toBe(false);
+    await worker.runNow();
+    expect(processDuePublishJobs).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("active leases retained"), { timeoutMs: 1000 });
+    finish();
+    await running;
+  });
   it.each(["email", "insights"])("processes due publishes before a failing %s task", async (task) => {
     const failing = task === "email" ? sendMonthlyAnalyticsPdfEmailForAllWorkspaces : syncInstagramAnalyticsForAllWorkspaces;
     vi.mocked(failing).mockRejectedValueOnce(new Error("Unrelated service unavailable"));

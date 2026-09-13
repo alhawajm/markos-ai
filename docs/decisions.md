@@ -637,6 +637,12 @@ Validate current stored media under a content-row lock for attachment, format ch
 
 Connect the reviewer approved by Khalid and Mohamed using paginated, searchable Campaign summaries and a direct workspace-scoped review read containing the plan, linked content, and attached media. Derive counts from existing plan slots and content states; do not create a reviewed state or persist navigation as approval. Preserve idempotent suggestion-to-draft registration and direct opening of that same draft in Create, plus the working 3/7/14-day generation contract. These additive reads require no schema migration. Longer-plan prototype fixtures do not authorize longer generation.
 
+## 2026-09-13: Worker reliability first-pass checkpoint
+
+Stop accepting new work on shutdown and drain already-started work for up to 30 seconds before exiting. If the grace period expires, retain active leases and use a nonzero exit; do not release ownership while an external operation may still finish. Concurrent maintenance batches settle their already-started requests before returning an error. Deployment termination grace still needs to accommodate the application's drain period; this change does not modify hosted deployment settings.
+
+Use current elapsed time at task/job boundaries, renew video leases around external work with a lease longer than the configured AI HTTP timeout, and fence video state/storage attachment by both attempt and claim time. Log task durations and job queue/processing delays using identifiers and classified errors, excluding credentials, prompts and raw provider responses. Keep the existing one-minute scheduler and task order for this increment. Publish cancellation/rescheduling policy and ambiguous video-start recovery remain pending product decisions; this checkpoint does not claim those audit findings are resolved.
+
 ## 2026-09-13: Showcase publishing recovery and Reel draft application
 
 Retain the existing one-minute maintenance scheduler and skip overlapping ticks. Renew publishing job leases at provider boundaries. Retry known transient failures before final publication using the existing backoff, but require operator inspection when the final external result is unknown or an in-flight worker was interrupted. A stored Instagram publication ID can complete recovery without another external publish. This intentionally favors duplicate prevention over automatic recovery of ambiguous attempts; it does not claim exactly-once delivery across Instagram and PostgreSQL.

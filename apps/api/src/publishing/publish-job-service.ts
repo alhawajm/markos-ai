@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma";
 import { publishContentItem, PublishContentItemNotFoundError, type PublishAttemptRecord } from "./publishing-service";
 import { InstagramPublishError, type InstagramPublisher } from "./instagram-publisher";
 import { env } from "../config/env";
+import { workerErrorCode, workerLogger, type WorkerLogger } from "../worker/worker-diagnostics";
 
 const leaseMs = Math.max(5 * 60_000, env.INSTAGRAM_CONTAINER_POLL_DELAY_MS + 60_000, env.INSTAGRAM_GRAPH_REQUEST_TIMEOUT_MS + 60_000);
 
@@ -67,7 +68,9 @@ export interface PublishJobWorkerResult {
   retrying: number;
 }
 
-export async function processDuePublishJobs(input: { limit?: number; now?: Date; publisher?: InstagramPublisher } = {}): Promise<PublishJobWorkerResult> {
+export async function processDuePublishJobs(
+  input: { limit?: number; now?: Date; publisher?: InstagramPublisher; shouldStop?: (() => boolean) | undefined; logger?: WorkerLogger | undefined } = {}
+): Promise<PublishJobWorkerResult> {
   const now = input.now ?? new Date();
   const startedAt = Date.now();
   const clock = () => new Date(now.getTime() + Date.now() - startedAt);
@@ -75,9 +78,19 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
   const result: PublishJobWorkerResult = { attempted: 0, completed: 0, failed: 0, processed: 0, retrying: 0 };
 
   for (let index = 0; index < (input.limit ?? 10); index += 1) {
+    if (input.shouldStop?.()) break;
     const claimed = await claimPublishJob(clock());
     if (!claimed) break;
     const { job, interrupted } = claimed;
+    const jobStarted = performance.now();
+    const logger = input.logger ?? workerLogger;
+    const context = { jobId: job.id, workspaceId: job.workspaceId, contentItemId: job.contentItemId, attempt: job.attempts };
+    logger.info("Publish job claimed", {
+      ...context,
+      queueDelayMs: Math.max(0, clock().getTime() - job.nextAttemptAt.getTime()),
+      scheduleDelayMs: Math.max(0, clock().getTime() - job.scheduledFor.getTime()),
+      interrupted
+    });
     result.processed += 1;
     if (!interrupted) result.attempted += 1;
     const attempt = await prisma.publishAttempt.create({
@@ -115,6 +128,7 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
         });
       }
     } catch (error) {
+      logger.error("Publish job failed unexpectedly", { ...context, errorCode: workerErrorCode(error) });
       outcome = {
         contentItemId: job.contentItemId,
         dryRun: false,
@@ -128,6 +142,12 @@ export async function processDuePublishJobs(input: { limit?: number; now?: Date;
     const owned = await prisma.publishJob.findFirst({ where: { id: job.id, status: "PROCESSING", attempts: job.attempts }, select: { id: true } });
     if (!owned) continue;
     const completedAt = clock();
+    logger.info("Publish attempt completed", {
+      ...context,
+      outcome: outcome.status,
+      errorCode: outcome.reasons[0],
+      durationMs: Math.round(performance.now() - jobStarted)
+    });
     if (outcome.status === "PUBLISHED") {
       await finishPublishAttempt(job, attempt.id, "PUBLISHED", completedAt);
       result.completed += 1;
