@@ -1,10 +1,26 @@
-import type { ApprovedOnboardingDocumentProfile, KnowledgeVaultEntry, OfferingKind, OnboardingDocumentProfileDraft, VaultSection } from "@markos/shared-types";
+import type {
+  ApprovedOnboardingDocumentProfile,
+  KnowledgeVaultEntry,
+  OfferingKind,
+  OfferingRecord,
+  OfferingCatalogRecord,
+  OnboardingDocumentProfileDraft,
+  VaultSection
+} from "@markos/shared-types";
 
 export type OnboardingStepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface OnboardingOfferingDraft {
+  id?: string;
+  version?: number;
+  nameEn?: string;
+  nameAr?: string;
+  priceType?: OfferingRecord["priceType"];
+  minPriceMinor?: number;
+  maxPriceMinor?: number;
+  status?: OfferingRecord["status"];
   category?: string;
-  currency: "BHD";
+  currency: string;
   description: string;
   kind: OfferingKind;
   name: string;
@@ -12,6 +28,8 @@ export interface OnboardingOfferingDraft {
 }
 
 export interface OnboardingDraft {
+  establishment?: string;
+  catalogVersion?: number;
   audience: string;
   avoid: string;
   businessName: string;
@@ -38,7 +56,7 @@ export const previousOnboardingDraftKey = "markos.onboarding.draft.v2";
 export const onboardingDraftKey = "markos.onboarding.draft.v3";
 
 const onboardingStepFields = {
-  1: ["businessName", "industry", "market"],
+  1: ["businessName", "industry", "market", "establishment"],
   2: ["offer", "offerings"],
   3: ["difference", "problem", "story"],
   4: ["audience", "needs", "motivations"],
@@ -84,6 +102,7 @@ export function createOnboardingDraftFromVault(vault: Record<VaultSection, Knowl
     audience: stringValue(audience.demographics),
     avoid: stringValue(competitors.doDifferently),
     businessName: stringValue(company.name),
+    establishment: stringValue(company.establishment) || "UNSPECIFIED",
     colors: stringArray(brand.colors)
       .filter((value) => /^#[0-9A-Fa-f]{6}$/.test(value))
       .slice(0, 7),
@@ -169,7 +188,7 @@ export function approvedDocumentProfile(draft: OnboardingDraft, extracted: Onboa
   };
   const { currentPriority: _currentPriority, ...objectivesRest } = extracted.objectives;
   const objectives = { ...objectivesRest, ...(draft.priority.trim() ? { currentPriority: draft.priority.trim() } : {}) };
-  const { website: companyWebsite, ...companyRest } = extracted.company;
+  const { website: companyWebsite, industry: _industry, location: _location, ...companyRest } = extracted.company;
 
   return {
     company: {
@@ -252,6 +271,7 @@ export function payloadForOnboardingStep(step: OnboardingStepId, draft: Onboardi
         module: "company",
         body: {
           name: draft.businessName.trim(),
+          ...(draft.establishment ? { establishment: draft.establishment } : {}),
           ...(draft.industry.trim() ? { industry: draft.industry.trim() } : {}),
           ...(draft.market.trim() ? { location: draft.market.trim() } : {})
         }
@@ -260,6 +280,7 @@ export function payloadForOnboardingStep(step: OnboardingStepId, draft: Onboardi
       const items = draft.offerings
         .filter((item) => item.name.trim())
         .map((item) => ({
+          ...item,
           kind: item.kind,
           name: item.name.trim(),
           ...(item.category?.trim() ? { category: item.category.trim() } : {}),
@@ -270,6 +291,7 @@ export function payloadForOnboardingStep(step: OnboardingStepId, draft: Onboardi
       return {
         module: "products",
         body: {
+          ...(draft.catalogVersion === undefined ? {} : { expectedVersion: draft.catalogVersion }),
           ...(draft.offer.trim() ? { summary: draft.offer.trim() } : {}),
           ...(items.length ? { items } : {})
         }
@@ -403,7 +425,15 @@ function offeringDrafts(value: unknown): OnboardingOfferingDraft[] {
       const kind = item.kind === "PRODUCT" || item.kind === "SERVICE" ? item.kind : "UNSPECIFIED";
       const priceMinor = typeof item.priceMinor === "number" && Number.isInteger(item.priceMinor) && item.priceMinor >= 0 ? item.priceMinor : undefined;
       return {
-        currency: "BHD" as const,
+        ...(typeof item.id === "string" ? { id: item.id } : {}),
+        ...(typeof item.version === "number" ? { version: item.version } : {}),
+        ...(typeof item.priceType === "string" ? { priceType: item.priceType as OfferingRecord["priceType"] } : {}),
+        ...(typeof item.status === "string" ? { status: item.status as OfferingRecord["status"] } : {}),
+        ...(typeof item.minPriceMinor === "number" ? { minPriceMinor: item.minPriceMinor } : {}),
+        ...(typeof item.maxPriceMinor === "number" ? { maxPriceMinor: item.maxPriceMinor } : {}),
+        ...(typeof item.nameEn === "string" ? { nameEn: item.nameEn } : {}),
+        ...(typeof item.nameAr === "string" ? { nameAr: item.nameAr } : {}),
+        currency: stringValue(item.currency) || "BHD",
         ...(stringValue(item.category).trim() ? { category: stringValue(item.category).trim() } : {}),
         description: stringValue(item.description),
         kind,
@@ -423,4 +453,27 @@ export function emptyOnboardingOffering(): OnboardingOfferingDraft {
     kind: "UNSPECIFIED",
     name: ""
   };
+}
+
+export function onboardingDraftWithCatalog(draft: OnboardingDraft, catalog: OfferingCatalogRecord | null): OnboardingDraft {
+  return {
+    ...draft,
+    catalogVersion: catalog?.version ?? 0,
+    ...(catalog ? { offerings: offeringDrafts(catalog.offerings.filter((item) => item.status !== "ARCHIVED")) } : {})
+  };
+}
+
+/** Only fields actually rendered by the shortened onboarding forms may be cleared implicitly. */
+export function onboardingClearedFields(step: OnboardingStepId, draft: OnboardingDraft): string[] {
+  const fields: Record<OnboardingStepId, string[]> = {
+    1: ["industry", "location"],
+    2: [],
+    3: ["usp", "problemSolved", "origin"],
+    4: ["demographics"],
+    5: ["marketContext", "doDifferently"],
+    6: ["voiceNotes"],
+    7: []
+  };
+  const body = payloadForOnboardingStep(step, draft).body;
+  return fields[step].filter((key) => !Object.hasOwn(body, key));
 }

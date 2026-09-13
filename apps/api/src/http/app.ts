@@ -18,6 +18,7 @@ import { registerMetaRoutes } from "../meta/meta-routes";
 import { registerNotificationRoutes } from "../notifications/notification-routes";
 import { initObservability } from "../observability/sentry";
 import { registerOnboardingRoutes } from "../onboarding/onboarding-routes";
+import { registerBusinessKnowledgeRoutes } from "../business-profile/knowledge-routes";
 import { registerPromptRoutes } from "../prompts/prompt-routes";
 import { registerPublishingRoutes } from "../publishing/publishing-routes";
 import { registerCampaignRoutes } from "../campaign/campaign-routes";
@@ -79,6 +80,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerBillingRoutes(app);
   await registerCalendarRoutes(app);
   await registerOnboardingRoutes(app);
+  await registerBusinessKnowledgeRoutes(app);
   await registerCampaignRoutes(app);
   await registerContentRoutes(app);
   await registerConversationRoutes(app);

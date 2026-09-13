@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./business-knowledge";
 import { captionValidationIssue } from "@markos/shared-types";
 
 export const localeSchema = z.enum(["ar", "en"]);
@@ -111,6 +112,9 @@ const nonEmptyStringArraySchema = z.array(z.string().min(1).max(80)).min(1).max(
 
 export const companyOnboardingSchema = z.object({
   name: z.string().min(2).max(160),
+  establishment: z.enum(["UNSPECIFIED", "PRE_LAUNCH", "NEW", "ESTABLISHED"]).optional(),
+  email: z.string().email().optional(),
+  description: z.string().max(2000).optional(),
   industry: z.string().min(2).max(120).optional(),
   size: z.string().min(1).max(80).optional(),
   location: z.string().min(2).max(120).optional(),
@@ -138,10 +142,19 @@ export const storyOnboardingSchema = z
 
 export const productsOnboardingSchema = z
   .object({
+    expectedVersion: z.number().int().nonnegative().optional(),
     summary: z.string().min(2).max(4000).optional(),
     items: z
       .array(
         z.object({
+          id: z.string().uuid().optional(),
+          version: z.number().int().positive().optional(),
+          nameEn: z.string().max(160).optional(),
+          nameAr: z.string().max(160).optional(),
+          priceType: z.enum(["UNSPECIFIED", "FIXED", "FROM", "RANGE", "QUOTE"]).optional(),
+          minPriceMinor: z.number().int().nonnegative().optional(),
+          maxPriceMinor: z.number().int().nonnegative().optional(),
+          status: z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]).optional(),
           kind: z.enum(["PRODUCT", "SERVICE", "UNSPECIFIED"]).optional(),
           name: z.string().min(1).max(160),
           category: z.string().max(120).optional(),
@@ -150,7 +163,7 @@ export const productsOnboardingSchema = z
           description: z.string().max(1000).optional()
         })
       )
-      .max(30)
+      .max(500)
       .optional(),
     differentiators: z.array(z.string().min(1).max(160)).max(20).optional(),
     priceRange: z.string().max(120).optional(),

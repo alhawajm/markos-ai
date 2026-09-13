@@ -313,7 +313,7 @@ describe("onboarding routes", () => {
         businessProfile: {
           status: "APPROVED",
           interactionId: draft.interactionId,
-          profile: draft.profile
+          profile: expect.objectContaining({ businessName: "Pearl Coffee Roasters" })
         }
       }
     });

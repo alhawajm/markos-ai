@@ -5,7 +5,10 @@ import { generateBusinessProfile as requestBusinessProfile } from "../ai/busines
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { getVaultScore, listVault, upsertVaultSection } from "../vault/vault-service";
+import { getVaultScore, listVault, indexVaultEntries, lockWorkspaceKnowledge, persistVaultSection } from "../vault/vault-service";
+
+import { readStoredKnowledge, persistKnowledge, currentProfileSummary } from "../business-profile/knowledge-service";
+import { getOfferingCatalog } from "../offerings/offering-catalog-service";
 
 export const businessProfileAgentName = "ONBOARDING_PROFILE_RESOLVER";
 const localCurrency = "BHD";
@@ -29,6 +32,16 @@ export class BusinessProfileAlreadyApprovedError extends Error {
 }
 
 export async function getBusinessProfileState(workspaceId: string): Promise<OnboardingBusinessProfileState> {
+  const { stored, updatedAt } = await readStoredKnowledge(prisma, workspaceId);
+  if (stored.approved) {
+    const catalog = await getOfferingCatalog(workspaceId);
+    return {
+      status: "APPROVED",
+      interactionId: stored.interactionId ?? null,
+      profile: stored.summaryCurrent && stored.introduction ? stored.introduction : currentProfileSummary(stored, catalog),
+      updatedAt
+    };
+  }
   const row = await prisma.aiInteraction.findFirst({
     where: {
       workspaceId,
@@ -155,43 +168,31 @@ export async function approveWorkspaceBusinessProfile(workspaceId: string, input
   const edited = JSON.stringify(generated.data) !== JSON.stringify(approvedProfile);
   const vaultScore = await getVaultScore(workspaceId);
 
-  await upsertVaultSection(workspaceId, "COMPANY", {
-    entries: [
-      {
-        key: "business-profile",
-        value: {
-          ...approvedProfile,
-          approvedAt: new Date().toISOString()
-        }
-      }
-    ]
+  const entries = await prisma.$transaction(async (tx) => {
+    await lockWorkspaceKnowledge(tx, workspaceId);
+    const current = await tx.aiInteraction.findFirst({ where: { id: interaction.id, workspaceId, deletedAt: null, regenerated: false, accepted: false } });
+    if (!current) throw new BusinessProfileNotFoundError();
+    const { stored } = await readStoredKnowledge(tx, workspaceId);
+    stored.approved = true;
+    stored.introduction = approvedProfile;
+    stored.interactionId = interaction.id;
+    stored.summaryCurrent = true;
+    stored.modules.company.name = approvedProfile.businessName;
+    await persistKnowledge(tx, workspaceId, stored);
+    const projected = await persistVaultSection(tx, workspaceId, "COMPANY", {
+      entries: [
+        { key: "profile", value: stored.modules.company },
+        { key: "business-profile", value: { ...approvedProfile, approvedAt: new Date().toISOString() } }
+      ]
+    });
+    await tx.aiInteraction.update({
+      where: { id: interaction.id },
+      data: { accepted: true, edited, response: { ...response, generatedProfile: generated.data, approvedProfile } as unknown as Prisma.InputJsonValue }
+    });
+    await tx.workspace.update({ where: { id: workspaceId }, data: { onboardingStatus: "COMPLETE", onboardingScore: vaultScore.score } });
+    return projected;
   });
-
-  await prisma.$transaction([
-    prisma.aiInteraction.update({
-      where: {
-        id: interaction.id
-      },
-      data: {
-        accepted: true,
-        edited,
-        response: {
-          ...response,
-          generatedProfile: generated.data,
-          approvedProfile
-        } as unknown as Prisma.InputJsonValue
-      }
-    }),
-    prisma.workspace.update({
-      where: {
-        id: workspaceId
-      },
-      data: {
-        onboardingStatus: "COMPLETE",
-        onboardingScore: vaultScore.score
-      }
-    })
-  ]);
+  await indexVaultEntries(entries);
 }
 
 export async function invalidateBusinessProfile(workspaceId: string): Promise<void> {
