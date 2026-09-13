@@ -87,6 +87,7 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
     const method = route.request().method();
     if (method === "OPTIONS") return route.fulfill({ status: 204 });
     if (path === "/v1/auth/refresh") return route.fulfill(json(session));
+    if (path === "/v1/campaigns/summaries" && method === "GET") return route.fulfill(json({ items: [], nextCursor: null }));
     if (path === "/v1/onboarding")
       return route.fulfill(
         json({ businessProfile: { status: "APPROVED" }, status: "COMPLETE", modules: [], onboardingScore: 100, vaultScore: { score: 100 } })
@@ -759,7 +760,7 @@ describe("unified Create", () => {
     const { page, state, close } = await setup();
     try {
       await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("button", { name: "Close campaign composer" }).click();
+      await page.getByRole("heading", { name: "Campaigns", exact: true }).waitFor();
       await page.getByRole("link", { name: "Create", exact: true }).click();
       await page.getByRole("button", { name: "Edit caption", exact: true }).click();
       await page.getByLabel("Caption", { exact: true }).fill("Do not lose this on Back.");

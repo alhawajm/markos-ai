@@ -25,6 +25,14 @@ function assertIncludes(path, expected, name) {
   }
 }
 
+function assertMatches(path, expected, name) {
+  if (expected.test(read(path))) {
+    pass(name, `${path} matches ${expected}`);
+  } else {
+    fail(name, `${path} does not match ${expected}`);
+  }
+}
+
 function listFiles(dir, extensions) {
   const absoluteDir = join(root, dir);
   const entries = readdirSync(absoluteDir);
@@ -55,7 +63,8 @@ assertIncludes("apps/web/app/[locale]/layout.tsx", "lang={locale}", "localized-l
 assertIncludes("apps/web/app/[locale]/layout.tsx", "dir={directionForLocale(locale)}", "localized-layout-dir");
 assertIncludes("apps/web/app/[locale]/[section]/page.tsx", '["ar", "en"]', "localized-section-static-params");
 assertIncludes("apps/web/app/page.tsx", 'redirect("/ar")', "root-route-defaults-to-arabic");
-assertIncludes("apps/web/app/layout.tsx", '<html lang="en" dir="ltr">', "root-html-neutral-default");
+// Font classes and theme attributes may change without changing the document defaults.
+assertMatches("apps/web/app/layout.tsx", /<html\b(?=[^>]*\slang="en")(?=[^>]*\sdir="ltr")[^>]*>/, "root-html-neutral-default");
 assertIncludes("packages/i18n/src/index.ts", 'locale === "ar" ? "rtl" : "ltr"', "direction-helper");
 assertIncludes("packages/i18n/src/index.ts", "\u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645", "arabic-dashboard-copy");
 assertIncludes("apps/web/app/[locale]/_components/settings-page.tsx", 'href="/ar/app/settings"', "arabic-language-switch");
