@@ -150,6 +150,56 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
+  it("isolates manual onboarding drafts by account and workspace and discards unowned legacy data", async () => {
+    const page = await browserPage();
+    let currentSession = { ...session, user: { ...session.user, id: "new-owner" }, workspace: { id: "new-workspace", name: "New business" } };
+    await page.addInitScript(() => {
+      if (!localStorage.getItem("legacy-seeded")) {
+        localStorage.setItem("markos.onboarding.draft.v3", JSON.stringify({ businessName: "SnackLab", industry: "Bakery", offer: "SnackLab products" }));
+        localStorage.setItem("legacy-seeded", "yes");
+      }
+    });
+    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(currentSession));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      return route.fulfill(json(null));
+    });
+    const openManual = async () => {
+      await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Enter details myself" }).click();
+      await page.getByRole("heading", { name: "Let’s start with the basics" }).waitFor();
+    };
+    try {
+      await openManual();
+      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("New business");
+      expect(await page.getByLabel("Business type").inputValue()).toBe("");
+      expect(await page.locator("body").innerText()).not.toContain("SnackLab");
+      expect(await page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v3"))).toBeNull();
+      await page.getByLabel("Business name").fill("My unsaved business");
+      await page.getByLabel("Business type").fill("Technology");
+      await openManual();
+      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("My unsaved business");
+
+      currentSession = { ...currentSession, workspace: { id: "other-workspace", name: "Other workspace" } };
+      await openManual();
+      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("Other workspace");
+      expect(await page.getByLabel("Business type").inputValue()).toBe("");
+
+      currentSession = { ...currentSession, user: { ...currentSession.user, id: "other-owner" }, workspace: { id: "new-workspace", name: "New business" } };
+      await openManual();
+      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("New business");
+      expect(await page.getByLabel("Business type").inputValue()).toBe("");
+
+      currentSession = { ...currentSession, user: { ...currentSession.user, id: "new-owner" } };
+      await openManual();
+      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("My unsaved business");
+      expect(await page.getByLabel("Business type").inputValue()).toBe("Technology");
+    } finally {
+      await page.close();
+    }
+  });
+
   it("uses manual onboarding with structured offerings and protects unsaved edits in both locales", async () => {
     const page = await browserPage();
     let offeringPayload: Record<string, unknown> | undefined;
@@ -236,10 +286,12 @@ describe("active SettingsPanel Instagram interactions", () => {
     const stored = await page.evaluate(() => ({
       legacy: localStorage.getItem("markos.onboarding.draft"),
       previous: localStorage.getItem("markos.onboarding.draft.v2"),
-      next: localStorage.getItem("markos.onboarding.draft.v3")
+      unscoped: localStorage.getItem("markos.onboarding.draft.v3"),
+      next: localStorage.getItem("markos.onboarding.draft.v4:user-1:workspace-1")
     }));
     expect(stored.legacy).toBeNull();
     expect(stored.previous).toBeNull();
+    expect(stored.unscoped).toBeNull();
     expect(JSON.parse(stored.next ?? "{}")).toMatchObject({
       businessName: "Browser Workspace",
       competitors: "",
@@ -304,7 +356,7 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
     expect(offeringPayload).toMatchObject({ items: [{ name: "Coffee beans", kind: "PRODUCT" }] });
     await expect
-      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.onboarding.draft.v3") ?? "{}")))
+      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.onboarding.draft.v4:user-1:workspace-1") ?? "{}")))
       .toMatchObject({
         catalogVersion: 1,
         offerings: [{ id: "saved-coffee-beans", version: 1, name: "Coffee beans" }]

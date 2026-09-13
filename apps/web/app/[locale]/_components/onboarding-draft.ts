@@ -53,7 +53,11 @@ export type OnboardingValidationIssue = "company" | "products" | "tone";
 
 export const legacyOnboardingDraftKey = "markos.onboarding.draft";
 export const previousOnboardingDraftKey = "markos.onboarding.draft.v2";
-export const onboardingDraftKey = "markos.onboarding.draft.v3";
+export const unscopedOnboardingDraftKey = "markos.onboarding.draft.v3";
+
+export function onboardingDraftKey(userId: string, workspaceId: string): string {
+  return `markos.onboarding.draft.v4:${encodeURIComponent(userId)}:${encodeURIComponent(workspaceId)}`;
+}
 
 const onboardingStepFields = {
   1: ["businessName", "industry", "market", "establishment"],
