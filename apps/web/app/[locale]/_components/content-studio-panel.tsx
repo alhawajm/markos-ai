@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react";
 import { captionCharacterCount, captionValidationIssue, CONTENT_CAPTION_MAX_LENGTH, contentMediaConstraints, contentMediaIssue } from "@markos/shared-types";
+import { PublishTimeFields } from "./publish-time-fields";
 import { MarkosApiError } from "@markos/api-client";
 import type {
   ContentConversationRecord,
@@ -1448,17 +1449,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           )}
           {dialog === "schedule" && (
             <div className="mt-5 space-y-4">
-              <label className="studio-field">
-                {text("Publish date and time", "تاريخ ووقت النشر")}
-                <input
-                  aria-label={text("Publish date and time", "تاريخ ووقت النشر")}
-                  type="datetime-local"
-                  step={1800}
-                  disabled={!!busy}
-                  value={scheduledInput}
-                  onChange={(event) => setScheduledInput(event.target.value)}
-                />
-              </label>
+              <PublishTimeFields locale={locale} disabled={!!busy} value={scheduledInput} onChange={setScheduledInput} />
               <p className="text-sm text-[var(--sunlit-muted)]">
                 {text(
                   "Bahrain time · half-hour intervals. This action queues the post for publishing.",

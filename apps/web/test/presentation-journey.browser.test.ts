@@ -795,7 +795,8 @@ describe("presentation journey", () => {
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-calendar-motion="focus-surface"]')?.dataset.calendarMotionState === "settled");
 
     const readyScheduleInput = bahrainInputDaysFromNow(1, 18, 0);
-    await focusSurface.getByLabel("Choose publishing time").fill(readyScheduleInput);
+    await focusSurface.getByLabel("Publish date", { exact: true }).fill(readyScheduleInput.slice(0, 10));
+    await focusSurface.getByLabel("Publish time", { exact: true }).selectOption(readyScheduleInput.slice(11, 16));
     await focusSurface.getByRole("button", { name: "Schedule content" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
 
@@ -808,7 +809,8 @@ describe("presentation journey", () => {
     await page.getByRole("button", { name: /Scheduled: Product story scheduled/ }).click();
     await page.getByRole("button", { name: "Back to day" }).waitFor();
     const rescheduleInput = bahrainInputDaysFromNow(2, 19, 30);
-    await page.getByLabel("Choose a new time").fill(rescheduleInput);
+    await page.getByLabel("Publish date", { exact: true }).fill(rescheduleInput.slice(0, 10));
+    await page.getByLabel("Publish time", { exact: true }).selectOption(rescheduleInput.slice(11, 16));
     await page.getByRole("button", { name: "Save new time" }).click();
     await page.getByText(/^Saved in MARKOS for /).waitFor();
     const cancelScheduleButton = page.getByRole("button", { name: "Cancel schedule" });

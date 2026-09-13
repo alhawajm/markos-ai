@@ -25,6 +25,7 @@ import {
 import type { CalendarSummary, ContentRecord, ContentStatus, ContentType, Locale, MediaAssetRecord } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import { contentStatusBadgeClass, contentStatusDotClass, contentStatusLabel } from "./content-status";
+import { PublishTimeFields } from "./publish-time-fields";
 import { ContentStatusBadge } from "./content-status-badge";
 import { useModalDialog } from "./use-modal-dialog";
 import {
@@ -1355,19 +1356,17 @@ function CalendarDetails({
 
         {canChooseTime ? (
           <div className="mt-6 border-t border-[var(--sunlit-line)] pt-5">
-            <label className="block text-sm font-semibold text-[var(--sunlit-ink)]" htmlFor={`calendar-time-${record.id}`}>
-              {record.status === "APPROVED" ? copy.schedulePost : copy.reschedule}
-            </label>
+            <h4 className="text-sm font-semibold text-[var(--sunlit-ink)]">{record.status === "APPROVED" ? copy.schedulePost : copy.reschedule}</h4>
             <p className="mt-1 text-xs leading-5 text-[var(--sunlit-muted)]">{copy.allTimes}</p>
-            <input
-              className="sunlit-field mt-3 min-h-12 w-full rounded-xl px-3 text-sm font-semibold outline-none"
-              id={`calendar-time-${record.id}`}
-              min={minimumScheduleInput()}
-              onChange={(event) => setScheduleValue(event.target.value)}
-              step={1800}
-              type="datetime-local"
-              value={scheduleValue}
-            />
+            <div className="mt-3">
+              <PublishTimeFields
+                id={`calendar-time-${record.id}`}
+                locale={locale}
+                min={minimumScheduleInput()}
+                onChange={setScheduleValue}
+                value={scheduleValue}
+              />
+            </div>
             <button
               className="sunlit-primary mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
               disabled={saving || !scheduleValue}
