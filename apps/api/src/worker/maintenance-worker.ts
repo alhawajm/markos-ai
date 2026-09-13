@@ -216,7 +216,14 @@ function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unkn
     attemptedPublishes: result.publishing?.attempted ?? 0,
     analyticsEmailsDelivered: result.analyticsEmail?.delivered ?? 0,
     analyticsEmailsSkipped: result.analyticsEmail?.skipped ?? 0,
-    analyticsWorkspacesSynced: result.analyticsSync?.attempted ?? 0,
+    analyticsWorkspacesSynced: result.analyticsSync?.results.filter((sync) => !sync.diagnostics || sync.diagnostics.status === "COMPLETE").length ?? 0,
+    analyticsPartialSyncs: result.analyticsSync?.results.filter((sync) => sync.diagnostics?.status === "PARTIAL").length ?? 0,
+    analyticsSyncFailures:
+      (result.analyticsSync?.failures?.length ?? 0) + (result.analyticsSync?.results.filter((sync) => sync.diagnostics?.status === "FAILED").length ?? 0),
+    analyticsErrors:
+      result.analyticsSync?.results
+        .flatMap((sync) => sync.diagnostics?.warnings.filter((warning) => warning.code !== "METRIC_UNAVAILABLE") ?? [])
+        .slice(0, 10) ?? [],
     expiredOfferingDocumentAnalyses: result.documentCleanup?.expired ?? 0,
     offeringDocumentCleanupFailures: result.documentCleanup?.failed ?? 0,
     refreshedTokens: result.tokenRefresh?.filter((item) => item.refreshed).length ?? 0,
