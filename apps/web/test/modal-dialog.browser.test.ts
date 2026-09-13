@@ -51,6 +51,7 @@ describe("shared native modal behavior", () => {
       const pathname = new URL(route.request().url()).pathname;
       let data: unknown = [];
       if (pathname === "/v1/auth/refresh") data = session;
+      else if (pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
       else if (pathname === "/v1/notifications") data = notifications;
       else if (pathname === "/v1/calendar") {
         const query = new URL(route.request().url()).searchParams;

@@ -58,7 +58,7 @@ describe("verification email providers", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("sends a localized verification link through SendGrid", async () => {
+  it.each(["en", "ar"] as const)("sends a localized verification link and return-to-tab guidance through SendGrid (%s)", async (locale) => {
     let callCount = 0;
     let requestUrl: string | URL | Request | undefined;
     let requestInit: RequestInit | undefined;
@@ -79,7 +79,7 @@ describe("verification email providers", () => {
 
     await provider.send({
       email: "owner@markos.test",
-      locale: "ar",
+      locale,
       token: "secret-token"
     });
 
@@ -95,11 +95,19 @@ describe("verification email providers", () => {
       from: { email: "verify@markos.test" },
       personalizations: [{ to: [{ email: "owner@markos.test" }] }]
     });
-    expect(payload.subject).toContain("تأكيد");
+    expect(payload.subject).toContain(locale === "ar" ? "تأكيد" : "Verify");
+    const html = payload.content.find((item: { type: string }) => item.type === "text/html").value;
+    const plain = payload.content.find((item: { type: string }) => item.type === "text/plain").value;
+    expect(html).toContain(`lang="${locale}" dir="${locale === "ar" ? "rtl" : "ltr"}"`);
+    expect(html).toContain('role="presentation"');
+    for (const body of [html, plain]) {
+      expect(body).toContain(locale === "ar" ? "عد إلى علامة التبويب" : "return to the tab");
+      expect(body).toContain(locale === "ar" ? "تنتهي صلاحية" : "expires in");
+    }
     expect(payload.content).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          value: expect.stringContaining("https://app.markos.test/ar/verify?token=secret-token")
+          value: expect.stringContaining(`https://app.markos.test/${locale}/verify?token=secret-token`)
         })
       ])
     );

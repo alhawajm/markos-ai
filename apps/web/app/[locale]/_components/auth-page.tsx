@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -27,17 +27,19 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
-import type { AuthSession, Locale } from "@markos/shared-types";
+import type { Locale } from "@markos/shared-types";
 import { loginSchema, registerSchema } from "@markos/validation";
 import { ThemeSelect } from "../../_components/theme-control";
 import { getBrowserApiBaseUrl } from "./api-base-url";
-import { refreshBrowserSession, setBrowserSession, useMarkosSession } from "./browser-session";
+import { refreshBrowserSession, setBrowserSession, createMarkosClient, useMarkosSession } from "./browser-session";
+import { appEntryRedirect } from "./app-entry";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./auth-page.module.css";
 
 export type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
 
 const pendingVerificationEmailKey = "markos.pending-verification-email";
+const pendingVerificationUserKey = "markos.pending-verification-user";
 
 type Notice = {
   tone: "error" | "info" | "success";
@@ -218,12 +220,12 @@ const copyByLocale = {
       title: "Check your email",
       body: "We sent a verification link to",
       fallbackEmail: "your email address",
-      instructions: "Open the link to confirm your account. Check your spam folder if it does not arrive.",
+      instructions: "Open the link, then return to this tab to continue setup. Check your spam folder if it does not arrive.",
       resend: "Resend verification email",
       resendIn: (seconds: number) => `Resend in ${seconds}s`,
       sent: "We sent a verification link to your email.",
       localReady: "A local verification link is ready below.",
-      verified: "Your email is verified. Opening onboarding…",
+      verified: "Your email is verified. You can continue setup.",
       changeEmail: "Change email",
       back: "Back to login"
     },
@@ -399,7 +401,7 @@ const copyByLocale = {
       resendIn: (seconds: number) => `إعادة الإرسال خلال ${seconds} ث`,
       sent: "أرسلنا رابط تحقق إلى بريدك الإلكتروني.",
       localReady: "رابط التحقق المحلي جاهز أدناه.",
-      verified: "تم تأكيد بريدك الإلكتروني. جارٍ فتح الإعداد…",
+      verified: "تم تأكيد بريدك الإلكتروني. يمكنك متابعة الإعداد.",
       changeEmail: "تغيير البريد الإلكتروني",
       back: "العودة إلى تسجيل الدخول"
     },
@@ -449,10 +451,84 @@ export function AuthPage({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [password, setPassword] = useState("");
   const [resendSeconds, setResendSeconds] = useState(30);
+  const [verificationComplete, setVerificationComplete] = useState(false);
+  const [verifiedReady, setVerifiedReady] = useState(false);
+  const [verificationChecking, setVerificationChecking] = useState(false);
+  const verificationCheckRef = useRef(false);
   const [resetComplete] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const checkVerification = useCallback(
+    async (proceed: boolean, quiet = false) => {
+      if (!email || verificationCheckRef.current) return;
+      verificationCheckRef.current = true;
+      setVerificationChecking(true);
+      if (!quiet) {
+        setSubmitting(true);
+        setNotice(null);
+      }
+      try {
+        const current = await refreshBrowserSession();
+        const expectedRaw = window.sessionStorage.getItem(pendingVerificationUserKey);
+        const expected = expectedRaw ? (JSON.parse(expectedRaw) as { id?: string; email?: string }) : null;
+        if (
+          current.user.email.toLowerCase() !== email.toLowerCase() ||
+          (expected?.email?.toLowerCase() === email.toLowerCase() && expected.id !== current.user.id)
+        ) {
+          setVerifiedReady(false);
+          setNotice({
+            tone: "error",
+            text: isArabic
+              ? "تغير الحساب في هذا المتصفح. سجّل الدخول بالحساب الذي تريد تأكيده."
+              : "This browser is signed into a different account. Sign in with the account you are verifying."
+          });
+          return;
+        }
+        setVerifiedReady(current.user.isVerified);
+        if (!current.user.isVerified) {
+          if (!quiet)
+            setNotice({
+              tone: "info",
+              text: isArabic
+                ? "لم يتم تأكيد البريد بعد. افتح الرابط في بريدك ثم حاول مرة أخرى."
+                : "Your email is not verified yet. Open the link in your email, then try again."
+            });
+          return;
+        }
+        if (proceed) {
+          const redirect = await appEntryRedirect(current, createMarkosClient(current, locale), locale);
+          window.sessionStorage.removeItem(pendingVerificationEmailKey);
+          window.sessionStorage.removeItem(pendingVerificationUserKey);
+          router.replace(redirect ?? "/" + locale + "/app");
+        } else {
+          setNotice({ tone: "success", text: copy.verify.verified });
+        }
+      } catch (error) {
+        setVerifiedReady(false);
+        if (!quiet) setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
+      } finally {
+        verificationCheckRef.current = false;
+        setVerificationChecking(false);
+        if (!quiet) setSubmitting(false);
+      }
+    },
+    [copy.verify.verified, email, isArabic, locale, router]
+  );
+
+  useEffect(() => {
+    if (mode !== "verify" || initialToken || !email) return;
+    const check = () => {
+      if (document.visibilityState === "visible") void checkVerification(false, true);
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [checkVerification, email, initialToken, mode]);
 
   useEffect(() => setInteractive(true), []);
 
@@ -477,7 +553,7 @@ export function AuthPage({
   useEffect(() => {
     if (mode !== "verify" || verificationStartedRef.current) return;
 
-    const pendingEmail = initialEmail || existingSession?.user.email || window.sessionStorage.getItem(pendingVerificationEmailKey) || "";
+    const pendingEmail = initialToken ? "" : initialEmail || window.sessionStorage.getItem(pendingVerificationEmailKey) || existingSession?.user.email || "";
     if (pendingEmail) setEmail(pendingEmail);
     verificationStartedRef.current = true;
 
@@ -549,6 +625,7 @@ export function AuthPage({
       });
       setBrowserSession(session);
       window.sessionStorage.setItem(pendingVerificationEmailKey, session.user.email);
+      window.sessionStorage.setItem(pendingVerificationUserKey, JSON.stringify({ id: session.user.id, email: session.user.email }));
       router.push(`/${locale}/verify?email=${encodeURIComponent(session.user.email)}`);
     } catch (error) {
       setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
@@ -587,11 +664,13 @@ export function AuthPage({
 
       if (!session.user.isVerified) {
         window.sessionStorage.setItem(pendingVerificationEmailKey, session.user.email);
+        window.sessionStorage.setItem(pendingVerificationUserKey, JSON.stringify({ id: session.user.id, email: session.user.email }));
         router.push(`/${locale}/verify?email=${encodeURIComponent(session.user.email)}`);
         return;
       }
 
-      router.push(sessionExpired ? `/${locale}/app/settings#profile` : `/${locale}/app`);
+      const redirect = await appEntryRedirect(session, createMarkosClient(session, locale), locale);
+      router.push(redirect ?? (sessionExpired ? `/${locale}/app/settings#profile` : `/${locale}/app`));
     } catch (error) {
       if (error instanceof MarkosApiError && error.code === "MFA_REQUIRED") {
         setMfaRequired(true);
@@ -650,7 +729,7 @@ export function AuthPage({
       setEmail(normalizedEmail);
 
       if (challenge.alreadyVerified) {
-        await finishVerifiedSession();
+        await checkVerification(false);
         return;
       }
 
@@ -669,25 +748,18 @@ export function AuthPage({
     setSubmitting(true);
     setNotice(null);
     try {
-      await client.verifyEmail({ token });
-      await finishVerifiedSession();
+      const result = await client.verifyEmail({ token });
+      if (initialToken) {
+        setEmail(result.email);
+        setVerificationComplete(true);
+      } else {
+        await checkVerification(false);
+      }
     } catch (error) {
       setResendSeconds(0);
       setNotice({ tone: "error", text: friendlyAuthError(error, locale) });
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function finishVerifiedSession() {
-    window.sessionStorage.removeItem(pendingVerificationEmailKey);
-    setNotice({ tone: "success", text: copy.verify.verified });
-
-    try {
-      const refreshedSession = await refreshBrowserSession();
-      router.replace(nextRouteAfterVerification(refreshedSession, locale));
-    } catch {
-      router.replace(`/${locale}/login?verified=1`);
     }
   }
 
@@ -905,13 +977,63 @@ export function AuthPage({
                 )
               ) : null}
 
-              {mode === "verify" ? (
+              {mode === "verify" && initialToken ? (
+                <StatusPanel
+                  icon={verificationComplete ? CheckCircle2 : ShieldCheck}
+                  title={
+                    verificationComplete
+                      ? isArabic
+                        ? "تم تأكيد البريد الإلكتروني"
+                        : "Email verified"
+                      : isArabic
+                        ? "تأكيد البريد الإلكتروني"
+                        : "Verify your email"
+                  }
+                  tone="aqua"
+                >
+                  <p>
+                    {verificationComplete
+                      ? isArabic
+                        ? "عد إلى علامة التبويب التي أنشأت منها الحساب لمتابعة الإعداد. يمكنك إغلاق هذه الصفحة."
+                        : "Return to the tab where you created your account to continue setup. You can close this page."
+                      : notice?.tone === "error"
+                        ? isArabic
+                          ? "تعذر تأكيد هذا الرابط. عد إلى علامة تبويب التسجيل لطلب رابط جديد."
+                          : "This link could not be verified. Return to your signup tab to request a new link."
+                        : isArabic
+                          ? "جارٍ التحقق من الرابط…"
+                          : "Checking your verification link…"}
+                  </p>
+                  {verificationComplete && email ? (
+                    <strong className={styles.statusEmail} dir="ltr">
+                      {email}
+                    </strong>
+                  ) : null}
+                  <NoticeMessage notice={notice} />
+                  <a className={styles.textLink} href={loginHref}>
+                    {isArabic ? "أغلقت علامة التبويب الأصلية؟ سجّل الدخول" : "Closed the original tab? Sign in"}
+                  </a>
+                </StatusPanel>
+              ) : mode === "verify" ? (
                 <StatusPanel icon={ShieldCheck} title={copy.verify.title} tone="aqua">
                   <p>{copy.verify.body}</p>
                   <strong className={styles.statusEmail} dir="ltr">
                     {email || copy.verify.fallbackEmail}
                   </strong>
-                  <p>{copy.verify.instructions}</p>
+                  <p>
+                    {isArabic
+                      ? "افتح الرابط في بريدك الإلكتروني، ثم عد إلى علامة التبويب هذه لمتابعة الإعداد. تحقق من مجلد الرسائل غير المرغوب فيها إن لم تصل الرسالة."
+                      : copy.verify.instructions}
+                  </p>
+                  <button
+                    className={styles.primaryButton}
+                    disabled={isSubmitting || verificationChecking || !email || !isInteractive}
+                    onClick={() => void checkVerification(true)}
+                    type="button"
+                  >
+                    {verifiedReady ? (isArabic ? "متابعة الإعداد" : "Continue setup") : isArabic ? "أكدت بريدي الإلكتروني" : "I’ve verified my email"}
+                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
+                  </button>
                   <NoticeMessage notice={notice} />
                   <button
                     className={styles.secondaryButton}
@@ -929,7 +1051,7 @@ export function AuthPage({
                       onClick={() => void verifyEmailToken(localVerificationToken)}
                       type="button"
                     >
-                      {isArabic ? "تأكيد محلي والمتابعة" : "Verify locally and continue"}
+                      {isArabic ? "تأكيد البريد محلياً" : "Verify locally"}
                       <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                     </button>
                   ) : null}
@@ -1364,10 +1486,6 @@ function StatusPanel({ children, icon: Icon, title, tone }: { children: ReactNod
 
 function isValidEmail(value: string) {
   return /^\S+@\S+\.\S+$/.test(value.trim());
-}
-
-function nextRouteAfterVerification(session: AuthSession, locale: Locale) {
-  return session.user.isVerified ? `/${locale}/onboarding` : `/${locale}/verify`;
 }
 
 function friendlyAuthError(error: unknown, locale: Locale) {

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "./use-modal-dialog";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { appEntryRedirect } from "./app-entry";
 import {
   BarChart3,
   Bell,
@@ -26,7 +28,7 @@ import { BusinessProfilePanel } from "./business-profile-panel";
 import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
 import { ContentStudioPanel } from "./content-studio-panel";
-import { initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
+import { createMarkosClient, initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
 
 export type SectionSlug =
@@ -60,6 +62,9 @@ const LOCALE_PREFERENCE_KEY = "markos.locale";
 
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
   const client = useMarkosClient(locale);
+  const router = useRouter();
+  const checkGeneration = useRef(0);
+  const [checkedOwner, setCheckedOwner] = useState("");
   const session = useMarkosSession();
   const [sessionChecked, setSessionChecked] = useState(false);
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
@@ -69,16 +74,34 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
+    const generation = ++checkGeneration.current;
+    setSessionChecked(false);
     setSessionCheckFailed(false);
     void initializeBrowserSession(locale)
-      .then(() => setSessionChecked(true))
-      .catch(() => setSessionCheckFailed(true));
-  }, [locale]);
+      .then(async (current) => {
+        const redirect = await appEntryRedirect(current, createMarkosClient(current, locale), locale);
+        if (generation !== checkGeneration.current) return;
+        if (redirect) {
+          router.replace(redirect);
+          return;
+        }
+        setCheckedOwner(JSON.stringify([current.user.id, current.workspace.id]));
+        setSessionChecked(true);
+      })
+      .catch(() => {
+        if (generation === checkGeneration.current) setSessionCheckFailed(true);
+      });
+  }, [locale, router]);
 
   useEffect(() => {
     checkSession();
-    return watchBrowserSession(locale);
-  }, [checkSession, locale]);
+    const unwatch = watchBrowserSession(locale);
+    const generationRef = checkGeneration;
+    return () => {
+      ++generationRef.current;
+      unwatch();
+    };
+  }, [checkSession, locale, session?.user.id, session?.workspace.id, session?.user.isVerified]);
 
   useEffect(() => {
     if (activeSection === "settings") return;
@@ -158,7 +181,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
     window.location.assign(`${target.pathname}${target.search}${target.hash}`);
   }, [locale]);
 
-  if (!sessionChecked) {
+  if (!sessionChecked || !session || checkedOwner !== JSON.stringify([session.user.id, session.workspace.id])) {
     return (
       <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
         <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
