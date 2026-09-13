@@ -797,6 +797,7 @@ describe("active SettingsPanel Instagram interactions", () => {
         });
       }
       if (pathname === "/v1/auth/login") return route.fulfill(json(session));
+      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
       if (pathname === "/v1/workspace/instagram") return route.fulfill(json(disconnected));
       if (pathname === "/v1/billing/summary") return route.fulfill(json({ invoices: [], payments: [] }));
       if (pathname === "/v1/workspace/audit-logs") return route.fulfill(json([]));
@@ -845,6 +846,7 @@ describe("active SettingsPanel Instagram interactions", () => {
           })
         );
       }
+      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
       if (pathname === "/v1/workspace/instagram") return route.fulfill(json(disconnected));
       if (pathname === "/v1/billing/summary") return route.fulfill(json({ invoices: [], payments: [] }));
       if (pathname === "/v1/workspace/audit-logs") return route.fulfill(json([]));
@@ -894,6 +896,7 @@ async function settingsPage(connection: Record<string, unknown>, path = "/en/app
     const request = route.request();
     requests.push(request.url());
     const pathname = new URL(request.url()).pathname;
+    if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
     if (pathname === "/v1/auth/logout") return route.fulfill(json({ loggedOut: true }));
     if (pathname === "/v1/auth/mfa/totp") return route.fulfill(json({ enabled: currentMfaEnabled }));

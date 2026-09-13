@@ -43,6 +43,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(approvedOnboardingState("2026-08-09T11:30:00.000Z")));
       }
 
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -74,6 +75,7 @@ describe("presentation journey", () => {
         moduleWrites += 1;
         return route.fulfill(json(emptyOnboardingState()));
       }
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -119,6 +121,7 @@ describe("presentation journey", () => {
       if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
       if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
       if (pathname === "/v1/onboarding/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
     await arabicPage.goto(`${baseUrl}/ar/onboarding`, { waitUntil: "domcontentloaded" });
@@ -142,6 +145,7 @@ describe("presentation journey", () => {
         discarded = true;
         return route.fulfill(json({ ...onboardingDocumentAnalysis(), status: "DISCARDED" }));
       }
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -170,6 +174,7 @@ describe("presentation journey", () => {
         const current = snackLabKnowledge();
         return route.fulfill(json({ ...current, version: 2, modules: { ...current.modules, company: { ...current.modules.company, ...input.changes } } }));
       }
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
@@ -197,7 +202,9 @@ describe("presentation journey", () => {
     const page = await sessionPage();
     let writes = 0;
     let savedColors: string[] = [];
-    await mockApi(page, async (route) => route.fulfill(json([])));
+    await mockApi(page, async (route, pathname) =>
+      route.fulfill(json(pathname === "/v1/onboarding" ? approvedOnboardingState("2026-09-13T10:00:00.000Z") : []))
+    );
     await page.route("**/v1/business-profile", async (route) => {
       const current = snackLabKnowledge();
       if (route.request().method() === "PATCH") {
@@ -237,7 +244,9 @@ describe("presentation journey", () => {
 
   it("keeps Business Profile offering columns, filters and stable edit actions usable on narrow screens", async () => {
     const page = await sessionPage();
-    await mockApi(page, async (route) => route.fulfill(json([])));
+    await mockApi(page, async (route, pathname) =>
+      route.fulfill(json(pathname === "/v1/onboarding" ? approvedOnboardingState("2026-09-13T10:00:00.000Z") : []))
+    );
     await page.route("**/v1/business-profile", async (route) =>
       route.fulfill(
         json({
@@ -309,6 +318,7 @@ describe("presentation journey", () => {
       if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
 
       if (pathname === "/v1/vault") return route.fulfill(json(snackLabVault()));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -411,6 +421,7 @@ describe("presentation journey", () => {
         );
       }
 
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -506,6 +517,7 @@ describe("presentation journey", () => {
         );
       }
       if (pathname === "/v1/analytics") return route.fulfill(json(emptyAnalyticsSummary()));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -627,6 +639,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(updated));
       }
 
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -923,6 +936,7 @@ describe("presentation journey", () => {
     const emptyPage = await sessionPage();
     await mockApi(emptyPage, async (route, pathname) => {
       if (pathname === "/v1/campaigns/summaries") return route.fulfill(json({ items: [], nextCursor: null }));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -959,6 +973,7 @@ describe("presentation journey", () => {
       if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
       if (pathname === `/v1/content/${draft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 
@@ -1028,6 +1043,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(draft));
       }
       if (pathname === "/v1/media" && method === "GET") return route.fulfill(json([]));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
       return route.fulfill(json([]));
     });
 

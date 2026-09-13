@@ -53,6 +53,7 @@ describe("rendered Sunlit authentication", () => {
         return route.fulfill(json(emptyOnboardingState()));
       }
 
+      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
       return route.fulfill(json([]));
     });
 
@@ -83,7 +84,8 @@ describe("rendered Sunlit authentication", () => {
 
     await page.waitForURL(/\/en\/verify\?email=mariam%40example\.com$/);
     await page.getByRole("heading", { level: 1, name: "Check your email" }).waitFor();
-    await page.getByRole("button", { name: "Verify locally and continue" }).click();
+    await page.getByRole("button", { name: "Verify locally", exact: true }).click();
+    await page.getByRole("button", { name: "Continue setup", exact: true }).click();
     await page.waitForURL(/\/en\/onboarding$/);
 
     expect(requests.find((request) => request.path === "/v1/auth/register")?.body).toEqual({
@@ -110,6 +112,7 @@ describe("rendered Sunlit authentication", () => {
         return route.fulfill(json(verifiedSession));
       }
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
       return route.fulfill(json([]));
     });
 
@@ -147,6 +150,7 @@ describe("rendered Sunlit authentication", () => {
         return route.fulfill(json(verifiedSession));
       }
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      if (pathname === "/v1/onboarding") return route.fulfill(json({ status: "COMPLETE", businessProfile: { status: "APPROVED" } }));
       return route.fulfill(json([]));
     });
 
@@ -168,6 +172,171 @@ describe("rendered Sunlit authentication", () => {
       { email: "mariam@example.com", password: "a-secure-passphrase", totpCode: "123456" }
     ]);
     await context.close();
+  });
+
+  it("confirms an email in a different browser without adopting its session, then continues in the signup tab", async () => {
+    const original = await browser.newContext();
+    const other = await browser.newContext();
+    const page = await original.newPage();
+    const link = await other.newPage();
+    let verified = false;
+    let otherRefreshes = 0;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/verification/request") return route.fulfill(json({ alreadyVerified: false, email: unverifiedSession.user.email }));
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(verified ? verifiedSession : unverifiedSession));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      return route.fulfill(json(null));
+    });
+    await link.addInitScript(() =>
+      localStorage.setItem(
+        "markos.session",
+        JSON.stringify({ user: { id: "snacklab-owner", email: "other@example.com" }, workspace: { id: "snacklab", name: "SnackLab" }, roles: ["OWNER"] })
+      )
+    );
+    await mockApi(link, async (route, pathname) => {
+      if (pathname === "/v1/auth/verify-email") {
+        verified = true;
+        return route.fulfill(json({ email: verifiedSession.user.email, isVerified: true }));
+      }
+      if (pathname === "/v1/auth/refresh") {
+        otherRefreshes++;
+        return route.fulfill(json({ ...verifiedSession, user: { ...verifiedSession.user, email: "other@example.com" } }));
+      }
+      return route.fulfill(json(null));
+    });
+    try {
+      await page.goto(baseUrl + "/en/verify?email=mariam%40example.com");
+      await page.getByRole("button", { name: "I’ve verified my email", exact: true }).click();
+      await page.getByText("Your email is not verified yet. Open the link in your email, then try again.").waitFor();
+      await link.goto(baseUrl + "/en/verify?token=token-from-email-1234567890");
+      await link.getByRole("heading", { name: "Email verified", exact: true }).waitFor();
+      expect(new URL(link.url()).pathname).toBe("/en/verify");
+      expect(new URL(link.url()).search).toBe("");
+      expect(otherRefreshes).toBe(0);
+      await link.getByText(/Return to the tab where you created/).waitFor();
+      await page.bringToFront();
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.getByRole("button", { name: "Continue setup", exact: true }).waitFor();
+      expect(new URL(page.url()).pathname).toBe("/en/verify");
+      await page.getByRole("button", { name: "Continue setup", exact: true }).click();
+      await page.waitForURL(/\/en\/onboarding$/);
+      await page.getByRole("button", { name: "Enter details myself" }).waitFor();
+    } finally {
+      await original.close();
+      await other.close();
+    }
+  });
+
+  it("does not continue verification under a different signed-in account", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/refresh")
+        return route.fulfill(json({ ...verifiedSession, user: { ...verifiedSession.user, id: "other-user", email: "other@example.com" } }));
+      return route.fulfill(json({ alreadyVerified: false }));
+    });
+    try {
+      await page.goto(baseUrl + "/en/verify?email=mariam%40example.com");
+      await page.getByRole("button", { name: "I’ve verified my email", exact: true }).click();
+      await page
+        .getByRole("alert")
+        .getByText(/different account/)
+        .waitFor();
+      expect(new URL(page.url()).pathname).toBe("/en/verify");
+    } finally {
+      await context.close();
+    }
+  });
+
+  it.each(["/en/app", "/en/app/content-studio", "/ar/app/calendar"])("blocks incomplete onboarding at direct app entry %s", async (path) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      return route.fulfill(json(null));
+    });
+    try {
+      await page.goto(baseUrl + path);
+      await page.waitForURL(new RegExp("/" + path.split("/")[1] + "/onboarding$"));
+      expect(await page.locator("[data-app-sidebar]").count()).toBe(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("holds app entry on a failed readiness check and allows retry", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    let failed = true;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(verifiedSession));
+      if (pathname === "/v1/onboarding")
+        return route.fulfill(
+          failed
+            ? { status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Please retry" } }) }
+            : json(emptyOnboardingState())
+        );
+      return route.fulfill(json(null));
+    });
+    try {
+      await page.goto(baseUrl + "/en/app");
+      await page.getByRole("heading", { name: "Could not open MARKOS" }).waitFor();
+      expect(await page.locator("[data-app-sidebar]").count()).toBe(0);
+      failed = false;
+      await page.getByRole("button", { name: "Try again", exact: true }).click();
+      await page.waitForURL(/\/en\/onboarding$/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it.each([false, true])("blocks direct app access before email verification (signed out: %s)", async (signedOut) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    let knowledgeReads = 0;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/refresh")
+        return route.fulfill(
+          signedOut
+            ? { status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "INVALID_REFRESH_TOKEN", message: "Sign in" } }) }
+            : json(unverifiedSession)
+        );
+      if (pathname === "/v1/onboarding") knowledgeReads++;
+      return route.fulfill(json({ alreadyVerified: false }));
+    });
+    try {
+      await page.goto(baseUrl + "/en/app/calendar");
+      await page.waitForURL(signedOut ? /\/en\/login/ : /\/en\/verify/);
+      expect(knowledgeReads).toBe(0);
+      expect(await page.locator("[data-app-sidebar]").count()).toBe(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("keeps an expired verification link on a recoverable confirmation screen", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    let refreshes = 0;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/auth/refresh") refreshes++;
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "EMAIL_VERIFICATION_INVALID", message: "Verification link is invalid or expired" } })
+      });
+    });
+    try {
+      await page.goto(baseUrl + "/ar/verify?token=expired-verification-token");
+      await page.getByRole("alert").filter({ hasText: "رابط التحقق" }).waitFor();
+      expect(new URL(page.url()).pathname).toBe("/ar/verify");
+      expect(await page.getByRole("heading", { name: "تم تأكيد البريد الإلكتروني", exact: true }).count()).toBe(0);
+      expect(refreshes).toBe(0);
+      await page.getByRole("link", { name: /سجّل الدخول/ }).waitFor();
+    } finally {
+      await context.close();
+    }
   });
 
   it("keeps recovery limitations honest and renders canonical legal pages", async () => {
