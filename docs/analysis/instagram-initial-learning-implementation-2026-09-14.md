@@ -43,7 +43,7 @@ The four permitted proposed targets are:
 | Brand & Voice | Personality & visual direction | Cover-supported presentation preferences |
 | Marketing Strategy | Content direction | Useful themes and format direction alongside owner goals |
 
-Content direction is one optional field in the existing objectives module, not a separate strategy model. The model sees current approved target values and must preserve their explicit requirements in proposed replacements. Every proposal needs references to supplied posts. Facts, offering records, prices, contacts, colors and business goals are not AI-editable here.
+Content direction is one optional field in the existing objectives module, not a separate strategy model. The model sees current approved target values and must preserve their explicit requirements in proposed replacements. Every proposal needs references to supplied posts. Facts, offering records, prices, contacts and business goals are not AI-editable here. The subsequent September 14 review pass adds an optional observed palette only when brand colors are absent; saved colors are protected.
 
 One approval transaction validates all selected fields, checks the profile revision, writes reviewed values and derived projections, retires stale summary data, and marks approval. No AI call is required to save. Repeated approval cannot increment the profile again. Workspace filtering and claim locking prevent cross-workspace access and duplicate active calls. Failed saves keep edits visible; late progress results cannot reset reviewed text. Existing retrieval behavior indexes committed facts on demand. Current brand/tone/objective context is included in future generation; historical posts and campaigns remain unchanged.
 
@@ -76,3 +76,12 @@ The first OAuth integration run failed because this test process lacked the test
 No full-repository verification suite, broad visual audit, screenshot baseline update, or deployment was performed. The temporary browser-test web server was stopped after the focused tests. PostgreSQL and Redis remain available.
 
 No real Instagram account exploration, provider-backed interpretation, or Railway deployment has been verified by these checks. The first established-business exercise must confirm actual optional fields/metric availability, cover fetches, recognizable proposals, and their effect on a newly generated campaign and Create request.
+
+
+## Staging feedback and focused review refinement
+
+Khalid reported successful first-connection learning in staging, useful cited evidence, and successful integration into Business Profile. This is operator-reported hosted evidence for the initial implementation; the following refinement still needs deployment/review.
+
+The approved follow-up introduces compact setup chrome, two review steps, independent content scrolling and always-visible action controls. The existing summary and limitations become expandable. Post references and the Posts examined analytics remain accessible. Optional observed colors use the existing brand field, remain unselected initially, require image references, and cannot replace saved colors.
+
+Focused verification: 7 API integration tests, 4 AI tests, and 4 browser tests passed. Coverage includes existing-color protection, missing-image rejection, invalid palette values, explicit palette selection, synchronized picker values, mobile footer visibility, selected-field persistence through step navigation and failed saves, inline MFA, and Arabic/dark review. The first browser run hit the documented sandbox Next.js false-404 issue; the same test server restarted outside the sandbox served the routes and passed. No hosted account mutations or real provider generation were performed for this refinement.

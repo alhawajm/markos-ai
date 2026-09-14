@@ -119,15 +119,51 @@ describe("guided Instagram connection and learning", () => {
     await section.getByRole("button", { name: "Edit", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Writing preferences" });
     await input.fill("  Owner-reviewed العربية\nEnglish below.  ");
+    const actions = page.getByTestId("learning-review-actions");
+    expect((await actions.boundingBox())!.y + (await actions.boundingBox())!.height).toBeLessThanOrEqual(900);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    expect(await page.getByRole("checkbox", { name: "Writing preferences", exact: true }).count()).toBe(0);
     await page.getByRole("checkbox", { name: "Content direction", exact: true }).uncheck();
     await latePoll!.fulfill(json(proposal));
     await page.getByRole("button", { name: "Use selected changes" }).click();
     await page.getByRole("alert").getByText("Save failed. Try again.").waitFor();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await section.getByRole("button", { name: "Edit", exact: true }).click();
     expect(await input.inputValue()).toBe("  Owner-reviewed العربية\nEnglish below.  ");
     expect(payload).toEqual({ expectedVersion: 3, changes: [{ field: "voiceNotes", value: "  Owner-reviewed العربية\nEnglish below.  " }] });
+    await page.getByRole("button", { name: "Next", exact: true }).click();
     await page.getByRole("button", { name: "Use selected changes" }).click();
     await page.getByRole("heading", { name: "Setup complete" }).waitFor();
     expect(await page.getByRole("link", { name: "View Business profile" }).getAttribute("href")).toBe("/en/app/knowledge");
+    await page.context().close();
+  });
+
+  it("keeps review actions visible on mobile and requires explicit palette selection", async () => {
+    const palette = { field: "colors", value: ["#FFFFFF", "#101010"], reasoning: "Colors observed in the supplied cover.", sourcePostIds: ["post-1"] };
+    const ready = { ...proposal, result: { ...proposal.result!, suggestions: [...proposal.result!.suggestions, palette] } };
+    let payload: unknown;
+    const page = await setupPage(true, true, async (route, path) => {
+      if (path.endsWith("/approve")) payload = route.request().postDataJSON();
+      return route.fulfill(json({ ...ready, status: path.endsWith("/approve") ? "APPROVED" : "READY" }));
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${baseUrl}/en/instagram-setup`);
+    const choice = page.getByRole("checkbox", { name: "Observed palette", exact: true });
+    await choice.waitFor();
+    expect(await choice.isChecked()).toBe(false);
+    const article = choice.locator("xpath=ancestor::article");
+    await article.getByRole("button", { name: "Edit", exact: true }).click();
+    await article.getByRole("textbox", { name: "Observed palette" }).fill("#FFFFFF\n#223344");
+    expect(await article.getByLabel("Palette color 2").inputValue()).toBe("#223344");
+    await choice.check();
+    const actions = page.getByTestId("learning-review-actions");
+    expect((await actions.boundingBox())!.y + (await actions.boundingBox())!.height).toBeLessThanOrEqual(844);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    expect((await actions.boundingBox())!.y + (await actions.boundingBox())!.height).toBeLessThanOrEqual(844);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await page.getByRole("button", { name: "Use selected changes" }).click();
+    await page.getByRole("heading", { name: "Setup complete" }).waitFor();
+    expect(payload).toMatchObject({ changes: expect.arrayContaining([{ field: "colors", value: ["#FFFFFF", "#223344"] }]) });
     await page.context().close();
   });
 

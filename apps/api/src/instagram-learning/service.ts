@@ -38,6 +38,7 @@ export async function startInstagramLearning(workspaceId: string): Promise<Insta
       toneWords: stored.modules.brand.toneWords ?? [],
       voiceNotes: stored.modules.brand.voiceNotes ?? "",
       aestheticWords: stored.modules.brand.aestheticWords ?? [],
+      colors: stored.modules.brand.colors ?? [],
       contentDirection: stored.modules.objectives.contentDirection ?? ""
     };
     const row = await tx.aiInteraction.create({
@@ -106,6 +107,13 @@ export async function analyzeInstagramLearning(workspaceId: string, id: string, 
           limitations: [locale === "ar" ? "يمكنك المتابعة باستخدام ملف نشاطك الحالي." : "You can continue using your current business profile."]
         };
     const ids = new Set(evidence.posts.map((post) => post.id));
+    // A palette is optional visual evidence, never a replacement for approved brand colors.
+    const visualIds = new Set(visuals.map((visual) => visual.id));
+    result.suggestions = result.suggestions.filter(
+      (suggestion) =>
+        suggestion.field !== "colors" ||
+        (!run.current.colors?.length && suggestion.sourcePostIds.length > 0 && suggestion.sourcePostIds.every((id) => visualIds.has(id)))
+    );
     if (result.suggestions.some((suggestion) => !suggestion.sourcePostIds.length || suggestion.sourcePostIds.some((source) => !ids.has(source)))) {
       throw failure("AI_OUTPUT_INVALID", "The learning result included unsupported evidence. Please retry.", 502);
     }
@@ -146,6 +154,14 @@ export async function approveInstagramLearning(
       throw failure("KNOWLEDGE_REVISION_CONFLICT", "The profile changed. Review the current values before saving.");
     const offered = new Set(run.result.suggestions.map((item) => item.field));
     if (input.changes.some((change) => !offered.has(change.field))) throw failure("VALIDATION_ERROR", "Only reviewed proposed fields can be saved.", 400);
+    if (input.changes.some((change) => change.field === "colors")) {
+      const { stored } = await readStoredKnowledge(tx, workspaceId);
+      if (Array.isArray(stored.modules.brand.colors) && stored.modules.brand.colors.length)
+        throw failure("KNOWLEDGE_REVISION_CONFLICT", "Brand colors are already saved. Keep the current palette.");
+      const palette = input.changes.find((change) => change.field === "colors")!.value;
+      if (!Array.isArray(palette) || !palette.length || palette.length > 7 || palette.some((color) => !/^#[0-9a-f]{6}$/i.test(color)))
+        throw failure("VALIDATION_ERROR", "Use one to seven six-digit hex colors.", 400);
+    }
     const updates: UpdateBusinessKnowledge[] = (["brand", "objectives"] as const)
       .map((module) => ({
         module,

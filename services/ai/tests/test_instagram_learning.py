@@ -4,7 +4,11 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.contracts.instagram_learning import InstagramLearningRequest, LearningSuggestion
+from app.contracts.instagram_learning import (
+    InstagramLearningRequest,
+    LearningSuggestion,
+    LearningVisual,
+)
 from app.core.errors import AiServiceError
 from app.providers.instagram_learning import analyze_instagram
 from app.providers.openai_structured import RawStructuredResponse, ResponsesApi, ResponseUsage
@@ -63,8 +67,8 @@ def request() -> InstagramLearningRequest:
         },
         current={"voiceNotes": "Owner preference"},
         visuals=[
-            {"id": "1", "url": "https://images.fbcdn.net/cover.jpg"},
-            {"id": "2", "url": "http://127.0.0.1/internal"},
+            LearningVisual(id="1", url="https://images.fbcdn.net/cover.jpg"),
+            LearningVisual(id="2", url="http://127.0.0.1/internal"),
         ],
     )
 
@@ -89,13 +93,18 @@ def test_structured_interpretation_has_evidence_current_values_and_safe_visuals(
 def test_profile_field_contract_rejects_unsupported_facts_and_wrong_shapes() -> None:
     for field, value in [
         ("price", "10"),
+        ("colors", "#FFFFFF"),
+        ("colors", ["red"]),
+        ("colors", ["#abc"]),
+        ("colors", []),
+        ("colors", ["#FFFFFF"] * 8),
         ("toneWords", "Warm"),
         ("toneWords", ["a"] * 5),
         ("voiceNotes", ["Wrong shape"]),
         ("voiceNotes", "a" * 1001),
     ]:
         with pytest.raises(ValidationError):
-            LearningSuggestion(field=field, value=value, reasoning="Evidence", sourcePostIds=["1"])
+            LearningSuggestion.model_validate({"field": field, "value": value, "reasoning": "Evidence", "sourcePostIds": ["1"]})
 
 
 def test_provider_failure_never_becomes_success() -> None:
@@ -109,3 +118,14 @@ def test_provider_failure_never_becomes_success() -> None:
     client.responses = Failing()
     with pytest.raises(AiServiceError):
         asyncio.run(analyze_instagram(request(), client))
+
+
+def test_observed_palette_contract_and_owner_protection_prompt() -> None:
+    palette = LearningSuggestion(field="colors", value=["#FFFFFF", "#123abc"], reasoning="Observed in covers", sourcePostIds=["1"])
+    assert palette.value == ["#FFFFFF", "#123abc"]
+    client = Client()
+    asyncio.run(analyze_instagram(request(), client))
+    instructions = str(client.fake.sent["instructions"])
+    assert "Never replace saved colors" in instructions
+    assert "only when current colors are empty" in instructions
+    assert "not verified official brand colors" in instructions

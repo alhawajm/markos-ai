@@ -46,32 +46,28 @@ const suggestions: InstagramLearningSuggestion[] = [
   }
 ];
 beforeEach(() => {
-  mocks.collect
-    .mockReset()
-    .mockResolvedValue({
-      evidence: {
-        accountId: "17840000001",
-        username: "test_business",
-        profile: {},
-        discovered: 1,
-        historyComplete: true,
-        metricsCovered: 1,
-        warnings: [],
-        posts: [
-          { id: "post-1", caption: "Owner post", mediaType: "REELS", timestamp: "2026-01-01T00:00:00Z", metrics: { likes: 0, saves: 2 }, selection: "LATEST" }
-        ]
-      },
-      visuals: []
-    });
-  mocks.generate
-    .mockReset()
-    .mockResolvedValue({
-      model: "mock-model",
-      prompt_version: "test-v1",
-      tokens_in: 10,
-      tokens_out: 20,
-      result: { summary: "Bilingual process content", limitations: ["Small sample"], suggestions }
-    });
+  mocks.collect.mockReset().mockResolvedValue({
+    evidence: {
+      accountId: "17840000001",
+      username: "test_business",
+      profile: {},
+      discovered: 1,
+      historyComplete: true,
+      metricsCovered: 1,
+      warnings: [],
+      posts: [
+        { id: "post-1", caption: "Owner post", mediaType: "REELS", timestamp: "2026-01-01T00:00:00Z", metrics: { likes: 0, saves: 2 }, selection: "LATEST" }
+      ]
+    },
+    visuals: []
+  });
+  mocks.generate.mockReset().mockResolvedValue({
+    model: "mock-model",
+    prompt_version: "test-v1",
+    tokens_in: 10,
+    tokens_out: 20,
+    result: { summary: "Bilingual process content", limitations: ["Small sample"], suggestions }
+  });
   mocks.campaign.mockReset().mockRejectedValue(new Error("STOP_AFTER_CONTEXT_CAPTURE"));
 });
 
@@ -111,6 +107,57 @@ describeInstagramDatabase("Instagram learning approval", () => {
       await app.close();
     }
   });
+  it("offers an observed palette only from supplied images and saves it only after approval", async () => {
+    const { app, workspaceId } = await setup(false);
+    try {
+      const collected = await mocks.collect();
+      mocks.collect.mockResolvedValue({ ...collected, visuals: [{ id: "post-1", url: "https://images.fbcdn.net/cover.jpg" }] });
+      const palette = {
+        field: "colors" as const,
+        value: ["#FFFFFF", "#123456"],
+        reasoning: "Observed in the cover, not verified official colors.",
+        sourcePostIds: ["post-1"]
+      };
+      const generated = await mocks.generate();
+      mocks.generate.mockResolvedValue({ ...generated, result: { ...generated.result, suggestions: [...suggestions, palette] } });
+      const run = await startInstagramLearning(workspaceId);
+      expect(run.current.colors).toEqual([]);
+      const ready = await analyzeInstagramLearning(workspaceId, run.id, "en");
+      expect(ready.result?.suggestions).toContainEqual(palette);
+      expect((await getBusinessKnowledge(workspaceId)).modules.brand.colors).toEqual([]);
+      await expect(
+        approveInstagramLearning(workspaceId, run.id, { expectedVersion: run.expectedVersion, changes: [{ ...palette, value: ["invalid"] }] })
+      ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+      expect((await getBusinessKnowledge(workspaceId)).modules.brand.colors).toEqual([]);
+      await approveInstagramLearning(workspaceId, run.id, { expectedVersion: run.expectedVersion, changes: [palette] });
+      expect((await getBusinessKnowledge(workspaceId)).modules.brand.colors).toEqual(palette.value);
+    } finally {
+      await app.close();
+    }
+  });
+  it.each([true, false])("omits palettes when colors already exist or images are missing (existing=%s)", async (existing) => {
+    const { app, workspaceId } = await setup(existing);
+    try {
+      if (existing) {
+        const collected = await mocks.collect();
+        mocks.collect.mockResolvedValue({ ...collected, visuals: [{ id: "post-1", url: "https://images.fbcdn.net/cover.jpg" }] });
+      }
+      const generated = await mocks.generate();
+      const palette = { field: "colors" as const, value: ["#FFFFFF"], reasoning: "Observed colors", sourcePostIds: ["post-1"] };
+      mocks.generate.mockResolvedValue({ ...generated, result: { ...generated.result, suggestions: [...suggestions, palette] } });
+      const run = await startInstagramLearning(workspaceId);
+      const ready = await analyzeInstagramLearning(workspaceId, run.id, "en");
+      expect(ready.status).toBe("READY");
+      expect(ready.result?.suggestions.some((item) => item.field === "colors")).toBe(false);
+      await expect(approveInstagramLearning(workspaceId, run.id, { expectedVersion: run.expectedVersion, changes: [palette] })).rejects.toMatchObject({
+        code: "VALIDATION_ERROR"
+      });
+      expect((await getBusinessKnowledge(workspaceId)).modules.brand.colors).toEqual(existing ? ["#123456"] : []);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("rolls back all selected fields when one is invalid and preserves the proposal", async () => {
     const { app, workspaceId } = await setup();
     try {
@@ -169,7 +216,7 @@ describeInstagramDatabase("Instagram learning approval", () => {
   });
 });
 
-async function setup() {
+async function setup(existingColors = true) {
   const app = await buildApp();
   const response = await app.inject({
     method: "POST",
@@ -188,7 +235,11 @@ async function setup() {
   await prisma.user.update({ where: { id: session.user.id }, data: { isVerified: true } });
   await prisma.workspace.update({ where: { id: workspaceId }, data: { onboardingStatus: "COMPLETE" } });
   await saveBusinessKnowledge(workspaceId, { expectedVersion: 0, module: "company", changes: { name: "Owner business" } });
-  await saveBusinessKnowledge(workspaceId, { expectedVersion: 1, module: "brand", changes: { voiceNotes: "Owner wording", colors: ["#123456"] } });
+  await saveBusinessKnowledge(workspaceId, {
+    expectedVersion: 1,
+    module: "brand",
+    changes: { voiceNotes: "Owner wording", colors: existingColors ? ["#123456"] : [] }
+  });
   await saveBusinessKnowledge(workspaceId, { expectedVersion: 2, module: "objectives", changes: { currentPriority: "Owner's current goal" } });
   return { app, workspaceId };
 }

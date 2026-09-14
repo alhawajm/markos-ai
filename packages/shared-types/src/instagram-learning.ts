@@ -1,4 +1,4 @@
-export const instagramLearningFields = ["toneWords", "voiceNotes", "aestheticWords", "contentDirection"] as const;
+export const instagramLearningFields = ["toneWords", "voiceNotes", "aestheticWords", "contentDirection", "colors"] as const;
 export type InstagramLearningField = (typeof instagramLearningFields)[number];
 export interface InstagramLearningPost {
   id: string;
@@ -34,7 +34,7 @@ export interface InstagramLearningRecord {
   id: string;
   status: "PENDING" | "COLLECTING" | "ANALYZING" | "READY" | "APPROVED" | "SKIPPED" | "FAILED";
   expectedVersion: number;
-  current: Record<InstagramLearningField, string | string[]>;
+  current: Record<Exclude<InstagramLearningField, "colors">, string | string[]> & { colors?: string[] };
   evidence?: InstagramLearningEvidence;
   result?: InstagramLearningResult;
   error?: string;
