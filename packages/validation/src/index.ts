@@ -300,6 +300,7 @@ export const brandOnboardingSchema = z
 
 export const objectivesOnboardingSchema = z
   .object({
+    contentDirection: z.string().max(2000).optional(),
     currentPriority: z.string().min(2).max(1000).optional(),
     goals: z.array(z.string().min(1).max(80)).max(30).default([]),
     budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
@@ -310,6 +311,7 @@ export const objectivesOnboardingSchema = z
   .refine(
     (value) =>
       Boolean(
+        value.contentDirection?.trim() ||
         value.currentPriority?.trim() ||
         value.goals.length ||
         value.budgetRange?.trim() ||

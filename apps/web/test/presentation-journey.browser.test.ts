@@ -48,7 +48,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app/campaigns`);
+    await page.waitForURL(`${baseUrl}/en/instagram-setup`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();

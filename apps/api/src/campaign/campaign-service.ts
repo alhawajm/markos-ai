@@ -2,7 +2,7 @@ import { Prisma, type CampaignStatus } from "@prisma/client";
 import type { CampaignPlan, CampaignPostCounts, CampaignRecord, CampaignReviewRecord, CampaignSummaryPage, ContentRecord } from "@markos/shared-types";
 import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
-import { toContentRecord } from "../content/content-service";
+import { getContentToneLock, toContentRecord } from "../content/content-service";
 import { generateCampaignPlan } from "../ai/campaign-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -336,10 +336,13 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
   }
 
   const query = input.objective ?? (input.locale === "ar" ? "حملة تسويق إنستغرام للشركات الصغيرة في البحرين" : "Instagram marketing campaign Bahrain SMB");
-  const context = await searchVaultContext(workspaceId, {
+  const retrieved = await searchVaultContext(workspaceId, {
     query,
     topK: 10
   });
+  const currentMarketing = (await getContentToneLock(workspaceId)).context;
+  const currentIds = new Set(currentMarketing.map((chunk) => chunk.id));
+  const context = [...currentMarketing, ...retrieved.filter((chunk) => !currentIds.has(chunk.id))].slice(0, 10);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     campaignAgentName,

@@ -63,46 +63,16 @@ describe("active SettingsPanel Instagram interactions", () => {
     await browser?.close();
   });
 
-  it("is the active route, renders a truthful disconnected state, and prevents duplicate connect requests", async () => {
+  it("routes a disconnected account from Settings into guided Instagram setup", async () => {
     const { page, requests } = await settingsPage(disconnected);
     await expect(page.getByRole("heading", { name: "Settings", exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.locator(".bg-card, .bg-canvas, .text-navy").count()).resolves.toBe(0);
     await expect(page.getByText("No account connected", { exact: true }).isVisible()).resolves.toBe(true);
-    await expect(page.getByText("Dry run", { exact: true }).count()).resolves.toBe(0);
-    await expect(page.getByText("Zain Arabia").count()).resolves.toBe(0);
     await expect(page.getByRole("button", { name: "Refresh token" }).isDisabled()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: "Disconnect" }).isDisabled()).resolves.toBe(true);
-    const connect = page.getByRole("button", { name: "Connect Instagram" });
-    let pending: Route | undefined;
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\/v1\/workspace\/instagram\/oauth\/start$/, async (route) => {
-      requests.push(route.request().url());
-      expect(route.request().postDataJSON()).toEqual({
-        locale: "en",
-        returnTo: "/en/app/settings"
-      });
-      pending = route;
-    });
-    await connect.press("Enter");
-    await expect(connect.isDisabled()).resolves.toBe(true);
-    await connect.click({ force: true });
-    expect(requests.filter((url) => url.endsWith("/oauth/start"))).toHaveLength(1);
-    await pending!.fulfill({
-      status: 503,
-      contentType: "application/json",
-      body: JSON.stringify({
-        error: { message: "Instagram connection is temporarily unavailable." }
-      })
-    });
-    const alert = page.locator('[data-notification-toast][role="alert"]');
-    await alert.getByText("Instagram connection is temporarily unavailable.").waitFor();
-    await expect(alert.getByText("Instagram connection is temporarily unavailable.").isVisible()).resolves.toBe(true);
-    await expect(alert.getAttribute("class")).resolves.toContain("fixed");
-    await page.screenshot({
-      path: "evidence/settings-instagram-disconnected.png",
-      fullPage: true
-    });
-    await page.getByRole("button", { name: "Dismiss notification" }).click();
-    await expect(page.locator('[data-notification-toast][role="alert"]').count()).resolves.toBe(0);
+    await page.getByRole("button", { name: "Connect Instagram" }).click();
+    await page.waitForURL(`${baseUrl}/en/instagram-setup`);
+    await page.getByRole("heading", { name: "Connect your professional Instagram account" }).waitFor();
+    expect(requests.filter((url) => url.endsWith("/oauth/start"))).toHaveLength(0);
     await page.close();
   });
 
@@ -468,7 +438,7 @@ describe("active SettingsPanel Instagram interactions", () => {
       fullPage: true
     });
 
-    await Promise.all([page.waitForURL(/\/en\/app\/campaigns$/), page.getByRole("button", { name: "Approve profile & continue" }).click()]);
+    await Promise.all([page.waitForURL(/\/en\/instagram-setup$/), page.getByRole("button", { name: "Approve profile & continue" }).click()]);
 
     expect(approvalPayload).toMatchObject({
       interactionId,

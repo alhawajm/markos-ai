@@ -14,6 +14,7 @@ import {
 declare module "fastify" {
   interface FastifyContextConfig {
     mfaRequired?: boolean;
+    mfaEnrollmentRequired?: boolean;
     permissions?: Permission[];
     verifiedUserRequired?: boolean;
     workspaceRequired?: boolean;
@@ -135,6 +136,12 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
 
       if (request.routeOptions.config.verifiedUserRequired === true && !auth.isVerified) {
         await reply.status(403).send(errorEnvelope("EMAIL_VERIFICATION_REQUIRED", "Email verification is required before this action"));
+        return;
+      }
+
+      if (request.routeOptions.config.mfaEnrollmentRequired === true && !user.mfaEnabled) {
+        reportBoundaryFailure(true, "mfa_setup_required");
+        await reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", "Set up authenticator security before connecting Instagram"));
         return;
       }
 

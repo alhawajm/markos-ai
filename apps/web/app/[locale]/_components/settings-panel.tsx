@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Check,
@@ -35,6 +36,7 @@ type SettingsSectionId = "profile" | "appearance" | "connections" | "security" |
 const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "appearance", "connections", "security", "billing", "data"];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
+  const router = useRouter();
   const session = useMarkosSession();
   const [connection, setConnection] = useState<InstagramConnection | null>(null);
   const [billing, setBilling] = useState<BillingSummary | null>(null);
@@ -154,6 +156,11 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
     if (!session) {
       setNotificationTone("info");
       setMessage(copy(locale, "previewOnly"));
+      return;
+    }
+
+    if (!connection?.connected) {
+      router.push(`/${locale}/instagram-setup`);
       return;
     }
 

@@ -25,6 +25,7 @@ import {
 import type { Locale, NotificationRecord } from "@markos/shared-types";
 import { CampaignBuilderPanel, DailyBriefingPanel, FinalAnalyticsPanel, FinalDashboard, OpportunitiesPanel } from "./final-command-panels";
 import { BusinessProfilePanel } from "./business-profile-panel";
+import { InstagramConnectionBanner } from "./instagram-connection-banner";
 import { CampaignPanel } from "./campaign-panel";
 import { CalendarPanel } from "./calendar-panel";
 import { ContentStudioPanel } from "./content-studio-panel";
@@ -342,6 +343,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           </nav>
 
           <div className="mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8">
+            {activeSection === "dashboard" || activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}

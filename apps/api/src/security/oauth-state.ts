@@ -12,7 +12,14 @@ export type OAuthStateClaims = {
   userId: string;
   workspaceId: string;
 };
-const ALLOWED_RETURN_PATHS = new Set(["/settings/integrations", "/settings/instagram", "/en/app/settings", "/ar/app/settings"]);
+const ALLOWED_RETURN_PATHS = new Set([
+  "/settings/integrations",
+  "/settings/instagram",
+  "/en/app/settings",
+  "/ar/app/settings",
+  "/en/instagram-setup",
+  "/ar/instagram-setup"
+]);
 
 export class OAuthStateError extends Error {
   constructor(

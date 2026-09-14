@@ -241,6 +241,8 @@ export interface OnboardingBusinessProfileState {
   updatedAt: string | null;
 }
 
+export * from "./instagram-learning";
+
 export type BusinessKnowledgeModule = "company" | "story" | "audience" | "competitors" | "brand" | "objectives";
 
 export interface BusinessKnowledgeRecord {

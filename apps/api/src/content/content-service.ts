@@ -838,7 +838,11 @@ function parseFutureScheduleTime(value: string): Date {
 }
 
 export async function getContentToneLock(workspaceId: string): Promise<{ context: VaultRagChunk[]; lock: ContentToneLock }> {
-  const [brandEntries, toneEntries] = await Promise.all([listVaultSection(workspaceId, "BRAND"), listVaultSection(workspaceId, "TONE")]);
+  const [brandEntries, toneEntries, objectiveEntries] = await Promise.all([
+    listVaultSection(workspaceId, "BRAND"),
+    listVaultSection(workspaceId, "TONE"),
+    listVaultSection(workspaceId, "OBJECTIVES")
+  ]);
   const toneWords = uniqueStrings(
     toneEntries.flatMap((entry) => {
       const value = entry.value.toneWords;
@@ -847,7 +851,7 @@ export async function getContentToneLock(workspaceId: string): Promise<{ context
   );
   const voiceNotes = firstString(toneEntries.map((entry) => entry.value.voiceNotes));
   const brandHints = Object.fromEntries(brandEntries.map((entry) => [entry.key, entry.value]));
-  const context: VaultRagChunk[] = [...brandEntries, ...toneEntries].map((entry) => ({
+  const context: VaultRagChunk[] = [...brandEntries, ...toneEntries, ...objectiveEntries.filter((entry) => entry.key === "goals")].map((entry) => ({
     id: entry.id,
     section: entry.section,
     key: entry.key,

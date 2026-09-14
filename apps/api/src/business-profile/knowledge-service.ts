@@ -99,11 +99,25 @@ export async function retireProfileSummary(tx: Prisma.TransactionClient, workspa
 }
 
 export async function saveBusinessKnowledge(workspaceId: string, input: UpdateBusinessKnowledge, requireApproved = true, checkRevision = true): Promise<void> {
-  const saved = await prisma.$transaction(async (tx) => {
-    await lockWorkspaceKnowledge(tx, workspaceId);
-    const { stored, version } = await readStoredKnowledge(tx, workspaceId);
-    if (requireApproved && !stored.approved)
-      throw Object.assign(new Error("Complete onboarding before maintaining your business profile."), { statusCode: 409, code: "ONBOARDING_REQUIRED" });
+  const saved = await prisma.$transaction((tx) => applyBusinessKnowledgeChanges(tx, workspaceId, [input], requireApproved, checkRevision));
+  // Maintenance saves never wait on AI. Retrieval indexes these committed facts when needed.
+  if (!requireApproved) await indexVaultEntries(saved);
+}
+
+/** Shared atomic writer for owner-reviewed modules, including Instagram onboarding additions. */
+export async function applyBusinessKnowledgeChanges(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  inputs: UpdateBusinessKnowledge[],
+  requireApproved = true,
+  checkRevision = true
+) {
+  await lockWorkspaceKnowledge(tx, workspaceId);
+  const { stored, version } = await readStoredKnowledge(tx, workspaceId);
+  if (requireApproved && !stored.approved)
+    throw Object.assign(new Error("Complete onboarding before maintaining your business profile."), { statusCode: 409, code: "ONBOARDING_REQUIRED" });
+  const projections: KnowledgeVaultEntry[] = [];
+  for (const input of inputs) {
     if (checkRevision && input.expectedVersion !== version) throw new KnowledgeConflictError();
     const schema = knowledgeSchemas[input.module];
     const fields = schema.shape;
@@ -122,9 +136,6 @@ export async function saveBusinessKnowledge(workspaceId: string, input: UpdateBu
     // Parsed validation defaults are safe; no model-generated rewriting or normalization.
     stored.modules[input.module] = parsed.data;
     stored.summaryCurrent = false;
-    await persistKnowledge(tx, workspaceId, stored);
-    await retireProfileSummary(tx, workspaceId);
-    const projections: KnowledgeVaultEntry[] = [];
     for (const [section, key] of bindings[input.module]) {
       const value =
         input.module !== "brand"
@@ -136,10 +147,10 @@ export async function saveBusinessKnowledge(workspaceId: string, input: UpdateBu
       if (meaningful) projections.push(...(await persistVaultSection(tx, workspaceId, section, { entries: [{ key, value }] })));
       else await tx.knowledgeVault.updateMany({ where: { workspaceId, section, key, deletedAt: null }, data: { deletedAt: new Date() } });
     }
-    return projections;
-  });
-  // Maintenance saves never wait on AI. Retrieval indexes these committed facts when needed.
-  if (!requireApproved) await indexVaultEntries(saved);
+  }
+  await persistKnowledge(tx, workspaceId, stored);
+  await retireProfileSummary(tx, workspaceId);
+  return projections;
 }
 
 export function isManagedKnowledgeKey(section: VaultSection, key: string): boolean {

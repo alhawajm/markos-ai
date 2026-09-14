@@ -25,6 +25,7 @@ import {
   type InstagramOAuthFailureDiagnostic
 } from "./instagram-oauth-telemetry";
 import { disconnectSecureInstagram, getSecureInstagramConnection, refreshSecureInstagram } from "./instagram-connection-service";
+import { verifyOAuthState } from "../security/oauth-state";
 import { ContentItemNotFoundForReadinessError, listWorkspaceAuditLogs, getPublishReadiness, WorkspaceNotFoundError } from "./workspace-service";
 
 export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<void> {
@@ -32,7 +33,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     "/v1/workspace/instagram/oauth/start",
     {
       config: {
-        mfaRequired: true,
+        mfaEnrollmentRequired: true,
         workspaceRequired: true,
         verifiedUserRequired: true,
         permissions: ["instagram:manage"],
@@ -178,7 +179,14 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
         requestId: request.id,
         diagnostic
       });
-      return sendInstagramOAuthCallbackError(reply, acceptsJson);
+      // A verified allowlisted return path keeps a failed setup connection in its guided flow.
+      let returnTo: string | undefined;
+      try {
+        returnTo = verifyOAuthState(query.state, env.INSTAGRAM_OAUTH_STATE_SECRET ?? "").returnTo;
+      } catch {
+        /* Invalid state uses the safe default. */
+      }
+      return sendInstagramOAuthCallbackError(reply, acceptsJson, returnTo);
     }
   });
 
@@ -365,11 +373,16 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
   );
 }
 
-function sendInstagramOAuthCallbackError(reply: FastifyReply, acceptsJson: boolean) {
+function sendInstagramOAuthCallbackError(reply: FastifyReply, acceptsJson: boolean, returnTo?: string) {
   if (acceptsJson) {
     return reply.status(400).send(errorEnvelope("INSTAGRAM_OAUTH_FAILED", "Instagram authorization could not be completed"));
   }
 
+  if (returnTo) {
+    const url = new URL(returnTo, env.WEB_BASE_URL);
+    url.searchParams.set("instagram", "error");
+    return reply.redirect(url.toString());
+  }
   return reply.redirect(getSettingsRedirectUrl("error"));
 }
 

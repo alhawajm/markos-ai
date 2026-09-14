@@ -42,6 +42,8 @@ import type {
   InstagramConnection,
   InstagramDisconnectResult,
   InstagramOAuthStart,
+  InstagramLearningRecord,
+  InstagramLearningField,
   InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
   KnowledgeVaultHistoryEntry,
@@ -806,6 +808,28 @@ export class MarkosApiClient {
   async instagramConnection(): Promise<InstagramConnection> {
     const response = await this.request<InstagramConnection>("/v1/workspace/instagram");
     return response.data;
+  }
+
+  async instagramLearning(): Promise<InstagramLearningRecord | null> {
+    return (await this.request<InstagramLearningRecord | null>("/v1/workspace/instagram/learning")).data;
+  }
+  async startInstagramLearning(): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>("/v1/workspace/instagram/learning", { method: "POST" })).data;
+  }
+  async analyzeInstagramLearning(id: string, locale: "en" | "ar"): Promise<InstagramLearningRecord> {
+    return (
+      await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/analyze`, { method: "POST", body: { locale } })
+    ).data;
+  }
+  async approveInstagramLearning(
+    id: string,
+    input: { expectedVersion: number; changes: Array<{ field: InstagramLearningField; value: string | string[] }> }
+  ): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/approve`, { method: "POST", body: input }))
+      .data;
+  }
+  async skipInstagramLearning(id: string): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/skip`, { method: "POST" })).data;
   }
 
   async instagramOAuthStart(input: { locale?: "ar" | "en"; returnTo?: string } = {}): Promise<InstagramOAuthStart> {
