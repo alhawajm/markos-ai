@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import { AiServiceRequestError } from "../src/ai/request";
+import { cleanupExpiredOnboardingDocumentAnalyses } from "../src/onboarding/onboarding-document-service";
 
 const aiHarness = vi.hoisted(() => ({ analyze: vi.fn() }));
 const storageHarness = vi.hoisted(() => ({
@@ -119,7 +121,9 @@ describe("full onboarding document analysis", () => {
   });
 
   it("keeps failed files retryable and removes them on discard without saving business knowledge", async () => {
-    aiHarness.analyze.mockRejectedValueOnce(new Error("provider unavailable")).mockResolvedValueOnce(analysisResponse());
+    aiHarness.analyze
+      .mockRejectedValueOnce(new AiServiceRequestError({ code: "AI_PROVIDER_TIMEOUT", message: "The AI provider timed out", retryable: true, statusCode: 504 }))
+      .mockResolvedValueOnce(analysisResponse());
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -144,6 +148,14 @@ describe("full onboarding document analysis", () => {
     expect(storageHarness.objects.size).toBe(1);
     const analysisId = created.json().data.id as string;
 
+    // The maintenance worker must not delete a failed upload before its 24-hour expiry.
+    await cleanupExpiredOnboardingDocumentAnalyses();
+    const saved = await prisma.onboardingDocumentAnalysis.findUniqueOrThrow({ where: { id: analysisId } });
+    expect(saved.status).toBe("FAILED");
+    expect(saved.expiresAt.getTime() - saved.createdAt.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000);
+    expect(storageHarness.objects.size).toBe(1);
+    expect(storageHarness.remove).not.toHaveBeenCalledWith(session.workspace.id, expect.any(String));
+
     const retried = await app.inject({
       method: "POST",
       url: `/v1/onboarding/document-analysis/${analysisId}/retry`,
@@ -152,6 +164,8 @@ describe("full onboarding document analysis", () => {
 
     expect(retried.statusCode).toBe(200);
     expect(retried.json().data.status).toBe("READY");
+    expect(aiHarness.analyze.mock.calls[1]).toEqual(aiHarness.analyze.mock.calls[0]);
+    expect(storageHarness.store).toHaveBeenCalledTimes(1);
 
     const discarded = await app.inject({
       method: "DELETE",
