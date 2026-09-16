@@ -865,3 +865,5 @@ export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
 export type GenerateImageForContentInput = z.infer<typeof generateImageForContentSchema>;
 export type GenerateVideoForContentInput = z.infer<typeof generateVideoForContentSchema>;
+
+export * from "./authoring-assistant";

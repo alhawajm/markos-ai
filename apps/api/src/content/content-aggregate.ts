@@ -194,99 +194,101 @@ export async function validateContentAggregate(tx: Tx, row: ContentAggregateRow)
 }
 
 export async function mutateContentAggregate(workspaceId: string, id: string, raw: ContentMutationInput): Promise<ContentRecord> {
+  return prisma.$transaction((tx) => mutateContentAggregateInTransaction(tx, workspaceId, id, raw));
+}
+
+export async function mutateContentAggregateInTransaction(tx: Tx, workspaceId: string, id: string, raw: ContentMutationInput): Promise<ContentRecord> {
   const input = contentMutationSchema.parse(raw);
-  return prisma.$transaction(async (tx) => {
-    let root = await lockContentRoot(tx, workspaceId, id, input.expectedRevision);
-    assertEditable(root);
-    for (const operation of input.operations) {
-      const item = "itemId" in operation ? root.mediaItems.find((candidate) => candidate.id === operation.itemId) : undefined;
-      if ("itemId" in operation && !item) throw new ContentAggregateError("CONTENT_TARGET_NOT_FOUND", "Media item is not active in this draft", 404);
-      switch (operation.type) {
-        case "updateContent": {
-          const { plannedAt, ...fields } = operation.fields;
-          await tx.contentItem.update({
-            where: { id },
-            data: { ...defined(fields), ...(plannedAt === undefined ? {} : { plannedAt: plannedAt ? new Date(plannedAt) : null }) }
+  let root = await lockContentRoot(tx, workspaceId, id, input.expectedRevision);
+  assertEditable(root);
+  for (const operation of input.operations) {
+    const item = "itemId" in operation ? root.mediaItems.find((candidate) => candidate.id === operation.itemId) : undefined;
+    if ("itemId" in operation && !item) throw new ContentAggregateError("CONTENT_TARGET_NOT_FOUND", "Media item is not active in this draft", 404);
+    switch (operation.type) {
+      case "updateContent": {
+        const { plannedAt, ...fields } = operation.fields;
+        await tx.contentItem.update({
+          where: { id },
+          data: { ...defined(fields), ...(plannedAt === undefined ? {} : { plannedAt: plannedAt ? new Date(plannedAt) : null }) }
+        });
+        break;
+      }
+      case "updateMediaItem":
+        await requireOwnedAsset(tx, workspaceId, operation.fields.mediaAssetId);
+        await tx.contentMediaItem.update({
+          where: { id: item!.id },
+          data: { ...defined(operation.fields), ...("mediaAssetId" in operation.fields ? { generationIntent: randomUUID() } : {}) }
+        });
+        break;
+      case "addMediaItem": {
+        if (root.contentType !== "CAROUSEL" || root.mediaItems.length >= 10)
+          throw new ContentAggregateError("CONTENT_ITEM_LIMIT", "Only Carousels may add items, up to ten");
+        await requireOwnedAsset(tx, workspaceId, operation.fields.mediaAssetId);
+        const added = await tx.contentMediaItem.create({
+          data: { ...initialMediaItem(workspaceId, root.contentType), ...defined(operation.fields), contentItemId: id, position: root.mediaItems.length }
+        });
+        await orderMedia(
+          tx,
+          root,
+          insertAfter(
+            root.mediaItems.map((value) => value.id),
+            added.id,
+            operation.afterId
+          )
+        );
+        break;
+      }
+      case "removeMediaItem": {
+        if (root.contentType !== "CAROUSEL" || root.mediaItems.length === 1)
+          throw new ContentAggregateError("CONTENT_ITEM_LIMIT", "Keep at least one logical media item");
+        await tx.contentMediaItem.update({ where: { id: item!.id }, data: { deletedAt: new Date() } });
+        await orderMedia(
+          tx,
+          root,
+          root.mediaItems.filter((value) => value.id !== item!.id).map((value) => value.id)
+        );
+        break;
+      }
+      case "reorderMediaItems":
+        await orderMedia(tx, root, operation.orderedIds);
+        break;
+      default: {
+        if (root.contentType !== "REEL") throw new ContentAggregateError("CONTENT_STRUCTURE_INVALID", "Only Reels have scripts and beats");
+        const script = root.reelScript ?? (await tx.contentReelScript.create({ data: { workspaceId, contentItemId: id }, include: { beats: true } }));
+        const beat = "beatId" in operation ? script.beats.find((candidate) => candidate.id === operation.beatId) : undefined;
+        if ("beatId" in operation && !beat) throw new ContentAggregateError("CONTENT_TARGET_NOT_FOUND", "Beat is not in this Reel", 404);
+        if (operation.type === "updateReelScript") await tx.contentReelScript.update({ where: { id: script.id }, data: defined(operation.fields) });
+        if (operation.type === "addReelBeat") {
+          if (script.beats.length >= 100) throw new ContentAggregateError("CONTENT_BEAT_LIMIT", "A script may contain at most 100 beats");
+          const added = await tx.contentReelBeat.create({
+            data: { workspaceId, reelScriptId: script.id, position: script.beats.length, text: operation.text }
           });
-          break;
-        }
-        case "updateMediaItem":
-          await requireOwnedAsset(tx, workspaceId, operation.fields.mediaAssetId);
-          await tx.contentMediaItem.update({
-            where: { id: item!.id },
-            data: { ...defined(operation.fields), ...("mediaAssetId" in operation.fields ? { generationIntent: randomUUID() } : {}) }
-          });
-          break;
-        case "addMediaItem": {
-          if (root.contentType !== "CAROUSEL" || root.mediaItems.length >= 10)
-            throw new ContentAggregateError("CONTENT_ITEM_LIMIT", "Only Carousels may add items, up to ten");
-          await requireOwnedAsset(tx, workspaceId, operation.fields.mediaAssetId);
-          const added = await tx.contentMediaItem.create({
-            data: { ...initialMediaItem(workspaceId, root.contentType), ...defined(operation.fields), contentItemId: id, position: root.mediaItems.length }
-          });
-          await orderMedia(
+          await orderBeats(
             tx,
-            root,
+            script.id,
             insertAfter(
-              root.mediaItems.map((value) => value.id),
+              script.beats.map((value) => value.id),
               added.id,
               operation.afterId
             )
           );
-          break;
         }
-        case "removeMediaItem": {
-          if (root.contentType !== "CAROUSEL" || root.mediaItems.length === 1)
-            throw new ContentAggregateError("CONTENT_ITEM_LIMIT", "Keep at least one logical media item");
-          await tx.contentMediaItem.update({ where: { id: item!.id }, data: { deletedAt: new Date() } });
-          await orderMedia(
+        if (operation.type === "updateReelBeat") await tx.contentReelBeat.update({ where: { id: beat!.id }, data: { text: operation.text } });
+        if (operation.type === "removeReelBeat") {
+          await tx.contentReelBeat.delete({ where: { id: beat!.id } });
+          await orderBeats(
             tx,
-            root,
-            root.mediaItems.filter((value) => value.id !== item!.id).map((value) => value.id)
+            script.id,
+            script.beats.filter((value) => value.id !== beat!.id).map((value) => value.id)
           );
-          break;
         }
-        case "reorderMediaItems":
-          await orderMedia(tx, root, operation.orderedIds);
-          break;
-        default: {
-          if (root.contentType !== "REEL") throw new ContentAggregateError("CONTENT_STRUCTURE_INVALID", "Only Reels have scripts and beats");
-          const script = root.reelScript ?? (await tx.contentReelScript.create({ data: { workspaceId, contentItemId: id }, include: { beats: true } }));
-          const beat = "beatId" in operation ? script.beats.find((candidate) => candidate.id === operation.beatId) : undefined;
-          if ("beatId" in operation && !beat) throw new ContentAggregateError("CONTENT_TARGET_NOT_FOUND", "Beat is not in this Reel", 404);
-          if (operation.type === "updateReelScript") await tx.contentReelScript.update({ where: { id: script.id }, data: defined(operation.fields) });
-          if (operation.type === "addReelBeat") {
-            if (script.beats.length >= 100) throw new ContentAggregateError("CONTENT_BEAT_LIMIT", "A script may contain at most 100 beats");
-            const added = await tx.contentReelBeat.create({
-              data: { workspaceId, reelScriptId: script.id, position: script.beats.length, text: operation.text }
-            });
-            await orderBeats(
-              tx,
-              script.id,
-              insertAfter(
-                script.beats.map((value) => value.id),
-                added.id,
-                operation.afterId
-              )
-            );
-          }
-          if (operation.type === "updateReelBeat") await tx.contentReelBeat.update({ where: { id: beat!.id }, data: { text: operation.text } });
-          if (operation.type === "removeReelBeat") {
-            await tx.contentReelBeat.delete({ where: { id: beat!.id } });
-            await orderBeats(
-              tx,
-              script.id,
-              script.beats.filter((value) => value.id !== beat!.id).map((value) => value.id)
-            );
-          }
-          if (operation.type === "reorderReelBeats") await orderBeats(tx, script.id, operation.orderedIds);
-        }
+        if (operation.type === "reorderReelBeats") await orderBeats(tx, script.id, operation.orderedIds);
       }
-      root = await loadContentAggregate(tx, workspaceId, id);
     }
-    await validateContentAggregate(tx, root);
-    return toContentRecord(root);
-  });
+    root = await loadContentAggregate(tx, workspaceId, id);
+  }
+  await validateContentAggregate(tx, root);
+  return toContentRecord(root);
 }
 
 export interface ContentConversionPreview {
@@ -314,14 +316,16 @@ const populated = (item: ContentAggregateRow["mediaItems"][number]) =>
 export async function convertContentAggregate(
   workspaceId: string,
   id: string,
-  raw: ConvertContentInput
+  raw: ConvertContentInput,
+  transaction?: Tx,
+  previewOnly = false
 ): Promise<{
   applied: boolean;
   preview: ContentConversionPreview;
   content: ContentRecord;
 }> {
   const input = convertContentSchema.parse(raw);
-  return prisma.$transaction(async (tx) => {
+  const execute = async (tx: Tx) => {
     const root = await lockContentRoot(tx, workspaceId, id, input.expectedRevision);
     assertEditable(root);
     const to = input.contentType;
@@ -357,6 +361,7 @@ export async function convertContentAggregate(
       detachedAssetIds: [...removed, ...incompatible].flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : [])),
       resetFields
     };
+    if (previewOnly) return { applied: false, preview, content: toContentRecord(root) };
     if (root.contentType === to) return { applied: true, preview, content: toContentRecord(root) };
     if (requiresSelection || (preview.requiresConfirmation && !input.confirmDestructive)) return { applied: false, preview, content: toContentRecord(root) };
     if (await tx.publishJob.findFirst({ where: { contentItemId: id, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } } })) {
@@ -381,5 +386,6 @@ export async function convertContentAggregate(
     const updated = await loadContentAggregate(tx, workspaceId, id);
     await validateContentAggregate(tx, updated);
     return { applied: true, preview, content: toContentRecord(updated) };
-  });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute);
 }

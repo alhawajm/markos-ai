@@ -958,6 +958,7 @@ model ConversationRun {
   baseRevision   Int
   status         String                @default("QUEUED")
   result         Json?
+  actionState    Json?
   errorCode      String?
   leaseExpiresAt DateTime?
   createdAt      DateTime              @default(now())

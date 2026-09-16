@@ -1,3 +1,12 @@
+import { ZodError } from "zod";
+import { randomUUID } from "node:crypto";
+import { assistantConfirmationSchema, type AssistantResult } from "@markos/validation";
+import type { AssistantActionState } from "@markos/shared-types";
+import { authoringSnapshot, destructiveConsequences, applyAssistantBatch } from "./assistant-authoring";
+import { ContentAggregateError, contentAggregateInclude, lockContentRoot, toContentRecord } from "./content-aggregate";
+import { generateImageForContent } from "../media/media-service";
+import { queueVideoGeneration } from "../media/video-generation-service";
+import type { ConversationRun } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import type { ContentConversationRecord, ConversationTurnInput, ConversationRunStatus } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
@@ -7,7 +16,7 @@ import { respondToConversation, conversationResultSchema } from "../ai/conversat
 import { AiServiceRequestError } from "../ai/request";
 import { recordAiTokenUsage } from "../usage/usage-service";
 import { ContentConflictError } from "./content-conflict";
-import { getContentToneLock, toContentRecord } from "./content-service";
+import { getContentToneLock } from "./content-service";
 
 export class ConversationError extends Error {
   constructor(
@@ -19,8 +28,198 @@ export class ConversationError extends Error {
   }
 }
 
+function actionText(state: AssistantActionState, locale: string): string {
+  const ar = locale === "ar";
+  if (state.confirmation)
+    return ar ? "يتطلب هذا الاقتراح تأكيدك. لم تُحفظ أي تغييرات بعد." : "This proposal needs your confirmation. No changes have been saved yet.";
+  const lines = [
+    state.editsSaved
+      ? ar
+        ? "تم حفظ التعديلات في المسودة."
+        : "Authoring changes saved to the draft."
+      : ar
+        ? "لم تتغير حقول المسودة."
+        : "No authoring fields were changed."
+  ];
+  const labels = {
+    PENDING: ["Generation requested; not dispatched yet.", "طُلب التوليد ولم يبدأ بعد."],
+    DISPATCHING: ["Generation is being requested; completion is not confirmed.", "جارٍ طلب التوليد؛ لم يُؤكد الاكتمال."],
+    QUEUED: ["Video generation queued; not attached yet.", "أُضيف توليد الفيديو إلى الانتظار؛ لم يُرفق بعد."],
+    RUNNING: ["Generation is running; not attached yet.", "التوليد جارٍ؛ لم يُرفق بعد."],
+    ATTACHED: ["Generation completed and attached.", "اكتمل التوليد وأُرفق بالمسودة."],
+    LIBRARY_ONLY: [
+      "Generation completed and saved to Media Library; the newer draft was not overwritten.",
+      "اكتمل التوليد وحُفظ في مكتبة الوسائط دون تغيير المسودة الأحدث."
+    ],
+    FAILED: ["Generation was not completed. Any saved authoring changes remain saved.", "لم يكتمل التوليد. تبقى التعديلات المحفوظة محفوظة."],
+    UNKNOWN: [
+      "Generation outcome is unknown after an interruption. It will not be requested again automatically.",
+      "نتيجة التوليد غير معروفة بعد انقطاع. لن يُعاد طلبه تلقائيًا."
+    ]
+  };
+  for (const entry of state.generation) lines.push(`${entry.itemId}: ${labels[entry.status][ar ? 1 : 0]}`);
+  return lines.join("\n");
+}
+
+function discussionText(reply: string, locale: string) {
+  // Execution claims never come from a provider reply without corresponding actions.
+  if (/\b(saved|updated|applied|generated|published|scheduled|ready in the draft)\b|تم.{0,24}(حفظ|تحديث|توليد|نشر|تطبيق)/iu.test(reply))
+    return locale === "ar"
+      ? "لم أُجرِ أي تعديل على المسودة. حدّد التعديل المطلوب للمتابعة."
+      : "I have not changed the draft. Specify the edit you want to apply.";
+  return reply;
+}
+
+async function saveAssistantMessage(tx: Prisma.TransactionClient, run: ConversationRun, text: string) {
+  await tx.conversationMessage.upsert({
+    where: { runId_role: { runId: run.id, role: "assistant" } },
+    create: { workspaceId: run.workspaceId, conversationId: run.conversationId, runId: run.id, role: "assistant", text },
+    update: { text }
+  });
+}
+
+async function saveActionReceipt(tx: Prisma.TransactionClient, run: ConversationRun, state: AssistantActionState, result: AssistantResult) {
+  const status = state.confirmation ? "AWAITING_CONFIRMATION" : state.generation.length ? "DISPATCHING" : "SUCCEEDED";
+  await tx.conversationRun.update({
+    where: { id: run.id },
+    data: {
+      status,
+      result: result as unknown as Prisma.InputJsonValue,
+      actionState: state as unknown as Prisma.InputJsonValue,
+      errorCode: null,
+      leaseExpiresAt: status === "DISPATCHING" ? new Date(Date.now() + Math.max(120000, env.AI_HTTP_TIMEOUT_MS + 60000)) : null
+    }
+  });
+  await saveAssistantMessage(
+    tx,
+    run,
+    state.editsSaved || state.confirmation || state.generation.length ? actionText(state, run.locale) : discussionText(result.reply, run.locale)
+  );
+}
+
+export async function confirmConversationActions(
+  workspaceId: string,
+  userId: string,
+  contentItemId: string,
+  runId: string,
+  raw: { confirmationToken: string; expectedRevision: number }
+) {
+  const input = assistantConfirmationSchema.parse(raw);
+  await contentForWorkspace(workspaceId, contentItemId);
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM conversation_runs WHERE id = ${runId}::uuid AND "workspaceId" = ${workspaceId}::uuid FOR UPDATE`;
+    const run = await tx.conversationRun.findFirst({ where: { id: runId, workspaceId, userId, conversation: { contentItemId } } });
+    if (!run || !(await canContinue(workspaceId, userId, tx))) throw new ConversationError("CONVERSATION_NOT_FOUND", "Proposal was not found.", 404);
+    const state = run.actionState as unknown as AssistantActionState | null;
+    if (!state?.confirmation || state.confirmation.token !== input.confirmationToken || state.confirmation.revision !== input.expectedRevision)
+      throw new ConversationError("CONVERSATION_CONFIRMATION_INVALID", "This confirmation does not match the proposal.");
+    // A repeated acknowledgement returns its existing receipt, never reapplies.
+    if (run.status !== "AWAITING_CONFIRMATION") return;
+    const result = conversationResultSchema.parse(run.result);
+    const applied = await applyAssistantBatch(tx, workspaceId, contentItemId, input.expectedRevision, result);
+    // Keep the receipt token for safe acknowledgement retries; hide it unless pending.
+    const receipt = { ...applied, confirmation: state.confirmation };
+    await saveActionReceipt(tx, run, applied, result);
+    await tx.conversationRun.update({ where: { id: runId }, data: { actionState: receipt as unknown as Prisma.InputJsonValue } });
+  });
+  await dispatchRunGeneration(runId);
+  return getContentConversation(workspaceId, contentItemId);
+}
+
+async function dispatchRunGeneration(runId: string) {
+  for (;;) {
+    const claim = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM conversation_runs WHERE id = ${runId}::uuid FOR UPDATE`;
+      const run = await tx.conversationRun.findUniqueOrThrow({ where: { id: runId }, include: { conversation: true } });
+      if (run.status !== "DISPATCHING") return null;
+      const state = run.actionState as unknown as AssistantActionState;
+      if (state.generation.some((item) => item.status === "DISPATCHING")) return null;
+      const index = state.generation.findIndex((item) => item.status === "PENDING");
+      if (index < 0) return null;
+      state.generation[index]!.status = "DISPATCHING";
+      await tx.conversationRun.update({
+        where: { id: run.id },
+        data: {
+          actionState: state as unknown as Prisma.InputJsonValue,
+          leaseExpiresAt: new Date(Date.now() + Math.max(120000, env.AI_HTTP_TIMEOUT_MS + 60000))
+        }
+      });
+      return { run, state, index };
+    });
+    if (!claim) return;
+    const { run, state, index } = claim;
+    const entry = state.generation[index]!;
+    let outcome: AssistantActionState["generation"][number];
+    try {
+      if (!(await canContinue(run.workspaceId, run.userId))) throw new ConversationError("CONVERSATION_ACCESS_CHANGED", "Access changed.");
+      const current = await contentForWorkspace(run.workspaceId, run.conversation.contentItemId);
+      if (current.revision !== state.revision) throw new ContentConflictError();
+      const item = current.mediaItems.find((item) => item.id === entry.itemId);
+      const input = { contentMediaItemId: entry.itemId, expectedRevision: state.revision };
+      if (item?.mediaKind === "VIDEO") {
+        const job = await queueVideoGeneration(run.workspaceId, current.id, input);
+        outcome = { ...entry, status: "QUEUED", jobId: job.id };
+        state.revision = job.requestedRevision;
+      } else if (item?.mediaKind === "IMAGE") {
+        const image = await generateImageForContent(run.workspaceId, current.id, input);
+        outcome = { ...entry, status: "ATTACHED", mediaAssetId: image.mediaAsset.id };
+        state.revision = image.contentItem.revision;
+      } else throw new ConversationError("AI_GENERATION_TARGET_INVALID", "Generation target is unavailable.");
+    } catch (error) {
+      const asset = error && typeof error === "object" && "mediaAssetId" in error && typeof error.mediaAssetId === "string" ? error.mediaAssetId : undefined;
+      outcome = {
+        ...entry,
+        status: asset ? "LIBRARY_ONLY" : "FAILED",
+        ...(asset ? { mediaAssetId: asset } : {}),
+        errorCode: error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "GENERATION_FAILED"
+      };
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM conversation_runs WHERE id = ${runId}::uuid FOR UPDATE`;
+      const latest = await tx.conversationRun.findUniqueOrThrow({ where: { id: runId } });
+      if (latest.status !== "DISPATCHING") return; // expired claim: do not invent a recovered success
+      state.generation[index] = outcome;
+      if (outcome.status === "FAILED" || outcome.status === "LIBRARY_ONLY")
+        for (const pending of state.generation)
+          if (pending.status === "PENDING") {
+            pending.status = "FAILED";
+            pending.errorCode = "PREVIOUS_GENERATION_INTERRUPTED";
+          }
+      const pending = state.generation.some((item) => item.status === "PENDING");
+      await tx.conversationRun.update({
+        where: { id: runId },
+        data: {
+          actionState: state as unknown as Prisma.InputJsonValue,
+          status: pending ? "DISPATCHING" : "SUCCEEDED",
+          leaseExpiresAt: pending ? latest.leaseExpiresAt : null
+        }
+      });
+      await saveAssistantMessage(tx, run, actionText({ ...state, confirmation: null }, run.locale));
+    });
+  }
+}
+
+async function recoverDispatches(workspaceId?: string) {
+  const expired = await prisma.conversationRun.findMany({
+    where: { ...(workspaceId ? { workspaceId } : {}), status: "DISPATCHING", leaseExpiresAt: { lte: new Date() } },
+    take: 20
+  });
+  for (const run of expired)
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.conversationRun.updateMany({
+        where: { id: run.id, status: "DISPATCHING", leaseExpiresAt: { lte: new Date() } },
+        data: { status: "FAILED", errorCode: "GENERATION_DISPATCH_INTERRUPTED", leaseExpiresAt: null }
+      });
+      if (!changed.count) return;
+      const state = run.actionState as unknown as AssistantActionState;
+      for (const entry of state.generation) if (entry.status === "PENDING" || entry.status === "DISPATCHING") entry.status = "UNKNOWN";
+      await tx.conversationRun.update({ where: { id: run.id }, data: { actionState: state as unknown as Prisma.InputJsonValue } });
+      await saveAssistantMessage(tx, run, actionText({ ...state, confirmation: null }, run.locale));
+    });
+}
+
 async function contentForWorkspace(workspaceId: string, id: string) {
-  const content = await prisma.contentItem.findFirst({ where: { id, workspaceId, deletedAt: null } });
+  const content = await prisma.contentItem.findFirst({ where: { id, workspaceId, deletedAt: null }, include: contentAggregateInclude });
   if (!content) throw new ConversationError("CONTENT_NOT_FOUND", "This post was not found.", 404);
   return content;
 }
@@ -33,6 +232,31 @@ export async function getContentConversation(workspaceId: string, contentItemId:
   });
   const run = conversation?.runs[0];
   const result = run?.result ? conversationResultSchema.safeParse(run.result) : undefined;
+  const actions = run?.actionState ? (structuredClone(run.actionState) as unknown as AssistantActionState) : null;
+  if (actions) {
+    if (run?.status !== "AWAITING_CONFIRMATION") actions.confirmation = null;
+    const jobs = await prisma.mediaGenerationJob.findMany({
+      where: { workspaceId, contentItemId, id: { in: actions.generation.flatMap((entry) => (entry.jobId ? [entry.jobId] : [])) } }
+    });
+    for (const entry of actions.generation) {
+      const job = jobs.find((job) => job.id === entry.jobId);
+      if (!job) continue;
+      entry.status =
+        job.status === "COMPLETED"
+          ? job.attachmentApplied
+            ? "ATTACHED"
+            : "LIBRARY_ONLY"
+          : ["FAILED", "CANCELLED"].includes(job.status)
+            ? "FAILED"
+            : job.status === "QUEUED"
+              ? "QUEUED"
+              : "RUNNING";
+      if (job.outputMediaAssetId) entry.mediaAssetId = job.outputMediaAssetId;
+    }
+  }
+  const proposedCaption = result?.success
+    ? (result.data.operations.flatMap((op) => (op.type === "updateContent" && op.field === "caption" && op.value !== null ? [op.value] : []))[0] ?? null)
+    : null;
   return {
     id: conversation?.id ?? null,
     contentItem: toContentRecord(content),
@@ -50,7 +274,9 @@ export async function getContentConversation(workspaceId: string, contentItemId:
           requestId: run.requestId,
           status: run.status as ConversationRunStatus,
           errorCode: run.errorCode,
-          proposedCaption: run.status === "CONFLICT" && result?.success ? (result.data.changes?.caption ?? null) : null
+          confirmation: actions?.confirmation ?? null,
+          actions: actions,
+          proposedCaption: run.status === "CONFLICT" && result?.success ? proposedCaption : null
         }
       : null
   };
@@ -85,7 +311,7 @@ export async function submitConversationTurn(workspaceId: string, userId: string
       const content = await tx.contentItem.findFirst({ where: { id: contentItemId, workspaceId, deletedAt: null } });
       if (!content) throw new ConversationError("CONTENT_NOT_FOUND", "This post was not found.", 404);
       if (content.revision !== input.expectedRevision) throw new ContentConflictError();
-      const active = await tx.conversationRun.findFirst({ where: { conversationId: conversation.id, status: { in: ["QUEUED", "RUNNING"] } } });
+      const active = await tx.conversationRun.findFirst({ where: { conversationId: conversation.id, status: { in: ["QUEUED", "RUNNING", "DISPATCHING"] } } });
       if (active) throw new ConversationError("CONVERSATION_BUSY", "MARKOS is still working on the previous message.");
       const run = await tx.conversationRun.create({
         data: {
@@ -118,9 +344,12 @@ function failureText(locale: string, conflict: boolean) {
     : "This message could not be completed. No changes from it were saved. You can try again with a new message.";
 }
 
-async function failRun(id: string, code: string, status = "FAILED") {
+async function failRun(id: string, code: string, status = "FAILED", result?: AssistantResult) {
   await prisma.$transaction(async (tx) => {
-    const claimed = await tx.conversationRun.updateMany({ where: { id, status: "RUNNING" }, data: { status, errorCode: code, leaseExpiresAt: null } });
+    const claimed = await tx.conversationRun.updateMany({
+      where: { id, status: "RUNNING" },
+      data: { status, errorCode: code, leaseExpiresAt: null, ...(result ? { result: result as unknown as Prisma.InputJsonValue } : {}) }
+    });
     if (!claimed.count) return;
     const run = await tx.conversationRun.findUniqueOrThrow({ where: { id } });
     await tx.conversationMessage.create({
@@ -135,7 +364,7 @@ async function failRun(id: string, code: string, status = "FAILED") {
   });
 }
 
-async function canContinue(workspaceId: string, userId: string, tx: Prisma.TransactionClient = prisma) {
+export async function canContinue(workspaceId: string, userId: string, tx: Prisma.TransactionClient = prisma) {
   const [member, user, workspace] = await Promise.all([
     tx.workspaceMember.findFirst({ where: { workspaceId, userId, deletedAt: null } }),
     tx.user.findFirst({ where: { id: userId, deletedAt: null, isVerified: true } }),
@@ -146,6 +375,7 @@ async function canContinue(workspaceId: string, userId: string, tx: Prisma.Trans
 
 export async function processConversationRuns(workspaceId?: string) {
   const scope = workspaceId ? { workspaceId } : {};
+  await recoverDispatches(workspaceId);
   const expired = await prisma.conversationRun.findMany({ where: { ...scope, status: "RUNNING", leaseExpiresAt: { lte: new Date() } }, take: 20 });
   for (const run of expired) await failRun(run.id, "CONVERSATION_INTERRUPTED");
   const candidate = await prisma.conversationRun.findFirst({ where: { ...scope, status: "QUEUED" }, orderBy: { createdAt: "asc" } });
@@ -153,6 +383,7 @@ export async function processConversationRuns(workspaceId?: string) {
   const leaseExpiresAt = new Date(Date.now() + Math.max(120_000, env.AI_HTTP_TIMEOUT_MS + 60_000));
   const claimed = await prisma.conversationRun.updateMany({ where: { id: candidate.id, status: "QUEUED" }, data: { status: "RUNNING", leaseExpiresAt } });
   if (!claimed.count) return;
+  let proposed: AssistantResult | undefined;
   try {
     const conversation = await prisma.contentConversation.findUniqueOrThrow({ where: { id: candidate.conversationId } });
     const current = await contentForWorkspace(candidate.workspaceId, conversation.contentItemId);
@@ -192,100 +423,67 @@ export async function processConversationRuns(workspaceId?: string) {
       workspace_id: candidate.workspaceId,
       locale: candidate.locale,
       message: candidate.instruction,
-      current: toContentRecord(current),
+      current: await prisma.$transaction(async (tx) =>
+        authoringSnapshot(tx, await lockContentRoot(tx, candidate.workspaceId, current.id, candidate.baseRevision))
+      ),
       context,
       history: messages.reverse().map(({ role, text }) => ({ role, text })),
       summary: conversation.summary
     });
     // Validate again at the application boundary, even when a test/provider adapter is substituted.
     const result = conversationResultSchema.parse(generated.result);
-    const changes = result.changes;
-    if ((changes?.carousel && current.contentType !== "CAROUSEL") || (changes?.reelScript && current.contentType !== "REEL"))
-      throw new ConversationError("AI_OUTPUT_INVALID", "Unexpected format change.");
-    // Video generation consumes visualDirection, not the structured script.
-    // Keep script-only provider edits usable without introducing another field.
-    if (changes?.reelScript && !changes.visualDirection?.trim()) {
-      changes.visualDirection = [changes.reelScript.hook, ...changes.reelScript.beats].join("\n\n");
-      if (changes.visualDirection.length > 2000)
-        throw new ConversationError("AI_OUTPUT_INVALID", "The Reel script needs a video direction of at most 2000 characters.");
-    }
-    const data = Object.fromEntries(Object.entries(changes ?? {}).filter(([, value]) => value !== null));
-    if (changes && !Object.keys(data).length) throw new ConversationError("AI_OUTPUT_INVALID", "An edit response must include a draft change.");
+    proposed = result;
     await prisma.$transaction(async (tx) => {
-      const owned = await tx.conversationRun.updateMany({
-        where: { id: candidate.id, status: "RUNNING", leaseExpiresAt: { gt: new Date() } },
-        data: { status: "RUNNING" }
-      });
-      if (!owned.count) return;
-      if (!(await canContinue(candidate.workspaceId, candidate.userId, tx))) throw new ConversationError("CONVERSATION_ACCESS_CHANGED", "Access changed.");
-      let conflict = false;
-      let revision = current.revision;
-      if (Object.keys(data).length) {
-        const applied = await tx.contentItem.updateMany({
-          where: { id: current.id, workspaceId: candidate.workspaceId, revision: current.revision, deletedAt: null, status: { in: ["DRAFT", "IN_REVIEW"] } },
-          data: { ...data, aiPromptUsed: generated.prompt_version }
-        });
-        conflict = applied.count !== 1;
-        if (!conflict) revision += 1;
-      }
-      const status = conflict ? "CONFLICT" : "SUCCEEDED";
-      await tx.conversationRun.update({
-        where: { id: candidate.id },
-        data: { status, result: result as unknown as Prisma.InputJsonValue, errorCode: conflict ? "CONTENT_REVISION_CONFLICT" : null, leaseExpiresAt: null }
-      });
-      await tx.conversationMessage.create({
-        data: {
-          workspaceId: candidate.workspaceId,
-          conversationId: conversation.id,
-          runId: candidate.id,
-          role: "assistant",
-          text: conflict
-            ? failureText(candidate.locale, true) +
-              (changes?.caption == null
-                ? ""
-                : `\n\n${candidate.locale === "ar" ? "النص المقترح الذي لم يُحفظ:" : "Proposed caption, not saved:"}\n${changes.caption}`)
-            : changes
-              ? appliedChangesText(candidate.locale, Object.keys(data))
-              : result.reply
-        }
-      });
-      if (!conflict) await tx.contentConversation.update({ where: { id: conversation.id }, data: { summary: result.summary } });
+      await tx.$queryRaw`SELECT id FROM conversation_runs WHERE id = ${candidate.id}::uuid FOR UPDATE`;
+      const run = await tx.conversationRun.findUniqueOrThrow({ where: { id: candidate.id } });
+      if (run.status !== "RUNNING" || !run.leaseExpiresAt || run.leaseExpiresAt <= new Date()) return;
+      if (!(await canContinue(run.workspaceId, run.userId, tx))) throw new ConversationError("CONVERSATION_ACCESS_CHANGED", "Access changed.");
+      const root = await lockContentRoot(tx, run.workspaceId, current.id, run.baseRevision);
+      const consequences = await destructiveConsequences(tx, root, result);
+      const state: AssistantActionState = consequences.length
+        ? {
+            editsSaved: false,
+            revision: root.revision,
+            bindings: {},
+            generation: [],
+            confirmation: { token: randomUUID(), revision: root.revision, consequences }
+          }
+        : await applyAssistantBatch(tx, run.workspaceId, current.id, run.baseRevision, result);
+      await saveActionReceipt(tx, run, state, result);
+      await tx.contentConversation.update({ where: { id: conversation.id }, data: { summary: result.summary } });
       await tx.aiInteraction.create({
         data: {
-          workspaceId: candidate.workspaceId,
+          workspaceId: run.workspaceId,
           agent: "CREATE_CONVERSATION",
-          conversationRunId: candidate.id,
-          contentItemId: current.id,
-          contentRevision: revision,
+          conversationRunId: run.id,
+          contentItemId: root.id,
+          contentRevision: state.revision,
           model: generated.model,
           promptVersion: generated.prompt_version,
-          prompt: { instruction: candidate.instruction, baseRevision: candidate.baseRevision, context } as unknown as Prisma.InputJsonValue,
-          response: { result, applied: !conflict && Object.keys(data).length > 0 } as unknown as Prisma.InputJsonValue,
+          prompt: { instruction: run.instruction, baseRevision: run.baseRevision, context } as unknown as Prisma.InputJsonValue,
+          response: { result, applied: state.editsSaved } as unknown as Prisma.InputJsonValue,
           tokensIn: generated.tokens_in,
           tokensOut: generated.tokens_out,
           costMinor: 0,
           currency: "BHD"
         }
       });
-      await recordAiTokenUsage({ client: tx, workspaceId: candidate.workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out });
+      await recordAiTokenUsage({ client: tx, workspaceId: run.workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out });
     });
+    await dispatchRunGeneration(candidate.id);
   } catch (error) {
     // Do not automatically repeat an ambiguous provider request or an application write.
-    await failRun(candidate.id, error instanceof AiServiceRequestError || error instanceof ConversationError ? error.code : "CONVERSATION_FAILED");
+    await failRun(
+      candidate.id,
+      error instanceof ContentConflictError
+        ? error.code
+        : error instanceof AiServiceRequestError || error instanceof ConversationError || error instanceof ContentAggregateError
+          ? error.code
+          : error instanceof ZodError
+            ? "AI_OUTPUT_INVALID"
+            : "CONVERSATION_FAILED",
+      error instanceof ContentConflictError ? "CONFLICT" : "FAILED",
+      proposed
+    );
   }
-}
-
-function appliedChangesText(locale: string, fields: string[]): string {
-  const labels: Record<string, [string, string]> = {
-    caption: ["caption", "النص"],
-    brief: ["brief", "الموجز"],
-    contentPillar: ["content pillar", "محور المحتوى"],
-    campaignGoal: ["post objective", "هدف المنشور"],
-    tone: ["tone", "النبرة"],
-    visualDirection: ["visual direction", "التوجيه البصري"],
-    carousel: ["carousel plan", "خطة المنشور المتعدد"],
-    reelScript: ["Reel script", "سيناريو الريل"]
-  };
-  const names = fields.map((field) => labels[field]?.[locale === "ar" ? 1 : 0] ?? field).join(locale === "ar" ? "، " : ", ");
-  return locale === "ar" ? `تم تحديث وحفظ ${names} في المسودة.` : `Updated and saved ${names} in the draft.`;
 }
