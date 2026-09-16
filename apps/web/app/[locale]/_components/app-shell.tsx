@@ -71,7 +71,9 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPreferenceReady, setSidebarPreferenceReady] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const ownerKey = session ? JSON.stringify([session.user.id, session.workspace.id]) : "";
+  const [notificationState, setNotificationState] = useState<{ owner: string; items: NotificationRecord[] }>({ owner: "", items: [] });
+  const notifications = notificationState.owner === ownerKey ? notificationState.items : [];
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
@@ -133,7 +135,11 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
       void client
         .notifications()
         .then((items) => {
-          if (!cancelled) setNotifications(items);
+          if (!cancelled)
+            setNotificationState({
+              owner: ownerKey,
+              items: items.filter((item) => item.channel === "IN_APP" && item.userId === session.user.id && item.workspaceId === session.workspace.id)
+            });
         })
         .catch(() => undefined);
     };
@@ -143,13 +149,15 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [client, session, sessionChecked]);
+  }, [client, session, sessionChecked, ownerKey]);
 
   async function markNotificationRead(notification: NotificationRecord) {
     if (notification.readAt) return;
     try {
       const updated = await client.markNotificationRead(notification.id);
-      setNotifications((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setNotificationState((current) =>
+        current.owner === ownerKey ? { ...current, items: current.items.map((item) => (item.id === updated.id ? updated : item)) } : current
+      );
     } catch {
       // The durable record remains available for a later retry.
     }
@@ -448,7 +456,7 @@ function NotificationDrawer({
           ) : (
             notifications.map((notification) => (
               <article
-                className={`rounded-2xl border p-4 ${notification.readAt ? "border-[var(--sunlit-line)] bg-[var(--surface)]" : "border-[var(--danger)] bg-[var(--danger-soft)]"}`}
+                className={`rounded-2xl border p-4 ${!notification.readAt && notification.templateKey === "publishing_failed" ? "border-[var(--danger)] bg-[var(--danger-soft)]" : "border-[var(--sunlit-line)] bg-[var(--surface)]"}`}
                 key={notification.id}
               >
                 <div className="flex items-start gap-3">
@@ -456,13 +464,25 @@ function NotificationDrawer({
                     <Bell size={17} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-extrabold text-[var(--sunlit-ink)]">{locale === "ar" ? "تعذر نشر المحتوى" : "Publishing needs attention"}</p>
+                    <p className="font-extrabold text-[var(--sunlit-ink)]">
+                      {notification.templateKey === "publishing_failed"
+                        ? locale === "ar"
+                          ? "تعذر نشر المحتوى"
+                          : "Publishing needs attention"
+                        : locale === "ar"
+                          ? "تنبيه"
+                          : "Notification"}
+                    </p>
                     <p className="mt-1 text-sm leading-6 text-[var(--sunlit-ink-soft)]">
                       {typeof notification.payload.message === "string"
                         ? notification.payload.message
                         : locale === "ar"
-                          ? "راجع المحتوى وحاول مرة أخرى."
-                          : "Review the content and try again."}
+                          ? notification.templateKey === "publishing_failed"
+                            ? "راجع المحتوى وحاول مرة أخرى."
+                            : "لديك تحديث جديد."
+                          : notification.templateKey === "publishing_failed"
+                            ? "Review the content and try again."
+                            : "You have a new update."}
                     </p>
                     <p className="mt-2 text-xs font-semibold text-[var(--sunlit-muted)]">
                       {new Intl.DateTimeFormat(locale === "ar" ? "ar-BH" : "en-BH", { dateStyle: "medium", timeStyle: "short" }).format(

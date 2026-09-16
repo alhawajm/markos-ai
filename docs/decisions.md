@@ -717,3 +717,15 @@ Uploads remain temporary for 24 hours and are retained after analysis failure so
 Extend the first-learning field allowlist with `colors`, only when the business has no saved brand colors. A proposal contains one to seven six-digit hex values and cites posts with supplied cover images. The API omits unsupported palettes and palettes that would replace existing colors; approval rechecks authoritative colors under the existing knowledge lock. The UI starts palette suggestions unselected. Only explicit approval writes the reviewed values to the existing brand colors field. These are suggested visual choices, never automatically inferred official brand facts. No migration, additional provider request, or new palette store is needed. Existing saved learning records without a colors snapshot remain readable.
 
 Deferred separately: stronger restraint against invented facts during onboarding profile resolution (pending user evidence), email verification page arrangement, and Instagram connection ownership/revocation recovery. Document timeout handling remains the separate merged fix.
+
+
+## 2026-09-16 — Focused notifications, carousel and Insights fixes
+
+- In-app notifications are selected by recipient, workspace and `IN_APP` channel. Email-delivery records must not appear as publish failures. The shell binds fetched notifications to the current identity and uses the template to identify publishing alerts.
+- Create retains its current layout. Carousel media supports ordered multi-upload/library selection, drag and button reordering, replacement, and one explicitly requested image generation at a time. Bulk generation is deferred. Existing ten-image and JPEG constraints remain unchanged.
+- Media-list updates use the existing content row lock and compare the expected media list before saving. Generation replaces a specific asset in place only if it is still attached; completed output remains in the library if attachment fails. No new data model is introduced.
+- Insights starts at the latest chronological data on initial load or a range/metric change, with RTL-aware positioning. Ordinary renders do not override user scrolling.
+- Business Profile photo features remain outside this pass. Uncommitted onboarding integration is preserved separately while this branch is tested.
+
+
+Focused local verification for this pass: 22 API tests in media/notifications passed, including ownership, channel filtering, stale-order rejection, full-carousel replacement, failure preservation and removed-target recovery. Focused Create browser checks passed for multi-upload/library selection, drag/button order, generation retry, saved ordering, existing format limits/recovery and thinking visibility. Notification account-switch checks and latest-date chart positioning in English/Arabic passed. API/web TypeScript and affected web ESLint passed. Two targeted Create screenshots were inspected. No real provider generation, publishing, hosted environment changes, full-suite run or production build was performed. The first Create browser navigation timed out during cold compilation; its focused rerun passed.

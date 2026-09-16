@@ -183,7 +183,12 @@ export async function generateImageForContent(
   }
 
   assertMediaEditable(contentItem.status);
-  await assertStoredContentMedia(prisma, contentItem, { addition: { id: "pending-generated-image", mimeType: "image/jpeg" } });
+  if (input.replaceMediaAssetId && !contentItem.mediaIds.includes(input.replaceMediaAssetId)) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
+  await assertStoredContentMedia(
+    prisma,
+    { ...contentItem, mediaIds: contentItem.mediaIds.filter((id) => id !== input.replaceMediaAssetId) },
+    { addition: { id: "pending-generated-image", mimeType: "image/jpeg" } }
+  );
 
   const prompt = input.prompt?.trim() || promptFromContent(contentItem);
   const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`);
@@ -232,10 +237,25 @@ export async function generateImageForContent(
         ? "CONTENT_NOT_FOUND"
         : !["DRAFT", "IN_REVIEW"].includes(latest.status)
           ? "CONTENT_LOCKED"
-          : await validateStoredContentMedia(tx, latest, { addition: asset });
+          : input.replaceMediaAssetId && !latest.mediaIds.includes(input.replaceMediaAssetId)
+            ? "CONTENT_MEDIA_CHANGED"
+            : await validateStoredContentMedia(
+                tx,
+                { ...latest, mediaIds: latest.mediaIds.filter((id) => id !== input.replaceMediaAssetId) },
+                { addition: asset }
+              );
       const attachmentError = issue ? new ContentMediaValidationError(issue, asset.id) : null;
       const content =
-        latest && !attachmentError ? await tx.contentItem.update({ where: { id: latest.id }, data: { mediaIds: [...latest.mediaIds, asset.id] } }) : null;
+        latest && !attachmentError
+          ? await tx.contentItem.update({
+              where: { id: latest.id },
+              data: {
+                mediaIds: input.replaceMediaAssetId
+                  ? latest.mediaIds.map((id) => (id === input.replaceMediaAssetId ? asset.id : id))
+                  : [...latest.mediaIds, asset.id]
+              }
+            })
+          : null;
 
       await tx.aiInteraction.create({
         data: {
@@ -384,6 +404,22 @@ export async function detachMediaFromContent(workspaceId: string, contentItemId:
     });
 
     return toContentRecord(row);
+  });
+}
+
+/** Atomic list update: preserves ordering and rejects stale edits or foreign assets. */
+export async function updateContentMedia(
+  workspaceId: string,
+  contentItemId: string,
+  input: { mediaIds: string[]; expectedMediaIds: string[] }
+): Promise<ContentRecord> {
+  return prisma.$transaction(async (tx) => {
+    const content = await lockContentForMedia(tx, workspaceId, contentItemId);
+    if (!content) throw new MediaContentItemNotFoundError();
+    assertMediaEditable(content.status);
+    if (JSON.stringify(content.mediaIds) !== JSON.stringify(input.expectedMediaIds)) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
+    await assertStoredContentMedia(tx, { ...content, mediaIds: input.mediaIds });
+    return toContentRecord(await tx.contentItem.update({ where: { id: content.id }, data: { mediaIds: input.mediaIds } }));
   });
 }
 

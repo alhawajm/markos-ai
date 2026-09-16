@@ -4,7 +4,8 @@ import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { listNotifications, markNotificationRead, NotificationNotFoundError } from "./notification-service";
 
 export async function registerNotificationRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/notifications", { config: { workspaceRequired: true, permissions: ["workspace:read"] } }, async () => {
+  app.get("/v1/notifications", { config: { workspaceRequired: true, permissions: ["workspace:read"] } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
     const { userId, workspaceId } = requireWorkspaceContext();
     return ok(await listNotifications(userId, workspaceId));
   });

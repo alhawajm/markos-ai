@@ -676,8 +676,17 @@ export const attachMediaToContentSchema = z.object({
 });
 
 export const generateImageForContentSchema = z.object({
+  replaceMediaAssetId: z.string().uuid().optional(),
   prompt: z.string().min(3).max(1000).optional(),
   aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
+});
+
+export const updateContentMediaSchema = z.object({
+  mediaIds: z
+    .array(z.string().uuid())
+    .max(10)
+    .refine((ids) => new Set(ids).size === ids.length, "Duplicate media"),
+  expectedMediaIds: z.array(z.string().uuid()).max(10)
 });
 
 export const generateVideoForContentSchema = z.object({

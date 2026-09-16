@@ -41,6 +41,99 @@ afterEach(() => {
 });
 
 describe("media routes", () => {
+  it("saves carousel order/replacement atomically and rejects stale, foreign, duplicate and locked media edits", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    try {
+      const content = await createDraftContent(owner.workspace.id);
+      const a = await createIntegrityAsset(owner.workspace.id);
+      const b = await createIntegrityAsset(owner.workspace.id);
+      const c = await createIntegrityAsset(owner.workspace.id);
+      const foreign = await createIntegrityAsset(other.workspace.id);
+      await prisma.contentItem.update({ where: { id: content.id }, data: { contentType: "CAROUSEL", mediaIds: [a.id, b.id] } });
+      const update = (mediaIds: string[], expectedMediaIds: string[], auth = headers) =>
+        app.inject({ method: "PATCH", url: `/v1/content/${content.id}/media`, headers: auth, payload: { mediaIds, expectedMediaIds } });
+      expect((await update([b.id, a.id], [a.id, b.id])).json().data.mediaIds).toEqual([b.id, a.id]);
+      expect((await update([c.id, a.id], [a.id, b.id])).json().error.code).toBe("CONTENT_MEDIA_CHANGED");
+      expect((await update([foreign.id, a.id], [b.id, a.id])).statusCode).toBe(409);
+      expect((await update([a.id, a.id], [b.id, a.id])).statusCode).toBe(400);
+      expect((await update([a.id], [b.id, a.id], authHeaders(other.tokens.accessToken))).statusCode).toBe(404);
+      expect((await update([c.id, a.id], [b.id, a.id])).json().data.mediaIds).toEqual([c.id, a.id]);
+      await prisma.contentItem.update({ where: { id: content.id }, data: { status: "APPROVED" } });
+      expect((await update([a.id, c.id], [c.id, a.id])).statusCode).toBe(409);
+      expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).mediaIds).toEqual([c.id, a.id]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("generates a replacement at the same slide position, retaining the old image when generation fails", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    try {
+      const content = await createDraftContent(owner.workspace.id);
+      const images = await Promise.all(Array.from({ length: 10 }, () => createIntegrityAsset(owner.workspace.id)));
+      const ids = images.map((item) => item.id);
+      await prisma.contentItem.update({ where: { id: content.id }, data: { contentType: "CAROUSEL", mediaIds: ids } });
+      const generate = () =>
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${content.id}/generate-image`,
+          headers,
+          payload: { prompt: "A fresh orange tart on a marble table", replaceMediaAssetId: ids[4] }
+        });
+      imageMock.error = new AiServiceRequestError({ code: "AI_PROVIDER_UNAVAILABLE", message: "Provider unavailable", statusCode: 503, retryable: true });
+      expect((await generate()).statusCode).not.toBe(200);
+      expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).mediaIds).toEqual(ids);
+      imageMock.error = undefined;
+      const result = await generate();
+      expect(result.statusCode, result.body).toBe(200);
+      const next = [...ids];
+      next[4] = result.json().data.mediaAsset.id;
+      expect(result.json().data.contentItem.mediaIds).toEqual(next);
+      expect(await prisma.mediaAsset.findFirst({ where: { id: ids[4]!, deletedAt: null } })).not.toBeNull();
+      expect((await generate()).json().error.code).toBe("CONTENT_MEDIA_CHANGED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("retains generated output in the library if its target slide is removed during generation", async () => {
+    const app = await buildApp();
+    const owner = await registerTestUser(app);
+    const headers = authHeaders(owner.tokens.accessToken);
+    let release!: () => void;
+    try {
+      const content = await createDraftContent(owner.workspace.id);
+      const a = await createIntegrityAsset(owner.workspace.id);
+      const b = await createIntegrityAsset(owner.workspace.id);
+      await prisma.contentItem.update({ where: { id: content.id }, data: { contentType: "CAROUSEL", mediaIds: [a.id, b.id] } });
+      imageMock.hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const previousCalls = imageMock.calls;
+      const request = app
+        .inject({ method: "POST", url: `/v1/content/${content.id}/generate-image`, headers, payload: { prompt: "Orange tart", replaceMediaAssetId: a.id } })
+        .then((response) => response);
+      await vi.waitFor(() => expect(imageMock.calls).toBeGreaterThan(previousCalls));
+      await app.inject({ method: "DELETE", url: `/v1/content/${content.id}/media/${a.id}`, headers });
+      release();
+      const response = await request;
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe("CONTENT_MEDIA_CHANGED");
+      const output = response.json().error.details[0];
+      expect(output.savedToLibrary).toBe(true);
+      expect(await prisma.mediaAsset.findFirst({ where: { id: output.mediaAssetId, workspaceId: owner.workspace.id, deletedAt: null } })).not.toBeNull();
+      expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).mediaIds).toEqual([b.id]);
+    } finally {
+      release?.();
+      await app.close();
+    }
+  });
+
   it("limits single-format attachments and rejects incompatible media without replacing the current file", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
