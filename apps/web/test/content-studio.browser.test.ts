@@ -63,6 +63,8 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
     items,
     media,
     creates: 0,
+    imageRequests: [] as Record<string, unknown>[],
+    failImage: false,
     conversations: {} as Record<string, ContentConversationRecord>,
     calls: [] as string[],
     failSave: false,
@@ -132,7 +134,10 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
       );
     if (path === "/v1/media" && method === "GET") return route.fulfill(json(state.media));
     if (path === "/v1/media/upload") {
-      const uploaded = { ...asset("upload", body.width, body.height), filename: body.filename };
+      const uploaded = {
+        ...asset(state.media.some((item) => item.id === "upload") ? `upload-${state.media.length}` : "upload", body.width, body.height),
+        filename: body.filename
+      };
       state.media.push(uploaded);
       return route.fulfill(json(uploaded));
     }
@@ -190,7 +195,7 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
           contentPillar: "Offerings"
         });
       }
-      if (action === "/media") {
+      if (action === "/media" && method === "POST") {
         if (state.attachConflict) {
           state.media.push(state.attachConflict);
           item.mediaIds = [state.attachConflict.id];
@@ -208,7 +213,12 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
         item.mediaIds = item.mediaIds.filter((id) => id !== action.split("/")[2]);
       }
       if (action === "/generate-image") {
-        const generated = { ...asset("generated"), type: "AI_GENERATED" as const };
+        state.imageRequests.push(body);
+        if (state.failImage) return route.fulfill(failure());
+        const generated = {
+          ...asset(state.media.some((asset) => asset.id === "generated") ? `generated-${state.media.length}` : "generated"),
+          type: "AI_GENERATED" as const
+        };
         state.media.push(generated);
         if (state.retainGeneratedImage) {
           if (state.generatedImageErrorCode === "CONTENT_LOCKED") item.status = "APPROVED";
@@ -225,7 +235,8 @@ async function setup(items: ContentRecord[] = [], media: MediaAssetRecord[] = [a
             })
           });
         }
-        item.mediaIds.push(generated.id);
+        if (body.replaceMediaAssetId) item.mediaIds = item.mediaIds.map((id) => (id === body.replaceMediaAssetId ? generated.id : id));
+        else item.mediaIds.push(generated.id);
         return route.fulfill(json({ contentItem: item, mediaAsset: generated }));
       }
       if (action === "/status") item.status = body.status;
@@ -749,6 +760,8 @@ describe("unified Create", () => {
       await working.waitFor();
       expect((await working.innerText()).trim()).toBe("");
       expect(await working.locator("svg").count()).toBe(1);
+      expect((await working.boundingBox())?.width).toBeGreaterThanOrEqual(40);
+      if (process.env.MARKOS_UI_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.MARKOS_UI_SCREENSHOT_DIR}/thinking-indicator.png` });
       await preview(page);
       expect(await working.isVisible()).toBe(true);
       expect(await page.getByLabel("Caption", { exact: true }).isDisabled()).toBe(true);
@@ -960,6 +973,62 @@ describe("unified Create", () => {
       await page.getByRole("region", { name: "Create workspace" }).getByRole("alert").waitFor();
       expect(state.items[0]?.caption).toBe("Shorter citrus caption.\n\nنص عربي محدّث.\n\nTry it today");
       expect(await page.getByLabel("Message MARKOS", { exact: true }).inputValue()).toBe("Make it warmer.");
+    } finally {
+      await close();
+    }
+  });
+
+  it("edits carousel slides in saved order with multiple uploads, library selection and failed generation retry", async () => {
+    const { page, state, close } = await setup(
+      [draft({ contentType: "CAROUSEL", mediaIds: ["photo", "second"] })],
+      [asset(), asset("second"), asset("third"), asset("fourth")]
+    );
+    try {
+      await open(page, "saved-post");
+      await page.getByRole("button", { name: "Edit media", exact: true }).click();
+      const slides = page.getByRole("list", { name: "Slide order" });
+      await expect.poll(() => slides.getByRole("listitem").count()).toBe(2);
+      await page.getByRole("button", { name: "Move slide 2 up", exact: true }).click();
+      await expect.poll(() => state.items[0]?.mediaIds).toEqual(["second", "photo"]);
+      await page.getByRole("button", { name: "Media Library", exact: true }).click();
+      const library = page.getByRole("dialog", { name: "Media Library", exact: true });
+      await library.getByRole("button", { name: /third.jpg/ }).click();
+      await library.getByRole("button", { name: /fourth.jpg/ }).click();
+      await library.getByRole("button", { name: "Attach selected", exact: true }).click();
+      await expect.poll(() => state.items[0]?.mediaIds).toEqual(["second", "photo", "third", "fourth"]);
+      await slides.getByRole("listitem").first().dragTo(slides.getByRole("listitem").nth(1));
+      await expect.poll(() => state.items[0]?.mediaIds).toEqual(["photo", "second", "third", "fourth"]);
+      await page.getByRole("button", { name: "Move slide 2 up", exact: true }).click();
+      await expect.poll(() => state.items[0]?.mediaIds).toEqual(["second", "photo", "third", "fourth"]);
+      if (process.env.MARKOS_UI_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.MARKOS_UI_SCREENSHOT_DIR}/carousel-slides.png` });
+      await slides.getByRole("listitem").first().getByRole("button", { name: "Generate", exact: true }).click();
+      const direction = page.getByLabel("Visual direction", { exact: true });
+      await direction.fill("A close-up of the first pastry with orange zest");
+      state.failImage = true;
+      await page.getByRole("button", { name: "Generate image", exact: true }).click();
+      await expect.poll(() => state.imageRequests.length).toBe(1);
+      await expect.poll(() => page.getByRole("button", { name: "Generate image", exact: true }).isEnabled()).toBe(true);
+      expect(state.items[0]?.mediaIds[0]).toBe("second");
+      expect(await direction.inputValue()).toContain("orange zest");
+      state.failImage = false;
+      await page.getByRole("button", { name: "Generate image", exact: true }).click();
+      await expect.poll(() => state.items[0]?.mediaIds[0]).toBe("generated");
+      expect(state.imageRequests[1]).toMatchObject({ replaceMediaAssetId: "second", prompt: "A close-up of the first pastry with orange zest" });
+      const jpeg = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1080;
+        canvas.height = 1350;
+        return canvas.toDataURL("image/jpeg").split(",")[1]!;
+      });
+      await page
+        .getByLabel("Upload JPEG file", { exact: true })
+        .setInputFiles(["one.jpg", "two.jpg"].map((name) => ({ name, mimeType: "image/jpeg", buffer: Buffer.from(jpeg, "base64") })));
+      await expect.poll(() => state.items[0]?.mediaIds.length).toBe(6);
+      const order = [...state.items[0]!.mediaIds];
+      await page.reload();
+      await page.getByRole("button", { name: "Edit media", exact: true }).click();
+      await expect.poll(() => page.getByRole("list", { name: "Slide order" }).getByRole("listitem").count()).toBe(6);
+      expect(state.items[0]?.mediaIds).toEqual(order);
     } finally {
       await close();
     }

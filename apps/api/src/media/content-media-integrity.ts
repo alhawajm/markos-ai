@@ -1,8 +1,9 @@
 import type { ContentItem, ContentType, Prisma } from "@prisma/client";
 import { contentMediaIssue, type ContentMediaIssue } from "@markos/shared-types";
 
-type ContentMediaFailureCode = ContentMediaIssue | "CONTENT_LOCKED" | "CONTENT_NOT_FOUND";
+type ContentMediaFailureCode = ContentMediaIssue | "CONTENT_LOCKED" | "CONTENT_NOT_FOUND" | "CONTENT_MEDIA_CHANGED";
 const messages: Record<ContentMediaFailureCode, string> = {
+  CONTENT_MEDIA_CHANGED: "The media changed while you were editing. Review the current slides and try again.",
   CONTENT_LOCKED: "Media cannot be attached because this post is no longer a draft.",
   CONTENT_NOT_FOUND: "Media cannot be attached because this post is no longer available.",
   CONTENT_MEDIA_SINGLE_ITEM_LIMIT:

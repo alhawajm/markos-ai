@@ -48,6 +48,7 @@ import {
   type ContentDraftFields
 } from "./content-studio-draft-state";
 import { ContentStudioPreview } from "./content-studio-preview";
+import { CarouselSlides } from "./carousel-slides";
 import { ContentStudioMediaLibrary } from "./content-studio-media-library";
 import { ContentStatusBadge } from "./content-status-badge";
 import { contentStatusLabel } from "./content-status";
@@ -101,6 +102,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     fieldsRef.current = fields;
     baselineRef.current = baseline;
   }, [fields, baseline]);
+  const [mediaTarget, setMediaTarget] = useState<string | null>(null);
+  const [slidePrompts, setSlidePrompts] = useState<Record<string, string>>({});
+  const generatorRef = useRef<HTMLDetailsElement>(null);
+  const carousel = fields.contentType === "CAROUSEL";
+  const generationPrompt = carousel ? (slidePrompts[mediaTarget ?? "new"] ?? visualDirection) : visualDirection;
   const [ratio, setRatio] = useState<"1:1" | "4:5" | "9:16">("4:5");
   const [mediaMode, setMediaMode] = useState<"image" | "video">("image");
   const [duration, setDuration] = useState<4 | 8 | 12>(8);
@@ -194,6 +200,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return;
     }
     setError("");
+    setMediaTarget(null);
     field("contentType", type);
     setContentTypeChosen(true);
     setMediaMode(type === "REEL" ? "video" : "image");
@@ -206,6 +213,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   }
   function remember(next: ContentRecord) {
     if (!mounted.current) return;
+    if (recordRef.current?.id !== next.id) {
+      setMediaTarget(null);
+      setSlidePrompts({});
+    }
     recordRef.current = next;
     baselineRevision.current = next.revision;
     setRecord(next);
@@ -519,6 +530,8 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     setContentTypeChosen(false);
     setCompanionView("assistant");
     setVideoJob(null);
+    setMediaTarget(null);
+    setSlidePrompts({});
     setRetainedMediaId(null);
     setPublishJob(null);
     setError("");
@@ -556,33 +569,80 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       setPrompt("");
     });
   }
-  async function upload(file: File) {
-    if (!canEdit) return;
+  async function saveMediaList(saved: ContentRecord, mediaIds: string[]) {
+    remember(await client.updateContentMedia(saved.id, { mediaIds, expectedMediaIds: saved.mediaIds }));
+  }
+  async function reorderSlides(from: number, to: number) {
+    await run(text("Saving slide order…", "جارٍ حفظ ترتيب الشرائح…"), async () => {
+      const saved = await persist();
+      const ids = [...saved.mediaIds];
+      const [moved] = ids.splice(from, 1);
+      if (!moved || to < 0 || to >= saved.mediaIds.length) return;
+      ids.splice(to, 0, moved);
+      await saveMediaList(saved, ids);
+    });
+  }
+  function selectSlide(id: string | null, action: "upload" | "library" | "generate") {
+    setMediaTarget(id);
+    if (action === "upload") window.requestAnimationFrame(() => uploadRef.current?.click());
+    if (action === "library") setDialog("library");
+    if (action === "generate" && generatorRef.current) {
+      generatorRef.current.open = true;
+      generatorRef.current.scrollIntoView({ block: "nearest", behavior: "auto" });
+    }
+  }
+  async function upload(files: File[]) {
+    if (!canEdit || !files.length) return;
     await run(text("Uploading media…", "جارٍ رفع الوسائط…"), async () => {
-      assertCanAddMedia("image/jpeg");
-      if (file.type !== "image/jpeg" || !/\.jpe?g$/i.test(file.name) || !file.size || file.size > 8 * 1024 * 1024) {
-        throw new Error(
-          text(
-            "Choose a JPEG up to 8 MB. Existing videos can be selected from the Media Library.",
-            "اختر صورة JPEG حتى 8 ميغابايت. يمكنك اختيار فيديو محفوظ من مكتبة الوسائط."
-          )
-        );
+      if (!mediaTarget) assertCanAddMedia("image/jpeg");
+      const capacity = mediaTarget ? 1 : mediaLimit - mediaCount;
+      if (files.length > capacity) throw new Error(text(`Choose up to ${capacity} images.`, `اختر حتى ${capacity} صور.`));
+      if (files.some((file) => file.type !== "image/jpeg" || !/\.jpe?g$/i.test(file.name) || !file.size || file.size > 8 * 1024 * 1024)) {
+        throw new Error(text("Choose JPEG images up to 8 MB each.", "اختر صور JPEG بحجم 8 ميغابايت كحد أقصى لكل صورة."));
       }
-      const dimensions = await readImageDimensions(file);
+      // Validate the whole selection before uploading; a failed attachment keeps files in the library.
+      const dimensions = await Promise.all(files.map(readImageDimensions));
       const saved = await persist(true);
-      const media = await client.uploadMedia({ filename: file.name, mimeType: file.type, type: "IMAGE", ...dimensions, base64Data: await readBase64(file) });
-      setAssets((current) => [media, ...current.filter((item) => item.id !== media.id)]);
-      const result = await client.attachMediaToContent(saved.id, media.id);
-      remember(result);
+      if (mediaTarget && !saved.mediaIds.includes(mediaTarget))
+        throw new Error(text("This slide changed. Select it again.", "تغيّرت هذه الشريحة. اخترها مجدداً."));
+      const uploaded: string[] = [];
+      for (const [index, file] of files.entries()) {
+        const media = await client.uploadMedia({
+          filename: file.name,
+          mimeType: file.type,
+          type: "IMAGE",
+          ...dimensions[index],
+          base64Data: await readBase64(file)
+        });
+        setAssets((current) => [media, ...current.filter((item) => item.id !== media.id)]);
+        uploaded.push(media.id);
+      }
+      try {
+        if (carousel)
+          await saveMediaList(saved, mediaTarget ? saved.mediaIds.map((id) => (id === mediaTarget ? uploaded[0]! : id)) : [...saved.mediaIds, ...uploaded]);
+        else remember(await client.attachMediaToContent(saved.id, uploaded[0]!));
+      } catch (cause) {
+        setRetainedMediaId(uploaded[0] ?? null);
+        throw cause;
+      }
+      setMediaTarget(null);
       setNotice(text("Media attached. The draft is saved.", "أُرفقت الوسائط وحُفظت المسودة."));
     });
   }
-  async function attach(asset: MediaAssetRecord) {
+  async function attach(selected: MediaAssetRecord[]) {
     await run(text("Attaching media…", "جارٍ إرفاق الوسائط…"), async () => {
-      assertCanAddMedia(asset.mimeType);
+      if (!mediaTarget) selected.forEach((asset) => assertCanAddMedia(asset.mimeType));
       const saved = await persist(true);
-      remember(await client.attachMediaToContent(saved.id, asset.id));
-      if (asset.id === retainedMediaId) setRetainedMediaId(null);
+      if (mediaTarget && !saved.mediaIds.includes(mediaTarget))
+        throw new Error(text("This slide changed. Select it again.", "تغيّرت هذه الشريحة. اخترها مجدداً."));
+      if (carousel)
+        await saveMediaList(
+          saved,
+          mediaTarget ? saved.mediaIds.map((id) => (id === mediaTarget ? selected[0]!.id : id)) : [...saved.mediaIds, ...selected.map((asset) => asset.id)]
+        );
+      else remember(await client.attachMediaToContent(saved.id, selected[0]!.id));
+      if (selected.some((asset) => asset.id === retainedMediaId)) setRetainedMediaId(null);
+      setMediaTarget(null);
       setDialog(null);
       setNotice(text("Media attached. The draft is saved.", "أُرفقت الوسائط وحُفظت المسودة."));
     });
@@ -590,7 +650,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   async function generateMedia() {
     setRetainedMediaId(null);
     await run(text("Starting media generation…", "جارٍ بدء إنشاء الوسائط…"), async () => {
-      assertCanAddMedia(mediaMode === "video" ? "video/mp4" : "image/jpeg");
+      if (!carousel || !mediaTarget) assertCanAddMedia(mediaMode === "video" ? "video/mp4" : "image/jpeg");
       const saved = await persist(true);
       if (mediaMode === "video") {
         if (visualDirection.trim().length < 3) throw new Error(text("Describe the video before generating it.", "صف الفيديو قبل إنشائه."));
@@ -599,10 +659,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       } else {
         const result = await client.generateContentImage(saved.id, {
           aspectRatio: fields.contentType === "STORY" ? "9:16" : ratio,
-          ...(visualDirection.trim() ? { prompt: visualDirection.trim() } : {})
+          ...(generationPrompt.trim() ? { prompt: generationPrompt.trim() } : {}),
+          ...(carousel && mediaTarget ? { replaceMediaAssetId: mediaTarget } : {})
         });
         setAssets((current) => [result.mediaAsset, ...current.filter((item) => item.id !== result.mediaAsset.id)]);
         remember(result.contentItem);
+        setMediaTarget(null);
+        if (carousel) setSlidePrompts((current) => ({ ...current, new: "" }));
         setNotice(text("Image generated and attached. The draft is saved.", "أُنشئت الصورة وأُرفقت وحُفظت المسودة."));
       }
     });
@@ -861,7 +924,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       className="studio-button"
                       disabled={!!imageUploadBlockedReason}
                       title={imageUploadBlockedReason || undefined}
-                      onClick={() => uploadRef.current?.click()}
+                      onClick={() => selectSlide(null, "upload")}
                       type="button"
                     >
                       <ImagePlus size={16} />
@@ -871,7 +934,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       className="studio-button"
                       disabled={!!mediaBlockedReason}
                       title={mediaBlockedReason || undefined}
-                      onClick={() => setDialog("library")}
+                      onClick={() => selectSlide(null, "library")}
                       type="button"
                     >
                       {text("Media Library", "مكتبة الوسائط")}
@@ -890,33 +953,69 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       </button>
                     </div>
                   )}
-                  {record?.mediaIds.map((mediaId, index) => {
-                    const asset = assets.find((candidate) => candidate.id === mediaId);
-                    const filename = asset?.filename ?? text("Unavailable media", "وسائط غير متاحة");
-                    return (
-                      <div className="flex items-center gap-3 rounded-lg border border-[var(--sunlit-line)] p-2" key={mediaId}>
-                        <span className="text-xs text-[var(--sunlit-muted)]">{index + 1}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm">{filename}</span>
-                        <button
-                          className="studio-button"
-                          disabled={mediaGenerating}
-                          aria-label={`${text("Remove", "إزالة")} ${filename}${asset ? "" : ` ${index + 1}`}`}
-                          onClick={() =>
-                            void run(text("Removing media…", "جارٍ إزالة الوسائط…"), async () => {
-                              const saved = await persist();
-                              remember(await client.detachMediaFromContent(saved.id, mediaId));
-                            })
-                          }
-                          type="button"
-                        >
-                          <X size={15} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  <details className="rounded-xl border border-[var(--sunlit-line)] p-3">
+                  {carousel ? (
+                    <CarouselSlides
+                      locale={locale}
+                      mediaIds={record?.mediaIds ?? []}
+                      assets={assets}
+                      disabled={disabled || !canEdit}
+                      activeId={mediaTarget}
+                      busy={!!busy}
+                      onReorder={(from, to) => void reorderSlides(from, to)}
+                      onSelect={selectSlide}
+                      onRemove={(id) =>
+                        void run(text("Removing slide…", "جارٍ إزالة الشريحة…"), async () => {
+                          const saved = await persist();
+                          remember(await client.detachMediaFromContent(saved.id, id));
+                          if (mediaTarget === id) setMediaTarget(null);
+                        })
+                      }
+                    />
+                  ) : (
+                    <>
+                      {" "}
+                      {record?.mediaIds.map((mediaId, index) => {
+                        const asset = assets.find((candidate) => candidate.id === mediaId);
+                        const filename = asset?.filename ?? text("Unavailable media", "وسائط غير متاحة");
+                        return (
+                          <div className="flex items-center gap-3 rounded-lg border border-[var(--sunlit-line)] p-2" key={mediaId}>
+                            <span className="text-xs text-[var(--sunlit-muted)]">{index + 1}</span>
+                            <span className="min-w-0 flex-1 truncate text-sm">{filename}</span>
+                            <button
+                              className="studio-button"
+                              disabled={mediaGenerating}
+                              aria-label={`${text("Remove", "إزالة")} ${filename}${asset ? "" : ` ${index + 1}`}`}
+                              onClick={() =>
+                                void run(text("Removing media…", "جارٍ إزالة الوسائط…"), async () => {
+                                  const saved = await persist();
+                                  remember(await client.detachMediaFromContent(saved.id, mediaId));
+                                })
+                              }
+                              type="button"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                  <details ref={generatorRef} className="rounded-xl border border-[var(--sunlit-line)] p-3">
                     <summary className="cursor-pointer text-sm font-semibold">{text("Generate media", "إنشاء الوسائط")}</summary>
                     <div className="mt-4 space-y-4">
+                      {carousel && (
+                        <label className="studio-field">
+                          {text("Generate for", "إنشاء لـ")}
+                          <select value={mediaTarget ?? ""} onChange={(event) => setMediaTarget(event.target.value || null)} disabled={disabled}>
+                            <option value="">{text("New slide", "شريحة جديدة")}</option>
+                            {record?.mediaIds.map((id, index) => (
+                              <option key={id} value={id}>
+                                {text(`Replace slide ${index + 1}`, `استبدال الشريحة ${index + 1}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       {fields.contentType === "STORY" && (
                         <label className="studio-field">
                           {text("Media format", "تنسيق الوسائط")}
@@ -936,9 +1035,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         <textarea
                           aria-label={text("Visual direction", "التوجيه البصري")}
                           rows={3}
-                          maxLength={2000}
-                          value={visualDirection}
-                          onChange={(event) => field("visualDirection", event.target.value)}
+                          maxLength={mediaMode === "image" ? 1000 : 2000}
+                          value={generationPrompt}
+                          onChange={(event) =>
+                            carousel
+                              ? setSlidePrompts((current) => ({ ...current, [mediaTarget ?? "new"]: event.target.value }))
+                              : field("visualDirection", event.target.value)
+                          }
                           placeholder={text(
                             "Describe the visual, or leave blank for an image based on the draft.",
                             "صف المشهد أو اتركه فارغاً لإنشاء صورة بناءً على المسودة."
@@ -982,12 +1085,16 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       </p>
                       <button
                         className="studio-button"
-                        disabled={disabled || !!mediaBlockedReason || (mediaMode === "video" && visualDirection.trim().length < 3)}
+                        disabled={disabled || (!mediaTarget && !!mediaBlockedReason) || (mediaMode === "video" && visualDirection.trim().length < 3)}
                         onClick={() => void generateMedia()}
                         type="button"
                       >
                         <Sparkles size={16} />
-                        {mediaMode === "video" ? text("Generate video", "إنشاء فيديو") : text("Generate image", "إنشاء صورة")}
+                        {busy && carousel
+                          ? text("Generating slide…", "جارٍ إنشاء الشريحة…")
+                          : mediaMode === "video"
+                            ? text("Generate video", "إنشاء فيديو")
+                            : text("Generate image", "إنشاء صورة")}
                       </button>
                     </div>
                   </details>
@@ -1182,9 +1289,9 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               <Sparkles aria-hidden="true" size={18} className="text-[var(--link)]" />
               {companionView === "preview" && attached.length ? text("Instagram preview", "معاينة Instagram") : "MARKOS"}
             </h2>
-            {activeConversation && (
+            {(activeConversation || busy === text("Sending…", "جارٍ الإرسال…")) && (
               <span role="status" aria-label={text("MARKOS is working", "يعمل MARKOS")} className="studio-working-indicator">
-                <LoaderCircle aria-hidden="true" size={19} className="animate-spin motion-reduce:animate-none" />
+                <LoaderCircle aria-hidden="true" size={23} className="animate-spin motion-reduce:animate-none" />
               </span>
             )}
             {attached.length > 0 &&
@@ -1312,7 +1419,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                     aria-describedby={imageUploadBlockedReason ? "studio-upload-availability" : undefined}
                     onClick={() => {
                       setEditing("media");
-                      uploadRef.current?.click();
+                      selectSlide(null, "upload");
                     }}
                     aria-label={text("Attach JPEG", "إرفاق JPEG")}
                     type="button"
@@ -1351,11 +1458,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         aria-label={text("Upload JPEG file", "رفع ملف JPEG")}
         type="file"
         accept="image/jpeg,.jpg,.jpeg"
-        disabled={disabled || !canEdit || !!imageUploadBlockedReason}
+        multiple={carousel && !mediaTarget}
+        disabled={disabled || !canEdit || (!mediaTarget && !!imageUploadBlockedReason)}
         onChange={(event) => {
-          const file = event.target.files?.[0];
+          const files = Array.from(event.target.files ?? []);
           event.target.value = "";
-          if (file) void upload(file);
+          if (files.length) void upload(files);
         }}
       />
       {pendingExit && (
@@ -1450,10 +1558,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               attachedIds={record?.mediaIds ?? []}
               busy={!!busy}
               contentType={fields.contentType}
-              blockedReason={mediaBlockedReason}
+              blockedReason={mediaTarget ? "" : mediaBlockedReason}
+              selectionLimit={mediaTarget ? 1 : mediaLimit - mediaCount}
               errorMessage={error}
               locale={locale}
-              onAttach={(asset) => void attach(asset)}
+              onAttach={(selected) => void attach(selected)}
             />
           )}
           {dialog === "schedule" && (
@@ -1624,6 +1733,7 @@ function mediaRuleMessage(code: string | null | undefined, locale: Locale): stri
     ],
     CONTENT_MEDIA_REQUIRED: ["Add a compatible media file before marking Ready.", "أضف ملف وسائط متوافقاً قبل تحديد المحتوى كجاهز."],
     CONTENT_MEDIA_CAROUSEL_MINIMUM: ["Add at least two images before marking this carousel Ready.", "أضف صورتين على الأقل قبل تحديد المنشور المتعدد كجاهز."],
+    CONTENT_MEDIA_CHANGED: ["The slide list changed. Review the current slides and try again.", "تغيّر ترتيب الشرائح. راجع الشرائح الحالية وحاول مجدداً."],
     CONTENT_MEDIA_UNAVAILABLE: ["Remove unavailable media before adding another file.", "أزل الوسائط غير المتاحة قبل إضافة ملف آخر."]
   };
   return code ? messages[code]?.[locale === "ar" ? 1 : 0] : undefined;

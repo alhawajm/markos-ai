@@ -4,7 +4,8 @@ import {
   generateImageForContentSchema,
   generateVideoForContentSchema,
   registerPublicMediaSchema,
-  uploadMediaSchema
+  uploadMediaSchema,
+  updateContentMediaSchema
 } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
 import { errorEnvelope, ok } from "../http/envelope";
@@ -26,7 +27,8 @@ import {
   MediaUploadInvalidError,
   readPublicMediaFile,
   registerPublicMedia,
-  uploadMedia
+  uploadMedia,
+  updateContentMedia
 } from "./media-service";
 import {
   cancelMediaGenerationJob,
@@ -42,6 +44,17 @@ import {
 const maxDirectUploadBodyBytes = 12 * 1024 * 1024;
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
+  app.patch("/v1/content/:contentItemId/media", { config: { workspaceRequired: true, permissions: ["media:write"] } }, async (request, reply) => {
+    const { contentItemId } = request.params as { contentItemId: string };
+    const parsed = updateContentMediaSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid media list", parsed.error.issues));
+    const { workspaceId } = requireWorkspaceContext();
+    try {
+      return ok(await updateContentMedia(workspaceId, contentItemId, parsed.data));
+    } catch (error) {
+      return handleMediaMutationError(error, reply);
+    }
+  });
   app.get(
     "/v1/media",
     {

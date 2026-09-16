@@ -10,7 +10,7 @@ export class NotificationNotFoundError extends Error {
 
 export async function listNotifications(userId: string, workspaceId: string): Promise<NotificationRecord[]> {
   const rows = await prisma.notification.findMany({
-    where: { userId, workspaceId, deletedAt: null },
+    where: { userId, workspaceId, channel: "IN_APP", deletedAt: null },
     orderBy: { createdAt: "desc" },
     take: 50
   });
@@ -18,7 +18,7 @@ export async function listNotifications(userId: string, workspaceId: string): Pr
 }
 
 export async function markNotificationRead(userId: string, workspaceId: string, notificationId: string): Promise<NotificationRecord> {
-  const notification = await prisma.notification.findFirst({ where: { id: notificationId, userId, workspaceId, deletedAt: null } });
+  const notification = await prisma.notification.findFirst({ where: { id: notificationId, userId, workspaceId, channel: "IN_APP", deletedAt: null } });
   if (!notification) throw new NotificationNotFoundError();
   return toNotificationRecord(
     await prisma.notification.update({

@@ -12,7 +12,8 @@ export function ContentStudioMediaLibrary({
   blockedReason,
   errorMessage,
   locale,
-  onAttach
+  onAttach,
+  selectionLimit = 1
 }: {
   assets: MediaAssetRecord[];
   attachedIds: string[];
@@ -21,12 +22,13 @@ export function ContentStudioMediaLibrary({
   blockedReason: string;
   errorMessage?: string;
   locale: Locale;
-  onAttach: (asset: MediaAssetRecord) => void;
+  onAttach: (assets: MediaAssetRecord[]) => void;
+  selectionLimit?: number;
 }) {
   const ar = locale === "ar";
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [unavailableImages, setUnavailableImages] = useState<Set<string>>(() => new Set());
   const isImage = (asset: MediaAssetRecord) => asset.mimeType.toLowerCase().startsWith("image/");
   const isVideo = (asset: MediaAssetRecord) => asset.mimeType.toLowerCase().startsWith("video/");
@@ -34,7 +36,7 @@ export function ContentStudioMediaLibrary({
     (asset) =>
       asset.filename.toLocaleLowerCase().includes(query.toLocaleLowerCase()) && (kind === "all" || (kind === "IMAGE" ? isImage(asset) : isVideo(asset)))
   );
-  const selected = assets.find((asset) => asset.id === selectedId);
+  const selected = selectedIds.map((id) => assets.find((asset) => asset.id === id)).filter((asset): asset is MediaAssetRecord => !!asset);
   const compatible = (asset: MediaAssetRecord) => (contentMediaConstraints[contentType].mimeTypes as readonly string[]).includes(asset.mimeType.toLowerCase());
   const compatibilityHint =
     contentType === "REEL"
@@ -54,8 +56,12 @@ export function ContentStudioMediaLibrary({
       {!blockedReason && (
         <p className="text-sm leading-6 text-[var(--muted)]">
           {ar
-            ? "اختر ملفاً ثم أرفقه. إرفاق الوسائط يحفظ التعديلات الحالية مع المسودة."
-            : "Choose a file, then attach it. Attaching media also saves your current draft edits."}
+            ? selectionLimit > 1
+              ? "اختر الصور بترتيب الشرائح ثم أرفقها. تُحفظ تعديلات المسودة أيضاً."
+              : "اختر ملفاً ثم أرفقه. إرفاق الوسائط يحفظ التعديلات الحالية مع المسودة."
+            : selectionLimit > 1
+              ? "Select images in slide order, then attach them. Your draft edits are saved too."
+              : "Choose a file, then attach it. Attaching media also saves your current draft edits."}
         </p>
       )}
       {(!blockedReason || blockedReason !== errorMessage) && (
@@ -103,12 +109,28 @@ export function ContentStudioMediaLibrary({
             const attached = attachedIds.includes(asset.id);
             return (
               <button
-                aria-pressed={selectedId === asset.id}
+                aria-pressed={selectedIds.includes(asset.id)}
                 className="studio-library-item"
-                disabled={busy || attached || !!blockedReason || !compatible(asset)}
+                disabled={
+                  busy ||
+                  attached ||
+                  !!blockedReason ||
+                  !compatible(asset) ||
+                  (selectionLimit > 1 && selectedIds.length >= selectionLimit && !selectedIds.includes(asset.id))
+                }
                 key={asset.id}
                 title={asset.filename}
-                onClick={() => setSelectedId(asset.id)}
+                onClick={() =>
+                  setSelectedIds((ids) =>
+                    ids.includes(asset.id)
+                      ? ids.filter((id) => id !== asset.id)
+                      : selectionLimit === 1
+                        ? [asset.id]
+                        : ids.length < selectionLimit
+                          ? [...ids, asset.id]
+                          : ids
+                  )
+                }
                 type="button"
               >
                 <span className="studio-library-thumbnail">
@@ -126,7 +148,12 @@ export function ContentStudioMediaLibrary({
                 </span>
                 <span className="line-clamp-2 break-all text-sm font-medium">{asset.filename}</span>
                 <span className="mt-1 flex items-center gap-1 text-xs text-[var(--muted)]">
-                  {attached ? (
+                  {selectedIds.includes(asset.id) ? (
+                    <>
+                      <Check aria-hidden="true" size={14} />
+                      {ar ? `محدد ${selectedIds.indexOf(asset.id) + 1}` : `Selected ${selectedIds.indexOf(asset.id) + 1}`}
+                    </>
+                  ) : attached ? (
                     <>
                       <Check aria-hidden="true" size={14} />
                       {ar ? "مرفق" : "Attached"}
@@ -141,11 +168,27 @@ export function ContentStudioMediaLibrary({
         </div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
-        <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{selected?.filename ?? (ar ? "لم يتم اختيار ملف" : "No file selected")}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">
+          {selected.length
+            ? selectionLimit > 1
+              ? ar
+                ? `${selected.length} صور محددة`
+                : `${selected.length} images selected`
+              : selected[0]?.filename
+            : ar
+              ? "لم يتم اختيار ملف"
+              : "No file selected"}
+        </span>
         <button
           className="studio-button studio-button-primary"
-          disabled={busy || !!blockedReason || !selected || attachedIds.includes(selected.id) || !compatible(selected)}
-          onClick={() => selected && onAttach(selected)}
+          disabled={
+            busy ||
+            !!blockedReason ||
+            !selected.length ||
+            selected.length > selectionLimit ||
+            selected.some((asset) => attachedIds.includes(asset.id) || !compatible(asset))
+          }
+          onClick={() => selected.length && onAttach(selected)}
           type="button"
         >
           {busy ? (ar ? "جارٍ الإرفاق…" : "Attaching…") : ar ? "إرفاق الملف" : "Attach selected"}

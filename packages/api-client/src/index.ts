@@ -728,10 +728,15 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async updateContentMedia(contentItemId: string, input: { mediaIds: string[]; expectedMediaIds: string[] }): Promise<ContentRecord> {
+    return (await this.request<ContentRecord>(`/v1/content/${contentItemId}/media`, { method: "PATCH", body: input })).data;
+  }
+
   async generateContentImage(
     contentItemId: string,
     input: {
       aspectRatio?: "1:1" | "4:5" | "9:16";
+      replaceMediaAssetId?: string;
       prompt?: string;
     } = {}
   ): Promise<AiImageGenerationResult> {
