@@ -232,12 +232,12 @@ async function approveContentRecord(client: MarkosApiClient, record: ContentReco
   }
 
   if (record.status === "DRAFT") {
-    const reviewRecord = await client.updateContentStatus(record.id, "IN_REVIEW");
-    return client.updateContentStatus(reviewRecord.id, "APPROVED");
+    const reviewRecord = await client.updateContentStatus(record.id, "IN_REVIEW", record.revision);
+    return client.updateContentStatus(reviewRecord.id, "APPROVED", reviewRecord.revision);
   }
 
   if (record.status === "IN_REVIEW") {
-    return client.updateContentStatus(record.id, "APPROVED");
+    return client.updateContentStatus(record.id, "APPROVED", record.revision);
   }
 
   throw new Error(`Only draft or in-review content can be marked Ready. Current status: ${statusLabel(record.status)}.`);

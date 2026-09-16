@@ -82,7 +82,8 @@ async function fixture(page: Page, populated = false, fullTrend = false) {
         contentType: "POST",
         caption: index ? "Bakery launch" : "Orange-cardamom launch",
         status,
-        mediaIds: [],
+        mediaItems: [],
+        reelScript: null,
         revision: 1,
         createdAt: "2026-09-09T09:00:00Z",
         updatedAt: "2026-09-09T09:00:00Z"

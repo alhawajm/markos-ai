@@ -6,11 +6,8 @@ import { ContentMediaValidationError } from "../media/content-media-integrity";
 import type { FastifyInstance } from "fastify";
 import {
   createContentSchema,
-  generateContentForItemSchema,
-  generateContentForSlotSchema,
   generateContentSchema,
   ideateContentSchema,
-  reviseContentItemSchema,
   scheduleContentSchema,
   updateContentSchema,
   updateContentStatusSchema
@@ -24,17 +21,13 @@ import {
   ContentItemDeleteError,
   ContentItemLockedError,
   ContentItemNotFoundError,
-  ContentRevisionUnavailableError,
   ContentScheduleError,
   ContentStatusTransitionError,
   createWorkspaceContent,
   deleteContentItem,
-  generateWorkspaceContentForSlot,
-  generateWorkspaceContentForItem,
   generateWorkspaceContent,
   ideateWorkspaceContent,
   listContentItems,
-  reviseWorkspaceContentItem,
   rescheduleContentItem,
   scheduleContentItem,
   unscheduleContentItem,
@@ -73,8 +66,8 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
               : await convertContentAggregate(workspaceId, params.data.contentItemId, convertContentSchema.parse(parsed.data))
           );
         } catch (error) {
-          if (error instanceof ContentConflictError || error instanceof ContentAggregateError)
-            return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+          if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+          if (error instanceof ContentConflictError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
           throw error;
         }
       }
@@ -113,6 +106,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await ideateWorkspaceContent(workspaceId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentContextMissingError) {
@@ -127,124 +121,6 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
         if (error instanceof UsagePlanInactiveError) {
           return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
         }
-        throw error;
-      }
-    }
-  );
-
-  app.post(
-    "/v1/content/:contentItemId/generate",
-    {
-      config: {
-        workspaceRequired: true,
-        verifiedUserRequired: true,
-        permissions: ["content:write"]
-      }
-    },
-    async (request, reply) => {
-      const params = request.params as { contentItemId?: string };
-      const parsed = generateContentForItemSchema.safeParse(request.body ?? {});
-
-      if (!params.contentItemId) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
-      }
-
-      if (!parsed.success) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content item generation request", parsed.error.issues));
-      }
-
-      const { workspaceId } = requireWorkspaceContext();
-
-      try {
-        return ok(await generateWorkspaceContentForItem(workspaceId, params.contentItemId, parsed.data));
-      } catch (error) {
-        if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
-          return reply.status(409).send(errorEnvelope(error.code, error.message));
-        if (error instanceof ContentItemNotFoundError) {
-          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof ContentItemLockedError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
-        }
-
-        if (error instanceof ContentContextMissingError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
-        }
-
-        if (error instanceof ContentCampaignNotFoundError) {
-          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof UsageQuotaExceededError) {
-          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
-        }
-
-        if (error instanceof UsagePlanInactiveError) {
-          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
-        }
-
-        throw error;
-      }
-    }
-  );
-
-  app.post(
-    "/v1/content/:contentItemId/revise",
-    {
-      config: {
-        workspaceRequired: true,
-        verifiedUserRequired: true,
-        permissions: ["content:write"]
-      }
-    },
-    async (request, reply) => {
-      const params = request.params as { contentItemId?: string };
-      const parsed = reviseContentItemSchema.safeParse(request.body ?? {});
-
-      if (!params.contentItemId) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
-      }
-
-      if (!parsed.success) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content revision request", parsed.error.issues));
-      }
-
-      const { workspaceId } = requireWorkspaceContext();
-
-      try {
-        return ok(await reviseWorkspaceContentItem(workspaceId, params.contentItemId, parsed.data));
-      } catch (error) {
-        if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
-          return reply.status(409).send(errorEnvelope(error.code, error.message));
-        if (error instanceof ContentItemNotFoundError) {
-          return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof ContentItemLockedError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_LOCKED", error.message));
-        }
-
-        if (error instanceof ContentRevisionUnavailableError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_REVISION_UNAVAILABLE", error.message));
-        }
-
-        if (error instanceof ContentContextMissingError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
-        }
-
-        if (error instanceof ContentCampaignNotFoundError) {
-          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof UsageQuotaExceededError) {
-          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
-        }
-
-        if (error instanceof UsagePlanInactiveError) {
-          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
-        }
-
         throw error;
       }
     }
@@ -291,6 +167,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await generateWorkspaceContent(workspaceId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentContextMissingError) {
@@ -299,54 +176,6 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
         if (error instanceof ContentCampaignNotFoundError) {
           return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof UsageQuotaExceededError) {
-          return reply.status(402).send(errorEnvelope("USAGE_QUOTA_EXCEEDED", error.message, [{ metric: error.metric }]));
-        }
-
-        if (error instanceof UsagePlanInactiveError) {
-          return reply.status(402).send(errorEnvelope("BILLING_STATUS_INACTIVE", error.message, [{ status: error.status }]));
-        }
-
-        throw error;
-      }
-    }
-  );
-
-  app.post(
-    "/v1/content/generate-for-slot",
-    {
-      config: {
-        workspaceRequired: true,
-        verifiedUserRequired: true,
-        permissions: ["content:write", "content:schedule"]
-      }
-    },
-    async (request, reply) => {
-      const parsed = generateContentForSlotSchema.safeParse(request.body ?? {});
-
-      if (!parsed.success) {
-        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid slot content generation request", parsed.error.issues));
-      }
-
-      const { workspaceId } = requireWorkspaceContext();
-
-      try {
-        return ok(await generateWorkspaceContentForSlot(workspaceId, parsed.data));
-      } catch (error) {
-        if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
-          return reply.status(409).send(errorEnvelope(error.code, error.message));
-        if (error instanceof ContentContextMissingError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_CONTEXT_MISSING", error.message));
-        }
-
-        if (error instanceof ContentCampaignNotFoundError) {
-          return reply.status(404).send(errorEnvelope("CAMPAIGN_NOT_FOUND", error.message));
-        }
-
-        if (error instanceof ContentScheduleError) {
-          return reply.status(409).send(errorEnvelope("CONTENT_SCHEDULE_INVALID", error.message));
         }
 
         if (error instanceof UsageQuotaExceededError) {
@@ -387,6 +216,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await updateContentItem(workspaceId, params.contentItemId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {
@@ -424,6 +254,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
         if (!body.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Expected revision is required"));
         return ok(await deleteContentItem(workspaceId, params.contentItemId, body.data.expectedRevision));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {
@@ -464,6 +295,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await updateContentItemStatus(workspaceId, params.contentItemId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {
@@ -504,6 +336,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await scheduleContentItem(workspaceId, params.contentItemId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {
@@ -544,6 +377,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await rescheduleContentItem(workspaceId, params.contentItemId, parsed.data));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {
@@ -579,6 +413,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       try {
         return ok(await unscheduleContentItem(workspaceId, params.contentItemId));
       } catch (error) {
+        if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentItemNotFoundError) {

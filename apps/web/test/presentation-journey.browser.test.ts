@@ -1,6 +1,7 @@
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { CampaignRecord } from "@markos/shared-types";
+import { item } from "./create-fixtures";
+import type { ContentMediaItemRecord, CampaignRecord } from "@markos/shared-types";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered presentation-journey tests");
@@ -406,6 +407,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(approvedSuggestionDraft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}`) return route.fulfill(json(approvedSuggestionDraft));
       if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: approvedSuggestionDraft, messages: [], latestRun: null }));
       if (pathname === "/v1/media") return route.fulfill(json([]));
@@ -493,7 +495,7 @@ describe("presentation journey", () => {
     await generatedReview.getByRole("button", { name: "Create draft: Publish customer taste-test Reel", exact: true }).click();
     await expect.poll(() => suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
-    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
+    await page.getByTestId("create-workspace").waitFor();
     expect(await page.locator(".studio-instagram").count()).toBe(0);
     const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
     await campaignLink.waitFor();
@@ -510,7 +512,8 @@ describe("presentation journey", () => {
   it("renders the desktop overview, Create, and honest Insights destinations", async () => {
     const page = await sessionPage();
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/content" || pathname === "/v1/publishing/queue") return route.fulfill(json([]));
+      if (pathname === "/v1/content") return route.fulfill(json(route.request().method() === "POST" ? studioContentRecord() : []));
+      if (pathname === "/v1/publishing/queue") return route.fulfill(json([]));
       if (pathname === "/v1/vault/score") {
         return route.fulfill(
           json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
@@ -528,7 +531,7 @@ describe("presentation journey", () => {
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "How can MARKOS help?" }).waitFor();
-    await expect.poll(() => page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: "Caption", exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
@@ -563,7 +566,8 @@ describe("presentation journey", () => {
       caption: "Product story scheduled for this week.",
       contentType: "REEL",
       id: "calendar-scheduled",
-      mediaIds: ["calendar-video"],
+      mediaItems: [{ ...item("calendar-item", "calendar-scheduled"), mediaKind: "VIDEO", mediaAssetId: "calendar-video" }] as ContentMediaItemRecord[],
+      reelScript: null,
       plannedAt: updatedAt,
       scheduledAt,
       status: "SCHEDULED",
@@ -971,6 +975,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(draft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname === `/v1/content/${draft.id}`) return route.fulfill(json(draft));
       if (pathname === `/v1/content/${draft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
@@ -1007,6 +1012,7 @@ describe("presentation journey", () => {
     // Reopen immediately after Back, while Next still has the Create route cached.
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.goBack({ waitUntil: "domcontentloaded" });
     await createButton.waitFor();
@@ -1017,6 +1023,7 @@ describe("presentation journey", () => {
     expect(approvalCalls).toBe(1);
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.close();
   }, 60_000);
@@ -1036,6 +1043,7 @@ describe("presentation journey", () => {
       const method = route.request().method();
       if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult([draft], route.request().url())));
       if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([draft]));
+      if (pathname === `/v1/content/${draft.id}`) return route.fulfill(json(draft));
       if (pathname === `/v1/content/${draft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       if (pathname === "/v1/content" && method === "POST") {
@@ -1103,8 +1111,8 @@ describe("presentation journey", () => {
     await drawerButton.click();
     await existingDraftLink.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
-    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Edit caption", exact: true }).click();
+    await page.getByTestId("create-workspace").waitFor();
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Caption", exact: true }).inputValue()).resolves.toBe(draft.caption);
     expect(createCalls).toBe(0);
     await page.close();
@@ -1436,7 +1444,8 @@ function phaseTwoCampaignDraft(campaignId: string) {
     caption: "",
     revision: 1,
     id: "content-phase-two",
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     plannedAt: "2026-09-03T00:00:00.000Z",
     platform: "INSTAGRAM" as const,
     status: "DRAFT" as const,
@@ -1455,7 +1464,8 @@ function campaignSuggestionDraft(campaignId = "campaign-snacklab-14") {
     caption: "",
     revision: 1,
     platform: "INSTAGRAM" as const,
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     campaignId,
     campaignGoal: "Earn trust",
     campaignWeek: 2,
@@ -1487,7 +1497,8 @@ function studioContentRecord() {
     contentType: "POST",
     createdAt: "2026-08-17T10:00:00.000Z",
     id: "content-showcase",
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     status: "DRAFT",
     updatedAt: "2026-08-17T10:00:00.000Z",
     workspaceId: session.workspace.id

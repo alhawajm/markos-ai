@@ -107,7 +107,7 @@ def test_invalid_caption_is_rejected(caption: str) -> None:
 
 
 def test_stable_references_independent_reel_duration_and_targeted_generation() -> None:
-    ops = [
+    ops: list[dict[str, object]] = [
         {"type": "addReelBeat", "ref": "$beat", "text": "Show baking"},
         {"type": "updateReelBeat", "beatId": "$beat", "text": "Show fresh baking"},
         {"type": "reorderReelBeats", "orderedIds": ["$beat"]},

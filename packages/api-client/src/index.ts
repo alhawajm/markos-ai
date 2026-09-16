@@ -560,12 +560,9 @@ export class MarkosApiClient {
       contentType?: ContentType;
       brief?: string | null;
       caption?: string;
-      visualDirection?: string | null;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
-      carousel?: Record<string, unknown> | null;
-      reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;
     } = {}
   ): Promise<ContentRecord> {
@@ -637,44 +634,16 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; campaignId?: string }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
-  async generateContentForItem(contentItemId: string, input: { topic: string; contentType: ContentType }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/generate`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
-  async reviseContentItem(contentItemId: string, input: { instruction: string }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/revise`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
   async updateContent(
     contentItemId: string,
     input: {
       platform?: "INSTAGRAM";
-      contentType?: ContentType;
       brief?: string | null;
       caption?: string;
-      visualDirection?: string | null;
-      expectedRevision?: number;
+      expectedRevision: number;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
-      carousel?: Record<string, unknown> | null;
-      reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;
     }
   ): Promise<ContentRecord> {
@@ -685,8 +654,9 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async deleteContent(contentItemId: string): Promise<{ id: string }> {
+  async deleteContent(contentItemId: string, expectedRevision: number): Promise<{ id: string }> {
     const response = await this.request<{ id: string }>(`/v1/content/${contentItemId}`, {
+      body: { expectedRevision },
       method: "DELETE"
     });
     return response.data;
@@ -695,12 +665,12 @@ export class MarkosApiClient {
   async updateContentStatus(
     contentItemId: string,
     status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">,
-    expectedRevision?: number
+    expectedRevision: number
   ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {
         status,
-        ...(expectedRevision === undefined ? {} : { expectedRevision })
+        expectedRevision
       },
       method: "POST"
     });
@@ -740,9 +710,6 @@ export class MarkosApiClient {
   }
   async detachMediaFromContent(id: string, itemId: string, expectedRevision: number): Promise<ContentRecord> {
     return (await this.request<ContentRecord>(`/v1/content/${id}/media/${itemId}`, { method: "DELETE", body: { expectedRevision } })).data;
-  }
-  async updateContentMedia(contentItemId: string, input: { mediaIds: string[]; expectedMediaIds: string[] }): Promise<ContentRecord> {
-    return (await this.request<ContentRecord>(`/v1/content/${contentItemId}/media`, { method: "PATCH", body: input })).data;
   }
 
   async generateContentImage(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<AiImageGenerationResult> {

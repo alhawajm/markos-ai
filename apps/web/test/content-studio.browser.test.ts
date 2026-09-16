@@ -86,6 +86,14 @@ async function setup(initial: ContentRecord) {
     if (path.includes("/instagram/learning")) return route.fulfill(json({ status: "APPLIED" }));
     if (path === "/v1/media") return route.fulfill(json(state.media));
     if (path.endsWith("/publish-job/latest") || path.endsWith("/media-generation/latest")) return route.fulfill(json(null));
+    if (path === "/v1/content" && method === "POST") {
+      state.record = draft({ id: "new-draft", mediaItems: [item("new-item", "new-draft")] });
+      return route.fulfill(json(state.record));
+    }
+    if (path === `/v1/content/${state.record.id}` && method === "DELETE") {
+      if (body.expectedRevision !== state.record.revision) return route.fulfill(fail());
+      return route.fulfill(json({ id: state.record.id }));
+    }
     if (path === "/v1/content" && method === "GET") return route.fulfill(json([state.record]));
     if (path === `/v1/content/${state.record.id}` && method === "GET") return route.fulfill(json(state.record));
     if (path.endsWith("/conversation") && method === "GET") return route.fulfill(json(thread()));
@@ -335,6 +343,16 @@ describe("Relational Create workspace", () => {
       await page.reload();
       await page.getByTestId("create-workspace").waitFor();
       await expect.poll(() => page.locator(".create-message").count()).toBe(2);
+      await page.getByRole("button", { name: "Caption", exact: true }).click();
+      await page.getByLabel("Caption", { exact: true }).fill("Final edit before deletion");
+      await page.getByLabel("More actions", { exact: true }).click();
+      await page.getByRole("button", { name: "Delete draft", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true }).click();
+      await expect.poll(() => state.record.id).toBe("new-draft");
+      const deletion = state.calls.findIndex((c) => c.path === "/v1/content/draft-1");
+      expect(deletion).toBeGreaterThan(0);
+      expect(state.calls[deletion]!.body.expectedRevision).toBeGreaterThan(3);
+      expect(state.calls[deletion - 1]!.path).toContain("/mutate");
     } finally {
       await h.context.close();
     }

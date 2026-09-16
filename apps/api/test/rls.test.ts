@@ -20,6 +20,9 @@ const rlsTables = [
   "content_calendars",
   "campaigns",
   "content_items",
+  "content_media_items",
+  "content_reel_scripts",
+  "content_reel_beats",
   "content_conversations",
   "conversation_runs",
   "conversation_messages",
@@ -68,11 +71,11 @@ describe("database row-level security", () => {
     const second = await createWorkspace("second");
 
     const firstItem = await prisma.contentItem.create({
-      data: { workspaceId: first.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
+      data: { mediaItems: { create: { position: 0, mediaKind: "IMAGE" } }, workspaceId: first.workspaceId, contentType: "POST", caption: "" },
       select: { id: true }
     });
     await prisma.contentItem.create({
-      data: { workspaceId: second.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
+      data: { mediaItems: { create: { position: 0, mediaKind: "IMAGE" } }, workspaceId: second.workspaceId, contentType: "POST", caption: "" },
       select: { id: true }
     });
 
@@ -97,7 +100,7 @@ describe("database row-level security", () => {
 
     await withWorkspaceDbContext(first.workspaceId, async (tx) => {
       await tx.contentItem.create({
-        data: { workspaceId: first.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
+        data: { workspaceId: first.workspaceId, contentType: "POST", caption: "", mediaItems: { create: { position: 0, mediaKind: "IMAGE" } } },
         select: { id: true }
       });
     });
@@ -105,7 +108,7 @@ describe("database row-level security", () => {
     await expect(
       withWorkspaceDbContext(first.workspaceId, async (tx) => {
         await tx.contentItem.create({
-          data: { workspaceId: second.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
+          data: { workspaceId: second.workspaceId, contentType: "POST", caption: "", mediaItems: { create: { position: 0, mediaKind: "IMAGE" } } },
           select: { id: true }
         });
       })

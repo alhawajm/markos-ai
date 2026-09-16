@@ -1,47 +1,24 @@
 # Create conversation backend
 
-Status: implemented for the private development stage, September 6, 2026.
+Current architecture: September 16, 2026. See [authoring invariants](create-authoring.md) and [targeted assistant contract](create-assistant-authoring-contract.md).
 
-## Product behavior
+Each ContentItem owns one workspace-scoped conversation. The typed snapshot includes shared content, stable media-item IDs and creative fields, attached-file metadata, and content-owned Reel script/beats. Media bytes are not supplied: MARKOS cannot claim visual inspection.
 
-Each ContentItem has one workspace-owned conversation. Create, Campaign and Calendar entry points use that same post identity. Opening a blank Create page creates nothing; its first sent message saves a draft and creates the conversation. Messages survive refresh and reopening.
+Create flushes coordinated autosave before sending against the current root revision. A coherent targeted edit batch commits atomically through aggregate services. Replies confirm persistence only after success. New human input is preserved when assistant results arrive; conflicts require deliberate review.
 
-MARKOS can discuss ideas, ask questions, offer alternatives, and apply clearly requested text edits. Suggestions stay in the conversation until selected. The editable fields are the unified caption, brief, visual direction, carousel text and Reel script. Format and media changes use their existing controls. Ready, Return to Draft, scheduling, publishing, deletion and Business Profile edits remain explicit owner actions enforced by application code.
+ConversationRun persists request identity, base revision, lease, result and action receipts. Retries do not replay saved actions or generation dispatch. Destructive proposals require server-issued, revision-bound confirmation. Generation dispatch follows the successful edit transaction and reports queued, attached, Library-only, failed or unknown outcomes truthfully.
 
-Sending saves outstanding manual edits first. A successful AI edit saves automatically. Leave/Discard affects unsaved manual fields, not sent messages or already saved AI changes. The user can leave while a submitted conversation run continues. Routine feedback does not shift the page.
+Ready, scheduling, publishing and underlying Library-asset deletion remain human-controlled. MARKOS cannot search/select Library assets or alter business knowledge through Create.
 
-## Persistence and processing
+Workspace export includes conversation history and relational authoring state. Erasure removes conversations, runs/action receipts, scripts/beats and generation jobs, and soft-deletes content, logical items and assets. Physical content deletion cascades owned rows; ordinary draft deletion retains reusable Library assets and execution history.
 
-- `ContentConversation` links a post and workspace and stores a compact conversation summary.
-- `ConversationMessage` stores ordered user and assistant messages, linked to their run. The run identifies the author.
-- `ConversationRun` persists the client request ID, user, instruction, locale, base revision, state, lease, result and sanitized failure code. A partial unique index permits one queued/running request per conversation. A duplicate request returns the same run; reusing its ID with different input is rejected.
-- An API-owned processor checks the durable queue every 750 ms. It operates independently of the browser request and does not start the broader maintenance worker. Multiple API instances claim runs conditionally. Each instance executes one conversation run at a time.
-- Queued work survives an API restart. Expired in-progress work becomes visibly interrupted without automatically repeating an ambiguous provider request. A late result cannot commit after losing its lease. New user messages can retry failed work deliberately.
-- The browser loads conversation state on opening and polls every two seconds. It preserves unsaved fields while receiving background updates. Replies are displayed as successful edits only after the database transaction commits. Streaming tokens is deferred.
+The API-owned durable conversation processor and workspace access checks remain in place. The retired single-draft generate/revise/slot endpoints have been removed; bulk generation is a separate provider boundary that constructs relational aggregates, not a second editable representation.
 
-## Content safety and context
+## Historical verification
 
-`ContentItem.revision` increments in a PostgreSQL trigger for every write, including media and publishing workers. Create sends its baseline revision when saving and reviewing. An AI edit applies only to the exact revision it read, while the post is editable. A conflict leaves newer content intact and retains the result; the owner can inspect an unapplied caption. This is concurrency protection, not an Undo/history feature.
+The following September 6 evidence describes the former interface, not the current authoring contract.
 
-The older generate/revise endpoints also compare their input revision when applying results. Unversioned older clients retain request-time checks; Create supplies the explicit revision to detect stale browser drafts. Full immutable publication snapshots remain separate publishing work.
-
-The AI receives the latest saved post, recent messages, an updated compact summary, approved profile/tone context, active offerings and Campaign intent. The current draft takes precedence over historical text. Context retrieval currently includes up to eight profile entries, twenty offerings and twenty recent messages; the offerings list is flagged when it may be partial. Chat statements never automatically update business knowledge. Media bytes are not supplied, so the assistant cannot claim visual inspection.
-
-The Python service uses the existing configured text model and Responses structured-output integration, with prompt `create-conversation.v1`. A typical turn uses one model call returning a reply, allowed field changes or null, and an updated summary. Both services validate the result. The conversation provider disables automatic SDK retries. Safe local mode gives deterministic, explicitly limited replies; natural conversation edits require live text mode.
-
-Every new table has workspace RLS and restricted-role grants. Database triggers reject child records linked to another workspace or conversation. The processor rechecks the author's membership and write permission before applying a result. Conversation data participates in workspace export and erasure. No provider credentials or signed media URLs are stored in conversation records.
-
-## Commercial restrictions
-
-Khalid deferred commercial quotas and billing eligibility gates until functionality is established. Existing counters remain diagnostic; they no longer block AI, Campaigns, storage or publication because of a MARKOS allowance, trial expiry or plan status. The old frontend Campaign quota simulation is removed. No replacement billing or cost-reporting system is introduced. Provider-imposed constraints and content/media validation remain operational requirements.
-
-## Migration and remaining work
-
-Migrations `20260906170000_content_conversations` and `20260906171000_conversation_access` add conversations, revision protection, persisted visual direction, interaction provenance and access constraints. They were applied to local `markos_local_test` and `markos`, preserving existing records. No hosted migration, deployment or reset was performed.
-
-Media generation through chat, Campaign plan editing/stable idea records, immutable publication snapshots, Business Profile conversation, transcript pagination, streaming, mobile design and the learning loop remain future work. The summary is conversational context and is not a learned business preference.
-
-## Verification — September 6
+### September 6
 
 - **API:** 87 focused cases passed across conversation (13), usage (8), content, Campaign, media, RLS and publishing. All persistent automated checks used loopback `markos_local_test`. Provider publishing transport was mocked; this is not live Instagram evidence.
 - **AI service:** 31 unique cases passed across conversation, content provider and health tests. Provider responses were mocked or deterministic in these automated cases.

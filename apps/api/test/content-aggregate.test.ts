@@ -13,7 +13,7 @@ import {
 } from "../src/content/content-aggregate";
 import { approveCampaignSuggestion } from "../src/campaign/campaign-service";
 import { registerContentRoutes } from "../src/content/content-routes";
-import { generateWorkspaceContent } from "../src/content/content-service";
+import { deleteContentItem, generateWorkspaceContent } from "../src/content/content-service";
 import { runWorkspaceContextScope, setWorkspaceContext } from "../src/tenancy/workspace-context";
 import { validateInstagramDatabaseTarget } from "./helpers/instagram-database";
 
@@ -460,5 +460,59 @@ describe("authoring HTTP contract", () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+describe("aggregate deletion retention", () => {
+  it("keeps reusable assets on soft deletion and cascades owned rows on physical deletion", async () => {
+    const media = await asset(workspaceId, "video/mp4");
+    let content = await create("REEL");
+    content = await mutate(
+      content,
+      { type: "updateMediaItem", itemId: content.mediaItems[0]!.id, fields: { mediaAssetId: media.id } },
+      { type: "updateReelScript", fields: { hook: "Hook", intendedDurationSeconds: 30 } },
+      { type: "addReelBeat", text: "Opening beat" }
+    );
+    const item = await prisma.contentMediaItem.findUniqueOrThrow({ where: { id: content.mediaItems[0]!.id } });
+    const job = await prisma.mediaGenerationJob.create({
+      data: {
+        workspaceId,
+        contentItemId: content.id,
+        contentMediaItemId: item.id,
+        generationIntent: item.generationIntent,
+        requestedRevision: content.revision,
+        prompt: "Direction",
+        status: "COMPLETED",
+        outputMediaAssetId: media.id
+      }
+    });
+    const conversation = await prisma.contentConversation.create({
+      data: {
+        workspaceId,
+        contentItemId: content.id,
+        runs: {
+          create: {
+            workspaceId,
+            userId: randomUUID(),
+            requestId: randomUUID(),
+            instruction: "Edit",
+            baseRevision: content.revision,
+            actionState: { applied: true }
+          }
+        }
+      }
+    });
+    await expect(deleteContentItem(workspaceId, content.id, content.revision - 1)).rejects.toMatchObject({ code: "CONTENT_REVISION_CONFLICT" });
+    await deleteContentItem(workspaceId, content.id, content.revision);
+    await expect(getContentAggregate(workspaceId, content.id)).rejects.toMatchObject({ code: "CONTENT_NOT_FOUND" });
+    expect((await prisma.mediaAsset.findUniqueOrThrow({ where: { id: media.id } })).deletedAt).toBeNull();
+    expect(await prisma.mediaGenerationJob.findUnique({ where: { id: job.id } })).not.toBeNull();
+    await prisma.contentItem.delete({ where: { id: content.id } });
+    expect(await prisma.contentMediaItem.count({ where: { contentItemId: content.id } })).toBe(0);
+    expect(await prisma.contentReelScript.count({ where: { contentItemId: content.id } })).toBe(0);
+    expect(await prisma.contentReelBeat.count({ where: { reelScriptId: content.reelScript!.id } })).toBe(0);
+    expect(await prisma.mediaGenerationJob.findUnique({ where: { id: job.id } })).toBeNull();
+    expect(await prisma.conversationRun.count({ where: { conversationId: conversation.id } })).toBe(0);
+    expect(await prisma.mediaAsset.findUnique({ where: { id: media.id } })).not.toBeNull();
   });
 });

@@ -560,8 +560,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                           title: t("Delete draft?", "حذف المسودة؟"),
                           detail: t("Library files are kept.", "سيتم الاحتفاظ بملفات المكتبة."),
                           run: async () => {
-                            await coordinator.flush();
-                            await api.current.deleteContent(record.id);
+                            await coordinator.action(async (current) => {
+                              await api.current.deleteContent(current.id, current.revision);
+                              return { result: undefined };
+                            });
                             await open();
                           }
                         })

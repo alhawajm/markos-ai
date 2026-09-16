@@ -5,11 +5,8 @@ import { Prisma, type ContentStatus } from "@prisma/client";
 import type { CampaignPlan, ContentDraft, ContentRecord, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
 import type {
   CreateContentInput,
-  GenerateContentForItemInput,
-  GenerateContentForSlotInput,
   GenerateContentInput,
   IdeateContentInput,
-  ReviseContentItemInput,
   ScheduleContentInput,
   UpdateContentInput,
   UpdateContentStatusInput
@@ -60,12 +57,6 @@ export class ContentItemLockedError extends Error {
   }
 }
 
-export class ContentRevisionUnavailableError extends Error {
-  constructor() {
-    super("Add a caption before requesting a revision");
-  }
-}
-
 export class ContentStatusTransitionError extends Error {
   constructor() {
     super("Content item cannot move to that status from its current status");
@@ -104,14 +95,6 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
 export async function createWorkspaceContent(workspaceId: string, input: CreateContentInput): Promise<ContentRecord> {
   return prisma.$transaction((tx) => createContentAggregate(tx, workspaceId, input));
 }
-export class ContentPhasePendingError extends Error {
-  readonly statusCode = 503;
-  readonly code = "CREATE_PHASE_PENDING";
-  constructor() {
-    super("This Create operation is unavailable until the generation/assistant migration is completed.");
-  }
-}
-
 export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {
   const score = await getVaultScore(workspaceId);
 
@@ -309,22 +292,7 @@ export async function ideateWorkspaceContent(workspaceId: string, input: IdeateC
   }
 }
 
-// Old whole-draft writers cannot safely edit the new aggregate. Targeted AI
-// mutation and generation belong to Phases 3 and 2, respectively.
-export async function generateWorkspaceContentForItem(
-  _workspaceId: string,
-  _contentItemId: string,
-  _input: GenerateContentForItemInput
-): Promise<ContentRecord> {
-  throw new ContentPhasePendingError();
-}
-export async function reviseWorkspaceContentItem(_workspaceId: string, _contentItemId: string, _input: ReviseContentItemInput): Promise<ContentRecord> {
-  throw new ContentPhasePendingError();
-}
-export async function generateWorkspaceContentForSlot(_workspaceId: string, _input: GenerateContentForSlotInput): Promise<ContentRecord> {
-  throw new ContentPhasePendingError();
-}
-
+// Shared-field edits use the same revision-checked aggregate as targeted authoring.
 export async function updateContentItem(workspaceId: string, contentItemId: string, raw: UpdateContentInput): Promise<ContentRecord> {
   const { expectedRevision, ...fields } = updateContentSchema.parse(raw);
   return mutateContentAggregate(workspaceId, contentItemId, { expectedRevision, operations: [{ type: "updateContent", fields }] });
@@ -334,6 +302,7 @@ export async function deleteContentItem(workspaceId: string, contentItemId: stri
   revisionSchema.parse(expectedRevision);
   return prisma.$transaction(async (tx) => {
     const row = await lockContentRoot(tx, workspaceId, contentItemId, expectedRevision);
+    if (row.status === "SCHEDULED") throw new ContentItemDeleteError("Cancel publishing before deleting content", "CONTENT_DELETE_REQUIRES_CANCELLATION");
     if (!["DRAFT", "IN_REVIEW", "APPROVED", "FAILED"].includes(row.status))
       throw new ContentItemDeleteError("Cancel publishing before deleting content", "CONTENT_DELETE_FORBIDDEN");
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
@@ -599,7 +568,7 @@ function isAllowedContentTransition(current: ContentStatus, next: UpdateContentS
 
   const allowed: Record<UpdateContentStatusInput["status"], UpdateContentStatusInput["status"][]> = {
     APPROVED: ["DRAFT"],
-    DRAFT: ["IN_REVIEW"],
+    DRAFT: ["IN_REVIEW", "APPROVED"],
     IN_REVIEW: ["APPROVED", "DRAFT"]
   };
 

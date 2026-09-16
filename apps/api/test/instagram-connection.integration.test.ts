@@ -96,11 +96,12 @@ describeInstagramDatabase("Instagram encrypted persistence integration", () => {
     await persist(id, "provider-failure-token", undefined, undefined, "17841400000000304", [{ id: "retained-history-media", mediaType: "IMAGE" }]);
     const content = await prisma.contentItem.create({
       data: {
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
         workspaceId: id,
         contentType: "POST",
         status: "PUBLISHED",
         caption: "Retained workspace content\n\n#markos",
-        mediaIds: [],
+
         instagramPostId: "published-history-id"
       }
     });

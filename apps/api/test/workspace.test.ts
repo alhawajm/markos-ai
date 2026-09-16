@@ -84,11 +84,12 @@ describe("workspace routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const content = await prisma.contentItem.create({
       data: {
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
         workspaceId: session.workspace.id,
         contentType: "POST",
         status: "SCHEDULED",
         caption: "Ready soon\n\n#Bahrain",
-        mediaIds: [],
+
         scheduledAt: new Date(Date.now() + 60 * 60 * 1000)
       }
     });
@@ -113,14 +114,7 @@ describe("workspace routes", () => {
         height: 1080
       }
     });
-    await prisma.contentItem.update({
-      where: {
-        id: content.id
-      },
-      data: {
-        mediaIds: [media.id]
-      }
-    });
+    await prisma.contentMediaItem.updateMany({ where: { contentItemId: content.id, deletedAt: null }, data: { mediaAssetId: media.id } });
 
     const ready = await app.inject({
       method: "GET",
@@ -132,7 +126,7 @@ describe("workspace routes", () => {
     expect(missingConnection.json()).toMatchObject({
       data: {
         ready: false,
-        reasons: ["INSTAGRAM_NOT_CONNECTED", "PUBLIC_MEDIA_REQUIRED"]
+        reasons: ["INSTAGRAM_NOT_CONNECTED", "CONTENT_MEDIA_REQUIRED", "PUBLIC_MEDIA_REQUIRED"]
       }
     });
     expect(ready.statusCode).toBe(200);
@@ -244,9 +238,11 @@ describe("workspace routes", () => {
     });
     await prisma.contentItem.create({
       data: {
+        mediaItems: { create: { position: 0, mediaKind: "VIDEO", visualDirection: "Export direction" } },
+        reelScript: { create: { hook: "Export hook", beats: { create: { position: 0, text: "Export beat" } } } },
         caption: "First content",
-        contentType: "POST",
-        mediaIds: [],
+        contentType: "REEL",
+
         workspaceId: first.workspace.id
       }
     });
@@ -335,6 +331,12 @@ describe("workspace routes", () => {
         })
       ])
     );
+    expect(response.json().data.records.contentItems).toEqual([
+      expect.objectContaining({
+        mediaItems: [expect.objectContaining({ position: 0, mediaKind: "VIDEO", visualDirection: "Export direction" })],
+        reelScript: expect.objectContaining({ hook: "Export hook", beats: [expect.objectContaining({ position: 0, text: "Export beat" })] })
+      })
+    ]);
     expect(response.json().data.records.offeringCatalogs).toEqual([
       expect.objectContaining({
         id: firstCatalog.id,
@@ -413,11 +415,13 @@ describe("workspace routes", () => {
         workspaceId: session.workspace.id
       }
     });
-    await prisma.contentItem.create({
+    const erasedContent = await prisma.contentItem.create({
       data: {
+        mediaItems: { create: { position: 0, mediaKind: "VIDEO" } },
+        reelScript: { create: { hook: "Erase hook", beats: { create: { position: 0, text: "Erase beat" } } } },
         caption: "Delete this",
-        contentType: "POST",
-        mediaIds: [],
+        contentType: "REEL",
+
         workspaceId: session.workspace.id
       }
     });
@@ -503,6 +507,34 @@ describe("workspace routes", () => {
       }
     });
 
+    const generationTarget = await prisma.contentMediaItem.findFirstOrThrow({ where: { contentItemId: erasedContent.id } });
+    await prisma.mediaGenerationJob.create({
+      data: {
+        workspaceId: session.workspace.id,
+        contentItemId: erasedContent.id,
+        contentMediaItemId: generationTarget.id,
+        generationIntent: generationTarget.generationIntent,
+        requestedRevision: erasedContent.revision,
+        prompt: "Erase request",
+        status: "COMPLETED"
+      }
+    });
+    await prisma.contentConversation.create({
+      data: {
+        workspaceId: session.workspace.id,
+        contentItemId: erasedContent.id,
+        runs: {
+          create: {
+            workspaceId: session.workspace.id,
+            userId: session.user.id,
+            requestId: randomUUID(),
+            instruction: "Erase instruction",
+            baseRevision: erasedContent.revision,
+            actionState: { applied: true }
+          }
+        }
+      }
+    });
     const invalidConfirmation = await app.inject({
       method: "POST",
       url: "/v1/workspace/data-erasure",
@@ -529,6 +561,10 @@ describe("workspace routes", () => {
     });
     expect(erased.json().data.counts).toMatchObject({
       contentItems: 1,
+      contentMediaItems: 1,
+      contentReelScripts: 1,
+      mediaGenerationJobs: 1,
+      contentConversations: 1,
       knowledgeVault: 1,
       knowledgeVaultHistory: 1,
       mediaAssets: 1,
@@ -544,6 +580,11 @@ describe("workspace routes", () => {
       workspaces: 1
     });
 
+    expect(await prisma.contentReelScript.count({ where: { contentItemId: erasedContent.id } })).toBe(0);
+    expect(await prisma.mediaGenerationJob.count({ where: { workspaceId: session.workspace.id } })).toBe(0);
+    expect(await prisma.conversationRun.count({ where: { workspaceId: session.workspace.id } })).toBe(0);
+    expect(await prisma.contentReelBeat.count({ where: { workspaceId: session.workspace.id } })).toBe(0);
+    expect(await prisma.contentMediaItem.count({ where: { contentItemId: erasedContent.id, deletedAt: null } })).toBe(0);
     await expect(prisma.workspace.findUniqueOrThrow({ where: { id: session.workspace.id } })).resolves.toMatchObject({
       deletedAt: expect.any(Date),
       instagramAccessToken: null

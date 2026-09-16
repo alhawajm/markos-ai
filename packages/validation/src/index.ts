@@ -418,26 +418,6 @@ export const ideateContentSchema = z
   })
   .strict();
 
-export const generateContentForSlotSchema = z.object({
-  topic: z.string().min(3).max(500),
-  contentType: contentTypeSchema.default("POST"),
-  scheduledAt: z.string().datetime(),
-  campaignId: z.string().uuid().optional()
-});
-
-export const generateContentForItemSchema = z
-  .object({
-    topic: z.string().trim().min(3).max(1000),
-    contentType: contentTypeSchema
-  })
-  .strict();
-
-export const reviseContentItemSchema = z
-  .object({
-    instruction: z.string().trim().min(3).max(1000)
-  })
-  .strict();
-
 export const runAgentSchema = z.object({
   agent: agentNameSchema,
   task: z.string().min(3).max(1000),
@@ -838,9 +818,6 @@ export type ApproveCampaignSuggestionInput = z.infer<typeof approveCampaignSugge
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type IdeateContentInput = z.infer<typeof ideateContentSchema>;
-export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
-export type GenerateContentForItemInput = z.infer<typeof generateContentForItemSchema>;
-export type ReviseContentItemInput = z.infer<typeof reviseContentItemSchema>;
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
 export type AnalyticsMonthlyPdfInput = z.infer<typeof analyticsMonthlyPdfSchema>;
 export type AnalyticsMonthlyEmailInput = z.infer<typeof analyticsMonthlyEmailSchema>;

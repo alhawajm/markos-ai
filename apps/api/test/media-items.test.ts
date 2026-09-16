@@ -52,10 +52,7 @@ const asset = (workspaceId = owner, mimeType = "image/jpeg", vertical = false) =
     }
   });
 const attach = (c: ContentRecord, mediaAssetId: string) => attachMediaToContent(c.workspaceId, c.id, { ...request(c), mediaAssetId });
-const ready = async (c: ContentRecord) => {
-  const reviewing = c.status === "DRAFT" ? await updateContentItemStatus(c.workspaceId, c.id, { expectedRevision: c.revision, status: "IN_REVIEW" }) : c;
-  return updateContentItemStatus(c.workspaceId, c.id, { expectedRevision: reviewing.revision, status: "APPROVED" });
-};
+const ready = (c: ContentRecord) => updateContentItemStatus(c.workspaceId, c.id, { expectedRevision: c.revision, status: "APPROVED" });
 const edit = (c: ContentRecord, fields: { visualDirection?: string; aspectRatio?: "SQUARE"; generationDurationSeconds?: number }) =>
   mutateContentAggregate(c.workspaceId, c.id, { expectedRevision: c.revision, operations: [{ type: "updateMediaItem", itemId: c.mediaItems[0]!.id, fields }] });
 function imageResult(input: { aspectRatio: string }) {
