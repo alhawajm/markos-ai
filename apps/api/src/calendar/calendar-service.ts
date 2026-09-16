@@ -1,7 +1,7 @@
 import type { ContentStatus, Prisma } from "@prisma/client";
 import type { CalendarReadResult } from "@markos/shared-types";
 import type { CalendarReadQueryInput } from "@markos/validation";
-import { toContentRecord } from "../content/content-service";
+import { contentAggregateInclude, toContentRecord } from "../content/content-aggregate";
 import { prisma } from "../db/prisma";
 import { toMediaAssetRecord } from "../media/media-service";
 
@@ -39,6 +39,7 @@ export async function readWorkspaceCalendar(workspaceId: string, input: Calendar
 
   const [placedRows, unscheduledTotal, unscheduledRows, scheduledThisWeek, ready, needsAttention] = await Promise.all([
     prisma.contentItem.findMany({
+      include: contentAggregateInclude,
       where: {
         ...sharedWhere,
         OR: [
@@ -53,6 +54,7 @@ export async function readWorkspaceCalendar(workspaceId: string, input: Calendar
     matchingUnscheduledStatuses.length === 0
       ? Promise.resolve([])
       : prisma.contentItem.findMany({
+          include: contentAggregateInclude,
           where: unscheduledWhere,
           orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
           skip: input.unscheduledOffset,
@@ -70,7 +72,7 @@ export async function readWorkspaceCalendar(workspaceId: string, input: Calendar
   ]);
 
   const rows = [...placedRows, ...unscheduledRows];
-  const mediaIds = Array.from(new Set(rows.flatMap((row) => row.mediaIds)));
+  const mediaIds = Array.from(new Set(rows.flatMap((row) => row.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : [])))));
   const mediaRows =
     mediaIds.length === 0
       ? []

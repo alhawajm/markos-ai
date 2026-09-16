@@ -385,7 +385,6 @@ export const contentCaptionSchema = z.string().superRefine((caption, context) =>
 
 export const createContentSchema = z
   .object({
-    visualDirection: z.string().max(2000).nullable().optional(),
     platform: contentPlatformSchema.default("INSTAGRAM"),
     contentType: contentTypeSchema.default("POST"),
     brief: z.string().max(1000).nullable().optional(),
@@ -393,8 +392,6 @@ export const createContentSchema = z
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
-    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
-    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
   })
   .strict();
@@ -509,28 +506,109 @@ export const adminUpdateModelSettingSchema = z.object({
 
 export const updateContentSchema = z
   .object({
-    expectedRevision: z.number().int().positive().optional(),
-    visualDirection: z.string().max(2000).nullable().optional(),
-    platform: contentPlatformSchema.optional(),
-    contentType: contentTypeSchema.optional(),
+    expectedRevision: z.number().int().positive(),
     brief: z.string().max(1000).nullable().optional(),
     caption: contentCaptionSchema.optional(),
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
-    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
-    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, {
+  .refine((value) => Object.keys(value).some((key) => key !== "expectedRevision"), {
     message: "At least one content field is required"
   });
 
 export const updateContentStatusSchema = z.object({
-  expectedRevision: z.number().int().positive().optional(),
+  expectedRevision: z.number().int().positive(),
   status: z.enum(["DRAFT", "IN_REVIEW", "APPROVED"])
 });
+
+const authoringPatch = <T extends z.ZodRawShape>(shape: T) =>
+  z
+    .object(shape)
+    .strict()
+    .refine((value) => Object.keys(value).length > 0, "At least one field is required");
+
+export const contentMediaFieldsSchema = z
+  .object({
+    mediaKind: z.enum(["IMAGE", "VIDEO"]).nullable().optional(),
+    mediaAssetId: z.string().uuid().nullable().optional(),
+    purpose: z.string().max(160).nullable().optional(),
+    title: z.string().max(160).nullable().optional(),
+    body: z.string().max(800).nullable().optional(),
+    visualDirection: z.string().max(2000).nullable().optional(),
+    aspectRatio: z.enum(["SQUARE", "PORTRAIT", "VERTICAL"]).nullable().optional(),
+    generationDurationSeconds: z.number().int().positive().max(3600).nullable().optional()
+  })
+  .strict();
+
+const orderedAuthoringIds = z
+  .array(z.string().uuid())
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, "IDs must be unique");
+export const contentMutationSchema = z
+  .object({
+    expectedRevision: z.number().int().positive(),
+    operations: z
+      .array(
+        z.discriminatedUnion("type", [
+          z
+            .object({
+              type: z.literal("updateContent"),
+              fields: authoringPatch({
+                brief: z.string().max(1000).nullable().optional(),
+                caption: contentCaptionSchema.optional(),
+                contentPillar: z.string().max(160).nullable().optional(),
+                campaignGoal: z.string().max(500).nullable().optional(),
+                tone: z.string().max(200).nullable().optional(),
+                plannedAt: z.string().datetime().nullable().optional()
+              })
+            })
+            .strict(),
+          z
+            .object({ type: z.literal("addMediaItem"), afterId: z.string().uuid().nullable().optional(), fields: contentMediaFieldsSchema.default({}) })
+            .strict(),
+          z
+            .object({
+              type: z.literal("updateMediaItem"),
+              itemId: z.string().uuid(),
+              fields: contentMediaFieldsSchema.refine((value) => Object.keys(value).length > 0, "At least one field is required")
+            })
+            .strict(),
+          z.object({ type: z.literal("removeMediaItem"), itemId: z.string().uuid() }).strict(),
+          z.object({ type: z.literal("reorderMediaItems"), orderedIds: orderedAuthoringIds }).strict(),
+          z
+            .object({
+              type: z.literal("updateReelScript"),
+              fields: authoringPatch({
+                hook: z.string().max(300).nullable().optional(),
+                intendedDurationSeconds: z.number().int().positive().max(3600).nullable().optional()
+              })
+            })
+            .strict(),
+          z.object({ type: z.literal("addReelBeat"), afterId: z.string().uuid().nullable().optional(), text: z.string().max(800) }).strict(),
+          z.object({ type: z.literal("updateReelBeat"), beatId: z.string().uuid(), text: z.string().max(800) }).strict(),
+          z.object({ type: z.literal("removeReelBeat"), beatId: z.string().uuid() }).strict(),
+          z.object({ type: z.literal("reorderReelBeats"), orderedIds: orderedAuthoringIds }).strict()
+        ])
+      )
+      .min(1)
+      .max(50)
+  })
+  .strict();
+
+export const convertContentSchema = z
+  .object({
+    expectedRevision: z.number().int().positive(),
+    contentType: contentTypeSchema,
+    retainMediaItemId: z.string().uuid().optional(),
+    confirmDestructive: z.boolean().default(false)
+  })
+  .strict();
+
+export type ContentMutationInput = z.infer<typeof contentMutationSchema>;
+export type ConvertContentInput = z.infer<typeof convertContentSchema>;
 
 export const scheduleContentSchema = z.object({
   scheduledAt: z.string().datetime()

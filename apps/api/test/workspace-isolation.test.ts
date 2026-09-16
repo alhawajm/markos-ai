@@ -8,6 +8,7 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { env } from "../src/config/env";
 import { encryptCredential } from "../src/security/credential-encryption";
+import { createContentAggregate } from "../src/content/content-aggregate";
 
 interface WorkspaceFixture {
   userId: string;
@@ -239,12 +240,26 @@ const isolationCases: IsolationCase[] = [
   },
   {
     model: "ContentItem",
-    create: (fixture) =>
-      prisma.contentItem.create({
-        data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "", mediaIds: [] },
-        select: { id: true, workspaceId: true }
-      }),
+    create: createContentFixture,
     list: (workspaceId) => prisma.contentItem.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ContentMediaItem",
+    create: async (fixture) => (await createContentFixture(fixture)).mediaItems[0]!,
+    list: (workspaceId) => prisma.contentMediaItem.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ContentReelScript",
+    create: createReelScriptFixture,
+    list: (workspaceId) => prisma.contentReelScript.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "ContentReelBeat",
+    create: async (fixture) => {
+      const script = await createReelScriptFixture(fixture);
+      return prisma.contentReelBeat.create({ data: { workspaceId: fixture.workspaceId, reelScriptId: script.id, position: 0, text: "Opening" } });
+    },
+    list: (workspaceId) => prisma.contentReelBeat.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
   },
   {
     model: "ContentConversation",
@@ -499,7 +514,14 @@ const isolationCases: IsolationCase[] = [
 ];
 
 function createContentFixture(fixture: WorkspaceFixture) {
-  return prisma.contentItem.create({ data: { workspaceId: fixture.workspaceId, contentType: "POST", caption: "Isolation test", mediaIds: [] } });
+  return prisma.$transaction((tx) =>
+    createContentAggregate(tx, fixture.workspaceId, { platform: "INSTAGRAM", contentType: "POST", caption: "Isolation test" })
+  );
+}
+
+async function createReelScriptFixture(fixture: WorkspaceFixture) {
+  const content = await prisma.$transaction((tx) => createContentAggregate(tx, fixture.workspaceId, { platform: "INSTAGRAM", contentType: "REEL" }));
+  return prisma.contentReelScript.create({ data: { workspaceId: fixture.workspaceId, contentItemId: content.id, hook: "Opening" } });
 }
 
 async function createConversationFixture(fixture: WorkspaceFixture) {

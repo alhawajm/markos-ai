@@ -1,4 +1,7 @@
 import { ContentConflictError } from "./content-conflict";
+import { z } from "zod";
+import { contentMutationSchema, convertContentSchema } from "@markos/validation";
+import { getContentAggregate, mutateContentAggregate, convertContentAggregate, ContentAggregateError } from "./content-aggregate";
 import { ContentMediaValidationError } from "../media/content-media-integrity";
 import type { FastifyInstance } from "fastify";
 import {
@@ -40,6 +43,43 @@ import {
 } from "./content-service";
 
 export async function registerContentRoutes(app: FastifyInstance): Promise<void> {
+  app.get(
+    "/v1/content/:contentItemId",
+    {
+      config: { workspaceRequired: true, permissions: ["content:read"] }
+    },
+    async (request, reply) => {
+      const params = z.object({ contentItemId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content ID"));
+      return ok(await getContentAggregate(requireWorkspaceContext().workspaceId, params.data.contentItemId));
+    }
+  );
+  for (const operation of ["mutate", "convert"] as const) {
+    app.post(
+      `/v1/content/:contentItemId/${operation}`,
+      {
+        config: { workspaceRequired: true, permissions: ["content:write"] }
+      },
+      async (request, reply) => {
+        const params = z.object({ contentItemId: z.string().uuid() }).safeParse(request.params);
+        if (!params.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid content ID"));
+        const parsed = (operation === "mutate" ? contentMutationSchema : convertContentSchema).safeParse(request.body);
+        if (!parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid authoring operation", parsed.error.issues));
+        try {
+          const { workspaceId } = requireWorkspaceContext();
+          return ok(
+            operation === "mutate"
+              ? await mutateContentAggregate(workspaceId, params.data.contentItemId, contentMutationSchema.parse(parsed.data))
+              : await convertContentAggregate(workspaceId, params.data.contentItemId, convertContentSchema.parse(parsed.data))
+          );
+        } catch (error) {
+          if (error instanceof ContentConflictError || error instanceof ContentAggregateError)
+            return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+          throw error;
+        }
+      }
+    );
+  }
   app.get(
     "/v1/content",
     {
@@ -380,7 +420,9 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await deleteContentItem(workspaceId, params.contentItemId));
+        const body = z.object({ expectedRevision: z.number().int().positive() }).strict().safeParse(request.body);
+        if (!body.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Expected revision is required"));
+        return ok(await deleteContentItem(workspaceId, params.contentItemId, body.data.expectedRevision));
       } catch (error) {
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
           return reply.status(409).send(errorEnvelope(error.code, error.message));

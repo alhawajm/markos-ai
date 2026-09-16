@@ -638,7 +638,6 @@ export * from "./conversation";
 
 export interface ContentRecord {
   revision: number;
-  visualDirection?: string;
   id: string;
   workspaceId: string;
   platform?: ContentPlatform;
@@ -646,9 +645,8 @@ export interface ContentRecord {
   status: ContentStatus;
   brief?: string;
   caption: string;
-  mediaIds: string[];
-  carousel?: Record<string, unknown>;
-  reelScript?: Record<string, unknown>;
+  mediaItems: ContentMediaItemRecord[];
+  reelScript: ContentReelScriptRecord | null;
   contentPillar?: string;
   campaignId?: string;
   campaignGoal?: string;
@@ -661,6 +659,44 @@ export interface ContentRecord {
   publishedAt?: string;
   instagramPostId?: string;
   failureReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentMediaItemRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  position: number;
+  mediaKind: "IMAGE" | "VIDEO" | null;
+  mediaAssetId: string | null;
+  purpose: string | null;
+  title: string | null;
+  body: string | null;
+  visualDirection: string | null;
+  aspectRatio: "SQUARE" | "PORTRAIT" | "VERTICAL" | null;
+  generationDurationSeconds: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentReelScriptRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  hook: string | null;
+  intendedDurationSeconds: number | null;
+  beats: ContentReelBeatRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentReelBeatRecord {
+  id: string;
+  workspaceId: string;
+  reelScriptId: string;
+  position: number;
+  text: string;
   createdAt: string;
   updatedAt: string;
 }

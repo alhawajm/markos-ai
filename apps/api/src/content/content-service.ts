@@ -1,4 +1,6 @@
-import { Prisma, type ContentStatus, type ContentType } from "@prisma/client";
+import { z } from "zod";
+import { updateContentSchema, updateContentStatusSchema } from "@markos/validation";
+import { Prisma, type ContentStatus } from "@prisma/client";
 import type { CampaignPlan, ContentDraft, ContentRecord, ContentToneLock, VaultRagChunk } from "@markos/shared-types";
 import type {
   CreateContentInput,
@@ -14,7 +16,16 @@ import type {
 import { generateContentDrafts } from "../ai/content-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
-import { assertStoredContentMedia, lockContentForMedia } from "../media/content-media-integrity";
+import {
+  contentAggregateInclude,
+  createContentAggregate,
+  getContentAggregate,
+  loadContentAggregate,
+  lockContentRoot,
+  mutateContentAggregate,
+  toContentRecord
+} from "./content-aggregate";
+export { toContentRecord } from "./content-aggregate";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
@@ -76,41 +87,28 @@ export class ContentItemDeleteError extends Error {
 }
 
 export async function listContentItems(workspaceId: string): Promise<ContentRecord[]> {
-  const rows = await prisma.contentItem.findMany({
-    where: {
-      workspaceId,
-      deletedAt: null
+  return prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.contentItem.findMany({
+        where: { workspaceId, deletedAt: null },
+        include: contentAggregateInclude,
+        orderBy: { createdAt: "desc" },
+        take: 50
+      });
+      return rows.map(toContentRecord);
     },
-    orderBy: {
-      createdAt: "desc"
-    },
-    take: 50
-  });
-
-  return rows.map(toContentRecord);
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead }
+  );
 }
-
 export async function createWorkspaceContent(workspaceId: string, input: CreateContentInput): Promise<ContentRecord> {
-  const row = await prisma.contentItem.create({
-    data: {
-      workspaceId,
-      platform: input.platform,
-      contentType: input.contentType,
-      status: "DRAFT",
-      ...(input.brief === undefined ? {} : { brief: input.brief }),
-      ...(input.caption === undefined ? {} : { caption: input.caption }),
-      ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
-      ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
-      ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
-      ...(input.tone === undefined ? {} : { tone: input.tone }),
-      ...(input.carousel == null ? {} : { carousel: input.carousel as Prisma.InputJsonValue }),
-      ...(input.reelScript == null ? {} : { reelScript: input.reelScript as Prisma.InputJsonValue }),
-      ...(input.plannedAt == null ? {} : { plannedAt: new Date(input.plannedAt) }),
-      mediaIds: []
-    }
-  });
-
-  return toContentRecord(row);
+  return prisma.$transaction((tx) => createContentAggregate(tx, workspaceId, input));
+}
+export class ContentPhasePendingError extends Error {
+  readonly statusCode = 503;
+  readonly code = "CREATE_PHASE_PENDING";
+  constructor() {
+    super("This Create operation is unavailable until the generation/assistant migration is completed.");
+  }
 }
 
 export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {
@@ -153,24 +151,45 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
       const rows = [];
 
       for (const draft of generated.drafts) {
-        rows.push(
-          await tx.contentItem.create({
+        const record = await createContentAggregate(tx, workspaceId, {
+          platform: "INSTAGRAM",
+          contentType: draft.contentType,
+          caption: draft.caption,
+          contentPillar: draft.contentPillar,
+          tone: toneLock.lock.toneWords.join(", ") || null
+        });
+        await tx.contentItem.update({
+          where: { id: record.id },
+          data: {
+            campaignId: input.campaignId ?? null,
+            aiPromptUsed: promptVersion
+          }
+        });
+        const initial = record.mediaItems[0]!;
+        await tx.contentMediaItem.update({ where: { id: initial.id }, data: { visualDirection: draft.visualDirection ?? null } });
+        if (draft.contentType === "CAROUSEL" && draft.carousel) {
+          const slides = generatedCarouselSchema.parse(draft.carousel).slides;
+          for (const [position, slide] of slides.entries()) {
+            if (position === 0) await tx.contentMediaItem.update({ where: { id: initial.id }, data: slide });
+            else
+              await tx.contentMediaItem.create({
+                data: { workspaceId, contentItemId: record.id, position, mediaKind: "IMAGE", ...slide, visualDirection: draft.visualDirection ?? null }
+              });
+          }
+        }
+        if (draft.contentType === "REEL" && draft.reelScript) {
+          const script = generatedReelSchema.parse(draft.reelScript);
+          await tx.contentReelScript.create({
             data: {
               workspaceId,
-              contentType: draft.contentType,
-              status: "DRAFT",
-              ...(draft.caption === undefined ? {} : { caption: draft.caption }),
-              ...(draft.visualDirection === undefined ? {} : { visualDirection: draft.visualDirection }),
-              mediaIds: [],
-              ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
-              ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
-              ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-              ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
-              ...(toneLock.lock.toneWords.length === 0 ? {} : { tone: toneLock.lock.toneWords.join(", ") }),
-              aiPromptUsed: promptVersion
+              contentItemId: record.id,
+              hook: script.hook,
+              intendedDurationSeconds: script.durationSeconds,
+              beats: { create: script.beats.map((text, position) => ({ position, text })) }
             }
-          })
-        );
+          });
+        }
+        rows.push(toContentRecord(await loadContentAggregate(tx, workspaceId, record.id)));
       }
 
       await tx.aiInteraction.create({
@@ -209,7 +228,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
       return rows;
     });
 
-    return saved.map(toContentRecord);
+    return saved;
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", amount: generationCount, now: usagePeriodDate });
     throw error;
@@ -289,376 +308,54 @@ export async function ideateWorkspaceContent(workspaceId: string, input: IdeateC
   }
 }
 
+// Old whole-draft writers cannot safely edit the new aggregate. Targeted AI
+// mutation and generation belong to Phases 3 and 2, respectively.
 export async function generateWorkspaceContentForItem(
-  workspaceId: string,
-  contentItemId: string,
-  input: GenerateContentForItemInput,
-  revision?: { instruction: string; currentDraft: ContentDraft }
+  _workspaceId: string,
+  _contentItemId: string,
+  _input: GenerateContentForItemInput
 ): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
-    throw new ContentItemLockedError();
-  }
-
-  const score = await getVaultScore(workspaceId);
-  if (score.entryCount === 0) {
-    throw new ContentContextMissingError();
-  }
-
-  const campaign = await findCampaign(workspaceId, current.campaignId ?? undefined);
-  const context = await searchVaultContext(workspaceId, { query: input.topic, topK: 8 });
-  const toneLock = await getContentToneLock(workspaceId);
-  const explicitToneWords = current.tone
-    ?.split(/[,\n]/)
-    .map((word) => word.trim())
-    .filter(Boolean);
-  const effectiveToneLock: ContentToneLock = explicitToneWords?.length ? { ...toneLock.lock, toneWords: explicitToneWords } : toneLock.lock;
-  const lockedContext = mergeVaultContext(context, toneLock.context);
-  const promptTemplate = await selectPromptTemplateForRun(workspaceId, contentAgentName, `${workspaceId}:${contentItemId}:${input.topic}:${input.contentType}`);
-  const usagePeriodDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
-
-  try {
-    const generated = await generateContentDrafts({
-      workspaceId,
-      topic: input.topic,
-      contentType: input.contentType,
-      count: 1,
-      context: lockedContext,
-      toneLock: effectiveToneLock,
-      ...(revision === undefined ? {} : { revision }),
-      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(campaign === undefined ? {} : { campaign })
-    });
-    const [draft] = generated.drafts;
-    if (!draft) throw new Error("AI content generation returned no draft");
-    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
-
-    const saved = await prisma.$transaction(async (tx) => {
-      const latest = await lockContentForMedia(tx, workspaceId, current.id);
-      if (!latest) throw new ContentItemNotFoundError();
-      if (latest.contentType !== draft.contentType) await assertStoredContentMedia(tx, latest, { contentType: draft.contentType });
-      const row = await tx.contentItem.update({
-        where: { id: current.id, revision: current.revision, status: { in: ["DRAFT", "IN_REVIEW"] }, deletedAt: null },
-        data: {
-          brief: input.topic,
-          contentType: draft.contentType,
-          caption: draft.caption,
-          visualDirection: draft.visualDirection ?? null,
-          carousel: draft.carousel === undefined ? Prisma.JsonNull : (draft.carousel as unknown as Prisma.InputJsonValue),
-          reelScript: draft.reelScript === undefined ? Prisma.JsonNull : (draft.reelScript as unknown as Prisma.InputJsonValue),
-          contentPillar: current.contentPillar ?? draft.contentPillar ?? null,
-          tone: current.tone ?? (effectiveToneLock.toneWords.length > 0 ? effectiveToneLock.toneWords.join(", ") : null),
-          aiPromptUsed: promptVersion
-        }
-      });
-
-      await tx.aiInteraction.create({
-        data: {
-          workspaceId,
-          agent: contentAgentName,
-          promptVersion,
-          prompt: {
-            contentItemId,
-            topic: input.topic,
-            contentType: input.contentType,
-            ...(current.campaignId === null ? {} : { campaignId: current.campaignId }),
-            campaignGoal: current.campaignGoal,
-            contentPillar: current.contentPillar,
-            ...(revision === undefined ? {} : { revisionInstruction: revision.instruction, currentDraft: revision.currentDraft }),
-            toneLock: effectiveToneLock,
-            ...(promptTemplate === undefined ? {} : { promptTemplate }),
-            retrievedContext: lockedContext
-          } as unknown as Prisma.InputJsonValue,
-          response: { draft, providerPromptVersion: generated.prompt_version } as unknown as Prisma.InputJsonValue,
-          tokensIn: generated.tokens_in,
-          tokensOut: generated.tokens_out,
-          costMinor: 0,
-          currency: localCurrency,
-          model: generated.model || env.LLM_PRIMARY_MODEL
-        }
-      });
-      await recordAiTokenUsage({ client: tx, workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out, now: usagePeriodDate });
-      return row;
-    });
-
-    return toContentRecord(saved);
-  } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-    throw error;
-  }
+  throw new ContentPhasePendingError();
+}
+export async function reviseWorkspaceContentItem(_workspaceId: string, _contentItemId: string, _input: ReviseContentItemInput): Promise<ContentRecord> {
+  throw new ContentPhasePendingError();
+}
+export async function generateWorkspaceContentForSlot(_workspaceId: string, _input: GenerateContentForSlotInput): Promise<ContentRecord> {
+  throw new ContentPhasePendingError();
 }
 
-export async function reviseWorkspaceContentItem(workspaceId: string, contentItemId: string, input: ReviseContentItemInput): Promise<ContentRecord> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (!current.caption.trim()) {
-    throw new ContentRevisionUnavailableError();
-  }
-
-  const currentDraft: ContentDraft = {
-    contentType: current.contentType,
-    caption: current.caption,
-    ...(current.contentPillar ? { contentPillar: current.contentPillar } : {}),
-    ...(current.carousel === null ? {} : { carousel: current.carousel as Record<string, unknown> }),
-    ...(current.reelScript === null ? {} : { reelScript: current.reelScript as Record<string, unknown> })
-  };
-  const topic = (current.brief?.trim() || (current.caption.trim().length >= 3 ? current.caption.trim() : "Revise this Instagram caption")).slice(0, 1000);
-
-  return generateWorkspaceContentForItem(
-    workspaceId,
-    contentItemId,
-    { topic, contentType: current.contentType },
-    { instruction: input.instruction, currentDraft }
-  );
+export async function updateContentItem(workspaceId: string, contentItemId: string, raw: UpdateContentInput): Promise<ContentRecord> {
+  const { expectedRevision, ...fields } = updateContentSchema.parse(raw);
+  return mutateContentAggregate(workspaceId, contentItemId, { expectedRevision, operations: [{ type: "updateContent", fields }] });
 }
 
-export async function generateWorkspaceContentForSlot(workspaceId: string, input: GenerateContentForSlotInput): Promise<ContentRecord> {
-  const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
-  const score = await getVaultScore(workspaceId);
-
-  if (score.entryCount === 0) {
-    throw new ContentContextMissingError();
-  }
-
-  const campaign = await findCampaign(workspaceId, input.campaignId);
-  const context = await searchVaultContext(workspaceId, {
-    query: input.topic,
-    topK: 8
-  });
-  const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
-  const promptTemplate = await selectPromptTemplateForRun(
-    workspaceId,
-    contentAgentName,
-    `${workspaceId}:${input.topic}:${input.contentType}:slot:${input.scheduledAt}:${input.campaignId ?? "orphan"}`
-  );
-  const usagePeriodDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
-
-  try {
-    const generated = await generateContentDrafts({
-      workspaceId,
-      topic: input.topic,
-      contentType: input.contentType,
-      count: 1,
-      context: lockedContext,
-      toneLock: toneLock.lock,
-      ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      ...(campaign === undefined ? {} : { campaign })
-    });
-    const promptVersion = promptTemplate?.version ?? generated.prompt_version;
-    const [draft] = generated.drafts;
-
-    if (!draft) {
-      throw new Error("AI content generation returned no drafts");
-    }
-
-    const saved = await prisma.$transaction(async (tx) => {
-      const row = await tx.contentItem.create({
-        data: {
-          workspaceId,
-          contentType: draft.contentType,
-          status: "SCHEDULED",
-          scheduledAt,
-          ...(draft.caption === undefined ? {} : { caption: draft.caption }),
-          ...(draft.visualDirection === undefined ? {} : { visualDirection: draft.visualDirection }),
-          mediaIds: [],
-          ...(draft.carousel === undefined ? {} : { carousel: draft.carousel as unknown as Prisma.InputJsonValue }),
-          ...(draft.reelScript === undefined ? {} : { reelScript: draft.reelScript as unknown as Prisma.InputJsonValue }),
-          ...(draft.contentPillar === undefined ? {} : { contentPillar: draft.contentPillar }),
-          ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
-          ...(toneLock.lock.toneWords.length === 0 ? {} : { tone: toneLock.lock.toneWords.join(", ") }),
-          aiPromptUsed: promptVersion
-        }
-      });
-
-      await addToContentCalendar(tx, workspaceId, row.id, scheduledAt);
-      await tx.aiInteraction.create({
-        data: {
-          workspaceId,
-          agent: contentAgentName,
-          promptVersion,
-          prompt: {
-            topic: input.topic,
-            contentType: input.contentType,
-            count: 1,
-            scheduledAt: input.scheduledAt,
-            ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
-            ...(promptTemplate === undefined ? {} : { promptTemplate }),
-            toneLock: toneLock.lock,
-            retrievedContext: lockedContext
-          } as unknown as Prisma.InputJsonValue,
-          response: {
-            drafts: generated.drafts,
-            scheduledContentItemId: row.id,
-            providerPromptVersion: generated.prompt_version
-          } as unknown as Prisma.InputJsonValue,
-          tokensIn: generated.tokens_in,
-          tokensOut: generated.tokens_out,
-          costMinor: 0,
-          currency: localCurrency,
-          model: generated.model || env.LLM_PRIMARY_MODEL
-        }
-      });
-      await recordAiTokenUsage({
-        client: tx,
-        workspaceId,
-        tokensIn: generated.tokens_in,
-        tokensOut: generated.tokens_out,
-        now: usagePeriodDate
-      });
-
-      return row;
-    });
-
-    return toContentRecord(saved);
-  } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-    throw error;
-  }
-}
-
-export async function updateContentItem(workspaceId: string, contentItemId: string, input: UpdateContentInput): Promise<ContentRecord> {
+export async function deleteContentItem(workspaceId: string, contentItemId: string, expectedRevision: number): Promise<{ id: string }> {
+  revisionSchema.parse(expectedRevision);
   return prisma.$transaction(async (tx) => {
-    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
-
-    if (!current) {
-      throw new ContentItemNotFoundError();
-    }
-
-    if (!["DRAFT", "IN_REVIEW"].includes(current.status)) {
-      throw new ContentItemLockedError();
-    }
-    if (input.contentType !== undefined && input.contentType !== current.contentType) {
-      await assertStoredContentMedia(tx, current, { contentType: input.contentType });
-    }
-
-    const row = await tx.contentItem
-      .update({
-        where: {
-          id: current.id,
-          revision: input.expectedRevision ?? current.revision,
-          status: { in: ["DRAFT", "IN_REVIEW"] },
-          deletedAt: null
-        },
-        data: {
-          ...(input.platform === undefined ? {} : { platform: input.platform }),
-          ...(input.contentType === undefined ? {} : { contentType: input.contentType }),
-          ...(input.brief === undefined ? {} : { brief: input.brief }),
-          ...(input.caption === undefined ? {} : { caption: input.caption }),
-          ...(input.visualDirection === undefined ? {} : { visualDirection: input.visualDirection }),
-          ...(input.contentPillar === undefined ? {} : { contentPillar: input.contentPillar }),
-          ...(input.campaignGoal === undefined ? {} : { campaignGoal: input.campaignGoal }),
-          ...(input.tone === undefined ? {} : { tone: input.tone }),
-          ...(input.carousel === undefined ? {} : { carousel: input.carousel as unknown as Prisma.InputJsonValue }),
-          ...(input.reelScript === undefined ? {} : { reelScript: input.reelScript as unknown as Prisma.InputJsonValue }),
-          ...(input.plannedAt === undefined ? {} : { plannedAt: input.plannedAt === null ? null : new Date(input.plannedAt) })
-        }
-      })
-      .catch((error: unknown) => {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-        throw error;
-      });
-
-    return toContentRecord(row);
+    const row = await lockContentRoot(tx, workspaceId, contentItemId, expectedRevision);
+    if (!["DRAFT", "IN_REVIEW", "APPROVED", "FAILED"].includes(row.status))
+      throw new ContentItemDeleteError("Cancel publishing before deleting content", "CONTENT_DELETE_FORBIDDEN");
+    await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
+    await tx.contentItem.update({ where: { id: row.id }, data: { deletedAt: new Date() } });
+    return { id: row.id };
   });
 }
-
-export async function deleteContentItem(workspaceId: string, contentItemId: string): Promise<{ id: string }> {
-  const current = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!current) {
-    throw new ContentItemNotFoundError();
-  }
-
-  if (current.status === "SCHEDULED") {
-    throw new ContentItemDeleteError("Cancel the scheduled publishing time before deleting this post draft", "CONTENT_DELETE_REQUIRES_CANCELLATION");
-  }
-
-  if (current.status === "PUBLISHED") {
-    throw new ContentItemDeleteError("Published Instagram posts cannot be deleted through the draft deletion action", "CONTENT_DELETE_FORBIDDEN");
-  }
-
-  await prisma.contentItem.update({
-    where: {
-      id: current.id
-    },
-    data: {
-      deletedAt: new Date()
-    }
-  });
-
-  return { id: current.id };
-}
-
-export async function updateContentItemStatus(workspaceId: string, contentItemId: string, input: UpdateContentStatusInput): Promise<ContentRecord> {
+export async function updateContentItemStatus(workspaceId: string, contentItemId: string, raw: UpdateContentStatusInput): Promise<ContentRecord> {
+  const input = updateContentStatusSchema.parse(raw);
+  // Readiness migrates with publishing in Phase 2.
+  if (input.status === "APPROVED") throw new ContentPhasePendingError();
   return prisma.$transaction(async (tx) => {
-    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
-
-    if (!current) {
-      throw new ContentItemNotFoundError();
-    }
-
-    if (!isAllowedContentTransition(current.status, input.status)) {
-      throw new ContentStatusTransitionError();
-    }
-    if (input.status === "APPROVED") await assertStoredContentMedia(tx, current, { requireReady: true });
-
-    const row = await tx.contentItem
-      .update({
-        where: {
-          id: current.id,
-          revision: input.expectedRevision ?? current.revision,
-          status: current.status,
-          deletedAt: null
-        },
-        data: {
-          status: input.status
-        }
-      })
-      .catch((error: unknown) => {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") throw new ContentConflictError();
-        throw error;
-      });
-
-    return toContentRecord(row);
+    const row = await lockContentRoot(tx, workspaceId, contentItemId, input.expectedRevision);
+    if (!isAllowedContentTransition(row.status, input.status)) throw new ContentStatusTransitionError();
+    await tx.contentItem.update({ where: { id: row.id }, data: { status: input.status } });
+    return toContentRecord(await loadContentAggregate(tx, workspaceId, row.id));
   });
 }
 
 export async function scheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const row = await prisma.$transaction(async (tx) => {
-    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    const current = await lockContentRoot(tx, workspaceId, contentItemId);
     if (!current) throw new ContentItemNotFoundError();
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
     if (current.status !== "APPROVED") throw new ContentScheduleError();
@@ -677,13 +374,13 @@ export async function scheduleContentItem(workspaceId: string, contentItemId: st
     return updated;
   });
 
-  return toContentRecord(row);
+  return getContentAggregate(workspaceId, row.id);
 }
 
 export async function rescheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const row = await prisma.$transaction(async (tx) => {
-    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    const current = await lockContentRoot(tx, workspaceId, contentItemId);
     if (!current) throw new ContentItemNotFoundError();
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
     if (current.status !== "SCHEDULED" && current.status !== "FAILED") {
@@ -708,12 +405,12 @@ export async function rescheduleContentItem(workspaceId: string, contentItemId: 
     return updated;
   });
 
-  return toContentRecord(row);
+  return getContentAggregate(workspaceId, row.id);
 }
 
 export async function unscheduleContentItem(workspaceId: string, contentItemId: string): Promise<ContentRecord> {
   const row = await prisma.$transaction(async (tx) => {
-    const current = await lockContentForMedia(tx, workspaceId, contentItemId);
+    const current = await lockContentRoot(tx, workspaceId, contentItemId);
     if (!current) throw new ContentItemNotFoundError();
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
     if (current.status !== "SCHEDULED") throw new ContentScheduleError("Only scheduled content can be unscheduled");
@@ -735,7 +432,7 @@ export async function unscheduleContentItem(workspaceId: string, contentItemId: 
     return updated;
   });
 
-  return toContentRecord(row);
+  return getContentAggregate(workspaceId, row.id);
 }
 
 /** Caller holds the content row lock shared with publish queueing/claiming. */
@@ -929,60 +626,11 @@ export async function findCampaign(workspaceId: string, campaignId: string | und
   return row.content as unknown as CampaignPlan;
 }
 
-export function toContentRecord(row: {
-  id: string;
-  workspaceId: string;
-  platform?: string;
-  contentType: ContentType;
-  status: ContentStatus;
-  brief: string | null;
-  caption: string;
-  revision: number;
-  visualDirection: string | null;
-  mediaIds: string[];
-  carousel: Prisma.JsonValue | null;
-  reelScript: Prisma.JsonValue | null;
-  contentPillar: string | null;
-  campaignId: string | null;
-  campaignGoal: string | null;
-  campaignWeek: number | null;
-  campaignActionIndex: number | null;
-  tone: string | null;
-  aiPromptUsed: string | null;
-  plannedAt: Date | null;
-  scheduledAt: Date | null;
-  publishedAt: Date | null;
-  instagramPostId: string | null;
-  failureReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): ContentRecord {
-  return {
-    id: row.id,
-    revision: row.revision,
-    ...(row.visualDirection === null ? {} : { visualDirection: row.visualDirection }),
-    workspaceId: row.workspaceId,
-    platform: row.platform === "INSTAGRAM" ? row.platform : "INSTAGRAM",
-    contentType: row.contentType,
-    status: row.status,
-    ...(row.brief === null ? {} : { brief: row.brief }),
-    caption: row.caption,
-    mediaIds: row.mediaIds,
-    ...(row.carousel === null ? {} : { carousel: row.carousel as Record<string, unknown> }),
-    ...(row.reelScript === null ? {} : { reelScript: row.reelScript as Record<string, unknown> }),
-    ...(row.contentPillar === null ? {} : { contentPillar: row.contentPillar }),
-    ...(row.campaignId === null ? {} : { campaignId: row.campaignId }),
-    ...(row.campaignGoal === null ? {} : { campaignGoal: row.campaignGoal }),
-    ...(row.campaignWeek === null ? {} : { campaignWeek: row.campaignWeek }),
-    ...(row.campaignActionIndex === null ? {} : { campaignActionIndex: row.campaignActionIndex }),
-    ...(row.tone === null ? {} : { tone: row.tone }),
-    ...(row.aiPromptUsed === null ? {} : { aiPromptUsed: row.aiPromptUsed }),
-    ...(row.plannedAt === null ? {} : { plannedAt: row.plannedAt.toISOString() }),
-    ...(row.scheduledAt === null ? {} : { scheduledAt: row.scheduledAt.toISOString() }),
-    ...(row.publishedAt === null ? {} : { publishedAt: row.publishedAt.toISOString() }),
-    ...(row.instagramPostId === null ? {} : { instagramPostId: row.instagramPostId }),
-    ...(row.failureReason === null ? {} : { failureReason: row.failureReason }),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
-  };
-}
+const revisionSchema = z.number().int().positive();
+const generatedCarouselSchema = z.object({
+  slides: z
+    .array(z.object({ title: z.string().max(160), body: z.string().max(800) }))
+    .min(1)
+    .max(10)
+});
+const generatedReelSchema = z.object({ hook: z.string().max(300), durationSeconds: z.number().int().positive(), beats: z.array(z.string().max(800)).max(100) });
