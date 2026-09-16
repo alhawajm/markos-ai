@@ -42,7 +42,6 @@ describe("content studio draft state", () => {
       contentPillar: null,
       contentType: "POST",
       plannedAt: "2026-08-28T15:30:00.000Z",
-      visualDirection: null,
       tone: null
     });
   });
@@ -54,7 +53,8 @@ describe("content studio draft state", () => {
       contentType: "POST",
       createdAt: "2026-08-25T10:00:00.000Z",
       id: "content-1",
-      mediaIds: [],
+      mediaItems: [],
+      reelScript: null,
       plannedAt: "2026-08-28T15:30:00.000Z",
       status: "DRAFT",
       updatedAt: "2026-08-25T10:00:00.000Z",

@@ -1250,3 +1250,45 @@ export interface PublishDueContentResult {
   attempted: number;
   attempts: PublishAttemptRecord[];
 }
+
+type AuthoringPatch<T> = { [K in keyof T]?: T[K] | undefined };
+export type ContentAuthoringOperation =
+  | {
+      type: "updateContent";
+      fields: AuthoringPatch<
+        Pick<ContentRecord, "caption"> & {
+          brief: string | null;
+          contentPillar: string | null;
+          campaignGoal: string | null;
+          tone: string | null;
+          plannedAt: string | null;
+        }
+      >;
+    }
+  | {
+      type: "updateMediaItem";
+      itemId: string;
+      fields: AuthoringPatch<
+        Pick<
+          ContentMediaItemRecord,
+          "mediaKind" | "mediaAssetId" | "purpose" | "title" | "body" | "visualDirection" | "aspectRatio" | "generationDurationSeconds"
+        >
+      >;
+    }
+  | {
+      type: "addMediaItem";
+      fields: AuthoringPatch<
+        Pick<
+          ContentMediaItemRecord,
+          "mediaKind" | "mediaAssetId" | "purpose" | "title" | "body" | "visualDirection" | "aspectRatio" | "generationDurationSeconds"
+        >
+      >;
+      afterId?: string | null | undefined;
+    }
+  | { type: "removeMediaItem"; itemId: string }
+  | { type: "reorderMediaItems"; orderedIds: string[] }
+  | { type: "updateReelScript"; fields: AuthoringPatch<Pick<ContentReelScriptRecord, "hook" | "intendedDurationSeconds">> }
+  | { type: "addReelBeat"; text: string; afterId?: string | null | undefined }
+  | { type: "updateReelBeat"; beatId: string; text: string }
+  | { type: "removeReelBeat"; beatId: string }
+  | { type: "reorderReelBeats"; orderedIds: string[] };

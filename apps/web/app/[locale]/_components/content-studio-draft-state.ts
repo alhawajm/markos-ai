@@ -11,7 +11,6 @@ export interface ContentDraftFields {
   contentType: ContentType;
   plannedAtInput: string;
   tone: string;
-  visualDirection: string;
 }
 
 export interface ContentDraftPayload {
@@ -22,7 +21,6 @@ export interface ContentDraftPayload {
   contentPillar: string | null;
   plannedAt: string | null;
   tone: string | null;
-  visualDirection: string | null;
 }
 
 export function emptyContentDraftFields(contentType: ContentType = "POST"): ContentDraftFields {
@@ -33,7 +31,6 @@ export function emptyContentDraftFields(contentType: ContentType = "POST"): Cont
     contentPillar: "",
     contentType,
     plannedAtInput: "",
-    visualDirection: "",
     tone: ""
   };
 }
@@ -46,7 +43,6 @@ export function contentDraftFieldsFromRecord(record: ContentRecord): ContentDraf
     contentPillar: record.contentPillar ?? "",
     contentType: record.contentType,
     plannedAtInput: record.plannedAt ? bahrainInputValue(record.plannedAt) : "",
-    visualDirection: record.visualDirection ?? "",
     tone: record.tone ?? ""
   };
 }
@@ -60,7 +56,6 @@ export function contentDraftHasMeaningfulWork(fields: ContentDraftFields): boole
     normalized.caption.trim().length > 0 ||
     normalized.contentPillar.length > 0 ||
     normalized.plannedAtInput.length > 0 ||
-    normalized.visualDirection.length > 0 ||
     normalized.tone.length > 0
   );
 }
@@ -77,7 +72,6 @@ export function contentDraftPayload(fields: ContentDraftFields): ContentDraftPay
     contentType: fields.contentType,
     contentPillar: fields.contentPillar.trim() || null,
     plannedAt: plannedAtInputToIso(fields.plannedAtInput),
-    visualDirection: fields.visualDirection.trim() || null,
     tone: fields.tone.trim() || null
   };
 }
@@ -119,7 +113,6 @@ function normalizeContentDraft(fields: ContentDraftFields) {
     contentType: fields.contentType,
     contentPillar: fields.contentPillar.trim(),
     plannedAtInput: fields.plannedAtInput,
-    visualDirection: fields.visualDirection.trim(),
     tone: fields.tone.trim()
   };
 }

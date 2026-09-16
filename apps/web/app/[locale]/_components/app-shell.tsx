@@ -350,7 +350,11 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             <MobileNavLink activeSection={activeSection} item={settingsNavItem} locale={locale} />
           </nav>
 
-          <div className="mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8">
+          <div
+            className={
+              activeSection === "content-studio" ? "w-full min-w-0 px-4 py-5 lg:p-6" : "mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8"
+            }
+          >
             {activeSection === "dashboard" || activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
