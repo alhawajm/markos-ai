@@ -1,6 +1,9 @@
+import { ContentAggregateError } from "../content/content-aggregate";
+import { ContentConflictError } from "../content/content-conflict";
 import type { FastifyInstance } from "fastify";
 import {
   attachMediaToContentSchema,
+  mediaRevisionSchema,
   generateImageForContentSchema,
   generateVideoForContentSchema,
   registerPublicMediaSchema,
@@ -273,8 +276,14 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
         const params = request.params as { jobId?: string };
         if (!params.jobId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Media generation job id is required"));
         const { workspaceId } = requireWorkspaceContext();
+        const parsed = mediaRevisionSchema.safeParse(request.body);
+        if (action === "retry" && !parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Expected revision is required"));
         try {
-          return ok(action === "cancel" ? await cancelMediaGenerationJob(workspaceId, params.jobId) : await retryMediaGenerationJob(workspaceId, params.jobId));
+          return ok(
+            action === "cancel"
+              ? await cancelMediaGenerationJob(workspaceId, params.jobId)
+              : await retryMediaGenerationJob(workspaceId, params.jobId, parsed.success ? parsed.data.expectedRevision : 0)
+          );
         } catch (error) {
           if (error instanceof MediaGenerationJobNotFoundError) return reply.status(404).send(errorEnvelope("MEDIA_GENERATION_NOT_FOUND", error.message));
           if (error instanceof MediaGenerationJobStateError) return reply.status(409).send(errorEnvelope("MEDIA_GENERATION_STATE_INVALID", error.message));
@@ -307,7 +316,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await attachMediaToContent(workspaceId, params.contentItemId, parsed.data.mediaAssetId));
+        return ok(await attachMediaToContent(workspaceId, params.contentItemId, parsed.data));
       } catch (error) {
         return handleMediaMutationError(error, reply);
       }
@@ -315,7 +324,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.delete(
-    "/v1/content/:contentItemId/media/:mediaAssetId",
+    "/v1/content/:contentItemId/media/:contentMediaItemId",
     {
       config: {
         workspaceRequired: true,
@@ -323,16 +332,18 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
     },
     async (request, reply) => {
-      const params = request.params as { contentItemId?: string; mediaAssetId?: string };
+      const params = request.params as { contentItemId?: string; contentMediaItemId?: string };
 
-      if (!params.contentItemId || !params.mediaAssetId) {
+      if (!params.contentItemId || !params.contentMediaItemId) {
         return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id and media asset id are required"));
       }
 
+      const parsed = mediaRevisionSchema.safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Expected revision is required"));
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await detachMediaFromContent(workspaceId, params.contentItemId, params.mediaAssetId));
+        return ok(await detachMediaFromContent(workspaceId, params.contentItemId, params.contentMediaItemId, parsed.data.expectedRevision));
       } catch (error) {
         return handleMediaMutationError(error, reply);
       }
@@ -364,6 +375,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 }
 
 function handleMediaMutationError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {
+  if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+  if (error instanceof ContentConflictError) return reply.status(409).send(errorEnvelope(error.code, error.message));
   if (error instanceof ContentMediaValidationError) {
     return reply
       .status(409)

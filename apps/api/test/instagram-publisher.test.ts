@@ -170,7 +170,7 @@ describe("InstagramGraphPublisher", () => {
 
     await expect(
       publisher.publish({
-        contentItem: contentItem({ contentType: "STORY" }),
+        contentItem: { ...contentItem({ contentType: "STORY" }), caption: "" },
         mediaAssets: [videoAsset({ filename: "story.mp4" })],
         workspace: workspace()
       })
@@ -485,14 +485,12 @@ function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" | "STORY
   return {
     aiPromptUsed: null,
     revision: 1,
-    visualDirection: null,
     brief: null,
     caption: completeCaption,
     campaignActionIndex: null,
     campaignGoal: null,
     campaignId: null,
     campaignWeek: null,
-    carousel: null,
     contentPillar: null,
     contentType: input.contentType,
     createdAt: new Date(),
@@ -500,11 +498,9 @@ function contentItem(input: { contentType: "CAROUSEL" | "POST" | "REEL" | "STORY
     failureReason: null,
     id: "content-id",
     instagramPostId: null,
-    mediaIds: ["media-id"],
     platform: "INSTAGRAM",
     plannedAt: null,
     publishedAt: null,
-    reelScript: null,
     scheduledAt: new Date(Date.now() - 1000),
     status: "SCHEDULED",
     tone: null,

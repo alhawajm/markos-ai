@@ -749,29 +749,41 @@ export function validateInstagramImageMetadata(input: {
   return reasons;
 }
 
-export const attachMediaToContentSchema = z.object({
-  mediaAssetId: z.string().uuid()
-});
-
-export const generateImageForContentSchema = z.object({
-  replaceMediaAssetId: z.string().uuid().optional(),
-  prompt: z.string().min(3).max(1000).optional(),
-  aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
-});
-
-export const updateContentMediaSchema = z.object({
-  mediaIds: z
-    .array(z.string().uuid())
-    .max(10)
-    .refine((ids) => new Set(ids).size === ids.length, "Duplicate media"),
-  expectedMediaIds: z.array(z.string().uuid()).max(10)
-});
-
-export const generateVideoForContentSchema = z.object({
-  prompt: z.string().trim().min(3).max(4000),
-  durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).default(8),
-  aspectRatio: z.literal("9:16").default("9:16")
-});
+export const mediaRevisionSchema = z.object({ expectedRevision: z.number().int().positive() }).strict();
+export const attachMediaToContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    mediaAssetId: z.string().uuid(),
+    expectedRevision: z.number().int().positive()
+  })
+  .strict();
+export const generateImageForContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    expectedRevision: z.number().int().positive(),
+    prompt: z.string().trim().min(3).max(2000).optional(),
+    aspectRatio: z.enum(["1:1", "4:5", "9:16"]).optional()
+  })
+  .strict();
+export const updateContentMediaSchema = z
+  .object({
+    orderedIds: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(10)
+      .refine((ids) => new Set(ids).size === ids.length, "Duplicate item"),
+    expectedRevision: z.number().int().positive()
+  })
+  .strict();
+export const generateVideoForContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    expectedRevision: z.number().int().positive(),
+    prompt: z.string().trim().min(3).max(2000).optional(),
+    durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional(),
+    aspectRatio: z.literal("9:16").optional()
+  })
+  .strict();
 
 export const createPromptTemplateSchema = z.object({
   agent: promptAgentSchema,

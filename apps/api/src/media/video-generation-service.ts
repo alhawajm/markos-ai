@@ -1,3 +1,4 @@
+import { dispatchGeneration, applyGeneratedAsset } from "./generation-intent";
 import type { MediaGenerationJob, MediaGenerationStatus, Prisma } from "@prisma/client";
 import type { MediaGenerationJobRecord } from "@markos/shared-types";
 import type { GenerateVideoForContentInput } from "@markos/validation";
@@ -7,7 +8,7 @@ import { prisma } from "../db/prisma";
 import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { deleteStoredMedia, storeWorkspaceMedia } from "./storage-service";
 import { MediaContentItemNotFoundError, MediaContentLockedError } from "./media-service";
-import { assertStoredContentMedia, ContentMediaValidationError, lockContentForMedia, validateStoredContentMedia } from "./content-media-integrity";
+import { ContentMediaValidationError, lockContentForMedia } from "./content-media-integrity";
 import { workerLogger, workerErrorCode, type WorkerLogger } from "../worker/worker-diagnostics";
 import { env } from "../config/env";
 
@@ -61,51 +62,12 @@ export class MediaGenerationJobStateError extends Error {
 }
 
 export async function queueVideoGeneration(workspaceId: string, contentItemId: string, input: GenerateVideoForContentInput): Promise<MediaGenerationJobRecord> {
-  const content = await prisma.contentItem.findFirst({
-    where: { id: contentItemId, workspaceId, deletedAt: null }
-  });
-  if (!content) throw new MediaContentItemNotFoundError();
-  if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
-  if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
-  await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
-
-  const active = await prisma.mediaGenerationJob.findFirst({
-    where: {
-      contentItemId,
-      workspaceId,
-      status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] }
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  if (active) return toMediaGenerationJobRecord(active);
-
   const quotaDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: quotaDate });
   try {
-    return toMediaGenerationJobRecord(
-      await prisma.mediaGenerationJob.create({
-        data: {
-          workspaceId,
-          contentItemId,
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          durationSeconds: input.durationSeconds
-        }
-      })
-    );
+    return toMediaGenerationJobRecord(await dispatchGeneration(workspaceId, contentItemId, "VIDEO", input));
   } catch (error) {
     await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: quotaDate });
-    if (isUniqueConstraintError(error)) {
-      const raced = await prisma.mediaGenerationJob.findFirst({
-        where: {
-          contentItemId,
-          workspaceId,
-          status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] }
-        },
-        orderBy: { createdAt: "desc" }
-      });
-      if (raced) return toMediaGenerationJobRecord(raced);
-    }
     throw error;
   }
 }
@@ -118,7 +80,7 @@ export async function getMediaGenerationJob(workspaceId: string, jobId: string):
 
 export async function getLatestMediaGenerationJob(workspaceId: string, contentItemId: string): Promise<MediaGenerationJobRecord | null> {
   const job = await prisma.mediaGenerationJob.findFirst({
-    where: { contentItemId, workspaceId },
+    where: { contentItemId, workspaceId, kind: "VIDEO" },
     orderBy: { createdAt: "desc" }
   });
   return job ? toMediaGenerationJobRecord(job) : null;
@@ -127,7 +89,7 @@ export async function getLatestMediaGenerationJob(workspaceId: string, contentIt
 export async function cancelMediaGenerationJob(workspaceId: string, jobId: string): Promise<MediaGenerationJobRecord> {
   const job = await prisma.mediaGenerationJob.findFirst({ where: { id: jobId, workspaceId } });
   if (!job) throw new MediaGenerationJobNotFoundError();
-  if (["COMPLETED", "FAILED", "CANCELLED"].includes(job.status)) throw new MediaGenerationJobStateError();
+  if (job.kind !== "VIDEO" || ["COMPLETED", "FAILED", "CANCELLED"].includes(job.status)) throw new MediaGenerationJobStateError();
 
   const result = await prisma.mediaGenerationJob.updateMany({
     where: { id: job.id, status: { in: activeJobStatuses } },
@@ -146,53 +108,13 @@ export async function cancelMediaGenerationJob(workspaceId: string, jobId: strin
   return toMediaGenerationJobRecord(cancelled);
 }
 
-export async function retryMediaGenerationJob(workspaceId: string, jobId: string): Promise<MediaGenerationJobRecord> {
+export async function retryMediaGenerationJob(workspaceId: string, jobId: string, expectedRevision: number): Promise<MediaGenerationJobRecord> {
   const job = await prisma.mediaGenerationJob.findFirst({ where: { id: jobId, workspaceId } });
   if (!job) throw new MediaGenerationJobNotFoundError();
-  if (job.status !== "FAILED") throw new MediaGenerationJobStateError("Only failed video jobs can be retried");
-  if (job.outputMediaAssetId)
-    throw new MediaGenerationJobStateError("The generated video is already saved in the Media Library. Attach that file after removing incompatible media.");
-  const content = await prisma.contentItem.findFirst({ where: { id: job.contentItemId, workspaceId, deletedAt: null } });
-  if (!content) throw new MediaContentItemNotFoundError();
-  if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
-  if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
-  await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
-
-  const active = await prisma.mediaGenerationJob.findFirst({
-    where: {
-      contentItemId: job.contentItemId,
-      workspaceId,
-      status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] }
-    }
-  });
-  if (active) return toMediaGenerationJobRecord(active);
-
-  const quotaDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: quotaDate });
-  try {
-    return toMediaGenerationJobRecord(
-      await prisma.mediaGenerationJob.update({
-        where: { id: job.id, status: "FAILED", outputMediaAssetId: null },
-        data: {
-          status: "QUEUED",
-          providerJobId: null,
-          progress: 0,
-          errorCode: null,
-          errorMessage: null,
-          retryable: null,
-          attempts: 0,
-          nextAttemptAt: quotaDate,
-          leasedAt: null,
-          leaseExpiresAt: null,
-          completedAt: null,
-          cancelledAt: null
-        }
-      })
-    );
-  } catch (error) {
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: quotaDate });
-    throw error;
-  }
+  if (job.kind !== "VIDEO" || job.status !== "FAILED" || job.outputMediaAssetId)
+    throw new MediaGenerationJobStateError("Only failed video requests without an output can be retried");
+  // An intentional retry is a new execution of the current saved item intent.
+  return queueVideoGeneration(workspaceId, job.contentItemId, { contentMediaItemId: job.contentMediaItemId, expectedRevision });
 }
 
 export interface VideoGenerationWorkerResult {
@@ -242,6 +164,7 @@ export async function processDueVideoGenerationJobs(
 async function claimVideoGenerationJob(now: Date): Promise<MediaGenerationJob | undefined> {
   const candidate = await prisma.mediaGenerationJob.findFirst({
     where: {
+      kind: "VIDEO",
       status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] },
       nextAttemptAt: { lte: now },
       OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }]
@@ -276,7 +199,17 @@ async function processClaimedJob(job: MediaGenerationJob, clock: () => Date): Pr
     if (!content) throw new MediaContentItemNotFoundError();
     if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
     if (content.contentType !== "REEL" && content.contentType !== "STORY") throw new MediaVideoGenerationUnsupportedError();
-    await assertStoredContentMedia(prisma, content, { addition: { id: "pending-generated-video", mimeType: "video/mp4" } });
+    const target = await prisma.contentMediaItem.findFirst({
+      where: {
+        id: job.contentMediaItemId,
+        workspaceId: job.workspaceId,
+        contentItemId: job.contentItemId,
+        deletedAt: null,
+        generationIntent: job.generationIntent,
+        mediaKind: "VIDEO"
+      }
+    });
+    if (!target) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
     const starting = await prisma.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, clock()), data: { status: "STARTING" } });
     if (starting.count !== 1) return "waiting";
     await renewVideoLease(job, clock());
@@ -320,7 +253,6 @@ async function persistProviderState(job: MediaGenerationJob, providerJob: VideoP
         status: "GENERATING",
         progress: providerJob.progress,
         model: providerJob.model,
-        durationSeconds: providerJob.duration_seconds,
         nextAttemptAt: new Date(clock().getTime() + pollDelayMs),
         leasedAt: null,
         leaseExpiresAt: null,
@@ -381,15 +313,8 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
           durationSeconds: providerJob.duration_seconds
         }
       });
-      const issue = !content
-        ? "CONTENT_NOT_FOUND"
-        : !["DRAFT", "IN_REVIEW"].includes(content.status)
-          ? "CONTENT_LOCKED"
-          : await validateStoredContentMedia(tx, content, { addition: mediaAsset });
-      const attachmentError = issue ? new ContentMediaValidationError(issue, mediaAsset.id) : null;
-      if (content && !attachmentError) {
-        await tx.contentItem.update({ where: { id: content.id }, data: { mediaIds: [...content.mediaIds, mediaAsset.id] } });
-      }
+      const applied = await applyGeneratedAsset(tx, job, mediaAsset.id);
+      const attachmentError = applied ? null : new ContentMediaValidationError("CONTENT_MEDIA_CHANGED", mediaAsset.id);
       await tx.aiInteraction.create({
         data: {
           workspaceId: job.workspaceId,
@@ -417,7 +342,8 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
       await tx.mediaGenerationJob.update({
         where: { id: job.id },
         data: {
-          status: attachmentError ? "FAILED" : "COMPLETED",
+          status: "COMPLETED",
+          attachmentApplied: applied,
           outputMediaAssetId: mediaAsset.id,
           completedAt: clock(),
           progress: 100,
@@ -429,7 +355,7 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
           retryable: attachmentError ? false : null
         }
       });
-      return attachmentError ? "failed" : "completed";
+      return "completed" as const;
     });
   } catch (error) {
     if (stored) await deleteStoredMedia(job.workspaceId, stored.key).catch(() => undefined);
@@ -502,7 +428,7 @@ async function markJobFailed(job: MediaGenerationJob, code: string, message: str
   }
 }
 
-function toDuration(value: number): 4 | 8 | 12 {
+function toDuration(value: number | null): 4 | 8 | 12 {
   return value === 4 || value === 12 ? value : 8;
 }
 
@@ -511,11 +437,14 @@ export function toMediaGenerationJobRecord(job: MediaGenerationJob): MediaGenera
     id: job.id,
     workspaceId: job.workspaceId,
     contentItemId: job.contentItemId,
+    contentMediaItemId: job.contentMediaItemId,
+    requestedRevision: job.requestedRevision,
+    ...(job.attachmentApplied === null ? {} : { attachmentApplied: job.attachmentApplied }),
     kind: job.kind,
     status: job.status,
     prompt: job.prompt,
-    aspectRatio: "9:16",
-    durationSeconds: toDuration(job.durationSeconds),
+    aspectRatio: job.aspectRatio as "1:1" | "4:5" | "9:16",
+    ...(job.durationSeconds === null ? {} : { durationSeconds: toDuration(job.durationSeconds) }),
     progress: job.progress,
     ...(job.model ? { model: job.model } : {}),
     ...(job.errorCode ? { errorCode: job.errorCode } : {}),
@@ -527,8 +456,4 @@ export function toMediaGenerationJobRecord(job: MediaGenerationJob): MediaGenera
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString()
   };
-}
-
-function isUniqueConstraintError(error: unknown): error is { code: "P2002" } {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "P2002";
 }

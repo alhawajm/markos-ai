@@ -754,11 +754,14 @@ export interface MediaGenerationJobRecord {
   id: string;
   workspaceId: string;
   contentItemId: string;
-  kind: "VIDEO";
+  contentMediaItemId: string;
+  requestedRevision: number;
+  attachmentApplied?: boolean;
+  kind: "IMAGE" | "VIDEO";
   status: MediaGenerationStatus;
   prompt: string;
-  aspectRatio: "9:16";
-  durationSeconds: 4 | 8 | 12;
+  aspectRatio: "1:1" | "4:5" | "9:16";
+  durationSeconds?: 4 | 8 | 12;
   progress: number;
   model?: string;
   errorCode?: string;

@@ -27,7 +27,13 @@ describe("publishing routes", () => {
         height: 1080
       }
     });
-    await prisma.contentItem.update({ where: { id: content.id }, data: { contentType: "CAROUSEL", mediaIds: [second.id, media.id] } });
+    await prisma.contentItem.update({
+      where: { id: content.id },
+      data: {
+        contentType: "CAROUSEL",
+        mediaItems: { updateMany: { where: { position: 0 }, data: { position: 1 } }, create: { position: 0, mediaKind: "IMAGE", mediaAssetId: second.id } }
+      }
+    });
     const publisher: InstagramPublisher = {
       async publish(input) {
         expect(input.mediaAssets.map((asset) => asset.id)).toEqual([second.id, media.id]);
@@ -281,7 +287,7 @@ describe("publishing routes", () => {
         contentType: "POST",
         status: "SCHEDULED",
         caption: "No media yet\n\n#Bahrain",
-        mediaIds: [],
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
         scheduledAt: new Date(Date.now() - 60 * 1000)
       }
     });
@@ -297,7 +303,7 @@ describe("publishing routes", () => {
       data: {
         contentItemId: content.id,
         dryRun: true,
-        reasons: ["INSTAGRAM_NOT_CONNECTED", "INSTAGRAM_PUBLISH_REQUIRES_ONE_MEDIA_ITEM", "PUBLIC_MEDIA_REQUIRED"],
+        reasons: ["INSTAGRAM_NOT_CONNECTED", "CONTENT_MEDIA_REQUIRED", "INSTAGRAM_PUBLISH_REQUIRES_ONE_MEDIA_ITEM", "PUBLIC_MEDIA_REQUIRED"],
         status: "BLOCKED"
       }
     });
@@ -947,7 +953,7 @@ async function createPublishableContent(workspaceId: string, scheduledAt: Date) 
       contentType: "POST",
       status: "SCHEDULED",
       caption: "Ready to publish\n\n#Bahrain #MarkosAI",
-      mediaIds: [media.id],
+      mediaItems: { create: { position: 0, mediaKind: "IMAGE", mediaAssetId: media.id } },
       scheduledAt
     }
   });

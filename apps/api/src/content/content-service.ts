@@ -1,3 +1,4 @@
+import { assertContentReady } from "../media/content-media-integrity";
 import { z } from "zod";
 import { updateContentSchema, updateContentStatusSchema } from "@markos/validation";
 import { Prisma, type ContentStatus } from "@prisma/client";
@@ -342,11 +343,10 @@ export async function deleteContentItem(workspaceId: string, contentItemId: stri
 }
 export async function updateContentItemStatus(workspaceId: string, contentItemId: string, raw: UpdateContentStatusInput): Promise<ContentRecord> {
   const input = updateContentStatusSchema.parse(raw);
-  // Readiness migrates with publishing in Phase 2.
-  if (input.status === "APPROVED") throw new ContentPhasePendingError();
   return prisma.$transaction(async (tx) => {
     const row = await lockContentRoot(tx, workspaceId, contentItemId, input.expectedRevision);
     if (!isAllowedContentTransition(row.status, input.status)) throw new ContentStatusTransitionError();
+    if (input.status === "APPROVED") await assertContentReady(tx, row);
     await tx.contentItem.update({ where: { id: row.id }, data: { status: input.status } });
     return toContentRecord(await loadContentAggregate(tx, workspaceId, row.id));
   });

@@ -78,6 +78,7 @@ enum MediaType {
 }
 
 enum MediaGenerationKind {
+  IMAGE
   VIDEO
 }
 
@@ -580,6 +581,8 @@ enum ContentAspectRatio {
 }
 
 model ContentMediaItem {
+  generationIntent          String              @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  generationJobs            MediaGenerationJob[]
   id                        String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId               String              @db.Uuid
   contentItemId             String              @db.Uuid
@@ -599,6 +602,7 @@ model ContentMediaItem {
   deletedAt                 DateTime?
 
   @@unique([workspaceId, id])
+  @@unique([workspaceId, contentItemId, id])
   @@index([workspaceId, contentItemId, deletedAt, position])
   @@index([workspaceId, mediaAssetId])
   @@map("content_media_items")
@@ -657,6 +661,11 @@ model MediaAsset {
 }
 
 model MediaGenerationJob {
+  contentMediaItemId  String                @db.Uuid
+  generationIntent   String                @db.Uuid
+  requestedRevision  Int
+  attachmentApplied  Boolean?
+  contentMediaItem    ContentMediaItem      @relation(fields: [workspaceId, contentItemId, contentMediaItemId], references: [workspaceId, contentItemId, id], onDelete: Cascade, onUpdate: Restrict)
   id                 String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId        String                @db.Uuid
   contentItemId      String                @db.Uuid
@@ -664,7 +673,7 @@ model MediaGenerationJob {
   status             MediaGenerationStatus @default(QUEUED)
   prompt             String
   aspectRatio        String                @default("9:16")
-  durationSeconds    Int                   @default(8)
+  durationSeconds    Int?
   provider           String                @default("openai_sora")
   model              String?
   providerJobId      String?

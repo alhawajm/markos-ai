@@ -174,11 +174,13 @@ describe("maintenance worker", () => {
   it("publishes a queued Reel only after processing finishes and persists its final media ID", async () => {
     const now = new Date("2026-01-03T12:00:00Z");
     const target = await createPublishableWorkspace("worker-publish-now-reel", now);
-    await prisma.mediaAsset.update({
-      where: { id: target.media.id },
-      data: { filename: "reel.mp4", mimeType: "video/mp4", width: 720, height: 1280, durationSeconds: 8 }
+    const video = await prisma.mediaAsset.create({
+      data: { ...target.media, id: randomUUID(), filename: "reel.mp4", mimeType: "video/mp4", width: 720, height: 1280, durationSeconds: 8 }
     });
-    await prisma.contentItem.update({ where: { id: target.content.id }, data: { contentType: "REEL", status: "APPROVED", scheduledAt: null } });
+    await prisma.$transaction(async (tx) => {
+      await tx.contentItem.update({ where: { id: target.content.id }, data: { contentType: "REEL", status: "APPROVED", scheduledAt: null } });
+      await tx.contentMediaItem.updateMany({ where: { contentItemId: target.content.id }, data: { mediaKind: "VIDEO", mediaAssetId: video.id } });
+    });
     const job = await queuePublishNow(target.workspace.id, target.content.id, now);
     const steps: string[] = [];
     let polls = 0;
@@ -678,7 +680,7 @@ async function createPublishableWorkspace(label: string, now = new Date()) {
     data: {
       caption: "Worker publish\n\n#MarkosAI",
       contentType: "POST",
-      mediaIds: [media.id],
+      mediaItems: { create: { position: 0, mediaKind: "IMAGE", mediaAssetId: media.id } },
       scheduledAt: new Date(now.getTime() - 60 * 1000),
       status: "SCHEDULED",
       workspaceId: workspace.id

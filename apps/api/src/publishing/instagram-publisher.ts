@@ -327,7 +327,7 @@ function buildPayload(input: { contentItem: ContentItem; mediaAssets: MediaAsset
   return {
     accountId: input.workspace.instagramAccountId ?? "",
     contentItemId: input.contentItem.id,
-    caption: buildCaption(input.contentItem),
+    caption: input.contentItem.contentType === "STORY" ? "" : buildCaption(input.contentItem),
     contentType: input.contentItem.contentType,
     mediaCount: input.mediaAssets.length
   };

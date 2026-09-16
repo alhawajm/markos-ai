@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { ContentStatus, MediaAsset, Prisma } from "@prisma/client";
 import type { AiImageGenerationResult, ContentRecord, MediaAssetRecord } from "@markos/shared-types";
 import {
+  attachMediaToContentSchema,
   instagramImageConstraints,
   validateInstagramImageMetadata,
   type GenerateImageForContentInput,
@@ -12,11 +14,12 @@ import { generateImageAsset } from "../ai/image-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
-import { toContentRecord } from "../content/content-service";
+import { toContentRecord, loadContentAggregate, mutateContentAggregate, lockContentRoot, validateContentAggregate } from "../content/content-aggregate";
+import { dispatchGeneration, applyGeneratedAsset } from "./generation-intent";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { inspectJpegDimensions } from "./jpeg-inspection";
 import { deleteStoredMedia, readStoredMedia, storageKeysForRoute, storeWorkspaceMedia } from "./storage-service";
-import { assertStoredContentMedia, ContentMediaValidationError, lockContentForMedia, validateStoredContentMedia } from "./content-media-integrity";
+import { ContentMediaValidationError, lockContentForMedia } from "./content-media-integrity";
 
 export class MediaAssetNotFoundError extends Error {
   constructor() {
@@ -170,44 +173,28 @@ export async function generateImageForContent(
   contentItemId: string,
   input: GenerateImageForContentInput
 ): Promise<AiImageGenerationResult> {
-  const contentItem = await prisma.contentItem.findFirst({
-    where: {
-      id: contentItemId,
-      workspaceId,
-      deletedAt: null
-    }
-  });
-
-  if (!contentItem) {
-    throw new MediaContentItemNotFoundError();
-  }
-
-  assertMediaEditable(contentItem.status);
-  if (input.replaceMediaAssetId && !contentItem.mediaIds.includes(input.replaceMediaAssetId)) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
-  await assertStoredContentMedia(
-    prisma,
-    { ...contentItem, mediaIds: contentItem.mediaIds.filter((id) => id !== input.replaceMediaAssetId) },
-    { addition: { id: "pending-generated-image", mimeType: "image/jpeg" } }
-  );
-
-  const prompt = input.prompt?.trim() || promptFromContent(contentItem);
-  const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${contentItemId}:${input.aspectRatio}:${prompt}`);
+  const job = await dispatchGeneration(workspaceId, contentItemId, "IMAGE", input);
+  const prompt = job.prompt;
+  const aspectRatio = job.aspectRatio as "1:1" | "4:5" | "9:16";
   const usagePeriodDate = new Date();
-  await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
+  let imageUsageReserved = false;
   let reservedStorageBytes = 0;
   let stored: Awaited<ReturnType<typeof storeWorkspaceMedia>> | undefined;
   let outputPersisted = false;
 
   try {
+    const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${job.contentMediaItemId}:${aspectRatio}:${prompt}`);
+    await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
+    imageUsageReserved = true;
     const generated = await generateImageAsset({
-      aspectRatio: input.aspectRatio,
+      aspectRatio,
       prompt,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
       workspaceId
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
     const bytes = Buffer.from(generated.base64_data, "base64");
-    const verifiedImageDimensions = validateGeneratedImage(generated, bytes, input.aspectRatio);
+    const verifiedImageDimensions = validateGeneratedImage(generated, bytes, aspectRatio);
 
     await reserveWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: bytes.byteLength, now: usagePeriodDate });
     reservedStorageBytes = bytes.byteLength;
@@ -233,30 +220,22 @@ export async function generateImageForContent(
           height: verifiedImageDimensions.height
         }
       });
-      const issue = !latest
-        ? "CONTENT_NOT_FOUND"
-        : !["DRAFT", "IN_REVIEW"].includes(latest.status)
-          ? "CONTENT_LOCKED"
-          : input.replaceMediaAssetId && !latest.mediaIds.includes(input.replaceMediaAssetId)
-            ? "CONTENT_MEDIA_CHANGED"
-            : await validateStoredContentMedia(
-                tx,
-                { ...latest, mediaIds: latest.mediaIds.filter((id) => id !== input.replaceMediaAssetId) },
-                { addition: asset }
-              );
-      const attachmentError = issue ? new ContentMediaValidationError(issue, asset.id) : null;
-      const content =
-        latest && !attachmentError
-          ? await tx.contentItem.update({
-              where: { id: latest.id },
-              data: {
-                mediaIds: input.replaceMediaAssetId
-                  ? latest.mediaIds.map((id) => (id === input.replaceMediaAssetId ? asset.id : id))
-                  : [...latest.mediaIds, asset.id]
-              }
-            })
-          : null;
-
+      const applied = await applyGeneratedAsset(tx, job, asset.id);
+      const attachmentError = applied ? null : new ContentMediaValidationError("CONTENT_MEDIA_CHANGED", asset.id);
+      const content = latest ? await loadContentAggregate(tx, workspaceId, contentItemId) : null;
+      await tx.mediaGenerationJob.update({
+        where: { id: job.id },
+        data: {
+          status: "COMPLETED",
+          model: generated.model || env.IMAGE_MODEL_PRIMARY,
+          outputMediaAssetId: asset.id,
+          attachmentApplied: applied,
+          completedAt: new Date(),
+          progress: 100,
+          errorCode: attachmentError?.code ?? null,
+          errorMessage: attachmentError?.message ?? null
+        }
+      });
       await tx.aiInteraction.create({
         data: {
           workspaceId,
@@ -264,11 +243,11 @@ export async function generateImageForContent(
           accepted: !attachmentError,
           promptVersion,
           prompt: {
-            aspectRatio: input.aspectRatio,
+            aspectRatio,
             contentItemId,
             prompt,
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
-            source: contentImagePromptSource(contentItem)
+            contentMediaItemId: job.contentMediaItemId
           } as unknown as Prisma.InputJsonValue,
           response: {
             mediaAssetId: asset.id,
@@ -310,6 +289,10 @@ export async function generateImageForContent(
     };
   } catch (error) {
     if (outputPersisted) throw error;
+    await prisma.mediaGenerationJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", errorCode: "AI_IMAGE_GENERATION_FAILED", errorMessage: error instanceof Error ? error.message : "Image generation failed" }
+    });
     if (stored !== undefined) {
       try {
         await deleteStoredMedia(workspaceId, stored.key);
@@ -320,7 +303,7 @@ export async function generateImageForContent(
     if (reservedStorageBytes > 0) {
       await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: reservedStorageBytes, now: usagePeriodDate });
     }
-    await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
+    if (imageUsageReserved) await refundWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
     throw error;
   }
 }
@@ -346,80 +329,47 @@ export async function readPublicMediaFile(workspaceId: string, storedFilename: s
   };
 }
 
-export async function attachMediaToContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
+export async function attachMediaToContent(
+  workspaceId: string,
+  contentItemId: string,
+  input: { contentMediaItemId: string; mediaAssetId: string; expectedRevision: number }
+): Promise<ContentRecord> {
+  input = attachMediaToContentSchema.parse(input);
   return prisma.$transaction(async (tx) => {
-    const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
-    const mediaAsset = await tx.mediaAsset.findFirst({
-      where: {
-        id: mediaAssetId,
-        workspaceId,
-        deletedAt: null
-      }
+    const root = await lockContentRoot(tx, workspaceId, contentItemId, input.expectedRevision);
+    assertMediaEditable(root.status);
+    const item = root.mediaItems.find((item) => item.id === input.contentMediaItemId);
+    if (!item) throw new ContentMediaValidationError("CONTENT_NOT_FOUND");
+    const asset = await tx.mediaAsset.findFirst({ where: { id: input.mediaAssetId, workspaceId, deletedAt: null } });
+    if (!asset) throw new MediaAssetNotFoundError();
+    await tx.contentMediaItem.update({
+      where: { id: item.id },
+      data: { mediaAssetId: asset.id, mediaKind: item.mediaKind ?? (asset.mimeType === "video/mp4" ? "VIDEO" : "IMAGE"), generationIntent: randomUUID() }
     });
-
-    if (!contentItem) {
-      throw new MediaContentItemNotFoundError();
-    }
-
-    if (!mediaAsset) {
-      throw new MediaAssetNotFoundError();
-    }
-
-    assertMediaEditable(contentItem.status);
-    if (contentItem.mediaIds.includes(mediaAsset.id)) return toContentRecord(contentItem);
-    await assertStoredContentMedia(tx, contentItem, { addition: mediaAsset });
-
-    const mediaIds = Array.from(new Set([...contentItem.mediaIds, mediaAsset.id]));
-    const row = await tx.contentItem.update({
-      where: {
-        id: contentItem.id
-      },
-      data: {
-        mediaIds
-      }
-    });
-
-    return toContentRecord(row);
+    const updated = await loadContentAggregate(tx, workspaceId, contentItemId);
+    await validateContentAggregate(tx, updated);
+    return toContentRecord(updated);
   });
 }
-
-export async function detachMediaFromContent(workspaceId: string, contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
-  return prisma.$transaction(async (tx) => {
-    const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
-
-    if (!contentItem) {
-      throw new MediaContentItemNotFoundError();
-    }
-
-    assertMediaEditable(contentItem.status);
-
-    if (!contentItem.mediaIds.includes(mediaAssetId)) return toContentRecord(contentItem);
-    const row = await tx.contentItem.update({
-      where: {
-        id: contentItem.id
-      },
-      data: {
-        mediaIds: contentItem.mediaIds.filter((id) => id !== mediaAssetId)
-      }
-    });
-
-    return toContentRecord(row);
+export async function detachMediaFromContent(
+  workspaceId: string,
+  contentItemId: string,
+  contentMediaItemId: string,
+  expectedRevision: number
+): Promise<ContentRecord> {
+  return mutateContentAggregate(workspaceId, contentItemId, {
+    expectedRevision,
+    operations: [{ type: "updateMediaItem", itemId: contentMediaItemId, fields: { mediaAssetId: null } }]
   });
 }
-
-/** Atomic list update: preserves ordering and rejects stale edits or foreign assets. */
 export async function updateContentMedia(
   workspaceId: string,
   contentItemId: string,
-  input: { mediaIds: string[]; expectedMediaIds: string[] }
+  input: { orderedIds: string[]; expectedRevision: number }
 ): Promise<ContentRecord> {
-  return prisma.$transaction(async (tx) => {
-    const content = await lockContentForMedia(tx, workspaceId, contentItemId);
-    if (!content) throw new MediaContentItemNotFoundError();
-    assertMediaEditable(content.status);
-    if (JSON.stringify(content.mediaIds) !== JSON.stringify(input.expectedMediaIds)) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
-    await assertStoredContentMedia(tx, { ...content, mediaIds: input.mediaIds });
-    return toContentRecord(await tx.contentItem.update({ where: { id: content.id }, data: { mediaIds: input.mediaIds } }));
+  return mutateContentAggregate(workspaceId, contentItemId, {
+    expectedRevision: input.expectedRevision,
+    operations: [{ type: "reorderMediaItems", orderedIds: input.orderedIds }]
   });
 }
 
@@ -436,13 +386,11 @@ export async function deleteMediaAsset(workspaceId: string, mediaAssetId: string
     throw new MediaAssetNotFoundError();
   }
 
-  const attachedContentCount = await prisma.contentItem.count({
+  const attachedContentCount = await prisma.contentMediaItem.count({
     where: {
       workspaceId,
       deletedAt: null,
-      mediaIds: {
-        has: mediaAsset.id
-      }
+      mediaAssetId: mediaAsset.id
     }
   });
 
@@ -450,7 +398,6 @@ export async function deleteMediaAsset(workspaceId: string, mediaAssetId: string
     throw new MediaAssetInUseError();
   }
 
-  await deleteStoredMedia(workspaceId, mediaAsset.s3Key);
   await prisma.mediaAsset.update({
     where: {
       id: mediaAsset.id
@@ -459,6 +406,7 @@ export async function deleteMediaAsset(workspaceId: string, mediaAssetId: string
       deletedAt: new Date()
     }
   });
+  await deleteStoredMedia(workspaceId, mediaAsset.s3Key);
   await refundWorkspaceUsage({ workspaceId, metric: "STORAGE_BYTES", amount: mediaAsset.sizeBytes });
 
   return { id: mediaAsset.id };
@@ -516,7 +464,7 @@ function validateGeneratedImage(
     width: number;
   },
   bytes: Buffer,
-  aspectRatio: GenerateImageForContentInput["aspectRatio"]
+  aspectRatio: "1:1" | "4:5" | "9:16"
 ): { height: number; width: number } {
   if (!isValidBase64Payload(generated.base64_data, bytes) || generated.size_bytes !== bytes.byteLength) {
     throw new MediaImageGenerationInvalidError();
@@ -563,28 +511,6 @@ function validateGeneratedImage(
   }
 
   return verified;
-}
-
-function promptFromContent(contentItem: { caption: string; contentPillar: string | null; contentType: string }): string {
-  const caption = contentItem.caption || "Instagram marketing visual";
-  const pillar = contentItem.contentPillar ?? "brand awareness";
-
-  return [
-    `Create a Bahrain-ready Instagram ${contentItem.contentType.toLowerCase()} visual.`,
-    `Theme: ${pillar}.`,
-    `Caption context: ${caption}.`,
-    "No unreadable text, distorted logos, or generic stock-photo styling."
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function contentImagePromptSource(contentItem: { caption: string; contentPillar: string | null; contentType: string }): Record<string, unknown> {
-  return {
-    contentType: contentItem.contentType,
-    caption: contentItem.caption,
-    contentPillar: contentItem.contentPillar
-  };
 }
 
 async function reserveMediaUsage(workspaceId: string, mediaType: string, sizeBytes: number, now: Date): Promise<void> {

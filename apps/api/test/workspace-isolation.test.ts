@@ -287,7 +287,17 @@ const isolationCases: IsolationCase[] = [
     create: async (fixture) => {
       const content = await createContentFixture(fixture);
       return prisma.mediaGenerationJob.create({
-        data: { workspaceId: fixture.workspaceId, contentItemId: content.id, prompt: "Show the citrus product", status: "CANCELLED" },
+        data: {
+          workspaceId: fixture.workspaceId,
+          contentItemId: content.id,
+          contentMediaItemId: content.mediaItems[0]!.id,
+          generationIntent: randomUUID(),
+          requestedRevision: content.revision,
+          prompt: "Show the citrus product",
+          kind: "IMAGE",
+          aspectRatio: "4:5",
+          status: "CANCELLED"
+        },
         select: { id: true, workspaceId: true }
       });
     },

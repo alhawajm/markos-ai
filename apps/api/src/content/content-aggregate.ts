@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Prisma, type ContentType } from "@prisma/client";
 import type { ContentRecord } from "@markos/shared-types";
 import {
@@ -45,7 +46,7 @@ export function toContentRecord(row: ContentAggregateRow): ContentRecord {
     revision: row.revision,
     status: row.status,
     caption: row.caption,
-    mediaItems: mediaItems.map(({ deletedAt: _removed, createdAt: created, updatedAt: updated, ...item }) => ({
+    mediaItems: mediaItems.map(({ generationIntent: _intent, deletedAt: _removed, createdAt: created, updatedAt: updated, ...item }) => ({
       ...item,
       createdAt: created.toISOString(),
       updatedAt: updated.toISOString()
@@ -211,7 +212,10 @@ export async function mutateContentAggregate(workspaceId: string, id: string, ra
         }
         case "updateMediaItem":
           await requireOwnedAsset(tx, workspaceId, operation.fields.mediaAssetId);
-          await tx.contentMediaItem.update({ where: { id: item!.id }, data: defined(operation.fields) });
+          await tx.contentMediaItem.update({
+            where: { id: item!.id },
+            data: { ...defined(operation.fields), ...("mediaAssetId" in operation.fields ? { generationIntent: randomUUID() } : {}) }
+          });
           break;
         case "addMediaItem": {
           if (root.contentType !== "CAROUSEL" || root.mediaItems.length >= 10)
@@ -355,13 +359,8 @@ export async function convertContentAggregate(
     };
     if (root.contentType === to) return { applied: true, preview, content: toContentRecord(root) };
     if (requiresSelection || (preview.requiresConfirmation && !input.confirmDestructive)) return { applied: false, preview, content: toContentRecord(root) };
-    if (
-      (await tx.mediaGenerationJob.findFirst({
-        where: { contentItemId: id, workspaceId, status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] } }
-      })) ||
-      (await tx.publishJob.findFirst({ where: { contentItemId: id, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } } }))
-    ) {
-      throw new ContentAggregateError("CONTENT_BUSY", "Cancel active generation or publishing before converting");
+    if (await tx.publishJob.findFirst({ where: { contentItemId: id, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } } })) {
+      throw new ContentAggregateError("CONTENT_BUSY", "Cancel active publishing before converting");
     }
     if (removed.length)
       await tx.contentMediaItem.updateMany({ where: { id: { in: removed.map((item) => item.id) }, workspaceId }, data: { deletedAt: new Date() } });
