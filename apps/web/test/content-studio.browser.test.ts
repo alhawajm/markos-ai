@@ -305,7 +305,7 @@ describe("Relational Create workspace", () => {
       await page.getByRole("button", { name: "Confirm conversion", exact: true }).click();
       await expect.poll(() => state.record.contentType).toBe("POST");
       expect(state.record.mediaItems.map((m) => m.id)).toEqual(["item-1"]);
-      expect(await page.locator(".create-slide-strip").count()).toBe(0);
+      await expect.poll(() => page.locator(".create-slide-strip").count()).toBe(0);
     } finally {
       await h.context.close();
     }

@@ -72,6 +72,7 @@ async function fixture(page: Page, populated = false, fullTrend = false) {
     let data: unknown;
     if (url.pathname === "/v1/auth/refresh") data = session;
     else if (url.pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
+    else if (url.pathname === "/v1/workspace/instagram") data = { status: "CONNECTED", username: "the.snacklab" };
     else if (url.pathname === "/v1/vault/score") data = { score: 100, completedSections: [], requiredSections: [], missingSections: [], entryCount: 8 };
     else if (url.pathname === "/v1/notifications" || url.pathname === "/v1/publishing/queue") data = [];
     else if (url.pathname === "/v1/content")

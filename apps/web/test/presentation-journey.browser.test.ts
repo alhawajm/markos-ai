@@ -496,7 +496,8 @@ describe("presentation journey", () => {
     await expect.poll(() => suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
     await page.getByTestId("create-workspace").waitFor();
-    expect(await page.locator(".studio-instagram").count()).toBe(0);
+    await expect.poll(() => page.locator(".create-assistant").isVisible()).toBe(true);
+    expect(await page.locator(".create-preview").isVisible()).toBe(false);
     const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
     await campaignLink.waitFor();
     await expect(campaignLink.getAttribute("href")).resolves.toBe("/en/app/campaigns?campaign=campaign-snacklab-generated");
@@ -511,8 +512,13 @@ describe("presentation journey", () => {
 
   it("renders the desktop overview, Create, and honest Insights destinations", async () => {
     const page = await sessionPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const content = studioContentRecord();
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/content") return route.fulfill(json(route.request().method() === "POST" ? studioContentRecord() : []));
+      if (pathname === "/v1/content") return route.fulfill(json(route.request().method() === "POST" ? content : []));
+      if (pathname === `/v1/content/${content.id}`) return route.fulfill(json(content));
+      if (pathname === `/v1/content/${content.id}/conversation`) return route.fulfill(json({ id: null, contentItem: content, messages: [], latestRun: null }));
       if (pathname === "/v1/publishing/queue") return route.fulfill(json([]));
       if (pathname === "/v1/vault/score") {
         return route.fulfill(
@@ -530,7 +536,8 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "How can MARKOS help?" }).waitFor();
+    await page.getByTestId("create-workspace").waitFor();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${content.id}`);
     await expect.poll(() => page.getByRole("button", { name: "Caption", exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
@@ -544,6 +551,7 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Business profile", exact: true }).waitFor();
     await page.getByRole("heading", { name: "Current strategy", exact: true }).waitFor();
+    expect(errors).toEqual([]);
     await page.close();
   });
 
@@ -1130,6 +1138,8 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
   await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+    if (pathname === "/v1/workspace/instagram") return route.fulfill(json({ status: "CONNECTED", username: "the.snacklab" }));
+    if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) return route.fulfill(json(null));
     if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));
     await handler(route, pathname);
   });

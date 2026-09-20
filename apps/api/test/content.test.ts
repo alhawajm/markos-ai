@@ -211,8 +211,7 @@ describe("content routes", () => {
           id: ids.unscheduledFirst,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          caption: "First unscheduled carousel",
-          updatedAt: new Date("2026-08-25T12:00:00+03:00")
+          caption: "First unscheduled carousel"
         }
       }),
       prisma.contentItem.create({
@@ -222,8 +221,7 @@ describe("content routes", () => {
           id: ids.unscheduledSecond,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          caption: "Second unscheduled carousel",
-          updatedAt: new Date("2026-08-24T12:00:00+03:00")
+          caption: "Second unscheduled carousel"
         }
       }),
       prisma.contentItem.create({
@@ -237,6 +235,19 @@ describe("content routes", () => {
           status: "SCHEDULED",
           scheduledAt: new Date("2026-08-15T09:00:00+03:00")
         }
+      })
+    ]);
+
+    // Child inserts touch the aggregate's updatedAt. Set ordering fixtures only
+    // after all nested media writes complete, independent of concurrent creation.
+    await Promise.all([
+      prisma.contentItem.update({
+        where: { id: ids.unscheduledFirst },
+        data: { updatedAt: new Date("2026-08-25T12:00:00+03:00") }
+      }),
+      prisma.contentItem.update({
+        where: { id: ids.unscheduledSecond },
+        data: { updatedAt: new Date("2026-08-24T12:00:00+03:00") }
       })
     ]);
 
@@ -254,7 +265,7 @@ describe("content routes", () => {
     expect(pageData.items.map((item: { id: string }) => item.id)).not.toEqual(expect.arrayContaining([ids.outside, ids.otherWorkspace]));
     expect(pageData.mediaAssets).toEqual([expect.objectContaining({ id: media.id, workspaceId: owner.workspace.id })]);
     expect(pageData.unscheduled).toMatchObject({ total: 2, nextOffset: 1 });
-    expect(pageData.unscheduled.items).toHaveLength(1);
+    expect(pageData.unscheduled.items).toEqual([expect.objectContaining({ id: ids.unscheduledFirst })]);
     expect(pageData.summary).toMatchObject({ ready: 3, needsAttention: 1 });
     expect(pageData.summary.scheduledThisWeek).toEqual(expect.any(Number));
 
