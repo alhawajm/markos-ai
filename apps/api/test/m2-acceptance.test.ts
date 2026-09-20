@@ -123,66 +123,54 @@ describe("M2 acceptance", () => {
 
     const generated = await app.inject({
       method: "POST",
-      url: "/v1/content/generate-for-slot",
+      url: "/v1/content/generate",
       headers,
-      payload: {
-        topic: "wholesale office coffee leads",
-        contentType: "POST",
-        campaignId,
-        scheduledAt
-      }
+      payload: { topic: "wholesale office coffee leads", contentType: "POST", campaignId, count: 1 }
     });
-    const content = generated.json().data as { id: string };
-
-    const unscheduled = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/unschedule`,
-      headers,
-      payload: {}
-    });
-    const draft = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/status`,
-      headers,
-      payload: {
-        status: "DRAFT"
-      }
-    });
+    expect(generated.statusCode).toBe(200);
+    const content = generated.json().data[0] as import("@markos/shared-types").ContentRecord;
     const image = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/generate-image`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         aspectRatio: "4:5",
         prompt: "Premium Bahrain office coffee setup with Pearl Coffee branding"
       }
     });
+    expect(image.statusCode).toBe(200);
     const imageBody = image.json().data;
-
+    const initialReady = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/status`,
+      headers,
+      payload: { status: "APPROVED", expectedRevision: imageBody.contentItem.revision }
+    });
+    expect(initialReady.statusCode).toBe(200);
+    const scheduled = await app.inject({ method: "POST", url: `/v1/content/${content.id}/schedule`, headers, payload: { scheduledAt } });
+    expect(scheduled.statusCode).toBe(200);
+    const unscheduled = await app.inject({ method: "POST", url: `/v1/content/${content.id}/unschedule`, headers, payload: {} });
+    const draft = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/status`,
+      headers,
+      payload: { status: "DRAFT", expectedRevision: unscheduled.json().data.revision }
+    });
     const review = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/status`,
       headers,
-      payload: {
-        status: "IN_REVIEW"
-      }
+      payload: { status: "IN_REVIEW", expectedRevision: draft.json().data.revision }
     });
     const approved = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/status`,
       headers,
-      payload: {
-        status: "APPROVED"
-      }
+      payload: { status: "APPROVED", expectedRevision: review.json().data.revision }
     });
-    const rescheduled = await app.inject({
-      method: "POST",
-      url: `/v1/content/${content.id}/schedule`,
-      headers,
-      payload: {
-        scheduledAt: rescheduledAt
-      }
-    });
+    const rescheduled = await app.inject({ method: "POST", url: `/v1/content/${content.id}/schedule`, headers, payload: { scheduledAt: rescheduledAt } });
     const pdf = await app.inject({
       method: "GET",
       url: `/v1/campaigns/${campaignId}/pdf`,
@@ -197,7 +185,7 @@ describe("M2 acceptance", () => {
 
     expect(campaign.statusCode).toBe(200);
     expect(generated.statusCode).toBe(200);
-    expect(generated.json()).toMatchObject({
+    expect(scheduled.json()).toMatchObject({
       data: {
         workspaceId: session.workspace.id,
         contentType: "POST",
@@ -225,7 +213,7 @@ describe("M2 acceptance", () => {
     expect(imageBody).toMatchObject({
       contentItem: {
         id: content.id,
-        mediaIds: [imageBody.mediaAsset.id]
+        mediaItems: [expect.objectContaining({ id: content.mediaItems[0]!.id, mediaAssetId: imageBody.mediaAsset.id })]
       },
       mediaAsset: {
         type: "AI_GENERATED",
@@ -246,7 +234,7 @@ describe("M2 acceptance", () => {
         id: content.id,
         status: "SCHEDULED",
         scheduledAt: rescheduledAt,
-        mediaIds: [imageBody.mediaAsset.id]
+        mediaItems: [expect.objectContaining({ id: content.mediaItems[0]!.id, mediaAssetId: imageBody.mediaAsset.id })]
       }
     });
     expect(calendar.plan).toMatchObject({

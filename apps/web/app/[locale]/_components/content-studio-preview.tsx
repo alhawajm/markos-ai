@@ -16,7 +16,7 @@ export function ContentStudioPreview({
   caption: string;
   contentType: ContentType;
   locale: Locale;
-  media: MediaAssetRecord[];
+  media: Array<MediaAssetRecord | null>;
   fallbackRatio?: "1:1" | "4:5" | "9:16";
 }) {
   const [slide, setSlide] = useState(0);
@@ -182,7 +182,7 @@ export function ContentStudioPreview({
             {contentType === "CAROUSEL" && media.length > 1 && (
               <div className="studio-slide-dots" aria-hidden="true">
                 {media.map((asset, index) => (
-                  <span className={index === slide ? "active" : ""} key={asset.id} />
+                  <span className={index === slide ? "active" : ""} key={asset?.id ?? index} />
                 ))}
               </div>
             )}

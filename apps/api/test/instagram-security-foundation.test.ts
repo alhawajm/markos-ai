@@ -107,6 +107,11 @@ describe("OAuth state", () => {
     await expect(state({ returnTo: "https://evil.test/steal" })).rejects.toBeInstanceOf(OAuthStateError);
     await expect(state({ returnTo: "//evil.test" })).rejects.toBeInstanceOf(OAuthStateError);
   });
+
+  it.each(["/en/instagram-setup", "/ar/instagram-setup"])("returns securely to %s", async (returnTo) => {
+    const { store, value } = await state({ returnTo });
+    await expect(consumeOAuthState({ state: value, secret, store, userId: "user-a", workspaceId: "workspace-a" })).resolves.toEqual({ returnTo });
+  });
 });
 
 describe("credential handling", () => {

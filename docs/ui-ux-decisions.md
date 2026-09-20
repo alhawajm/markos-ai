@@ -2,7 +2,7 @@
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-09-10
+- Last updated: 2026-09-14
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -463,3 +463,15 @@ Use **Marketing strategy** as the section name. Add a simple owner-reported esta
 ### Campaign reviewer approved by Khalid and Mohamed
 
 The September 10 full-screen Campaign review prototype is approved for implementation. Preserve its Campaign index → Overview/Week/Month → Day → Post hierarchy and direct short-plan entry. Use independent panel scrolling where useful, without requiring visible panel borders. Frequently used Previous/Next actions must stay visible and in a stable position while navigating or scrolling. Apply restrained semantic color to status/count/category distinctions where the real data benefits; labels remain visible. These refinements do not add a reviewed state, expand generation beyond 3/7/14 days, or change the same-record Create handoff.
+
+
+## 2026-09-14 — Guided Instagram learning review
+
+Approved after Khalid's staging test. Reduce the setup heading and progress indicator footprint, explain once how learning improves future captions, visuals and campaigns, and keep the main action row outside the scrolling content. Inline MFA enrollment and connection retain the same behavior. Review Brand & Voice first, then Marketing Strategy; navigation and failed saves preserve selections and edited values. Display the account summary, limitations and post analytics on demand, while retaining reasoning and supporting-post links alongside each proposal. Use existing semantic theme colors for the current step, completed steps, selected suggestions and evidence categories. Do not reduce ordinary text sizing to fit more content.
+
+When brand colors are absent, an optional observed palette may appear with swatches, editable hex values and native color pickers. It starts unselected and explicitly describes its evidential limits. Existing saved colors appear as the business's palette and are preserved. No new global design tokens or theme behavior are introduced.
+
+
+## 2026-09-16 — Carousel media and thinking visibility
+
+Carousel media uses numbered image previews, per-slide replacement/library/generation controls, and drag reordering with keyboard-accessible move buttons. Multi-selection in the library preserves selection order. Generation failures retain the direction input and existing slide. The existing MARKOS thinking spinner is larger, centered in a contrasting circular surface/ring, and visible while a message is being submitted as well as while the saved run is active. Reduced-motion preferences remain respected. These changes refine Create without changing its editor/chat/preview layout.

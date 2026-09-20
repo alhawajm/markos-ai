@@ -884,10 +884,11 @@ async function seedVault(app: Awaited<ReturnType<typeof buildApp>>, headers: Rec
 async function createPublishedContent(workspaceId: string, input: { caption?: string; publishedAt?: Date } = {}) {
   return prisma.contentItem.create({
     data: {
+      mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
       caption: [input.caption ?? "Analytics post", ["#MarkosAI"].join(" ")].filter(Boolean).join("\n\n"),
       contentType: "POST",
       instagramPostId: `ig-${randomUUID()}`,
-      mediaIds: [],
+
       publishedAt: input.publishedAt ?? new Date(),
       status: "PUBLISHED",
       workspaceId

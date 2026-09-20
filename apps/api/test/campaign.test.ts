@@ -133,39 +133,43 @@ describe("campaign routes", () => {
     const session = await registerTestUser(app);
     const campaign = await storedCampaign(session.workspace.id);
     const statuses = ["DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
-    await prisma.contentItem.createMany({
-      data: statuses.map((status, index) => ({
+    await Promise.all(
+      statuses.map((status, index) =>
+        prisma.contentItem.create({
+          data: {
+            mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
+            workspaceId: session.workspace.id,
+            campaignId: campaign.id,
+            campaignWeek: 1,
+            campaignActionIndex: index,
+            status,
+            contentType: "POST"
+          }
+        })
+      )
+    );
+    await prisma.contentItem.create({
+      data: {
         workspaceId: session.workspace.id,
         campaignId: campaign.id,
-        campaignWeek: 1,
-        campaignActionIndex: index,
-        status,
+        campaignWeek: 2,
+        campaignActionIndex: 0,
+        status: "DRAFT",
         contentType: "POST",
-        mediaIds: []
-      }))
+        deletedAt: new Date(),
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE" } }
+      }
     });
-    await prisma.contentItem.createMany({
-      data: [
-        {
-          workspaceId: session.workspace.id,
-          campaignId: campaign.id,
-          campaignWeek: 2,
-          campaignActionIndex: 0,
-          status: "DRAFT",
-          contentType: "POST",
-          mediaIds: [],
-          deletedAt: new Date()
-        },
-        {
-          workspaceId: session.workspace.id,
-          campaignId: campaign.id,
-          campaignWeek: 2,
-          campaignActionIndex: 99,
-          status: "DRAFT",
-          contentType: "POST",
-          mediaIds: []
-        }
-      ]
+    await prisma.contentItem.create({
+      data: {
+        workspaceId: session.workspace.id,
+        campaignId: campaign.id,
+        campaignWeek: 2,
+        campaignActionIndex: 99,
+        status: "DRAFT",
+        contentType: "POST",
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE" } }
+      }
     });
     const response = await app.inject({ method: "GET", url: "/v1/campaigns/summaries", headers: authHeaders(session.tokens.accessToken) });
     expect(response.statusCode).toBe(200);
@@ -208,7 +212,7 @@ describe("campaign routes", () => {
         campaignActionIndex: 0,
         status: "DRAFT",
         contentType: "POST",
-        mediaIds: [media.id],
+        mediaItems: { create: { position: 0, mediaKind: "IMAGE", mediaAssetId: media.id } },
         caption: "Owner caption"
       }
     });
@@ -238,7 +242,9 @@ describe("campaign routes", () => {
     expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200]);
     const ids = responses.map((response) => response.json().data.id);
     expect(new Set(ids).size).toBe(1);
-    const saved = await prisma.contentItem.update({ where: { id: ids[0] }, data: { caption: "Owner's saved caption", status: "APPROVED" } });
+    await prisma.contentItem.update({ where: { id: ids[0] }, data: { caption: "Owner's saved caption", status: "APPROVED" } });
+    // Lifecycle invalidation also touches child intent, so read the final aggregate revision.
+    const saved = await prisma.contentItem.findUniqueOrThrow({ where: { id: ids[0] } });
     const repeated = await app.inject(request);
     expect(repeated.json().data).toMatchObject({ id: ids[0], caption: saved.caption, status: saved.status, revision: saved.revision });
     expect(await prisma.contentItem.count({ where: { campaignId: campaign.id, campaignWeek: 1, campaignActionIndex: 0 } })).toBe(1);

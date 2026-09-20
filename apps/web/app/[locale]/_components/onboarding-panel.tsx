@@ -1184,7 +1184,7 @@ export function OnboardingPanel({
     try {
       await client.approveBusinessProfile({ interactionId: profileInteractionId, profile: profileDraft });
       window.localStorage.removeItem(onboardingDraftKey(session.user.id, session.workspace.id));
-      router.push(`/${locale}/app/campaigns`);
+      router.push(`/${locale}/instagram-setup`);
     } catch (error) {
       showError(error instanceof Error ? error.message : copy.errors.approve);
       setSaving(false);

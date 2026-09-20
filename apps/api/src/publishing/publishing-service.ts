@@ -1,3 +1,5 @@
+import { contentAggregateInclude, type ContentAggregateRow } from "../content/content-aggregate";
+import { readinessIssue } from "../media/content-media-integrity";
 import type { ContentItem, MediaAsset, Workspace } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { cancelUnclaimedPublishJobs, ContentScheduleError } from "../content/content-service";
@@ -89,8 +91,9 @@ const publishingRequiredEnv = [
 ];
 const activePublishAttempts = new Map<string, Promise<PublishAttemptRecord>>();
 
-export async function listPublishingQueue(workspaceId: string): Promise<ContentItem[]> {
+export async function listPublishingQueue(workspaceId: string): Promise<ContentAggregateRow[]> {
   return prisma.contentItem.findMany({
+    include: contentAggregateInclude,
     where: {
       workspaceId,
       status: {
@@ -170,7 +173,7 @@ export async function getPublishingLiveReadiness(workspaceId: string): Promise<P
   };
 }
 
-export async function rescheduleFailedPublish(workspaceId: string, contentItemId: string, input: { scheduledAt: string }): Promise<ContentItem> {
+export async function rescheduleFailedPublish(workspaceId: string, contentItemId: string, input: { scheduledAt: string }): Promise<ContentAggregateRow> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   return prisma.$transaction(async (tx) => {
     const contentItem = await lockContentForMedia(tx, workspaceId, contentItemId);
@@ -189,6 +192,7 @@ export async function rescheduleFailedPublish(workspaceId: string, contentItemId
       throw error;
     }
     return tx.contentItem.update({
+      include: contentAggregateInclude,
       where: {
         id: contentItem.id
       },
@@ -314,6 +318,7 @@ async function executePublishContentItem(
       }
     }),
     prisma.contentItem.findFirst({
+      include: contentAggregateInclude,
       where: {
         id: contentItemId,
         workspaceId,
@@ -330,15 +335,15 @@ async function executePublishContentItem(
   const storedMedia = await prisma.mediaAsset.findMany({
     where: {
       id: {
-        in: contentItem.mediaIds
+        in: contentItem.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []))
       },
       workspaceId,
       deletedAt: null
     }
   });
   const mediaById = new Map(storedMedia.map((asset) => [asset.id, asset]));
-  const mediaAssets = contentItem.mediaIds.flatMap((id) => {
-    const asset = mediaById.get(id);
+  const mediaAssets = contentItem.mediaItems.flatMap((item) => {
+    const asset = item.mediaAssetId ? mediaById.get(item.mediaAssetId) : undefined;
     return asset ? [asset] : [];
   });
   const reasons = validatePublishAttempt({
@@ -485,7 +490,7 @@ async function executePublishContentItem(
 }
 
 function validatePublishAttempt(input: {
-  contentItem: ContentItem;
+  contentItem: ContentAggregateRow;
   mediaAssets: MediaAsset[];
   now: Date;
   workspace: Workspace;
@@ -517,6 +522,8 @@ function validatePublishAttempt(input: {
     reasons.push("CONTENT_TYPE_NOT_PUBLISHABLE");
   }
 
+  const issue = readinessIssue(input.contentItem, input.mediaAssets);
+  if (issue) reasons.push(issue);
   reasons.push(...validateContentMedia(input.contentItem, input.mediaAssets, input.instagramAccountType));
 
   if (input.liveProvider && input.mediaAssets.some((asset) => !asset.s3Key.startsWith("s3:") && !asset.s3Key.startsWith("external:"))) {
@@ -525,7 +532,10 @@ function validatePublishAttempt(input: {
 
   const validPublicMediaIds = new Set(input.mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
 
-  if (input.contentItem.mediaIds.length === 0 || input.contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
+  if (
+    input.contentItem.mediaItems.length === 0 ||
+    input.contentItem.mediaItems.some((item) => !item.mediaAssetId || !validPublicMediaIds.has(item.mediaAssetId))
+  ) {
     reasons.push("PUBLIC_MEDIA_REQUIRED");
   }
 

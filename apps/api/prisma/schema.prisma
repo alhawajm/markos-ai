@@ -78,6 +78,7 @@ enum MediaType {
 }
 
 enum MediaGenerationKind {
+  IMAGE
   VIDEO
 }
 
@@ -532,7 +533,8 @@ model Campaign {
 
 model ContentItem {
   revision            Int                  @default(1)
-  visualDirection     String?
+  mediaItems          ContentMediaItem[]
+  reelScript          ContentReelScript?
   conversation        ContentConversation?
   id                  String               @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId         String               @db.Uuid
@@ -541,9 +543,6 @@ model ContentItem {
   status              ContentStatus        @default(DRAFT)
   brief               String?
   caption             String               @default("")
-  mediaIds            String[]             @db.Uuid
-  carousel            Json?
-  reelScript          Json?
   contentPillar       String?
   campaignId          String?              @db.Uuid
   campaign            Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
@@ -561,6 +560,7 @@ model ContentItem {
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
 
+  @@unique([workspaceId, id])
   @@unique([campaignId, campaignWeek, campaignActionIndex], map: "content_items_campaign_suggestion_key")
   @@index([workspaceId, status])
   @@index([workspaceId, campaignId])
@@ -569,7 +569,77 @@ model ContentItem {
   @@map("content_items")
 }
 
+enum ContentMediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum ContentAspectRatio {
+  SQUARE   @map("1:1")
+  PORTRAIT @map("4:5")
+  VERTICAL @map("9:16")
+}
+
+model ContentMediaItem {
+  generationIntent          String              @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  generationJobs            MediaGenerationJob[]
+  id                        String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId               String              @db.Uuid
+  contentItemId             String              @db.Uuid
+  position                  Int
+  mediaKind                 ContentMediaKind?
+  mediaAssetId              String?             @db.Uuid
+  purpose                   String?
+  title                     String?
+  body                      String?
+  visualDirection           String?
+  aspectRatio               ContentAspectRatio?
+  generationDurationSeconds Int?
+  contentItem               ContentItem         @relation(fields: [workspaceId, contentItemId], references: [workspaceId, id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset                MediaAsset?          @relation(fields: [workspaceId, mediaAssetId], references: [workspaceId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  deletedAt                 DateTime?
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, contentItemId, id])
+  @@index([workspaceId, contentItemId, deletedAt, position])
+  @@index([workspaceId, mediaAssetId])
+  @@map("content_media_items")
+}
+
+model ContentReelScript {
+  id                      String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId             String            @db.Uuid
+  contentItemId           String            @db.Uuid
+  hook                    String?
+  intendedDurationSeconds Int?
+  contentItem             ContentItem       @relation(fields: [workspaceId, contentItemId], references: [workspaceId, id], onDelete: Cascade, onUpdate: Restrict)
+  beats                   ContentReelBeat[]
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, contentItemId])
+  @@map("content_reel_scripts")
+}
+
+model ContentReelBeat {
+  id           String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId  String            @db.Uuid
+  reelScriptId String            @db.Uuid
+  position     Int
+  text         String
+  script       ContentReelScript @relation(fields: [workspaceId, reelScriptId], references: [workspaceId, id], onDelete: Cascade, onUpdate: Restrict)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([workspaceId, reelScriptId, position])
+  @@map("content_reel_beats")
+}
+
 model MediaAsset {
+  contentMediaItems ContentMediaItem[]
   id              String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId     String    @db.Uuid
   type            MediaType
@@ -585,11 +655,17 @@ model MediaAsset {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
+  @@unique([workspaceId, id])
   @@index([workspaceId, type])
   @@map("media_assets")
 }
 
 model MediaGenerationJob {
+  contentMediaItemId  String                @db.Uuid
+  generationIntent   String                @db.Uuid
+  requestedRevision  Int
+  attachmentApplied  Boolean?
+  contentMediaItem    ContentMediaItem      @relation(fields: [workspaceId, contentItemId, contentMediaItemId], references: [workspaceId, contentItemId, id], onDelete: Cascade, onUpdate: Restrict)
   id                 String                @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId        String                @db.Uuid
   contentItemId      String                @db.Uuid
@@ -597,7 +673,7 @@ model MediaGenerationJob {
   status             MediaGenerationStatus @default(QUEUED)
   prompt             String
   aspectRatio        String                @default("9:16")
-  durationSeconds    Int                   @default(8)
+  durationSeconds    Int?
   provider           String                @default("openai_sora")
   model              String?
   providerJobId      String?
@@ -882,6 +958,7 @@ model ConversationRun {
   baseRevision   Int
   status         String                @default("QUEUED")
   result         Json?
+  actionState    Json?
   errorCode      String?
   leaseExpiresAt DateTime?
   createdAt      DateTime              @default(now())

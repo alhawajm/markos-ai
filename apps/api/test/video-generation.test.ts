@@ -1,3 +1,5 @@
+import { createContentAggregate, getContentAggregate, convertContentAggregate } from "../src/content/content-aggregate";
+import type { ContentRecord } from "@markos/shared-types";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
@@ -40,7 +42,7 @@ describe("durable video generation", () => {
     "stops an ambiguous %s submission until an intentional retry",
     async (code) => {
       const { content, workspace } = await createVideoWorkspace();
-      const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+      const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
       const now = new Date(Date.now() + 1000);
       provider.start.mockRejectedValueOnce(new AiServiceRequestError({ code, message: "Request failed", retryable: true, statusCode: 504 }));
       await processDueVideoGenerationJobs({ limit: 1, now });
@@ -52,18 +54,21 @@ describe("durable video generation", () => {
       });
       await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 300_000) });
       expect(provider.start).toHaveBeenCalledOnce();
-      await retryMediaGenerationJob(workspace.id, job.id);
+      const retried = await retryMediaGenerationJob(workspace.id, job.id, (await getContentAggregate(workspace.id, content.id)).revision);
       provider.start.mockResolvedValueOnce(providerState("in_progress"));
       await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
       expect(provider.start).toHaveBeenCalledTimes(2);
-      await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "GENERATING", errorCode: null });
-      await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
+      await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: retried.id } })).resolves.toMatchObject({
+        status: "GENERATING",
+        errorCode: null
+      });
+      await prisma.mediaGenerationJob.updateMany({ where: { contentItemId: content.id }, data: { status: "CANCELLED" } });
     }
   );
 
   it("does not submit a recovered STARTING job whose provider identity was never saved", async () => {
     const { content, workspace } = await createVideoWorkspace();
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
     const now = new Date(Date.now() + 1000);
     await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "STARTING", attempts: 1, leaseExpiresAt: new Date(now.getTime() - 1) } });
     await processDueVideoGenerationJobs({ limit: 1, now });
@@ -76,7 +81,7 @@ describe("durable video generation", () => {
 
   it.each(["status", "download"] as const)("retries a %s timeout against the saved video without starting another generation", async (stage) => {
     const { content, workspace } = await createVideoWorkspace();
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
     const now = new Date(Date.now() + 1000);
     provider.start.mockResolvedValueOnce(providerState(stage === "download" ? "completed" : "in_progress"));
     provider[stage].mockRejectedValueOnce(new AiServiceRequestError({ code: "AI_PROVIDER_TIMEOUT", message: "Timed out", retryable: true, statusCode: 504 }));
@@ -95,7 +100,7 @@ describe("durable video generation", () => {
 
   it("retries an explicit rate-limit rejection instead of treating it as an accepted video", async () => {
     const { content, workspace } = await createVideoWorkspace();
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
     const now = new Date(Date.now() + 1000);
     provider.start.mockRejectedValueOnce(
       new AiServiceRequestError({ code: "AI_PROVIDER_RATE_LIMITED", message: "Rate limited", retryable: true, statusCode: 503 })
@@ -108,12 +113,12 @@ describe("durable video generation", () => {
     provider.start.mockResolvedValueOnce(providerState("in_progress"));
     await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 60_000) });
     expect(provider.start).toHaveBeenCalledTimes(2);
-    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
+    await prisma.mediaGenerationJob.updateMany({ where: { contentItemId: content.id }, data: { status: "CANCELLED" } });
   });
 
   it.each(["response", "error"])("does not let a stale worker's %s overwrite a newer claim", async (outcome) => {
     const { content, workspace } = await createVideoWorkspace();
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
     provider.start.mockImplementationOnce(async () => {
       const claimed = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
       expect(claimed.leaseExpiresAt!.getTime() - claimed.leasedAt!.getTime()).toBeGreaterThan(env.AI_HTTP_TIMEOUT_MS);
@@ -145,10 +150,10 @@ describe("durable video generation", () => {
       errorCode: null
     });
     expect(provider.download).not.toHaveBeenCalled();
-    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
+    await prisma.mediaGenerationJob.updateMany({ where: { contentItemId: content.id }, data: { status: "CANCELLED" } });
   });
 
-  it("keeps one active job, survives provider polling, and attaches the completed MP4", async () => {
+  it("rejects stale duplicate dispatch, survives provider polling, and attaches the completed MP4", async () => {
     const { content, workspace } = await createVideoWorkspace();
     provider.start.mockResolvedValue({
       provider_job_id: "video-provider-job",
@@ -170,16 +175,8 @@ describe("durable video generation", () => {
     });
     provider.download.mockResolvedValue(Buffer.from("video-bytes"));
 
-    const first = await queueVideoGeneration(workspace.id, content.id, {
-      aspectRatio: "9:16",
-      durationSeconds: 8,
-      prompt: "A vertical close-up of a fresh snack being plated"
-    });
-    const duplicate = await queueVideoGeneration(workspace.id, content.id, {
-      aspectRatio: "9:16",
-      durationSeconds: 8,
-      prompt: "This duplicate request must not create another job"
-    });
+    const first = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
+    await expect(queueVideoGeneration(workspace.id, content.id, generationInput(content))).rejects.toMatchObject({ code: "CONTENT_REVISION_CONFLICT" });
     const firstTick = await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1_000) });
     const waiting = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: first.id } });
     await prisma.mediaGenerationJob.update({
@@ -189,13 +186,12 @@ describe("durable video generation", () => {
     const secondTick = await processDueVideoGenerationJobs({ limit: 1, now: new Date() });
     const [completed, contentAfter, interaction, usage] = await Promise.all([
       prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: first.id } }),
-      prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } }),
+      getContentAggregate(workspace.id, content.id),
       prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO" } }),
       prisma.usageCounter.findFirstOrThrow({ where: { workspaceId: workspace.id, metric: "AI_GENERATION" } })
     ]);
     const media = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: completed.outputMediaAssetId! } });
 
-    expect(duplicate.id).toBe(first.id);
     expect(firstTick).toEqual({ completed: 0, failed: 0, processed: 1, waiting: 1 });
     expect(waiting).toMatchObject({ providerJobId: "video-provider-job", progress: 25, status: "GENERATING" });
     expect(secondTick).toEqual({ completed: 1, failed: 0, processed: 1, waiting: 0 });
@@ -207,7 +203,7 @@ describe("durable video generation", () => {
       type: "AI_GENERATED",
       width: 720
     });
-    expect(contentAfter.mediaIds).toContain(media.id);
+    expect(contentAfter.mediaItems[0]!.mediaAssetId).toBe(media.id);
     expect(interaction).toMatchObject({ accepted: true, regenerated: false });
     expect(usage.used).toBe(1n);
     expect(provider.start).toHaveBeenCalledTimes(1);
@@ -215,19 +211,27 @@ describe("durable video generation", () => {
     expect(provider.download).toHaveBeenCalledWith("video-provider-job");
   });
 
-  it("rejects a full Reel before queueing or calling the provider", async () => {
+  it("regenerates into the same populated Reel item", async () => {
     const { content, workspace } = await createVideoWorkspace();
     const existing = await videoAsset(workspace.id);
-    await attachMediaToContent(workspace.id, content.id, existing.id);
-    await expect(queueVideoGeneration(workspace.id, content.id, generationInput())).rejects.toMatchObject({ code: "CONTENT_MEDIA_SINGLE_ITEM_LIMIT" });
-    expect(await prisma.mediaGenerationJob.count({ where: { contentItemId: content.id } })).toBe(0);
-    expect(provider.start).not.toHaveBeenCalled();
+    const attached = await attachMediaToContent(workspace.id, content.id, {
+      contentMediaItemId: content.mediaItems[0]!.id,
+      mediaAssetId: existing.id,
+      expectedRevision: content.revision
+    });
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(attached));
+    expect(job.contentMediaItemId).toBe(content.mediaItems[0]!.id);
+    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } });
   });
 
   it("rejects a queued job before provider work if the owner changed its content type", async () => {
     const { content, workspace } = await createVideoWorkspace();
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
-    await updateContentItem(workspace.id, content.id, { contentType: "POST" });
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
+    await convertContentAggregate(workspace.id, content.id, {
+      contentType: "POST",
+      expectedRevision: (await getContentAggregate(workspace.id, content.id)).revision,
+      confirmDestructive: true
+    });
     expect(await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) })).toEqual({ completed: 0, failed: 1, processed: 1, waiting: 0 });
     await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({
       status: "FAILED",
@@ -242,25 +246,36 @@ describe("durable video generation", () => {
     provider.start.mockResolvedValue(providerState("in_progress"));
     provider.status.mockResolvedValue(providerState("completed"));
     provider.download.mockResolvedValue(Buffer.from("generated-video-bytes"));
-    const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+    const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
     await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
     if (change === "attachment") {
       const ownerMedia = await videoAsset(workspace.id);
-      await attachMediaToContent(workspace.id, content.id, ownerMedia.id);
+      await attachMediaToContent(workspace.id, content.id, {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        mediaAssetId: ownerMedia.id,
+        expectedRevision: (await getContentAggregate(workspace.id, content.id)).revision
+      });
     }
+    if (change === "type")
+      await convertContentAggregate(workspace.id, content.id, {
+        contentType: "POST",
+        expectedRevision: (await getContentAggregate(workspace.id, content.id)).revision,
+        confirmDestructive: true
+      });
     const latest = await updateContentItem(workspace.id, content.id, {
-      caption: "The owner's newer caption stays exact.",
-      ...(change === "type" ? { contentType: "POST" as const } : {})
+      expectedRevision: (await getContentAggregate(workspace.id, content.id)).revision,
+      caption: "The owner's newer caption stays exact."
     });
     await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { nextAttemptAt: new Date(Date.now() - 1000) } });
-    expect(await processDueVideoGenerationJobs({ limit: 1, now: new Date() })).toEqual({ completed: 0, failed: 1, processed: 1, waiting: 0 });
+    expect(await processDueVideoGenerationJobs({ limit: 1, now: new Date() })).toEqual({ completed: 1, failed: 0, processed: 1, waiting: 0 });
     const savedJob = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
-    const unchanged = await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } });
-    expect(unchanged).toMatchObject({ caption: latest.caption, contentType: latest.contentType, mediaIds: latest.mediaIds, revision: latest.revision });
+    const unchanged = await getContentAggregate(workspace.id, content.id);
+    expect(unchanged).toMatchObject({ caption: latest.caption, contentType: latest.contentType, mediaItems: latest.mediaItems, revision: latest.revision });
     expect(savedJob).toMatchObject({
-      status: "FAILED",
+      status: "COMPLETED",
+      attachmentApplied: false,
       retryable: false,
-      errorCode: change === "attachment" ? "CONTENT_MEDIA_SINGLE_ITEM_LIMIT" : "CONTENT_MEDIA_TYPE_INCOMPATIBLE"
+      errorCode: "CONTENT_MEDIA_CHANGED"
     });
     expect(savedJob.errorMessage).toContain("saved in the Media Library");
     expect(savedJob.outputMediaAssetId).toBeTruthy();
@@ -269,7 +284,9 @@ describe("durable video generation", () => {
       deletedAt: null,
       mimeType: "video/mp4"
     });
-    await expect(retryMediaGenerationJob(workspace.id, job.id)).rejects.toThrow("already saved in the Media Library");
+    await expect(retryMediaGenerationJob(workspace.id, job.id, (await getContentAggregate(workspace.id, content.id)).revision)).rejects.toThrow(
+      "Only failed video requests without an output"
+    );
     expect(provider.start).toHaveBeenCalledTimes(1);
     await expect(prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO" } })).resolves.toMatchObject({ accepted: false });
   });
@@ -279,7 +296,7 @@ describe("durable video generation", () => {
     async (response) => {
       const { content, workspace } = await createVideoWorkspace();
       provider.start.mockResolvedValue(providerState("in_progress"));
-      const job = await queueVideoGeneration(workspace.id, content.id, generationInput());
+      const job = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
       await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
       const retained = await videoAsset(workspace.id);
       const terminalTime = new Date("2026-09-10T08:00:00.000Z");
@@ -315,13 +332,19 @@ describe("durable video generation", () => {
       });
       expect(provider.download).not.toHaveBeenCalled();
       expect(await prisma.mediaAsset.count({ where: { workspaceId: workspace.id } })).toBe(1);
-      await expect(prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).resolves.toMatchObject({ mediaIds: [] });
+      await expect(getContentAggregate(workspace.id, content.id)).resolves.toMatchObject({ mediaItems: [expect.objectContaining({ mediaAssetId: null })] });
     }
   );
 });
 
-function generationInput() {
-  return { aspectRatio: "9:16" as const, durationSeconds: 8 as const, prompt: "A vertical close-up of a fresh snack being plated" };
+function generationInput(content: ContentRecord) {
+  return {
+    contentMediaItemId: content.mediaItems[0]!.id,
+    expectedRevision: content.revision,
+    aspectRatio: "9:16" as const,
+    durationSeconds: 8 as const,
+    prompt: "A vertical close-up of a fresh snack being plated"
+  };
 }
 
 function providerState(status: "in_progress" | "completed") {
@@ -391,15 +414,9 @@ async function createVideoWorkspace() {
       slug: `video-generation-${suffix}`
     }
   });
-  const content = await prisma.contentItem.create({
-    data: {
-      workspaceId: workspace.id,
-      contentType: "REEL",
-      status: "DRAFT",
-      caption: "Freshly made",
-      mediaIds: []
-    }
-  });
+  const content = await prisma.$transaction((tx) =>
+    createContentAggregate(tx, workspace.id, { platform: "INSTAGRAM", contentType: "REEL", caption: "Freshly made" })
+  );
 
   return { content, workspace };
 }

@@ -300,6 +300,7 @@ export const brandOnboardingSchema = z
 
 export const objectivesOnboardingSchema = z
   .object({
+    contentDirection: z.string().max(2000).optional(),
     currentPriority: z.string().min(2).max(1000).optional(),
     goals: z.array(z.string().min(1).max(80)).max(30).default([]),
     budgetRange: z.string().max(onboardingObjectiveFieldLimits.budgetRange).optional(),
@@ -310,6 +311,7 @@ export const objectivesOnboardingSchema = z
   .refine(
     (value) =>
       Boolean(
+        value.contentDirection?.trim() ||
         value.currentPriority?.trim() ||
         value.goals.length ||
         value.budgetRange?.trim() ||
@@ -383,7 +385,6 @@ export const contentCaptionSchema = z.string().superRefine((caption, context) =>
 
 export const createContentSchema = z
   .object({
-    visualDirection: z.string().max(2000).nullable().optional(),
     platform: contentPlatformSchema.default("INSTAGRAM"),
     contentType: contentTypeSchema.default("POST"),
     brief: z.string().max(1000).nullable().optional(),
@@ -391,8 +392,6 @@ export const createContentSchema = z
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
-    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
-    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
   })
   .strict();
@@ -416,26 +415,6 @@ export const ideateContentSchema = z
     topic: z.string().trim().min(8).max(1000),
     contentType: contentTypeSchema.default("POST"),
     campaignId: z.string().uuid().optional()
-  })
-  .strict();
-
-export const generateContentForSlotSchema = z.object({
-  topic: z.string().min(3).max(500),
-  contentType: contentTypeSchema.default("POST"),
-  scheduledAt: z.string().datetime(),
-  campaignId: z.string().uuid().optional()
-});
-
-export const generateContentForItemSchema = z
-  .object({
-    topic: z.string().trim().min(3).max(1000),
-    contentType: contentTypeSchema
-  })
-  .strict();
-
-export const reviseContentItemSchema = z
-  .object({
-    instruction: z.string().trim().min(3).max(1000)
   })
   .strict();
 
@@ -507,28 +486,109 @@ export const adminUpdateModelSettingSchema = z.object({
 
 export const updateContentSchema = z
   .object({
-    expectedRevision: z.number().int().positive().optional(),
-    visualDirection: z.string().max(2000).nullable().optional(),
-    platform: contentPlatformSchema.optional(),
-    contentType: contentTypeSchema.optional(),
+    expectedRevision: z.number().int().positive(),
     brief: z.string().max(1000).nullable().optional(),
     caption: contentCaptionSchema.optional(),
     contentPillar: z.string().max(160).nullable().optional(),
     campaignGoal: z.string().max(500).nullable().optional(),
     tone: z.string().max(200).nullable().optional(),
-    carousel: z.record(z.string(), z.unknown()).nullable().optional(),
-    reelScript: z.record(z.string(), z.unknown()).nullable().optional(),
     plannedAt: z.string().datetime().nullable().optional()
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, {
+  .refine((value) => Object.keys(value).some((key) => key !== "expectedRevision"), {
     message: "At least one content field is required"
   });
 
 export const updateContentStatusSchema = z.object({
-  expectedRevision: z.number().int().positive().optional(),
+  expectedRevision: z.number().int().positive(),
   status: z.enum(["DRAFT", "IN_REVIEW", "APPROVED"])
 });
+
+const authoringPatch = <T extends z.ZodRawShape>(shape: T) =>
+  z
+    .object(shape)
+    .strict()
+    .refine((value) => Object.keys(value).length > 0, "At least one field is required");
+
+export const contentMediaFieldsSchema = z
+  .object({
+    mediaKind: z.enum(["IMAGE", "VIDEO"]).nullable().optional(),
+    mediaAssetId: z.string().uuid().nullable().optional(),
+    purpose: z.string().max(160).nullable().optional(),
+    title: z.string().max(160).nullable().optional(),
+    body: z.string().max(800).nullable().optional(),
+    visualDirection: z.string().max(2000).nullable().optional(),
+    aspectRatio: z.enum(["SQUARE", "PORTRAIT", "VERTICAL"]).nullable().optional(),
+    generationDurationSeconds: z.number().int().positive().max(3600).nullable().optional()
+  })
+  .strict();
+
+const orderedAuthoringIds = z
+  .array(z.string().uuid())
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, "IDs must be unique");
+export const contentMutationSchema = z
+  .object({
+    expectedRevision: z.number().int().positive(),
+    operations: z
+      .array(
+        z.discriminatedUnion("type", [
+          z
+            .object({
+              type: z.literal("updateContent"),
+              fields: authoringPatch({
+                brief: z.string().max(1000).nullable().optional(),
+                caption: contentCaptionSchema.optional(),
+                contentPillar: z.string().max(160).nullable().optional(),
+                campaignGoal: z.string().max(500).nullable().optional(),
+                tone: z.string().max(200).nullable().optional(),
+                plannedAt: z.string().datetime().nullable().optional()
+              })
+            })
+            .strict(),
+          z
+            .object({ type: z.literal("addMediaItem"), afterId: z.string().uuid().nullable().optional(), fields: contentMediaFieldsSchema.default({}) })
+            .strict(),
+          z
+            .object({
+              type: z.literal("updateMediaItem"),
+              itemId: z.string().uuid(),
+              fields: contentMediaFieldsSchema.refine((value) => Object.keys(value).length > 0, "At least one field is required")
+            })
+            .strict(),
+          z.object({ type: z.literal("removeMediaItem"), itemId: z.string().uuid() }).strict(),
+          z.object({ type: z.literal("reorderMediaItems"), orderedIds: orderedAuthoringIds }).strict(),
+          z
+            .object({
+              type: z.literal("updateReelScript"),
+              fields: authoringPatch({
+                hook: z.string().max(300).nullable().optional(),
+                intendedDurationSeconds: z.number().int().positive().max(3600).nullable().optional()
+              })
+            })
+            .strict(),
+          z.object({ type: z.literal("addReelBeat"), afterId: z.string().uuid().nullable().optional(), text: z.string().max(800) }).strict(),
+          z.object({ type: z.literal("updateReelBeat"), beatId: z.string().uuid(), text: z.string().max(800) }).strict(),
+          z.object({ type: z.literal("removeReelBeat"), beatId: z.string().uuid() }).strict(),
+          z.object({ type: z.literal("reorderReelBeats"), orderedIds: orderedAuthoringIds }).strict()
+        ])
+      )
+      .min(1)
+      .max(50)
+  })
+  .strict();
+
+export const convertContentSchema = z
+  .object({
+    expectedRevision: z.number().int().positive(),
+    contentType: contentTypeSchema,
+    retainMediaItemId: z.string().uuid().optional(),
+    confirmDestructive: z.boolean().default(false)
+  })
+  .strict();
+
+export type ContentMutationInput = z.infer<typeof contentMutationSchema>;
+export type ConvertContentInput = z.infer<typeof convertContentSchema>;
 
 export const scheduleContentSchema = z.object({
   scheduledAt: z.string().datetime()
@@ -669,20 +729,41 @@ export function validateInstagramImageMetadata(input: {
   return reasons;
 }
 
-export const attachMediaToContentSchema = z.object({
-  mediaAssetId: z.string().uuid()
-});
-
-export const generateImageForContentSchema = z.object({
-  prompt: z.string().min(3).max(1000).optional(),
-  aspectRatio: z.enum(["1:1", "4:5", "9:16"]).default("4:5")
-});
-
-export const generateVideoForContentSchema = z.object({
-  prompt: z.string().trim().min(3).max(4000),
-  durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).default(8),
-  aspectRatio: z.literal("9:16").default("9:16")
-});
+export const mediaRevisionSchema = z.object({ expectedRevision: z.number().int().positive() }).strict();
+export const attachMediaToContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    mediaAssetId: z.string().uuid(),
+    expectedRevision: z.number().int().positive()
+  })
+  .strict();
+export const generateImageForContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    expectedRevision: z.number().int().positive(),
+    prompt: z.string().trim().min(3).max(2000).optional(),
+    aspectRatio: z.enum(["1:1", "4:5", "9:16"]).optional()
+  })
+  .strict();
+export const updateContentMediaSchema = z
+  .object({
+    orderedIds: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(10)
+      .refine((ids) => new Set(ids).size === ids.length, "Duplicate item"),
+    expectedRevision: z.number().int().positive()
+  })
+  .strict();
+export const generateVideoForContentSchema = z
+  .object({
+    contentMediaItemId: z.string().uuid(),
+    expectedRevision: z.number().int().positive(),
+    prompt: z.string().trim().min(3).max(2000).optional(),
+    durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional(),
+    aspectRatio: z.literal("9:16").optional()
+  })
+  .strict();
 
 export const createPromptTemplateSchema = z.object({
   agent: promptAgentSchema,
@@ -737,9 +818,6 @@ export type ApproveCampaignSuggestionInput = z.infer<typeof approveCampaignSugge
 export type CreateContentInput = z.infer<typeof createContentSchema>;
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 export type IdeateContentInput = z.infer<typeof ideateContentSchema>;
-export type GenerateContentForSlotInput = z.infer<typeof generateContentForSlotSchema>;
-export type GenerateContentForItemInput = z.infer<typeof generateContentForItemSchema>;
-export type ReviseContentItemInput = z.infer<typeof reviseContentItemSchema>;
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
 export type AnalyticsMonthlyPdfInput = z.infer<typeof analyticsMonthlyPdfSchema>;
 export type AnalyticsMonthlyEmailInput = z.infer<typeof analyticsMonthlyEmailSchema>;
@@ -764,3 +842,5 @@ export type UploadMediaInput = z.infer<typeof uploadMediaSchema>;
 export type AttachMediaToContentInput = z.infer<typeof attachMediaToContentSchema>;
 export type GenerateImageForContentInput = z.infer<typeof generateImageForContentSchema>;
 export type GenerateVideoForContentInput = z.infer<typeof generateVideoForContentSchema>;
+
+export * from "./authoring-assistant";

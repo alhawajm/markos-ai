@@ -168,14 +168,14 @@ function contentItem(): ContentItem {
   return {
     aiPromptUsed: null,
     revision: 1,
-    visualDirection: null,
+
     brief: null,
     caption: "Analytics post\n\n#MarkosAI",
     campaignActionIndex: null,
     campaignGoal: null,
     campaignId: null,
     campaignWeek: null,
-    carousel: null,
+
     contentPillar: null,
     contentType: "POST",
     createdAt: new Date(),
@@ -183,11 +183,11 @@ function contentItem(): ContentItem {
     failureReason: null,
     id: "content-id",
     instagramPostId: "ig-media-id",
-    mediaIds: [],
+
     platform: "INSTAGRAM",
     plannedAt: null,
     publishedAt: new Date(Date.UTC(2026, 0, 5)),
-    reelScript: null,
+
     scheduledAt: null,
     status: "PUBLISHED",
     tone: null,

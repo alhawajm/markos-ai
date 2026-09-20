@@ -38,6 +38,7 @@ export const profileSections: ProfileSection[] = [
     title: ["Current strategy", "الاستراتيجية الحالية"],
     fields: [
       { key: "currentPriority", label: ["Current priority", "الأولوية الحالية"], kind: "long", max: 1000 },
+      { key: "contentDirection", label: ["Content direction", "توجه المحتوى"], kind: "long", max: 2000 },
       { key: "goals", label: ["Marketing objectives", "الأهداف التسويقية"], kind: "list" }
     ]
   },

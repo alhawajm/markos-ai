@@ -241,6 +241,8 @@ export interface OnboardingBusinessProfileState {
   updatedAt: string | null;
 }
 
+export * from "./instagram-learning";
+
 export type BusinessKnowledgeModule = "company" | "story" | "audience" | "competitors" | "brand" | "objectives";
 
 export interface BusinessKnowledgeRecord {
@@ -636,7 +638,6 @@ export * from "./conversation";
 
 export interface ContentRecord {
   revision: number;
-  visualDirection?: string;
   id: string;
   workspaceId: string;
   platform?: ContentPlatform;
@@ -644,9 +645,8 @@ export interface ContentRecord {
   status: ContentStatus;
   brief?: string;
   caption: string;
-  mediaIds: string[];
-  carousel?: Record<string, unknown>;
-  reelScript?: Record<string, unknown>;
+  mediaItems: ContentMediaItemRecord[];
+  reelScript: ContentReelScriptRecord | null;
   contentPillar?: string;
   campaignId?: string;
   campaignGoal?: string;
@@ -659,6 +659,44 @@ export interface ContentRecord {
   publishedAt?: string;
   instagramPostId?: string;
   failureReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentMediaItemRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  position: number;
+  mediaKind: "IMAGE" | "VIDEO" | null;
+  mediaAssetId: string | null;
+  purpose: string | null;
+  title: string | null;
+  body: string | null;
+  visualDirection: string | null;
+  aspectRatio: "SQUARE" | "PORTRAIT" | "VERTICAL" | null;
+  generationDurationSeconds: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentReelScriptRecord {
+  id: string;
+  workspaceId: string;
+  contentItemId: string;
+  hook: string | null;
+  intendedDurationSeconds: number | null;
+  beats: ContentReelBeatRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentReelBeatRecord {
+  id: string;
+  workspaceId: string;
+  reelScriptId: string;
+  position: number;
+  text: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -716,11 +754,14 @@ export interface MediaGenerationJobRecord {
   id: string;
   workspaceId: string;
   contentItemId: string;
-  kind: "VIDEO";
+  contentMediaItemId: string;
+  requestedRevision: number;
+  attachmentApplied?: boolean;
+  kind: "IMAGE" | "VIDEO";
   status: MediaGenerationStatus;
   prompt: string;
-  aspectRatio: "9:16";
-  durationSeconds: 4 | 8 | 12;
+  aspectRatio: "1:1" | "4:5" | "9:16";
+  durationSeconds?: 4 | 8 | 12;
   progress: number;
   model?: string;
   errorCode?: string;
@@ -1209,3 +1250,45 @@ export interface PublishDueContentResult {
   attempted: number;
   attempts: PublishAttemptRecord[];
 }
+
+type AuthoringPatch<T> = { [K in keyof T]?: T[K] | undefined };
+export type ContentAuthoringOperation =
+  | {
+      type: "updateContent";
+      fields: AuthoringPatch<
+        Pick<ContentRecord, "caption"> & {
+          brief: string | null;
+          contentPillar: string | null;
+          campaignGoal: string | null;
+          tone: string | null;
+          plannedAt: string | null;
+        }
+      >;
+    }
+  | {
+      type: "updateMediaItem";
+      itemId: string;
+      fields: AuthoringPatch<
+        Pick<
+          ContentMediaItemRecord,
+          "mediaKind" | "mediaAssetId" | "purpose" | "title" | "body" | "visualDirection" | "aspectRatio" | "generationDurationSeconds"
+        >
+      >;
+    }
+  | {
+      type: "addMediaItem";
+      fields: AuthoringPatch<
+        Pick<
+          ContentMediaItemRecord,
+          "mediaKind" | "mediaAssetId" | "purpose" | "title" | "body" | "visualDirection" | "aspectRatio" | "generationDurationSeconds"
+        >
+      >;
+      afterId?: string | null | undefined;
+    }
+  | { type: "removeMediaItem"; itemId: string }
+  | { type: "reorderMediaItems"; orderedIds: string[] }
+  | { type: "updateReelScript"; fields: AuthoringPatch<Pick<ContentReelScriptRecord, "hook" | "intendedDurationSeconds">> }
+  | { type: "addReelBeat"; text: string; afterId?: string | null | undefined }
+  | { type: "updateReelBeat"; beatId: string; text: string }
+  | { type: "removeReelBeat"; beatId: string }
+  | { type: "reorderReelBeats"; orderedIds: string[] };

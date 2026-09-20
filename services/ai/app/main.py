@@ -24,6 +24,7 @@ from app.contracts.campaign import (
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
 from app.contracts.conversation import ConversationRequest, ConversationResponse
 from app.contracts.image import ImageGenerateRequest, ImageGenerateResponse
+from app.contracts.instagram_learning import InstagramLearningRequest, InstagramLearningResponse
 from app.contracts.offering_document import (
     OfferingDocumentAnalysisRequest,
     OfferingDocumentAnalysisResponse,
@@ -42,6 +43,7 @@ from app.providers.campaign import get_campaign_provider
 from app.providers.content import get_content_provider
 from app.providers.conversation import respond_to_conversation
 from app.providers.image import get_image_provider
+from app.providers.instagram_learning import analyze_instagram
 from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
 from app.providers.video import get_video_provider
@@ -568,3 +570,8 @@ def agent_prompt_text(request: AgentRunRequest) -> str:
 @app.post("/ai/content/conversation", response_model=ConversationResponse)
 async def content_conversation(request: ConversationRequest) -> ConversationResponse:
     return await respond_to_conversation(request)
+
+
+@app.post("/ai/onboarding/instagram/analyze", response_model=InstagramLearningResponse)
+async def instagram_learning(request: InstagramLearningRequest) -> InstagramLearningResponse:
+    return await analyze_instagram(request)

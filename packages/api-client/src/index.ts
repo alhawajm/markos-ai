@@ -1,3 +1,4 @@
+import type { ContentAuthoringOperation } from "@markos/shared-types";
 import type {
   AgentName,
   AgentRunRecord,
@@ -42,6 +43,8 @@ import type {
   InstagramConnection,
   InstagramDisconnectResult,
   InstagramOAuthStart,
+  InstagramLearningRecord,
+  InstagramLearningField,
   InstagramTokenRefreshResult,
   KnowledgeVaultEntry,
   KnowledgeVaultHistoryEntry,
@@ -506,6 +509,29 @@ export class MarkosApiClient {
     return (await this.request<ContentConversationRecord>(`/v1/content/${contentItemId}/conversation`, { method: "POST", body: { ...input } })).data;
   }
 
+  async contentItem(id: string): Promise<ContentRecord> {
+    return (await this.request<ContentRecord>(`/v1/content/${id}`)).data;
+  }
+
+  async mutateContent(id: string, input: { expectedRevision: number; operations: ContentAuthoringOperation[] }): Promise<ContentRecord> {
+    return (await this.request<ContentRecord>(`/v1/content/${id}/mutate`, { method: "POST", body: input })).data;
+  }
+
+  async convertContent(
+    id: string,
+    input: { expectedRevision: number; contentType: ContentType; confirmDestructive: boolean; retainMediaItemId?: string }
+  ): Promise<ContentConversionResult> {
+    return (await this.request<ContentConversionResult>(`/v1/content/${id}/convert`, { method: "POST", body: input })).data;
+  }
+
+  async confirmConversationActions(
+    id: string,
+    runId: string,
+    input: { confirmationToken: string; expectedRevision: number }
+  ): Promise<ContentConversationRecord> {
+    return (await this.request<ContentConversationRecord>(`/v1/content/${id}/conversation/${runId}/confirm`, { method: "POST", body: input })).data;
+  }
+
   async contentItems(): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>("/v1/content");
     return response.data;
@@ -534,12 +560,9 @@ export class MarkosApiClient {
       contentType?: ContentType;
       brief?: string | null;
       caption?: string;
-      visualDirection?: string | null;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
-      carousel?: Record<string, unknown> | null;
-      reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;
     } = {}
   ): Promise<ContentRecord> {
@@ -611,44 +634,16 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async generateContentForSlot(input: { topic: string; contentType?: ContentType; scheduledAt: string; campaignId?: string }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>("/v1/content/generate-for-slot", {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
-  async generateContentForItem(contentItemId: string, input: { topic: string; contentType: ContentType }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/generate`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
-  async reviseContentItem(contentItemId: string, input: { instruction: string }): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/revise`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
   async updateContent(
     contentItemId: string,
     input: {
       platform?: "INSTAGRAM";
-      contentType?: ContentType;
       brief?: string | null;
       caption?: string;
-      visualDirection?: string | null;
-      expectedRevision?: number;
+      expectedRevision: number;
       contentPillar?: string | null;
       campaignGoal?: string | null;
       tone?: string | null;
-      carousel?: Record<string, unknown> | null;
-      reelScript?: Record<string, unknown> | null;
       plannedAt?: string | null;
     }
   ): Promise<ContentRecord> {
@@ -659,8 +654,9 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async deleteContent(contentItemId: string): Promise<{ id: string }> {
+  async deleteContent(contentItemId: string, expectedRevision: number): Promise<{ id: string }> {
     const response = await this.request<{ id: string }>(`/v1/content/${contentItemId}`, {
+      body: { expectedRevision },
       method: "DELETE"
     });
     return response.data;
@@ -669,12 +665,12 @@ export class MarkosApiClient {
   async updateContentStatus(
     contentItemId: string,
     status: Extract<ContentStatus, "DRAFT" | "IN_REVIEW" | "APPROVED">,
-    expectedRevision?: number
+    expectedRevision: number
   ): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/status`, {
       body: {
         status,
-        ...(expectedRevision === undefined ? {} : { expectedRevision })
+        expectedRevision
       },
       method: "POST"
     });
@@ -709,46 +705,18 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async attachMediaToContent(contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/media`, {
-      body: {
-        mediaAssetId
-      },
-      method: "POST"
-    });
-    return response.data;
+  async attachMediaToContent(id: string, input: { contentMediaItemId: string; mediaAssetId: string; expectedRevision: number }): Promise<ContentRecord> {
+    return (await this.request<ContentRecord>(`/v1/content/${id}/media`, { method: "POST", body: input })).data;
+  }
+  async detachMediaFromContent(id: string, itemId: string, expectedRevision: number): Promise<ContentRecord> {
+    return (await this.request<ContentRecord>(`/v1/content/${id}/media/${itemId}`, { method: "DELETE", body: { expectedRevision } })).data;
   }
 
-  async detachMediaFromContent(contentItemId: string, mediaAssetId: string): Promise<ContentRecord> {
-    const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/media/${mediaAssetId}`, {
-      method: "DELETE"
-    });
-    return response.data;
+  async generateContentImage(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<AiImageGenerationResult> {
+    return (await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, { method: "POST", body: input })).data;
   }
-
-  async generateContentImage(
-    contentItemId: string,
-    input: {
-      aspectRatio?: "1:1" | "4:5" | "9:16";
-      prompt?: string;
-    } = {}
-  ): Promise<AiImageGenerationResult> {
-    const response = await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
-  }
-
-  async generateContentVideo(
-    contentItemId: string,
-    input: { aspectRatio?: "9:16"; durationSeconds?: 4 | 8 | 12; prompt: string }
-  ): Promise<MediaGenerationJobRecord> {
-    const response = await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, {
-      body: input,
-      method: "POST"
-    });
-    return response.data;
+  async generateContentVideo(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<MediaGenerationJobRecord> {
+    return (await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, { method: "POST", body: input })).data;
   }
 
   async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {
@@ -795,9 +763,9 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async retryMediaGeneration(jobId: string): Promise<MediaGenerationJobRecord> {
+  async retryMediaGeneration(jobId: string, expectedRevision: number): Promise<MediaGenerationJobRecord> {
     const response = await this.request<MediaGenerationJobRecord>(`/v1/media-generation/${jobId}/retry`, {
-      body: {},
+      body: { expectedRevision },
       method: "POST"
     });
     return response.data;
@@ -806,6 +774,28 @@ export class MarkosApiClient {
   async instagramConnection(): Promise<InstagramConnection> {
     const response = await this.request<InstagramConnection>("/v1/workspace/instagram");
     return response.data;
+  }
+
+  async instagramLearning(): Promise<InstagramLearningRecord | null> {
+    return (await this.request<InstagramLearningRecord | null>("/v1/workspace/instagram/learning")).data;
+  }
+  async startInstagramLearning(): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>("/v1/workspace/instagram/learning", { method: "POST" })).data;
+  }
+  async analyzeInstagramLearning(id: string, locale: "en" | "ar"): Promise<InstagramLearningRecord> {
+    return (
+      await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/analyze`, { method: "POST", body: { locale } })
+    ).data;
+  }
+  async approveInstagramLearning(
+    id: string,
+    input: { expectedVersion: number; changes: Array<{ field: InstagramLearningField; value: string | string[] }> }
+  ): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/approve`, { method: "POST", body: input }))
+      .data;
+  }
+  async skipInstagramLearning(id: string): Promise<InstagramLearningRecord> {
+    return (await this.request<InstagramLearningRecord>(`/v1/workspace/instagram/learning/${encodeURIComponent(id)}/skip`, { method: "POST" })).data;
   }
 
   async instagramOAuthStart(input: { locale?: "ar" | "en"; returnTo?: string } = {}): Promise<InstagramOAuthStart> {
@@ -1178,4 +1168,19 @@ function isTerminalSessionError(error: unknown): boolean {
     error instanceof MarkosApiError &&
     ["INVALID_REFRESH_TOKEN", "REFRESH_TOKEN_REUSE_DETECTED", "MFA_REQUIRED", "MFA_SETUP_REQUIRED"].includes(error.code ?? "")
   );
+}
+
+export interface ContentConversionResult {
+  applied: boolean;
+  content: ContentRecord;
+  preview: {
+    from: ContentType;
+    to: ContentType;
+    requiresSelection: boolean;
+    requiresConfirmation: boolean;
+    retainedItemId: string | null;
+    removedItemIds: string[];
+    detachedAssetIds: string[];
+    resetFields: string[];
+  };
 }

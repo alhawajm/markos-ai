@@ -94,7 +94,7 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(authorization.toString()).not.toContain("unrequested_scope");
   });
 
-  it("requires verified email and a current MFA step-up before Instagram connection", async () => {
+  it("requires verified email and MFA enrollment, without a temporary authorization window", async () => {
     const owner = await principal("OWNER");
     const withoutMfa = await token(owner.userId, owner.workspaceId, false);
     const mfaBlocked = await app.inject({
@@ -104,8 +104,12 @@ describeInstagramDatabase("registered Instagram routes", () => {
       payload: { returnTo: "/en/app/settings" }
     });
 
-    expect(mfaBlocked.statusCode).toBe(403);
-    expect(mfaBlocked.json().error.code).toBe("MFA_REQUIRED");
+    expect(mfaBlocked.statusCode).toBe(200);
+
+    await prisma.user.update({ where: { id: owner.userId }, data: { mfaEnabled: false } });
+    const unenrolled = await app.inject({ method: "POST", url: "/v1/workspace/instagram/oauth/start", headers: auth(withoutMfa) });
+    expect(unenrolled.statusCode).toBe(403);
+    expect(unenrolled.json().error.code).toBe("MFA_SETUP_REQUIRED");
 
     await prisma.user.update({
       where: { id: owner.userId },
@@ -204,6 +208,36 @@ describeInstagramDatabase("registered Instagram routes", () => {
     expect(terminal[0]?.[0]).toMatchObject({ stage: "connection_upsert", category: "database_unique_constraint", databaseCode: "P2002" });
     await app.inject({ method: "DELETE", url: "/v1/workspace/instagram", headers: auth(currentOwner.token) });
     warn.mockRestore();
+  });
+
+  it("returns setup cancellation and exchange failures to the verified guided return path", async () => {
+    const owner = await principal("OWNER");
+    const begin = async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/workspace/instagram/oauth/start",
+        headers: auth(owner.token),
+        payload: { locale: "ar", returnTo: "/ar/instagram-setup" }
+      });
+      expect(response.statusCode).toBe(200);
+      return new URL(response.json().data.authorizationUrl).searchParams.get("state")!;
+    };
+    const denied = await app.inject({
+      method: "GET",
+      url: `/v1/workspace/instagram/oauth/callback?error=access_denied&state=${encodeURIComponent(await begin())}`
+    });
+    expect(denied.headers.location).toBe("http://localhost:3000/ar/instagram-setup?instagram=error");
+    const provider = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Provider unavailable"));
+    try {
+      const failed = await app.inject({
+        method: "GET",
+        url: `/v1/workspace/instagram/oauth/callback?code=test-code&state=${encodeURIComponent(await begin())}`
+      });
+      expect(failed.headers.location).toBe("http://localhost:3000/ar/instagram-setup?instagram=error");
+      expect((await status(owner)).json().data.connected).toBe(false);
+    } finally {
+      provider.mockRestore();
+    }
   });
 
   it("authorizes status, refresh, reconnect, and disconnect by workspace membership and permission", async () => {

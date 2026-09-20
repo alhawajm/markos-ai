@@ -53,7 +53,10 @@ describe("clean database baseline contract", () => {
       "20260903130000_add_durable_publish_jobs",
       "20260906150000_unified_content_caption",
       "20260906170000_content_conversations",
-      "20260906171000_conversation_access"
+      "20260906171000_conversation_access",
+      "20260916160000_relational_content_aggregate",
+      "20260916170000_media_item_generation",
+      "20260916180000_conversation_actions"
     ]);
     for (const table of ["users", "workspaces", "plans", "oauth_state_nonces", "instagram_connection_credentials", "instagram_recent_media"]) {
       expect(baseline).toContain(`CREATE TABLE "${table}"`);

@@ -57,7 +57,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
           ]) {
             window.localStorage.removeItem(key);
           }
-          router.replace(`/${locale}/app/campaigns`);
+          router.replace(`/${locale}/instagram-setup`);
           return;
         }
 

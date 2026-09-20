@@ -1,8 +1,10 @@
-import type { ContentItem, ContentType, Prisma } from "@prisma/client";
-import { contentMediaIssue, type ContentMediaIssue } from "@markos/shared-types";
+import type { Prisma, MediaAsset } from "@prisma/client";
+import { contentAggregateInclude, type ContentAggregateRow } from "../content/content-aggregate";
+import { captionValidationIssue, contentMediaIssue, type ContentMediaIssue } from "@markos/shared-types";
 
-type ContentMediaFailureCode = ContentMediaIssue | "CONTENT_LOCKED" | "CONTENT_NOT_FOUND";
+type ContentMediaFailureCode = ContentMediaIssue | "CONTENT_LOCKED" | "CONTENT_NOT_FOUND" | "CONTENT_MEDIA_CHANGED";
 const messages: Record<ContentMediaFailureCode, string> = {
+  CONTENT_MEDIA_CHANGED: "The media changed while you were editing. Review the current slides and try again.",
   CONTENT_LOCKED: "Media cannot be attached because this post is no longer a draft.",
   CONTENT_NOT_FOUND: "Media cannot be attached because this post is no longer available.",
   CONTENT_MEDIA_SINGLE_ITEM_LIMIT:
@@ -24,30 +26,43 @@ export class ContentMediaValidationError extends Error {
   }
 }
 
-/** All media-list mutations lock the content row before reading its current list. */
-export async function lockContentForMedia(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string): Promise<ContentItem | null> {
+/** Lock the aggregate before checking a generation result or scheduling mutation. */
+export async function lockContentForMedia(tx: Prisma.TransactionClient, workspaceId: string, contentItemId: string): Promise<ContentAggregateRow | null> {
   await tx.$queryRaw`SELECT "id" FROM "content_items" WHERE "id" = ${contentItemId}::uuid AND "workspaceId" = ${workspaceId}::uuid AND "deletedAt" IS NULL FOR UPDATE`;
-  return tx.contentItem.findFirst({ where: { id: contentItemId, workspaceId, deletedAt: null } });
+  return tx.contentItem.findFirst({ where: { id: contentItemId, workspaceId, deletedAt: null }, include: contentAggregateInclude });
 }
 
-export async function validateStoredContentMedia(
-  tx: Prisma.TransactionClient,
-  content: Pick<ContentItem, "workspaceId" | "contentType" | "mediaIds">,
-  options: { contentType?: ContentType; requireReady?: boolean; addition?: { id: string; mimeType: string } } = {}
-): Promise<ContentMediaIssue | null> {
+export function readinessIssue(
+  content: Pick<ContentAggregateRow, "contentType" | "caption" | "mediaItems">,
+  assets: Pick<MediaAsset, "id" | "mimeType">[]
+): string | null {
+  if (content.contentType !== "STORY") {
+    if (!content.caption.trim()) return "CONTENT_CAPTION_REQUIRED";
+    const captionIssue = captionValidationIssue(content.caption);
+    if (captionIssue) return captionIssue === "length" ? "CONTENT_CAPTION_TOO_LONG" : "CONTENT_CAPTION_TOO_MANY_HASHTAGS";
+  }
+  if (content.mediaItems.some((item) => !item.mediaAssetId)) return "CONTENT_MEDIA_REQUIRED";
+  const ids = content.mediaItems.map((item) => item.mediaAssetId!);
+  const issue = contentMediaIssue(content.contentType, ids, assets, true);
+  if (issue) return issue;
+  if (
+    content.mediaItems.some(
+      (item) =>
+        assets.find((asset) => asset.id === item.mediaAssetId)?.mimeType !==
+        (item.mediaKind === "VIDEO" ? "video/mp4" : item.mediaKind === "IMAGE" ? "image/jpeg" : "")
+    )
+  )
+    return "CONTENT_MEDIA_TYPE_INCOMPATIBLE";
+  return null;
+}
+export async function assertContentReady(tx: Prisma.TransactionClient, content: ContentAggregateRow): Promise<void> {
   const assets = await tx.mediaAsset.findMany({
-    where: { id: { in: content.mediaIds }, workspaceId: content.workspaceId, deletedAt: null },
-    select: { id: true, mimeType: true }
+    where: {
+      workspaceId: content.workspaceId,
+      deletedAt: null,
+      id: { in: content.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : [])) }
+    }
   });
-  const ids = options.addition && !content.mediaIds.includes(options.addition.id) ? [...content.mediaIds, options.addition.id] : content.mediaIds;
-  return contentMediaIssue(options.contentType ?? content.contentType, ids, options.addition ? [...assets, options.addition] : assets, options.requireReady);
-}
-
-export async function assertStoredContentMedia(
-  tx: Prisma.TransactionClient,
-  content: Pick<ContentItem, "workspaceId" | "contentType" | "mediaIds">,
-  options: Parameters<typeof validateStoredContentMedia>[2] = {}
-): Promise<void> {
-  const issue = await validateStoredContentMedia(tx, content, options);
-  if (issue) throw new ContentMediaValidationError(issue);
+  const issue = readinessIssue(content, assets);
+  if (issue) throw Object.assign(new Error(issue), { code: issue, statusCode: 409 });
 }

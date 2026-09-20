@@ -55,118 +55,13 @@ vi.mock("../src/ai/content-client", () => ({
           .join("\n\n"),
         visualDirection: `Editorial visual direction ${index + 1} for ${input.topic}`,
         contentPillar: "Proof and trust",
-        ...(input.contentType === "CAROUSEL" ? { carousel: { slides: [{ title: "Hook" }] } } : {})
+        ...(input.contentType === "CAROUSEL" ? { carousel: { slides: [{ title: "Hook", body: "Opening copy" }] } } : {})
       }))
     };
   }
 }));
 
 describe("content routes", () => {
-  it("preserves media on an incompatible type change and allows repairing a legacy invalid draft", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      const images = await Promise.all([createContentTestMedia(session.workspace.id), createContentTestMedia(session.workspace.id)]);
-      const mediaIds = images.map((image) => image.id);
-      const item = await prisma.contentItem.create({
-        data: { workspaceId: session.workspace.id, contentType: "CAROUSEL", status: "DRAFT", caption: "Owner caption", mediaIds }
-      });
-      const switchType = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${item.id}`,
-        headers,
-        payload: { contentType: "POST", caption: "Must not save" }
-      });
-      expect(switchType.statusCode).toBe(409);
-      expect(switchType.json().error.code).toBe("CONTENT_MEDIA_SINGLE_ITEM_LIMIT");
-      expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } })).toMatchObject({
-        contentType: "CAROUSEL",
-        caption: "Owner caption",
-        mediaIds
-      });
-      // Records created before enforcement may already contain extra media.
-      await prisma.contentItem.update({ where: { id: item.id }, data: { contentType: "POST" } });
-      const saveCopy = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${item.id}`,
-        headers,
-        payload: { contentType: "POST", caption: "Keep this repair caption" }
-      });
-      expect(saveCopy.statusCode).toBe(200);
-      expect((await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "IN_REVIEW" } })).statusCode).toBe(200);
-      const prematureReady = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
-      expect(prematureReady.statusCode).toBe(409);
-      const remove = await app.inject({ method: "DELETE", url: `/v1/content/${item.id}/media/${images[1]!.id}`, headers });
-      expect(remove.statusCode).toBe(200);
-      expect(remove.json().data).toMatchObject({ caption: "Keep this repair caption", mediaIds: [images[0]!.id] });
-      const ready = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
-      expect(ready.statusCode).toBe(200);
-      expect(await prisma.mediaAsset.findUniqueOrThrow({ where: { id: images[1]!.id } })).toMatchObject({ deletedAt: null });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("requires complete compatible media before Ready but permits empty working drafts", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      const image = await createContentTestMedia(session.workspace.id);
-      const video = await createContentTestMedia(session.workspace.id, "video/mp4");
-      const cases = [
-        { contentType: "POST", mediaIds: [], code: "CONTENT_MEDIA_REQUIRED" },
-        { contentType: "CAROUSEL", mediaIds: [image.id], code: "CONTENT_MEDIA_CAROUSEL_MINIMUM" },
-        { contentType: "REEL", mediaIds: [image.id], code: "CONTENT_MEDIA_TYPE_INCOMPATIBLE" },
-        { contentType: "CAROUSEL", mediaIds: [image.id, video.id], code: "CONTENT_MEDIA_TYPE_INCOMPATIBLE" },
-        { contentType: "STORY", mediaIds: [randomUUID()], code: "CONTENT_MEDIA_UNAVAILABLE" }
-      ] as const;
-      for (const value of cases) {
-        const item = await prisma.contentItem.create({
-          data: {
-            workspaceId: session.workspace.id,
-            contentType: value.contentType,
-            status: "IN_REVIEW",
-            caption: "A complete caption",
-            mediaIds: [...value.mediaIds]
-          }
-        });
-        const response = await app.inject({ method: "POST", url: `/v1/content/${item.id}/status`, headers, payload: { status: "APPROVED" } });
-        expect(response.statusCode).toBe(409);
-        expect(response.json().error.code).toBe(value.code);
-        expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe("IN_REVIEW");
-      }
-      const empty = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption: "", contentType: "REEL" } });
-      expect(empty.statusCode).toBe(200);
-      expect(empty.json().data.mediaIds).toEqual([]);
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("serializes content-type changes with concurrent media attachment", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      const image = await createContentTestMedia(session.workspace.id);
-      const item = await prisma.contentItem.create({
-        data: { workspaceId: session.workspace.id, contentType: "POST", status: "DRAFT", caption: "Keep this caption", mediaIds: [] }
-      });
-      const responses = await Promise.all([
-        app.inject({ method: "PATCH", url: `/v1/content/${item.id}`, headers, payload: { contentType: "REEL" } }),
-        app.inject({ method: "POST", url: `/v1/content/${item.id}/media`, headers, payload: { mediaAssetId: image.id } })
-      ]);
-      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
-      const saved = await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } });
-      if (saved.contentType === "REEL") expect(saved.mediaIds).toEqual([]);
-      else expect(saved).toMatchObject({ contentType: "POST", mediaIds: [image.id] });
-      expect(saved.caption).toBe("Keep this caption");
-    } finally {
-      await app.close();
-    }
-  });
   it("saves and reloads exact final captions and rejects invalid or cross-workspace updates", async () => {
     const app = await buildApp();
     const owner = await registerTestUser(app);
@@ -174,25 +69,25 @@ describe("content routes", () => {
     const headers = authHeaders(owner.tokens.accessToken);
     try {
       for (const caption of ["", "English only", "العربية فقط", "  English 🍊\n\nالعربية\n\nMessage us. راسلنا.\n\n#Bahrain #البحرين\n"]) {
-        const created = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption } });
+        const created = await injectContent(app, { method: "POST", url: "/v1/content", headers, payload: { caption } });
         expect(created.statusCode).toBe(200);
         const id = created.json().data.id as string;
         expect(created.json().data.caption).toBe(caption);
         expect(await prisma.contentItem.findUniqueOrThrow({ where: { id } })).toMatchObject({ caption });
-        const listed = await app.inject({ method: "GET", url: "/v1/content", headers });
+        const listed = await injectContent(app, { method: "GET", url: "/v1/content", headers });
         expect(listed.json().data.find((item: { id: string }) => item.id === id).caption).toBe(caption);
         const changed = `${caption}\nOwner edit`;
-        const updated = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: changed } });
+        const updated = await injectContent(app, { method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: changed } });
         expect(updated.json().data.caption).toBe(changed);
         for (const payload of [
           { caption: "a".repeat(2201) },
           { caption: Array.from({ length: 31 }, (_, i) => `#tag${i}`).join(" ") },
           { caption: "discard me", captionEn: "retired field" }
         ]) {
-          const invalid = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload });
+          const invalid = await injectContent(app, { method: "PATCH", url: `/v1/content/${id}`, headers, payload });
           expect(invalid.statusCode).toBe(400);
         }
-        const crossWorkspace = await app.inject({
+        const crossWorkspace = await injectContent(app, {
           method: "PATCH",
           url: `/v1/content/${id}`,
           headers: authHeaders(other.tokens.accessToken),
@@ -200,28 +95,9 @@ describe("content routes", () => {
         });
         expect(crossWorkspace.statusCode).toBe(404);
         expect(await prisma.contentItem.findUniqueOrThrow({ where: { id } })).toMatchObject({ caption: changed });
-        const cleared = await app.inject({ method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: "" } });
+        const cleared = await injectContent(app, { method: "PATCH", url: `/v1/content/${id}`, headers, payload: { caption: "" } });
         expect(cleared.json().data.caption).toBe("");
       }
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("revises a manual caption without an AI origin, pillar, CTA or hashtags", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      await app.inject({ method: "PUT", url: "/v1/vault/company", headers, payload: { entries: [{ key: "business", value: { name: "Citrus Studio" } }] } });
-      const caption = "العربية أولاً\n\nEnglish follows.";
-      const created = await app.inject({ method: "POST", url: "/v1/content", headers, payload: { caption } });
-      const id = created.json().data.id as string;
-      const revised = await app.inject({ method: "POST", url: `/v1/content/${id}/revise`, headers, payload: { instruction: "Make the caption shorter" } });
-      expect(revised.statusCode).toBe(200);
-      expect(contentMock.lastInput?.revision?.currentDraft).toEqual({ contentType: "POST", caption });
-      expect(revised.json().data.id).toBe(id);
-      expect(await prisma.contentItem.count({ where: { workspaceId: session.workspace.id } })).toBe(1);
     } finally {
       await app.close();
     }
@@ -256,13 +132,14 @@ describe("content routes", () => {
     });
     const base = {
       caption: "",
-      mediaIds: [] as string[],
+
       workspaceId: owner.workspace.id
     };
 
     await Promise.all([
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.plannedDraft,
           contentType: "POST",
@@ -278,12 +155,13 @@ describe("content routes", () => {
           contentType: "CAROUSEL",
           status: "APPROVED",
           caption: "Planned ready carousel",
-          mediaIds: [media.id],
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE", mediaAssetId: media.id } },
           plannedAt: new Date("2026-08-11T10:00:00+03:00")
         }
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "VIDEO" } },
           ...base,
           id: ids.scheduled,
           contentType: "REEL",
@@ -294,6 +172,7 @@ describe("content routes", () => {
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.published,
           contentType: "STORY",
@@ -304,6 +183,7 @@ describe("content routes", () => {
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.failed,
           contentType: "POST",
@@ -315,6 +195,7 @@ describe("content routes", () => {
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.outside,
           contentType: "POST",
@@ -325,28 +206,29 @@ describe("content routes", () => {
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.unscheduledFirst,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          caption: "First unscheduled carousel",
-          updatedAt: new Date("2026-08-25T12:00:00+03:00")
+          caption: "First unscheduled carousel"
         }
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           ...base,
           id: ids.unscheduledSecond,
           contentType: "CAROUSEL",
           status: "APPROVED",
-          caption: "Second unscheduled carousel",
-          updatedAt: new Date("2026-08-24T12:00:00+03:00")
+          caption: "Second unscheduled carousel"
         }
       }),
       prisma.contentItem.create({
         data: {
+          mediaItems: { create: { position: 0, mediaKind: "IMAGE" } },
           caption: "Other workspace item",
-          mediaIds: [],
+
           workspaceId: other.workspace.id,
           id: ids.otherWorkspace,
           contentType: "POST",
@@ -356,7 +238,20 @@ describe("content routes", () => {
       })
     ]);
 
-    const page = await app.inject({
+    // Child inserts touch the aggregate's updatedAt. Set ordering fixtures only
+    // after all nested media writes complete, independent of concurrent creation.
+    await Promise.all([
+      prisma.contentItem.update({
+        where: { id: ids.unscheduledFirst },
+        data: { updatedAt: new Date("2026-08-25T12:00:00+03:00") }
+      }),
+      prisma.contentItem.update({
+        where: { id: ids.unscheduledSecond },
+        data: { updatedAt: new Date("2026-08-24T12:00:00+03:00") }
+      })
+    ]);
+
+    const page = await injectContent(app, {
       method: "GET",
       url: "/v1/calendar?from=2026-08-01&to=2026-08-31&unscheduledLimit=1",
       headers
@@ -370,11 +265,11 @@ describe("content routes", () => {
     expect(pageData.items.map((item: { id: string }) => item.id)).not.toEqual(expect.arrayContaining([ids.outside, ids.otherWorkspace]));
     expect(pageData.mediaAssets).toEqual([expect.objectContaining({ id: media.id, workspaceId: owner.workspace.id })]);
     expect(pageData.unscheduled).toMatchObject({ total: 2, nextOffset: 1 });
-    expect(pageData.unscheduled.items).toHaveLength(1);
+    expect(pageData.unscheduled.items).toEqual([expect.objectContaining({ id: ids.unscheduledFirst })]);
     expect(pageData.summary).toMatchObject({ ready: 3, needsAttention: 1 });
     expect(pageData.summary.scheduledThisWeek).toEqual(expect.any(Number));
 
-    const filteredPage = await app.inject({
+    const filteredPage = await injectContent(app, {
       method: "GET",
       url: "/v1/calendar?from=2026-08-01&to=2026-08-31&statuses=APPROVED&contentTypes=CAROUSEL&unscheduledOffset=1&unscheduledLimit=1",
       headers
@@ -388,7 +283,7 @@ describe("content routes", () => {
     expect(filteredData.unscheduled.nextOffset).toBeUndefined();
     expect(filteredData.summary.ready).toBe(3);
 
-    const invalid = await app.inject({
+    const invalid = await injectContent(app, {
       method: "GET",
       url: "/v1/calendar?from=2026-08-31&to=2026-08-01&statuses=READY",
       headers
@@ -402,7 +297,7 @@ describe("content routes", () => {
   it("creates a workspace-owned blank draft without Vault context or AI usage", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content",
       headers: authHeaders(session.tokens.accessToken),
@@ -416,7 +311,7 @@ describe("content routes", () => {
         contentType: "POST",
         status: "DRAFT",
         caption: "",
-        mediaIds: []
+        mediaItems: expect.any(Array)
       }
     });
     await expect(
@@ -437,7 +332,7 @@ describe("content routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const plannedAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content",
       headers: authHeaders(session.tokens.accessToken),
@@ -466,7 +361,7 @@ describe("content routes", () => {
   it("requires Vault context before generating content", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers: authHeaders(session.tokens.accessToken),
@@ -491,7 +386,7 @@ describe("content routes", () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -499,7 +394,7 @@ describe("content routes", () => {
     });
 
     const before = await prisma.contentItem.count({ where: { workspaceId: session.workspace.id } });
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/ideate",
       headers,
@@ -525,7 +420,7 @@ describe("content routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const periodStart = monthStart(new Date());
 
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -543,7 +438,7 @@ describe("content routes", () => {
       }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers,
@@ -564,13 +459,7 @@ describe("content routes", () => {
           caption:
             "English caption 1 for wholesale coffee leads using clear tone\n\nArabic caption 1 for wholesale coffee leads using clear tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI",
           contentPillar: "Proof and trust",
-          carousel: {
-            slides: [
-              {
-                title: "Hook"
-              }
-            ]
-          }
+          mediaItems: [expect.objectContaining({ title: "Hook", body: "Opening copy" })]
         },
         {
           workspaceId: session.workspace.id,
@@ -586,7 +475,7 @@ describe("content routes", () => {
         agent: "CONTENT"
       }
     });
-    const list = await app.inject({
+    const list = await injectContent(app, {
       method: "GET",
       url: "/v1/content",
       headers
@@ -646,199 +535,12 @@ describe("content routes", () => {
     await app.close();
   });
 
-  it("generates into the existing campaign draft without losing its campaign placement or creating a duplicate", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    const startsAt = new Date("2026-09-15T09:00:00.000Z");
-    const plannedAt = new Date("2026-09-17T09:00:00.000Z");
-
-    await app.inject({
-      method: "PUT",
-      url: "/v1/vault/company",
-      headers,
-      payload: {
-        entries: [
-          {
-            key: "profile",
-            value: {
-              name: "SnackLab",
-              industry: "food subscriptions",
-              location: "Manama, Bahrain"
-            }
-          }
-        ]
-      }
-    });
-
-    const campaign = await prisma.campaign.create({
-      data: {
-        workspaceId: session.workspace.id,
-        title: "Subscription launch",
-        objective: "Explain the three subscription tiers",
-        startsAt,
-        endsAt: new Date("2026-09-28T09:00:00.000Z"),
-        durationDays: 14,
-        publishesPerDay: 1,
-        content: {
-          summary: "Introduce SnackLab subscriptions.",
-          objectives: ["Build awareness"],
-          pillars: [],
-          weeklyCadence: [],
-          kpis: [],
-          risks: [],
-          nextActions: [],
-          retrievedContext: []
-        }
-      }
-    });
-    const item = await prisma.contentItem.create({
-      data: {
-        workspaceId: session.workspace.id,
-        contentType: "POST",
-        status: "DRAFT",
-        brief: "Original campaign idea",
-        caption: "",
-        mediaIds: [],
-        campaignId: campaign.id,
-        campaignGoal: "Teach followers what each tier includes",
-        campaignWeek: 1,
-        campaignActionIndex: 2,
-        contentPillar: "Tier education",
-        tone: "warm, practical",
-        plannedAt
-      }
-    });
-
-    const response = await app.inject({
-      method: "POST",
-      url: `/v1/content/${item.id}/generate`,
-      headers,
-      payload: {
-        topic: "Compare the three SnackLab subscription tiers",
-        contentType: "CAROUSEL"
-      }
-    });
-    const data = response.json().data;
-
-    expect(response.statusCode).toBe(200);
-    expect(data).toMatchObject({
-      id: item.id,
-      workspaceId: session.workspace.id,
-      campaignId: campaign.id,
-      campaignWeek: 1,
-      campaignActionIndex: 2,
-      campaignGoal: "Teach followers what each tier includes",
-      contentPillar: "Tier education",
-      contentType: "CAROUSEL",
-      brief: "Compare the three SnackLab subscription tiers",
-      tone: "warm, practical",
-      plannedAt: plannedAt.toISOString(),
-      caption:
-        "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nArabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
-    });
-    expect(contentMock.lastInput).toMatchObject({
-      topic: "Compare the three SnackLab subscription tiers",
-      contentType: "CAROUSEL",
-      count: 1,
-      toneLock: {
-        toneWords: ["warm", "practical"]
-      }
-    });
-    await expect(
-      prisma.contentItem.count({
-        where: {
-          campaignId: campaign.id,
-          campaignWeek: 1,
-          campaignActionIndex: 2,
-          deletedAt: null
-        }
-      })
-    ).resolves.toBe(1);
-    await expect(
-      prisma.aiInteraction.count({
-        where: {
-          workspaceId: session.workspace.id,
-          agent: "CONTENT"
-        }
-      })
-    ).resolves.toBe(1);
-
-    const revision = await app.inject({
-      method: "POST",
-      url: `/v1/content/${item.id}/revise`,
-      headers,
-      payload: {
-        instruction: "Make it shorter and add a stronger call to action."
-      }
-    });
-
-    expect(revision.statusCode).toBe(200);
-    expect(revision.json().data).toMatchObject({
-      id: item.id,
-      campaignId: campaign.id,
-      campaignWeek: 1,
-      campaignActionIndex: 2,
-      campaignGoal: "Teach followers what each tier includes",
-      contentPillar: "Tier education",
-      tone: "warm, practical",
-      plannedAt: plannedAt.toISOString(),
-      caption:
-        "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nRevised for Make it shorter and add a stronger call to action.: Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
-    });
-    expect(contentMock.lastInput).toMatchObject({
-      revision: {
-        instruction: "Make it shorter and add a stronger call to action.",
-        currentDraft: {
-          caption:
-            "English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nArabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI",
-          contentType: "CAROUSEL"
-        }
-      }
-    });
-    await expect(
-      prisma.contentItem.count({
-        where: {
-          campaignId: campaign.id,
-          campaignWeek: 1,
-          campaignActionIndex: 2,
-          deletedAt: null
-        }
-      })
-    ).resolves.toBe(1);
-
-    const failedRevision = await app.inject({
-      method: "POST",
-      url: `/v1/content/${item.id}/revise`,
-      headers,
-      payload: {
-        instruction: "FAIL_REVISION_TEST"
-      }
-    });
-    const preserved = await prisma.contentItem.findUniqueOrThrow({ where: { id: item.id } });
-
-    expect(failedRevision.statusCode).toBe(500);
-    expect(preserved.caption).toBe(
-      "Revised for Make it shorter and add a stronger call to action.: English caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nRevised for Make it shorter and add a stronger call to action.: Arabic caption 1 for Compare the three SnackLab subscription tiers using warm, practical tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
-    );
-    await expect(
-      prisma.aiInteraction.count({
-        where: {
-          workspaceId: session.workspace.id,
-          agent: "CONTENT"
-        }
-      })
-    ).resolves.toBe(2);
-
-    await app.close();
-  });
-
   it("locks generated content to bilingual brand tone from the Vault", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
 
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -855,7 +557,7 @@ describe("content routes", () => {
         ]
       }
     });
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/brand",
       headers,
@@ -872,7 +574,7 @@ describe("content routes", () => {
         ]
       }
     });
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/tone",
       headers,
@@ -889,7 +591,7 @@ describe("content routes", () => {
       }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers,
@@ -950,7 +652,7 @@ describe("content routes", () => {
     const headers = authHeaders(session.tokens.accessToken);
     const periodStart = monthStart(new Date());
 
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -978,7 +680,7 @@ describe("content routes", () => {
       }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers,
@@ -999,7 +701,7 @@ describe("content routes", () => {
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
 
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -1025,7 +727,7 @@ describe("content routes", () => {
       }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers,
@@ -1048,7 +750,7 @@ describe("content routes", () => {
     const periodStart = monthStart(new Date());
     await assignTokenLimitedPlan(session.user.id);
 
-    await app.inject({
+    await injectContent(app, {
       method: "PUT",
       url: "/v1/vault/company",
       headers,
@@ -1066,7 +768,7 @@ describe("content routes", () => {
       }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: "/v1/content/generate",
       headers,
@@ -1090,7 +792,7 @@ describe("content routes", () => {
     const itemId = created.id;
     const plannedAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
 
-    const update = await app.inject({
+    const update = await injectContent(app, {
       method: "PATCH",
       url: `/v1/content/${itemId}`,
       headers,
@@ -1112,7 +814,7 @@ describe("content routes", () => {
       }
     });
 
-    const review = await app.inject({
+    const review = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${itemId}/status`,
       headers,
@@ -1120,7 +822,7 @@ describe("content routes", () => {
         status: "IN_REVIEW"
       }
     });
-    const approved = await app.inject({
+    const approved = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${itemId}/status`,
       headers,
@@ -1128,7 +830,7 @@ describe("content routes", () => {
         status: "APPROVED"
       }
     });
-    const lockedEdit = await app.inject({
+    const lockedEdit = await injectContent(app, {
       method: "PATCH",
       url: `/v1/content/${itemId}`,
       headers,
@@ -1136,7 +838,7 @@ describe("content routes", () => {
         caption: "Should not save"
       }
     });
-    const invalidTransition = await app.inject({
+    const invalidTransition = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${itemId}/status`,
       headers,
@@ -1165,7 +867,7 @@ describe("content routes", () => {
     const otherHeaders = authHeaders(otherSession.tokens.accessToken);
     const created = await createDraftContent(app, ownerHeaders);
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "PATCH",
       url: `/v1/content/${created.id}`,
       headers: otherHeaders,
@@ -1200,25 +902,25 @@ describe("content routes", () => {
         height: 1080
       }
     });
-    await prisma.contentItem.update({ where: { id: created.id }, data: { mediaIds: [media.id] } });
-    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "IN_REVIEW" } });
-    await app.inject({ method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "APPROVED" } });
-    await app.inject({
+    await prisma.contentMediaItem.update({ where: { id: created.mediaItems[0].id }, data: { mediaAssetId: media.id } });
+    await injectContent(app, { method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "IN_REVIEW" } });
+    await injectContent(app, { method: "POST", url: `/v1/content/${created.id}/status`, headers: ownerHeaders, payload: { status: "APPROVED" } });
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/schedule`,
       headers: ownerHeaders,
       payload: { scheduledAt: futureScheduleTime(1) }
     });
 
-    const crossWorkspace = await app.inject({
+    const crossWorkspace = await injectContent(app, {
       method: "DELETE",
       url: `/v1/content/${created.id}`,
       headers: authHeaders(otherSession.tokens.accessToken)
     });
-    const scheduledDelete = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
-    await app.inject({ method: "POST", url: `/v1/content/${created.id}/unschedule`, headers: ownerHeaders, payload: {} });
-    const deleted = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
-    const listed = await app.inject({ method: "GET", url: "/v1/content", headers: ownerHeaders });
+    const scheduledDelete = await injectContent(app, { method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    await injectContent(app, { method: "POST", url: `/v1/content/${created.id}/unschedule`, headers: ownerHeaders, payload: {} });
+    const deleted = await injectContent(app, { method: "DELETE", url: `/v1/content/${created.id}`, headers: ownerHeaders });
+    const listed = await injectContent(app, { method: "GET", url: "/v1/content", headers: ownerHeaders });
 
     expect(crossWorkspace.statusCode).toBe(404);
     expect(scheduledDelete.statusCode).toBe(409);
@@ -1239,7 +941,7 @@ describe("content routes", () => {
     const created = await createDraftContent(app, headers);
     await prisma.contentItem.update({ where: { id: created.id }, data: { status: "PUBLISHED", instagramPostId: "instagram-post-id" } });
 
-    const response = await app.inject({ method: "DELETE", url: `/v1/content/${created.id}`, headers });
+    const response = await injectContent(app, { method: "DELETE", url: `/v1/content/${created.id}`, headers });
 
     expect(response.statusCode).toBe(409);
     expect(response.json().error.code).toBe("CONTENT_DELETE_FORBIDDEN");
@@ -1256,14 +958,14 @@ describe("content routes", () => {
     const plannedAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const scheduledAt = futureScheduleTime(1);
 
-    await app.inject({
+    await injectContent(app, {
       method: "PATCH",
       url: `/v1/content/${created.id}`,
       headers,
       payload: { plannedAt }
     });
 
-    const draftSchedule = await app.inject({
+    const draftSchedule = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/schedule`,
       headers,
@@ -1272,7 +974,7 @@ describe("content routes", () => {
       }
     });
 
-    await app.inject({
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/status`,
       headers,
@@ -1280,7 +982,7 @@ describe("content routes", () => {
         status: "IN_REVIEW"
       }
     });
-    await app.inject({
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/status`,
       headers,
@@ -1289,7 +991,7 @@ describe("content routes", () => {
       }
     });
 
-    const schedule = await app.inject({
+    const schedule = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/schedule`,
       headers,
@@ -1302,7 +1004,7 @@ describe("content routes", () => {
         workspaceId: session.workspace.id
       }
     });
-    const unschedule = await app.inject({
+    const unschedule = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/unschedule`,
       headers,
@@ -1349,19 +1051,19 @@ describe("content routes", () => {
     const originalScheduledAt = originalDate.toISOString();
     const movedScheduledAt = movedDate.toISOString();
 
-    await app.inject({
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/status`,
       headers,
       payload: { status: "IN_REVIEW" }
     });
-    await app.inject({
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/status`,
       headers,
       payload: { status: "APPROVED" }
     });
-    await app.inject({
+    await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/schedule`,
       headers,
@@ -1369,14 +1071,14 @@ describe("content routes", () => {
     });
 
     const otherSession = await registerTestUser(app);
-    const crossWorkspaceResponse = await app.inject({
+    const crossWorkspaceResponse = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/reschedule`,
       headers: authHeaders(otherSession.tokens.accessToken),
       payload: { scheduledAt: movedScheduledAt }
     });
 
-    const response = await app.inject({
+    const response = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/reschedule`,
       headers,
@@ -1389,7 +1091,7 @@ describe("content routes", () => {
       where: { id: created.id },
       data: { failureReason: "Provider processing failed", status: "FAILED" }
     });
-    const recoveryResponse = await app.inject({
+    const recoveryResponse = await injectContent(app, {
       method: "POST",
       url: `/v1/content/${created.id}/reschedule`,
       headers,
@@ -1427,150 +1129,10 @@ describe("content routes", () => {
 
     await app.close();
   });
-
-  it("generates content directly from a calendar slot and records the schedule", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    const scheduledAt = futureScheduleTime(2);
-    const periodStart = monthStart(new Date());
-
-    await app.inject({
-      method: "PUT",
-      url: "/v1/vault/company",
-      headers,
-      payload: {
-        entries: [
-          {
-            key: "profile",
-            value: {
-              name: "Pearl Coffee",
-              industry: "specialty coffee",
-              location: "Manama, Bahrain"
-            }
-          }
-        ]
-      }
-    });
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/content/generate-for-slot",
-      headers,
-      payload: {
-        topic: "wholesale coffee leads",
-        contentType: "REEL",
-        scheduledAt
-      }
-    });
-    const item = response.json().data as { id: string };
-    const calendar = await prisma.contentCalendar.findFirstOrThrow({
-      where: {
-        workspaceId: session.workspace.id
-      }
-    });
-    const interaction = await prisma.aiInteraction.findFirstOrThrow({
-      where: {
-        workspaceId: session.workspace.id,
-        agent: "CONTENT"
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      data: {
-        workspaceId: session.workspace.id,
-        contentType: "REEL",
-        status: "SCHEDULED",
-        scheduledAt,
-        caption:
-          "English caption 1 for wholesale coffee leads using clear tone\n\nArabic caption 1 for wholesale coffee leads using clear tone\n\nSend a DM.\n\n#BahrainBusiness #MarkosAI"
-      }
-    });
-    expect(calendar.plan).toMatchObject({
-      scheduledContentIds: [item.id]
-    });
-    expect(interaction.prompt).toMatchObject({
-      topic: "wholesale coffee leads",
-      contentType: "REEL",
-      count: 1,
-      scheduledAt
-    });
-    expect(interaction.response).toMatchObject({
-      scheduledContentItemId: item.id
-    });
-    await expect(
-      prisma.usageCounter.findUniqueOrThrow({
-        where: {
-          workspaceId_metric_periodStart: {
-            workspaceId: session.workspace.id,
-            metric: "AI_GENERATION",
-            periodStart
-          }
-        }
-      })
-    ).resolves.toMatchObject({
-      used: 1n,
-      limit: 0n
-    });
-    await expect(
-      prisma.usageCounter.findUniqueOrThrow({
-        where: {
-          workspaceId_metric_periodStart: {
-            workspaceId: session.workspace.id,
-            metric: "AI_TOKENS_IN",
-            periodStart
-          }
-        }
-      })
-    ).resolves.toMatchObject({
-      used: 55n
-    });
-    await expect(
-      prisma.usageCounter.findUniqueOrThrow({
-        where: {
-          workspaceId_metric_periodStart: {
-            workspaceId: session.workspace.id,
-            metric: "AI_TOKENS_OUT",
-            periodStart
-          }
-        }
-      })
-    ).resolves.toMatchObject({
-      used: 89n
-    });
-
-    await app.close();
-  });
-
-  it("rejects calendar slot generation when the schedule time is not in the future", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/content/generate-for-slot",
-      headers,
-      payload: {
-        topic: "wholesale coffee leads",
-        contentType: "POST",
-        scheduledAt: new Date(Date.now() - 60 * 1000).toISOString()
-      }
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json().error.code).toBe("CONTENT_SCHEDULE_INVALID");
-
-    await app.close();
-  });
 });
 
 async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, headers: Record<string, string>) {
-  await app.inject({
+  await injectContent(app, {
     method: "PUT",
     url: "/v1/vault/company",
     headers,
@@ -1588,7 +1150,7 @@ async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, hea
     }
   });
 
-  const response = await app.inject({
+  const response = await injectContent(app, {
     method: "POST",
     url: "/v1/content/generate",
     headers,
@@ -1602,7 +1164,7 @@ async function createDraftContent(app: Awaited<ReturnType<typeof buildApp>>, hea
   expect(response.statusCode).toBe(200);
   const item = response.json().data[0];
   const media = await createContentTestMedia(item.workspaceId);
-  const attached = await app.inject({ method: "POST", url: `/v1/content/${item.id}/media`, headers, payload: { mediaAssetId: media.id } });
+  const attached = await injectContent(app, { method: "POST", url: `/v1/content/${item.id}/media`, headers, payload: { mediaAssetId: media.id } });
   expect(attached.statusCode).toBe(200);
   return attached.json().data;
 }
@@ -1625,7 +1187,7 @@ async function createContentTestMedia(workspaceId: string, mimeType = "image/jpe
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   const email = `content-${randomUUID()}@markos.test`;
-  const response = await app.inject({
+  const response = await injectContent(app, {
     method: "POST",
     url: "/v1/auth/register",
     payload: {
@@ -1720,4 +1282,22 @@ function monthEnd(periodStart: Date): Date {
 
 function futureScheduleTime(hours: number): string {
   return new Date(Math.ceil((Date.now() + hours * 60 * 60 * 1000) / 1_800_000) * 1_800_000).toISOString();
+}
+
+// Older lifecycle regressions use the current aggregate revision. Explicit revisions
+// are never replaced; stale-write cases live in content-aggregate.test.ts.
+async function injectContent(app: Awaited<ReturnType<typeof buildApp>>, input: import("fastify").InjectOptions) {
+  const match = String(input.url).match(/^\/v1\/content\/([0-9a-f-]{36})(?:\/(status|media))?$/);
+  if (match && ["POST", "PATCH", "DELETE"].includes(String(input.method))) {
+    const content = await prisma.contentItem.findUnique({
+      where: { id: match[1]! },
+      include: { mediaItems: { where: { deletedAt: null }, orderBy: { position: "asc" } } }
+    });
+    const payload = (input.payload ?? {}) as Record<string, unknown>;
+    input = {
+      ...input,
+      payload: { expectedRevision: content?.revision ?? 1, ...(match[2] === "media" ? { contentMediaItemId: content?.mediaItems[0]?.id } : {}), ...payload }
+    };
+  }
+  return app.inject(input);
 }

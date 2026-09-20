@@ -2,7 +2,8 @@ import { Prisma, type CampaignStatus } from "@prisma/client";
 import type { CampaignPlan, CampaignPostCounts, CampaignRecord, CampaignReviewRecord, CampaignSummaryPage, ContentRecord } from "@markos/shared-types";
 import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
-import { toContentRecord } from "../content/content-service";
+import { getContentToneLock } from "../content/content-service";
+import { contentAggregateInclude, createContentAggregate, getContentAggregate, loadContentAggregate, toContentRecord } from "../content/content-aggregate";
 import { generateCampaignPlan } from "../ai/campaign-client";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -131,7 +132,7 @@ export async function listCampaignSummaries(workspaceId: string, input: { limit?
 export async function readCampaignReview(workspaceId: string, campaignId: string): Promise<CampaignReviewRecord> {
   const campaign = toCampaignRecord(await findWorkspaceCampaign(workspaceId, campaignId));
   const items = await listCampaignDrafts(workspaceId, campaignId);
-  const mediaIds = Array.from(new Set(items.flatMap((item) => item.mediaIds)));
+  const mediaIds = Array.from(new Set(items.flatMap((item) => item.mediaItems.flatMap((media) => (media.mediaAssetId ? [media.mediaAssetId] : [])))));
   const media = mediaIds.length ? await prisma.mediaAsset.findMany({ where: { workspaceId, id: { in: mediaIds }, deletedAt: null } }) : [];
   return { campaign, items, mediaAssets: media.map(toMediaAssetRecord) };
 }
@@ -153,18 +154,17 @@ export async function listCampaigns(workspaceId: string): Promise<CampaignRecord
 
 export async function listCampaignDrafts(workspaceId: string, campaignId: string): Promise<ContentRecord[]> {
   await findWorkspaceCampaign(workspaceId, campaignId);
-  const rows = await prisma.contentItem.findMany({
-    where: {
-      workspaceId,
-      campaignId,
-      deletedAt: null,
-      campaignWeek: { not: null },
-      campaignActionIndex: { not: null }
+  return prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.contentItem.findMany({
+        where: { workspaceId, campaignId, deletedAt: null, campaignWeek: { not: null }, campaignActionIndex: { not: null } },
+        include: contentAggregateInclude,
+        orderBy: [{ campaignWeek: "asc" }, { campaignActionIndex: "asc" }]
+      });
+      return rows.map(toContentRecord);
     },
-    orderBy: [{ campaignWeek: "asc" }, { campaignActionIndex: "asc" }]
-  });
-
-  return rows.map(toContentRecord);
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead }
+  );
 }
 
 export async function approveCampaignSuggestion(workspaceId: string, campaignId: string, input: ApproveCampaignSuggestionInput): Promise<ContentRecord> {
@@ -182,85 +182,37 @@ export async function approveCampaignSuggestion(workspaceId: string, campaignId:
   const plannedAt = campaignDayDate(campaign.startsAt, locatedSuggestion.day);
   const tone = await campaignToneSummary(workspaceId);
 
-  const existing = await prisma.contentItem.findUnique({
-    where: {
-      campaignId_campaignWeek_campaignActionIndex: {
-        campaignId,
-        campaignWeek: input.week,
-        campaignActionIndex: input.actionIndex
-      }
-    }
-  });
-
-  if (existing?.deletedAt === null) {
-    if (existing.plannedAt === null || (existing.tone === null && tone !== undefined)) {
-      const placed = await prisma.contentItem.update({
-        where: { id: existing.id },
-        data: {
-          platform: "INSTAGRAM",
-          ...(existing.plannedAt === null ? { plannedAt } : {}),
-          ...(existing.tone === null && tone !== undefined ? { tone } : {})
-        }
-      });
-      return toContentRecord(placed);
-    }
-    return toContentRecord(existing);
-  }
-
-  if (existing) {
-    const restored = await prisma.contentItem.update({
-      where: { id: existing.id },
-      data: {
-        brief,
-        platform: "INSTAGRAM",
-        campaignGoal: suggestion.goal,
-        contentPillar: suggestion.contentPillar,
-        ...(tone === undefined ? {} : { tone }),
-        contentType: suggestion.contentType,
-        status: "DRAFT",
-        plannedAt,
-        scheduledAt: null,
-        publishedAt: null,
-        failureReason: null,
-        deletedAt: null
-      }
-    });
-    return toContentRecord(restored);
-  }
-
+  const slot = { campaignId, campaignWeek: input.week, campaignActionIndex: input.actionIndex };
   try {
-    const created = await prisma.contentItem.create({
-      data: {
-        workspaceId,
-        platform: "INSTAGRAM",
-        contentType: suggestion.contentType,
-        status: "DRAFT",
-        brief,
-        mediaIds: [],
-        campaignId,
-        campaignGoal: suggestion.goal,
-        contentPillar: suggestion.contentPillar,
-        campaignWeek: input.week,
-        campaignActionIndex: input.actionIndex,
-        ...(tone === undefined ? {} : { tone }),
-        plannedAt
+    return await prisma.$transaction(async (tx) => {
+      const existing = await tx.contentItem.findUnique({ where: { campaignId_campaignWeek_campaignActionIndex: slot } });
+      if (existing) {
+        // Repeated approval must not rewrite an existing authored draft.
+        await tx.$queryRaw`SELECT "id" FROM "content_items" WHERE "id" = ${existing.id}::uuid AND "workspaceId" = ${workspaceId}::uuid FOR UPDATE`;
+        const latest = await tx.contentItem.findFirstOrThrow({ where: { id: existing.id, workspaceId } });
+        if (latest.deletedAt) await tx.contentItem.update({ where: { id: latest.id }, data: { deletedAt: null, status: "DRAFT" } });
+        return toContentRecord(await loadContentAggregate(tx, workspaceId, latest.id));
       }
+      return createContentAggregate(
+        tx,
+        workspaceId,
+        {
+          platform: "INSTAGRAM",
+          contentType: suggestion.contentType,
+          brief,
+          campaignGoal: suggestion.goal,
+          contentPillar: suggestion.contentPillar,
+          tone,
+          plannedAt: plannedAt.toISOString()
+        },
+        { id: campaignId, week: input.week, actionIndex: input.actionIndex }
+      );
     });
-    return toContentRecord(created);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const concurrent = await prisma.contentItem.findUnique({
-        where: {
-          campaignId_campaignWeek_campaignActionIndex: {
-            campaignId,
-            campaignWeek: input.week,
-            campaignActionIndex: input.actionIndex
-          }
-        }
-      });
-      if (concurrent) return toContentRecord(concurrent);
+      const concurrent = await prisma.contentItem.findUnique({ where: { campaignId_campaignWeek_campaignActionIndex: slot } });
+      if (concurrent && concurrent.workspaceId === workspaceId && !concurrent.deletedAt) return getContentAggregate(workspaceId, concurrent.id);
     }
-
     throw error;
   }
 }
@@ -336,10 +288,13 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
   }
 
   const query = input.objective ?? (input.locale === "ar" ? "حملة تسويق إنستغرام للشركات الصغيرة في البحرين" : "Instagram marketing campaign Bahrain SMB");
-  const context = await searchVaultContext(workspaceId, {
+  const retrieved = await searchVaultContext(workspaceId, {
     query,
     topK: 10
   });
+  const currentMarketing = (await getContentToneLock(workspaceId)).context;
+  const currentIds = new Set(currentMarketing.map((chunk) => chunk.id));
+  const context = [...currentMarketing, ...retrieved.filter((chunk) => !currentIds.has(chunk.id))].slice(0, 10);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     campaignAgentName,

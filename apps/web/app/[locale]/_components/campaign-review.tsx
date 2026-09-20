@@ -699,7 +699,11 @@ function PostDetail({
   onCreate: () => void;
   onOpen: (item: ContentRecord) => void;
 }) {
-  const assets = item?.mediaIds.map((id) => media.find((asset) => asset.id === id)).filter((asset): asset is MediaAssetRecord => Boolean(asset)) ?? [];
+  const assets =
+    item?.mediaItems
+      .flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []))
+      .map((id) => media.find((asset) => asset.id === id))
+      .filter((asset): asset is MediaAssetRecord => Boolean(asset)) ?? [];
   const Icon = formats[item?.contentType ?? post.contentType];
   return (
     <article className={styles.postDetail}>
@@ -762,7 +766,11 @@ function PostDetail({
           ) : (
             <div className={styles.noMedia}>
               <ImageIcon aria-hidden="true" size={36} />
-              <p>{item?.mediaIds.length ? label(locale, "mediaFailed") : label(locale, "noMedia")}</p>
+              <p>
+                {item?.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : [])).length
+                  ? label(locale, "mediaFailed")
+                  : label(locale, "noMedia")}
+              </p>
             </div>
           )}
         </div>

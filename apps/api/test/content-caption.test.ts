@@ -19,7 +19,7 @@ describe("one publication caption", () => {
   it.each(captions)("preserves complete copy through validation and publisher: %j", (caption) => {
     expect(contentCaptionSchema.parse(caption)).toBe(caption);
     expect(createContentSchema.parse({ caption }).caption).toBe(caption);
-    expect(updateContentSchema.parse({ caption }).caption).toBe(caption);
+    expect(updateContentSchema.parse({ caption, expectedRevision: 1 }).caption).toBe(caption);
     expect(buildCaption({ caption })).toBe(caption);
   });
 
@@ -38,7 +38,7 @@ describe("one publication caption", () => {
     for (const key of ["captionEn", "captionAr", "callToAction", "hashtags"]) {
       const payload = { caption: "Keep this", [key]: key === "hashtags" ? ["#Old"] : "Old split copy" };
       expect(createContentSchema.safeParse(payload).success).toBe(false);
-      expect(updateContentSchema.safeParse(payload).success).toBe(false);
+      expect(updateContentSchema.safeParse({ ...payload, expectedRevision: 1 }).success).toBe(false);
     }
   });
 

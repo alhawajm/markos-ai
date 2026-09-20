@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     ai_video_provider: Literal["disabled", "openai"] = "disabled"
     ai_campaign_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
-    ai_document_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    # Leave headroom within the API's 130-second HTTP deadline for uploads and responses.
+    ai_document_timeout_seconds: float = Field(default=120, gt=0, le=120)
     ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_image_timeout_seconds: float = Field(default=120, gt=0, le=180)
     ai_video_timeout_seconds: float = Field(default=120, gt=0, le=180)

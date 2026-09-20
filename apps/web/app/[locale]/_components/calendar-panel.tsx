@@ -1114,7 +1114,11 @@ function CalendarRecordFocus({
   todayKey: string;
 }) {
   const isPresent = useIsPresent();
-  const media = record.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null;
+  const media =
+    record.mediaItems
+      .flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []))
+      .map((id) => mediaById.get(id))
+      .find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null;
   const temporalContext = calendarPlacementInstant(record) ?? record.updatedAt;
 
   return (
@@ -1177,7 +1181,11 @@ function CalendarRecordFocus({
 
         <div className="mt-5 grid max-h-[34rem] gap-2 overflow-y-auto pe-1 lg:min-h-0 lg:flex-1">
           {records.map((dayRecord) => {
-            const dayMedia = dayRecord.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null;
+            const dayMedia =
+              dayRecord.mediaItems
+                .flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []))
+                .map((id) => mediaById.get(id))
+                .find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null;
             const selected = dayRecord.id === record.id;
 
             return (
@@ -1344,7 +1352,7 @@ function CalendarDetails({
           {record.contentPillar ? <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">{record.contentPillar}</span> : null}
           {record.campaignId ? <span className="rounded-full bg-[var(--sunlit-aqua-soft)] px-3 py-1.5">{campaignOriginLabel(record, locale)}</span> : null}
           <span className="rounded-full bg-[var(--sunlit-paper)] px-3 py-1.5">
-            {record.mediaIds.length} {locale === "ar" ? "وسائط" : "media"}
+            {record.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : [])).length} {locale === "ar" ? "وسائط" : "media"}
           </span>
         </div>
 
@@ -1492,7 +1500,12 @@ function CalendarDayView({
             <CalendarDayRecordButton
               key={record.id}
               locale={locale}
-              media={record.mediaIds.map((id) => mediaById.get(id)).find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null}
+              media={
+                record.mediaItems
+                  .flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []))
+                  .map((id) => mediaById.get(id))
+                  .find((asset): asset is MediaAssetRecord => asset !== undefined) ?? null
+              }
               onClick={(origin) => onChooseRecord(record, origin)}
               record={record}
               copy={copy}

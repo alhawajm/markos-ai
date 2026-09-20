@@ -43,8 +43,9 @@ class OpenAIOfferingDocumentProvider:
             OpenAIClient,
             AsyncOpenAI(
                 api_key=settings.openai_api_key.get_secret_value(),
-                max_retries=settings.openai_max_retries,
-                timeout=settings.openai_timeout_seconds,
+                # One attempt owns the document budget; the UI can retry retained uploads.
+                max_retries=0,
+                timeout=settings.ai_document_timeout_seconds,
             ),
         )
 

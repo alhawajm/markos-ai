@@ -55,7 +55,7 @@ function summary(populated: boolean): AnalyticsSummary {
   };
 }
 
-async function fixture(page: Page, populated = false) {
+async function fixture(page: Page, populated = false, fullTrend = false) {
   const requests: string[] = [];
   const unknown: string[] = [];
   const errors: string[] = [];
@@ -72,6 +72,7 @@ async function fixture(page: Page, populated = false) {
     let data: unknown;
     if (url.pathname === "/v1/auth/refresh") data = session;
     else if (url.pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
+    else if (url.pathname === "/v1/workspace/instagram") data = { status: "CONNECTED", username: "the.snacklab" };
     else if (url.pathname === "/v1/vault/score") data = { score: 100, completedSections: [], requiredSections: [], missingSections: [], entryCount: 8 };
     else if (url.pathname === "/v1/notifications" || url.pathname === "/v1/publishing/queue") data = [];
     else if (url.pathname === "/v1/content")
@@ -82,13 +83,20 @@ async function fixture(page: Page, populated = false) {
         contentType: "POST",
         caption: index ? "Bakery launch" : "Orange-cardamom launch",
         status,
-        mediaIds: [],
+        mediaItems: [],
+        reelScript: null,
         revision: 1,
         createdAt: "2026-09-09T09:00:00Z",
         updatedAt: "2026-09-09T09:00:00Z"
       }));
-    else if (url.pathname === "/v1/analytics") data = summary(populated);
-    else if (url.pathname === "/v1/analytics/monthly-pdf")
+    else if (url.pathname === "/v1/analytics") {
+      const result = summary(populated);
+      if (fullTrend) {
+        result.days = Number(url.searchParams.get("days") ?? 7);
+        result.daily = Array.from({ length: result.days }, (_, i) => ({ dataDate: `2026-08-${String(i + 1).padStart(2, "0")}`, totals }));
+      }
+      data = result;
+    } else if (url.pathname === "/v1/analytics/monthly-pdf")
       return route.fulfill({ status: 200, contentType: "application/pdf", body: "%PDF-1.4\nUI fixture report\n%%EOF" });
     else {
       unknown.push(url.pathname);
@@ -166,6 +174,34 @@ describe("refined overview and Insights", () => {
       expect(observed.errors).toEqual([]);
     } finally {
       await context.close();
+    }
+  });
+
+  it("opens the month at the latest date in English and Arabic without fighting manual scrolling", async () => {
+    for (const locale of ["en", "ar"]) {
+      const context = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+      const page = await context.newPage();
+      try {
+        await fixture(page, true, true);
+        await page.goto(`${baseUrl}/${locale}/app/analytics`, { waitUntil: "networkidle" });
+        await page.getByRole("button", { name: locale === "ar" ? "30 يوماً" : "30 days", exact: true }).click();
+        const viewport = page.locator("[data-trend-viewport]");
+        await expect.poll(() => viewport.getByRole("listitem").count()).toBe(30);
+        await expect.poll(() => viewport.evaluate((el) => Math.abs(el.scrollLeft) >= el.scrollWidth - el.clientWidth - 2)).toBe(true);
+        await viewport.evaluate((el) => {
+          el.scrollLeft = 0;
+        });
+        // An unrelated render (export notification) must not reset the chart.
+        await page.getByRole("button", { name: locale === "ar" ? "تصدير التقرير الشهري" : "Export monthly report", exact: true }).click();
+        await expect.poll(() => viewport.evaluate((el) => el.scrollLeft)).toBe(0);
+        await page.getByRole("button", { name: locale === "ar" ? "7 أيام" : "7 days", exact: true }).click();
+        await expect.poll(() => viewport.getByRole("listitem").count()).toBe(7);
+        await page.getByRole("button", { name: locale === "ar" ? "30 يوماً" : "30 days", exact: true }).click();
+        await expect.poll(() => viewport.getByRole("listitem").count()).toBe(30);
+        await expect.poll(() => viewport.evaluate((el) => Math.abs(el.scrollLeft) >= el.scrollWidth - el.clientWidth - 2)).toBe(true);
+      } finally {
+        await context.close();
+      }
     }
   });
 

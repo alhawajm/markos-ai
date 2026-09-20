@@ -1,3 +1,4 @@
+import { contentAggregateInclude } from "../content/content-aggregate";
 import type { Prisma } from "@prisma/client";
 import type { WorkspaceDataErasureResult, WorkspaceDataExport } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
@@ -75,7 +76,7 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     prisma.onboardingDocumentFile.findMany({ where: { workspaceId } }),
     prisma.contentCalendar.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.campaign.findMany({ where: { deletedAt: null, workspaceId } }),
-    prisma.contentItem.findMany({ where: { deletedAt: null, workspaceId } }),
+    prisma.contentItem.findMany({ where: { deletedAt: null, workspaceId }, include: contentAggregateInclude }),
     prisma.mediaAsset.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.instagramAnalytics.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.aiInteraction.findMany({ where: { deletedAt: null, workspaceId } }),
@@ -179,6 +180,9 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
     counts.contentCalendars = (await tx.contentCalendar.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.campaigns = (await tx.campaign.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentConversations = (await tx.contentConversation.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.contentMediaItems = (await tx.contentMediaItem.updateMany({ where: { workspaceId: input.workspaceId, deletedAt: null }, data: markDeleted })).count;
+    counts.contentReelScripts = (await tx.contentReelScript.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.mediaGenerationJobs = (await tx.mediaGenerationJob.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.contentItems = (await tx.contentItem.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.mediaAssets = (await tx.mediaAsset.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.instagramAnalytics = (

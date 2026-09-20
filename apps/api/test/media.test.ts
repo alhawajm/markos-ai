@@ -1,6 +1,7 @@
+import { createContentAggregate } from "../src/content/content-aggregate";
+import { AiServiceRequestError } from "../src/ai/request";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AiServiceRequestError } from "../src/ai/request";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { instagramJpegFixture } from "./helpers/jpeg";
@@ -41,127 +42,7 @@ afterEach(() => {
 });
 
 describe("media routes", () => {
-  it("limits single-format attachments and rejects incompatible media without replacing the current file", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      const jpeg = await createIntegrityAsset(session.workspace.id);
-      const otherJpeg = await createIntegrityAsset(session.workspace.id);
-      const video = await createIntegrityAsset(session.workspace.id, "video/mp4");
-      for (const contentType of ["POST", "REEL", "STORY"] as const) {
-        const content = await createDraftContent(session.workspace.id);
-        await prisma.contentItem.update({ where: { id: content.id }, data: { contentType } });
-        const firstAsset = contentType === "REEL" ? video : jpeg;
-        const attach = (mediaAssetId: string) => app.inject({ method: "POST", url: `/v1/content/${content.id}/media`, headers, payload: { mediaAssetId } });
-        if (contentType !== "STORY") {
-          const incompatible = await attach(contentType === "REEL" ? jpeg.id : video.id);
-          expect(incompatible.statusCode).toBe(409);
-          expect(incompatible.json().error.code).toBe("CONTENT_MEDIA_TYPE_INCOMPATIBLE");
-        }
-        expect((await attach(firstAsset.id)).statusCode).toBe(200);
-        expect((await attach(firstAsset.id)).statusCode).toBe(200);
-        const blocked = await attach(contentType === "REEL" ? jpeg.id : otherJpeg.id);
-        expect(blocked.statusCode).toBe(409);
-        expect(blocked.json().error.code).toBe("CONTENT_MEDIA_SINGLE_ITEM_LIMIT");
-        expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).mediaIds).toEqual([firstAsset.id]);
-      }
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("serializes competing attachments without exceeding capacity or losing carousel images", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    try {
-      const media = await Promise.all([createIntegrityAsset(session.workspace.id), createIntegrityAsset(session.workspace.id)]);
-      for (const contentType of ["POST", "CAROUSEL"] as const) {
-        const content = await createDraftContent(session.workspace.id);
-        await prisma.contentItem.update({ where: { id: content.id }, data: { contentType } });
-        const responses = await Promise.all(
-          media.map((asset) => app.inject({ method: "POST", url: `/v1/content/${content.id}/media`, headers, payload: { mediaAssetId: asset.id } }))
-        );
-        expect(responses.map((response) => response.statusCode).sort()).toEqual(contentType === "POST" ? [200, 409] : [200, 200]);
-        const saved = await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } });
-        expect(saved.mediaIds).toHaveLength(contentType === "POST" ? 1 : 2);
-        if (contentType === "CAROUSEL") expect(saved.mediaIds).toEqual(expect.arrayContaining(media.map((asset) => asset.id)));
-      }
-      const carousel = await createDraftContent(session.workspace.id);
-      const ten = await Promise.all(Array.from({ length: 10 }, () => createIntegrityAsset(session.workspace.id)));
-      await prisma.contentItem.update({ where: { id: carousel.id }, data: { contentType: "CAROUSEL", mediaIds: ten.map((asset) => asset.id) } });
-      const extra = await app.inject({ method: "POST", url: `/v1/content/${carousel.id}/media`, headers, payload: { mediaAssetId: media[0]!.id } });
-      expect(extra.statusCode).toBe(409);
-      expect(extra.json().error.code).toBe("CONTENT_MEDIA_CAROUSEL_LIMIT");
-      expect((await prisma.contentItem.findUniqueOrThrow({ where: { id: carousel.id } })).mediaIds).toEqual(ten.map((asset) => asset.id));
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("blocks full image generation before calling the provider", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const content = await createDraftContent(session.workspace.id);
-    const asset = await createIntegrityAsset(session.workspace.id);
-    await prisma.contentItem.update({ where: { id: content.id }, data: { mediaIds: [asset.id] } });
-    const calls = imageMock.calls;
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: `/v1/content/${content.id}/generate-image`,
-        headers: authHeaders(session.tokens.accessToken),
-        payload: { aspectRatio: "4:5", prompt: "A new photo" }
-      });
-      expect(response.statusCode).toBe(409);
-      expect(response.json().error.code).toBe("CONTENT_MEDIA_SINGLE_ITEM_LIMIT");
-      expect(imageMock.calls).toBe(calls);
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("retains a completed image in the library when a newer attachment fills the post", async () => {
-    const app = await buildApp();
-    const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-    const content = await createDraftContent(session.workspace.id);
-    const ownerAsset = await createIntegrityAsset(session.workspace.id);
-    let release = () => {};
-    imageMock.hold = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const calls = imageMock.calls;
-    const pending = app
-      .inject({ method: "POST", url: `/v1/content/${content.id}/generate-image`, headers, payload: { aspectRatio: "4:5", prompt: "A held photo" } })
-      .then((response) => response);
-    try {
-      await vi.waitFor(() => expect(imageMock.calls).toBe(calls + 1));
-      expect((await app.inject({ method: "POST", url: `/v1/content/${content.id}/media`, headers, payload: { mediaAssetId: ownerAsset.id } })).statusCode).toBe(
-        200
-      );
-      expect(
-        (await app.inject({ method: "PATCH", url: `/v1/content/${content.id}`, headers, payload: { caption: "Keep the newer owner caption." } })).statusCode
-      ).toBe(200);
-      release();
-      const response = await pending;
-      expect(response.statusCode).toBe(409);
-      expect(response.json().error.code).toBe("CONTENT_MEDIA_SINGLE_ITEM_LIMIT");
-      const detail = response.json().error.details[0];
-      expect(detail).toMatchObject({ savedToLibrary: true });
-      const generated = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: detail.mediaAssetId } });
-      expect(generated).toMatchObject({ workspaceId: session.workspace.id, mimeType: "image/jpeg", deletedAt: null });
-      expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).toMatchObject({
-        caption: "Keep the newer owner caption.",
-        mediaIds: [ownerAsset.id]
-      });
-    } finally {
-      release();
-      await pending;
-      await app.close();
-    }
-  });
+  // Relational attachment, concurrency and replacement coverage lives in media-items.test.ts.
   it("registers public media and attaches it to content", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
@@ -188,6 +69,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         mediaAssetId: mediaId
       }
     });
@@ -206,7 +89,7 @@ describe("media routes", () => {
       }
     });
     expect(attached.statusCode).toBe(200);
-    expect(attached.json().data.mediaIds).toEqual([mediaId]);
+    expect(attached.json().data.mediaItems.map((item: { mediaAssetId: string }) => item.mediaAssetId)).toEqual([mediaId]);
     expect(list.statusCode).toBe(200);
     expect(list.json().data).toEqual(
       expect.arrayContaining([
@@ -407,7 +290,7 @@ describe("media routes", () => {
       method: "POST",
       url: `/v1/content/${content.id}/media`,
       headers,
-      payload: { mediaAssetId: mediaId }
+      payload: { contentMediaItemId: content.mediaItems[0]!.id, expectedRevision: content.revision, mediaAssetId: mediaId }
     });
     const blocked = await app.inject({ method: "DELETE", url: `/v1/media/${mediaId}`, headers });
 
@@ -429,6 +312,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/generate-image`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         aspectRatio: "4:5",
         prompt: "Premium Bahrain coffee product photo"
       }
@@ -450,7 +335,7 @@ describe("media routes", () => {
     expect(body).toMatchObject({
       contentItem: {
         id: content.id,
-        mediaIds: [assetId]
+        mediaItems: [expect.objectContaining({ id: content.mediaItems[0]!.id, mediaAssetId: assetId })]
       },
       mediaAsset: {
         id: assetId,
@@ -549,6 +434,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/generate-image`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         aspectRatio: "4:5",
         prompt: "Premium Bahrain coffee product photo"
       }
@@ -593,6 +480,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers: ownerHeaders,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         mediaAssetId: foreignMedia.id
       }
     });
@@ -628,6 +517,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/media`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: (await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } })).revision,
         mediaAssetId: media.id
       }
     });
@@ -762,6 +653,8 @@ describe("media routes", () => {
       url: `/v1/content/${content.id}/generate-image`,
       headers,
       payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: content.revision,
         aspectRatio: "4:5",
         prompt: "A Bahrain coffee product image"
       }
@@ -839,32 +732,9 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
 }
 
 async function createDraftContent(workspaceId: string) {
-  return prisma.contentItem.create({
-    data: {
-      workspaceId,
-      contentType: "POST",
-      status: "DRAFT",
-      caption: "Draft with media\n\n#Bahrain",
-      mediaIds: []
-    }
-  });
-}
-
-async function createIntegrityAsset(workspaceId: string, mimeType = "image/jpeg") {
-  const suffix = mimeType === "video/mp4" ? "mp4" : "jpg";
-  return prisma.mediaAsset.create({
-    data: {
-      workspaceId,
-      filename: `integrity-${randomUUID()}.${suffix}`,
-      s3Key: `external:${randomUUID()}`,
-      mimeType,
-      type: mimeType === "video/mp4" ? "VIDEO" : "IMAGE",
-      cdnUrl: `https://cdn.example.com/${randomUUID()}.${suffix}`,
-      sizeBytes: 1000,
-      width: 1080,
-      height: 1350
-    }
-  });
+  return prisma.$transaction((tx) =>
+    createContentAggregate(tx, workspaceId, { platform: "INSTAGRAM", contentType: "POST", caption: "Draft with media\n\n#Bahrain" })
+  );
 }
 
 function authHeaders(accessToken: string): Record<string, string> {

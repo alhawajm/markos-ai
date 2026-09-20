@@ -693,3 +693,39 @@ Manual onboarding caches use a versioned user-and-workspace key. The previous br
 Email token links confirm the token owner and stay on a confirmation screen, without refreshing or navigating the browser's existing session. The signup waiting tab checks verification on return/focus and through an explicit Continue action; it verifies the expected account before selecting a destination. A missing original tab can recover through sign-in. Both login and the shared app shell use server-reported onboarding status: unverified accounts go to verification; incomplete or unapproved workspaces go to onboarding; completed/approved workspaces enter the requested app page. Readiness failures hold the loading/error boundary with Retry rather than mounting app pages. This is the normal browser routing gate, alongside existing API authentication and permissions; it does not introduce a new global API onboarding restriction.
 
 Verification emails retain SendGrid delivery and plaintext fallback, add a modest bilingual branded button and return-to-tab instructions, and display the configured link lifetime. No production email, account or workspace data is mutated by the verification tests.
+
+
+## 2026-09-14 — Initial Instagram learning extends onboarding and maintains Business Profile
+
+After business onboarding approval, enter a dedicated bilingual Instagram setup flow, with postponement to Overview before connection. Overview and Business Profile offer a connection banner while disconnected; Settings first connection enters the same flow. Inline MFA enrollment is required, but OAuth start does not require the existing 15-minute authorization window. Settings refresh/disconnect and other step-up behavior are unchanged.
+
+After connection, perform one bounded exploration of profile information, five latest and five distinct strongest found posts (up to ten unique posts). The first implementation searches at most 50 records with explicit partial/history limitations and analyzes representative covers, not full videos or every slide. Unknown metrics remain unavailable. No account facts, offerings, prices, goals or official brand colors are silently inferred or overwritten.
+
+The owner reviews, edits and selects proposed Tone, Writing preferences, Personality & visual direction, and Marketing Strategy Content direction values. Approval writes those reviewed values atomically into the existing versioned profile and Vault projections; proposals remain non-authoritative in an existing AiInteraction until approval. There is no second profile store or migration. Future Create/Campaign grounding includes current approved marketing context; historical content is unchanged.
+
+This supersedes the audits' earlier separate-baseline UI/storage proposal. The UI asks the user to stay through review. Interruption recovery, account switching/reconnection, continuous Intelligence and redesign of Settings security are explicitly deferred. See [implementation decisions and verification](analysis/instagram-initial-learning-implementation-2026-09-14.md).
+
+## 2026-09-14 — Document analysis gets one coherent time budget
+
+Staging returned two 504 responses from the onboarding document-analysis endpoint; worker cleanup reported no expired analyses. The old 50-second document deadline competed with a 45-second OpenAI attempt and an automatic retry. Document and offering extraction now default to one 120-second attempt, controlled by the existing `AI_DOCUMENT_TIMEOUT_SECONDS` setting, with SDK retries disabled for these two providers only. The endpoint deadline still cancels unfinished work and returns a retryable failure. Keep the API's `AI_HTTP_TIMEOUT_MS` above the document deadline (the existing 130000 ms default leaves response/transport headroom). No new environment variable is required; an explicit old document-timeout override must be updated separately.
+
+Uploads remain temporary for 24 hours and are retained after analysis failure so an intentional Retry can reuse them. Worker expiration, approval/discard cleanup, the publishing schedule, and other AI provider timeouts are unchanged. Local mocked-provider and database tests cover timeout cancellation and upload retention/retry; successful analysis of the staging document still requires a hosted retest after deployment.
+
+
+## 2026-09-14 — Optional observed Instagram palette
+
+Extend the first-learning field allowlist with `colors`, only when the business has no saved brand colors. A proposal contains one to seven six-digit hex values and cites posts with supplied cover images. The API omits unsupported palettes and palettes that would replace existing colors; approval rechecks authoritative colors under the existing knowledge lock. The UI starts palette suggestions unselected. Only explicit approval writes the reviewed values to the existing brand colors field. These are suggested visual choices, never automatically inferred official brand facts. No migration, additional provider request, or new palette store is needed. Existing saved learning records without a colors snapshot remain readable.
+
+Deferred separately: stronger restraint against invented facts during onboarding profile resolution (pending user evidence), email verification page arrangement, and Instagram connection ownership/revocation recovery. Document timeout handling remains the separate merged fix.
+
+
+## 2026-09-16 — Focused notifications, carousel and Insights fixes
+
+- In-app notifications are selected by recipient, workspace and `IN_APP` channel. Email-delivery records must not appear as publish failures. The shell binds fetched notifications to the current identity and uses the template to identify publishing alerts.
+- Create retains its current layout. Carousel media supports ordered multi-upload/library selection, drag and button reordering, replacement, and one explicitly requested image generation at a time. Bulk generation is deferred. Existing ten-image and JPEG constraints remain unchanged.
+- Media-list updates use the existing content row lock and compare the expected media list before saving. Generation replaces a specific asset in place only if it is still attached; completed output remains in the library if attachment fails. No new data model is introduced.
+- Insights starts at the latest chronological data on initial load or a range/metric change, with RTL-aware positioning. Ordinary renders do not override user scrolling.
+- Business Profile photo features remain outside this pass. Uncommitted onboarding integration is preserved separately while this branch is tested.
+
+
+Focused local verification for this pass: 22 API tests in media/notifications passed, including ownership, channel filtering, stale-order rejection, full-carousel replacement, failure preservation and removed-target recovery. Focused Create browser checks passed for multi-upload/library selection, drag/button order, generation retry, saved ordering, existing format limits/recovery and thinking visibility. Notification account-switch checks and latest-date chart positioning in English/Arabic passed. API/web TypeScript and affected web ESLint passed. Two targeted Create screenshots were inspected. No real provider generation, publishing, hosted environment changes, full-suite run or production build was performed. The first Create browser navigation timed out during cold compilation; its focused rerun passed.

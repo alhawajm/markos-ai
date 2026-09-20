@@ -1,6 +1,7 @@
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { CampaignRecord } from "@markos/shared-types";
+import { item } from "./create-fixtures";
+import type { ContentMediaItemRecord, CampaignRecord } from "@markos/shared-types";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered presentation-journey tests");
@@ -48,7 +49,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/app/campaigns`);
+    await page.waitForURL(`${baseUrl}/en/instagram-setup`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();
@@ -406,6 +407,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(approvedSuggestionDraft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(approvedSuggestionDraft ? [approvedSuggestionDraft] : []));
+      if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}`) return route.fulfill(json(approvedSuggestionDraft));
       if (approvedSuggestionDraft && pathname === `/v1/content/${approvedSuggestionDraft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: approvedSuggestionDraft, messages: [], latestRun: null }));
       if (pathname === "/v1/media") return route.fulfill(json([]));
@@ -493,8 +495,9 @@ describe("presentation journey", () => {
     await generatedReview.getByRole("button", { name: "Create draft: Publish customer taste-test Reel", exact: true }).click();
     await expect.poll(() => suggestionApprovalPayload).toEqual({ week: 2, actionIndex: 0 });
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${approvedSuggestionDraft!.id}&source=campaign`);
-    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
-    expect(await page.locator(".studio-instagram").count()).toBe(0);
+    await page.getByTestId("create-workspace").waitFor();
+    await expect.poll(() => page.locator(".create-assistant").isVisible()).toBe(true);
+    expect(await page.locator(".create-preview").isVisible()).toBe(false);
     const campaignLink = page.getByRole("link", { name: /^Campaign ↗$/ });
     await campaignLink.waitFor();
     await expect(campaignLink.getAttribute("href")).resolves.toBe("/en/app/campaigns?campaign=campaign-snacklab-generated");
@@ -509,8 +512,14 @@ describe("presentation journey", () => {
 
   it("renders the desktop overview, Create, and honest Insights destinations", async () => {
     const page = await sessionPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const content = studioContentRecord();
     await mockApi(page, async (route, pathname) => {
-      if (pathname === "/v1/content" || pathname === "/v1/publishing/queue") return route.fulfill(json([]));
+      if (pathname === "/v1/content") return route.fulfill(json(route.request().method() === "POST" ? content : []));
+      if (pathname === `/v1/content/${content.id}`) return route.fulfill(json(content));
+      if (pathname === `/v1/content/${content.id}/conversation`) return route.fulfill(json({ id: null, contentItem: content, messages: [], latestRun: null }));
+      if (pathname === "/v1/publishing/queue") return route.fulfill(json([]));
       if (pathname === "/v1/vault/score") {
         return route.fulfill(
           json({ score: 100, completedSections, missingSections: [], requiredSections: completedSections, entryCount: completedSections.length })
@@ -527,8 +536,9 @@ describe("presentation journey", () => {
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "How can MARKOS help?" }).waitFor();
-    await expect.poll(() => page.getByRole("button", { name: "Edit caption", exact: true }).isVisible()).toBe(true);
+    await page.getByTestId("create-workspace").waitFor();
+    await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${content.id}`);
+    await expect.poll(() => page.getByRole("button", { name: "Caption", exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
 
@@ -541,6 +551,7 @@ describe("presentation journey", () => {
     await page.goto(`${baseUrl}/en/app/knowledge`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Business profile", exact: true }).waitFor();
     await page.getByRole("heading", { name: "Current strategy", exact: true }).waitFor();
+    expect(errors).toEqual([]);
     await page.close();
   });
 
@@ -563,7 +574,8 @@ describe("presentation journey", () => {
       caption: "Product story scheduled for this week.",
       contentType: "REEL",
       id: "calendar-scheduled",
-      mediaIds: ["calendar-video"],
+      mediaItems: [{ ...item("calendar-item", "calendar-scheduled"), mediaKind: "VIDEO", mediaAssetId: "calendar-video" }] as ContentMediaItemRecord[],
+      reelScript: null,
       plannedAt: updatedAt,
       scheduledAt,
       status: "SCHEDULED",
@@ -971,6 +983,7 @@ describe("presentation journey", () => {
         return route.fulfill(json(draft));
       }
       if (pathname === "/v1/content") return route.fulfill(json(registeredDraft ? [registeredDraft] : []));
+      if (pathname === `/v1/content/${draft.id}`) return route.fulfill(json(draft));
       if (pathname === `/v1/content/${draft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
@@ -1007,6 +1020,7 @@ describe("presentation journey", () => {
     // Reopen immediately after Back, while Next still has the Create route cached.
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.goBack({ waitUntil: "domcontentloaded" });
     await createButton.waitFor();
@@ -1017,6 +1031,7 @@ describe("presentation journey", () => {
     expect(approvalCalls).toBe(1);
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.close();
   }, 60_000);
@@ -1036,6 +1051,7 @@ describe("presentation journey", () => {
       const method = route.request().method();
       if (pathname === "/v1/calendar" && method === "GET") return route.fulfill(json(calendarReadResult([draft], route.request().url())));
       if (pathname === "/v1/content" && method === "GET") return route.fulfill(json([draft]));
+      if (pathname === `/v1/content/${draft.id}`) return route.fulfill(json(draft));
       if (pathname === `/v1/content/${draft.id}/conversation`)
         return route.fulfill(json({ id: null, contentItem: { ...draft, revision: 1 }, messages: [], latestRun: null }));
       if (pathname === "/v1/content" && method === "POST") {
@@ -1103,8 +1119,8 @@ describe("presentation journey", () => {
     await drawerButton.click();
     await existingDraftLink.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
-    await page.getByRole("region", { name: "Post workspace", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Edit caption", exact: true }).click();
+    await page.getByTestId("create-workspace").waitFor();
+    await page.getByRole("button", { name: "Caption", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Caption", exact: true }).inputValue()).resolves.toBe(draft.caption);
     expect(createCalls).toBe(0);
     await page.close();
@@ -1114,6 +1130,7 @@ describe("presentation journey", () => {
 async function sessionPage(): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
   await page.addInitScript((identity) => localStorage.setItem("markos.session", JSON.stringify(identity)), storedIdentity);
   return page;
 }
@@ -1122,6 +1139,8 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
   await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+    if (pathname === "/v1/workspace/instagram") return route.fulfill(json({ status: "CONNECTED", username: "the.snacklab" }));
+    if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) return route.fulfill(json(null));
     if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));
     await handler(route, pathname);
   });
@@ -1436,7 +1455,8 @@ function phaseTwoCampaignDraft(campaignId: string) {
     caption: "",
     revision: 1,
     id: "content-phase-two",
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     plannedAt: "2026-09-03T00:00:00.000Z",
     platform: "INSTAGRAM" as const,
     status: "DRAFT" as const,
@@ -1455,7 +1475,8 @@ function campaignSuggestionDraft(campaignId = "campaign-snacklab-14") {
     caption: "",
     revision: 1,
     platform: "INSTAGRAM" as const,
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     campaignId,
     campaignGoal: "Earn trust",
     campaignWeek: 2,
@@ -1487,7 +1508,8 @@ function studioContentRecord() {
     contentType: "POST",
     createdAt: "2026-08-17T10:00:00.000Z",
     id: "content-showcase",
-    mediaIds: [] as string[],
+    mediaItems: [item()] as ContentMediaItemRecord[],
+    reelScript: null,
     status: "DRAFT",
     updatedAt: "2026-08-17T10:00:00.000Z",
     workspaceId: session.workspace.id

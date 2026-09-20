@@ -1,3 +1,5 @@
+import { contentAggregateInclude } from "../content/content-aggregate";
+import { readinessIssue } from "../media/content-media-integrity";
 import type { AuditLogRecord, InstagramConnection, PublishReadiness } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 import { toContentRecord } from "../content/content-service";
@@ -49,6 +51,7 @@ export async function getPublishReadiness(workspaceId: string, contentItemId: st
   const [connection, contentItem] = await Promise.all([
     getInstagramConnection(workspaceId),
     prisma.contentItem.findFirst({
+      include: contentAggregateInclude,
       where: {
         id: contentItemId,
         workspaceId,
@@ -75,30 +78,17 @@ export async function getPublishReadiness(workspaceId: string, contentItemId: st
     reasons.push("SCHEDULE_TIME_NOT_IN_FUTURE");
   }
 
-  if (contentItem.contentType === "POST" || contentItem.contentType === "CAROUSEL" || contentItem.contentType === "REEL") {
-    if (contentItem.mediaIds.length === 0) {
-      reasons.push("PUBLIC_MEDIA_REQUIRED");
-    } else {
-      const mediaAssets = await prisma.mediaAsset.findMany({
-        where: {
-          id: {
-            in: contentItem.mediaIds
-          },
-          workspaceId,
-          deletedAt: null
-        },
-        select: {
-          id: true,
-          cdnUrl: true
-        }
-      });
-      const validPublicMediaIds = new Set(mediaAssets.filter((asset) => asset.cdnUrl.startsWith("https://")).map((asset) => asset.id));
-
-      if (contentItem.mediaIds.some((id) => !validPublicMediaIds.has(id))) {
-        reasons.push("PUBLIC_MEDIA_REQUIRED");
-      }
-    }
-  }
+  const attachedIds = contentItem.mediaItems.flatMap((item) => (item.mediaAssetId ? [item.mediaAssetId] : []));
+  const mediaAssets = await prisma.mediaAsset.findMany({ where: { workspaceId, deletedAt: null, id: { in: attachedIds } } });
+  const issue = readinessIssue(contentItem, mediaAssets);
+  if (issue) reasons.push(issue);
+  if (
+    !attachedIds.length ||
+    contentItem.mediaItems.some((item) => !item.mediaAssetId) ||
+    mediaAssets.some((asset) => !asset.cdnUrl.startsWith("https://")) ||
+    mediaAssets.length !== new Set(attachedIds).size
+  )
+    reasons.push("PUBLIC_MEDIA_REQUIRED");
 
   if (connection.tokenExpiresAt && new Date(connection.tokenExpiresAt) <= new Date()) {
     reasons.push("INSTAGRAM_TOKEN_EXPIRED");

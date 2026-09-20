@@ -53,6 +53,7 @@ import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./brows
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { ContentStatusBadge } from "./content-status-badge";
 import { contentStatusLabel } from "./content-status";
+import { LatestTrendViewport } from "./latest-trend-viewport";
 import { NotificationToast } from "./notification-toast";
 
 type Accent = "amber" | "gold" | "teal";
@@ -231,12 +232,12 @@ async function approveContentRecord(client: MarkosApiClient, record: ContentReco
   }
 
   if (record.status === "DRAFT") {
-    const reviewRecord = await client.updateContentStatus(record.id, "IN_REVIEW");
-    return client.updateContentStatus(reviewRecord.id, "APPROVED");
+    const reviewRecord = await client.updateContentStatus(record.id, "IN_REVIEW", record.revision);
+    return client.updateContentStatus(reviewRecord.id, "APPROVED", reviewRecord.revision);
   }
 
   if (record.status === "IN_REVIEW") {
-    return client.updateContentStatus(record.id, "APPROVED");
+    return client.updateContentStatus(record.id, "APPROVED", record.revision);
   }
 
   throw new Error(`Only draft or in-review content can be marked Ready. Current status: ${statusLabel(record.status)}.`);
@@ -1252,7 +1253,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                 </div>
               </div>
               {daily.length > 0 ? (
-                <div className="mt-6 overflow-x-auto rounded-2xl bg-[var(--sunlit-paper)] px-4 pb-4 pt-6">
+                <LatestTrendViewport key={`${session?.workspace.id}:${summary?.days}:${trendMetric}`} rtl={locale === "ar"}>
                   <div
                     className="flex h-64 items-end gap-3"
                     style={{ minWidth: `${Math.max(34, daily.length * 3.5)}rem` }}
@@ -1284,7 +1285,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                       </div>
                     ))}
                   </div>
-                </div>
+                </LatestTrendViewport>
               ) : (
                 <InsightsUnavailableState label={copy.unavailable} locale={locale} />
               )}
