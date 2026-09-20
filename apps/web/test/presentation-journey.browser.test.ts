@@ -1130,6 +1130,7 @@ describe("presentation journey", () => {
 async function sessionPage(): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
   await page.addInitScript((identity) => localStorage.setItem("markos.session", JSON.stringify(identity)), storedIdentity);
   return page;
 }

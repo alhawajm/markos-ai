@@ -285,13 +285,16 @@ describe("Relational Create workspace", () => {
       expect(state.record.mediaItems[1]!.mediaAssetId).not.toBe("replacement");
       await page.getByRole("button", { name: "Attach selected", exact: true }).click();
       await expect.poll(() => state.record.mediaItems[1]!.mediaAssetId).toBe("replacement");
+      await page.getByRole("dialog", { name: "Media Library", exact: true }).waitFor({ state: "detached" });
       await page.getByLabel("Message MARKOS").fill("Keep this question");
+      await expect.poll(() => page.getByRole("button", { name: "Send message", exact: true }).isEnabled()).toBe(true);
       await page.getByRole("button", { name: "Preview", exact: true }).click();
       await page.locator(".studio-instagram").waitFor({ state: "visible" });
       expect(await page.locator("[data-selected-item]").getAttribute("data-selected-item")).toBe(created);
       await screenshot(page, "carousel-preview");
       await page.getByRole("button", { name: "Assistant", exact: true }).click();
-      expect(await page.getByLabel("Message MARKOS").inputValue()).toBe("Keep this question");
+      await expect.poll(() => page.getByLabel("Message MARKOS").inputValue()).toBe("Keep this question");
+      expect(state.calls.some((call) => call.path.endsWith("/conversation"))).toBe(false);
       await page.getByRole("button", { name: "Remove slide", exact: true }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true }).click();
       await expect.poll(() => state.record.mediaItems.length).toBe(2);

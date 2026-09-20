@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { expect, it } from "vitest";
+import { draft, item } from "./create-fixtures";
 
 it("shows only the signed-in owner's in-app notices across accounts in the same browser", async () => {
   const browser = await chromium.launch({
@@ -8,6 +9,9 @@ it("shows only the signed-in owner's in-app notices across accounts in the same 
   });
   const context = await browser.newContext();
   const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   let account = "a";
   const session = () => ({
     tokens: { accessToken: `token-${account}`, expiresIn: 900 },
@@ -29,9 +33,19 @@ it("shows only the signed-in owner's in-app notices across accounts in the same 
     await page.route(/^http:\/\/(localhost|127\.0\.0\.1):4000\//, async (route) => {
       if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204 });
       const path = new URL(route.request().url()).pathname;
+      const content = draft({
+        id: `draft-${account}`,
+        workspaceId: `workspace-${account}`,
+        mediaItems: [{ ...item(`item-${account}`, `draft-${account}`), workspaceId: `workspace-${account}` }]
+      });
       let data: unknown = [];
       if (path === "/v1/auth/refresh") data = session();
       if (path === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
+      if (path === "/v1/workspace/instagram") data = { status: "CONNECTED", username: `account-${account}` };
+      if (path === "/v1/content") data = route.request().method() === "POST" ? content : [content];
+      if (path === `/v1/content/${content.id}`) data = content;
+      if (path.endsWith("/conversation")) data = { id: null, contentItem: content, messages: [], latestRun: null };
+      if (path.endsWith("/media-generation/latest") || path.endsWith("/publish-job/latest")) data = null;
       // Deliberately include foreign/email rows: client must fail closed as well.
       if (path === "/v1/notifications") data = [notice, { ...notice, id: "email", channel: "EMAIL", templateKey: "monthly_analytics_pdf", payload: {} }];
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
@@ -45,7 +59,7 @@ it("shows only the signed-in owner's in-app notices across accounts in the same 
     await page.getByText(notice.payload.message, { exact: true }).waitFor();
     expect(await page.getByText("Publishing needs attention", { exact: true }).count()).toBe(1);
     account = "b";
-    await page.reload({ waitUntil: "networkidle" });
+    await page.goto(url, { waitUntil: "networkidle" });
     await page
       .getByRole("button", { name: /Notifications/ })
       .first()
@@ -53,6 +67,7 @@ it("shows only the signed-in owner's in-app notices across accounts in the same 
     await page.getByText("No notifications yet.", { exact: true }).waitFor();
     expect(await page.getByText(notice.payload.message, { exact: true }).count()).toBe(0);
     expect(await page.getByText("Publishing needs attention", { exact: true }).count()).toBe(0);
+    expect(errors).toEqual([]);
   } finally {
     await context.close();
     await browser.close();
