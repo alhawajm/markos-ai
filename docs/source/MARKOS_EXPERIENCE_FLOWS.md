@@ -169,7 +169,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - Current saved content, approved business context, offerings, Campaign intent, recent messages and a compact summary supply context. The current post overrides historical copy. Conversation statements never automatically update the Business Profile or learning memory.
 - The API validates the structured reply and allowed edits, rechecks authorization, and conditionally applies against the original content revision. A stale result or newly approved post cannot be overwritten. The failed/conflicting result remains identifiable and a proposed caption can be inspected.
 - Duplicate submissions resolve to the existing request. Interrupted or failed work receives a visible outcome without automatically repeating an ambiguous provider call. Safe local mode explicitly identifies its limited behavior; natural text edits use live text mode.
-- Commercial quotas are deferred. Existing diagnostic usage recording continues. See `docs/create-conversation-backend.md` for persistence, processor recovery and current boundaries.
+- Commercial quotas are deferred. Existing diagnostic usage recording continues. See `docs/features/create-conversation-backend.md` for persistence, processor recovery and current boundaries.
 
 **C3. Save, edit, and attach media**
 

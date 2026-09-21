@@ -1,5 +1,7 @@
 # MARKOS UI/UX Decisions
 
+Handoff note: this document retains dated decisions and verification history. Private workstation evidence referenced below is not included in the repository; removed prototypes are not runnable onboarding steps. Use [project status](project-status.md) for the handoff checkpoint.
+
 - Status: active decision register
 - Started: 2026-08-25
 - Last updated: 2026-09-14
@@ -75,7 +77,7 @@ Each surface entry should state what is accepted, what remains deferred or open,
 - Following Khalid's rendered feedback, remove the outer preview card and horizontal toolbars, remove the simulated Posts/back header, and raise the preview width ceiling from 360 to 480 CSS pixels while preserving its `360:730` proportions. The available viewport still governs uniform scaling. Keep the larger readable text and button sizes.
 - Routine Create feedback uses a neutral floating notice with a dismiss action and 4.5-second expiry. It must not occupy layout space or move the conversation/preview. Actionable errors remain available for dismissal/retry; they also avoid layout shifts.
 
-Khalid subsequently approved caption consolidation: one editable final text, no EN/AR toggle or separate CTA/hashtag fields. Keep the complete text and ordering through Save, AI revision and preview; changing UI locale must not change it. The preview column now fits its height and action controls, giving surplus desktop width to the conversation. `docs/content-campaign-model-proposal.md` records the implemented caption slice and the remaining proposed ownership work.
+Khalid subsequently approved caption consolidation: one editable final text, no EN/AR toggle or separate CTA/hashtag fields. Keep the complete text and ordering through Save, AI revision and preview; changing UI locale must not change it. The preview column now fits its height and action controls, giving surplus desktop width to the conversation. `docs/features/content-campaign-model-proposal.md` records the implemented caption slice and the remaining proposed ownership work.
 
 The older entries below retain their historical rationale. Their action-hub, separate-preview-shell, and media-save gates are superseded by this decision and the September 6 persistence decision in `docs/decisions.md`.
 
@@ -441,13 +443,13 @@ Khalid selected durable text conversations first, keeping image/video generation
 
 Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
 
-The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.
+The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/features/create-conversation-backend.md` for the implemented data contracts and verification boundary.
 
 ## 2026-09-07: Business Profile uses focused editing and explicit consequences
 
 Khalid emphasized simplicity, contrast, consistency, low cognitive load, user control, and user understanding. Apply these principles to the planned Business Profile editor: show readable saved knowledge, reveal focused editing in modals, and prevent overlapping editing tasks in the page. Use confirmation for meaningful discard/archive consequences; an ordinary Save does not need another confirmation. Preserve readable typography and comfortable controls, and avoid persistent routine notifications that move page content.
 
-The detailed candidate is recorded in [the Business Profile plan](business-profile-plan.md): a wide profile surface, searchable and filterable offering rows, and one offering editor at a time. Khalid narrowed the first increment to manual editing; remove the earlier assistant panel and AI change-review states from this candidate, and do not reserve empty space or show disabled AI controls. The layout remains a prototype proposal awaiting visual review. Keep crowded forms, nested dialogs, and bulk editing out of the first candidate; preserve keyboard accessibility and Arabic/RTL parity.
+The detailed candidate is recorded in [the Business Profile plan](features/business-profile-plan.md): a wide profile surface, searchable and filterable offering rows, and one offering editor at a time. Khalid narrowed the first increment to manual editing; remove the earlier assistant panel and AI change-review states from this candidate, and do not reserve empty space or show disabled AI controls. The layout remains a prototype proposal awaiting visual review. Keep crowded forms, nested dialogs, and bulk editing out of the first candidate; preserve keyboard accessibility and Arabic/RTL parity.
 
 Use **Marketing strategy** as the section name. Add a simple owner-reported establishment-stage field to Business basics in Onboarding and the corresponding Business Profile editor. Its wording must describe how established the business is without claiming to score its quality, size, or competence. Prefer stable, readable business information over a page that pressures the owner to keep changing it.
 

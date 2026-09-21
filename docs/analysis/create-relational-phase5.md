@@ -1,6 +1,6 @@
 # Create relational migration — final integration gate
 
-September 16, 2026. Completes Phases 1–4; their dated reports remain historical checkpoints. Current invariants: [Create authoring](../create-authoring.md).
+September 16, 2026. Completes Phases 1–4; their dated reports remain historical checkpoints. Current invariants: [Create authoring](../features/create-authoring.md).
 
 ## Cleanup
 
