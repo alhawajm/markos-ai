@@ -301,17 +301,23 @@ Set the web's `NEXT_PUBLIC_API_BASE_URL` build input before building. Confirm th
 
 ### 4. Initialize a confirmed-new database
 
-The current migration directory is a single baseline for a new, empty pgvector database. Do **not** apply it as rewritten history to a valuable database or one with a different `_prisma_migrations` history. Preserve such a database and design a reviewed forward migration.
+Keep the committed migration history intact. As of the 2026-09-20 handoff review, it contains 20 migrations: the initial `20260802000000_clean_baseline` plus subsequent changes through `20260916180000_conversation_actions`. These files include custom workspace-isolation policies, grants, constraints, and triggers as well as Prisma tables; do not replace them with a schema-only baseline.
+
+The existing Railway test data is disposable for the planned handoff reset. Sarah, as the deployment owner, should confirm the exact project/environment/database, stop the old API and worker writers, and prepare an empty application database before this sequence. A clean reset includes the old application schema and `_prisma_migrations`, not just deleting user rows. This is a one-time operator action, not an automatic deployment step. No reset has been performed as part of this documentation update.
 
 For a confirmed-new/disposable target, the API image contains `psql` and supports this repository-root pre-deploy sequence:
 
 ```bash
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && pnpm --filter api prisma migrate deploy && pnpm --filter api prisma db seed
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=apps/api/prisma/init/001-init.sql && corepack pnpm --filter api prisma migrate deploy && corepack pnpm --filter api prisma db seed
 ```
 
-A failed command must stop deployment. The initialization is idempotent; the seed upserts only the four active plan rows (`STARTER`, `GROWTH`, `PREMIUM`, and `ENTERPRISE`). It creates no users, workspaces, content, OAuth state, Instagram credentials, recent media, or analytics.
+A failed command must stop deployment. Initialization supplies `vector`, `pgcrypto`, `uuid_generate_v7()`, and database roles before migrations run; the database image and deployment account must support those operations. The initialization is idempotent; the seed upserts only the four active plan rows (`STARTER`, `GROWTH`, `PREMIUM`, and `ENTERPRISE`). It creates no users, workspaces, content, OAuth state, Instagram credentials, recent media, or analytics.
 
-For an existing Railway database, first inspect migration status, roles, extensions, backups, and valuable data without running the baseline command. Never use `prisma db push` as a substitute for a reviewed migration.
+After the sequence, run `corepack pnpm --filter api prisma migrate status` in the same service environment and confirm the database is up to date. Verify the four plans, then start the matching API and worker release and check API health. Run migrations from the API pre-deploy step only, not separately from every service. The API Dockerfile includes the required files and tools but does not itself configure Railway's pre-deploy setting; the operator must confirm that setting.
+
+On subsequent deployments, retain the database and migration history: the same sequence applies only pending migrations and upserts the plans. Do not reset the database on each deployment. If an inherited database has a different migration history or data that is no longer disposable, inspect it before proceeding rather than deleting history to bypass an error. Never use `prisma db push` as a substitute for migrations.
+
+Fresh-database initialization, all migrations, two seed runs, and migration status passed in [CI run 35499880642](https://github.com/alhawajm/markos-ai/actions/runs/35499880642) for commit `d1821ddb7e4c9553f84dfc3de96575a85803dadd`. This verifies the repository sequence in CI, not the current Railway configuration or a completed Railway reset.
 
 ### 5. Configure variables by consumer
 
@@ -455,7 +461,7 @@ Run this only in the service environment where the secret is already injected. A
 
 Repository API tests create users, workspaces, content, analytics, and other records. `NODE_ENV=test` does not select a separate database. Never run `corepack pnpm verify` with `DATABASE_URL` pointing to an ordinary development, staging, or production database.
 
-CI creates a dedicated loopback `markos_ci_test` database, applies the initialization/baseline, seeds plans, and sets both `DATABASE_URL` and `INSTAGRAM_DATABASE_TEST_URL` to that disposable target. Instagram database suites additionally require:
+CI creates a dedicated loopback `markos_ci_test` database, applies initialization and the complete migration history, seeds plans twice, checks migration status, and sets both `DATABASE_URL` and `INSTAGRAM_DATABASE_TEST_URL` to that disposable target. Instagram database suites additionally require:
 
 - explicit `INSTAGRAM_DATABASE_TEST_URL` opt-in;
 - a matching actual Prisma target;
@@ -488,7 +494,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 | API deep health is degraded                                       | Per-dependency result for DB, Redis, OpenSearch, and AI                   | OAuth connection itself does not call AI/OpenSearch, but launch deep-health acceptance does.   |
 | OAuth generic failure                                             | One terminal OAuth event and its allowlisted stage/category               | Never request callback URLs, codes, state, tokens, raw provider bodies, or Prisma errors.      |
 | `credential_configuration` / `encryption_key_invalid`             | Canonical Base64 32-byte format check                                     | Variable presence is not validity; do not print it.                                            |
-| Migration mismatch                                                | `prisma migrate status`, `_prisma_migrations`, backup/data classification | Do not apply the clean baseline to valuable inherited history.                                 |
+| Migration mismatch                                                | `prisma migrate status`, `_prisma_migrations`, backup/data classification | Do not rewrite applied history; reset only an explicitly confirmed disposable target.           |
 | AI shallow health passes but API deep health or AI behavior fails | `AI_BASE_URL`, port/routing, AI logs, `/ai/health/deep`                   | Shallow health does not prove auth, providers, document/file handling, embeddings, RAG, or database access. |
 | Publishing media rejected                                         | S3-backed object key, public HTTPS API origin, signing, and external fetch | Local/container filesystem media is intentionally rejected by the Milestone A live-publish gate. |
 

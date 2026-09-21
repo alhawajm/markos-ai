@@ -2,7 +2,7 @@
 
 Date: 2026-09-07. Branch: `feat/business-profile`.
 
-Status: the approved manual-maintenance design is implemented and automatically verified on `feat/business-profile-maintenance`. See [the September 13 audit and implementation checkpoint](analysis/business-profile-maintenance-2026-09-13.md) for current storage, tab order and verification. The original September 7 rationale below remains the product foundation.
+Status: the approved manual-maintenance design is implemented and automatically verified on `feat/business-profile-maintenance`. See [the September 13 audit and implementation checkpoint](../analysis/business-profile-maintenance-2026-09-13.md) for current storage, tab order and verification. The original September 7 rationale below remains the product foundation.
 
 ## Outcome and scope
 
@@ -77,7 +77,7 @@ Dedicated mobile composition follows the desktop checkpoint; retain accessible d
 
 ## Prototype checkpoint — 2026-09-07
 
-The [interactive desktop draft](prototypes/business-profile.html) is available for Khalid's visual review. Start it with `node scripts/business-profile-preview.mjs`; [preview instructions](prototypes/README.md#business-profile-draft) describe its sample states. It uses the runtime Sunlit stylesheet and Lucide artwork, with an isolated HTML/JavaScript implementation rather than mounted application components.
+The standalone desktop draft and its preview server were retired during handoff cleanup. Use the implemented application for current visual review; the planning decisions below remain historical context.
 
 The draft demonstrates all five profile sections, establishment-stage editing, focused modals, catalog search/filter/pagination, offering pricing and status, archive/discard confirmation, and simulated save failure/conflict recovery. Browser checks cover English/Arabic at the three agreed desktop sizes, including forward/backward keyboard focus within the modal. Native dialog focus briefly moved to the document at wraparound during review; explicit boundary cycling was added and rechecked.
 

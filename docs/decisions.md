@@ -607,13 +607,13 @@ Khalid selected durable text conversations first, keeping image/video generation
 
 Commercial quotas, including the one-Campaign allowance and billing/trial eligibility gates, are deferred until the product functionality is established. Retain existing diagnostic usage records; remove blocking behavior and simulated quota UI. No new billing or cost-reporting work belongs to this pass. Provider constraints and authorization remain enforced.
 
-The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/create-conversation-backend.md` for the implemented data contracts and verification boundary.
+The composer now accepts natural messages without the Generate/Revise/Explore selector. Sent messages and applied edits are saved; Leave remains available while a durable conversation run is processing. Visual direction is now a persisted draft field. See `docs/features/create-conversation-backend.md` for the implemented data contracts and verification boundary.
 
 ## 2026-09-07: Business Profile owns ongoing business edits
 
 Khalid accepted a dedicated versioned profile, the existing canonical Offering Catalog, and direct editing after onboarding. The initial assistant proposal was subsequently narrowed to the manual-only increment and future permission boundary below. This supersedes the August 20 return-to-onboarding editor as the target behavior; runtime implementation is still pending. AI interaction logs retain history, while Vault retrieval representations must follow current approved facts. Updating business knowledge does not rewrite saved Campaigns or posts.
 
-Keep one foreground editing task in the UI, with focused modals and explicit save/discard boundaries. Preserve only the necessary backend safeguards: validation, workspace authorization, atomic writes, and revision checks against unseen concurrent changes. Do not implement automatic conflict merging or Undo. Offering renames must preserve their IDs; archiving preserves history. See [the Business Profile plan](business-profile-plan.md) for proposed interactions, dependencies, and acceptance criteria.
+Keep one foreground editing task in the UI, with focused modals and explicit save/discard boundaries. Preserve only the necessary backend safeguards: validation, workspace authorization, atomic writes, and revision checks against unseen concurrent changes. Do not implement automatic conflict merging or Undo. Offering renames must preserve their IDs; archiving preserves history. See [the Business Profile plan](features/business-profile-plan.md) for proposed interactions, dependencies, and acceptance criteria.
 
 ## 2026-09-07: Stable business facts, evidence-backed marketing proposals, manual editing first
 

@@ -1,10 +1,28 @@
 # MARKOS AI Current Status, Roadmap, and Ownership
 
-Status date: 2026-09-01.
+Handoff update: 2026-09-20. The detailed implementation snapshot below dates from 2026-09-01 and is historical unless explicitly updated; do not treat every pending item as a newly verified gap.
 
 This document is the current implementation and operating overlay for MARKOS AI. It does not replace the structural source of truth in `source/MARKOS_BUILD_SPEC. 2.pdf` or the behavioral source of truth in `source/MARKOS_EXPERIENCE_FLOWS.md`. Use it to avoid treating target architecture, implemented code, automated tests, and external production evidence as the same thing.
 
 Detailed milestone gates remain in `milestone-checklist.md`. Durable engineering decisions remain in `decisions.md`. Railway reconstruction and operations remain in `staging-deploy.md`.
+
+## Handoff checkpoint — 2026-09-20
+
+- **Start here:** [local setup](local-development.md), [formatting and tests](testing.md), and [deployment procedure](staging-deploy.md#4-initialize-a-confirmed-new-database). The latter retains the complete migration history rather than introducing another baseline.
+- **User-reported verification:** PR #35 was merged. Offline startup completed without stopping and rerunning the command, although the API restarted several times. This is startup evidence, not a completed watcher-regression or full-feature test.
+- **Production testing:** the newly registered account reached Campaign generation; two timeouts remain open below. Do not describe production Campaign acceptance as complete.
+- **Ownership:** the next application developer takes over code fixes and feature verification; Sarah owns deployment/infrastructure coordination, and Mohamed reviews consequential product or technical decisions. Khalid's responsibilities in the older snapshot describe the internship period.
+- **Documentation scope:** standalone prototypes were removed, and private workstation notes are not part of the handoff. The source index identifies the restored planning references. The planned test-data reset has not been verified as completed in this handoff.
+
+## Immediate handoff issue — Campaign generation timeout
+
+**Open · production observed 2026-09-20 · prioritize before Campaign acceptance.** This dated issue supplements the older status snapshot below.
+
+- **Impact:** a newly registered user completed onboarding but Campaign generation timed out twice.
+- **Evidence:** production API HTTP logs show `POST /v1/campaigns/generate` returning 504 after 50.143 and 50.137 seconds. AI logs also show two `POST /ai/campaigns/generate` 504 responses at 19:39:45 and 19:40:39 UTC (22:39:45 and 22:40:39 Bahrain time). Profile generation succeeded shortly before. API and AI deployments reported commit `e3d51e4d4ddd9a1e9af897ff66ba0fb489cf0990`.
+- **Likely cause:** Campaign's 50-second overall deadline conflicts with the provider client's 45-second attempt timeout plus one allowed retry. The API's configured 130-second deadline is not the limiting budget. The logs do not establish why the provider request was slow or whether a retry actually occurred.
+- **Next developer action:** align the Campaign-specific request/retry budget and improve timeout diagnostics, then verify a generated Campaign is saved successfully through the production UI. Simply setting `AI_CAMPAIGN_TIMEOUT_SECONDS=120` is insufficient: the deployed settings validation caps it at 60. Relevant code: `services/ai/app/core/config.py`, `services/ai/app/main.py`, `services/ai/app/providers/campaign.py`, and `apps/api/src/ai/request.ts`.
+- **Ownership/status:** next application developer owns the code fix and focused regression tests; coordinate any deployment-variable changes with Sarah. No fix, configuration change, or redeployment was performed during the investigation.
 
 ## Status language
 
@@ -96,9 +114,9 @@ This production result does **not** establish:
 - durable storage/CDN readiness;
 - payment certification or broad launch readiness.
 
-## Current roadmap
+## Historical roadmap snapshot — 2026-09-01
 
-These are current priorities, not claims that each item is already in progress:
+These were the recorded priorities on 2026-09-01, not a newly verified handoff task list. Start with the dated handoff checkpoint and immediate issue above:
 
 1. Keep the accepted Onboarding checkpoint closed except for focused defects. Before launch, deploy and live-verify the full-business document path on Railway with one successful mixed-file extraction and one honest failure/recovery state; retain the narrower Products/Services analyzer as a separate shortcut.
 2. Implement the reviewed Create prototype as one honest standard Post/JPEG vertical slice; keep Carousel, Reel, Story, Media Library, and production font/palette adoption explicitly outside that slice until separately supported.

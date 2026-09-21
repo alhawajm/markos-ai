@@ -10,8 +10,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "lint": "eslint .",
     "test": "pnpm exec vitest run --config vitest.config.ts",
-    "test:browser": "pnpm exec vitest run --config vitest.browser.config.ts",
-    "test:e2e": "echo \"test:e2e: web\""
+    "test:browser": "pnpm exec vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@markos/api-client": "workspace:*",

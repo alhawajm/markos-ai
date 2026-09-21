@@ -18,12 +18,23 @@ const LOCAL_DEFAULTS = {
   INSTAGRAM_ANALYTICS_SYNC_MODE: "dry_run",
   INSTAGRAM_PUBLISH_MODE: "dry_run",
   MEDIA_STORAGE_DRIVER: "local",
+  NEXT_PUBLIC_API_BASE_URL: "http://localhost:4000",
   OPENSEARCH_URL: "http://localhost:9200",
   REDIS_URL: "redis://localhost:6379",
   WEB_BASE_URL: "http://localhost:3000"
 };
 
-const ALLOWED_MODES = new Set(["safe", "live-ai"]);
+const OFFLINE_ENV = {
+  AI_IMAGE_PROVIDER: "disabled",
+  AI_TEXT_PROVIDER: "local",
+  AI_VIDEO_PROVIDER: "disabled",
+  OPENAI_API_KEY: "",
+  OPENAI_STORE_RESPONSES: "false",
+  SENTRY_DSN: "",
+  NEXT_PUBLIC_SENTRY_DSN: "",
+  NEXT_TELEMETRY_DISABLED: "1",
+  TURBO_TELEMETRY_DISABLED: "1"
+};
 const APPLICATION_PORTS = [
   { name: "web", port: 3000 },
   { name: "API", port: 4000 },
@@ -85,13 +96,18 @@ function validateLoopbackUrl(errors, name, value, protocols) {
   }
 }
 
-export function validateLocalConfiguration({ aiEnv = {}, mode, rootEnv = {} }) {
+export function createLocalEnvironment({ rootEnv = {}, parentEnv = process.env } = {}) {
+  const overrides = Object.fromEntries(
+    Object.keys(LOCAL_DEFAULTS)
+      .filter((key) => parentEnv[key] !== undefined)
+      .map((key) => [key, parentEnv[key]])
+  );
+  return { ...parentEnv, ...LOCAL_DEFAULTS, ...rootEnv, ...overrides, ...OFFLINE_ENV };
+}
+
+export function validateLocalConfiguration({ aiEnv = {}, rootEnv = {} }) {
   const errors = [];
   const root = { ...LOCAL_DEFAULTS, ...rootEnv };
-
-  if (!ALLOWED_MODES.has(mode)) {
-    errors.push(`Unknown local mode: ${mode}.`);
-  }
 
   const databaseUrl = validateLoopbackUrl(errors, "DATABASE_URL", root.DATABASE_URL, new Set(["postgresql:", "postgres:"]));
   if (databaseUrl !== undefined && databaseUrl.pathname !== "/markos") {
@@ -102,13 +118,14 @@ export function validateLocalConfiguration({ aiEnv = {}, mode, rootEnv = {} }) {
   validateLoopbackUrl(errors, "OPENSEARCH_URL", root.OPENSEARCH_URL, new Set(["http:", "https:"]));
   validateLoopbackUrl(errors, "AI_BASE_URL", root.AI_BASE_URL, new Set(["http:", "https:"]));
   validateLoopbackUrl(errors, "API_BASE_URL", root.API_BASE_URL, new Set(["http:", "https:"]));
+  validateLoopbackUrl(errors, "NEXT_PUBLIC_API_BASE_URL", root.NEXT_PUBLIC_API_BASE_URL, new Set(["http:", "https:"]));
   validateLoopbackUrl(errors, "WEB_BASE_URL", root.WEB_BASE_URL, new Set(["http:", "https:"]));
 
   if (root.EMAIL_PROVIDER !== "local") {
-    errors.push("EMAIL_PROVIDER must remain local in the two standard development modes.");
+    errors.push("EMAIL_PROVIDER must remain local for offline development.");
   }
   if (root.MEDIA_STORAGE_DRIVER !== "local") {
-    errors.push("MEDIA_STORAGE_DRIVER must remain local in the two standard development modes.");
+    errors.push("MEDIA_STORAGE_DRIVER must remain local for offline development.");
   }
   if (root.INSTAGRAM_PUBLISH_MODE !== "dry_run" || root.INSTAGRAM_ANALYTICS_SYNC_MODE !== "dry_run") {
     errors.push("Instagram publishing and analytics must remain in dry-run mode locally.");
@@ -122,41 +139,27 @@ export function validateLocalConfiguration({ aiEnv = {}, mode, rootEnv = {} }) {
     }
   }
 
-  if (mode === "live-ai") {
-    if (isPlaceholder(aiEnv.OPENAI_API_KEY)) {
-      errors.push("OPENAI_API_KEY is missing from services/ai/.env.");
-    }
-
-    for (const key of ["LLM_PRIMARY_MODEL", "LLM_LONGFORM_MODEL"]) {
-      if (isPlaceholder(rootEnv[key]) || isPlaceholder(aiEnv[key])) {
-        errors.push(`${key} must be configured in both .env files for live AI.`);
-      } else if (rootEnv[key] !== aiEnv[key]) {
-        errors.push(`${key} must match between .env and services/ai/.env.`);
-      } else if (rootEnv[key].startsWith("local-")) {
-        errors.push(`${key} cannot use a deterministic local model name in live-AI mode.`);
-      }
-    }
-  }
-
   return {
     errors,
     summary: {
       database: databaseUrl?.pathname.slice(1) ?? "invalid",
       email: root.EMAIL_PROVIDER,
       imageProvider: "disabled",
-      mode,
-      responseStorage: aiEnv.OPENAI_STORE_RESPONSES === "true" ? "enabled" : "disabled",
-      textProvider: mode === "live-ai" ? "openai" : "local"
+      videoProvider: "disabled",
+      textProvider: "local"
     }
   };
 }
 
-export function inspectLocalConfiguration(mode) {
-  return validateLocalConfiguration({
-    aiEnv: readOptionalEnv(aiEnvPath),
-    mode,
-    rootEnv: readOptionalEnv(repositoryEnvPath)
-  });
+export function inspectLocalConfiguration() {
+  const environment = createLocalEnvironment({ rootEnv: readOptionalEnv(repositoryEnvPath) });
+  return {
+    ...validateLocalConfiguration({
+      aiEnv: readOptionalEnv(aiEnvPath),
+      rootEnv: environment
+    }),
+    environment
+  };
 }
 
 function isPortInUse(port) {
@@ -184,24 +187,20 @@ export async function findBusyApplicationPorts(ports = APPLICATION_PORTS) {
 
 function printSummary(summary, checkOnly) {
   console.log("MARKOS local development preflight");
-  console.log(`  Mode: ${summary.mode}`);
+  console.log("  Offline development");
   console.log(`  Text provider: ${summary.textProvider}`);
   console.log(`  Image provider: ${summary.imageProvider}`);
-  console.log(`  OpenAI response storage: ${summary.responseStorage}`);
+  console.log(`  Video provider: ${summary.videoProvider}`);
   console.log(`  Database: localhost/${summary.database}`);
   console.log(`  Email provider: ${summary.email}`);
   console.log("  Hosted environments: not used");
   if (checkOnly) console.log("  Result: ready");
 }
 
-function startDevelopment(mode) {
+function startDevelopment(environment) {
   const child = spawn(process.execPath, [turboCliPath, "dev"], {
     cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      AI_IMAGE_PROVIDER: "disabled",
-      AI_TEXT_PROVIDER: mode === "live-ai" ? "openai" : "local"
-    },
+    env: environment,
     shell: false,
     stdio: "inherit"
   });
@@ -216,9 +215,13 @@ function startDevelopment(mode) {
 }
 
 async function main() {
-  const mode = process.argv[2] ?? "safe";
+  if (process.argv.slice(2).some((argument) => argument !== "--check")) {
+    console.error("Usage: corepack pnpm dev OR corepack pnpm local:check");
+    process.exitCode = 1;
+    return;
+  }
   const checkOnly = process.argv.includes("--check");
-  const { errors, summary } = inspectLocalConfiguration(mode);
+  const { errors, summary, environment } = inspectLocalConfiguration();
 
   if (errors.length > 0) {
     console.error("MARKOS local development preflight failed:");
@@ -239,7 +242,7 @@ async function main() {
     return;
   }
 
-  startDevelopment(mode);
+  startDevelopment(environment);
 }
 
 const entryPath = process.argv[1] === undefined ? undefined : pathToFileURL(resolve(process.argv[1])).href;

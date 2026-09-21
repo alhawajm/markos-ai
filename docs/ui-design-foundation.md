@@ -79,7 +79,7 @@ Use dark labels on the light primary and secondary fills and on the dark primary
 
 The September 10 semantic lifecycle roles supersede the earlier Calendar palette: Draft neutral, Ready teal, Scheduled violet/blue, Published green, Failed red, and review/attention amber where distinct from failure. Shared foreground, background, and border tokens support each status in both themes. Preserve labels, icons, counts, and accessible names; color never replaces those cues and must not change lifecycle meaning.
 
-The IBM Plex plus Tangerine Slate compositions under `docs/prototypes/` remain historical experiments. The approved palette above and the typography below govern implementation. An approval does not by itself constitute completed browser or accessibility verification.
+The standalone IBM Plex plus Tangerine Slate prototypes were historical experiments and have been removed. The approved palette above and the typography below govern implementation. An approval does not by itself constitute completed browser or accessibility verification.
 
 ### Runtime token scope
 
@@ -236,7 +236,7 @@ These routes preserve their existing session, workspace, API, approval, and fail
 - `apps/web/app/globals.css`, `packages/ui-tokens`, and remaining legacy helpers still support surviving product components and states. Keep them until every consumer is identified and deliberately replaced.
 - The legacy token package is explicitly labeled as such and must not be extended for new Sunlit work.
 - Unmounted duplicate panels and unused global luxury helpers were removed during the pre-migration cleanup pass.
-- Historical Figma inventories, dark-theme checklists, state audits, and the completed August presentation runbook live under `docs/archive/ui/` and `docs/archive/presentations/`. They are evidence only, not active instructions.
+- Historical Figma inventories, dark-theme checklists, and state audits remain under `docs/archive/ui/` as evidence, not active instructions. The August presentation runbook was removed during handoff cleanup.
 
 ### Deferred Sunlit product-surface restoration
 

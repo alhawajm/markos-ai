@@ -1,5 +1,7 @@
 # Focused product follow-ups
 
+Handoff note: this document retains dated decisions and verification history. Private workstation evidence referenced below is not included in the repository; removed prototypes are not runnable onboarding steps. Use [project status](../project-status.md) for the handoff checkpoint.
+
 Date: 2026-09-10. Status: Passes 1–2 complete with focused verification. The Campaign reviewer approved by Khalid and Mohamed is mounted with focused API/type/lint checks; Khalid owns visual validation. Business Profile editing remains Pass 4.
 
 ## Scope and accepted decisions
@@ -15,7 +17,7 @@ Continue from the [completed UI refinement checkpoint](ui-refinement-audit-2026-
 
 ## Audited starting point
 
-The mounted `knowledge` route renders `FinalVaultPanel`, reads Vault data/completeness, and links to `/onboarding?mode=edit`. The [Business Profile plan](../business-profile-plan.md) and [interactive prototype](../prototypes/business-profile.html) contain the proposed editor. Prototype data, versions, and failures live in JavaScript memory and reset on refresh. The inspected checkout has one worktree; `feat/business-profile`, `main`, and cached `origin/main` share `1b0acfd`. No implementation of this editor was found on the inspected local or cached remote branches; no remote fetch was performed.
+The mounted `knowledge` route renders `FinalVaultPanel`, reads Vault data/completeness, and links to `/onboarding?mode=edit`. The [Business Profile plan](../features/business-profile-plan.md) and now-retired interactive prototype contain the proposed editor. Prototype data, versions, and failures live in JavaScript memory and reset on refresh. The inspected checkout has one worktree; `feat/business-profile`, `main`, and cached `origin/main` share `1b0acfd`. No implementation of this editor was found on the inspected local or cached remote branches; no remote fetch was performed.
 
 Current backend evidence:
 
@@ -90,7 +92,7 @@ New profile/revision tables need workspace isolation policies and focused tests.
 
 ## Pass 3 prototype verification
 
-- Candidate files: `docs/prototypes/campaign-review.html`, `.css`, and `.js`. Run `node scripts/campaign-review-preview.mjs` and open `http://127.0.0.1:3101`. The allowlisted loopback server loads no environment files and exposes no application API.
+- The standalone Campaign review prototype and its preview server were retired during handoff cleanup. Review the implemented application instead; this proposal remains historical context.
 - Rendered review covers English and Arabic in light/dark at 1440 × 900 and 1366 × 768. Eight combinations produced 144 captures and 1,076 interaction/layout assertions, with no page errors, failed requests, HTTP errors, or external/API requests. These are prototype checks, not production application tests.
 - Checks cover the 3-, 14-, and explicitly review-only 90-day examples; Overview/Week/Month; days and individual posts; Previous/Next; selection across zoom and close/reopen; keyboard focus/Escape; empty/loading/error states; and explicit, idempotent simulated draft creation with failed-action recovery.
 - Visual review corrected Arabic narrative count forms and made a deliberate Month day selection reveal and focus its posts within the visible working area. Changing scale preserves selection without forcing that same scroll.

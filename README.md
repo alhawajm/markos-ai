@@ -2,39 +2,25 @@
 
 AI-powered marketing operating system for Bahrain SMBs. Version 1 is Instagram-only, bilingual Arabic/English, and built around a Knowledge Vault plus eight AI agents.
 
-Start with M0 Foundation from [`docs/source/MARKOS_BUILD_SPEC. 2.pdf`](docs/source/MARKOS_BUILD_SPEC.%202.pdf).
+## Get started
 
-The active source set is intentionally small:
+Follow [Run MARKOS locally](docs/local-development.md) for first-time setup, daily startup, and shutdown. It uses offline providers and does not require paid-service credentials.
 
+For code changes, see [Formatting and tests](docs/testing.md).
+
+For handoff priorities and ownership, start with [Project status](docs/project-status.md). **Immediate open issue:** production Campaign generation times out; details and next steps are recorded there. Local startup has been manually tested, but this is not full feature or production acceptance.
+
+## Project references
+
+- [Feature documentation](docs/features/README.md) — Business Profile, Create, and Campaign contracts and proposals.
 - [`AGENTS.md`](AGENTS.md) — repository operating instructions and precedence.
 - [`docs/source/MARKOS_BUILD_SPEC. 2.pdf`](docs/source/MARKOS_BUILD_SPEC.%202.pdf) — structural product target.
 - [`docs/source/MARKOS_EXPERIENCE_FLOWS.md`](docs/source/MARKOS_EXPERIENCE_FLOWS.md) — behavioral target and state transitions.
 - [`docs/project-status.md`](docs/project-status.md) — current implementation, evidence, roadmap, and ownership overlay.
 
-Superseded PRD, implementation, cost, design, and agent-instruction sources are retained under [`docs/archive/source/`](docs/archive/source/README.md) for history only. Do not use them as current contracts.
+The [source index](docs/source/README.md) separates authoritative specifications from supporting references. Retired documents remain in the [source archive](docs/archive/source/README.md).
 
 Detailed progress is tracked in
 [`docs/milestone-checklist.md`](docs/milestone-checklist.md), durable engineering choices in
 [`docs/decisions.md`](docs/decisions.md), and Railway deployment operations in
 [`docs/staging-deploy.md`](docs/staging-deploy.md).
-
-```bash
-corepack pnpm install
-corepack pnpm dev
-```
-
-Local verification:
-
-```bash
-corepack pnpm verify
-```
-
-Python 3.11 is required for `services/ai`. On Windows, use the Python launcher if `python` is shadowed by the Microsoft Store alias:
-
-```bash
-py -3.11 -m venv services/ai/.venv
-cd services/ai
-.venv/Scripts/python.exe -m pip install -e ".[dev]"
-```
-
-Full M0 local infra requires Docker Desktop with WSL enabled.

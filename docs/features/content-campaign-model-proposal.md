@@ -1,6 +1,6 @@
 # Content and Campaign data model
 
-Status: the one-caption contract, persisted Create conversations, creative direction and content revision checks are implemented in the September 6 development passes. Stable Campaign ideas, media associations, immutable publication snapshots and learning rules remain proposed. See `docs/create-conversation-backend.md`.
+Status: the one-caption contract, persisted Create conversations, creative direction and content revision checks are implemented in the September 6 development passes. Stable Campaign ideas, media associations, immutable publication snapshots and learning rules remain proposed. See `docs/features/create-conversation-backend.md`.
 
 Date: 2026-09-06
 

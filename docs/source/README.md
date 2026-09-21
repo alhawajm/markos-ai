@@ -7,6 +7,13 @@ Only these files in this directory are active product authorities:
 
 Repository operating precedence is defined by the root `AGENTS.md`: experience flows win on behavior; the build specification wins on structure.
 
-The original PRD, implementation plan, cost model, Figma design document, and PDF copy of the old agent instructions were reviewed during the 2026-08-16 documentation reconciliation and moved to `../archive/source/`. They remain useful historical context but are not current requirements.
+Supporting references restored to this directory for handoff:
+
+- [Implementation plan](MARKOS_AI_Implementation_Plan.docx)
+- [Cost model](MARKOS_AI_Cost_Model.docx)
+
+These are planning context, not proof of current implementation or current provider pricing. Their relocation does not change the two product authorities above.
+
+The original PRD, Figma design document, and old agent-instruction PDF remain in the [source archive](../archive/source/README.md) for historical context.
 
 Use `../project-status.md` to distinguish the target system from what is implemented, locally verified, externally verified, planned, or deferred today.

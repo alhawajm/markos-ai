@@ -7,8 +7,8 @@ verify:
 test:
 	corepack pnpm test
 
-test.e2e:
-	corepack pnpm --filter web test:e2e
+test.browser:
+	corepack pnpm --filter web test:browser
 
 build:
 	corepack pnpm build
