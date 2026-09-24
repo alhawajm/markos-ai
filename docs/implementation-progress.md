@@ -39,6 +39,8 @@ Campaign review adds actual dates, status counts, date/format/search filters, fu
 
 Focused checks: 52 tests in nine mobile files passed, including eight rendered screen workflows, recovery, campaign identity, media readiness, partial script saves, publishing helpers and file sharing. Mobile TypeScript and Android/iOS bundle exports passed. These use mocked API/native controls and are not a physical-device or live Instagram acceptance claim. Runtime stays 0.3.0; no new native module is required.
 
+Released source `ab0a795` to preview/TestFlight update group `c11fc46b-4bbc-4d97-aef5-ac9a4d924931` and production group `d828ee4c-5020-4d8b-b0a7-1631219f2619`. Android/iOS manifest IDs match on both channels; all four bundle downloads returned HTTP 200 with matching SHA-256 hashes using Expo's issued asset request headers. Existing 0.3.0 installations apply it on a subsequent cold launch; 0.2.0 requires the current APK/TestFlight binary. Railway services and other Apple apps were unchanged.
+
 ## Remaining
 
 - Self-hosted Wan generated footage: this laptop has 16 GB system RAM and Intel integrated graphics. It cannot run the selected model at a useful production level. Wan code/weights are Apache-2.0; cloud GPUs, including AWS, are infrastructure costs. No paid video service is enabled. Suitable owned GPU hardware remains necessary for a no-video-API-fee deployment.
