@@ -1,12 +1,10 @@
-import { PrismaClient } from "@prisma/client";
 import Redis from "ioredis";
 import { performance } from "node:perf_hooks";
 import { env } from "../config/env";
-
-const prisma = new PrismaClient();
+import { prisma } from "../db/prisma";
 
 export interface DependencyHealth {
-  status: "ok" | "down";
+  status: "ok" | "down" | "skipped";
   durationMs: number;
   detail?: string;
 }
@@ -27,15 +25,17 @@ export async function getDeepHealth(): Promise<DeepHealthResponse> {
   const [database, redis, opensearch, ai] = await Promise.all([
     checkDatabase(),
     checkRedis(),
-    checkHttp(`${env.OPENSEARCH_URL}/_cluster/health`),
-    checkHttp(`${env.AI_BASE_URL}/ai/health`)
+    env.OPENSEARCH_HEALTH_REQUIRED
+      ? checkHttp(`${env.OPENSEARCH_URL}/_cluster/health`)
+      : Promise.resolve<DependencyHealth>({ status: "skipped", durationMs: 0, detail: "Not required by current product features" }),
+    checkHttp(`${env.AI_BASE_URL}/ai/ready`, true)
   ]);
 
   const checks = [database, redis, opensearch, ai];
 
   return {
     service: "api",
-    status: checks.every((check) => check.status === "ok") ? "ok" : "degraded",
+    status: checks.every((check) => check.status !== "down") ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
     dependencies: {
       database,
@@ -82,7 +82,7 @@ async function checkRedis(): Promise<DependencyHealth> {
   }
 }
 
-async function checkHttp(url: string): Promise<DependencyHealth> {
+async function checkHttp(url: string, internalAi = false): Promise<DependencyHealth> {
   const startedAt = performance.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.HEALTH_HTTP_TIMEOUT_MS);
@@ -90,6 +90,7 @@ async function checkHttp(url: string): Promise<DependencyHealth> {
   try {
     const response = await fetch(url, {
       cache: "no-store",
+      ...(internalAi ? { headers: { authorization: `Bearer ${env.INTERNAL_SERVICE_TOKEN}` } } : {}),
       signal: controller.signal
     });
 
@@ -110,7 +111,8 @@ function errorToMessage(error: unknown, timeoutMs = env.HEALTH_DEPENDENCY_TIMEOU
     return `Timed out after ${timeoutMs}ms`;
   }
 
-  return error instanceof Error ? error.message : "Unknown error";
+  // Public readiness must never echo a database URL, provider body or credential.
+  return "Dependency check failed";
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

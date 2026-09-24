@@ -137,16 +137,17 @@ async def health() -> HealthResponse:
 
 @app.get("/ai/health/deep")
 async def deep_health() -> dict[str, object]:
-    return {
-        "service": "ai",
-        "status": "degraded",
-        "timestamp": datetime.now(UTC).isoformat(),
-        "dependencies": {
-            "database": "not_checked",
-            "providers": "not_checked",
-            "embeddings": "not_checked",
-        },
-    }
+    from app.readiness import readiness
+
+    return readiness()
+
+
+@app.get("/ai/ready")
+async def ready() -> JSONResponse:
+    from app.readiness import readiness
+
+    result = readiness()
+    return JSONResponse(content=result, status_code=200 if result["status"] == "ok" else 503)
 
 
 @app.post("/ai/vault/embed", response_model=VaultEmbedResponse)

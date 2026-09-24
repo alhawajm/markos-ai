@@ -37,11 +37,18 @@ export const envSchema = z
     AI_BASE_URL: z.string().url().default("http://localhost:8000"),
     INTERNAL_SERVICE_TOKEN: z.string().min(1).default("change-me"),
     AI_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(180_000).default(130_000),
-    CONVERSATION_PROCESSOR_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+    CONVERSATION_PROCESSOR_ENABLED: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
     AI_VIDEO_MAX_BYTES: z.coerce.number().int().positive().max(250_000_000).default(100_000_000),
     DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     OPENSEARCH_URL: z.string().url().default("http://localhost:9200"),
+    OPENSEARCH_HEALTH_REQUIRED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     JWT_ACCESS_SECRET: z.string().min(12).default("dev-access-secret-change-me"),
     JWT_REFRESH_SECRET: z.string().min(12).default("dev-refresh-secret-change-me"),
     JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),

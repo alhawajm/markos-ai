@@ -144,6 +144,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/v1/health/deep", async () => {
     return ok(await getDeepHealth());
   });
+  app.get("/v1/ready", async (_request, reply) => {
+    const health = await getDeepHealth();
+    return reply
+      .header("Cache-Control", "no-store")
+      .code(health.status === "ok" ? 200 : 503)
+      .send(ok(health));
+  });
 
   app.get(
     "/v1/workspace-context",
