@@ -480,3 +480,9 @@ Carousel media uses numbered image previews, per-slide replacement/library/gener
 ## 2026-09-24: Native account and team completion
 
 Reuse Sunlit cards, native task headers, Lucide icons and existing bilingual controls. Keep team/workspace access within Account and web Settings, and knowledge history alongside Business profile. Preserve the main navigation. New teammates can enter an invitation during the native onboarding welcome instead of recreating an existing business. Role selection explains editor/viewer/administrator access; owner access cannot be changed here. Use the existing MARKOS wand and rose color for native launch assets. Rendered web checks cover English desktop, Arabic phone width, invitation creation/revocation and profile saving. Physical-device share sheet and screen-reader acceptance remain pending.
+
+## 2026-09-24: Native Create and campaign workflow
+
+Preserve Sunlit components and the phone/tablet navigation. Show all four formats by name, including Story. Keep format conversion collapsed until requested. Provide Full preview, Caption, Media and Details inside the editor, with an explicit Assistant handoff and a persistent context-sensitive primary action. Missing media leads to generation/upload/library, then Ready, then Schedule. A written Assistant response is never represented as a finished visual.
+
+Campaign review separates Content plan from Strategy & context. Use horizontally scrolling day/status/format controls, actual Bahrain dates and the existing draft handoff, plus native PDF sharing. Story choices, captions and recovery explanations remain bilingual. Rendered component tests cover these handoffs and Arabic Story controls; they do not replace physical-device keyboard, picker, layout or accessibility acceptance.

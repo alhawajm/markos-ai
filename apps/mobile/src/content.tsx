@@ -37,7 +37,7 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 export function typeLabel(type: string, t: (en: string, ar: string) => string) {
-  return type === "REEL" ? t("Reel", "ريل") : type === "CAROUSEL" ? t("Carousel", "منشور متعدد") : t("Post", "منشور");
+  return type === "REEL" ? t("Reel", "ريل") : type === "CAROUSEL" ? t("Carousel", "منشور متعدد") : type === "STORY" ? t("Story", "قصة") : t("Post", "منشور");
 }
 export function ContentCard({ item }: { item: ContentRecord }) {
   const { colors, locale, t } = useAppearance();

@@ -25,11 +25,19 @@ Focused evidence: 23 API workspace/team/native-auth tests, 21 native session/exp
 
 - Android 0.3.0/code 3 signed ARM64 APK: build da2f543b-7492-4f8c-bd04-46376ff518be finished. Artifact downloaded and ZIP integrity verified.
 - iPhone 0.3.0/build 4: build 2c1fa2a6-5c45-4a54-b527-49d0af02ada0 and submission 3dcfe732-2b38-43cc-a680-068685b6d6f0 finished. IPA integrity, bundle com.markos.mobile and iPhoneOS platform verified. Apple build f2488235-d7f2-4079-92f8-7801af3da523 is VALID and ready for internal testing after its platform-encryption declaration. The MARKOS test group still has exactly one tester, the owner, and no public link. No other Apple application or signing credential changed.
-- Android production AAB 793e803b-7445-4b49-a3b9-36f35e1b4ab3 is building; Google Play Console access remains unconfirmed. A store bundle is not store publication.
+- Android production AAB 793e803b-7445-4b49-a3b9-36f35e1b4ab3 finished, version 0.3.0/code 4; artifact downloaded. Google Play Console access remains unconfirmed. A store bundle is not store publication.
 - Dependency readiness is live: PostgreSQL, Redis and the authenticated AI boundary passed. The probe does not infer provider credits or permissions. OpenSearch is optional because no current feature depends on it. Eight API health tests, three AI readiness tests, Python type/lint checks and relevant TypeScript passed.
 - Independent maintenance failures no longer stop later tasks, including Reel jobs. Twelve focused maintenance/diagnostic tests passed. Worker deployment 8ad9cb2e-c775-43a7-805d-ae8e457b051d succeeded.
 - Latest verified web a6be0d5b-fdbf-47c8-abe0-30d505d93454, API 42bacaf9-4df6-435a-83bb-7cf1af4c78c9, worker 661d3843-e6f7-4887-b43f-55056dab8f57 and AI 8aea1f4b-44ba-4e3e-a236-be6e71e6635e deployments succeeded. After the final email correction, the live readiness probe again passed database, Redis and the authenticated AI boundary.
 - Monthly analytics email is still a dry-run adapter. Its receipt and worker totals now correctly report no delivery, and its audit action says SIMULATED. PDF download/sharing works; no real monthly report emails were sent. Two focused route/worker checks passed (32 unrelated tests skipped).
+
+## Native Create and campaign completion
+
+Fixed Stories being labeled Post and incorrectly forced into video generation. Added Story image/video choice, format conversion, full caption/media preview, guided preparation/media/approval actions, carousel missing-image generation, Reel hook/scene editing, planning metadata, library detachment and draft deletion. Assistant updates now follow revision ordering, and snapshots arriving during a save are reconsidered afterward. Approval waits for active Assistant/video work. Motion artwork/text persists per device/content/slot.
+
+Campaign review adds actual dates, status counts, date/format/search filters, full strategy/reference details and native PDF sharing. Existing five-reference campaign creation and durable generation remain connected to the same Railway API. No automatic publish or paid video provider was introduced.
+
+Focused checks: 52 tests in nine mobile files passed, including eight rendered screen workflows, recovery, campaign identity, media readiness, partial script saves, publishing helpers and file sharing. Mobile TypeScript and Android/iOS bundle exports passed. These use mocked API/native controls and are not a physical-device or live Instagram acceptance claim. Runtime stays 0.3.0; no new native module is required.
 
 ## Remaining
 

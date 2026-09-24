@@ -5,6 +5,7 @@ import { draftOperations, preserveDraftEdits } from "./model";
 
 export type EditorSnapshot = { version: 1; base: ContentRecord; draft: ContentRecord };
 export type MessageSnapshot = { version: 1; text: string; pending: ConversationTurnInput | null };
+export type MotionSnapshot = { artworkId: string | null; cards: string[] };
 const writes = new Map<string, Promise<unknown>>();
 function enqueue<T>(key: string, work: () => Promise<T>): Promise<T> {
   const pending = (writes.get(key) ?? Promise.resolve()).catch(() => {}).then(work);
@@ -62,6 +63,25 @@ export class StudioDeviceStore {
   clearEditor(): Promise<void> {
     return this.task(() => AsyncStorage.removeItem(this.editorKey));
   }
+  readMotion(mediaId: string): Promise<MotionSnapshot> {
+    return this.task(async () => {
+      const raw = await AsyncStorage.getItem(`markos.motion.${this.scope}.${this.contentId}.${mediaId}`);
+      if (!raw) return { artworkId: null, cards: ["", "", ""] };
+      const value = JSON.parse(raw) as MotionSnapshot;
+      if (
+        (value.artworkId !== null && typeof value.artworkId !== "string") ||
+        !Array.isArray(value.cards) ||
+        value.cards.length !== 3 ||
+        value.cards.some((card) => typeof card !== "string" || card.length > 160)
+      )
+        throw new Error("Invalid saved Motion Reel");
+      return value;
+    });
+  }
+  saveMotion(mediaId: string, value: MotionSnapshot): Promise<void> {
+    const json = JSON.stringify(value);
+    return this.task(() => AsyncStorage.setItem(`markos.motion.${this.scope}.${this.contentId}.${mediaId}`, json));
+  }
   readMessage(): Promise<MessageSnapshot> {
     return this.task(() => this.message());
   }
@@ -113,7 +133,7 @@ export class StudioDeviceStore {
 }
 export async function clearStudioDeviceData(scope: string): Promise<void> {
   await enqueue(scope, async () => {
-    const prefixes = ["editor", "message", "turn"].map((kind) => `markos.${kind}.${scope}.`);
+    const prefixes = ["editor", "message", "turn", "motion"].map((kind) => `markos.${kind}.${scope}.`);
     const keys = (await AsyncStorage.getAllKeys()).filter((key) => prefixes.some((prefix) => key.startsWith(prefix)));
     if (keys.length) await AsyncStorage.multiRemove(keys);
   });

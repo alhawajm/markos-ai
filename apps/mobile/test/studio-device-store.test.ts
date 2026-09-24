@@ -67,6 +67,15 @@ beforeEach(() => {
 });
 
 describe("device editor and message recovery", () => {
+  it("restores exact Motion Reel cards by content and media slot and clears them on logout", async () => {
+    const settings = { artworkId: "artwork", cards: ["Blooms in Pink", "معًا من أجل الوعي", ""] };
+    await store().saveMotion("slot", settings);
+    expect(await store().readMotion("slot")).toEqual(settings);
+    expect((await store().readMotion("different-slot")).artworkId).toBeNull();
+    expect((await new StudioDeviceStore("host:other:workspace", 1, "post", "workspace").readMotion("slot")).artworkId).toBeNull();
+    await clearStudioDeviceData("host:user:workspace");
+    expect((await store().readMotion("slot")).artworkId).toBeNull();
+  });
   it("restores exact bilingual edits on reopening and isolates account, workspace and content", async () => {
     await store().saveEditor(base, draft);
     expect((await store().readEditor())?.draft.caption).toBe(draft.caption);

@@ -10,7 +10,6 @@ import { briefStore, ReferenceError } from "../../src/campaigns/brief-store";
 import { campaignStart, localDate, newBrief, validDate, type Brief } from "../../src/campaigns/brief-model";
 import { errorMessage } from "../../src/errors";
 import { sessionController } from "../../src/auth/transport";
-import { WebButton } from "../../src/content";
 import { newRequestId } from "../../src/request-id";
 
 export default function NewCampaign() {
@@ -352,7 +351,7 @@ export default function NewCampaign() {
               }}
             />
           ) : null}
-          <WebButton label={t("Open business profile on web", "فتح ملف النشاط على الموقع")} path="app/knowledge" />
+          <Button secondary label={t("Open business profile", "فتح ملف النشاط")} onPress={() => router.push("/business")} />
         </>
       ) : null}
       <Txt variant="meta" muted>

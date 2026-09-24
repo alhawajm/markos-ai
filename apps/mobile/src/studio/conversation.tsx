@@ -20,7 +20,9 @@ export function StudioConversation({
   accept,
   run,
   disabled,
-  visible
+  visible,
+  openMedia,
+  openPreview
 }: {
   item: ContentRecord;
   busy: boolean;
@@ -29,6 +31,8 @@ export function StudioConversation({
   save: () => Promise<ContentRecord>;
   accept: (item: ContentRecord) => void;
   run: (work: () => Promise<void>) => Promise<void>;
+  openMedia: () => void;
+  openPreview: () => void;
 }) {
   const { api, scope, epoch, queryClient } = useAccount();
   const focused = useIsFocused();
@@ -47,10 +51,17 @@ export function StudioConversation({
   const queryKey = [scope, "conversation", item.id];
   const result = useQuery({ queryKey, queryFn: () => api.contentConversation(item.id), refetchInterval: 2500, enabled: focused });
   const latest = result.data?.latestRun;
+  const video = useQuery({ queryKey: [scope, "video-job", item.id], queryFn: () => api.latestMediaGenerationJob(item.id), enabled: focused });
   const active = conversationActive(latest?.status);
   useEffect(() => {
     if (result.data) accept(result.data.contentItem);
-  }, [result.data]);
+  }, [result.data, busy, accept]);
+  useEffect(() => {
+    if (latest && !conversationActive(latest.status)) {
+      void queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+      void queryClient.invalidateQueries({ queryKey: [scope, "content", item.id] });
+    }
+  }, [latest?.id, latest?.status]);
   useEffect(() => {
     let mounted = true;
     setRestoreError(false);
@@ -98,7 +109,7 @@ export function StudioConversation({
   useEffect(() => {
     if (pending && latest?.requestId === pending.requestId && result.data) void received(result.data, pending.requestId).catch(() => {});
   }, [pending?.requestId, latest?.requestId]);
-  async function send() {
+  async function send(suggestion?: string) {
     setError("");
     setRejected(false);
     await run(async () => {
@@ -106,7 +117,7 @@ export function StudioConversation({
         let intent = pendingRef.current;
         if (!intent) {
           const saved = await save();
-          intent = { requestId: newRequestId(), expectedRevision: saved.revision, message: message.trim(), locale };
+          intent = { requestId: newRequestId(), expectedRevision: saved.revision, message: (suggestion ?? message).trim(), locale };
           await device.startMessage(intent);
           sessionController.assertEpoch(epoch);
           setMessage("");
@@ -138,6 +149,19 @@ export function StudioConversation({
               "أخبر ماركوس بما تريد إنشاءه أو تغييره. ملف نشاطك ومراجع حملتك جزء من سياق المحادثة."
             )}
           </Txt>
+          <Button
+            secondary
+            disabled={busy || disabled || active || !restored || !!pending || !!message.trim()}
+            label={t("Prepare this draft", "إعداد هذه المسودة")}
+            onPress={() =>
+              void send(
+                t(
+                  `Prepare the caption and visual directions for this ${item.contentType.toLowerCase()} using its brief and campaign context. Keep the selected format. Save the draft for my review; do not mark it ready or schedule it.`,
+                  `أعدّ النص والتوجيهات البصرية لهذه المسودة باستخدام ملخصها وسياق الحملة. حافظ على نوع المحتوى المحدد واحفظها لمراجعتي دون اعتماد أو جدولة.`
+                )
+              )
+            }
+          />
         </Card>
       ) : null}
       {result.isPending ? <Loading /> : null}
@@ -162,6 +186,28 @@ export function StudioConversation({
       {active ? (
         <Notice>{t("MARKOS is working. You can leave and return to this conversation.", "ماركوس يعمل الآن. يمكنك المغادرة والعودة إلى هذه المحادثة.")}</Notice>
       ) : null}
+      {latest && ["FAILED", "CONFLICT"].includes(latest.status) ? (
+        <Card tone="warning">
+          <Txt>
+            {latest.status === "CONFLICT"
+              ? t(
+                  "The draft changed before the Assistant could apply its response. Your current edits are preserved.",
+                  "تغيّرت المسودة قبل تطبيق رد المساعد. تعديلاتك الحالية محفوظة."
+                )
+              : t(
+                  "The Assistant could not finish this request. Your draft is preserved. Review it before trying again.",
+                  "تعذّر على المساعد إكمال الطلب. مسودتك محفوظة. راجعها قبل المحاولة مجددًا."
+                )}
+          </Txt>
+          {latest.proposedCaption ? <Txt selectable>{latest.proposedCaption}</Txt> : null}
+          <Button
+            secondary
+            disabled={busy || disabled || !!pending || !!message.trim()}
+            label={t("Edit the last request", "تعديل الطلب السابق")}
+            onPress={() => editMessage([...result.data!.messages].reverse().find((entry) => entry.role === "user")?.text ?? "")}
+          />
+        </Card>
+      ) : null}
       {latest?.status === "AWAITING_CONFIRMATION" && latest.confirmation ? (
         <Card tone="warning">
           <Txt variant="heading">{t("Review the proposed changes", "راجع التغييرات المقترحة")}</Txt>
@@ -185,20 +231,46 @@ export function StudioConversation({
           />
         </Card>
       ) : null}
-      {latest?.actions?.generation.map((action) => (
-        <Notice key={action.itemId} error={["FAILED", "UNKNOWN"].includes(action.status)}>
-          {action.status === "ATTACHED"
-            ? t("Generated media attached to the draft.", "تم إرفاق الوسائط المنشأة بالمسودة.")
-            : action.status === "LIBRARY_ONLY"
-              ? t("Media saved to your library. Choose it in Media to attach it.", "حُفظت الوسائط في المكتبة. اخترها من قسم الوسائط لإرفاقها.")
-              : ["FAILED", "UNKNOWN"].includes(action.status)
-                ? t(
-                    "Media generation needs attention. Open Media to check and retry.",
-                    "يتطلب إنشاء الوسائط انتباهك. افتح قسم الوسائط للتحقّق وإعادة المحاولة."
-                  )
-                : t("Media generation is in progress.", "جارٍ إنشاء الوسائط.")}
-        </Notice>
-      ))}
+      {latest?.actions?.generation.map((recorded) => {
+        const job = video.data?.id === recorded.jobId ? video.data : null;
+        const action = {
+          ...recorded,
+          status:
+            job?.status === "FAILED" || job?.status === "CANCELLED"
+              ? "FAILED"
+              : job?.status === "COMPLETED"
+                ? item.mediaItems.some((media) => media.mediaAssetId === job.outputMediaAssetId)
+                  ? "ATTACHED"
+                  : "LIBRARY_ONLY"
+                : recorded.status
+        };
+        return (
+          <Notice key={action.itemId} error={["FAILED", "UNKNOWN"].includes(action.status)}>
+            {action.status === "ATTACHED"
+              ? t("Generated media attached to the draft.", "تم إرفاق الوسائط المنشأة بالمسودة.")
+              : action.status === "LIBRARY_ONLY"
+                ? t("Media saved to your library. Choose it in Media to attach it.", "حُفظت الوسائط في المكتبة. اخترها من قسم الوسائط لإرفاقها.")
+                : ["FAILED", "UNKNOWN"].includes(action.status)
+                  ? t(
+                      "Media generation needs attention. Open Media to check and retry.",
+                      "يتطلب إنشاء الوسائط انتباهك. افتح قسم الوسائط للتحقّق وإعادة المحاولة."
+                    )
+                  : t("Media generation is in progress.", "جارٍ إنشاء الوسائط.")}
+          </Notice>
+        );
+      })}
+      {latest && !active ? (
+        <Card tone="tint">
+          <Txt>
+            {t(
+              "Review the draft and its media. A written draft does not contain a generated image or video until media is attached.",
+              "راجع المسودة ووسائطها. المسودة المكتوبة لا تحتوي على صورة أو فيديو منشأ حتى تُرفق الوسائط."
+            )}
+          </Txt>
+          <Button secondary label={t("Review full draft", "مراجعة المسودة كاملة")} onPress={openPreview} />
+          <Button label={t("Generate or choose media", "إنشاء أو اختيار الوسائط")} onPress={openMedia} />
+        </Card>
+      ) : null}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
       {restoreError ? (
         <>
@@ -254,7 +326,15 @@ export function StudioConversation({
             maxLength={4000}
             editable={restored && !busy && !disabled && !active}
             style={{ minHeight: 100 }}
-            placeholder={t("Create the caption and an 8-second Reel…", "أنشئ النص وريل مدته ٨ ثوانٍ…")}
+            placeholder={
+              item.contentType === "REEL"
+                ? t("Write the caption and plan my Reel…", "اكتب النص وخطّط الريل…")
+                : item.contentType === "CAROUSEL"
+                  ? t("Prepare the caption and each slide…", "أعدّ النص وكل شريحة…")
+                  : item.contentType === "STORY"
+                    ? t("Prepare my image or video Story…", "أعدّ قصتي كصورة أو فيديو…")
+                    : t("Write the caption and image direction…", "اكتب النص والتوجّه البصري للصورة…")
+            }
           />
           {message ? (
             <Txt variant="meta" muted>

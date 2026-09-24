@@ -11,6 +11,7 @@ import { Button, Card, Field, IconButton, Notice, Row, Txt } from "../ui";
 import { MediaPreview } from "./media-preview";
 import { MotionReel } from "./motion-reel";
 import { generationActive } from "./model";
+import { mediaKind, generateMissingImages } from "./workflow";
 import { errorMessage, LocalAppError } from "../errors";
 
 export function StudioMedia({
@@ -42,7 +43,7 @@ export function StudioMedia({
     queryFn: () => api.latestMediaGenerationJob(item.id),
     refetchInterval: (query) => (generationActive(query.state.data?.status) ? 2500 : 6000)
   });
-  const job = jobResult.data;
+  const job = item.mediaItems.some((media) => media.id === jobResult.data?.contentMediaItemId && mediaKind(item, media) === "VIDEO") ? jobResult.data : null;
   const active = generationActive(job?.status);
   useEffect(() => {
     if (job?.status === "COMPLETED") {
@@ -50,8 +51,8 @@ export function StudioMedia({
       void queryClient.invalidateQueries({ queryKey: [scope, "content", item.id] });
     }
   }, [job?.id, job?.status]);
-  const video = item.contentType === "REEL" || item.contentType === "STORY";
   const locked = !editable || busy || active;
+  const missingImages = item.mediaItems.filter((media) => mediaKind(item, media) === "IMAGE" && !media.mediaAssetId && !!media.visualDirection?.trim());
   async function mutate(operations: ContentAuthoringOperation[]) {
     await run(async () => {
       const saved = await save();
@@ -65,6 +66,7 @@ export function StudioMedia({
   }
   async function upload(target: string) {
     await run(async () => {
+      const video = mediaKind(item, item.mediaItems.find((media) => media.id === target)!) === "VIDEO";
       const picked = await DocumentPicker.getDocumentAsync({ type: video ? ["video/mp4"] : ["image/jpeg"], copyToCacheDirectory: true });
       if (picked.canceled) return;
       const file = picked.assets[0]!;
@@ -84,6 +86,7 @@ export function StudioMedia({
     await run(async () => {
       const saved = await save();
       const input = { contentMediaItemId: target, expectedRevision: saved.revision };
+      const video = mediaKind(saved, saved.mediaItems.find((media) => media.id === target)!) === "VIDEO";
       if (video) {
         const next = await api.generateContentVideo(item.id, input);
         queryClient.setQueryData([scope, "video-job", item.id], next);
@@ -97,7 +100,26 @@ export function StudioMedia({
   return (
     <View style={{ gap: 20 }}>
       {assets.isError ? <Notice error>{errorMessage(assets.error, t)}</Notice> : null}
+      {item.contentType === "CAROUSEL" && missingImages.length > 1 ? (
+        <Button
+          icon={Sparkles}
+          disabled={locked}
+          label={t(`Generate ${missingImages.length} missing slide images`, `إنشاء صور الشرائح الناقصة (${missingImages.length})`)}
+          onPress={() =>
+            void run(async () => {
+              const saved = await save();
+              try {
+                await generateMissingImages(api, saved, accept);
+              } finally {
+                await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+              }
+            })
+          }
+        />
+      ) : null}
       {item.mediaItems.map((media, index) => {
+        const kind = mediaKind(item, media);
+        const video = kind === "VIDEO";
         const asset = assets.data?.find((asset) => asset.id === media.mediaAssetId);
         return (
           <Card key={media.id}>
@@ -130,6 +152,51 @@ export function StudioMedia({
                 </>
               ) : null}
             </Row>
+            {item.contentType === "STORY" && editable ? (
+              <>
+                <Txt variant="label">{t("Story media", "وسائط القصة")}</Txt>
+                <Row>
+                  {(["IMAGE", "VIDEO"] as const).map((nextKind) => (
+                    <View key={nextKind} style={{ flex: 1 }}>
+                      <Button
+                        secondary={kind !== nextKind}
+                        disabled={locked || kind === nextKind}
+                        label={nextKind === "IMAGE" ? t("Image", "صورة") : t("Video", "فيديو")}
+                        onPress={() => {
+                          const change = () =>
+                            void mutate([
+                              {
+                                type: "updateMediaItem",
+                                itemId: media.id,
+                                fields: {
+                                  mediaKind: nextKind,
+                                  mediaAssetId: null,
+                                  aspectRatio: "VERTICAL",
+                                  generationDurationSeconds: nextKind === "VIDEO" ? 8 : null
+                                }
+                              }
+                            ]);
+                          if (media.mediaAssetId)
+                            Alert.alert(
+                              t("Change Story media?", "تغيير وسائط القصة؟"),
+                              t(
+                                "The current attachment stays in your library. Review the new media before approval.",
+                                "سيبقى المرفق الحالي في مكتبتك. راجع الوسائط الجديدة قبل الاعتماد."
+                              ),
+                              [
+                                { text: t("Cancel", "إلغاء"), style: "cancel" },
+                                { text: t("Change", "تغيير"), onPress: change }
+                              ]
+                            );
+                          else change();
+                        }}
+                      />
+                    </View>
+                  ))}
+                </Row>
+                {!kind ? <Notice>{t("Choose an image or video to start this Story.", "اختر صورة أو فيديو لبدء هذه القصة.")}</Notice> : null}
+              </>
+            ) : null}
             {asset ? (
               <MediaPreview asset={asset} portrait={video} />
             ) : (
@@ -145,6 +212,13 @@ export function StudioMedia({
               <>
                 {item.contentType === "CAROUSEL" ? (
                   <>
+                    <Field
+                      label={t("Slide purpose", "هدف الشريحة")}
+                      value={media.purpose ?? ""}
+                      maxLength={160}
+                      editable={!locked}
+                      onChangeText={(purpose) => edit(media.id, { purpose })}
+                    />
                     <Field
                       label={t("Slide title", "عنوان الشريحة")}
                       value={media.title ?? ""}
@@ -194,11 +268,11 @@ export function StudioMedia({
                   </Row>
                 ) : (
                   <Row>
-                    {(["SQUARE", "PORTRAIT"] as const).map((ratio) => (
+                    {(["SQUARE", "PORTRAIT", "VERTICAL"] as const).map((ratio) => (
                       <View key={ratio} style={{ flex: 1 }}>
                         <Button
                           secondary={(media.aspectRatio ?? "PORTRAIT") !== ratio}
-                          label={ratio === "SQUARE" ? "1:1" : "4:5"}
+                          label={ratio === "SQUARE" ? "1:1" : ratio === "VERTICAL" ? "9:16" : "4:5"}
                           disabled={locked}
                           onPress={() => edit(media.id, { aspectRatio: ratio })}
                         />
@@ -209,6 +283,8 @@ export function StudioMedia({
                 {video ? (
                   <MotionReel
                     key={media.id}
+                    contentId={item.id}
+                    mediaId={media.id}
                     disabled={locked}
                     duration={media.generationDurationSeconds ?? 8}
                     assets={assets.data ?? []}
@@ -230,13 +306,37 @@ export function StudioMedia({
                         ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي")
                         : asset
                           ? t("Generate a replacement", "إنشاء بديل")
-                          : t("Generate", "إنشاء")
+                          : t("Generate image", "إنشاء صورة")
                     }
-                    disabled={locked || (media.visualDirection?.trim().length ?? 0) < 3}
+                    disabled={locked || !kind || (media.visualDirection?.trim().length ?? 0) < 3}
                     onPress={() => {
                       void generate(media.id);
                     }}
                   />
+                ) : null}
+                {!media.visualDirection?.trim() && kind ? (
+                  <Txt variant="meta" muted>
+                    {t(
+                      "Add visual direction above, or ask the Assistant to prepare it, then generate your media.",
+                      "أضف التوجّه البصري أعلاه أو اطلب من المساعد إعداده، ثم أنشئ الوسائط."
+                    )}
+                  </Txt>
+                ) : null}
+                {video && capabilities.data?.generatedFootage === false ? (
+                  <Notice>
+                    {t(
+                      "Use Motion Reel with your artwork, or upload a video. AI footage is currently unavailable.",
+                      "استخدم الريل المتحرك مع تصميمك أو ارفع فيديو. توليد المشاهد بالذكاء الاصطناعي غير متاح حاليًا."
+                    )}
+                  </Notice>
+                ) : null}
+                {video && capabilities.isError ? (
+                  <Notice error>
+                    {t(
+                      "Could not check AI footage availability. Motion Reel and upload are still available.",
+                      "تعذّر التحقق من توفر توليد المشاهد. يمكنك استخدام الريل المتحرك أو رفع فيديو."
+                    )}
+                  </Notice>
                 ) : null}
                 <Row>
                   <View style={{ flex: 1 }}>
@@ -244,7 +344,7 @@ export function StudioMedia({
                       secondary
                       icon={Upload}
                       label={t("Upload", "رفع")}
-                      disabled={locked}
+                      disabled={locked || !kind}
                       onPress={() => {
                         void upload(media.id);
                       }}
@@ -255,7 +355,7 @@ export function StudioMedia({
                       secondary
                       icon={FolderOpen}
                       label={t("Library", "المكتبة")}
-                      disabled={locked}
+                      disabled={locked || !kind}
                       onPress={() => setLibraryTarget(libraryTarget === media.id ? null : media.id)}
                     />
                   </View>
@@ -263,11 +363,20 @@ export function StudioMedia({
                 <Txt variant="meta" muted>
                   {video ? t("MP4 · up to 8 MB", "MP4 · حتى ٨ ميغابايت") : t("JPEG · up to 8 MB", "JPEG · حتى ٨ ميغابايت")}
                 </Txt>
-                {item.contentType === "CAROUSEL" ? (
+                {media.mediaAssetId ? (
                   <Button
                     secondary
                     icon={Trash2}
                     disabled={locked}
+                    label={t("Detach media", "فصل الوسائط")}
+                    onPress={() => void mutate([{ type: "updateMediaItem", itemId: media.id, fields: { mediaAssetId: null } }])}
+                  />
+                ) : null}
+                {item.contentType === "CAROUSEL" ? (
+                  <Button
+                    secondary
+                    icon={Trash2}
+                    disabled={locked || item.mediaItems.length <= 1}
                     label={t("Remove slide", "إزالة الشريحة")}
                     onPress={() =>
                       Alert.alert(t("Remove this slide?", "إزالة هذه الشريحة؟"), t("Its media stays in your library.", "ستبقى وسائطها في مكتبتك."), [
@@ -310,7 +419,7 @@ export function StudioMedia({
           </Card>
         );
       })}
-      {editable && (item.mediaItems.length === 0 || (item.contentType === "CAROUSEL" && item.mediaItems.length < 10)) ? (
+      {editable && item.contentType === "CAROUSEL" && item.mediaItems.length < 10 ? (
         <Button
           secondary
           icon={Plus}
@@ -320,7 +429,7 @@ export function StudioMedia({
             void mutate([
               {
                 type: "addMediaItem",
-                fields: { mediaKind: video ? "VIDEO" : "IMAGE", aspectRatio: video ? "VERTICAL" : "PORTRAIT", generationDurationSeconds: video ? 8 : null }
+                fields: { mediaKind: "IMAGE", aspectRatio: "PORTRAIT", generationDurationSeconds: null }
               }
             ]);
           }}
@@ -330,12 +439,12 @@ export function StudioMedia({
         <Card tone={job.status === "FAILED" ? "warning" : "tint"}>
           <Txt variant="heading">
             {active
-              ? t("Generating your Reel", "جارٍ إنشاء الريل")
+              ? t("Generating your video", "جارٍ إنشاء الفيديو")
               : job.status === "COMPLETED"
-                ? t("Reel generation complete", "اكتمل إنشاء الريل")
+                ? t("Video generation complete", "اكتمل إنشاء الفيديو")
                 : job.status === "CANCELLED"
                   ? t("Generation cancelled", "تم إلغاء الإنشاء")
-                  : t("Reel generation needs attention", "يتطلب إنشاء الريل انتباهك")}
+                  : t("Video generation needs attention", "يتطلب إنشاء الفيديو انتباهك")}
           </Txt>
           {active ? (
             <>
@@ -369,7 +478,7 @@ export function StudioMedia({
               <Button
                 secondary
                 disabled={busy || !editable}
-                label={t("Retry Reel", "إعادة محاولة الريل")}
+                label={t("Retry video", "إعادة محاولة الفيديو")}
                 onPress={() => {
                   void run(async () => {
                     const saved = await save();

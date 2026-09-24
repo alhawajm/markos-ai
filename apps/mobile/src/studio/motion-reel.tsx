@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Image } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
@@ -7,25 +7,67 @@ import type { MediaAssetRecord } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Field, Notice, Txt } from "../ui";
 import { errorMessage } from "../errors";
+import { StudioDeviceStore } from "./device-store";
 
 export function MotionReel({
+  contentId,
+  mediaId,
   disabled,
   duration,
   assets,
   generate
 }: {
+  contentId: string;
+  mediaId: string;
   disabled: boolean;
   duration: number;
   assets: MediaAssetRecord[];
   generate: (motion: { artworkMediaAssetId: string; textCards: string[] }) => Promise<void>;
 }) {
-  const { api, scope, queryClient } = useAccount();
+  const { api, scope, epoch, session, queryClient } = useAccount();
+  const device = useMemo(() => new StudioDeviceStore(scope, epoch, contentId, session.workspace.id), [scope, epoch, contentId, session.workspace.id]);
   const { t } = useAppearance();
-  const [artwork, setArtwork] = useState<MediaAssetRecord | null>(null);
+  const [artworkId, setArtworkId] = useState<string | null>(null);
+  const artwork = assets.find((asset) => asset.id === artworkId) ?? null;
+  const [restored, setRestored] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [cards, setCards] = useState(["", "", ""]);
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    let mounted = true;
+    void device
+      .readMotion(mediaId)
+      .then((saved) => {
+        if (mounted) {
+          setArtworkId(saved.artworkId);
+          setCards(saved.cards);
+          setRestored(true);
+          setError("");
+        }
+      })
+      .catch((problem) => {
+        if (mounted) setError(errorMessage(problem, t));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [device, mediaId, attempt]);
+  useEffect(() => {
+    if (!restored) return;
+    let mounted = true;
+    void device.saveMotion(mediaId, { artworkId, cards }).catch(() => {
+      if (mounted)
+        setError(
+          t("Could not save the Motion Reel settings on this device. Keep this screen open.", "تعذّر حفظ إعدادات الريل على الجهاز. أبقِ هذه الشاشة مفتوحة.")
+        );
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [device, mediaId, artworkId, cards, restored]);
+  const locked = disabled || !restored;
   async function upload() {
     setBusy(true);
     setError("");
@@ -38,7 +80,7 @@ export function MotionReel({
         return;
       }
       const saved = await api.uploadMedia({ type: "IMAGE", filename: file.name, mimeType: "image/jpeg", base64Data: await new File(file.uri).base64() });
-      setArtwork(saved);
+      setArtworkId(saved.id);
       await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
     } catch (e) {
       setError(errorMessage(e, t));
@@ -65,8 +107,8 @@ export function MotionReel({
           <Txt variant="meta">{artwork.filename}</Txt>
         </>
       ) : null}
-      <Button secondary icon={Upload} disabled={disabled} busy={busy} label={t("Upload JPEG artwork", "رفع تصميم JPEG")} onPress={() => void upload()} />
-      <Button secondary disabled={disabled || busy} label={t("Choose library artwork", "اختر تصميمًا من المكتبة")} onPress={() => setChoosing(!choosing)} />
+      <Button secondary icon={Upload} disabled={locked} busy={busy} label={t("Upload JPEG artwork", "رفع تصميم JPEG")} onPress={() => void upload()} />
+      <Button secondary disabled={locked || busy} label={t("Choose library artwork", "اختر تصميمًا من المكتبة")} onPress={() => setChoosing(!choosing)} />
       {choosing ? (
         <>
           {assets
@@ -75,9 +117,10 @@ export function MotionReel({
               <Button
                 key={asset.id}
                 secondary
+                disabled={locked || busy}
                 label={asset.filename}
                 onPress={() => {
-                  setArtwork(asset);
+                  setArtworkId(asset.id);
                   setChoosing(false);
                 }}
               />
@@ -92,7 +135,7 @@ export function MotionReel({
           value={text}
           multiline
           maxLength={160}
-          editable={!disabled && !busy}
+          editable={!locked && !busy}
           onChangeText={(value) => setCards((current) => current.map((line, i) => (i === index ? value : line)))}
         />
       ))}
@@ -103,9 +146,12 @@ export function MotionReel({
         )}
       </Txt>
       {error ? <Notice error>{error}</Notice> : null}
+      {!restored && error ? (
+        <Button secondary label={t("Retry saved settings", "إعادة محاولة استعادة الإعدادات")} onPress={() => setAttempt((value) => value + 1)} />
+      ) : null}
       <Button
         icon={Clapperboard}
-        disabled={disabled || !artwork}
+        disabled={locked || !artwork}
         busy={busy}
         label={t("Create Motion Reel", "إنشاء ريل متحرك")}
         onPress={() => {
