@@ -113,6 +113,12 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
       invoices: toJsonRows(invoices),
       mediaAssets: toJsonRows(mediaAssets),
       members: toJsonRows(members),
+      invitations: toJsonRows(
+        await prisma.workspaceInvitation.findMany({
+          where: { workspaceId },
+          select: { id: true, email: true, role: true, createdAt: true, expiresAt: true, acceptedAt: true, revokedAt: true }
+        })
+      ),
       notifications: toJsonRows(notifications),
       offeringCatalogs: toJsonRows(offeringCatalogs),
       offeringCatalogRevisions: toJsonRows(offeringCatalogRevisions),
@@ -199,6 +205,7 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
     counts.promptTemplates = (await tx.promptTemplate.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.notifications = (await tx.notification.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.workspaceMembers = (await tx.workspaceMember.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
+    counts.workspaceInvitations = (await tx.workspaceInvitation.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.workspaces = (
       await tx.workspace.updateMany({
         data: {

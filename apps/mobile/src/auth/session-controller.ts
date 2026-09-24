@@ -7,6 +7,7 @@ export interface CredentialStore {
   clear(): Promise<void>;
 }
 export interface SessionTransport {
+  switchWorkspace(input: { workspaceId: string; totpCode?: string }, accessToken: string): Promise<NativeAuthSession>;
   verifyMfa(code: string, accessToken: string): Promise<NativeAuthSession>;
   register(input: {
     email: string;
@@ -86,6 +87,41 @@ export class SessionController {
     this.stepUp = undefined;
     const grant = await this.transport.register(input);
     await this.accept(grant, epoch);
+  }
+
+  async switchWorkspace(input: { workspaceId: string; totpCode?: string }): Promise<void> {
+    const epoch = this.epoch;
+    await this.stepUp;
+    await this.renewal;
+    this.assertEpoch(epoch);
+    const previous = this.state.session;
+    if (!previous) throw new SessionChangedError();
+    let grant: NativeAuthSession;
+    try {
+      grant = await this.transport.switchWorkspace(input, previous.tokens.accessToken);
+    } catch (error) {
+      this.assertEpoch(epoch);
+      if (!(error instanceof MarkosApiError) || error.code !== "INVALID_TOKEN") throw error;
+      const access = await this.renew();
+      this.assertEpoch(epoch);
+      grant = await this.transport.switchWorkspace(input, access);
+    }
+    this.assertEpoch(epoch);
+    if (grant.user.id !== previous.user.id || grant.workspace.id !== input.workspaceId)
+      throw new MarkosApiError("Session identity changed", 401, "INVALID_RESPONSE");
+    const oldRefresh = this.refreshToken;
+    const nextEpoch = ++this.epoch;
+    this.renewal = undefined;
+    this.stepUp = undefined;
+    try {
+      await this.accept(grant, nextEpoch);
+    } catch (error) {
+      // Do not leave the old UI bound to an invalid epoch if secure storage fails.
+      if (this.epoch === nextEpoch) await this.expire().catch(() => {});
+      void this.transport.logout(grant.tokens.refreshToken).catch(() => {});
+      throw error;
+    }
+    if (oldRefresh) void this.transport.logout(oldRefresh).catch(() => {});
   }
 
   verifyMfa = (code: string): Promise<void> => {

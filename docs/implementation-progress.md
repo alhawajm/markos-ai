@@ -1,39 +1,32 @@
-# MARKOS implementation progress — 24 September 2026
+# MARKOS implementation progress - 24 September 2026
 
 Owner instruction: implement the remaining mobile and MARKOS work within available access, including an open-source video replacement. Continue directly; raise missing external access without blocking independent work.
 
-## Active order
+## Delivered
 
-- [x] Preserve the existing deployed implementation in Git and synchronize `codex/production-mobile` (`065d878`).
-- [ ] Replace retiring Sora generation with free, self-hosted Apache-2.0 Wan 2.2, preserving real Arabic/English text rendering. Owner rejected paid GPU/API hosting; live activation requires suitable owned GPU hardware.
-- [ ] Replace deterministic production embeddings; re-index existing knowledge safely before switching retrieval spaces. Build provider-backed agent contracts and analytics advice after retrieval.
-- [ ] Finish native account/data controls, workspace/team and catalog flows; connect supported backend operations with bilingual, recoverable screens.
-- [ ] Add remaining knowledge/history, reporting and administration surfaces, with appropriate roles and isolation coverage.
-- [ ] Prepare mobile store assets/configuration and repeatable release operations; verify backups, monitoring and the changed production journeys.
-- [ ] Complete live Instagram, email and physical-device acceptance where account access allows.
+- Preserved the handover/mobile implementation in Git and pushed codex/production-mobile (065d878).
+- Optional Wan 2.2 queue adapter (408b777); NOT activated after the owner rejected paid video hosting. No fal account, credential or payment was created.
+- Real production embeddings, versioned retrieval spaces and eight provider-backed agent contracts (9068f00). Re-indexed 67 facts across five active workspaces. Live provider smoke confirmed real embedding/agent requests and token accounting.
+- Free CPU Motion Reels on web and native: owned JPEG artwork, slow zoom/fades, optional exact Arabic/English cards, 4/8/12 seconds, portrait H.264. This is explicitly labeled motion graphics, not generated footage. No AI planning or video API call occurs in this mode. The hosted renderer produced a valid four-second 720x1280, 24 fps MP4; its bilingual frame was inspected.
+- Railway release succeeded: API 584d33a7-bd9f-46c1-b64b-06a1bae13fe4, AI 47b26059-73ad-4c0b-b43e-a34aa26b4527, worker bbf4e569-14ee-49a2-8c8b-5b5b4e02b456, web 7828257a-c4db-4d1f-8cbb-9a004fd99a20.
+- Motion native preview update group be13c85d-c6cd-4b94-8b2d-09c9be56ab58 served successfully to both runtime 0.2.0 platforms.
 
-Commercial billing remains a separate activation gate: implement available foundations without enabling simulated payments or reintroducing deferred quotas. Live merchant credentials/certification, final legal wording, Meta review approval, store review, and owner-controlled device actions cannot be claimed complete from code tests.
+## Account/team and reporting release
 
-## External input
+Implemented native account/name/language and owner workspace-name editing; secure workspace switching; email-bound, expiring, one-use team invitations; role management and revocation; private JSON export sharing and explicit workspace erasure; saved knowledge/history and activity readers; real analytics advice and monthly PDF sharing. Native catalog editing already existed and remains available in Business profile. Web Settings now supports account editing, team management and workspace switching.
 
-This PC has Intel integrated graphics and no suitable NVIDIA GPU. No fal.ai/RunPod/Replicate credential was found in the local configuration or returned AI-service Railway variables. Hosted Wan integration is being prepared; the owner was asked to set `FAL_KEY` in Railway's AI service or identify existing GPU hosting. Never put provider keys in mobile/web code or this document.
+Invitation codes are stored hashed and shown once for the owner to share. No automatic email is sent. Existing members cannot gain a stronger role by accepting an old invitation. Administrator changes require the owner, and removed members lose API access immediately. Invitation data is included without hashes in workspace exports and removed by scoped workspace erasure.
 
-## Video implementation
+Added Expo Sharing, so the new mobile release uses runtime 0.3.0 and requires new binaries. The earlier 0.2.0 Motion update remains compatible with installed apps. Added native icon, Android adaptive foreground and splash assets using the existing MARKOS wand and Sunlit colors. Only MARKOS's com.markos.mobile project is in scope.
 
-Wan 2.2 A14B is integrated through fal's durable queue, with signed job receipts, portrait normalization, 4/8/12-second outputs and separate English/Arabic text rendering. Eleven provider tests plus eleven existing video/text tests pass; provider typing and lint checks pass. Live generation and visual quality still require `FAL_KEY` and an actual GPU run.
+Focused evidence: 23 API workspace/team/native-auth tests, 21 native session/export tests, three rendered web tests (English desktop, Arabic 390 px, account saving); mobile/API/web TypeScript; Android/iOS bundle export. Tests used only disposable markos_production_features_test. These are focused checks, not a full suite or physical-device acceptance. Account/team migration and hosted rollout are next; mobile builds pending.
 
-Set `AI_VIDEO_PROVIDER=fal_wan` only with a working server-side `FAL_KEY`. `WAN_VIDEO_ENDPOINT` and `WAN_VIDEO_INFERENCE_STEPS` are configurable. Existing provider receipts retain their original routing across a configuration change. Retain the internal service signing token while Wan jobs are pending. A submission with an unknown outcome is never retried automatically because that could buy another generation.
+## Remaining
 
-Choice: [Wan 2.2](https://github.com/Wan-Video/Wan2.2) has Apache-2.0 code/model licensing and supports portrait video. [fal hosting](https://fal.ai/models/fal-ai/wan/v2.2-a14b/text-to-video/api) is paid GPU infrastructure, not a free local runtime. [OpenAI's retirement notice](https://developers.openai.com/api/docs/deprecations) retires the previous Videos API on 24 September 2026. Wan quality is not yet benchmarked on MARKOS campaigns.
+- Self-hosted Wan generated footage: this laptop has 16 GB system RAM and Intel integrated graphics. It cannot run the selected model at a useful production level. Wan code/weights are Apache-2.0; cloud GPUs, including AWS, are infrastructure costs. No paid video service is enabled. Suitable owned GPU hardware remains necessary for a no-video-API-fee deployment.
+- Verify native account/team/share controls on physical Android and iPhone devices after installing 0.3.0. Capture actual native store screenshots and complete store listing/privacy declarations, final legal wording and review submission. Store approval cannot be claimed from successful builds.
+- Complete live Instagram consent/publishing/analytics acceptance with the owner's connected account and Meta permissions. Existing configuration is not proof of review approval or live delivery.
+- Notification preferences/push delivery, remaining administration surfaces, backup/restore and monitoring verification remain follow-up production work.
+- Commercial billing remains deferred by explicit product decision. No simulated payments or quota gates were activated. Live merchant credentials/certification are external requirements.
 
-## Updated owner constraint
-
-24 September: video must use free, open-source software without a paid video API. The fal signup tab was opened but no account was created, no credential issued and no payment made. It was closed after this correction. The optional hosted adapter is committed but will not be activated. Prepare self-hosted Wan; suitable GPU availability is pending an owner answer.
-
-## Knowledge and agent implementation
-
-Real production embeddings and eight strict provider-backed agent contracts are implemented. Versioned embedding spaces prevent comparisons against legacy deterministic vectors; bounded workspace re-indexing and lazy refresh preserve current owner facts. Actual embedding tokens are metered without commercial quota gates. Focused checks: 29 Python tests and 16 API tests passed; API TypeScript and provider mypy passed. Migration applied only to disposable `markos_production_features_test` so far. Production deployment and re-index remain pending.
-
-## Works without a GPU
-
-Owner has 16 GB system RAM and intends future AWS hosting, but needs video now. Added an explicitly labeled Motion Reel mode on web and native: uploaded JPEG artwork, slow zoom/fades, optional exact Unicode cards, 4/8/12 seconds, 720?1280 H.264. This bypasses every AI planning/video provider call and retains durable queue recovery and generation-intent attachment checks. Outputs are ordinary VIDEO assets, never labeled AI_GENERATED. Actual local MP4 render and English/Arabic frame inspection passed. 22 video worker tests and 4 renderer validation tests passed; API, mobile and web TypeScript passed. AI/API deployment has started; worker/web and mobile release pending.
+Website: https://web-production-94e63.up.railway.app

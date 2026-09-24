@@ -8,6 +8,7 @@ import { Button, Card, Loading, Notice, Screen, Txt } from "../../src/ui";
 import { QueryFailure, typeLabel } from "../../src/content";
 import { Choices } from "../../src/publishing/components";
 import { percentageChange } from "../../src/publishing/model";
+import { InsightsAdvice } from "../../src/insights-advice";
 export default function Insights() {
   const { api, scope } = useAccount();
   const { t, colors, locale } = useAppearance();
@@ -136,6 +137,7 @@ export default function Insights() {
         </>
       )}
       <Button secondary label={t("Instagram connection", "اتصال إنستغرام")} onPress={() => router.push("/instagram")} />
+      <InsightsAdvice key={`${range}:${locale}`} days={Number(range)} />
       <Button secondary label={t("Refresh saved results", "تحديث النتائج المحفوظة")} busy={result.isFetching} onPress={() => void result.refetch()} />
       <Txt variant="meta" muted>
         {t(

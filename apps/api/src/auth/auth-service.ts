@@ -698,6 +698,30 @@ function emailVerificationUserKey(userId: string): string {
   return `email-verification:user:${userId}`;
 }
 
+export async function switchWorkspaceSession(input: {
+  userId: string;
+  workspaceId: string;
+  authVersion: number;
+  mfaVerifiedUntil: number | null;
+  totpCode?: string | undefined;
+}) {
+  const user = await prisma.user.findFirst({ where: { id: input.userId, deletedAt: null, authVersion: input.authVersion } });
+  const membership = await prisma.workspaceMember.findFirst({ where: { userId: input.userId, workspaceId: input.workspaceId, deletedAt: null } });
+  const workspace = await prisma.workspace.findFirst({ where: { id: input.workspaceId, deletedAt: null } });
+  if (!user || !membership || !workspace) throw new InvalidCredentialsError();
+  const roles = [membership.role as Role];
+  const inheritedMfa = isMfaStepUpActive(input.mfaVerifiedUntil) && user.mfaEnabled;
+  const verified = inheritedMfa || verifyRoleMfa({ roles, user, ...(input.totpCode ? { totpCode: input.totpCode } : {}) });
+  return sessionFor({
+    authVersion: user.authVersion,
+    roles,
+    mfaVerified: verified,
+    ...(inheritedMfa ? { mfaVerifiedUntil: input.mfaVerifiedUntil } : {}),
+    user: { id: user.id, email: user.email, fullName: user.fullName, locale: fromPrismaLocale(user.locale), isVerified: user.isVerified },
+    workspace
+  });
+}
+
 async function sessionFor(input: {
   authVersion: number;
   mfaVerified?: boolean;

@@ -101,6 +101,40 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
+  async accountSettings(): Promise<AccountSettings> {
+    return (await this.request<AccountSettings>("/v1/account")).data;
+  }
+  async updateAccount(input: { fullName: string; locale: "en" | "ar"; expectedUpdatedAt: string }): Promise<void> {
+    await this.request("/v1/account", { method: "PATCH", body: input });
+  }
+  async updateWorkspaceSettings(input: { name: string; expectedUpdatedAt: string }): Promise<void> {
+    await this.request("/v1/workspace/settings", { method: "PATCH", body: input });
+  }
+  async workspaces(): Promise<WorkspaceChoice[]> {
+    return (await this.request<WorkspaceChoice[]>("/v1/workspaces")).data;
+  }
+  async team(): Promise<WorkspaceTeam> {
+    return (await this.request<WorkspaceTeam>("/v1/workspace/team")).data;
+  }
+  async inviteTeam(input: { email: string; role: TeamRole }): Promise<TeamInvitation & { code: string }> {
+    return (await this.request<TeamInvitation & { code: string }>("/v1/workspace/team/invitations", { method: "POST", body: input })).data;
+  }
+  async revokeTeamInvitation(id: string): Promise<void> {
+    await this.request(`/v1/workspace/team/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async changeTeamRole(id: string, role: TeamRole): Promise<void> {
+    await this.request(`/v1/workspace/team/members/${encodeURIComponent(id)}`, { method: "PATCH", body: { role } });
+  }
+  async removeTeamMember(id: string): Promise<void> {
+    await this.request(`/v1/workspace/team/members/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async acceptTeamInvitation(code: string): Promise<{ workspaceId: string; name: string; role: TeamRole }> {
+    return (await this.request<{ workspaceId: string; name: string; role: TeamRole }>("/v1/workspaces/accept-invitation", { method: "POST", body: { code } }))
+      .data;
+  }
+  async switchWorkspace(workspaceId: string, totpCode?: string): Promise<AuthSession> {
+    return (await this.request<AuthSession>("/v1/auth/workspace", { method: "POST", body: { workspaceId, ...(totpCode ? { totpCode } : {}) } })).data;
+  }
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private accessToken: string | undefined;
@@ -1234,6 +1268,29 @@ function isTerminalSessionError(error: unknown): boolean {
     error instanceof MarkosApiError &&
     ["INVALID_REFRESH_TOKEN", "REFRESH_TOKEN_REUSE_DETECTED", "MFA_REQUIRED", "MFA_SETUP_REQUIRED"].includes(error.code ?? "")
   );
+}
+
+export interface AccountSettings {
+  user: { id: string; email: string; fullName: string; locale: "en" | "ar"; updatedAt: string; mfaEnabled: boolean };
+  workspace: { id: string; name: string; ownerUserId: string; updatedAt: string };
+}
+export type TeamRole = "WORKSPACE_ADMIN" | "EDITOR" | "VIEWER";
+export interface WorkspaceChoice {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  roles: string[];
+}
+export interface TeamInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  expiresAt: string;
+}
+export interface WorkspaceTeam {
+  ownerUserId: string;
+  members: Array<{ id: string; userId: string; fullName: string; email: string; role: string }>;
+  invitations: TeamInvitation[];
 }
 
 export interface ContentConversionResult {

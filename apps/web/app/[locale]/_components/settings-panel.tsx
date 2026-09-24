@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sun,
   UserRound,
+  Users,
   type LucideIcon
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -29,11 +30,12 @@ import { SectionNavigation, type SectionNavigationItem } from "./section-navigat
 import { logoutBrowserSession, setBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { instagramStatusLabel, sanitizedCallbackUrl } from "./instagram-settings-state";
 import { AppearanceSettings } from "../../_components/theme-control";
+import { AccountDetailsEditor, TeamSettings } from "./team-settings";
 
 type NotificationTone = "error" | "info" | "success" | "warning";
-type SettingsSectionId = "profile" | "appearance" | "connections" | "security" | "billing" | "data";
+type SettingsSectionId = "profile" | "team" | "appearance" | "connections" | "security" | "billing" | "data";
 
-const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "appearance", "connections", "security", "billing", "data"];
+const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "team", "appearance", "connections", "security", "billing", "data"];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const router = useRouter();
@@ -409,6 +411,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       status: session?.user.isVerified ? copy(locale, "verified") : copy(locale, "pending"),
       statusTone: session?.user.isVerified ? "success" : "warning"
     },
+    { id: "team", icon: Users, label: locale === "ar" ? "الفريق ومساحات العمل" : "Workspaces and team" },
     {
       id: "appearance",
       icon: Sun,
@@ -505,12 +508,14 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         />
 
         <div className="grid min-w-0 gap-5">
+          {selectedSection === "team" && session ? <TeamSettings key={session.workspace.id} locale={locale} /> : null}
           <article className={`${selectedSection === "appearance" ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`} id="appearance">
             <h2 className="mb-5 text-xl font-semibold text-[var(--text)]">{locale === "ar" ? "المظهر" : "Appearance"}</h2>
             <AppearanceSettings locale={locale} />
           </article>
           <div className="grid gap-5">
             <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} title={userName} body={userEmail}>
+              {selectedSection === "profile" && session ? <AccountDetailsEditor key={session.workspace.id} locale={locale} /> : null}
               <div className="mt-4 grid gap-2">
                 <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
                 <SettingRow label={copy(locale, "role")} value={session?.roles.map(formatAction).join(", ") ?? "—"} />

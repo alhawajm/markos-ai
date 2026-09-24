@@ -298,6 +298,22 @@ model WorkspaceMember {
   @@map("workspace_members")
 }
 
+model WorkspaceInvitation {
+  id String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId String @db.Uuid
+  createdBy String @db.Uuid
+  email String
+  role Role
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  acceptedBy String? @db.Uuid
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([workspaceId, expiresAt])
+  @@map("workspace_invitations")
+}
+
 model InstagramConnectionCredential {
   id                      String                    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   workspaceId             String                    @unique @db.Uuid

@@ -900,3 +900,12 @@ The owner requires video software to be free and open source. Wan2.2 Apache-2.0 
 ## 2026-09-24 ? Motion Reels on ordinary hardware
 
 Because the owner requires no paid video API and has no suitable GPU now, add a clearly labeled CPU Motion Reel mode. It animates an owner-uploaded JPEG and exact optional text cards; it does not synthesize new footage or call an AI planner. Persist artwork and copy as generation-job options, validate workspace ownership before queueing and rendering, retry interrupted rendering through the existing worker leases, and attach only if the generation intent still matches. Store output as VIDEO with renderer identity and zero provider tokens. Use three or fewer cards with at least two seconds each, preserve English/Arabic with libass, and retain the full uploaded design inside portrait margins. New Sora requests are disabled after the provider retirement. Future Wan deployment still needs GPU infrastructure; AWS GPU instances are paid.
+
+
+## 2026-09-24: Account, team and native reporting
+
+Expose account name/language and owner workspace-name edits with revision checks. Team invitations expire in seven days, use 256-bit random codes stored as SHA-256 hashes, and bind to the verified invited email. The owner explicitly shares the code; no invitation email is sent automatically. Serialize membership changes within each workspace, reserve administrator-role changes for its owner, protect owner/self access and never promote an existing member through an old invitation. Export invitation metadata without hashes and erase it with its owning workspace.
+
+Workspace switching issues a fresh workspace-scoped session and preserves an unexpired MFA confirmation without extending it. Native switching replaces the identity epoch and query cache; browser switching reloads the application and informs other tabs. Native export sharing uses a temporary private file removed after the share sheet returns. Workspace erasure has a typed-name confirmation plus destructive confirmation; it follows the existing scoped erasure contract and is not represented as deletion of published Instagram posts.
+
+Runtime 0.3.0 includes Expo Sharing and needs new binaries. Insights advice uses the actual analytics agent with saved business context; reports use the existing PDF backend. Knowledge/history and activity views read the existing workspace-owned endpoints. Billing activation and physical-device/store acceptance remain separate.

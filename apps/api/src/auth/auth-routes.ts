@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import { enableMfaTotpSchema, googleLoginSchema, loginSchema, registerSchema, requestEmailVerificationSchema, verifyEmailSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import {
@@ -20,6 +21,7 @@ import {
   register,
   requestEmailVerification,
   setupMfaTotp,
+  switchWorkspaceSession,
   verifyEmail,
   verifyMfaTotpSession
 } from "./auth-service";
@@ -34,6 +36,39 @@ const BROWSER_SESSION_HEADER = "x-markos-session";
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   await registerNativeAuthRoutes(app);
+  app.post("/v1/auth/workspace", { config: { workspaceRequired: true, verifiedUserRequired: true } }, async (request, reply) => {
+    const parsed = z
+      .object({
+        workspaceId: z.string().uuid(),
+        totpCode: z
+          .string()
+          .regex(/^\d{6}$/)
+          .optional()
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send(errorEnvelope("VALIDATION_ERROR", "Choose a workspace"));
+    const body = parsed.data;
+    const current = request.auth!;
+    try {
+      const grant = await switchWorkspaceSession({
+        userId: current.userId,
+        authVersion: current.authVersion,
+        mfaVerifiedUntil: current.mfaVerifiedUntil,
+        workspaceId: body.workspaceId,
+        ...(body.totpCode ? { totpCode: body.totpCode } : {})
+      });
+      const previous = readRefreshCookie(request.headers.cookie);
+      if (previous) await revokeRefreshToken(previous, current.userId);
+      return sendSession(reply, grant);
+    } catch (error) {
+      if (error instanceof InvalidCredentialsError) return reply.code(403).send(errorEnvelope("WORKSPACE_FORBIDDEN", "Workspace is not available"));
+      if (error instanceof MfaRequiredError) return reply.code(403).send(errorEnvelope("MFA_REQUIRED", error.message));
+      if (error instanceof MfaSetupRequiredError) return reply.code(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
+      if (error instanceof MfaInvalidError) return reply.code(400).send(errorEnvelope("MFA_INVALID", error.message));
+      throw error;
+    }
+  });
   app.post("/v1/auth/register", { bodyLimit: 16_384 }, async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
 

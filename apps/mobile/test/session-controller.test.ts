@@ -32,6 +32,7 @@ function setup() {
     })
   };
   const transport = {
+    switchWorkspace: vi.fn(async (input: { workspaceId: string }) => grant("switched", input.workspaceId)),
     verifyMfa: vi.fn(async (_code: string, _access: string) => ({
       ...grant("step-up"),
       mfaVerified: true,
@@ -47,6 +48,47 @@ function setup() {
 const credentials = { email: "owner@example.test", password: "fixture-password" };
 
 describe("native session isolation", () => {
+  it("changes the identity epoch and stored token when switching workspaces", async () => {
+    const s = setup();
+    await s.controller.login(credentials);
+    const prior = s.controller.getEpoch();
+    await s.controller.switchWorkspace({ workspaceId: "workspace-b" });
+    expect(s.controller.getEpoch()).toBe(prior + 1);
+    expect(s.stored()).toBe("switched");
+    expect(s.controller.getSnapshot().session?.workspace.id).toBe("workspace-b");
+    expect(() => s.controller.assertEpoch(prior)).toThrow();
+    expect(s.transport.logout).toHaveBeenCalledWith("refresh-1");
+  });
+  it("does not restore a workspace switch response after logout", async () => {
+    const s = setup();
+    await s.controller.login(credentials);
+    const response = deferred<NativeAuthSession>();
+    s.transport.switchWorkspace.mockReturnValueOnce(response.promise);
+    const pending = s.controller.switchWorkspace({ workspaceId: "workspace-b" });
+    await Promise.resolve();
+    await Promise.resolve();
+    await s.controller.logout();
+    response.resolve(grant("late", "workspace-b"));
+    await expect(pending).rejects.toThrow();
+    expect(s.stored()).toBeNull();
+  });
+  it("revokes the rotated previous credential after retrying an expired workspace access token", async () => {
+    const s = setup();
+    await s.controller.login(credentials);
+    s.transport.switchWorkspace.mockRejectedValueOnce(new MarkosApiError("Expired", 401, "INVALID_TOKEN"));
+    await s.controller.switchWorkspace({ workspaceId: "workspace-b" });
+    expect(s.transport.logout).toHaveBeenCalledWith("refresh-2");
+    expect(s.stored()).toBe("switched");
+  });
+  it("signs out cleanly if secure credential storage fails during a workspace switch", async () => {
+    const s = setup();
+    await s.controller.login(credentials);
+    s.store.write.mockRejectedValueOnce(new Error("Storage unavailable"));
+    await expect(s.controller.switchWorkspace({ workspaceId: "workspace-b" })).rejects.toThrow("Storage unavailable");
+    expect(s.controller.getSnapshot().status).toBe("signedOut");
+    expect(s.stored()).toBeNull();
+    expect(s.transport.logout).toHaveBeenCalledWith("switched");
+  });
   it("serializes MFA with refresh and persists the new grant without changing workspace scope", async () => {
     const s = setup();
     await s.controller.login(credentials);

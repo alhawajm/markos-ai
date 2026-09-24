@@ -4,6 +4,27 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
   if (error instanceof LocalAppError) return error.message;
   const code = error instanceof MarkosApiError ? error.code : undefined;
   switch (code) {
+    case "SETTINGS_REVISION_CONFLICT":
+      return t(
+        "These details changed elsewhere. Reload saved details before trying again.",
+        "تغيّرت هذه البيانات في مكان آخر. أعد تحميل البيانات المحفوظة قبل المحاولة مجددًا."
+      );
+    case "TEAM_INVITATION_INVALID":
+      return t(
+        "This invitation is expired, revoked, used, or issued to another email. Ask the owner for a new code.",
+        "انتهت صلاحية الدعوة أو أُلغيت أو استُخدمت أو صدرت لبريد آخر. اطلب رمزًا جديدًا من المالك."
+      );
+    case "TEAM_OWNER_REQUIRED":
+    case "TEAM_OWNER_PROTECTED":
+    case "TEAM_SELF_CHANGE":
+      return t("Ask the workspace owner to make this access change.", "اطلب من مالك مساحة العمل إجراء هذا التغيير في الصلاحيات.");
+    case "TEAM_INVITATION_NOT_FOUND":
+    case "TEAM_MEMBER_NOT_FOUND":
+      return t("Team access changed elsewhere. Reload this page.", "تغيّرت صلاحيات الفريق في مكان آخر. أعد تحميل هذه الصفحة.");
+    case "TEAM_INVITE_LIMIT":
+      return t("Revoke unused invitations before creating more.", "ألغِ الدعوات غير المستخدمة قبل إنشاء المزيد.");
+    case "WORKSPACE_FORBIDDEN":
+      return t("This workspace is no longer available to your account.", "لم تعد مساحة العمل هذه متاحة لحسابك.");
     case "EMAIL_ALREADY_EXISTS":
       return t("An account already uses this email. Log in or recover your password.", "يوجد حساب بهذا البريد. سجّل الدخول أو استعد كلمة المرور.");
     case "PASSWORD_RESET_INVALID":

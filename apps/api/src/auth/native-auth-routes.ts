@@ -14,6 +14,7 @@ import {
   AuthConflictError,
   refreshSession,
   verifyMfaTotpSession,
+  switchWorkspaceSession,
   type AuthSessionGrant
 } from "./auth-service";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError, revokeRefreshToken } from "./tokens";
@@ -36,6 +37,29 @@ export async function registerNativeAuthRoutes(app: FastifyInstance): Promise<vo
       try {
         return sendNativeSession(reply, await login(parsed.data));
       } catch (error) {
+        return sendAuthError(reply, error);
+      }
+    });
+    native.post("/v1/auth/native/workspace", { bodyLimit: 4096, config: { workspaceRequired: true, verifiedUserRequired: true } }, async (request, reply) => {
+      const input = z
+        .object({
+          workspaceId: z.string().uuid(),
+          totpCode: z
+            .string()
+            .regex(/^\d{6}$/)
+            .optional()
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!input.success) return reply.code(400).send(errorEnvelope("VALIDATION_ERROR", "Choose a workspace and valid authenticator code"));
+      const current = request.auth!;
+      try {
+        return sendNativeSession(
+          reply,
+          await switchWorkspaceSession({ userId: current.userId, authVersion: current.authVersion, mfaVerifiedUntil: current.mfaVerifiedUntil, ...input.data })
+        );
+      } catch (error) {
+        if (error instanceof InvalidCredentialsError) return reply.code(403).send(errorEnvelope("WORKSPACE_FORBIDDEN", "Workspace is not available"));
         return sendAuthError(reply, error);
       }
     });

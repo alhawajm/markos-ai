@@ -28,6 +28,7 @@ import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes";
+import { registerSettingsRoutes } from "../workspace/settings-routes";
 import { registerInstagramLearningRoutes } from "../instagram-learning/routes";
 import { errorEnvelope, ok } from "./envelope";
 import { reportUnexpectedRequestError } from "./error-telemetry";
@@ -95,6 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerPromptRoutes(app);
   await registerPublishingRoutes(app);
   await registerWorkspaceRoutes(app);
+  await registerSettingsRoutes(app);
   await registerInstagramLearningRoutes(app);
   await registerVaultRoutes(app);
 

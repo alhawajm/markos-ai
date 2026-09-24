@@ -475,3 +475,8 @@ When brand colors are absent, an optional observed palette may appear with swatc
 ## 2026-09-16 — Carousel media and thinking visibility
 
 Carousel media uses numbered image previews, per-slide replacement/library/generation controls, and drag reordering with keyboard-accessible move buttons. Multi-selection in the library preserves selection order. Generation failures retain the direction input and existing slide. The existing MARKOS thinking spinner is larger, centered in a contrasting circular surface/ring, and visible while a message is being submitted as well as while the saved run is active. Reduced-motion preferences remain respected. These changes refine Create without changing its editor/chat/preview layout.
+
+
+## 2026-09-24: Native account and team completion
+
+Reuse Sunlit cards, native task headers, Lucide icons and existing bilingual controls. Keep team/workspace access within Account and web Settings, and knowledge history alongside Business profile. Preserve the main navigation. New teammates can enter an invitation during the native onboarding welcome instead of recreating an existing business. Role selection explains editor/viewer/administrator access; owner access cannot be changed here. Use the existing MARKOS wand and rose color for native launch assets. Rendered web checks cover English desktop, Arabic phone width, invitation creation/revocation and profile saving. Physical-device share sheet and screen-reader acceptance remain pending.

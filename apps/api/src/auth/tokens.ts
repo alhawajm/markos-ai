@@ -140,7 +140,7 @@ export function isMfaStepUpActive(mfaVerifiedUntil: number | null | undefined, n
   return mfaVerifiedUntil !== null && mfaVerifiedUntil !== undefined && mfaVerifiedUntil > now;
 }
 
-export async function revokeRefreshToken(token: string): Promise<void> {
+export async function revokeRefreshToken(token: string, expectedUserId?: string): Promise<void> {
   let claims: z.infer<typeof refreshClaimsSchema>;
 
   try {
@@ -150,6 +150,7 @@ export async function revokeRefreshToken(token: string): Promise<void> {
     return;
   }
 
+  if (expectedUserId !== undefined && claims.sub !== expectedUserId) return;
   const redis = createRedisClient();
 
   try {

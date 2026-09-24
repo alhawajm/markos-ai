@@ -110,6 +110,11 @@ function Navigation() {
           <Stack.Screen name="content/[id]" options={{ header: () => <TaskHeader title={t("Content draft", "مسودة المحتوى")} /> }} />
           <Stack.Screen name="content/schedule" options={{ header: () => <TaskHeader title={t("Schedule content", "جدولة المحتوى")} /> }} />
           <Stack.Screen name="account" options={{ header: () => <TaskHeader title={t("Workspace and settings", "مساحة العمل والإعدادات")} /> }} />
+          <Stack.Screen name="account-details" options={{ header: () => <TaskHeader title={t("Your details", "بياناتك")} /> }} />
+          <Stack.Screen name="team" options={{ header: () => <TaskHeader title={t("Workspaces and team", "مساحات العمل والفريق")} /> }} />
+          <Stack.Screen name="data-controls" options={{ header: () => <TaskHeader title={t("Your data", "بياناتك")} /> }} />
+          <Stack.Screen name="knowledge" options={{ header: () => <TaskHeader title={t("Saved knowledge", "المعلومات المحفوظة")} /> }} />
+          <Stack.Screen name="activity" options={{ header: () => <TaskHeader title={t("Workspace activity", "نشاط مساحة العمل")} /> }} />
           <Stack.Screen name="instagram" options={{ header: () => <TaskHeader title={t("Instagram", "إنستغرام")} /> }} />
           <Stack.Screen name="security" options={{ header: () => <TaskHeader title={t("Account security", "أمان الحساب")} /> }} />
           <Stack.Screen name="business" options={{ header: () => <TaskHeader title={t("Business profile", "ملف النشاط")} /> }} />

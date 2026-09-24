@@ -8,6 +8,7 @@ import { sessionController } from "../auth/transport";
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Field, Loading, Notice, Row, Screen, Txt } from "../ui";
 import { QueryFailure } from "../content";
+import { JoinWorkspace } from "../join-workspace";
 import { errorMessage, LocalAppError } from "../errors";
 import { ReferenceError } from "../campaigns/brief-store";
 import type { Reference } from "../campaigns/brief-model";
@@ -432,6 +433,7 @@ export function NativeOnboarding({ initial, onConnectInstagram }: { initial: Onb
             </Txt>
             {saved.page === "welcome" ? (
               <>
+                <JoinWorkspace />
                 <Txt muted>
                   {t(
                     "Share your business documents or tell us about your business. You’ll review everything before approval.",

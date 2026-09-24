@@ -35,6 +35,7 @@ function grant(value: NativeAuthSession): NativeAuthSession {
 }
 
 const transport: SessionTransport = {
+  switchWorkspace: async (input, accessToken) => grant(await request<NativeAuthSession>("workspace", input, true, accessToken)),
   verifyMfa: async (code, accessToken) => grant(await request<NativeAuthSession>("mfa/totp/verify", { code }, true, accessToken)),
   register: async (input) => grant(await request<NativeAuthSession>("register", input)),
   login: async (input) => grant(await request<NativeAuthSession>("login", input)),

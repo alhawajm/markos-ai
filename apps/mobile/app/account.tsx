@@ -7,7 +7,7 @@ import { clearStudioDeviceData } from "../src/studio/device-store";
 import { clearBusinessDeviceData } from "../src/business/device-store";
 import { Button, Card, Notice, Screen, Txt } from "../src/ui";
 import { WebButton } from "../src/content";
-import { Camera, ShieldCheck } from "lucide-react-native";
+import { BookOpen, Camera, Database, History, ShieldCheck, UserRound, Users } from "lucide-react-native";
 
 export default function Account() {
   const { session, scope, epoch } = useAccount();
@@ -35,6 +35,13 @@ export default function Account() {
         <Txt variant="heading">{session.user.fullName}</Txt>
         <Txt muted>{session.user.email}</Txt>
       </Card>
+      <Button
+        secondary
+        icon={UserRound}
+        label={t("Personal and workspace details", "البيانات الشخصية ومساحة العمل")}
+        onPress={() => router.push("/account-details")}
+      />
+      <Button secondary icon={Users} label={t("Workspaces and team", "مساحات العمل والفريق")} onPress={() => router.push("/team")} />
       <Txt variant="heading">{t("Language", "اللغة")}</Txt>
       <Button
         secondary={locale !== "en"}
@@ -62,8 +69,13 @@ export default function Account() {
         />
       ))}
       <Button secondary label={t("Business profile", "ملف النشاط")} onPress={() => router.push("/business")} />
+      <Button secondary icon={BookOpen} label={t("Knowledge and history", "المعلومات والسجل")} onPress={() => router.push("/knowledge")} />
       <Button secondary icon={Camera} label={t("Instagram", "إنستغرام")} onPress={() => router.push("/instagram")} />
       <Button secondary icon={ShieldCheck} label={t("Authenticator and security", "المصادقة والأمان")} onPress={() => router.push("/security")} />
+      <Button secondary icon={Database} label={t("Workspace data controls", "التحكم في بيانات مساحة العمل")} onPress={() => router.push("/data-controls")} />
+      {session.roles.some((role) => role === "OWNER" || role === "WORKSPACE_ADMIN") ? (
+        <Button secondary icon={History} label={t("Workspace activity", "نشاط مساحة العمل")} onPress={() => router.push("/activity")} />
+      ) : null}
       <WebButton label={t("More account settings on web", "المزيد من إعدادات الحساب على الموقع")} path="app/settings" />
       {error ? <Notice error>{error}</Notice> : null}
       <Button
