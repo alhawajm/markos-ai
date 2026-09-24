@@ -9,6 +9,7 @@ import { QueryFailure } from "../src/content";
 import { NativeOnboarding, VerifyEmail } from "../src/business/onboarding";
 import { Providers, useAppearance, useSession } from "../src/providers";
 import { Button, Loading, Screen, TaskHeader, Txt } from "../src/ui";
+import { AppUpdateMonitor } from "../src/app-updates";
 
 function Navigation() {
   const { colors, mode, ready, t, rtl } = useAppearance();
@@ -130,6 +131,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <Providers>
+        <AppUpdateMonitor />
         <Navigation />
       </Providers>
     </SafeAreaProvider>

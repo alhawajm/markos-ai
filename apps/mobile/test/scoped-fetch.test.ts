@@ -32,7 +32,7 @@ describe("native requests stay inside their original account", () => {
         return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(new Error("Timed out"))));
       });
       const pending = scopedFetchFor(scope(), 1, network)("https://api.example.test/v1/onboarding/document-analysis", { method: "POST" });
-      const rejected = expect(pending).rejects.toThrow("Timed out");
+      const rejected = expect(pending).rejects.toMatchObject({ code: "REQUEST_TIMEOUT", status: 0 });
       await vi.advanceTimersByTimeAsync(35_001);
       expect(signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(130_000);

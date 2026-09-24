@@ -43,6 +43,8 @@ Released source `ab0a795` to preview/TestFlight update group `c11fc46b-4bbc-4d97
 
 ## Remaining
 
+Owner confirmed on Android 0.3.0 that removing MARKOS from Recents and reopening applied the Create update and the flow works. A follow-up adds foreground update download, an Account update-status/check/restart control, and precise draft-validation/HTTP/timeout messages. Twenty-two focused update, transport, error and rendered Create tests plus mobile TypeScript passed. This is owner confirmation of this screen/flow, not a full physical-device acceptance pass.
+
 - Self-hosted Wan generated footage: this laptop has 16 GB system RAM and Intel integrated graphics. It cannot run the selected model at a useful production level. Wan code/weights are Apache-2.0; cloud GPUs, including AWS, are infrastructure costs. No paid video service is enabled. Suitable owned GPU hardware remains necessary for a no-video-API-fee deployment.
 - Verify native account/team/share controls on physical Android and iPhone devices after installing 0.3.0. Capture actual native store screenshots and complete store listing/privacy declarations, final legal wording and review submission. Store approval cannot be claimed from successful builds.
 - Complete live Instagram consent/publishing/analytics acceptance with the owner's connected account and Meta permissions. Existing configuration is not proof of review approval or live delivery.

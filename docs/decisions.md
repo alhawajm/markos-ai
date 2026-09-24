@@ -923,3 +923,9 @@ Give Story its own visible format and choose image/video per Story slot. Post an
 Use content revision before timestamp when accepting Assistant/polling updates, and reconsider deferred snapshots when a foreground operation finishes. Sequential carousel generation refreshes the revision after every attachment and stops after an ambiguous failure. Long script saves use the API's maximum 50 operations per batch and retain remaining local edits after a partial save. Motion artwork/text inputs persist per identity/content/slot on the device and are cleared on logout.
 
 Native campaign review retains week/action identities before filtering, exposes actual dates, status/format search, full strategy/reference context and the existing PDF export through the native share sheet. This is a runtime 0.3.0 JavaScript update; no new native module, provider, database schema or automatic publishing behavior is introduced.
+
+## 2026-09-24: Visible native update delivery and accurate request failures
+
+The owner's 0.3.0 installation was still running the embedded Create screen. Closing it from Android Recents and reopening applied the published update; the owner confirmed the new controls and working flow. Check/download compatible updates on launch and foreground, throttled to five minutes, and expose the running update plus manual check/restart in Account. Only an explicit restart action applies an update while the app is open, preserving the editing journey.
+
+The observed failed approval request returned HTTP 409; the saved item was a Story with an empty image slot. The response body was not captured, so do not infer a network outage or a specific conflict code from the status alone. Preserve known validation messages, classify unknown HTTP conflicts separately from networking, and identify transport timeouts explicitly. No customer draft, media or publishing status was changed during diagnosis.

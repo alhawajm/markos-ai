@@ -2,7 +2,11 @@ import { MarkosApiError } from "@markos/api-client";
 export class LocalAppError extends Error {}
 export function errorMessage(error: unknown, t: (en: string, ar: string) => string): string {
   if (error instanceof LocalAppError) return error.message;
-  const code = error instanceof MarkosApiError ? error.code : undefined;
+  const apiError =
+    error instanceof MarkosApiError || (error instanceof Error && error.name === "MarkosApiError" && "status" in error && typeof error.status === "number")
+      ? (error as MarkosApiError)
+      : undefined;
+  const code = apiError?.code;
   switch (code) {
     case "SETTINGS_REVISION_CONFLICT":
       return t(
@@ -46,15 +50,33 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
       );
     case "CONTENT_CAPTION_REQUIRED":
       return t("Add a caption before marking this content ready.", "أضف نصًا قبل اعتماد هذا المحتوى.");
+    case "CONTENT_CAPTION_TOO_LONG":
+    case "CONTENT_CAPTION_TOO_MANY_HASHTAGS":
+      return t("Shorten the caption to 2,200 characters and at most 30 hashtags before approval.", "اختصر النص إلى ٢٢٠٠ حرف و٣٠ وسمًا كحد أقصى قبل الاعتماد.");
     case "CONTENT_MEDIA_REQUIRED":
       return t("Attach media to every slot before marking ready.", "أرفق وسائط بكل خانة قبل الاعتماد.");
     case "CONTENT_MEDIA_CAROUSEL_MINIMUM":
       return t("A carousel needs at least two finished slides.", "يحتاج المنشور المتعدد إلى شريحتين مكتملتين على الأقل.");
     case "CONTENT_MEDIA_TYPE_INCOMPATIBLE":
+    case "CONTENT_MEDIA_INCOMPATIBLE":
     case "MEDIA_UPLOAD_INVALID":
       return t(
         "Use an Instagram-compatible JPEG for images or MP4 for Reels. Check the file size and dimensions.",
         "استخدم JPEG متوافقًا مع إنستغرام للصور أو MP4 للريل. تحقّق من حجم الملف وأبعاده."
+      );
+    case "CONTENT_MEDIA_CHANGED":
+    case "CONTENT_MEDIA_UNAVAILABLE":
+    case "CONTENT_TARGET_NOT_FOUND":
+      return t(
+        "The attached media changed or is unavailable. Reopen Media and select a file from your library.",
+        "تغيّرت الوسائط أو لم تعد متاحة. افتح قسم الوسائط واختر ملفًا من مكتبتك."
+      );
+    case "CONTENT_MEDIA_DUPLICATE":
+      return t("Choose a different image for each slide.", "اختر صورة مختلفة لكل شريحة.");
+    case "REQUEST_TIMEOUT":
+      return t(
+        "The request timed out. Reopen the draft to check its saved state before trying again.",
+        "انتهت مهلة الطلب. أعد فتح المسودة للتحقّق من حالتها المحفوظة قبل المحاولة مجددًا."
       );
     case "CONTENT_LOCKED":
     case "CONTENT_STATUS_TRANSITION_INVALID":
@@ -106,6 +128,16 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
     case "NATIVE_SESSION_REQUEST_REQUIRED":
       return t("The sign-in service needs an update. Please reopen the app.", "تحتاج خدمة تسجيل الدخول إلى تحديث. أعد فتح التطبيق.");
   }
-  if (error instanceof MarkosApiError && error.status === 401) return t("Your session has ended. Sign in again.", "انتهت جلستك. سجّل الدخول مجددًا.");
-  return t("We couldn’t complete the request. Check your connection and try again.", "تعذّر إكمال الطلب. تحقّق من اتصالك وحاول مرة أخرى.");
+  if (apiError?.status === 401) return t("Your session has ended. Sign in again.", "انتهت جلستك. سجّل الدخول مجددًا.");
+  if (apiError?.status === 409)
+    return t(
+      "This action conflicts with the saved draft. Reopen it and review the caption and media before continuing.",
+      "يتعارض الإجراء مع المسودة المحفوظة. أعد فتحها وراجع النص والوسائط قبل المتابعة."
+    );
+  if (apiError?.status === 429) return t("Too many requests. Wait a moment and try again.", "طلبات كثيرة. انتظر قليلًا وحاول مجددًا.");
+  if (apiError && apiError.status >= 500) return t("MARKOS could not finish this request. Try again shortly.", "تعذّر على ماركوس إكمال الطلب. حاول بعد قليل.");
+  if (apiError) return t("Could not complete this action. Check the details and try again.", "تعذّر إكمال الإجراء. تحقّق من التفاصيل وحاول مجددًا.");
+  if (error instanceof TypeError && /network|fetch|connection/i.test(error.message))
+    return t("Couldn’t reach MARKOS. Check your connection and try again.", "تعذّر الاتصال بماركوس. تحقّق من اتصالك وحاول مجددًا.");
+  return t("Could not complete this action. Try again.", "تعذّر إكمال الإجراء. حاول مجددًا.");
 }

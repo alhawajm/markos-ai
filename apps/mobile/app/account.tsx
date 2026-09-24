@@ -8,6 +8,7 @@ import { clearBusinessDeviceData } from "../src/business/device-store";
 import { Button, Card, Notice, Screen, Txt } from "../src/ui";
 import { WebButton } from "../src/content";
 import { BookOpen, Camera, Database, History, ShieldCheck, UserRound, Users } from "lucide-react-native";
+import { AppUpdateCard } from "../src/app-updates";
 
 export default function Account() {
   const { session, scope, epoch } = useAccount();
@@ -77,6 +78,7 @@ export default function Account() {
         <Button secondary icon={History} label={t("Workspace activity", "نشاط مساحة العمل")} onPress={() => router.push("/activity")} />
       ) : null}
       <WebButton label={t("More account settings on web", "المزيد من إعدادات الحساب على الموقع")} path="app/settings" />
+      <AppUpdateCard />
       {error ? <Notice error>{error}</Notice> : null}
       <Button
         secondary
