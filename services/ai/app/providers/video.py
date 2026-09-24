@@ -146,9 +146,21 @@ class OpenAIVideoProvider:
         return content
 
 
-@lru_cache(maxsize=1)
-def get_video_provider() -> VideoProvider:
-    if settings.ai_video_provider == "openai":
+def get_video_provider(provider_job_id: str | None = None) -> VideoProvider:
+    provider = settings.ai_video_provider
+    if provider != "disabled" and provider_job_id:
+        # Persisted jobs keep their provider after a deployment/configuration change.
+        provider = "fal_wan" if provider_job_id.startswith("wan1:") else "openai"
+    return _configured_video_provider(provider)
+
+
+@lru_cache(maxsize=3)
+def _configured_video_provider(provider: str) -> VideoProvider:
+    if provider == "fal_wan":
+        from app.providers.wan_video import FalWanVideoProvider
+
+        return FalWanVideoProvider()
+    if provider == "openai":
         return OpenAIVideoProvider()
     return DisabledVideoProvider()
 

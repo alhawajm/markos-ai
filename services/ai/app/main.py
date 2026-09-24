@@ -351,7 +351,7 @@ async def prepare_video_render(request: VideoStartRequest) -> VideoPlanResponse:
 
 @app.post("/ai/videos/status", response_model=VideoJobResponse)
 async def video_status(request: VideoJobRequest) -> VideoJobResponse:
-    provider = get_video_provider()
+    provider = get_video_provider(request.provider_job_id)
     try:
         async with asyncio.timeout(settings.ai_video_timeout_seconds):
             return await provider.status(request.provider_job_id)
@@ -366,7 +366,7 @@ async def video_status(request: VideoJobRequest) -> VideoJobResponse:
 
 @app.post("/ai/videos/download")
 async def download_video(request: VideoDownloadRequest) -> Response:
-    provider = get_video_provider()
+    provider = get_video_provider(request.provider_job_id)
     try:
         async with asyncio.timeout(settings.ai_video_timeout_seconds):
             video = await provider.download(request.provider_job_id)

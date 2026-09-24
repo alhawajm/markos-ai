@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     # by the provider factory. MARKOS must never represent a synthetic bitmap as
     # AI-generated media.
     ai_image_provider: Literal["disabled", "local", "openai"] = "disabled"
-    ai_video_provider: Literal["disabled", "openai"] = "disabled"
+    ai_video_provider: Literal["disabled", "openai", "fal_wan"] = "disabled"
+    fal_key: SecretStr | None = None
+    wan_video_endpoint: str = "fal-ai/wan/v2.2-a14b/text-to-video"
+    wan_video_inference_steps: int = Field(default=27, ge=20, le=50)
     # Long campaign plans need one attempt within the API's 130-second deadline.
     ai_campaign_timeout_seconds: float = Field(default=120, gt=0, le=120)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
