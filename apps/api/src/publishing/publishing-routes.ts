@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { publishingActivity } from "./publishing-activity";
 import { scheduleContentSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
@@ -16,6 +18,15 @@ import { DryRunInstagramPublisher } from "./instagram-publisher";
 import { getLatestPublishJob, PublishNowStateError, queuePublishNow } from "./publish-job-service";
 
 export async function registerPublishingRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/publishing/activity", { config: { workspaceRequired: true, permissions: ["content:read"] } }, async (request, reply) => {
+    const query = z
+      .object({ status: z.enum(["SCHEDULED", "FAILED", "PUBLISHED"]).optional(), offset: z.coerce.number().int().min(0).max(10000).default(0) })
+      .strict()
+      .safeParse(request.query);
+    if (!query.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid publishing activity query"));
+    reply.header("Cache-Control", "private, no-store");
+    return ok(await publishingActivity(requireWorkspaceContext().workspaceId, query.data));
+  });
   app.post(
     "/v1/content/:contentItemId/publish-now",
     {

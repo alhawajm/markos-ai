@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
+import type { CampaignReferenceFileInput } from "@markos/shared-types";
+
+const generatedInputs = vi.hoisted(() => [] as Array<{ description?: string; referenceFiles?: CampaignReferenceFileInput[] }>);
 
 vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
@@ -12,13 +15,14 @@ vi.mock("../src/ai/embeddings-client", () => ({
 }));
 
 vi.mock("../src/ai/campaign-client", () => ({
-  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; publishesPerDay: number; workspaceId: string }) => ({
+  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; description?: string; referenceFiles?: CampaignReferenceFileInput[]; publishesPerDay: number; workspaceId: string }) => (generatedInputs.push(input), {
     model: "test-campaign-model",
     prompt_version: "campaign.v2.test",
     tokens_in: 101,
     tokens_out: 202,
     campaign: {
       summary: `${input.durationDays}-day campaign for ${input.objective ?? "Instagram growth"}`,
+      referenceSummary: input.referenceFiles?.length ? "Proposal: event on 6–7 October in Hall B. Design: lavender and pink." : null,
       durationDays: input.durationDays,
       publishesPerDay: input.publishesPerDay,
       objectives: [input.objective ?? "grow qualified Instagram inquiries"],
@@ -59,6 +63,43 @@ vi.mock("../src/ai/campaign-client", () => ({
 }));
 
 describe("campaign routes", () => {
+  it("uses five reference files and a description, retains their context and scopes it to the workspace", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const other = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    await app.inject({ method: "PUT", url: "/v1/vault/company", headers, payload: {
+      entries: [{ key: "profile", value: { name: "Event Studio", industry: "events", location: "Bahrain" } }]
+    } });
+    const referenceFiles: CampaignReferenceFileInput[] = Array.from({length: 5}, (_, index) => ({
+      filename: `event-${index}.txt`, mimeType: "text/plain",
+      // A valid request above Fastify's default 1 MB limit must reach generation.
+      base64Data: Buffer.from(index === 0 ? "Event notes ".repeat(100_000) : "6–7 October; Hall B; lavender and pink").toString("base64")
+    }));
+    const description = "Use the proposal dates. Venue is Hall B. Keep the lavender look.";
+    const payload = { description, referenceFiles, durationDays: 3, publishesPerDay: 1, startsAt: "2026-10-04T00:00:00.000Z" };
+    const response = await app.inject({ method: "POST", url: "/v1/campaigns/generate", headers, payload });
+    expect(response.statusCode).toBe(200);
+    const campaign = response.json().data;
+    expect(generatedInputs.at(-1)).toMatchObject({ description, referenceFiles });
+    expect(campaign.content).toMatchObject({ description, referenceSummary: expect.stringContaining("6–7 October") });
+    expect(campaign.content.referenceFiles).toHaveLength(5);
+    expect(campaign.content.referenceFiles[0]).toMatchObject({ filename: "event-0.txt", sizeBytes: 1_200_000 });
+    expect(JSON.stringify(campaign)).not.toContain("base64Data");
+    const reloaded = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}/review`, headers });
+    expect(reloaded.json().data.campaign.content).toMatchObject({ description, referenceFiles: campaign.content.referenceFiles });
+    const denied = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}/review`, headers: authHeaders(other.tokens.accessToken) });
+    expect(denied.statusCode).toBe(404);
+    const usage = await prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: session.workspace.id, agent: "STRATEGIST" } });
+    expect(usage).toMatchObject({ tokensIn: 101, tokensOut: 202 });
+    expect(JSON.stringify(usage.prompt)).not.toContain("base64Data");
+    expect((await app.inject({ method: "POST", url: "/v1/campaigns/generate", headers, payload: { ...payload, referenceFiles: [...referenceFiles, referenceFiles[0]] } })).statusCode).toBe(400);
+    const invalid = await app.inject({ method: "POST", url: "/v1/campaigns/generate", headers, payload: { ...payload, referenceFiles: [{ filename: "fake.pdf", mimeType: "application/pdf", base64Data: "aGVsbG8=" }] } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error.code).toBe("CAMPAIGN_REFERENCE_INVALID");
+    expect(await prisma.campaign.count({ where: { workspaceId: session.workspace.id } })).toBe(1);
+    await app.close();
+  });
   it("paginates lightweight summaries with stable ties and reads an older campaign directly", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

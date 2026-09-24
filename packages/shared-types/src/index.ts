@@ -114,6 +114,22 @@ export interface AuthSession {
   tokens: AuthTokens;
 }
 
+/** Native-only grant. The rotating credential must be persisted in the OS secure store. */
+export interface CampaignGenerationJobRecord {
+  id: string;
+  requestId: string;
+  objective: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+  campaignId: string | null;
+  errorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NativeAuthSession extends AuthSession {
+  tokens: AuthTokens & { refreshToken: string };
+}
+
 export interface EmailVerificationChallenge {
   alreadyVerified: boolean;
   email: string;
@@ -124,6 +140,10 @@ export interface EmailVerificationChallenge {
 export interface EmailVerificationResult {
   email: string;
   isVerified: boolean;
+}
+export interface PasswordResetChallenge {
+  challengeId: string;
+  expiresAt: string;
 }
 
 export interface GoogleLoginConfigurationStatus {
@@ -551,7 +571,23 @@ export interface CampaignWeek {
   days: CampaignDay[];
 }
 
+export const campaignReferenceLimits = { files: 5, fileBytes: 8_000_000, totalBytes: 20_000_000 } as const;
+export interface CampaignReferenceFileInput {
+  filename: string;
+  mimeType:
+    | "application/pdf"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    | "text/plain"
+    | "image/jpeg"
+    | "image/png"
+    | "image/webp";
+  base64Data: string;
+}
+
 export interface CampaignPlan {
+  description?: string;
+  referenceFiles?: Array<{ filename: string; mimeType: string; sizeBytes: number; checksumSha256: string }>;
+  referenceSummary?: string | null;
   summary: string;
   durationDays: CampaignDurationDays;
   publishesPerDay: number;
@@ -804,6 +840,18 @@ export interface NotificationRecord {
   readAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NotificationPage {
+  items: NotificationRecord[];
+  unreadCount: number;
+  nextCursor?: string;
+}
+
+export interface PublishingActivityPage {
+  items: Array<{ content: ContentRecord; job: PublishJobRecord | null }>;
+  total: number;
+  nextOffset?: number;
 }
 
 export interface PromptTemplateRecord {

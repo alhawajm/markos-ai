@@ -17,6 +17,7 @@ const safeAiMessages: Record<string, string> = {
   AI_VIDEO_OUTPUT_INVALID: "The AI provider returned a video MARKOS could not validate",
   AI_VIDEO_REQUEST_REJECTED: "The AI provider could not generate that video direction. Revise it and try again",
   AI_VIDEO_RESPONSE_INVALID: "The AI provider returned an invalid video job",
+  AI_VIDEO_TEXT_RENDER_FAILED: "Video lettering could not be rendered. MARKOS will retry using the saved footage",
   AI_PROVIDER_NOT_CONFIGURED: "The AI provider is not configured",
   AI_PROVIDER_RATE_LIMITED: "The AI provider is temporarily rate limited",
   AI_PROVIDER_TIMEOUT: "The AI provider timed out",

@@ -1,0 +1,36 @@
+# Expo uploads only the mobile app, its shared dependencies and build manifests.
+# Keep Railway credentials, private diagnostics and documentation out of EAS archives.
+.git/
+.github/
+node_modules/
+**/node_modules/
+**/.next/
+**/.expo/
+**/.turbo/
+**/dist/
+**/build/
+**/coverage/
+**/var/
+var/
+.tmp/
+**/.env
+**/.env.*
+*.jks
+*.keystore
+**/*.jks
+**/*.keystore
+**/credentials.json
+**/*.log
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.codex-doc-tools/
+.playwright-cli/
+_analysis/
+evidence/
+docs/
+AGENTS.override.md
+apps/mobile/android/
+apps/mobile/ios/

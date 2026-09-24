@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.contracts.campaign import StrictContract
 
@@ -17,6 +17,44 @@ class VideoStartRequest(StrictContract):
 
 class VideoJobRequest(StrictContract):
     provider_job_id: str = Field(min_length=1, max_length=240)
+
+
+class VideoTextCue(StrictContract):
+    text: str = Field(min_length=1, max_length=160)
+    start: float = Field(ge=0, lt=1)
+    end: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> "VideoTextCue":
+        if self.end <= self.start or not self.text.strip():
+            raise ValueError("Text needs a nonempty display interval")
+        return self
+
+
+class VideoRenderPlan(StrictContract):
+    visual_prompt: str = Field(min_length=3, max_length=4_000)
+    text_cues: list[VideoTextCue] = Field(max_length=6)
+
+    @model_validator(mode="after")
+    def validate_cues(self) -> "VideoRenderPlan":
+        end = 0.0
+        for cue in self.text_cues:
+            if cue.start < end:
+                raise ValueError("Text cards must be ordered and cannot overlap")
+            end = cue.end
+        return self
+
+
+class VideoPlanResponse(StrictContract):
+    result: VideoRenderPlan
+    model: str
+    tokens_in: int = Field(ge=0)
+    tokens_out: int = Field(ge=0)
+
+
+class VideoDownloadRequest(VideoJobRequest):
+    render_plan: VideoRenderPlan | None = None
+    duration_seconds: VideoDurationSeconds = 8
 
 
 class VideoJobResponse(StrictContract):

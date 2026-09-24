@@ -18,6 +18,29 @@ export class VerificationEmailDeliveryError extends Error {
   }
 }
 
+// A local API sharing Railway data can reuse its email delivery and token store.
+export async function forwardEmailVerification(
+  path: "/v1/auth/verification/request" | "/v1/auth/verify-email",
+  input: unknown,
+  baseUrl = env.EMAIL_VERIFICATION_API_BASE_URL,
+  fetchImpl: typeof fetch = fetch
+): Promise<{ status: number; body: unknown } | null> {
+  if (baseUrl === undefined) return null;
+
+  try {
+    const response = await fetchImpl(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000)
+    });
+    return { status: response.status, body: await response.json() };
+  } catch {
+    throw new VerificationEmailDeliveryError();
+  }
+}
+
 export function assertVerificationEmailConfiguration(
   configuration: {
     apiKey: string | undefined;

@@ -4,17 +4,32 @@ import { captionValidationIssue } from "@markos/shared-types";
 
 export const localeSchema = z.enum(["ar", "en"]);
 
+export const accountPolicyVersion = "draft-0.1";
+export const newPasswordSchema = z
+  .string()
+  .min(15)
+  .max(128)
+  .refine((value) => !/^(.)\1+$/u.test(value), "Choose a less predictable password");
+export const forgotPasswordSchema = z.object({ email: z.string().trim().email().max(254), locale: localeSchema.default("en") }).strict();
+export const resetPasswordSchema = z
+  .object({ challengeId: z.string().uuid(), code: z.string().regex(/^\d{8}$/), password: newPasswordSchema, confirmPassword: z.string().max(128) })
+  .strict()
+  .refine((value) => value.password === value.confirmPassword, { path: ["confirmPassword"], message: "Passwords do not match" });
+
 export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(12),
-  fullName: z.string().min(2).max(120),
+  email: z.string().trim().email().max(254),
+  password: newPasswordSchema,
+  fullName: z.string().trim().min(2).max(120),
   workspaceName: z.string().min(2).max(120).optional(),
-  locale: localeSchema.default("ar")
+  locale: localeSchema.default("ar"),
+  acceptedTerms: z.literal(true).optional(),
+  policyVersion: z.literal(accountPolicyVersion).optional()
 });
+export const nativeRegisterSchema = registerSchema.extend({ acceptedTerms: z.literal(true), policyVersion: z.literal(accountPolicyVersion) });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(1024),
   totpCode: z
     .string()
     .regex(/^\d{6}$/)
@@ -340,6 +355,8 @@ const campaignGenerationDurationSchema = z.union([z.literal(3), z.literal(7), z.
 
 export const generateCampaignSchema = z.object({
   objective: z.string().min(3).max(500).optional(),
+  description: z.string().trim().max(5000).optional(),
+  referenceFiles: z.array(createOnboardingDocumentAnalysisSchema.shape.files.element).max(5).optional(),
   durationDays: campaignGenerationDurationSchema.default(14),
   publishesPerDay: z.number().int().min(1).max(3).default(1),
   startsAt: z.string().datetime(),
@@ -591,6 +608,7 @@ export type ContentMutationInput = z.infer<typeof contentMutationSchema>;
 export type ConvertContentInput = z.infer<typeof convertContentSchema>;
 
 export const scheduleContentSchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
   scheduledAt: z.string().datetime()
 });
 

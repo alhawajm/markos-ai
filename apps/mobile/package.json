@@ -1,0 +1,51 @@
+{
+  "name": "@markos/mobile",
+  "version": "0.2.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "expo export --platform android --platform ios",
+    "check:tokens": "node ../../scripts/generate-native-tokens.mjs --check",
+    "eas-build-post-install": "node scripts/check-public-config.cjs && node ../../scripts/generate-native-tokens.mjs --check"
+  },
+  "dependencies": {
+    "@expo-google-fonts/ibm-plex-sans": "0.4.1",
+    "@expo-google-fonts/ibm-plex-sans-arabic": "0.4.2",
+    "@markos/api-client": "workspace:*",
+    "@markos/shared-types": "workspace:*",
+    "@markos/ui-tokens": "workspace:*",
+    "@markos/validation": "workspace:*",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "9.1.0",
+    "@tanstack/react-query": "^5.101.0",
+    "expo": "~57.0.24",
+    "expo-constants": "~57.0.19",
+    "expo-document-picker": "~57.0.2",
+    "expo-file-system": "~57.0.7",
+    "expo-font": "~57.0.4",
+    "expo-linking": "~57.0.10",
+    "expo-localization": "~57.0.2",
+    "expo-router": "~57.0.22",
+    "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
+    "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.23",
+    "expo-video": "~57.0.4",
+    "lucide-react-native": "^1.47.0",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.2",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.16"
+  }
+}

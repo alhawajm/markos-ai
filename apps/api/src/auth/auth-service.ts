@@ -11,6 +11,7 @@ import { slugifyWorkspaceName } from "./slug";
 import { buildTotpUri, generateTotpSecret, verifyTotpCode } from "./totp";
 import { consumeRefreshToken, isMfaStepUpActive, issueAuthTokens } from "./tokens";
 import { createVerificationEmailProvider } from "./verification-email";
+import { queueAuthMail } from "./auth-email";
 
 let googleTokenVerifier: GoogleTokenVerifier = verifyGoogleIdToken;
 
@@ -79,7 +80,7 @@ export class MfaAlreadyEnabledError extends Error {
   }
 }
 
-export async function register(input: RegisterInput): Promise<AuthSessionGrant> {
+export async function register(input: RegisterInput, options: { queueVerification?: boolean } = {}): Promise<AuthSessionGrant> {
   const email = normalizeEmail(input.email);
   const passwordHash = await argon2.hash(input.password, {
     type: argon2.argon2id
@@ -101,7 +102,8 @@ export async function register(input: RegisterInput): Promise<AuthSessionGrant> 
           fullName: input.fullName,
           locale: toPrismaLocale(input.locale),
           planId: plan.id,
-          trialEndsAt: daysFromNow(14)
+          trialEndsAt: daysFromNow(14),
+          ...(input.acceptedTerms ? { termsAcceptedAt: new Date(), termsVersion: input.policyVersion ?? "2026-09-22" } : {})
         }
       });
 
@@ -121,10 +123,12 @@ export async function register(input: RegisterInput): Promise<AuthSessionGrant> 
         }
       });
 
+      if (options.queueVerification) await queueAuthMail(tx, "VERIFY", { email, locale: input.locale }, new Date(Date.now() + 24 * 60 * 60_000));
       return { user, workspace };
     });
 
     return sessionFor({
+      authVersion: result.user.authVersion,
       user: {
         id: result.user.id,
         email: result.user.email,
@@ -208,6 +212,7 @@ export async function loginWithGoogle(input: GoogleLoginInput, verifier: GoogleT
   });
 
   return sessionFor({
+    authVersion: user.authVersion,
     roles: [membership.role as Role],
     mfaVerified,
     user: {
@@ -245,7 +250,7 @@ export async function login(input: LoginInput): Promise<AuthSessionGrant> {
     }
   });
 
-  if (user?.passwordHash === undefined || user.passwordHash === null) {
+  if (user?.passwordHash === undefined || user.passwordHash === null || user.deletedAt !== null) {
     throw new InvalidCredentialsError();
   }
 
@@ -293,6 +298,7 @@ export async function login(input: LoginInput): Promise<AuthSessionGrant> {
   });
 
   return sessionFor({
+    authVersion: user.authVersion,
     user: {
       id: user.id,
       email: user.email,
@@ -318,20 +324,22 @@ export async function setupMfaTotp(userId: string): Promise<MfaTotpSetup> {
   }
 
   const secret = generateTotpSecret();
-  const user = await prisma.user.update({
+  const result = await prisma.user.updateMany({
     data: {
       mfaEnabled: false,
       mfaSecret: secret
     },
     where: {
-      id: userId
+      id: userId,
+      mfaEnabled: false
     }
   });
+  if (result.count !== 1) throw new MfaAlreadyEnabledError();
 
   return {
-    enabled: user.mfaEnabled,
+    enabled: false,
     otpauthUri: buildTotpUri({
-      accountName: user.email,
+      accountName: existing.email,
       issuer: env.MFA_ISSUER,
       secret
     }),
@@ -369,27 +377,28 @@ export async function enableMfaTotp(userId: string, input: EnableMfaTotpInput): 
     throw new MfaInvalidError();
   }
 
-  const updated = await prisma.user.update({
+  const updated = await prisma.user.updateMany({
     data: {
       mfaEnabled: true
     },
     where: {
-      id: userId
+      id: userId,
+      mfaSecret: user.mfaSecret
     }
   });
 
-  return {
-    enabled: updated.mfaEnabled
-  };
+  if (updated.count !== 1) throw new MfaSetupMissingError();
+  return { enabled: true };
 }
 
-export async function verifyMfaTotpSession(input: { code: string; userId: string; workspaceId: string }): Promise<AuthSessionGrant> {
+export async function verifyMfaTotpSession(input: { code: string; userId: string; workspaceId: string; authVersion?: number }): Promise<AuthSessionGrant> {
   const user = await prisma.user.findUniqueOrThrow({
     where: {
       id: input.userId
     }
   });
 
+  if (user.deletedAt || (input.authVersion !== undefined && user.authVersion !== input.authVersion)) throw new InvalidCredentialsError();
   if (!user.mfaEnabled || user.mfaSecret === null) {
     throw new MfaSetupRequiredError();
   }
@@ -421,6 +430,7 @@ export async function verifyMfaTotpSession(input: { code: string; userId: string
   });
 
   return sessionFor({
+    authVersion: user.authVersion,
     mfaVerified: true,
     roles: [membership.role as Role],
     user: {
@@ -546,13 +556,22 @@ export async function verifyEmail(input: VerifyEmailInput): Promise<EmailVerific
 
   try {
     await redis.connect();
-    userId = await redis.get(emailVerificationTokenKey(tokenHash));
+    userId = (await redis.eval(
+      `
+      local user=redis.call('GET',KEYS[1]); if not user then return false end
+      redis.call('DEL',KEYS[1]); local userKey=ARGV[1]..user
+      if redis.call('GET',userKey)~=ARGV[2] then return false end
+      redis.call('DEL',userKey); return user
+    `,
+      1,
+      emailVerificationTokenKey(tokenHash),
+      "email-verification:user:",
+      tokenHash
+    )) as string | null;
 
     if (userId === null) {
       throw new EmailVerificationInvalidError();
     }
-
-    await redis.del(emailVerificationTokenKey(tokenHash), emailVerificationUserKey(userId));
   } finally {
     redis.disconnect();
   }
@@ -591,13 +610,15 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
     }
   });
 
+  if (user.authVersion !== (tokenInput.authVersion ?? 0)) throw new InvalidCredentialsError();
+
   if (membership === null) {
     throw new InvalidCredentialsError();
   }
 
   const roles = [membership.role as Role];
 
-  if (isMfaRequiredForRoles(roles)) {
+  if (isMfaRequiredForRoles(roles) || user.mfaEnabled) {
     if (!user.mfaEnabled) {
       throw new MfaSetupRequiredError();
     }
@@ -617,9 +638,10 @@ export async function refreshSession(refreshToken: string): Promise<AuthSessionG
   // Sensitive-action MFA is a fixed window. Refresh rotation carries the
   // original deadline without extending it, including across external OAuth.
   const mfaStepUpActive = tokenInput.mfaVerified === true && isMfaStepUpActive(tokenInput.mfaVerifiedUntil);
-  const mfaVerified = isMfaRequiredForRoles(roles) ? tokenInput.mfaVerified === true : mfaStepUpActive;
+  const mfaVerified = tokenInput.mfaVerified === true;
 
   return sessionFor({
+    authVersion: user.authVersion,
     user: {
       id: user.id,
       email: user.email,
@@ -642,16 +664,21 @@ async function storeEmailVerificationToken(userId: string, expiresAt: Date): Pro
 
   try {
     await redis.connect();
-    const previousTokenHash = await redis.get(emailVerificationUserKey(userId));
-    const pipeline = redis.pipeline();
-
-    if (previousTokenHash !== null) {
-      pipeline.del(emailVerificationTokenKey(previousTokenHash));
-    }
-
-    pipeline.set(emailVerificationTokenKey(tokenHash), userId, "EX", ttlSeconds);
-    pipeline.set(emailVerificationUserKey(userId), tokenHash, "EX", ttlSeconds);
-    await pipeline.exec();
+    await redis.eval(
+      `
+      local previous=redis.call('GET',KEYS[1])
+      if previous then redis.call('DEL',ARGV[1]..previous) end
+      redis.call('SET',KEYS[2],ARGV[2],'EX',ARGV[4])
+      redis.call('SET',KEYS[1],ARGV[3],'EX',ARGV[4]); return 1
+    `,
+      2,
+      emailVerificationUserKey(userId),
+      emailVerificationTokenKey(tokenHash),
+      "email-verification:token:",
+      userId,
+      tokenHash,
+      ttlSeconds
+    );
   } finally {
     redis.disconnect();
   }
@@ -672,6 +699,7 @@ function emailVerificationUserKey(userId: string): string {
 }
 
 async function sessionFor(input: {
+  authVersion: number;
   mfaVerified?: boolean;
   mfaVerifiedUntil?: number | null;
   user: AuthSession["user"];
@@ -679,6 +707,7 @@ async function sessionFor(input: {
   roles: Role[];
 }): Promise<AuthSessionGrant> {
   const tokens = await issueAuthTokens({
+    authVersion: input.authVersion,
     userId: input.user.id,
     workspaceId: input.workspace.id,
     roles: input.roles,
@@ -714,11 +743,7 @@ function verifyRoleMfa(input: { roles: Role[]; totpCode?: string; user: { mfaEna
   }
 
   if (input.totpCode === undefined) {
-    if (requiredForRole) {
-      throw new MfaRequiredError();
-    }
-
-    return false;
+    throw new MfaRequiredError();
   }
 
   if (!verifyTotpCode(input.user.mfaSecret, input.totpCode)) {
@@ -742,6 +767,7 @@ function isMfaRequiredForRoles(roles: Role[]): boolean {
 
 async function uniqueWorkspaceSlug(tx: Prisma.TransactionClient, name: string): Promise<string> {
   const baseSlug = slugifyWorkspaceName(name);
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`workspace-slug:${baseSlug}`}, 0))::text`;
   let attempt = 0;
 
   while (attempt < 20) {

@@ -6,6 +6,8 @@ import { registerAdminRoutes } from "../admin/admin-routes";
 import { registerAgentRoutes } from "../agents/agent-routes";
 import { registerAnalyticsRoutes } from "../analytics/analytics-routes";
 import { registerAuthRoutes } from "../auth/auth-routes";
+import { registerPasswordRoutes } from "../auth/password-routes";
+import { registerAuthRateLimits } from "../auth/auth-rate-limit";
 import { assertVerificationEmailConfiguration } from "../auth/verification-email";
 import { registerBillingRoutes } from "../billing/billing-routes";
 import { registerCalendarRoutes } from "../calendar/calendar-routes";
@@ -74,8 +76,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
   });
   await registerWorkspaceContext(app);
+  await registerAuthRateLimits(app);
   await registerAdminRoutes(app);
   await registerAuthRoutes(app);
+  await registerPasswordRoutes(app);
   await registerAgentRoutes(app);
   await registerAnalyticsRoutes(app);
   await registerBillingRoutes(app);

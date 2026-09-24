@@ -22,6 +22,7 @@ from app.prompts.campaign import (
     CAMPAIGN_PROMPT_VERSION,
     build_campaign_input,
     build_campaign_instructions,
+    build_campaign_multimodal_input,
 )
 from app.providers.openai_structured import OpenAIClient, generate_structured
 
@@ -38,6 +39,10 @@ class LocalCampaignProvider:
         self,
         request: CampaignGenerateRequest,
     ) -> CampaignGenerateResponse:
+        if request.reference_files:
+            raise AiServiceError(code="AI_PROVIDER_NOT_CONFIGURED",
+                                 message="Campaign reference analysis requires a configured AI provider",
+                                 status_code=503, retryable=False)
         campaign = build_local_campaign(request)
         prompt = f"{build_campaign_instructions(request)}\n{build_campaign_input(request)}"
         model = (
@@ -74,8 +79,9 @@ class OpenAICampaignProvider:
             OpenAIClient,
             AsyncOpenAI(
                 api_key=settings.openai_api_key.get_secret_value(),
-                max_retries=settings.openai_max_retries,
-                timeout=settings.openai_timeout_seconds,
+                # Keep the full campaign deadline for one generation attempt.
+                max_retries=0,
+                timeout=settings.ai_campaign_timeout_seconds,
             ),
         )
 
@@ -95,12 +101,14 @@ class OpenAICampaignProvider:
 
         generated = await generate_structured(
             client=self._client,
-            input_text=build_campaign_input(request),
+            input_text=None if request.reference_files else build_campaign_input(request),
+            input_items=build_campaign_multimodal_input(request) if request.reference_files else None,
             instructions=build_campaign_instructions(request),
             model=model,
             output_label="campaign",
             schema=GeneratedCampaignContent,
             schema_name="markos_campaign",
+            max_output_tokens=settings.campaign_max_output_tokens,
         )
 
         campaign = CampaignPlan.model_validate(

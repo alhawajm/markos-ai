@@ -65,6 +65,7 @@ async def generate_structured(
     schema_name: str,
     input_text: str | None = None,
     input_items: list[dict[str, object]] | None = None,
+    max_output_tokens: int | None = None,
 ) -> StructuredResult[ContractT]:
     if (input_text is None) == (input_items is None):
         raise ValueError("Provide exactly one structured input")
@@ -81,7 +82,9 @@ async def generate_structured(
         response = await client.responses.create(
             input=structured_input,
             instructions=instructions,
-            max_output_tokens=settings.openai_max_output_tokens,
+            max_output_tokens=(
+                settings.openai_max_output_tokens if max_output_tokens is None else max_output_tokens
+            ),
             model=model,
             reasoning={"effort": settings.openai_reasoning_effort},
             store=settings.openai_store_responses,

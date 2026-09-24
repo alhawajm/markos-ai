@@ -88,7 +88,10 @@ def test_openai_video_provider_starts_vertical_job_and_can_poll_and_download() -
         "prompt": (
             "Create a polished, vertical social-media video for an Instagram Reel or Story. "
             "Use a 9:16 portrait composition, keep important subjects away from interface-safe "
-            "areas, avoid logos and readable text unless explicitly requested, and do not invent "
+            "areas. Generate visual footage only: no lettering, captions, subtitles, words, "
+            "numbers, signage, logos or typography in any language. MARKOS adds requested text "
+            "afterwards with real fonts. Leave clear space in the lower middle for those titles. "
+            "Do not invent "
             "claims about the business. Visual direction: A close-up of fresh pastry being plated "
             "in warm morning light"
         ),

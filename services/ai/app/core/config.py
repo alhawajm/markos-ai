@@ -16,17 +16,22 @@ class Settings(BaseSettings):
     # AI-generated media.
     ai_image_provider: Literal["disabled", "local", "openai"] = "disabled"
     ai_video_provider: Literal["disabled", "openai"] = "disabled"
-    ai_campaign_timeout_seconds: float = Field(default=50, gt=0, le=60)
+    # Long campaign plans need one attempt within the API's 130-second deadline.
+    ai_campaign_timeout_seconds: float = Field(default=120, gt=0, le=120)
     ai_profile_timeout_seconds: float = Field(default=50, gt=0, le=60)
     # Leave headroom within the API's 130-second HTTP deadline for uploads and responses.
     ai_document_timeout_seconds: float = Field(default=120, gt=0, le=120)
     ai_content_timeout_seconds: float = Field(default=50, gt=0, le=60)
     ai_image_timeout_seconds: float = Field(default=120, gt=0, le=180)
     ai_video_timeout_seconds: float = Field(default=120, gt=0, le=180)
+    video_ffmpeg_path: str = "ffmpeg"
+    video_text_font: str = "DejaVu Sans"
     openai_api_key: SecretStr | None = None
     openai_timeout_seconds: float = Field(default=45, gt=0, le=60)
     openai_max_retries: int = Field(default=1, ge=0, le=3)
     openai_max_output_tokens: int = Field(default=4_000, ge=256, le=32_000)
+    campaign_max_output_tokens: int = Field(default=8_000, ge=256, le=32_000)
+    onboarding_document_max_output_tokens: int = Field(default=8_000, ge=256, le=32_000)
     openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "low"
     openai_store_responses: bool = True
     llm_primary_model: str = ""

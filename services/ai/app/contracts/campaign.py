@@ -61,6 +61,7 @@ class CampaignKpi(StrictContract):
 
 class GeneratedCampaignContent(StrictContract):
     summary: str = Field(min_length=1, max_length=2_000)
+    reference_summary: str | None = Field(default=None, alias="referenceSummary", max_length=4_000)
     objectives: list[ShortText] = Field(min_length=1, max_length=8)
     pillars: list[CampaignPillar] = Field(min_length=1, max_length=6)
     weekly_cadence: list[CampaignWeek] = Field(
@@ -101,9 +102,20 @@ class CampaignPlan(GeneratedCampaignContent):
         return self
 
 
+class CampaignReferenceFile(StrictContract):
+    filename: str = Field(min_length=1, max_length=180)
+    mime_type: Literal[
+        "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain", "image/jpeg", "image/png", "image/webp",
+    ]
+    base64_data: str = Field(min_length=4, max_length=11_200_000)
+
+
 class CampaignGenerateRequest(StrictContract):
     workspace_id: str = Field(min_length=1, max_length=120)
     objective: str | None = Field(default=None, min_length=3, max_length=500)
+    description: str | None = Field(default=None, max_length=5_000)
+    reference_files: list[CampaignReferenceFile] = Field(default_factory=list, max_length=5)
     duration_days: CampaignDurationDays = 14
     publishes_per_day: int = Field(default=1, ge=1, le=3)
     starts_at: datetime

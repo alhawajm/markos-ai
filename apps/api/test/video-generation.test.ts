@@ -7,7 +7,13 @@ import { prisma } from "../src/db/prisma";
 const provider = vi.hoisted(() => ({
   download: vi.fn(),
   status: vi.fn(),
-  start: vi.fn()
+  start: vi.fn(),
+  prepare: vi.fn()
+}));
+
+vi.mock("../src/ai/video-plan-client", async importOriginal => ({
+  ...await importOriginal<typeof import("../src/ai/video-plan-client")>(),
+  prepareVideoRender: provider.prepare
 }));
 
 vi.mock("../src/ai/video-client", () => ({
@@ -36,6 +42,23 @@ describe("durable video generation", () => {
     provider.download.mockReset();
     provider.status.mockReset();
     provider.start.mockReset();
+    provider.prepare.mockReset().mockResolvedValue({ result: { visual_prompt: "Pink flowers blooming, no lettering", text_cues: [
+      { text: "Save the dates\nاحفظوا الموعد", start: 0.5, end: 1 }
+    ] }, model: "planner-test", tokens_in: 120, tokens_out: 70 });
+  });
+
+  it("reuses an active identical video request without replacing its intent", async () => {
+    const { content, workspace } = await createVideoWorkspace();
+    const first = await queueVideoGeneration(workspace.id, content.id, generationInput(content));
+    const current = await getContentAggregate(workspace.id, content.id);
+    const duplicate = await queueVideoGeneration(workspace.id, content.id, generationInput(current));
+    expect(duplicate.id).toBe(first.id);
+    expect(await prisma.mediaGenerationJob.count({ where: { contentItemId: content.id } })).toBe(1);
+    expect((await getContentAggregate(workspace.id, content.id)).revision).toBe(current.revision);
+
+    const changed = await queueVideoGeneration(workspace.id, content.id, { ...generationInput(current), durationSeconds: 12 });
+    expect(changed.id).not.toBe(first.id);
+    await prisma.mediaGenerationJob.updateMany({ where: { contentItemId: content.id }, data: { status: "CANCELLED" } });
   });
 
   it.each(["AI_PROVIDER_TIMEOUT", "AI_SERVICE_TIMEOUT", "AI_SERVICE_RESPONSE_INVALID"])(
@@ -95,6 +118,7 @@ describe("durable video generation", () => {
     await processDueVideoGenerationJobs({ limit: 1, now: new Date(now.getTime() + 120_000) });
     expect(provider.start).toHaveBeenCalledOnce();
     expect(provider.status).toHaveBeenLastCalledWith("video-provider-job");
+    expect(provider.prepare).toHaveBeenCalledOnce();
     await expect(prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).resolves.toMatchObject({ status: "COMPLETED" });
   });
 
@@ -187,7 +211,7 @@ describe("durable video generation", () => {
     const [completed, contentAfter, interaction, usage] = await Promise.all([
       prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: first.id } }),
       getContentAggregate(workspace.id, content.id),
-      prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO" } }),
+      prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v2.openai" } }),
       prisma.usageCounter.findFirstOrThrow({ where: { workspaceId: workspace.id, metric: "AI_GENERATION" } })
     ]);
     const media = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: completed.outputMediaAssetId! } });
@@ -208,7 +232,14 @@ describe("durable video generation", () => {
     expect(usage.used).toBe(1n);
     expect(provider.start).toHaveBeenCalledTimes(1);
     expect(provider.status).toHaveBeenCalledWith("video-provider-job");
-    expect(provider.download).toHaveBeenCalledWith("video-provider-job");
+    expect(provider.start).toHaveBeenCalledWith(expect.objectContaining({ prompt: "Pink flowers blooming, no lettering" }));
+    expect(provider.prepare).toHaveBeenCalledOnce();
+    expect(provider.download).toHaveBeenCalledWith("video-provider-job", {
+      visual_prompt: "Pink flowers blooming, no lettering",
+      text_cues: [{ text: "Save the dates\nاحفظوا الموعد", start: 0.5, end: 1 }]
+    }, 8);
+    const plan = await prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, promptVersion: "video-render.v1" } });
+    expect(plan).toMatchObject({ tokensIn: 120, tokensOut: 70, contentItemId: content.id });
   });
 
   it("regenerates into the same populated Reel item", async () => {
@@ -288,7 +319,7 @@ describe("durable video generation", () => {
       "Only failed video requests without an output"
     );
     expect(provider.start).toHaveBeenCalledTimes(1);
-    await expect(prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO" } })).resolves.toMatchObject({ accepted: false });
+    await expect(prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v2.openai" } })).resolves.toMatchObject({ accepted: false });
   });
 
   it.each(["in_progress", "completed", "failed", "throw"] as const)(

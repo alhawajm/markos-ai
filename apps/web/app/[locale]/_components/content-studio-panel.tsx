@@ -38,11 +38,11 @@ import { ContentStatusBadge } from "./content-status-badge";
 import { useModalDialog } from "./use-modal-dialog";
 import { PublishTimeFields } from "./publish-time-fields";
 import { plannedAtInputToIso } from "./content-studio-draft-state";
+import { runningVideoGeneration as running, videoGenerationMessage } from "./video-generation-state";
 import "./content-studio.css";
 import "./create-workspace.css";
 
 const icons = { POST: ImageIcon, CAROUSEL: Images, REEL: Clapperboard, STORY: RectangleVertical };
-const running = (job: MediaGenerationJobRecord | null) => !!job && ["QUEUED", "STARTING", "GENERATING", "PROCESSING"].includes(job.status);
 export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const client = useMarkosClient(locale),
     session = useMarkosSession();
@@ -163,7 +163,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     const timer = setTimeout(async () => {
       try {
         const thread = await api.current.contentConversation(coordinator.record.id);
-        const job = videoJob ? await api.current.mediaGenerationJob(videoJob.id) : null;
+        const job = await api.current.latestMediaGenerationJob(coordinator.record.id);
         const freshAssets = await api.current.mediaAssets();
         const publication = publishing ? await api.current.latestPublishJob(coordinator.record.id) : null;
         const finished = (job && !running(job)) || (publication && !["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(publication.status));
@@ -173,6 +173,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         setConversation(thread);
         setAssets(freshAssets);
         if (job) setVideoJob(job);
+        if (job && !running(job) && (running(videoJob) || activeGeneration)) setNotice("");
         if (publication) setPublishJob(publication);
       } catch (cause) {
         if (!cancelled) {
@@ -828,7 +829,13 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       <div className="create-media-actions">
                         <button
                           className="studio-button studio-button-primary"
-                          disabled={locked || !selected.visualDirection?.trim() || (running(videoJob) && videoJob?.contentMediaItemId === selected.id)}
+                          disabled={
+                            locked ||
+                            conversationActive ||
+                            activeGeneration ||
+                            !selected.visualDirection?.trim() ||
+                            (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
+                          }
                           onClick={() => void run("generate", generate)}
                         >
                           <Sparkles size={17} />
@@ -861,13 +868,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       </div>
                       {videoJob && videoJob.contentMediaItemId === selected.id && (
                         <p role="status" className="create-muted">
-                          {running(videoJob)
-                            ? t("Video generation in progress…", "جارٍ توليد الفيديو…")
-                            : videoJob.status === "COMPLETED"
-                              ? videoJob.attachmentApplied
-                                ? t("Video attached.", "أُرفق الفيديو.")
-                                : t("Video saved to Library; newer draft preserved.", "حُفظ الفيديو في المكتبة دون تغيير المسودة الأحدث.")
-                              : videoJob.errorMessage || t("Video generation stopped.", "توقف توليد الفيديو.")}
+                          {videoGenerationMessage(videoJob, locale)}
                         </p>
                       )}
                       {videoJob && videoJob.contentMediaItemId === selected.id && running(videoJob) && (
@@ -1097,18 +1098,18 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               {conversation?.latestRun?.actions?.generation.map((item) => (
                 <p className="create-muted" role="status" key={item.itemId}>
                   {t("Generation", "التوليد")}:{" "}
-                  {
-                    {
-                      PENDING: t("Requested", "طُلب"),
-                      DISPATCHING: t("Requesting", "جارٍ الطلب"),
-                      QUEUED: t("Queued", "في الانتظار"),
-                      RUNNING: t("Running", "جارٍ"),
-                      ATTACHED: t("Completed and attached", "اكتمل وأُرفق"),
-                      LIBRARY_ONLY: t("Saved to Library only", "حُفظ في المكتبة فقط"),
-                      FAILED: t("Failed", "فشل"),
-                      UNKNOWN: t("Outcome unknown — no automatic retry", "النتيجة غير معروفة — لن يُعاد تلقائياً")
-                    }[item.status]
-                  }
+                  {videoJob?.contentMediaItemId === item.itemId
+                    ? videoGenerationMessage(videoJob, locale)
+                    : {
+                        PENDING: t("Requested", "طُلب"),
+                        DISPATCHING: t("Requesting", "جارٍ الطلب"),
+                        QUEUED: t("Queued", "في الانتظار"),
+                        RUNNING: t("Running", "جارٍ"),
+                        ATTACHED: t("Completed and attached", "اكتمل وأُرفق"),
+                        LIBRARY_ONLY: t("Saved to Library only", "حُفظ في المكتبة فقط"),
+                        FAILED: t("Failed", "فشل"),
+                        UNKNOWN: t("Outcome unknown — no automatic retry", "النتيجة غير معروفة — لن يُعاد تلقائياً")
+                      }[item.status]}
                 </p>
               ))}
             </div>

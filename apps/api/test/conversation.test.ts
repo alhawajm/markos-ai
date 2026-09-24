@@ -90,6 +90,22 @@ async function fixture() {
 }
 
 describe("durable post conversations", () => {
+  it("carries saved campaign document context into its posts without the full campaign schedule", async () => {
+    const f = await fixture();
+    const campaign = await prisma.campaign.create({ data: {
+      workspaceId: f.session.workspace.id, title: "Blooms in Pink", objective: "Event awareness", status: "REVIEW",
+      startsAt: new Date("2026-10-04"), endsAt: new Date("2026-10-07"), durationDays: 3, publishesPerDay: 1,
+      content: { description: "Use the pink proposal design.", referenceSummary: "6–7 October, Hall B. Lavender and pink palette.", referenceFiles: [{ filename: "proposal.pdf" }], weeklyCadence: [] }
+    } });
+    const linked = await prisma.contentItem.update({ where: { id: f.item.id }, data: { campaignId: campaign.id } });
+    const sent = await f.send({ ...f.input, expectedRevision: linked.revision, message: "Draft the campaign post with its event details." });
+    expect(sent.json()).not.toHaveProperty("error");
+    await processConversationRuns(f.session.workspace.id);
+    expect(respond).toHaveBeenCalledWith(expect.objectContaining({ context: expect.objectContaining({ campaign: expect.objectContaining({
+      id: campaign.id, description: "Use the pink proposal design.", referenceSummary: "6–7 October, Hall B. Lavender and pink palette.", referenceFiles: [{ filename: "proposal.pdf" }]
+    }) }) }));
+    expect(respond.mock.calls[0]?.[0].context).not.toHaveProperty("campaign.content");
+  });
   it("saves each Details field separately and preserves unrelated copy on later edits", async () => {
     const f = await fixture();
     const details = {

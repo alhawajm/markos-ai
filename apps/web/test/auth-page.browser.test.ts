@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Browser, type Page, type Route } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { accountPolicyVersion } from "@markos/validation";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered authentication tests");
@@ -92,7 +93,9 @@ describe("rendered Sunlit authentication", () => {
       email: "mariam@example.com",
       fullName: "Mariam Ali",
       locale: "en",
-      password: "a-secure-passphrase"
+      password: "a-secure-passphrase",
+      acceptedTerms: true,
+      policyVersion: accountPolicyVersion
     });
     expect(requests.find((request) => request.path === "/v1/auth/verification/request")?.body).toEqual({ email: "mariam@example.com", locale: "en" });
     expect(requests.find((request) => request.path === "/v1/auth/verify-email")?.body).toEqual({ token: "local-verification-token-1234567890" });
@@ -346,10 +349,13 @@ describe("rendered Sunlit authentication", () => {
     await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
     await page.getByRole("link", { name: "Forgot password?" }).click();
     await page.getByLabel("Email").fill("account@example.com");
-    await page.getByRole("button", { name: "Send reset link" }).click();
-    await expect(page.getByRole("status").textContent()).resolves.toContain("not available yet");
+    await mockApi(page, async (route) =>
+      route.fulfill(json({ challengeId: "e4a2ac69-14be-4e9c-9da8-456407c653dc", expiresAt: new Date(Date.now() + 600000).toISOString() }, 202))
+    );
+    await page.getByRole("button", { name: "Send recovery code" }).click();
+    await page.getByLabel("Eight-digit code").waitFor();
     expect(page.url()).toBe(`${baseUrl}/en/forgot-password`);
-    expect(await page.getByLabel("Email").inputValue()).toBe("account@example.com");
+    expect(await page.getByText("account@example.com", { exact: true }).isVisible()).toBe(true);
 
     await page.goto(`${baseUrl}/en/terms`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { level: 1, name: "The terms for using MARKOS" }).waitFor();
@@ -364,7 +370,7 @@ describe("rendered Sunlit authentication", () => {
 });
 
 async function mockApi(page: Page, handler: (route: Route, pathname: string) => Promise<unknown>) {
-  await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
+  await page.route("**/v1/**", async (route) => {
     await handler(route, new URL(route.request().url()).pathname);
   });
 }

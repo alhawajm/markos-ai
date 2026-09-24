@@ -18,18 +18,37 @@ Detailed progress is tracked in
 [`docs/decisions.md`](docs/decisions.md), and Railway deployment operations in
 [`docs/staging-deploy.md`](docs/staging-deploy.md).
 
+Double-click **Run MARKOS.cmd** to open the [Railway app](https://web-production-94e63.up.railway.app/en/login).
+This is the default application for demos and everyday use; it runs entirely on
+Railway with the existing accounts, workspaces, AI and media. No local server is needed.
+The optional developer setup remains documented in [Local handover](docs/local-handover.md).
+
+The Android/iOS app lives in [`apps/mobile`](apps/mobile/README.md), with the same Railway accounts and campaigns. Its [Expo project](https://expo.dev/accounts/mo4180/projects/markos) contains native preview builds; [the mobile plan](docs/mobile-app-plan.md) records the implemented slice and remaining milestones.
+
+This workstation's ignored `.env` and SSH identity are required for that
+connection. They are not included when copying or cloning the repository. Current
+source also does not implement every planned feature, including complete live
+billing.
+
+Install the pinned Node dependencies with:
+
 ```bash
-corepack pnpm install
-corepack pnpm dev
+corepack pnpm install --frozen-lockfile
 ```
 
-Local verification:
+For explicit local development only, use `powershell -File scripts/run-local.ps1`.
+That launcher configures the database tunnel and hosted job ownership together.
+**Stop MARKOS.cmd** stops those local processes; it does not stop Railway.
+`pnpm dev` is for separately configured local development.
 
-```bash
-corepack pnpm verify
-```
+Follow the focused testing rules in [`AGENTS.md`](AGENTS.md). Persistent tests
+require an explicitly named disposable database and separate test configuration.
+Do not run `pnpm verify`, persistent API tests, seeds or migrations against the
+shared Railway `.env`.
 
-Python 3.11 is required for `services/ai`. On Windows, use the Python launcher if `python` is shadowed by the Microsoft Store alias:
+Python 3.11 is required when running `services/ai` locally; the prepared Railway
+profile uses hosted AI. On Windows, use the Python launcher if `python` is
+shadowed by the Microsoft Store alias:
 
 ```bash
 py -3.11 -m venv services/ai/.venv

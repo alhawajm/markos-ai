@@ -11,6 +11,7 @@ import { MediaContentItemNotFoundError, MediaContentLockedError } from "./media-
 import { ContentMediaValidationError, lockContentForMedia } from "./content-media-integrity";
 import { workerLogger, workerErrorCode, type WorkerLogger } from "../worker/worker-diagnostics";
 import { env } from "../config/env";
+import { prepareVideoRender, videoRenderPlanSchema, type VideoRenderPlan } from "../ai/video-plan-client";
 
 const pollDelayMs = 15_000;
 const retryDelayMs = 30_000;
@@ -19,6 +20,37 @@ const localCurrency = "BHD";
 const activeJobStatuses: MediaGenerationStatus[] = ["QUEUED", "STARTING", "GENERATING", "PROCESSING"];
 
 class VideoLeaseLostError extends Error {}
+const renderPlanVersion = "video-render.v1";
+
+async function savedRenderPlan(job: MediaGenerationJob): Promise<VideoRenderPlan | undefined> {
+  const interaction = await prisma.aiInteraction.findFirst({
+    where: { workspaceId: job.workspaceId, contentItemId: job.contentItemId, agent: "VIDEO",
+      promptVersion: renderPlanVersion, deletedAt: null,
+      prompt: { path: ["generationJobId"], equals: job.id } }
+  });
+  return interaction ? videoRenderPlanSchema.parse(interaction.response) : undefined;
+}
+
+async function ensureRenderPlan(job: MediaGenerationJob, clock: () => Date): Promise<VideoRenderPlan> {
+  const saved = await savedRenderPlan(job);
+  if (saved) return saved;
+  await renewVideoLease(job, clock());
+  const prepared = await prepareVideoRender({ workspaceId: job.workspaceId, prompt: job.prompt, durationSeconds: toDuration(job.durationSeconds) });
+  // Persist the exact copy and its metered planning usage before starting paid footage.
+  // Reclaims/download retries use this same plan, never changed draft copy.
+  await prisma.$transaction(async tx => {
+    const renewed = await tx.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, clock()), data: { leaseExpiresAt: new Date(clock().getTime() + leaseMs) } });
+    if (renewed.count !== 1) throw new VideoLeaseLostError("Video job ownership changed");
+    await tx.aiInteraction.create({ data: {
+      workspaceId: job.workspaceId, contentItemId: job.contentItemId, contentRevision: job.requestedRevision,
+      agent: "VIDEO", promptVersion: renderPlanVersion,
+      prompt: { generationJobId: job.id, prompt: job.prompt }, response: prepared.result,
+      tokensIn: prepared.tokens_in, tokensOut: prepared.tokens_out, model: prepared.model,
+      costMinor: 0, currency: localCurrency, accepted: true, edited: false, regenerated: false
+    } });
+  });
+  return prepared.result;
+}
 class VideoStartResultUnknownError extends Error {
   readonly code = "AI_VIDEO_START_RESULT_UNKNOWN";
 }
@@ -210,12 +242,13 @@ async function processClaimedJob(job: MediaGenerationJob, clock: () => Date): Pr
       }
     });
     if (!target) throw new ContentMediaValidationError("CONTENT_MEDIA_CHANGED");
+    const renderPlan = await ensureRenderPlan(job, clock);
     const starting = await prisma.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, clock()), data: { status: "STARTING" } });
     if (starting.count !== 1) return "waiting";
     await renewVideoLease(job, clock());
     const started = await startVideoGeneration({
       workspaceId: job.workspaceId,
-      prompt: job.prompt,
+      prompt: renderPlan.visual_prompt,
       durationSeconds: toDuration(job.durationSeconds)
     });
     return persistProviderState(job, started, clock);
@@ -270,7 +303,8 @@ async function persistProviderState(job: MediaGenerationJob, providerJob: VideoP
   });
   if (processing.count !== 1) return "waiting";
   await renewVideoLease(job, clock());
-  const video = await downloadGeneratedVideo(providerJob.provider_job_id);
+  const renderPlan = await savedRenderPlan(job);
+  const video = await downloadGeneratedVideo(providerJob.provider_job_id, renderPlan, toDuration(job.durationSeconds));
   await renewVideoLease(job, clock());
   return completeVideoJob(job, providerJob, video, clock);
 }
@@ -319,7 +353,7 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
         data: {
           workspaceId: job.workspaceId,
           agent: "VIDEO",
-          promptVersion: "video.v1.openai",
+          promptVersion: "video.v2.openai",
           prompt: { prompt: job.prompt, aspectRatio: job.aspectRatio, durationSeconds: job.durationSeconds },
           response: {
             status: providerJob.status,

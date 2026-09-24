@@ -33,7 +33,13 @@ from app.contracts.onboarding_document import (
     OnboardingDocumentAnalysisRequest,
     OnboardingDocumentAnalysisResponse,
 )
-from app.contracts.video import VideoJobRequest, VideoJobResponse, VideoStartRequest
+from app.contracts.video import (
+    VideoDownloadRequest,
+    VideoJobRequest,
+    VideoJobResponse,
+    VideoPlanResponse,
+    VideoStartRequest,
+)
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
@@ -47,6 +53,8 @@ from app.providers.instagram_learning import analyze_instagram
 from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
 from app.providers.video import get_video_provider
+from app.providers.video_plan import prepare_video
+from app.video_text import render_video_text
 
 
 class HealthResponse(BaseModel):
@@ -336,6 +344,11 @@ async def start_video(request: VideoStartRequest) -> VideoJobResponse:
         ) from None
 
 
+@app.post("/ai/videos/prepare", response_model=VideoPlanResponse)
+async def prepare_video_render(request: VideoStartRequest) -> VideoPlanResponse:
+    return await prepare_video(request)
+
+
 @app.post("/ai/videos/status", response_model=VideoJobResponse)
 async def video_status(request: VideoJobRequest) -> VideoJobResponse:
     provider = get_video_provider()
@@ -352,11 +365,13 @@ async def video_status(request: VideoJobRequest) -> VideoJobResponse:
 
 
 @app.post("/ai/videos/download")
-async def download_video(request: VideoJobRequest) -> Response:
+async def download_video(request: VideoDownloadRequest) -> Response:
     provider = get_video_provider()
     try:
         async with asyncio.timeout(settings.ai_video_timeout_seconds):
             video = await provider.download(request.provider_job_id)
+            if request.render_plan is not None:
+                video = await render_video_text(video, request.render_plan, request.duration_seconds)
     except TimeoutError:
         raise AiServiceError(
             code="AI_PROVIDER_TIMEOUT",

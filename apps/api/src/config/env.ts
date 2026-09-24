@@ -29,6 +29,7 @@ const instagramOAuthScopes = z
 export const envSchema = z
   .object({
     API_PORT: z.coerce.number().int().positive().default(4000),
+    API_HOST: z.string().trim().min(1).default("0.0.0.0"),
     PORT: z.coerce.number().int().positive().optional(),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     API_BASE_URL: z.string().url().default("http://localhost:4000"),
@@ -36,6 +37,7 @@ export const envSchema = z
     AI_BASE_URL: z.string().url().default("http://localhost:8000"),
     INTERNAL_SERVICE_TOKEN: z.string().min(1).default("change-me"),
     AI_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(180_000).default(130_000),
+    CONVERSATION_PROCESSOR_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
     AI_VIDEO_MAX_BYTES: z.coerce.number().int().positive().max(250_000_000).default(100_000_000),
     DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
@@ -47,6 +49,10 @@ export const envSchema = z
     MFA_STEP_UP_TTL: z.coerce.number().int().positive().default(900),
     EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
     EMAIL_PROVIDER: z.enum(["local", "sendgrid"]).default("local"),
+    EMAIL_VERIFICATION_API_BASE_URL: optionalUrl.refine(
+      (value) => value === undefined || new URL(value).protocol === "https:",
+      "The verification API must use HTTPS"
+    ),
     SENDGRID_API_KEY: optionalString,
     FROM_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
     MFA_ISSUER: z.string().min(1).default("MARKOS-AI"),

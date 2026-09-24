@@ -1,4 +1,4 @@
-import type { CampaignGenerationDurationDays, CampaignPlan, VaultRagChunk } from "@markos/shared-types";
+import type { CampaignGenerationDurationDays, CampaignPlan, CampaignReferenceFileInput, VaultRagChunk } from "@markos/shared-types";
 import { z } from "zod";
 import { resolveModelSetting } from "../admin/model-settings-service";
 import { requestAi } from "./request";
@@ -6,6 +6,7 @@ import { requestAi } from "./request";
 const campaignPlanSchema = z
   .object({
     summary: z.string().min(1),
+    referenceSummary: z.string().max(4000).nullable().optional(),
     durationDays: z.union([z.literal(3), z.literal(7), z.literal(14)]),
     publishesPerDay: z.number().int().min(1).max(3),
     objectives: z.array(z.string().min(1)).min(1),
@@ -92,6 +93,8 @@ type CampaignGenerateResponse = z.infer<typeof campaignGenerateResponseSchema>;
 export async function generateCampaignPlan(input: {
   workspaceId: string;
   objective?: string;
+  description?: string;
+  referenceFiles?: CampaignReferenceFileInput[];
   durationDays: CampaignGenerationDurationDays;
   publishesPerDay: number;
   startsAt: string;
@@ -106,6 +109,10 @@ export async function generateCampaignPlan(input: {
     publishes_per_day: input.publishesPerDay,
     starts_at: input.startsAt,
     locale: input.locale,
+    ...(input.description ? { description: input.description } : {}),
+    ...(input.referenceFiles?.length ? { reference_files: input.referenceFiles.map(file => ({
+      filename: file.filename, mime_type: file.mimeType, base64_data: file.base64Data
+    })) } : {}),
     context: input.context.map((chunk) => ({
       section: chunk.section,
       key: chunk.key,

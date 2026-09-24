@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   assertVerificationEmailConfiguration,
+  forwardEmailVerification,
   LocalVerificationEmailProvider,
   SendGridVerificationEmailProvider,
   VerificationEmailConfigurationError,
@@ -8,6 +9,21 @@ import {
 } from "../src/auth/verification-email";
 
 describe("verification email providers", () => {
+  it.each(["/v1/auth/verification/request", "/v1/auth/verify-email"] as const)("uses the hosted email/token service for %s and preserves its errors", async (path) => {
+    const payload = path.endsWith("request") ? { email: "owner@markos.test", locale: "en" } : { token: "example-token" };
+    const body = { error: { code: "EMAIL_VERIFICATION_INVALID", message: "Expired token" } };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(body), { status: 400 }));
+    await expect(forwardEmailVerification(path, payload, "https://api.markos.test/", fetchImpl)).resolves.toEqual({ status: 400, body });
+    expect(fetchImpl).toHaveBeenCalledWith(`https://api.markos.test${path}`, expect.objectContaining({
+      method: "POST", body: JSON.stringify(payload), headers: { "content-type": "application/json" }, redirect: "error"
+    }));
+  });
+
+  it("reports hosted verification outages without exposing transport details", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockRejectedValue(new Error("internal transport detail"));
+    await expect(forwardEmailVerification("/v1/auth/verify-email", { token: "example-token" }, "https://api.markos.test", fetchImpl)).rejects.toThrow(VerificationEmailDeliveryError);
+  });
+
   it("fails API startup when production delivery is not fully configured", () => {
     expect(() =>
       assertVerificationEmailConfiguration({

@@ -26,13 +26,15 @@ import {
 import { GoogleOAuthConfigurationError, GoogleOAuthTokenError, getGoogleOAuthConfigurationStatus } from "./google-oauth";
 import { clearRefreshCookieHeader, readRefreshCookie, refreshCookieHeader } from "./refresh-cookie";
 import { RefreshTokenInvalidError, RefreshTokenReuseDetectedError, revokeRefreshToken } from "./tokens";
-import { VerificationEmailConfigurationError, VerificationEmailDeliveryError } from "./verification-email";
+import { forwardEmailVerification, VerificationEmailConfigurationError, VerificationEmailDeliveryError } from "./verification-email";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
+import { registerNativeAuthRoutes } from "./native-auth-routes";
 
 const BROWSER_SESSION_HEADER = "x-markos-session";
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/auth/register", async (request, reply) => {
+  await registerNativeAuthRoutes(app);
+  app.post("/v1/auth/register", { bodyLimit: 16_384 }, async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -226,11 +228,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           reply,
           await verifyMfaTotpSession({
             code: parsed.data.code,
+            authVersion: request.auth!.authVersion,
             userId,
             workspaceId
           })
         );
       } catch (error) {
+        if (error instanceof InvalidCredentialsError) {
+          return reply.status(401).send(errorEnvelope("INVALID_TOKEN", "Sign in again to confirm account security"));
+        }
         if (error instanceof MfaSetupRequiredError) {
           return reply.status(403).send(errorEnvelope("MFA_SETUP_REQUIRED", error.message));
         }
@@ -252,6 +258,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
+      const forwarded = await forwardEmailVerification("/v1/auth/verification/request", parsed.data);
+      if (forwarded !== null) return reply.status(forwarded.status).send(forwarded.body);
       return ok(await requestEmailVerification(parsed.data));
     } catch (error) {
       if (error instanceof VerificationEmailConfigurationError) {
@@ -274,8 +282,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
+      const forwarded = await forwardEmailVerification("/v1/auth/verify-email", parsed.data);
+      if (forwarded !== null) return reply.status(forwarded.status).send(forwarded.body);
       return ok(await verifyEmail(parsed.data));
     } catch (error) {
+      if (error instanceof VerificationEmailDeliveryError) {
+        return reply.status(503).send(errorEnvelope("EMAIL_DELIVERY_UNAVAILABLE", error.message));
+      }
+
       if (error instanceof EmailVerificationInvalidError) {
         return reply.status(400).send(errorEnvelope("EMAIL_VERIFICATION_INVALID", error.message));
       }

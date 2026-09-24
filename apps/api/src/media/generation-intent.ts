@@ -31,6 +31,23 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
       throw new ContentAggregateError("MEDIA_SETTINGS_INVALID", "Unsupported aspect ratio", 400);
     const duration = kind === "VIDEO" ? (input.durationSeconds ?? item.generationDurationSeconds ?? 8) : null;
     if (duration !== null && ![4, 8, 12].includes(duration)) throw new ContentAggregateError("MEDIA_SETTINGS_INVALID", "Choose 4, 8 or 12 seconds", 400);
+    if (kind === "VIDEO") {
+      const active = await tx.mediaGenerationJob.findFirst({
+        where: {
+          workspaceId,
+          contentItemId,
+          contentMediaItemId: item.id,
+          generationIntent: item.generationIntent,
+          kind,
+          status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] },
+          prompt,
+          aspectRatio,
+          durationSeconds: duration
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      if (active) return active;
+    }
     const target = await tx.contentMediaItem.update({
       where: { id: item.id },
       data: {

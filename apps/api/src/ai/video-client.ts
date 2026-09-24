@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { requestAi, requestAiBinary } from "./request";
+import type { VideoRenderPlan } from "./video-plan-client";
 
 const videoJobResponseSchema = z.object({
   provider_job_id: z.string().min(1).max(240),
@@ -34,6 +35,9 @@ export function getVideoGenerationStatus(providerJobId: string): Promise<VideoPr
   });
 }
 
-export function downloadGeneratedVideo(providerJobId: string): Promise<Buffer> {
-  return requestAiBinary("/ai/videos/download", { provider_job_id: providerJobId });
+export function downloadGeneratedVideo(providerJobId: string, renderPlan?: VideoRenderPlan, durationSeconds: 4 | 8 | 12 = 8): Promise<Buffer> {
+  return requestAiBinary("/ai/videos/download", {
+    provider_job_id: providerJobId,
+    ...(renderPlan ? { render_plan: renderPlan, duration_seconds: durationSeconds } : {})
+  });
 }

@@ -211,6 +211,9 @@ model User {
   id           String     @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   email        String     @unique
   passwordHash String?
+  authVersion  Int        @default(0)
+  termsAcceptedAt DateTime?
+  termsVersion String?
   fullName     String
   locale       Locale     @default(AR)
   planId       String?    @db.Uuid
@@ -226,6 +229,39 @@ model User {
   deletedAt    DateTime?
 
   @@map("users")
+}
+
+model PasswordResetChallenge {
+  id String @id @db.Uuid
+  userId String? @db.Uuid
+  authVersion Int?
+  codeHash String
+  attempts Int @default(0)
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId], map: "password_reset_challenges_user_idx")
+  @@index([expiresAt], map: "password_reset_challenges_expiry_idx")
+  @@map("password_reset_challenges")
+}
+
+model AuthEmailJob {
+  id String @id @db.Uuid
+  kind String
+  challengeId String? @db.Uuid
+  payload String?
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  expiresAt DateTime
+  leaseUntil DateTime?
+  leaseToken String? @db.Uuid
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, availableAt], map: "auth_email_jobs_ready_idx")
+  @@index([expiresAt], map: "auth_email_jobs_expiry_idx")
+  @@map("auth_email_jobs")
 }
 
 model Workspace {
@@ -506,6 +542,27 @@ model ContentCalendar {
 
   @@index([workspaceId, month])
   @@map("content_calendars")
+}
+
+model CampaignGenerationJob {
+  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId    String   @db.Uuid
+  userId         String   @db.Uuid
+  requestId      String   @db.Uuid
+  requestHash    String
+  objective      String
+  status         String   @default("QUEUED")
+  input          Json?
+  campaignId     String?  @db.Uuid
+  errorCode      String?
+  leaseExpiresAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([workspaceId, requestId])
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@map("campaign_generation_jobs")
 }
 
 model Campaign {

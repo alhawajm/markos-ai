@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronRight, Plus, RefreshCcw, Search, Sparkles, X, Zap } from "lucide-react";
+import { CalendarDays, ChevronRight, FileText, Paperclip, Plus, RefreshCcw, Search, Sparkles, X, Zap } from "lucide-react";
 import {
   campaignDurations,
   campaignGenerationDurations,
@@ -28,6 +28,7 @@ import {
   type ReviewSelection
 } from "./campaign-review-model";
 import styles from "./campaign-review.module.css";
+import { addCampaignReferenceFiles, campaignReferenceAccept, campaignReferencePayload } from "./campaign-reference-files";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -47,6 +48,8 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [objective, setObjective] = useState(t(locale, "defaultObjective"));
+  const [description, setDescription] = useState("");
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [durationDays, setDurationDays] = useState<CampaignGenerationDurationDays>(14);
   const [publishesPerDay, setPublishesPerDay] = useState(1);
   const [startsAt, setStartsAt] = useState(todayForDateInput);
@@ -188,7 +191,10 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
     setGenerating(true);
     setGenerationError("");
     try {
-      const base = { durationDays, locale, publishesPerDay, startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString() };
+      const files = await campaignReferencePayload(referenceFiles);
+      const base = { durationDays, locale, publishesPerDay, startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString(),
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(files.length ? { referenceFiles: files } : {}) };
       const campaign = await client.generateCampaign(objective.trim() ? { ...base, objective: objective.trim() } : base);
       if (lifetime !== workspaceLifetime.current) return;
       const result = { campaign, items: [], mediaAssets: [] };
@@ -196,6 +202,8 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
       setQuery("");
       setSearchQuery("");
       setShowComposer(false);
+      setReferenceFiles([]);
+      setDescription("");
       setReview(result);
       setSelections((current) => ({ ...current, [campaign.id]: initialReviewSelection(campaign) }));
       setActiveId(campaign.id);
@@ -204,7 +212,7 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
       setActionError("");
       updateCampaignUrl(campaign.id, initialReviewSelection(campaign));
     } catch (error) {
-      if (lifetime === workspaceLifetime.current) setGenerationError(error instanceof Error ? error.message : t(locale, "failed"));
+      if (lifetime === workspaceLifetime.current) setGenerationError(error instanceof Error ? t(locale, error.message) : t(locale, "failed"));
     } finally {
       generationPending.current = false;
       if (lifetime === workspaceLifetime.current) setGenerating(false);
@@ -354,6 +362,14 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
       )}
       {showComposer && (
         <CampaignComposer
+          description={description}
+          referenceFiles={referenceFiles}
+          onDescription={setDescription}
+          onAddFiles={(files) => {
+            try { setReferenceFiles(addCampaignReferenceFiles(referenceFiles, files)); setGenerationError(""); }
+            catch (error) { setGenerationError(t(locale, error instanceof Error ? error.message : "filesUnsupported")); }
+          }}
+          onRemoveFile={(index) => { setReferenceFiles(current => current.filter((_, i) => i !== index)); setGenerationError(""); }}
           durationDays={durationDays}
           isBusy={generating}
           locale={locale}
@@ -421,6 +437,11 @@ function todayForDateInput(): string {
   return new Date().toISOString().slice(0, 10);
 }
 function CampaignComposer({
+  description,
+  referenceFiles,
+  onDescription,
+  onAddFiles,
+  onRemoveFile,
   durationDays,
   isBusy,
   locale,
@@ -435,6 +456,11 @@ function CampaignComposer({
   publishesPerDay,
   startsAt
 }: {
+  description: string;
+  referenceFiles: File[];
+  onDescription: (value: string) => void;
+  onAddFiles: (files: File[]) => void;
+  onRemoveFile: (index: number) => void;
   durationDays: CampaignGenerationDurationDays;
   isBusy: boolean;
   locale: Locale;
@@ -450,6 +476,7 @@ function CampaignComposer({
   startsAt: string;
 }) {
   const { dialogRef, onCancel, onKeyDown } = useModalDialog({ onClose, closeDisabled: isBusy });
+  const fileInput = useRef<HTMLInputElement>(null);
   return (
     <dialog
       aria-label={t(locale, "generate")}
@@ -481,10 +508,42 @@ function CampaignComposer({
           <span className="text-sm font-semibold">{t(locale, "objective")}</span>
           <input
             className="sunlit-field mt-2 h-12 rounded-xl px-4 text-base outline-none"
+            maxLength={500}
             onChange={(event) => onObjective(event.target.value)}
             value={objective}
           />
         </label>
+        <label className="mt-4 block">
+          <span className="text-sm font-semibold">{t(locale, "description")}</span>
+          <textarea
+            className="sunlit-field mt-2 min-h-28 resize-y rounded-xl px-4 py-3 text-sm leading-6 outline-none"
+            rows={4} maxLength={5000} value={description} dir="auto"
+            onChange={event => onDescription(event.target.value)}
+            placeholder={t(locale, "descriptionPlaceholder")}
+          />
+        </label>
+        <section className="mt-4 rounded-xl border border-[var(--border)] p-4" aria-label={t(locale, "referenceFiles")}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">{t(locale, "referenceFiles")}</h3>
+            <span className="text-xs text-[var(--text-secondary)]">{referenceFiles.length}/5</span>
+          </div>
+          <p className="mt-1 text-sm leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceHint")}</p>
+          <input ref={fileInput} type="file" className="hidden" accept={campaignReferenceAccept} multiple
+            aria-label={t(locale, "addFiles")}
+            onChange={event => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+          {referenceFiles.length > 0 && <ul className="mt-3 space-y-2">
+            {referenceFiles.map((file, index) => <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-3 rounded-lg bg-[var(--surface-raised)] p-2">
+              <FileText size={18} className="shrink-0 text-[var(--primary)]" aria-hidden="true" />
+              <span className="min-w-0 flex-1 break-words text-sm" dir="auto">{file.name}</span>
+              <span className="shrink-0 text-xs text-[var(--sunlit-muted)]">{file.size < 1_000_000 ? `${Math.max(1, Math.ceil(file.size / 1000))} KB` : `${(file.size / 1_000_000).toFixed(1)} MB`}</span>
+              <button type="button" className="sunlit-secondary grid h-9 w-9 shrink-0 place-items-center rounded-lg" aria-label={`${t(locale, "removeFile")}: ${file.name}`} onClick={() => onRemoveFile(index)}><X size={16} /></button>
+            </li>)}
+          </ul>}
+          <button type="button" className="sunlit-secondary mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold disabled:opacity-50" disabled={referenceFiles.length >= 5} onClick={() => fileInput.current?.click()}>
+            <Paperclip size={16} />{t(locale, "addFiles")}
+          </button>
+          <p className="mt-2 text-xs leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceFormats")}</p>
+        </section>
         <fieldset className="mt-4">
           <legend className="text-sm font-semibold">{t(locale, "duration")}</legend>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -574,6 +633,18 @@ function CampaignEmpty({ locale, onNew }: { locale: Locale; onNew: () => void })
 function t(locale: Locale, key: string): string {
   const dictionary: Record<Locale, Record<string, string>> = {
     ar: {
+      description: "الوصف والسياق",
+      descriptionPlaceholder: "أخبر MARKOS عن الفعالية والجمهور والتواريخ والأسلوب المطلوب. وضّح ما الذي ينبغي أخذه من الملفات وأي تفاصيل تغيرت.",
+      referenceFiles: "ملفات مرجعية للحملة (اختياري)",
+      referenceHint: "أضف المقترح أو تفاصيل الفعالية أو التصاميم لمساعدة MARKOS على إعداد حملة أدق.",
+      referenceFormats: "PDF أو Word (.docx) أو TXT أو PNG أو JPG أو WebP. حتى 5 ملفات، 8 MB لكل ملف و20 MB إجمالاً.",
+      addFiles: "إضافة ملفات",
+      removeFile: "إزالة الملف",
+      filesTooMany: "يمكنك إضافة حتى 5 ملفات. أزل ملفاً لإضافة آخر.",
+      filesUnsupported: "اختر ملفات PDF أو Word (.docx) أو TXT أو PNG أو JPG أو WebP بأسماء أقصر من 181 حرفاً.",
+      fileTooLarge: "يجب ألا يكون الملف فارغاً وألا يتجاوز 8 MB.",
+      filesTotalTooLarge: "يجب ألا يتجاوز مجموع الملفات 20 MB.",
+      fileReadFailed: "تعذّرت قراءة أحد الملفات. أزله وأضفه مجدداً ثم حاول مرة أخرى.",
       addAnother: "إضافة حملة أخرى",
       approveSuggestion: "اعتماد الفكرة وإنشاء مسودة",
       businessInformed: "مبنية على ملف النشاط",
@@ -635,6 +706,18 @@ function t(locale: Locale, key: string): string {
       yourCampaigns: "حملاتك"
     },
     en: {
+      description: "Description and context",
+      descriptionPlaceholder: "Tell MARKOS about the event, audience, dates and creative direction. Explain what to use from the files and any details that have changed.",
+      referenceFiles: "Campaign reference files (optional)",
+      referenceHint: "Add proposals, event details or designs to help MARKOS draft a more accurate campaign.",
+      referenceFormats: "PDF, Word (.docx), TXT, PNG, JPG or WebP. Up to 5 files, 8 MB each and 20 MB total.",
+      addFiles: "Add files",
+      removeFile: "Remove file",
+      filesTooMany: "You can add up to 5 files. Remove one to add another.",
+      filesUnsupported: "Choose PDF, Word (.docx), TXT, PNG, JPG or WebP files with names under 181 characters.",
+      fileTooLarge: "Each file must be nonempty and no larger than 8 MB.",
+      filesTotalTooLarge: "The combined files must be 20 MB or less.",
+      fileReadFailed: "A file could not be read. Remove it, add it again and retry.",
       addAnother: "Add another campaign",
       approveSuggestion: "Approve idea and create draft",
       businessInformed: "Business-informed",

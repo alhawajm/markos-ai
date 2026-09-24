@@ -429,6 +429,14 @@ describe("maintenance worker", () => {
     expect(publishedContentIds).toEqual(expect.arrayContaining([first.content.id, second.content.id]));
     expect(firstAfter.status).toBe("PUBLISHED");
     expect(secondAfter.status).toBe("PUBLISHED");
+    await processDuePublishJobs({ now, publisher });
+    for (const target of [first, second]) {
+      const notices = await prisma.notification.findMany({
+        where: { userId: target.workspace.ownerUserId, workspaceId: target.workspace.id, templateKey: "publishing_succeeded" }
+      });
+      expect(notices).toHaveLength(1);
+      expect(notices[0]!.payload).toMatchObject({ contentItemId: target.content.id });
+    }
     await expect(
       prisma.publishJob.findFirstOrThrow({
         where: { contentItemId: first.content.id }

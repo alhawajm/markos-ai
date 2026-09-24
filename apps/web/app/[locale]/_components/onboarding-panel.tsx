@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type DragEvent, type ReactNode } from "react";
-import { MarkosApiError } from "@markos/api-client";
 import type {
   BusinessProfile,
   Locale,
@@ -44,6 +43,7 @@ import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./b
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { useModalDialog } from "./use-modal-dialog";
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
+import { pollOnboardingDocumentAnalysis, recoverOnboardingDocumentRequest } from "./onboarding-document-recovery";
 import {
   createEmptyOnboardingDraft,
   createOnboardingDraftFromDocumentProfile,
@@ -801,6 +801,32 @@ export function OnboardingPanel({
     };
   }, [client, editMode, session, syncOnboardingDocumentAnalysis]);
 
+  useEffect(() => {
+    if (!session || editMode || onboardingDocumentAnalysis?.status !== "PROCESSING") return;
+    const analysisId = onboardingDocumentAnalysis.id;
+    let stopPolling = () => {};
+    function resumePolling() {
+      stopPolling();
+      stopPolling = pollOnboardingDocumentAnalysis({
+        analysisId,
+        read: () => client.onboardingDocumentAnalysis(),
+        onAnalysis: (analysis) => {
+          if (analysis) syncOnboardingDocumentAnalysis(analysis);
+          else setOnboardingDocumentAnalysis(null);
+        },
+        onError: (error) => setOnboardingDocumentMessage(error instanceof Error ? error.message : copy.businessDocuments.failed)
+      });
+    }
+    resumePolling();
+    window.addEventListener("online", resumePolling);
+    window.addEventListener("focus", resumePolling);
+    return () => {
+      stopPolling();
+      window.removeEventListener("online", resumePolling);
+      window.removeEventListener("focus", resumePolling);
+    };
+  }, [client, copy.businessDocuments.failed, editMode, onboardingDocumentAnalysis?.id, onboardingDocumentAnalysis?.status, session, syncOnboardingDocumentAnalysis]);
+
   const activeStep = steps[step - 1]!;
   const validationIssue = validateOnboardingStep(step, draft);
   const canSave = hasOnboardingStepData(step, draft) && validationIssue === null;
@@ -935,16 +961,12 @@ export function OnboardingPanel({
       const payload = await Promise.all(
         prepared.files.map(async ({ file, mimeType }) => ({ filename: file.name, mimeType, base64Data: await fileAsBase64(file) }))
       );
-      const analysis = await client.analyzeOnboardingDocuments(payload);
+      const analysis = await recoverOnboardingDocumentRequest(
+        () => client.analyzeOnboardingDocuments(payload),
+        () => client.onboardingDocumentAnalysis()
+      );
       syncOnboardingDocumentAnalysis(analysis);
     } catch (error) {
-      if (error instanceof MarkosApiError && error.code === "ONBOARDING_DOCUMENT_ANALYSIS_CONFLICT") {
-        const existing = await client.onboardingDocumentAnalysis().catch(() => null);
-        if (existing !== null) {
-          syncOnboardingDocumentAnalysis(existing);
-          return;
-        }
-      }
       setOnboardingDocumentMessage(error instanceof Error ? error.message : copy.businessDocuments.failed);
     } finally {
       setOnboardingDocumentBusy(false);
@@ -956,7 +978,11 @@ export function OnboardingPanel({
     setOnboardingDocumentBusy(true);
     setOnboardingDocumentMessage("");
     try {
-      const analysis = await client.retryOnboardingDocumentAnalysis(onboardingDocumentAnalysis.id);
+      const analysis = await recoverOnboardingDocumentRequest(
+        () => client.retryOnboardingDocumentAnalysis(onboardingDocumentAnalysis.id),
+        () => client.onboardingDocumentAnalysis(),
+        onboardingDocumentAnalysis.id
+      );
       syncOnboardingDocumentAnalysis(analysis);
     } catch (error) {
       setOnboardingDocumentMessage(error instanceof Error ? error.message : copy.businessDocuments.failed);

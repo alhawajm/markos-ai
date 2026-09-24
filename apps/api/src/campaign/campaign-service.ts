@@ -5,6 +5,8 @@ import { AiServiceRequestError } from "../ai/request";
 import { getContentToneLock } from "../content/content-service";
 import { contentAggregateInclude, createContentAggregate, getContentAggregate, loadContentAggregate, toContentRecord } from "../content/content-aggregate";
 import { generateCampaignPlan } from "../ai/campaign-client";
+import { validateCampaignReferences } from "./campaign-reference-files";
+import { assertCampaignGenerationAccess, CampaignGenerationError } from "./campaign-generation-access";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { toMediaAssetRecord } from "../media/media-service";
@@ -280,7 +282,8 @@ async function findWorkspaceCampaign(workspaceId: string, campaignId: string) {
   return row;
 }
 
-export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput): Promise<CampaignRecord> {
+export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput, job?: { id: string; userId: string }): Promise<CampaignRecord> {
+  const referenceFiles = validateCampaignReferences(input.referenceFiles ?? []);
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
@@ -317,6 +320,8 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
       publishesPerDay: input.publishesPerDay,
       startsAt: input.startsAt,
       locale: input.locale,
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.referenceFiles?.length ? { referenceFiles: input.referenceFiles } : {}),
       context,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } })
     };
@@ -329,7 +334,7 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
           }
     );
 
-    if (generated.campaign.durationDays !== input.durationDays || generated.campaign.publishesPerDay !== input.publishesPerDay) {
+    if (generated.campaign.durationDays !== input.durationDays || generated.campaign.publishesPerDay !== input.publishesPerDay || (referenceFiles.length > 0 && !generated.campaign.referenceSummary?.trim())) {
       throw new AiServiceRequestError({
         code: "AI_SERVICE_RESPONSE_INVALID",
         message: "The AI service returned an invalid response",
@@ -340,11 +345,22 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
 
     const campaign: CampaignPlan = {
       ...generated.campaign,
+      referenceSummary: generated.campaign.referenceSummary ?? null,
+      ...(input.description ? { description: input.description } : {}),
+      ...(referenceFiles.length ? { referenceFiles } : {}),
       retrievedContext: context
     };
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 
     const saved = await prisma.$transaction(async (tx) => {
+      // The campaign and durable completion receipt commit together. A stale worker
+      // cannot create an orphan campaign after its lease has been recovered.
+      if (job) {
+        await tx.$queryRaw`SELECT id FROM campaign_generation_jobs WHERE id = ${job.id}::uuid AND "workspaceId" = ${workspaceId}::uuid FOR UPDATE`;
+        const active = await tx.campaignGenerationJob.findFirst({ where: { id: job.id, workspaceId, userId: job.userId, status: "RUNNING", leaseExpiresAt: { gt: new Date() } } });
+        if (!active) throw new CampaignGenerationError("CAMPAIGN_INTERRUPTED", "Campaign generation was interrupted. Review the brief before trying again.");
+        await assertCampaignGenerationAccess(workspaceId, job.userId, tx);
+      }
       const startsAt = new Date(input.startsAt);
       const row = await tx.campaign.create({
         data: {
@@ -371,6 +387,8 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
             publishesPerDay: input.publishesPerDay,
             startsAt: input.startsAt,
             locale: input.locale,
+            ...(input.description ? { description: input.description } : {}),
+            ...(referenceFiles.length ? { referenceFiles } : {}),
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
             retrievedContext: context
           } as unknown as Prisma.InputJsonValue,
@@ -391,6 +409,11 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
         tokensIn: generated.tokens_in,
         tokensOut: generated.tokens_out,
         now: usagePeriodDate
+      });
+
+      if (job) await tx.campaignGenerationJob.update({
+        where: { id: job.id, workspaceId },
+        data: { status: "COMPLETED", campaignId: row.id, input: Prisma.DbNull, leaseExpiresAt: null }
       });
 
       return row;

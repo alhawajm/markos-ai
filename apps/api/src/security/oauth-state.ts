@@ -18,7 +18,9 @@ const ALLOWED_RETURN_PATHS = new Set([
   "/en/app/settings",
   "/ar/app/settings",
   "/en/instagram-setup",
-  "/ar/instagram-setup"
+  "/ar/instagram-setup",
+  "/en/mobile/instagram",
+  "/ar/mobile/instagram"
 ]);
 
 export class OAuthStateError extends Error {

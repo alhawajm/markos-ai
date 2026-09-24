@@ -28,13 +28,15 @@ import {
 } from "lucide-react";
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
 import type { Locale } from "@markos/shared-types";
-import { loginSchema, registerSchema } from "@markos/validation";
+import { accountPolicyVersion, loginSchema, registerSchema } from "@markos/validation";
 import { ThemeSelect } from "../../_components/theme-control";
 import { getBrowserApiBaseUrl } from "./api-base-url";
 import { refreshBrowserSession, setBrowserSession, createMarkosClient, useMarkosSession } from "./browser-session";
 import { appEntryRedirect } from "./app-entry";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./auth-page.module.css";
+
+import { PasswordRecoveryPanel } from "./password-recovery-panel";
 
 export type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify";
 
@@ -86,7 +88,7 @@ const copyByLocale = {
       passwordPlaceholder: "Enter your password",
       newPassword: "New password",
       confirmPassword: "Confirm new password",
-      passwordRequirement: "At least 12 characters",
+      passwordRequirement: "At least 15 characters",
       mfaCode: "MFA code",
       mfaPlaceholder: "6-digit code",
       showPassword: "Show password",
@@ -109,7 +111,7 @@ const copyByLocale = {
       switchAction: "Log in",
       nameRequired: "Enter your full name.",
       emailRequired: "Enter a valid email address.",
-      passwordRequired: "Use a password with at least 12 characters."
+      passwordRequired: "Use a password with at least 15 characters."
     },
     login: {
       eyebrow: "LOG IN",
@@ -204,10 +206,10 @@ const copyByLocale = {
     },
     reset: {
       title: "Choose a new password",
-      body: "Use at least 12 characters and enter it twice.",
+      body: "Use at least 15 characters and enter it twice.",
       action: "Update password",
       mismatch: "The passwords do not match.",
-      passwordRequired: "Use a password with at least 12 characters.",
+      passwordRequired: "Use a password with at least 15 characters.",
       unavailable: "Password reset is not available yet. You can still sign in with your current password.",
       successTitle: "Password updated",
       successBody: "You can now log in with your new password.",
@@ -262,7 +264,7 @@ const copyByLocale = {
       passwordPlaceholder: "أدخل كلمة المرور",
       newPassword: "كلمة المرور الجديدة",
       confirmPassword: "تأكيد كلمة المرور الجديدة",
-      passwordRequirement: "12 حرفًا على الأقل",
+      passwordRequirement: "15 حرفًا على الأقل",
       mfaCode: "رمز التحقق بخطوتين",
       mfaPlaceholder: "رمز من 6 أرقام",
       showPassword: "إظهار كلمة المرور",
@@ -285,7 +287,7 @@ const copyByLocale = {
       switchAction: "تسجيل الدخول",
       nameRequired: "أدخل اسمك الكامل.",
       emailRequired: "أدخل بريدًا إلكترونيًا صالحًا.",
-      passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل."
+      passwordRequired: "استخدم كلمة مرور من 15 حرفًا على الأقل."
     },
     login: {
       eyebrow: "تسجيل الدخول",
@@ -380,10 +382,10 @@ const copyByLocale = {
     },
     reset: {
       title: "اختر كلمة مرور جديدة",
-      body: "استخدم 12 حرفًا على الأقل وأدخلها مرتين.",
+      body: "استخدم 15 حرفًا على الأقل وأدخلها مرتين.",
       action: "تحديث كلمة المرور",
       mismatch: "كلمتا المرور غير متطابقتين.",
-      passwordRequired: "استخدم كلمة مرور من 12 حرفًا على الأقل.",
+      passwordRequired: "استخدم كلمة مرور من 15 حرفًا على الأقل.",
       unavailable: "إعادة تعيين كلمة المرور غير متاحة حالياً. يمكنك تسجيل الدخول بكلمة مرورك الحالية.",
       successTitle: "تم تحديث كلمة المرور",
       successBody: "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.",
@@ -439,9 +441,8 @@ export function AuthPage({
   const legalCheckboxRef = useRef<HTMLInputElement>(null);
   const verificationStartedRef = useRef(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [email, setEmail] = useState(initialEmail);
-  const [forgotSent, setForgotSent] = useState(false);
+
   const [fullName, setFullName] = useState("");
   const [isSubmitting, setSubmitting] = useState(false);
   const [isInteractive, setInteractive] = useState(false);
@@ -455,9 +456,8 @@ export function AuthPage({
   const [verifiedReady, setVerifiedReady] = useState(false);
   const [verificationChecking, setVerificationChecking] = useState(false);
   const verificationCheckRef = useRef(false);
-  const [resetComplete] = useState(false);
+
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const checkVerification = useCallback(
@@ -601,7 +601,7 @@ export function AuthPage({
       return;
     }
 
-    if (password.length < 12) {
+    if (password.length < 15) {
       setNotice({ tone: "error", text: copy.signup.passwordRequired });
       return;
     }
@@ -621,6 +621,8 @@ export function AuthPage({
         fullName: parsed.data.fullName,
         locale: parsed.data.locale,
         password: parsed.data.password,
+        acceptedTerms: true,
+        policyVersion: accountPolicyVersion,
         ...(parsed.data.workspaceName === undefined ? {} : { workspaceName: parsed.data.workspaceName })
       });
       setBrowserSession(session);
@@ -681,35 +683,6 @@ export function AuthPage({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function submitForgot(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setNotice(null);
-
-    if (!isValidEmail(email)) {
-      setNotice({ tone: "error", text: copy.forgot.emailRequired });
-      return;
-    }
-
-    setNotice({ tone: "info", text: copy.forgot.unavailable });
-  }
-
-  function submitReset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setNotice(null);
-
-    if (password.length < 12) {
-      setNotice({ tone: "error", text: copy.reset.passwordRequired });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setNotice({ tone: "error", text: copy.reset.mismatch });
-      return;
-    }
-
-    setNotice({ tone: "info", text: copy.reset.unavailable });
   }
 
   async function requestVerification(requestedEmail = email) {
@@ -887,95 +860,7 @@ export function AuthPage({
                 </>
               ) : null}
 
-              {mode === "forgot-password" ? (
-                forgotSent ? (
-                  <StatusPanel icon={Mail} title={copy.forgot.sentTitle} tone="aqua">
-                    <p>{copy.forgot.sentBody}</p>
-                    <strong className={styles.statusEmail} dir="ltr">
-                      {email}
-                    </strong>
-                    <button className={styles.secondaryButton} onClick={() => setForgotSent(false)} type="button">
-                      {copy.forgot.sendAgain}
-                    </button>
-                    <a className={styles.textLink} href={loginHref}>
-                      {copy.forgot.back}
-                    </a>
-                  </StatusPanel>
-                ) : (
-                  <>
-                    <AuthHeading body={copy.forgot.unavailable} icon={KeyRound} title={copy.forgot.title} />
-                    <form noValidate onSubmit={submitForgot}>
-                      <fieldset className="contents" disabled={!isInteractive}>
-                        <div className={styles.formStack}>
-                          <EmailField copy={copy.fields} email={email} onChange={setEmail} />
-                        </div>
-                        <NoticeMessage notice={notice} />
-                        <button className={styles.primaryButton} type="submit">
-                          {copy.forgot.action}
-                          <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                        </button>
-                      </fieldset>
-                    </form>
-                    <a className={`${styles.textLink} ${styles.centeredLink}`} href={loginHref}>
-                      {copy.forgot.back}
-                    </a>
-                  </>
-                )
-              ) : null}
-
-              {mode === "reset-password" ? (
-                resetLinkExpired ? (
-                  <StatusPanel icon={Lock} title={copy.reset.expiredTitle} tone="coral">
-                    <p>{copy.reset.expiredBody}</p>
-                    <a className={styles.primaryButton} href={forgotHref}>
-                      {copy.reset.requestNew}
-                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                    </a>
-                  </StatusPanel>
-                ) : resetComplete ? (
-                  <StatusPanel icon={CheckCircle2} title={copy.reset.successTitle} tone="aqua">
-                    <p>{copy.reset.successBody}</p>
-                    <a className={styles.primaryButton} href={loginHref}>
-                      {copy.reset.login}
-                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                    </a>
-                  </StatusPanel>
-                ) : (
-                  <>
-                    <AuthHeading body={copy.reset.unavailable} icon={Lock} title={copy.reset.title} />
-                    <form noValidate onSubmit={submitReset}>
-                      <fieldset className="contents" disabled={!isInteractive}>
-                        <div className={styles.formStack}>
-                          <PasswordField
-                            copy={copy.fields}
-                            id="new-password"
-                            label={copy.fields.newPassword}
-                            onChange={setPassword}
-                            password={password}
-                            requirement
-                            show={showPassword}
-                            toggle={() => setShowPassword((current) => !current)}
-                          />
-                          <PasswordField
-                            copy={copy.fields}
-                            id="confirm-password"
-                            label={copy.fields.confirmPassword}
-                            onChange={setConfirmPassword}
-                            password={confirmPassword}
-                            show={showConfirmPassword}
-                            toggle={() => setShowConfirmPassword((current) => !current)}
-                          />
-                        </div>
-                        <NoticeMessage notice={notice} />
-                        <button className={styles.primaryButton} type="submit">
-                          {copy.reset.action}
-                          <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
-                        </button>
-                      </fieldset>
-                    </form>
-                  </>
-                )
-              ) : null}
+              {mode === "forgot-password" || mode === "reset-password" ? <PasswordRecoveryPanel locale={locale} /> : null}
 
               {mode === "verify" && initialToken ? (
                 <StatusPanel
@@ -1444,7 +1329,7 @@ function PasswordField({
         </button>
       </span>
       {requirement ? (
-        <small className={styles.passwordRequirement} data-met={password.length >= 12 ? "true" : "false"}>
+        <small className={styles.passwordRequirement} data-met={password.length >= 15 ? "true" : "false"}>
           <span aria-hidden="true">
             <Check size={13} />
           </span>

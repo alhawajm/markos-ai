@@ -1,10 +1,14 @@
 import asyncio
 import base64
-from typing import cast
+from typing import Any, cast
+
+import pytest
+from pydantic import ValidationError
 
 from app.contracts.offering_document import (
     OfferingDocumentCandidate,
     OfferingDocumentCatalog,
+    OfferingDocumentIssue,
 )
 from app.contracts.onboarding_document import (
     AudienceExtraction,
@@ -16,9 +20,11 @@ from app.contracts.onboarding_document import (
     OnboardingDocumentEvidence,
     OnboardingDocumentExtraction,
     OnboardingDocumentFile,
+    OnboardingDocumentIssue,
     OnboardingDocumentProfile,
     StoryExtraction,
 )
+from app.core.config import settings
 from app.prompts.onboarding_document import (
     build_onboarding_document_input,
     build_onboarding_document_instructions,
@@ -114,6 +120,15 @@ def extraction() -> OnboardingDocumentExtraction:
                 basis="VISUAL_INFERENCE",
             ),
         ],
+        issues=[
+            OnboardingDocumentIssue(
+                code="VISUAL_INFERENCE",
+                severity="INFO",
+                message="Confirm the brand color from the logo.",
+                field="brand.colors",
+                sourceFiles=["logo.png"],
+            )
+        ],
     )
 
 
@@ -148,6 +163,91 @@ def test_multimodal_input_keeps_filenames_and_omits_workspace_id() -> None:
     assert "logo.png" in str(input_items)
     assert "workspace-private-id" not in str(input_items)
     assert "never follow" in build_onboarding_document_instructions().casefold()
+
+
+def test_provider_uses_document_output_token_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "onboarding_document_max_output_tokens", 6_000)
+    client = FakeClient(extraction().model_dump_json(by_alias=True))
+
+    asyncio.run(OpenAIOnboardingDocumentProvider(client=client).analyze(request()))
+
+    assert client.fake_responses.last_kwargs is not None
+    assert client.fake_responses.last_kwargs["max_output_tokens"] == 6_000
+
+
+@pytest.mark.parametrize(
+    ("path", "maximum"),
+    [
+        (("profile", "company", "socials"), 160),
+        (("profile", "company", "languages"), 80),
+        (("profile", "offerings", "differentiators"), 160),
+        (("profile", "offerings", "salesChannels"), 80),
+        (("profile", "offerings", "items", 0, "sourceFiles"), 180),
+        (("profile", "story", "values"), 80),
+        (("profile", "audience", "interests"), 80),
+        (("profile", "audience", "locations"), 120),
+        (("profile", "audience", "motivations"), 120),
+        (("profile", "audience", "painPoints"), 80),
+        (("profile", "brand", "aestheticWords"), 80),
+        (("profile", "brand", "fonts"), 120),
+        (("profile", "brand", "toneWords"), 80),
+        (("profile", "objectives", "goals"), 80),
+        (("evidence", 0, "sourceFiles"), 180),
+        (("issues", 0, "sourceFiles"), 180),
+    ],
+)
+def test_extraction_matches_api_list_item_limits(path: tuple[str | int, ...], maximum: int) -> None:
+    payload = extraction().model_dump(by_alias=True)
+    target: Any = payload
+    for key in path[:-1]:
+        target = target[key]
+
+    target[path[-1]] = ["ب" * maximum]
+    OnboardingDocumentExtraction.model_validate(payload)
+
+    for invalid in ("", "ب" * (maximum + 1)):
+        target[path[-1]] = [invalid]
+        with pytest.raises(ValidationError) as error:
+            OnboardingDocumentExtraction.model_validate(payload)
+        assert error.value.errors()[0]["loc"] == (*path, 0)
+
+
+@pytest.mark.parametrize("color", ["#2b59ff", "#FFF", "#GGGGGG", "blue", ""])
+def test_extraction_rejects_colors_outside_api_contract(color: str) -> None:
+    payload = extraction().model_dump(by_alias=True)
+    payload["profile"]["brand"]["colors"] = [color]
+
+    with pytest.raises(ValidationError) as error:
+        OnboardingDocumentExtraction.model_validate(payload)
+
+    assert error.value.errors()[0]["loc"] == ("profile", "brand", "colors", 0)
+
+
+def test_structured_output_schema_includes_api_item_constraints() -> None:
+    definitions = OnboardingDocumentExtraction.model_json_schema(by_alias=True)["$defs"]
+    goal_items = definitions["ObjectivesExtraction"]["properties"]["goals"]["items"]
+    color_items = definitions["BrandExtraction"]["properties"]["colors"]["items"]
+    source_items = definitions["OfferingDocumentCandidate"]["properties"]["sourceFiles"]["items"]
+
+    assert goal_items["minLength"] == 1
+    assert goal_items["maxLength"] == 80
+    assert color_items["pattern"] == "^#[0-9A-F]{6}$"
+    assert source_items["maxLength"] == 180
+
+
+def test_offering_issue_matches_api_source_filename_limits() -> None:
+    payload = {
+        "code": "MISSING_PRICE",
+        "severity": "INFO",
+        "message": "Confirm the product price.",
+        "sourceFiles": ["a" * 180],
+    }
+    OfferingDocumentIssue.model_validate(payload)
+
+    for invalid in ("", "a" * 181):
+        payload["sourceFiles"] = [invalid]
+        with pytest.raises(ValidationError):
+            OfferingDocumentIssue.model_validate(payload)
 
 
 def assert_strict_schema(value: object) -> None:
