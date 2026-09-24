@@ -41,9 +41,11 @@ Focused checks: 52 tests in nine mobile files passed, including eight rendered s
 
 Released source `ab0a795` to preview/TestFlight update group `c11fc46b-4bbc-4d97-aef5-ac9a4d924931` and production group `d828ee4c-5020-4d8b-b0a7-1631219f2619`. Android/iOS manifest IDs match on both channels; all four bundle downloads returned HTTP 200 with matching SHA-256 hashes using Expo's issued asset request headers. Existing 0.3.0 installations apply it on a subsequent cold launch; 0.2.0 requires the current APK/TestFlight binary. Railway services and other Apple apps were unchanged.
 
-## Remaining
-
 Owner confirmed on Android 0.3.0 that removing MARKOS from Recents and reopening applied the Create update and the flow works. A follow-up adds foreground update download, an Account update-status/check/restart control, and precise draft-validation/HTTP/timeout messages. Twenty-two focused update, transport, error and rendered Create tests plus mobile TypeScript passed. This is owner confirmation of this screen/flow, not a full physical-device acceptance pass.
+
+Follow-up source `710d757` is published as preview/TestFlight group `edbd1c73-5f5d-454d-b863-df59355d06a1` and production group `0e1f544c-8e92-4a84-8d5d-08e8bcab6048`, runtime 0.3.0. Both native bundles exported successfully and preview downloads match their manifest SHA-256 hashes. App updates download on foreground without automatically restarting open work; Account exposes an explicit restart action.
+
+## Remaining
 
 - Self-hosted Wan generated footage: this laptop has 16 GB system RAM and Intel integrated graphics. It cannot run the selected model at a useful production level. Wan code/weights are Apache-2.0; cloud GPUs, including AWS, are infrastructure costs. No paid video service is enabled. Suitable owned GPU hardware remains necessary for a no-video-API-fee deployment.
 - Verify native account/team/share controls on physical Android and iPhone devices after installing 0.3.0. Capture actual native store screenshots and complete store listing/privacy declarations, final legal wording and review submission. Store approval cannot be claimed from successful builds.
