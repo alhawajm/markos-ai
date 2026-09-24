@@ -1,12 +1,12 @@
 import { dispatchGeneration, applyGeneratedAsset } from "./generation-intent";
 import type { MediaGenerationJob, MediaGenerationStatus, Prisma } from "@prisma/client";
 import type { MediaGenerationJobRecord } from "@markos/shared-types";
-import type { GenerateVideoForContentInput } from "@markos/validation";
-import { downloadGeneratedVideo, getVideoGenerationStatus, startVideoGeneration, type VideoProviderJob } from "../ai/video-client";
+import { motionReelOptionsSchema, type GenerateVideoForContentInput } from "@markos/validation";
+import { downloadGeneratedVideo, getVideoGenerationStatus, renderMotionReel, startVideoGeneration, type VideoProviderJob } from "../ai/video-client";
 import { AiServiceRequestError } from "../ai/request";
 import { prisma } from "../db/prisma";
 import { refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
-import { deleteStoredMedia, storeWorkspaceMedia } from "./storage-service";
+import { deleteStoredMedia, readStoredMedia, storeWorkspaceMedia } from "./storage-service";
 import { MediaContentItemNotFoundError, MediaContentLockedError } from "./media-service";
 import { ContentMediaValidationError, lockContentForMedia } from "./content-media-integrity";
 import { workerLogger, workerErrorCode, type WorkerLogger } from "../worker/worker-diagnostics";
@@ -20,13 +20,19 @@ const localCurrency = "BHD";
 const activeJobStatuses: MediaGenerationStatus[] = ["QUEUED", "STARTING", "GENERATING", "PROCESSING"];
 
 class VideoLeaseLostError extends Error {}
+class MotionArtworkError extends Error {}
 const renderPlanVersion = "video-render.v1";
 
 async function savedRenderPlan(job: MediaGenerationJob): Promise<VideoRenderPlan | undefined> {
   const interaction = await prisma.aiInteraction.findFirst({
-    where: { workspaceId: job.workspaceId, contentItemId: job.contentItemId, agent: "VIDEO",
-      promptVersion: renderPlanVersion, deletedAt: null,
-      prompt: { path: ["generationJobId"], equals: job.id } }
+    where: {
+      workspaceId: job.workspaceId,
+      contentItemId: job.contentItemId,
+      agent: "VIDEO",
+      promptVersion: renderPlanVersion,
+      deletedAt: null,
+      prompt: { path: ["generationJobId"], equals: job.id }
+    }
   });
   return interaction ? videoRenderPlanSchema.parse(interaction.response) : undefined;
 }
@@ -38,16 +44,31 @@ async function ensureRenderPlan(job: MediaGenerationJob, clock: () => Date): Pro
   const prepared = await prepareVideoRender({ workspaceId: job.workspaceId, prompt: job.prompt, durationSeconds: toDuration(job.durationSeconds) });
   // Persist the exact copy and its metered planning usage before starting paid footage.
   // Reclaims/download retries use this same plan, never changed draft copy.
-  await prisma.$transaction(async tx => {
-    const renewed = await tx.mediaGenerationJob.updateMany({ where: ownedVideoJob(job, clock()), data: { leaseExpiresAt: new Date(clock().getTime() + leaseMs) } });
+  await prisma.$transaction(async (tx) => {
+    const renewed = await tx.mediaGenerationJob.updateMany({
+      where: ownedVideoJob(job, clock()),
+      data: { leaseExpiresAt: new Date(clock().getTime() + leaseMs) }
+    });
     if (renewed.count !== 1) throw new VideoLeaseLostError("Video job ownership changed");
-    await tx.aiInteraction.create({ data: {
-      workspaceId: job.workspaceId, contentItemId: job.contentItemId, contentRevision: job.requestedRevision,
-      agent: "VIDEO", promptVersion: renderPlanVersion,
-      prompt: { generationJobId: job.id, prompt: job.prompt }, response: prepared.result,
-      tokensIn: prepared.tokens_in, tokensOut: prepared.tokens_out, model: prepared.model,
-      costMinor: 0, currency: localCurrency, accepted: true, edited: false, regenerated: false
-    } });
+    await tx.aiInteraction.create({
+      data: {
+        workspaceId: job.workspaceId,
+        contentItemId: job.contentItemId,
+        contentRevision: job.requestedRevision,
+        agent: "VIDEO",
+        promptVersion: renderPlanVersion,
+        prompt: { generationJobId: job.id, prompt: job.prompt },
+        response: prepared.result,
+        tokensIn: prepared.tokens_in,
+        tokensOut: prepared.tokens_out,
+        model: prepared.model,
+        costMinor: 0,
+        currency: localCurrency,
+        accepted: true,
+        edited: false,
+        regenerated: false
+      }
+    });
   });
   return prepared.result;
 }
@@ -146,7 +167,11 @@ export async function retryMediaGenerationJob(workspaceId: string, jobId: string
   if (job.kind !== "VIDEO" || job.status !== "FAILED" || job.outputMediaAssetId)
     throw new MediaGenerationJobStateError("Only failed video requests without an output can be retried");
   // An intentional retry is a new execution of the current saved item intent.
-  return queueVideoGeneration(workspaceId, job.contentItemId, { contentMediaItemId: job.contentMediaItemId, expectedRevision });
+  return queueVideoGeneration(workspaceId, job.contentItemId, {
+    contentMediaItemId: job.contentMediaItemId,
+    expectedRevision,
+    ...(job.provider === "motion_reel" ? { motion: motionReelOptionsSchema.parse(job.renderOptions), durationSeconds: toDuration(job.durationSeconds) } : {})
+  });
 }
 
 export interface VideoGenerationWorkerResult {
@@ -224,6 +249,40 @@ async function claimVideoGenerationJob(now: Date): Promise<MediaGenerationJob | 
 }
 
 async function processClaimedJob(job: MediaGenerationJob, clock: () => Date): Promise<"completed" | "failed" | "waiting"> {
+  if (job.provider === "motion_reel") {
+    const options = motionReelOptionsSchema.parse(job.renderOptions);
+    const asset = await prisma.mediaAsset.findFirst({
+      where: { id: options.artworkMediaAssetId, workspaceId: job.workspaceId, deletedAt: null, mimeType: "image/jpeg" }
+    });
+    if (!asset || asset.sizeBytes > 8_000_000) throw new MotionArtworkError("The selected artwork is no longer available");
+    const content = await prisma.contentItem.findFirst({ where: { id: job.contentItemId, workspaceId: job.workspaceId, deletedAt: null } });
+    if (!content) throw new MediaContentItemNotFoundError();
+    if (!["DRAFT", "IN_REVIEW"].includes(content.status)) throw new MediaContentLockedError();
+    const image = await readStoredMedia(job.workspaceId, asset.s3Key);
+    await renewVideoLease(job, clock());
+    const processing = await prisma.mediaGenerationJob.updateMany({
+      where: ownedVideoJob(job, clock()),
+      data: { status: "PROCESSING", providerJobId: `motion:${job.id}`, model: "ffmpeg-motion-v1" }
+    });
+    if (processing.count !== 1) throw new VideoLeaseLostError("Video job ownership changed");
+    const duration = toDuration(job.durationSeconds);
+    const video = await renderMotionReel({ imageBase64: image.toString("base64"), textCards: options.textCards, durationSeconds: duration });
+    await renewVideoLease(job, clock());
+    return completeVideoJob(
+      job,
+      {
+        provider_job_id: `motion:${job.id}`,
+        status: "completed",
+        progress: 100,
+        model: "ffmpeg-motion-v1",
+        duration_seconds: duration,
+        width: 720,
+        height: 1280
+      },
+      video,
+      clock
+    );
+  }
   if (!job.providerJobId) {
     // STARTING is persisted before sending. A recovered claim cannot safely submit again.
     if (job.status !== "QUEUED") throw new VideoStartResultUnknownError(videoStartUnknownMessage);
@@ -336,8 +395,8 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
       const mediaAsset = await tx.mediaAsset.create({
         data: {
           workspaceId: job.workspaceId,
-          type: "AI_GENERATED",
-          filename: `markos-ai-${job.id}.mp4`,
+          type: job.provider === "motion_reel" ? "VIDEO" : "AI_GENERATED",
+          filename: `markos-${job.provider === "motion_reel" ? "motion" : "ai"}-${job.id}.mp4`,
           s3Key: stored?.key ?? "",
           cdnUrl: stored?.publicUrl ?? "",
           mimeType: "video/mp4",
@@ -353,7 +412,7 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
         data: {
           workspaceId: job.workspaceId,
           agent: "VIDEO",
-          promptVersion: "video.v2.openai",
+          promptVersion: job.provider === "motion_reel" ? "video.v1.motion" : "video.v3.configured",
           prompt: { prompt: job.prompt, aspectRatio: job.aspectRatio, durationSeconds: job.durationSeconds },
           response: {
             status: providerJob.status,
@@ -377,6 +436,8 @@ async function completeVideoJob(job: MediaGenerationJob, providerJob: VideoProvi
         where: { id: job.id },
         data: {
           status: "COMPLETED",
+          model: providerJob.model,
+          providerJobId: providerJob.provider_job_id,
           attachmentApplied: applied,
           outputMediaAssetId: mediaAsset.id,
           completedAt: clock(),
@@ -421,6 +482,16 @@ async function handleWorkerError(job: MediaGenerationJob, error: unknown, now: D
             ? "CONTENT_NOT_FOUND"
             : "CONTENT_MEDIA_TYPE_INCOMPATIBLE";
     await markJobFailed(job, code, error.message, false, now);
+    return "failed";
+  }
+  if (error instanceof MotionArtworkError || (job.provider === "motion_reel" && job.attempts >= 3)) {
+    await markJobFailed(
+      job,
+      "MOTION_REEL_RENDER_FAILED",
+      error instanceof MotionArtworkError ? error.message : "Motion rendering could not finish. Please try again.",
+      false,
+      now
+    );
     return "failed";
   }
   if (error instanceof AiServiceRequestError && !error.retryable) {

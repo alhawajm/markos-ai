@@ -886,3 +886,17 @@ Expose publishing progress through the existing durable job states. A historical
 Add a compatible paginated notification feed while retaining the existing web list endpoint. Cursor lookup, unread counts and read operations bind both recipient and workspace. Record the owner's in-app success notification atomically with completion of the claimed publishing job, so replay cannot create a second success notice. Existing failure notifications remain. Native navigation recognizes only known publishing templates and validated content IDs; arbitrary notification URLs are never followed. These are in-app notifications, not operating-system push alerts.
 
 Insights uses the existing analytics summary for seven- and thirty-day ranges, period comparisons, available daily reach and top content. Preserve unavailable metrics as unavailable, distinguish partial/failed synchronization, and label refresh as reading saved data. No synthetic performance, new provider metric contract or manual synchronization endpoint is introduced. Native changes remain compatible with runtime 0.2.0 and add no native dependencies.
+
+
+## 2026-09-24 ? Real knowledge retrieval and agent contracts
+
+Production embeddings follow the configured text provider unless `AI_EMBEDDING_PROVIDER` explicitly selects another mode. Local hash embeddings identify themselves honestly and meter no provider tokens. Each vector stores its provider/model/dimension/aggregation space; migration leaves old vectors unlabelled and retrieval never compares incompatible spaces. Long Unicode facts are losslessly split into byte-bounded provider inputs, then pooled and normalized. Re-indexing is bounded and workspace-scoped, guarded by the fact revision. Provider outages preserve owner edits and return current facts with zero relevance score.
+
+All eight agent routes use strict provider contracts in OpenAI mode, configured models, real usage, approved Vault facts and localized outputs. Performance advice includes server-loaded analytics with missing-data instructions; source identifiers are validated. Local presets remain isolated to explicit local text mode. Content suggestions do not execute publishing or profile changes.
+
+The owner requires video software to be free and open source. Wan2.2 Apache-2.0 is selected; paid fal hosting is not activated. No new hosting account or payment was made. A suitable owned GPU is an external hardware requirement.
+
+
+## 2026-09-24 ? Motion Reels on ordinary hardware
+
+Because the owner requires no paid video API and has no suitable GPU now, add a clearly labeled CPU Motion Reel mode. It animates an owner-uploaded JPEG and exact optional text cards; it does not synthesize new footage or call an AI planner. Persist artwork and copy as generation-job options, validate workspace ownership before queueing and rendering, retry interrupted rendering through the existing worker leases, and attach only if the generation intent still matches. Store output as VIDEO with renderer identity and zero provider tokens. Use three or fewer cards with at least two seconds each, preserve English/Arabic with libass, and retain the full uploaded design inside portrait margins. New Sora requests are disabled after the provider retirement. Future Wan deployment still needs GPU infrastructure; AWS GPU instances are paid.

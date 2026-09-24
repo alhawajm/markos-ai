@@ -13,6 +13,7 @@ const safeAiMessages: Record<string, string> = {
   AI_IMAGE_OUTPUT_INVALID: "The AI provider returned an image MARKOS could not validate",
   AI_IMAGE_REQUEST_REJECTED: "The AI provider could not generate that image direction. Revise it and try again",
   AI_VIDEO_GENERATION_DISABLED: "AI video generation is not available in this environment",
+  MOTION_REEL_RENDER_FAILED: "The artwork could not be rendered. Use a valid JPEG up to 8 MB and try again",
   AI_VIDEO_MODERATION_BLOCKED: "That video direction was blocked by the provider safety policy. Revise it and try again",
   AI_VIDEO_OUTPUT_INVALID: "The AI provider returned a video MARKOS could not validate",
   AI_VIDEO_REQUEST_REJECTED: "The AI provider could not generate that video direction. Revise it and try again",

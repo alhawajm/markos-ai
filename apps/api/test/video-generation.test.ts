@@ -8,6 +8,7 @@ const provider = vi.hoisted(() => ({
   download: vi.fn(),
   status: vi.fn(),
   start: vi.fn(),
+  motion: vi.fn(),
   prepare: vi.fn()
 }));
 
@@ -19,11 +20,13 @@ vi.mock("../src/ai/video-plan-client", async importOriginal => ({
 vi.mock("../src/ai/video-client", () => ({
   downloadGeneratedVideo: provider.download,
   getVideoGenerationStatus: provider.status,
-  startVideoGeneration: provider.start
+  startVideoGeneration: provider.start,
+  renderMotionReel: provider.motion
 }));
 
 vi.mock("../src/media/storage-service", () => ({
   deleteStoredMedia: vi.fn(),
+  readStoredMedia: vi.fn(async () => Buffer.from("fixture artwork")),
   storeWorkspaceMedia: vi.fn(async ({ workspaceId, filename }: { workspaceId: string; filename: string }) => ({
     key: `s3:${workspaceId}/${filename}`,
     publicUrl: `https://cdn.example.com/${workspaceId}/${filename}`
@@ -42,9 +45,44 @@ describe("durable video generation", () => {
     provider.download.mockReset();
     provider.status.mockReset();
     provider.start.mockReset();
+    provider.motion.mockReset().mockResolvedValue(Buffer.from("fixture motion video"));
     provider.prepare.mockReset().mockResolvedValue({ result: { visual_prompt: "Pink flowers blooming, no lettering", text_cues: [
       { text: "Save the dates\nاحفظوا الموعد", start: 0.5, end: 1 }
     ] }, model: "planner-test", tokens_in: 120, tokens_out: 70 });
+  });
+
+  it("renders a Motion Reel without AI calls and records it as a regular video", async () => {
+    const { content, workspace } = await createVideoWorkspace();
+    const artwork = await prisma.mediaAsset.create({ data: { workspaceId: workspace.id, type: "IMAGE", filename: "artwork.jpg", mimeType: "image/jpeg", s3Key: `s3:${workspace.id}/artwork.jpg`, cdnUrl: "https://cdn.example.com/artwork.jpg", sizeBytes: 1000, width: 720, height: 1280 } });
+    const motion = { artworkMediaAssetId: artwork.id, textCards: ["Blooms in Pink\nالتوعية بسرطان الثدي"] };
+    const job = await queueVideoGeneration(workspace.id, content.id, { ...generationInput(content), motion });
+    const current = await getContentAggregate(workspace.id, content.id);
+    expect((await queueVideoGeneration(workspace.id, content.id, { ...generationInput(current), motion })).id).toBe(job.id);
+    await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
+    const completed = await prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(completed).toMatchObject({ status: "COMPLETED", provider: "motion_reel", model: "ffmpeg-motion-v1", attachmentApplied: true });
+    expect(provider.motion).toHaveBeenCalledWith({ imageBase64: Buffer.from("fixture artwork").toString("base64"), durationSeconds: 8, textCards: motion.textCards });
+    expect(provider.start).not.toHaveBeenCalled(); expect(provider.prepare).not.toHaveBeenCalled();
+    expect(await prisma.mediaAsset.findUnique({ where: { id: completed.outputMediaAssetId! } })).toMatchObject({ type: "VIDEO", mimeType: "video/mp4" });
+    await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 5000) });
+    expect(provider.motion).toHaveBeenCalledOnce();
+  });
+
+  it("rejects another workspace's artwork before queueing a Motion Reel", async () => {
+    const own = await createVideoWorkspace(); const other = await createVideoWorkspace();
+    const asset = await prisma.mediaAsset.create({ data: { workspaceId: other.workspace.id, type: "IMAGE", filename: "private.jpg", mimeType: "image/jpeg", s3Key: `s3:${other.workspace.id}/private.jpg`, cdnUrl: "https://cdn.example.com/private.jpg", sizeBytes: 1000 } });
+    await expect(queueVideoGeneration(own.workspace.id, own.content.id, { ...generationInput(own.content), motion: { artworkMediaAssetId: asset.id, textCards: [] } })).rejects.toMatchObject({ code: "MOTION_ARTWORK_REQUIRED" });
+    expect(await prisma.mediaGenerationJob.count({ where: { workspaceId: own.workspace.id } })).toBe(0);
+  });
+
+  it("recovers interrupted Motion processing without calling a paid video provider", async () => {
+    const { content, workspace } = await createVideoWorkspace();
+    const artwork = await prisma.mediaAsset.create({ data: { workspaceId: workspace.id, type: "IMAGE", filename: "artwork.jpg", mimeType: "image/jpeg", s3Key: `s3:${workspace.id}/artwork.jpg`, cdnUrl: "https://cdn.example.com/artwork.jpg", sizeBytes: 1000 } });
+    const job = await queueVideoGeneration(workspace.id, content.id, { ...generationInput(content), motion: { artworkMediaAssetId: artwork.id, textCards: [] } });
+    await prisma.mediaGenerationJob.update({ where: { id: job.id }, data: { status: "PROCESSING", providerJobId: `motion:${job.id}`, attempts: 1, leaseExpiresAt: new Date(0) } });
+    await processDueVideoGenerationJobs({ limit: 1, now: new Date(Date.now() + 1000) });
+    expect(await prisma.mediaGenerationJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "COMPLETED" });
+    expect(provider.motion).toHaveBeenCalledOnce(); expect(provider.start).not.toHaveBeenCalled(); expect(provider.status).not.toHaveBeenCalled();
   });
 
   it("reuses an active identical video request without replacing its intent", async () => {
@@ -211,7 +249,7 @@ describe("durable video generation", () => {
     const [completed, contentAfter, interaction, usage] = await Promise.all([
       prisma.mediaGenerationJob.findUniqueOrThrow({ where: { id: first.id } }),
       getContentAggregate(workspace.id, content.id),
-      prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v2.openai" } }),
+      prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v3.configured" } }),
       prisma.usageCounter.findFirstOrThrow({ where: { workspaceId: workspace.id, metric: "AI_GENERATION" } })
     ]);
     const media = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: completed.outputMediaAssetId! } });
@@ -319,7 +357,7 @@ describe("durable video generation", () => {
       "Only failed video requests without an output"
     );
     expect(provider.start).toHaveBeenCalledTimes(1);
-    await expect(prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v2.openai" } })).resolves.toMatchObject({ accepted: false });
+    await expect(prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: workspace.id, agent: "VIDEO", promptVersion: "video.v3.configured" } })).resolves.toMatchObject({ accepted: false });
   });
 
   it.each(["in_progress", "completed", "failed", "throw"] as const)(

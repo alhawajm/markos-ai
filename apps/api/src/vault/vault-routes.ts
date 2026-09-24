@@ -3,9 +3,13 @@ import { upsertVaultSectionSchema, vaultRagSearchSchema, vaultSectionSchema } fr
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { isManagedKnowledgeKey } from "../business-profile/knowledge-service";
-import { getVaultScore, listVault, listVaultEntryHistory, listVaultSection, searchVaultContext, upsertVaultSection } from "./vault-service";
+import { getVaultScore, listVault, listVaultEntryHistory, listVaultSection, reindexVaultBatch, searchVaultContext, upsertVaultSection } from "./vault-service";
 
 export async function registerVaultRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/v1/vault/reindex", { config: { workspaceRequired: true, permissions: ["vault:write"] } }, async () => {
+    const { workspaceId } = requireWorkspaceContext();
+    return ok(await reindexVaultBatch(workspaceId));
+  });
   app.get(
     "/v1/vault",
     {

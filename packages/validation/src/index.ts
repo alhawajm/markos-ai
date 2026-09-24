@@ -773,13 +773,20 @@ export const updateContentMediaSchema = z
     expectedRevision: z.number().int().positive()
   })
   .strict();
+export const motionReelOptionsSchema = z
+  .object({
+    artworkMediaAssetId: z.string().uuid(),
+    textCards: z.array(z.string().trim().min(1).max(160)).max(3).default([])
+  })
+  .strict();
 export const generateVideoForContentSchema = z
   .object({
     contentMediaItemId: z.string().uuid(),
     expectedRevision: z.number().int().positive(),
     prompt: z.string().trim().min(3).max(2000).optional(),
     durationSeconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional(),
-    aspectRatio: z.literal("9:16").optional()
+    aspectRatio: z.literal("9:16").optional(),
+    motion: motionReelOptionsSchema.optional()
   })
   .strict();
 

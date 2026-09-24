@@ -57,6 +57,20 @@ class VideoDownloadRequest(VideoJobRequest):
     duration_seconds: VideoDurationSeconds = 8
 
 
+class MotionReelRequest(StrictContract):
+    image_base64: str = Field(min_length=4, max_length=11_200_000)
+    duration_seconds: VideoDurationSeconds = 8
+    text_cards: list[str] = Field(default_factory=list, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_cards(self) -> "MotionReelRequest":
+        if any(not text.strip() or len(text) > 160 for text in self.text_cards):
+            raise ValueError("Use up to three nonempty cards, 160 characters each")
+        if len(self.text_cards) > self.duration_seconds // 2:
+            raise ValueError("Allow at least two seconds per text card")
+        return self
+
+
 class VideoJobResponse(StrictContract):
     provider_job_id: str = Field(min_length=1, max_length=240)
     status: VideoStatus

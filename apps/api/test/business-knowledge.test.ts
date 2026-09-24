@@ -2,16 +2,45 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
-import { indexVaultEntries, searchVaultContext } from "../src/vault/vault-service";
+import { indexVaultEntries, reindexVaultBatch, searchVaultContext } from "../src/vault/vault-service";
 import { getBusinessKnowledge, saveBusinessKnowledge } from "../src/business-profile/knowledge-service";
 
 const { embed } = vi.hoisted(() => ({ embed: vi.fn() }));
 vi.mock("../src/ai/embeddings-client", () => ({ embedVaultTexts: embed }));
 beforeEach(() => {
-  embed.mockReset().mockImplementation(async (texts: string[]) => ({ embeddings: texts.map(() => [1, ...Array<number>(1535).fill(0)]) }));
+  embed
+    .mockReset()
+    .mockImplementation(async (texts: string[]) => ({ space: "test:1536", tokens_in: 0, embeddings: texts.map(() => [1, ...Array<number>(1535).fill(0)]) }));
 });
 
 describe("business knowledge maintenance", () => {
+  it("reindexes legacy spaces before ranking and never rewrites another workspace's vectors", async () => {
+    const first = await setup();
+    const second = await setup();
+    try {
+      const rows = await Promise.all(
+        [first, second].map(({ session }) =>
+          prisma.knowledgeVault.create({
+            data: { workspaceId: session.workspace.id, section: "COMPANY", key: "legacy", value: { name: "Flowers in Bahrain" } }
+          })
+        )
+      );
+      for (const row of rows) {
+        await prisma.$executeRaw`UPDATE knowledge_vault SET embedding = ${`[${[1, ...Array<number>(1535).fill(0)].join(",")}]`}::vector,
+          "embeddingSpace" = 'obsolete-space' WHERE id = ${row.id}::uuid`;
+      }
+      const found = await searchVaultContext(first.session.workspace.id, { query: "flowers", topK: 5 });
+      expect(found.map((row) => row.id)).toEqual([rows[0]!.id]);
+      expect(found[0]!.score).toBeCloseTo(1);
+      expect((await prisma.knowledgeVault.findUniqueOrThrow({ where: { id: rows[0]!.id } })).embeddingSpace).toBe("test:1536");
+      expect((await prisma.knowledgeVault.findUniqueOrThrow({ where: { id: rows[1]!.id } })).embeddingSpace).toBe("obsolete-space");
+      expect(await reindexVaultBatch(first.session.workspace.id)).toEqual({ indexed: 0, remaining: 0, space: "test:1536" });
+    } finally {
+      await first.app.close();
+      await second.app.close();
+    }
+  });
+
   it("saves exact facts without AI, preserves completed onboarding and protects revisions and historical content", async () => {
     const { app, session, headers } = await setup();
     const historical = await prisma.aiInteraction.create({

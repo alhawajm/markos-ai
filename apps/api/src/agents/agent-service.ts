@@ -108,7 +108,7 @@ async function buildAgentInputs(workspaceId: string, input: RunAgentInput): Prom
     ...(input.inputs ?? {})
   };
 
-  if (input.agent === "ANALYTICS_CONSULTANT") {
+  if (["ANALYTICS_CONSULTANT", "RECOMMENDATION_ENGINE", "BUSINESS_GROWTH_ADVISOR"].includes(input.agent)) {
     inputs.analyticsSummary = await getAnalyticsSummary(workspaceId, { days: analyticsDays(input.inputs) });
   }
 

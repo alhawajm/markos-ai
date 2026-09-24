@@ -361,6 +361,7 @@ model KnowledgeVault {
   key         String
   value       Json
   embedding   Unsupported("vector(1536)")?
+  embeddingSpace String?
   version     Int                          @default(1)
   createdAt   DateTime                     @default(now())
   updatedAt   DateTime                     @updatedAt
@@ -732,6 +733,7 @@ model MediaGenerationJob {
   aspectRatio        String                @default("9:16")
   durationSeconds    Int?
   provider           String                @default("openai_sora")
+  renderOptions      Json?
   model              String?
   providerJobId      String?
   progress           Int                   @default(0)

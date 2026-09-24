@@ -10,6 +10,7 @@ export type GenerationRequest = {
   prompt?: string | undefined;
   aspectRatio?: string | undefined;
   durationSeconds?: number | undefined;
+  motion?: { artworkMediaAssetId: string; textCards: string[] } | undefined;
 };
 const ratios = { "1:1": "SQUARE", "4:5": "PORTRAIT", "9:16": "VERTICAL" } as const;
 const externalRatios = { SQUARE: "1:1", PORTRAIT: "4:5", VERTICAL: "9:16" } as const;
@@ -21,9 +22,14 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
     if (!["DRAFT", "IN_REVIEW"].includes(root.status)) throw new ContentAggregateError("CONTENT_LOCKED", "Only draft media can be generated");
     const item = root.mediaItems.find((item) => item.id === input.contentMediaItemId);
     if (!item) throw new ContentAggregateError("CONTENT_TARGET_NOT_FOUND", "Media item was not found", 404);
+    if (input.motion) {
+      const artwork = await tx.mediaAsset.findFirst({ where: { id: input.motion.artworkMediaAssetId, workspaceId, deletedAt: null, mimeType: "image/jpeg" } });
+      if (!artwork || !artwork.s3Key || artwork.s3Key.startsWith("external:") || artwork.sizeBytes > 8_000_000)
+        throw new ContentAggregateError("MOTION_ARTWORK_REQUIRED", "Choose an uploaded JPEG from this workspace", 400);
+    }
     if ((item.mediaKind && item.mediaKind !== kind) || (kind === "VIDEO" && !["REEL", "STORY"].includes(root.contentType)))
       throw new ContentAggregateError("CONTENT_MEDIA_TYPE_INCOMPATIBLE", "Generation kind does not match this item");
-    const prompt = (input.prompt ?? item.visualDirection)?.trim();
+    const prompt = (input.motion ? "Animate owner-uploaded artwork with exact text" : (input.prompt ?? item.visualDirection))?.trim();
     if (!prompt || prompt.length < 3) throw new ContentAggregateError("MEDIA_DIRECTION_REQUIRED", "Add a visual direction before generating media", 400);
     const aspectRatio =
       input.aspectRatio ?? (item.aspectRatio ? externalRatios[item.aspectRatio] : root.contentType === "STORY" || kind === "VIDEO" ? "9:16" : "4:5");
@@ -31,6 +37,8 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
       throw new ContentAggregateError("MEDIA_SETTINGS_INVALID", "Unsupported aspect ratio", 400);
     const duration = kind === "VIDEO" ? (input.durationSeconds ?? item.generationDurationSeconds ?? 8) : null;
     if (duration !== null && ![4, 8, 12].includes(duration)) throw new ContentAggregateError("MEDIA_SETTINGS_INVALID", "Choose 4, 8 or 12 seconds", 400);
+    if (input.motion && input.motion.textCards.length > (duration ?? 8) / 2)
+      throw new ContentAggregateError("MOTION_COPY_TOO_LONG", "Allow at least two seconds per text card", 400);
     if (kind === "VIDEO") {
       const active = await tx.mediaGenerationJob.findFirst({
         where: {
@@ -42,7 +50,9 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
           status: { in: ["QUEUED", "STARTING", "GENERATING", "PROCESSING"] },
           prompt,
           aspectRatio,
-          durationSeconds: duration
+          durationSeconds: duration,
+          provider: input.motion ? "motion_reel" : "configured_video_provider",
+          ...(input.motion ? { renderOptions: { equals: input.motion } } : {})
         },
         orderBy: { createdAt: "desc" }
       });
@@ -70,7 +80,8 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
         prompt,
         aspectRatio,
         durationSeconds: duration,
-        provider: kind === "VIDEO" ? "openai_sora" : "configured_image_provider",
+        provider: kind === "VIDEO" ? (input.motion ? "motion_reel" : "configured_video_provider") : "configured_image_provider",
+        ...(input.motion ? { renderOptions: input.motion } : {}),
         status: kind === "IMAGE" ? "STARTING" : "QUEUED"
       }
     });

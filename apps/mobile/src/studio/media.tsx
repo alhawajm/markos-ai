@@ -9,6 +9,7 @@ import type { ContentAuthoringOperation, ContentMediaItemRecord, ContentRecord, 
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Field, IconButton, Notice, Row, Txt } from "../ui";
 import { MediaPreview } from "./media-preview";
+import { MotionReel } from "./motion-reel";
 import { generationActive } from "./model";
 import { errorMessage, LocalAppError } from "../errors";
 
@@ -34,6 +35,7 @@ export function StudioMedia({
   const { t, colors } = useAppearance();
   const [libraryTarget, setLibraryTarget] = useState<string | null>(null);
   const assets = useQuery({ queryKey: [scope, "media"], queryFn: () => api.mediaAssets() });
+  const capabilities = useQuery({ queryKey: [scope, "video-capabilities"], queryFn: () => api.videoCapabilities() });
   const jobResult = useQuery({
     enabled: focused,
     queryKey: [scope, "video-job", item.id],
@@ -204,14 +206,38 @@ export function StudioMedia({
                     ))}
                   </Row>
                 )}
-                <Button
-                  icon={Sparkles}
-                  label={asset ? t("Generate a replacement", "إنشاء بديل") : t("Generate", "إنشاء")}
-                  disabled={locked || (media.visualDirection?.trim().length ?? 0) < 3}
-                  onPress={() => {
-                    void generate(media.id);
-                  }}
-                />
+                {video ? (
+                  <MotionReel
+                    key={media.id}
+                    disabled={locked}
+                    duration={media.generationDurationSeconds ?? 8}
+                    assets={assets.data ?? []}
+                    generate={async (motion) => {
+                      await run(async () => {
+                        const saved = await save();
+                        const next = await api.generateContentVideo(saved.id, { contentMediaItemId: media.id, expectedRevision: saved.revision, motion });
+                        queryClient.setQueryData([scope, "video-job", item.id], next);
+                        accept(await api.contentItem(saved.id));
+                      });
+                    }}
+                  />
+                ) : null}
+                {!video || capabilities.data?.generatedFootage ? (
+                  <Button
+                    icon={Sparkles}
+                    label={
+                      video
+                        ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي")
+                        : asset
+                          ? t("Generate a replacement", "إنشاء بديل")
+                          : t("Generate", "إنشاء")
+                    }
+                    disabled={locked || (media.visualDirection?.trim().length ?? 0) < 3}
+                    onPress={() => {
+                      void generate(media.id);
+                    }}
+                  />
+                ) : null}
                 <Row>
                   <View style={{ flex: 1 }}>
                     <Button

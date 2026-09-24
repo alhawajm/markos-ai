@@ -1,6 +1,4 @@
 import asyncio
-import hashlib
-import math
 import re
 import secrets
 from collections.abc import Awaitable, Callable
@@ -9,9 +7,10 @@ from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from starlette.responses import Response
 
+from app.contracts.agent import AgentName, AgentRunRequest, AgentRunResponse
 from app.contracts.business_profile import (
     BusinessProfileGenerateRequest,
     BusinessProfileGenerateResponse,
@@ -34,6 +33,7 @@ from app.contracts.onboarding_document import (
     OnboardingDocumentAnalysisResponse,
 )
 from app.contracts.video import (
+    MotionReelRequest,
     VideoDownloadRequest,
     VideoJobRequest,
     VideoJobResponse,
@@ -44,10 +44,13 @@ from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
 from app.documents import extract_documents
+from app.motion_reel import render_motion_reel
+from app.providers.agent import generate_agent
 from app.providers.business_profile import get_business_profile_provider
 from app.providers.campaign import get_campaign_provider
 from app.providers.content import get_content_provider
 from app.providers.conversation import respond_to_conversation
+from app.providers.embeddings import VaultEmbedRequest, VaultEmbedResponse, embed_texts
 from app.providers.image import get_image_provider
 from app.providers.instagram_learning import analyze_instagram
 from app.providers.offering_document import get_offering_document_provider
@@ -61,47 +64,6 @@ class HealthResponse(BaseModel):
     service: Literal["ai"]
     status: Literal["ok", "degraded"]
     timestamp: str
-
-
-class VaultEmbedRequest(BaseModel):
-    texts: list[str] = Field(min_length=1, max_length=50)
-    model: str | None = None
-
-
-class VaultEmbedResponse(BaseModel):
-    model: str
-    dimensions: int
-    embeddings: list[list[float]]
-
-
-AgentName = Literal[
-    "MARKETING_STRATEGIST",
-    "CONTENT_PLANNER",
-    "CONTENT_CREATOR",
-    "REEL_SCRIPT",
-    "IMAGE_PROMPT",
-    "ANALYTICS_CONSULTANT",
-    "RECOMMENDATION_ENGINE",
-    "BUSINESS_GROWTH_ADVISOR",
-]
-
-
-class AgentRunRequest(BaseModel):
-    workspace_id: str
-    agent: AgentName
-    task: str = Field(min_length=3, max_length=1000)
-    locale: Literal["ar", "en"] = "en"
-    context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
-    inputs: dict[str, object] | None = None
-    model: str | None = None
-
-
-class AgentRunResponse(BaseModel):
-    model: str
-    prompt_version: str
-    tokens_in: int
-    tokens_out: int
-    output: dict[str, object]
 
 
 init_observability()
@@ -189,15 +151,7 @@ async def deep_health() -> dict[str, object]:
 
 @app.post("/ai/vault/embed", response_model=VaultEmbedResponse)
 async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
-    model = request.model or settings.embedding_model
-
-    return VaultEmbedResponse(
-        model=model,
-        dimensions=settings.embedding_dimensions,
-        embeddings=[
-            deterministic_embedding(text, settings.embedding_dimensions) for text in request.texts
-        ],
-    )
+    return await embed_texts(request)
 
 
 @app.post("/ai/campaigns/generate", response_model=CampaignGenerateResponse)
@@ -364,6 +318,16 @@ async def video_status(request: VideoJobRequest) -> VideoJobResponse:
         ) from None
 
 
+@app.post("/ai/videos/motion")
+async def motion_video(request: MotionReelRequest) -> Response:
+    return Response(content=await render_motion_reel(request), media_type="video/mp4")
+
+
+@app.post("/ai/videos/capabilities")
+async def video_capabilities() -> dict[str, object]:
+    return {"motion": True, "generatedFootage": settings.ai_video_provider == "fal_wan" and bool(settings.fal_key and settings.fal_key.get_secret_value())}
+
+
 @app.post("/ai/videos/download")
 async def download_video(request: VideoDownloadRequest) -> Response:
     provider = get_video_provider(request.provider_job_id)
@@ -389,6 +353,8 @@ async def download_video(request: VideoDownloadRequest) -> Response:
 
 @app.post("/ai/agents/run", response_model=AgentRunResponse)
 async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
+    if settings.ai_text_provider == "openai":
+        return await generate_agent(request)
     model = request.model or settings.llm_primary_model
     prompt_text = agent_prompt_text(request)
     output = build_agent_output(request)
@@ -401,23 +367,6 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
         tokens_out=estimate_tokens(response_text),
         output=output,
     )
-
-
-def deterministic_embedding(text: str, dimensions: int) -> list[float]:
-    vector = [0.0 for _ in range(dimensions)]
-
-    for token in re.findall(r"\w+", text.casefold()):
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        index = int.from_bytes(digest[:4], "big") % dimensions
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vector[index] += sign
-
-    norm = math.sqrt(sum(value * value for value in vector))
-
-    if norm == 0:
-        return vector
-
-    return [value / norm for value in vector]
 
 
 def summarize_context(context: list[VaultContextChunk]) -> str:

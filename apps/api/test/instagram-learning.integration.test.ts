@@ -33,7 +33,7 @@ vi.mock("../src/instagram-learning/evidence", () => ({ collectInstagramEvidence:
 vi.mock("../src/ai/instagram-learning-client", () => ({ generateInstagramLearning: mocks.generate }));
 vi.mock("../src/ai/campaign-client", () => ({ generateCampaignPlan: mocks.campaign }));
 vi.mock("../src/ai/embeddings-client", () => ({
-  embedVaultTexts: async (texts: string[]) => ({ embeddings: texts.map(() => [1, ...Array<number>(1535).fill(0)]) })
+  embedVaultTexts: async (texts: string[]) => ({ space: "test:1536", tokens_in: 0, embeddings: texts.map(() => [1, ...Array<number>(1535).fill(0)]) })
 }));
 
 const suggestions: InstagramLearningSuggestion[] = [

@@ -11,7 +11,7 @@ vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
     dimensions: 1536,
     embeddings: texts.map(testEmbedding),
-    model: "test-embedding-model"
+    model: "test-embedding-model", space: "test:1536", tokens_in: 0
   })
 }));
 

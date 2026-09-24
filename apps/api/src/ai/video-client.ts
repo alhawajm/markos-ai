@@ -17,6 +17,10 @@ const videoJobResponseSchema = z.object({
 
 export type VideoProviderJob = z.infer<typeof videoJobResponseSchema>;
 
+export function renderMotionReel(input: { imageBase64: string; textCards: string[]; durationSeconds: 4 | 8 | 12 }): Promise<Buffer> {
+  return requestAiBinary("/ai/videos/motion", { image_base64: input.imageBase64, text_cards: input.textCards, duration_seconds: input.durationSeconds });
+}
+
 export function startVideoGeneration(input: { durationSeconds: 4 | 8 | 12; prompt: string; workspaceId: string }): Promise<VideoProviderJob> {
   return requestAi("/ai/videos/start", {
     body: {

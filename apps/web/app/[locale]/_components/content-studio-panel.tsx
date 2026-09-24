@@ -39,6 +39,7 @@ import { useModalDialog } from "./use-modal-dialog";
 import { PublishTimeFields } from "./publish-time-fields";
 import { plannedAtInputToIso } from "./content-studio-draft-state";
 import { runningVideoGeneration as running, videoGenerationMessage } from "./video-generation-state";
+import { MotionReelComposer } from "./motion-reel-composer";
 import "./content-studio.css";
 import "./create-workspace.css";
 
@@ -57,6 +58,19 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const current = useRef<CreateSaveCoordinator | null>(null);
   const navigation = useRef<{ url: string; state: unknown } | null>(null);
   const [assets, setAssets] = useState<MediaAssetRecord[]>([]);
+  const [generatedFootage, setGeneratedFootage] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void client
+      .videoCapabilities()
+      .then((value) => {
+        if (active) setGeneratedFootage(value.generatedFootage);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [client]);
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -827,20 +841,22 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         )}
                       </div>
                       <div className="create-media-actions">
-                        <button
-                          className="studio-button studio-button-primary"
-                          disabled={
-                            locked ||
-                            conversationActive ||
-                            activeGeneration ||
-                            !selected.visualDirection?.trim() ||
-                            (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
-                          }
-                          onClick={() => void run("generate", generate)}
-                        >
-                          <Sparkles size={17} />
-                          {t("Generate", "توليد")}
-                        </button>
+                        {(selected.mediaKind !== "VIDEO" || generatedFootage) && (
+                          <button
+                            className="studio-button studio-button-primary"
+                            disabled={
+                              locked ||
+                              conversationActive ||
+                              activeGeneration ||
+                              !selected.visualDirection?.trim() ||
+                              (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
+                            }
+                            onClick={() => void run("generate", generate)}
+                          >
+                            <Sparkles size={17} />
+                            {selected.mediaKind === "VIDEO" ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي") : t("Generate", "توليد")}
+                          </button>
+                        )}
                         <button className="studio-button" disabled={locked} onClick={() => upload.current?.click()}>
                           {t("Replace", "استبدال")}
                         </button>
@@ -866,6 +882,32 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                           </button>
                         )}
                       </div>
+                      {selected.mediaKind === "VIDEO" && (
+                        <MotionReelComposer
+                          key={`${record.id}:${selected.id}`}
+                          api={client}
+                          assets={assets}
+                          duration={selected.generationDurationSeconds ?? 8}
+                          disabled={locked || !!activeGeneration || conversationActive || running(videoJob)}
+                          t={t}
+                          onUploaded={(asset) => setAssets((current) => [...current.filter((row) => row.id !== asset.id), asset])}
+                          generate={async (motion) => {
+                            await run("motion-reel", async () => {
+                              await coordinator.action(async (current) => {
+                                setVideoJob(
+                                  await api.current.generateContentVideo(current.id, {
+                                    contentMediaItemId: selected.id,
+                                    expectedRevision: current.revision,
+                                    motion
+                                  })
+                                );
+                                setNotice(t("Motion Reel queued.", "أُضيف الريل المتحرك إلى الانتظار."));
+                                return { result: undefined, record: await api.current.contentItem(current.id) };
+                              });
+                            });
+                          }}
+                        />
+                      )}
                       {videoJob && videoJob.contentMediaItemId === selected.id && (
                         <p role="status" className="create-muted">
                           {videoGenerationMessage(videoJob, locale)}

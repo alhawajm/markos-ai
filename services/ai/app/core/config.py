@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     internal_service_token: str = "change-me"
     database_url: str = "postgresql://markos:markos@localhost:5432/markos"
     ai_text_provider: Literal["local", "openai"] = "local"
+    ai_embedding_provider: Literal["local", "openai"] | None = None
     # `local` remains accepted as a legacy value, but it is deliberately disabled
     # by the provider factory. MARKOS must never represent a synthetic bitmap as
     # AI-generated media.

@@ -756,8 +756,15 @@ export class MarkosApiClient {
   async generateContentImage(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<AiImageGenerationResult> {
     return (await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, { method: "POST", body: input })).data;
   }
-  async generateContentVideo(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<MediaGenerationJobRecord> {
+  async generateContentVideo(
+    contentItemId: string,
+    input: { contentMediaItemId: string; expectedRevision: number; durationSeconds?: 4 | 8 | 12; motion?: { artworkMediaAssetId: string; textCards: string[] } }
+  ): Promise<MediaGenerationJobRecord> {
     return (await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, { method: "POST", body: input })).data;
+  }
+
+  async videoCapabilities(): Promise<{ motion: boolean; generatedFootage: boolean }> {
+    return (await this.request<{ motion: boolean; generatedFootage: boolean }>("/v1/media/video-capabilities")).data;
   }
 
   async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {

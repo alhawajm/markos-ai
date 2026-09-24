@@ -148,6 +148,9 @@ class OpenAIVideoProvider:
 
 def get_video_provider(provider_job_id: str | None = None) -> VideoProvider:
     provider = settings.ai_video_provider
+    if provider == "openai" and provider_job_id is None:
+        # Sora Videos API retired on 2026-09-24. Do not accept new requests.
+        return DisabledVideoProvider()
     if provider != "disabled" and provider_job_id:
         # Persisted jobs keep their provider after a deployment/configuration change.
         provider = "fal_wan" if provider_job_id.startswith("wan1:") else "openai"

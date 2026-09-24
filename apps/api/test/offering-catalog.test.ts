@@ -5,7 +5,7 @@ import { buildApp } from "../src/http/app";
 
 const { embedVaultTextsMock } = vi.hoisted(() => ({
   embedVaultTextsMock: vi.fn(async (texts: string[]) => ({
-    model: "test-embedding-model",
+    model: "test-embedding-model", space: "test:1536", tokens_in: 0,
     dimensions: 1536,
     embeddings: texts.map(testEmbedding)
   }))
@@ -19,7 +19,7 @@ describe("offering catalogue", () => {
   beforeEach(() => {
     embedVaultTextsMock.mockReset();
     embedVaultTextsMock.mockImplementation(async (texts: string[]) => ({
-      model: "test-embedding-model",
+      model: "test-embedding-model", space: "test:1536", tokens_in: 0,
       dimensions: 1536,
       embeddings: texts.map(testEmbedding)
     }));
