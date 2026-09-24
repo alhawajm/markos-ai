@@ -16,6 +16,7 @@ import { observeWorkerTask, settleWorkerBatch, workerErrorCode, workerLogger, ty
 export type MaintenanceWorkerLogger = WorkerLogger;
 
 export interface MaintenanceWorkerTickResult {
+  failures?: { task: string; code: string }[];
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
   analyticsSync?: AnalyticsSyncForAllWorkspacesResult;
   documentCleanup?: OfferingDocumentCleanupResult;
@@ -53,7 +54,15 @@ export async function runMaintenanceWorkerTick(
   const started = Date.now();
   const base = input.now ?? new Date();
   const clock = () => new Date(base.getTime() + Date.now() - started);
-  const run = <T>(name: string, work: () => Promise<T>) => observeWorkerTask(input.logger ?? workerLogger, name, work);
+  const failures: { task: string; code: string }[] = [];
+  const run = async <T>(name: string, work: () => Promise<T>): Promise<T | undefined> => {
+    try {
+      return await observeWorkerTask(input.logger ?? workerLogger, name, work);
+    } catch (error) {
+      failures.push({ task: name, code: workerErrorCode(error) });
+      return undefined;
+    }
+  };
   const tokenRefresh =
     input.runTokenRefresh === false || input.shouldStop?.()
       ? undefined
@@ -114,6 +123,7 @@ export async function runMaintenanceWorkerTick(
       : await run("videoGeneration", () => processDueVideoGenerationJobs({ now: clock(), shouldStop: input.shouldStop, logger: input.logger }));
 
   return {
+    ...(failures.length ? { failures } : {}),
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
     ...(analyticsSync === undefined ? {} : { analyticsSync }),
     ...(documentCleanup === undefined ? {} : { documentCleanup }),
@@ -193,19 +203,20 @@ export function startMaintenanceWorker(
         ...(input.publisher === undefined ? {} : { publisher: input.publisher })
       });
 
-      if (shouldEmailAnalytics) {
+      if (shouldEmailAnalytics && result.analyticsEmail !== undefined) {
         lastAnalyticsEmailAt = now.getTime();
       }
-      if (shouldRefreshTokens) {
+      if (shouldRefreshTokens && result.tokenRefresh !== undefined) {
         lastTokenRefreshAt = now.getTime();
       }
-      if (shouldResetUsage) {
+      if (shouldResetUsage && result.usageReset !== undefined) {
         lastUsageResetAt = now.getTime();
       }
-      if (shouldSyncAnalytics) {
+      if (shouldSyncAnalytics && result.analyticsSync !== undefined) {
         lastAnalyticsSyncAt = now.getTime();
       }
 
+      if (result.failures?.length) logger.warn("Maintenance worker tick completed with task failures", { failures: result.failures });
       logger.info("Maintenance worker tick completed", { ...summarizeTick(result), durationMs: Math.round(performance.now() - tickStarted) });
       return result;
     } catch (error) {

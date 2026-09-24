@@ -29,6 +29,24 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("maintenance scheduling", () => {
+  it("continues delivery and video after a sibling maintenance task fails, and retries that task next tick", async () => {
+    vi.mocked(sendMonthlyAnalyticsPdfEmailForAllWorkspaces).mockRejectedValueOnce(Object.assign(new Error("private provider body"), { code: "REPORT_FAILED" }));
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const worker = startMaintenanceWorker({ role: "all", logger });
+    try {
+      const first = await worker.runNow();
+      expect(first.failures).toEqual([{ task: "analyticsEmail", code: "REPORT_FAILED" }]);
+      expect(processDueVideoGenerationJobs).toHaveBeenCalledOnce();
+      expect(syncInstagramAnalyticsForAllWorkspaces).toHaveBeenCalledOnce();
+      await worker.runNow();
+      expect(sendMonthlyAnalyticsPdfEmailForAllWorkspaces).toHaveBeenCalledTimes(2);
+      expect(processDuePublishJobs).toHaveBeenCalledTimes(2);
+      expect(processDueVideoGenerationJobs).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(logger.error.mock.calls)).not.toContain("private provider body");
+    } finally {
+      worker.stop();
+    }
+  });
   it.each(["all", "delivery", "maintenance"] as const)("runs only the tasks owned by the %s role", async (role) => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const worker = startMaintenanceWorker({ role, logger });
@@ -142,8 +160,10 @@ describe("maintenance scheduling", () => {
   it.each(["email", "insights"])("processes due publishes before a failing %s task", async (task) => {
     const failing = task === "email" ? sendMonthlyAnalyticsPdfEmailForAllWorkspaces : syncInstagramAnalyticsForAllWorkspaces;
     vi.mocked(failing).mockRejectedValueOnce(new Error("Unrelated service unavailable"));
-    await expect(runMaintenanceWorkerTick()).rejects.toThrow("Unrelated service unavailable");
+    const result = await runMaintenanceWorkerTick();
+    expect(result.failures).toEqual([{ task: task === "email" ? "analyticsEmail" : "analyticsSync", code: "WORKER_UNEXPECTED_ERROR" }]);
     expect(processDuePublishJobs).toHaveBeenCalledOnce();
+    expect(processDueVideoGenerationJobs).toHaveBeenCalledOnce();
   });
   it("checks publishing every minute, skips overlapping ticks and stops its existing timer", async () => {
     expect(env.WORKER_PUBLISHING_INTERVAL_MS).toBe(60_000);
