@@ -39,3 +39,11 @@ for both mobile platforms and the website.
 
 External alert delivery/Sentry and a restore rehearsal remain pending. The
 readiness probe is implemented, but it is not itself an always-on monitor.
+
+Independent maintenance failures are recorded with sanitized task/error codes
+and do not prevent later tasks, including Reel rendering, from running. Monthly
+analytics email is still simulated: `delivered` is false, `skippedReason` is
+`DRY_RUN`, and new audit records use `MONTHLY_ANALYTICS_PDF_EMAIL_SIMULATED`.
+Older `MONTHLY_ANALYTICS_PDF_EMAIL_SENT` rows with `deliveryMode: dry_run` are
+historical simulations, not evidence of email delivery. Real report email needs
+an owner preference and durable delivery handling before it is activated.

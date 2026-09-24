@@ -19,14 +19,26 @@ Invitation codes are stored hashed and shown once for the owner to share. No aut
 
 Added Expo Sharing, so the new mobile release uses runtime 0.3.0 and requires new binaries. The earlier 0.2.0 Motion update remains compatible with installed apps. Added native icon, Android adaptive foreground and splash assets using the existing MARKOS wand and Sunlit colors. Only MARKOS's com.markos.mobile project is in scope.
 
-Focused evidence: 23 API workspace/team/native-auth tests, 21 native session/export tests, three rendered web tests (English desktop, Arabic 390 px, account saving); mobile/API/web TypeScript; Android/iOS bundle export. Tests used only disposable markos_production_features_test. These are focused checks, not a full suite or physical-device acceptance. Account/team migration and hosted rollout are next; mobile builds pending.
+Focused evidence: 23 API workspace/team/native-auth tests, 21 native session/export tests, three rendered web tests (English desktop, Arabic 390 px, account saving); mobile/API/web TypeScript; Android/iOS bundle export. Tests used only disposable markos_production_features_test. These are focused checks, not a full suite or physical-device acceptance. Account/team migration 25 and the hosted rollout succeeded.
+
+## Release verification
+
+- Android 0.3.0/code 3 signed ARM64 APK: build da2f543b-7492-4f8c-bd04-46376ff518be finished. Artifact downloaded and ZIP integrity verified.
+- iPhone 0.3.0/build 4: build 2c1fa2a6-5c45-4a54-b527-49d0af02ada0 and submission 3dcfe732-2b38-43cc-a680-068685b6d6f0 finished. IPA integrity, bundle com.markos.mobile and iPhoneOS platform verified. Apple build f2488235-d7f2-4079-92f8-7801af3da523 is VALID and ready for internal testing after its platform-encryption declaration. The MARKOS test group still has exactly one tester, the owner, and no public link. No other Apple application or signing credential changed.
+- Android production AAB 793e803b-7445-4b49-a3b9-36f35e1b4ab3 is building; Google Play Console access remains unconfirmed. A store bundle is not store publication.
+- Dependency readiness is live: PostgreSQL, Redis and the authenticated AI boundary passed. The probe does not infer provider credits or permissions. OpenSearch is optional because no current feature depends on it. Eight API health tests, three AI readiness tests, Python type/lint checks and relevant TypeScript passed.
+- Independent maintenance failures no longer stop later tasks, including Reel jobs. Twelve focused maintenance/diagnostic tests passed. Worker deployment 8ad9cb2e-c775-43a7-805d-ae8e457b051d succeeded.
+- Latest verified web a6be0d5b-fdbf-47c8-abe0-30d505d93454, API 42bacaf9-4df6-435a-83bb-7cf1af4c78c9, worker 661d3843-e6f7-4887-b43f-55056dab8f57 and AI 8aea1f4b-44ba-4e3e-a236-be6e71e6635e deployments succeeded. After the final email correction, the live readiness probe again passed database, Redis and the authenticated AI boundary.
+- Monthly analytics email is still a dry-run adapter. Its receipt and worker totals now correctly report no delivery, and its audit action says SIMULATED. PDF download/sharing works; no real monthly report emails were sent. Two focused route/worker checks passed (32 unrelated tests skipped).
 
 ## Remaining
 
 - Self-hosted Wan generated footage: this laptop has 16 GB system RAM and Intel integrated graphics. It cannot run the selected model at a useful production level. Wan code/weights are Apache-2.0; cloud GPUs, including AWS, are infrastructure costs. No paid video service is enabled. Suitable owned GPU hardware remains necessary for a no-video-API-fee deployment.
 - Verify native account/team/share controls on physical Android and iPhone devices after installing 0.3.0. Capture actual native store screenshots and complete store listing/privacy declarations, final legal wording and review submission. Store approval cannot be claimed from successful builds.
 - Complete live Instagram consent/publishing/analytics acceptance with the owner's connected account and Meta permissions. Existing configuration is not proof of review approval or live delivery.
-- Notification preferences/push delivery, remaining administration surfaces, backup/restore and monitoring verification remain follow-up production work.
+- Notification preferences/push delivery, remaining administration surfaces, true account deletion across multiple workspaces, and opt-in monthly report email delivery remain implementation work. Current data controls erase one owned workspace and anonymize an owner with no remaining memberships; they are not a general account-deletion flow.
+- Backups: pgvector has no snapshots or schedule. Enabling Daily/Weekly with the current Railway credential returned Not Authorized; the project owner must enable them. Restore rehearsal, object-storage retention and external alert delivery remain pending. See operations-readiness.md.
+- AWS infrastructure remains a placeholder; no AWS migration or GPU has been provisioned. Railway currently serves web, Android and iPhone.
 - Commercial billing remains deferred by explicit product decision. No simulated payments or quota gates were activated. Live merchant credentials/certification are external requirements.
 
 Website: https://web-production-94e63.up.railway.app

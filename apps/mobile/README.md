@@ -2,7 +2,18 @@
 
 One Expo / React Native app for Android and iOS, connected to the existing Railway API. The existing Next.js site remains the web app. Expo project: [@mo4180/markos](https://expo.dev/accounts/mo4180/projects/markos).
 
-Latest preview update: [calendar, publishing activity, notification inbox and Insights, `e7e2334a-e0ed-4719-ab42-d4fdaaa12633`](https://expo.dev/accounts/mo4180/projects/markos/updates/e7e2334a-e0ed-4719-ab42-d4fdaaa12633), Android/iOS runtime **0.2.0**. Both bundles exported and both platform manifests returned the expected update IDs. Open the installed app online to download the update, then close and reopen it. Open Calendar → Publishing activity, the notification bell, or Insights. No replacement binary or Apple signing change was needed. Physical-device interaction and a real authorized Instagram publishing walkthrough still need acceptance testing.
+Current release: **0.3.0**, connected to the same Railway services as the website. This release adds native sharing, so install the new binary; a 0.2.0 app cannot receive these features through an update alone.
+
+- **Android:** [download the signed ARM64 APK](https://expo.dev/artifacts/eas/P0wfAFDb-PMuI5or77zRiBeDvFlTh5zmdEcpFP7FJ0w.apk), version 0.3.0/code 3, 51.4 MB. [Build record](https://expo.dev/accounts/mo4180/projects/markos/builds/da2f543b-7492-4f8c-bd04-46376ff518be).
+- **iPhone:** update MARKOS in TestFlight to **0.3.0/build 4**. [App Store Connect](https://appstoreconnect.apple.com/apps/6814797764/testflight/ios). Apple reports VALID and ready for internal testing, with the encryption declaration complete. The existing internal group has only the owner's account and no public link; other Apple apps and credentials were not changed.
+- **Android store bundle:** [production build 793e803b-7445-4b49-a3b9-36f35e1b4ab3](https://expo.dev/accounts/mo4180/projects/markos/builds/793e803b-7445-4b49-a3b9-36f35e1b4ab3) is building. Google Play Console access and submission remain pending.
+- **Website:** [hosted MARKOS](https://web-production-94e63.up.railway.app).
+
+Account now includes profile/workspace editing, secure workspace switching, team invitations and roles, saved knowledge/history, activity, private workspace JSON sharing and confirmed workspace erasure. Insights adds provider-backed advice and PDF report sharing. Free Motion Reels animate your JPEG artwork with exact optional Arabic/English cards. Open **Create > Reel > Media > Motion Reel**, choose artwork, enter optional copy and create the Reel. No paid video API is enabled; generated AI footage still needs separately provisioned GPU infrastructure. Text and image AI retain their existing provider costs.
+
+Latest compatible update for older 0.2.0 installations: [Motion Reels, be13c85d-c6cd-4b94-8b2d-09c9be56ab58](https://expo.dev/accounts/mo4180/projects/markos/updates/be13c85d-c6cd-4b94-8b2d-09c9be56ab58). Open online, then close and reopen. This includes earlier publishing/onboarding features but not the new 0.3.0 sharing controls.
+
+APK/IPA integrity and iPhone bundle/version/platform were checked. Focused API/native/browser checks, TypeScript and both native exports passed. Physical-device keyboards, pickers, Arabic, access revocation, app-kill recovery, accessibility and live Instagram publishing still require acceptance. This is an internal release, not public store approval. See [current implementation status](../../docs/implementation-progress.md) for remaining work.
 
 ## Working slice
 
@@ -41,7 +52,7 @@ eas.cmd build --platform ios --profile simulator
 
 The Android preview is a signed **ARM64 APK** with its JavaScript bundled; it uses Railway without a PC or Metro server. The preview targets current 64-bit Android phones to reduce build time and download size; production retains the default architecture set. The simulator profile produces an iOS Simulator app, which requires a Mac to run. An iPhone device build needs Apple Developer signing credentials and device registration or TestFlight. Neither preview is a store submission.
 
-The owner's TestFlight build 3 and Android runtime 0.2.0 remain compatible with the latest preview update above. Earlier business setup/profile update `3524cd3e-63d2-4e6b-aecc-bd517a20ea9c` is superseded.
+The owner's older TestFlight build 3 and Android runtime 0.2.0 remain compatible only with the 0.2.0 update listed above. Install 0.3.0 for the current account/team/share release.
 
 Preview builds use the `preview` Expo Updates channel and Expo's [app-version runtime policy](https://docs.expo.dev/eas-update/runtime-versions/). Compatible JavaScript/asset changes can be delivered with `eas.cmd update --channel preview --environment preview --message "Describe the change"`. **Bump `version` in `app.config.ts` before changing native dependencies or native configuration**, then create new builds. Windows and EAS use different pnpm dependency paths, so the initial automatic fingerprints did not match; the explicit app version is the runtime contract for this prototype. Do not publish an update that targets an unverified backend contract.
 
@@ -69,9 +80,9 @@ JPEG/MP4 media uploads currently allow 8 MB per file. Existing server video plan
 
 `packages/ui-tokens/src/native.ts` is generated from `apps/web/app/theme-tokens.css` by `scripts/generate-native-tokens.mjs`. `pnpm --filter @markos/mobile check:tokens` and EAS post-install reject stale colors. Phone layout uses explicit direction once in shared rows/tab navigation, mirrored back arrows/transitions, and directional text; the root stays LTR to prevent automatic double mirroring. Device RTL and assistive-technology checks are still required.
 
-## Validation boundary
+## Earlier 0.2.0 validation history
 
-The current preview uses runtime **`0.2.0`** because adding `expo-video` requires a new binary. [Android ARM64 build](https://expo.dev/accounts/mo4180/projects/markos/builds/df2ba5e0-e2f0-4398-af9b-2665c9e971de) finished successfully on 22 September 2026. Its downloaded APK passed ZIP integrity and confirms package `com.markos.mobile`, version 0.2.0/code 2, ARM64 libraries and the hosted Railway API URL in its bundle. [Download the Android APK](https://expo.dev/artifacts/eas/HxGFvtSm7aQrS5fdJm_4vNMnZnbTa_ia5MqzMA9cpOI.apk) (50.8 MB).
+The earlier preview used runtime **`0.2.0`** because adding `expo-video` required a new binary. [Android ARM64 build](https://expo.dev/accounts/mo4180/projects/markos/builds/df2ba5e0-e2f0-4398-af9b-2665c9e971de) finished successfully on 22 September 2026. Its downloaded APK passed ZIP integrity and confirms package `com.markos.mobile`, version 0.2.0/code 2, ARM64 libraries and the hosted Railway API URL in its bundle. [Download the Android APK](https://expo.dev/artifacts/eas/HxGFvtSm7aQrS5fdJm_4vNMnZnbTa_ia5MqzMA9cpOI.apk) (50.8 MB).
 
 The [iOS Simulator build](https://expo.dev/accounts/mo4180/projects/markos/builds/521919bb-61bc-44c9-844e-f3c7899b677c) also finished successfully; its downloaded artifact confirms bundle `com.markos.mobile`, version/runtime 0.2.0, Simulator platform and the preview update channel. Its embedded `CFBundleVersion` is 1 despite EAS reporting remote build version 2. [Download the Simulator archive](https://expo.dev/artifacts/eas/SDumJDmuiwbXNFbSUNODLJnH0yavIyDLNw9I6NpSzaY.tar.gz).
 

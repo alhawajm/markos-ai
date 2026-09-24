@@ -1,6 +1,6 @@
 # MARKOS AI — Experience and Behavioral Flows
 
-Status date: 2026-08-30. Create flows revised 2026-09-06; other dated implementation evidence is unchanged.
+Status date: 2026-08-30. Create flows revised 2026-09-06; provider, Motion Reel and native account implementation notes revised 2026-09-24. See `../implementation-progress.md` for the current release and its validation boundaries.
 
 > **Purpose:** explain how MARKOS moves end to end: what the user does, what the interface shows, which application boundary acts, what changes, what comes next, and how failure is recovered.
 >
@@ -46,8 +46,8 @@ Every feature should strengthen this loop or remove friction from it.
 
 - **Web** renders the localized journey and calls the typed API client.
 - **API gateway** owns authentication, workspace context, authorization, data, diagnostic usage, billing, provider credentials, Vault retrieval, and orchestration.
-- **AI service** receives a bounded, authenticated request and returns a validated result plus usage. Current Campaign and onboarding-profile paths can call OpenAI when explicitly configured; content, image, embedding, and generic-agent paths remain deterministic.
-- **Worker** runs API-owned maintenance loops for publishing, analytics sync/email, token refresh, and usage reset. Current interval workers are not evidence of production queue availability or retries.
+- **AI service** receives a bounded, authenticated request and returns a validated result plus usage. Production Campaign, onboarding-profile, content, image, embedding and eight typed agent paths use the configured provider. Deterministic text/embedding implementations are explicit local-development modes, never silent production fallbacks. CPU Motion Reels use uploaded artwork and exact text without a generative model call.
+- **Worker** runs API-owned maintenance loops for publishing, analytics sync/email, token refresh, usage reset and persisted video jobs. Independent task failures are isolated so later tasks still run. Stored jobs/leases establish recovery for the implemented paths; they do not establish provider permission or actual delivery. Monthly report email remains simulated and must report no delivery.
 
 ## 2. Actors and entry states
 
@@ -106,7 +106,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - A failed analysis preserves an honest sanitized failure state, temporary files within their retention window, and retry or discard/manual recovery as appropriate. Only one full onboarding analysis may remain active per workspace.
 - The manual path opens the same seven-module wizard without requiring a document upload.
 - `OB-03`–`OB-09` collect Company, Products, Story, Audience, Competitors, Brand, and Objectives. Products follows Company because those two essentials are enough to unlock the first profile; the remaining context stays skippable.
-- Each save calls `PUT /v1/onboarding/:module`, writes the matching Vault section(s), creates deterministic embeddings through the current AI boundary, updates completeness, invalidates any previously resolved profile, and leaves onboarding `IN_PROGRESS`.
+- Each save calls `PUT /v1/onboarding/:module`, writes the matching Vault section(s), creates provider embeddings through the authenticated AI boundary, updates completeness, invalidates any previously resolved profile, and leaves onboarding `IN_PROGRESS`. Stored embedding-space identifiers prevent comparing incompatible vectors; old facts are reindexed into the active space before retrieval.
 - Company and Products are essential because they identify the business and its offer. Story, Audience, Competitors, Brand/Tone, and Objectives are useful but optional; `POST /v1/onboarding/:module/skip` persists an optional skip so the journey can resume without asking the same question again. Essential modules cannot be skipped.
 - Brand writes `BRAND` only when visual-identity facts are supplied and `TONE` only when voice facts are supplied. Guidance, placeholders, palettes, and options are suggestions only; only selected or entered facts are persisted.
 - The browser keeps the current draft locally until the API confirms saves. Validation or API failure blocks forward progress without discarding the user's typed work.
@@ -238,7 +238,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 - Final `AN-01`–`AN-06` cover overview, posts, post detail, audience, Stories, and Reels with suitable ranges and empty/insufficient-data states.
 - The current Sunlit Insights page covers 7/30-day aggregates, daily reach/impression/interaction trends, an immediately preceding-period comparison calculated by the API, content-type performance, top content, explicit audience-data availability, and monthly PDF export. It does not prove the full drill-down screen set or live provider data.
 - Current supporting API contracts are `/v1/analytics/digest`, `/v1/analytics/learning`, `/v1/analytics/monthly-pdf`, `/v1/analytics/monthly-email`, and `/v1/analytics/chat`.
-- The Analytics Consultant and generic agents remain deterministic. Provider-backed interpretation, proactive recommendations, mounted chat/digest, and broader comparisons remain target behavior.
+- The Analytics Consultant and all eight typed agents use configured production providers with retrieved workspace context and actual usage. Analytics requests include server-read metrics, source IDs, assumptions and missing information. Native Insights mounts advice and PDF sharing. Autonomous recommendations, wider drill-downs and a fully demonstrated live learning loop remain separate acceptance work.
 
 **F3. Learn**
 
@@ -326,7 +326,7 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 2. API validates the access token, resolves workspace context, checks permission and Vault presence, and reserves `AI_GENERATION` usage.
 3. API retrieves up to eight relevant Vault chunks, merges the tone lock, and selects the current prompt template and optional Campaign. Content may remain orphaned when no Campaign is selected.
 4. API calls protected `POST /ai/content/generate` with the bounded structured request.
-5. The AI service currently returns deterministic draft shapes and usage; this step is not provider-backed today.
+5. The AI service returns provider-backed, schema-validated drafts and actual usage in production. Explicit local adapters exist for development; a provider failure must not silently substitute their output.
 6. API validates the result, creates workspace-scoped `ContentItem` rows, writes `ai_interaction`, records token usage, and returns the saved records. On failure it preserves previous content and reports a recoverable error.
 7. Web renders the saved draft with edit, approve, and schedule actions appropriate to its current state.
 
@@ -335,7 +335,7 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 | Situation | Required behavior | Current limitation to remember |
 | --- | --- | --- |
 | Vault lacks grounding | Explain the missing section and link to Business Profile/Vault | Do not fill missing facts from placeholders or demo content |
-| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, preserve diagnostic usage accuracy | Campaign/profile/content-copy and document-analysis paths are provider-capable; other routes remain deterministic where documented |
+| AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, preserve diagnostic usage accuracy | Production agents, embeddings, Campaign/profile/content-copy, image and document-analysis paths use configured providers; local adapters are explicit. Motion Reels render owner artwork without paid video generation. |
 | Former commercial allowance is exhausted | Continue the development action | Quota enforcement is deferred; provider limits still apply |
 | Media generation/upload fails | Preserve content edits and offer retry/manual attachment | Provider image fallback and durable storage are not complete |
 | Instagram credential is missing/expired | Block provider actions and route to secure reconnect | A configuration variable cannot repair an old credential's permissions |
