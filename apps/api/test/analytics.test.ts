@@ -731,7 +731,7 @@ describe("analytics routes", () => {
     await app.close();
   });
 
-  it("sends a monthly analytics PDF email and records delivery evidence", async () => {
+  it("simulates a monthly analytics PDF email without claiming delivery", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
@@ -754,7 +754,7 @@ describe("analytics routes", () => {
     });
     const auditLog = await prisma.auditLog.findFirstOrThrow({
       where: {
-        action: "MONTHLY_ANALYTICS_PDF_EMAIL_SENT",
+        action: "MONTHLY_ANALYTICS_PDF_EMAIL_SIMULATED",
         workspaceId: session.workspace.id
       }
     });
@@ -762,11 +762,12 @@ describe("analytics routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       data: {
-        delivered: true,
+        delivered: false,
         filename: expect.stringContaining("2026-01.pdf"),
         mode: "dry_run",
         month: "2026-01",
         recipients: [session.user.email],
+        skippedReason: "DRY_RUN",
         workspaceId: session.workspace.id
       }
     });
@@ -778,6 +779,7 @@ describe("analytics routes", () => {
       month: "2026-01",
       recipients: [session.user.email]
     });
+    expect(await prisma.auditLog.count({ where: { workspaceId: session.workspace.id, action: "MONTHLY_ANALYTICS_PDF_EMAIL_SENT" } })).toBe(0);
 
     await app.close();
   });

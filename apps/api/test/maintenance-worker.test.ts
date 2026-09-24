@@ -606,7 +606,7 @@ describe("maintenance worker", () => {
     expect(currentStorageCounter).toBeNull();
   }, 60_000);
 
-  it("sends monthly analytics PDF emails once per workspace and month", async () => {
+  it("simulates monthly analytics PDF emails once per workspace and month without counting delivery", async () => {
     const now = new Date(Date.UTC(2026, 1, 2, 12));
     const workspace = await createWorkspace("worker-analytics-email");
     const sentFilenames: string[] = [];
@@ -643,8 +643,9 @@ describe("maintenance worker", () => {
     expect(first.analyticsEmail?.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          delivered: true,
+          delivered: false,
           month: "2026-01",
+          skippedReason: "DRY_RUN",
           workspaceId: workspace.id
         })
       ])
@@ -654,12 +655,14 @@ describe("maintenance worker", () => {
         expect.objectContaining({
           delivered: false,
           month: "2026-01",
-          skippedReason: "ALREADY_SENT",
+          skippedReason: "DRY_RUN",
           workspaceId: workspace.id
         })
       ])
     );
     expect(sentFilenames.filter((filename) => filename.includes(workspace.name.toLowerCase().replace(/\s+/g, "-")))).toHaveLength(1);
+    expect(first.analyticsEmail?.delivered).toBe(0);
+    expect(second.analyticsEmail?.delivered).toBe(0);
   }, 60_000);
 });
 

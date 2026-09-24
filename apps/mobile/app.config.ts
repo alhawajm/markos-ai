@@ -11,7 +11,7 @@ const config: ExpoConfig = {
   runtimeVersion: { policy: "appVersion" },
   orientation: "default",
   userInterfaceStyle: "automatic",
-  ios: { supportsTablet: true, bundleIdentifier: "com.markos.mobile" },
+  ios: { supportsTablet: true, bundleIdentifier: "com.markos.mobile", config: { usesNonExemptEncryption: false } },
   android: {
     package: "com.markos.mobile",
     allowBackup: false,

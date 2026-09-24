@@ -75,7 +75,7 @@ export async function sendMonthlyAnalyticsPdfEmail(
         mode: "dry_run",
         month,
         recipients: [],
-        skippedReason: "ALREADY_SENT",
+        skippedReason: "DRY_RUN",
         workspaceId
       };
     }
@@ -116,7 +116,7 @@ export async function sendMonthlyAnalyticsPdfEmail(
     });
     await tx.auditLog.create({
       data: {
-        action: "MONTHLY_ANALYTICS_PDF_EMAIL_SENT",
+        action: "MONTHLY_ANALYTICS_PDF_EMAIL_SIMULATED",
         ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
         metadata: {
           attachmentBytes: pdf.bytes.length,
@@ -135,12 +135,13 @@ export async function sendMonthlyAnalyticsPdfEmail(
 
   return {
     attachmentBytes: pdf.bytes.length,
-    delivered: true,
+    delivered: false,
     filename: pdf.filename,
     messageId: result.messageId,
     mode: provider.mode,
     month,
     recipients,
+    skippedReason: "DRY_RUN",
     workspaceId
   };
 }
