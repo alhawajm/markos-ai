@@ -1,0 +1,21 @@
+name: MARKOS service readiness
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17,47 * * * *"
+permissions:
+  contents: read
+concurrency:
+  group: service-readiness
+  cancel-in-progress: false
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probe Railway dependencies without generating content
+        run: node scripts/check-service-readiness.mjs
