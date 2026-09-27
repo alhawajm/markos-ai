@@ -2,14 +2,13 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
-import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { accountDeletionPreview, deleteAccount, processAccountErasures } from "../src/workspace/account-deletion";
 import { storeWorkspaceMedia, readStoredMedia } from "../src/media/storage-service";
 import { generateTotpCode, generateTotpSecret } from "../src/auth/totp";
 import { requestAccountDeletionCode, verifyAccountDeletionCode } from "../src/workspace/account-deletion-proof";
 import { processAuthEmails } from "../src/auth/auth-email";
-if (!new URL(env.DATABASE_URL).pathname.endsWith("markos_production_features_test"))
-  throw new Error("Use the disposable markos_production_features_test database");
+requireDisposableDatabase("markos_production_features_test");
 const password = "CorrectHorseBattery99!";
 async function owner() {
   return prisma.user.create({

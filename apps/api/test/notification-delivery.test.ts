@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { buildApp } from "../src/http/app";
 import { notifyPublication, processPushDeliveries, registerPushDevice } from "../src/notifications/push-service";
 import { processReportDeliveries, sendMonthlyAnalyticsPdfEmail, ReportMailError } from "../src/analytics/analytics-email-service";
@@ -9,8 +10,7 @@ vi.mock("../src/analytics/analytics-service", async (original) => ({
   ...(await original<object>()),
   exportMonthlyAnalyticsPdf: vi.fn(async (workspaceId: string) => ({ bytes: Buffer.from(`%PDF-${workspaceId}`), filename: "report.pdf" }))
 }));
-if (!new URL(env.DATABASE_URL).pathname.endsWith("markos_production_features_test"))
-  throw new Error("Use the disposable markos_production_features_test database");
+requireDisposableDatabase("markos_production_features_test");
 async function fixture() {
   const user = await prisma.user.create({ data: { email: `${randomUUID()}@markos.test`, fullName: "Notice owner", isVerified: true } });
   const workspace = await prisma.workspace.create({ data: { ownerUserId: user.id, name: "Notice test", slug: randomUUID() } });

@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { enableMfaTotp, register, setupMfaTotp, verifyMfaTotpSession } from "../src/auth/auth-service";
 import { registerNativeAuthRoutes } from "../src/auth/native-auth-routes";
 import { registerWorkspaceContext } from "../src/tenancy/workspace-plugin";
@@ -10,8 +11,8 @@ import { registerAuthRateLimits } from "../src/auth/auth-rate-limit";
 import { generateTotpCode } from "../src/auth/totp";
 import { verifyAccessToken } from "../src/auth/tokens";
 
-if (env.NODE_ENV !== "test" || new URL(env.DATABASE_URL).pathname !== "/markos_account_recovery_test" || env.EMAIL_PROVIDER !== "local")
-  throw new Error("Use only the disposable markos_account_recovery_test database and local email provider");
+requireDisposableDatabase("markos_account_recovery_test");
+if (env.EMAIL_PROVIDER !== "local") throw new Error("Use the local email provider for MFA tests");
 const app = Fastify({ logger: false });
 beforeAll(async () => {
   await registerWorkspaceContext(app);

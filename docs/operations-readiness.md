@@ -53,9 +53,13 @@ Backup listing/scheduling still returned `Not Authorized` with this credential; 
 
 The 08:32 UTC production backup restored into a new disposable `markos_restore_rehearsal_20260927` database: 25 migrations, five users, five workspaces, 11 content items and 18 media references. `pgcrypto`, `vector` and the UUID v7 function restored. There were no orphan content/media workspace references; all media keys included their workspace ID. The restored database was removed after validation; the encrypted copy and metadata-only proof remain under ignored `var/backups/`. Media bytes remain a separate recovery obligation.
 
+That media obligation was also exercised at 09:03 UTC: `scripts/railway-media-backup.cjs` copied all 18 active database-referenced objects (19,796,528 bytes) into an encrypted archive. Restoration into a new isolated directory matched every SHA-256 hash; the plaintext restore directory was then removed. It preserves object/workspace metadata with the bytes and never writes or deletes remote objects. This is a point-in-time reference-media copy, not a full bucket/version-history backup. The storage provider reported bucket versioning not enabled. Scheduled, independent off-site storage and an approved retention policy remain pending.
+
 ```powershell
 node scripts/railway-database-backup.cjs backup 13a11103-4cfb-4ec1-82b4-e6fe776acdbe@ssh.railway.com
 node scripts/railway-database-backup.cjs restore <manifest.json> markos_restore_<unique_name>
+node scripts/railway-media-backup.cjs backup a3cb8762-58a3-4425-a801-b6cbec29b822@ssh.railway.com
+node scripts/railway-media-backup.cjs restore <media-manifest.json> markos_media_restore_<unique_name>
 ```
 
 Restore only creates a new disposable database; it never overwrites an existing one. Keep the encrypted file and manifest together. Establish independently accessible off-site storage and retention before public launch.

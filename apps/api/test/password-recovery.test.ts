@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
 import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { register, login, requestEmailVerification, verifyEmail } from "../src/auth/auth-service";
 import { registerNativeAuthRoutes } from "../src/auth/native-auth-routes";
 import { registerPasswordRoutes } from "../src/auth/password-routes";
@@ -12,8 +13,8 @@ import { processAuthEmails, type AuthMail } from "../src/auth/auth-email";
 import { generateTotpCode, generateTotpSecret } from "../src/auth/totp";
 import { accountPolicyVersion } from "@markos/validation";
 
-if (new URL(env.DATABASE_URL).pathname !== "/markos_account_recovery_test" || env.NODE_ENV !== "test" || env.EMAIL_PROVIDER !== "local")
-  throw new Error("Use the dedicated markos_account_recovery_test database and local email provider");
+requireDisposableDatabase("markos_account_recovery_test");
+if (env.EMAIL_PROVIDER !== "local") throw new Error("Use the local email provider for recovery tests");
 const password = "Correct Horse Battery 99!";
 const replacement = "Another unique passphrase 42!";
 const headers = { "x-markos-session": "native" };

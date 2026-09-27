@@ -2,14 +2,13 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { prisma } from "../src/db/prisma";
-import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { register } from "../src/auth/auth-service";
 import { registerWorkspaceContext } from "../src/tenancy/workspace-plugin";
 import { registerPublishingRoutes } from "../src/publishing/publishing-routes";
 import { registerNotificationRoutes } from "../src/notifications/notification-routes";
 import { readWorkspaceCalendar } from "../src/calendar/calendar-service";
-if (env.NODE_ENV !== "test" || new URL(env.DATABASE_URL).pathname !== "/markos_mobile_publishing_test")
-  throw Error("Use only the disposable markos_mobile_publishing_test database");
+requireDisposableDatabase("markos_mobile_publishing_test");
 const app = Fastify({ logger: false });
 beforeAll(async () => {
   await registerWorkspaceContext(app);

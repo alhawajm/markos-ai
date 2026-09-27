@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { env } from "../src/config/env";
+import { requireDisposableDatabase } from "./disposable-database";
 import { processCampaignGenerations, queueCampaignGeneration, readCampaignGeneration } from "../src/campaign/campaign-generation-service";
 import { AiServiceRequestError } from "../src/ai/request";
 import { createContentAggregate } from "../src/content/content-aggregate";
@@ -26,9 +27,7 @@ vi.mock("../src/prompts/prompt-service", async (importOriginal) => ({
 }));
 
 // Refuse to run these persistence tests against an ordinary or hosted database.
-const db = new URL(process.env.DATABASE_URL!);
-if (db.hostname !== "localhost" || db.pathname !== "/markos_mobile_jobs_test")
-  throw new Error("Use the named local disposable database markos_mobile_jobs_test");
+requireDisposableDatabase("markos_mobile_jobs_test");
 const input = {
   objective: "Blooms event",
   description: "Pink flowers and Arabic typography",
