@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 import { useNavigation, usePreventRemove } from "expo-router/react-navigation";
 import { useQuery } from "@tanstack/react-query";
-import type { BusinessKnowledgeRecord, BusinessKnowledgeModule, OfferingMaintenanceUpdate } from "@markos/shared-types";
+import type { BusinessKnowledgeRecord, BusinessKnowledgeModule } from "@markos/shared-types";
 import { MarkosApiError } from "@markos/api-client";
 import { Pencil, Plus } from "lucide-react-native";
 import { useAccount, useAppearance } from "../src/providers";
@@ -11,6 +11,7 @@ import { QueryFailure, WebButton } from "../src/content";
 import { errorMessage } from "../src/errors";
 import { BusinessDeviceStore } from "../src/business/device-store";
 import { ModuleForm } from "../src/business/forms";
+import { OfferingDetails, offeringInput, offeringValues, moneyText } from "../src/business/offering";
 import { changesBetween, clean, display, fields, fromKnowledge, knowledgeVersion, labels, type Module, type Values } from "../src/business/model";
 
 type Edit = { module: Module; baseVersion: number; base: Values; value: Values; offering?: boolean; offeringId?: string };
@@ -106,11 +107,10 @@ export default function Business() {
     try {
       let value: BusinessKnowledgeRecord;
       if (edit.offering) {
-        const { id: _id, workspaceId: _workspace, catalogId: _catalog, version: _version, createdAt: _created, updatedAt: _updated, ...offering } = edit.value;
         value = await api.maintainOffering({
           expectedVersion: edit.baseVersion,
           ...(edit.offeringId ? { id: edit.offeringId } : {}),
-          offering: clean(offering) as unknown as OfferingMaintenanceUpdate["offering"]
+          offering: offeringInput(edit.value, t)
         });
       } else if (edit.module === "products") {
         const changes = changesBetween(edit.base, edit.value);
@@ -216,9 +216,7 @@ export default function Business() {
                   onPress={() => change({ ...edit, value: { ...edit.value, kind } })}
                 />
               ))}
-              <Txt variant="meta" muted>
-                {t("Pricing and availability can be managed on the website.", "يمكن إدارة الأسعار والتوفر على الموقع.")}
-              </Txt>
+              <OfferingDetails value={edit.value} disabled={busy} onChange={(v) => change({ ...edit, value: v })} />
             </>
           ) : (
             <ModuleForm module={edit.module} value={edit.value} disabled={busy} catalogOnly onChange={(v) => change({ ...edit, value: v })} />
@@ -316,22 +314,32 @@ export default function Business() {
                       })
                     }
                   />
-                  {value.catalog?.offerings
-                    .filter((o) => o.status !== "ARCHIVED")
-                    .map((o) => (
-                      <Card key={o.id}>
-                        <Txt variant="label">{o.name}</Txt>
-                        {o.description ? <Txt muted>{o.description}</Txt> : null}
-                        <Button
-                          secondary
-                          label={t("Edit offering", "تعديل العرض")}
-                          onPress={() => {
-                            const base = o as unknown as Values;
-                            change({ module: "products", baseVersion: knowledgeVersion(value, m), base, value: base, offering: true, offeringId: o.id });
-                          }}
-                        />
-                      </Card>
-                    ))}
+                  {value.catalog?.offerings.map((o) => (
+                    <Card key={o.id}>
+                      <Txt variant="label">{o.name}</Txt>
+                      {o.description ? <Txt muted>{o.description}</Txt> : null}
+                      <Txt muted>
+                        {o.status === "ACTIVE" ? t("Available", "متاح") : o.status === "PAUSED" ? t("Paused", "متوقف مؤقتًا") : t("Archived", "مؤرشف")}
+                      </Txt>
+                      <Txt>
+                        {o.priceType === "QUOTE"
+                          ? t("Price on request", "السعر عند الطلب")
+                          : o.priceType === "RANGE"
+                            ? `${moneyText(o.minPriceMinor, o.currency)} – ${moneyText(o.maxPriceMinor, o.currency)} ${o.currency}`
+                            : o.priceMinor !== undefined
+                              ? `${o.priceType === "FROM" ? t("From ", "من ") : ""}${moneyText(o.priceMinor, o.currency)} ${o.currency}`
+                              : t("Price not specified", "السعر غير محدد")}
+                      </Txt>
+                      <Button
+                        secondary
+                        label={t("Edit offering", "تعديل العرض")}
+                        onPress={() => {
+                          const base = offeringValues(o as unknown as Values);
+                          change({ module: "products", baseVersion: knowledgeVersion(value, m), base, value: base, offering: true, offeringId: o.id });
+                        }}
+                      />
+                    </Card>
+                  ))}
                 </>
               ) : null}
             </Card>

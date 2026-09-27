@@ -4,6 +4,9 @@ import { prisma } from "../db/prisma";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { acceptTeamInvitation, changeTeamMember, inviteTeamMember, listTeam, revokeTeamInvitation, teamError } from "./team-service";
+import { accountDeletionPreview, deleteAccount } from "./account-deletion";
+import { takeAuthLimit } from "../auth/auth-rate-limit";
+import { requestAccountDeletionCode } from "./account-deletion-proof";
 
 const role = z.enum(["WORKSPACE_ADMIN", "EDITOR", "VIEWER"]);
 const memberInput = z.object({ role }).strict();
@@ -25,6 +28,49 @@ const workspaceInput = z.object({ name: z.string().trim().min(2).max(120), expec
 const config = { workspaceRequired: true, verifiedUserRequired: true } as const;
 
 export async function registerSettingsRoutes(app: FastifyInstance) {
+  app.post("/v1/account/deletion/code", { config: { workspaceRequired: true }, bodyLimit: 1024 }, async (_request, reply) => {
+    const { userId } = requireWorkspaceContext();
+    const retry = await takeAuthLimit(`account-deletion-mail:${userId}`, 3, 3600);
+    if (retry) return reply.header("Retry-After", retry).code(429).send(errorEnvelope("AUTH_RATE_LIMITED", "Wait before requesting another code"));
+    reply.header("Cache-Control", "private, no-store");
+    return ok(await requestAccountDeletionCode(userId));
+  });
+  app.get("/v1/account/deletion", { config: { workspaceRequired: true } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    return ok(await accountDeletionPreview(requireWorkspaceContext().userId));
+  });
+  app.post("/v1/account/deletion", { config: { workspaceRequired: true }, bodyLimit: 8192 }, async (request, reply) => {
+    const input = z
+      .object({
+        confirmation: z.literal("DELETE"),
+        confirmationToken: z.string().regex(/^[a-f0-9]{64}$/),
+        password: z.string().min(1).max(256).optional(),
+        challengeToken: z.string().max(2048).optional(),
+        emailCode: z
+          .string()
+          .regex(/^\d{8}$/)
+          .optional(),
+        totpCode: z
+          .string()
+          .regex(/^\d{6}$/)
+          .optional()
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!input.success) return reply.code(400).send(errorEnvelope("VALIDATION_ERROR", "Confirm account deletion and your current password"));
+    const { userId } = requireWorkspaceContext();
+    const retry = await takeAuthLimit(`account-deletion:${userId}`, 5, 300);
+    if (retry) return reply.header("Retry-After", retry).code(429).send(errorEnvelope("AUTH_RATE_LIMITED", "Too many confirmation attempts"));
+    return ok(
+      await deleteAccount(userId, {
+        ...(input.data.password ? { password: input.data.password } : {}),
+        ...(input.data.challengeToken ? { challengeToken: input.data.challengeToken } : {}),
+        ...(input.data.emailCode ? { emailCode: input.data.emailCode } : {}),
+        confirmationToken: input.data.confirmationToken,
+        ...(input.data.totpCode ? { totpCode: input.data.totpCode } : {})
+      })
+    );
+  });
   app.get("/v1/account", { config }, async () => {
     const { userId, workspaceId } = requireWorkspaceContext();
     const user = await prisma.user.findFirstOrThrow({

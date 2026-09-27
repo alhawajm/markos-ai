@@ -72,6 +72,7 @@ export default function Account() {
       <Button secondary label={t("Business profile", "ملف النشاط")} onPress={() => router.push("/business")} />
       <Button secondary icon={BookOpen} label={t("Knowledge and history", "المعلومات والسجل")} onPress={() => router.push("/knowledge")} />
       <Button secondary icon={Camera} label={t("Instagram", "إنستغرام")} onPress={() => router.push("/instagram")} />
+      <Button secondary label={t("Notifications and report emails", "الإشعارات وبريد التقارير")} onPress={() => router.push("/notification-settings")} />
       <Button secondary icon={ShieldCheck} label={t("Authenticator and security", "المصادقة والأمان")} onPress={() => router.push("/security")} />
       <Button secondary icon={Database} label={t("Workspace data controls", "التحكم في بيانات مساحة العمل")} onPress={() => router.push("/data-controls")} />
       {session.roles.some((role) => role === "OWNER" || role === "WORKSPACE_ADMIN") ? (
@@ -79,6 +80,9 @@ export default function Account() {
       ) : null}
       <WebButton label={t("More account settings on web", "المزيد من إعدادات الحساب على الموقع")} path="app/settings" />
       <AppUpdateCard />
+      {session.roles.some((r) => ["SUPER_ADMIN", "PRODUCT_ADMIN", "SUPPORT_ADMIN", "FINANCE_ADMIN", "READONLY_ADMIN"].includes(r)) ? (
+        <Button secondary label={t("Platform administration", "إدارة المنصة")} onPress={() => router.push("/administration")} />
+      ) : null}
       {error ? <Notice error>{error}</Notice> : null}
       <Button
         secondary

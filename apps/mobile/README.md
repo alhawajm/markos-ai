@@ -2,7 +2,19 @@
 
 One Expo / React Native app for Android and iOS, connected to the existing Railway API. The existing Next.js site remains the web app. Expo project: [@mo4180/markos](https://expo.dev/accounts/mo4180/projects/markos).
 
-Current release: **0.3.0**, connected to the same Railway services as the website. This release adds native sharing, so install the new binary; a 0.2.0 app cannot receive these features through an update alone.
+Current release: **0.4.0**, connected to the same Railway services as the website. Adds exact offering pricing/availability, notification/report preferences, complete account deletion and platform administration. Expo Notifications requires installing a new binary; a 0.3.0 app cannot receive these native features through OTA.
+
+- [Android 0.4.0/code 5 installer](https://expo.dev/artifacts/eas/3Hg_-ChvyZxmOTPvvga-E2oEJZ3TgtOnu3L8zW7LPbg.apk), build `d919c0f9-851e-44a6-b032-6ba3fbfe625a`. ZIP integrity and ARM64 payload checked.
+- [iPhone 0.4.0/build 6](https://expo.dev/accounts/mo4180/projects/markos/builds/8ae6e14d-8ee8-4f2d-9b37-ec37b05518f8). IPA integrity, iPhoneOS, MARKOS identity/team and production push entitlement checked. [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/d2bc4a39-35b4-4aef-9aeb-5a1d48ebb7ca) is processing; this is not public App Store publication.
+- [Android store AAB build](https://expo.dev/accounts/mo4180/projects/markos/builds/591a919a-b0b4-4fd3-85d8-2cd203a4a0e4) is processing. Play Console access remains unconfigured.
+
+Android FCM credentials are not configured, so phone alerts are not yet activated on Android. In-app notifications remain available. iOS now has an assigned push key and a new MARKOS-only provisioning profile; no other app or distribution certificate was modified. Actual phone notification receipt, keyboard/back behavior, screen-reader use and the real Instagram publishing walkthrough remain device/owner acceptance work. Public legal/contact and store disclosures are tracked in `docs/store-listing.md`.
+
+0.4 focused validation: 21 native pricing/session tests, relevant API isolation/deletion/email/administration tests, TypeScript for mobile/API/web, native bundle exports, and English/Arabic browser controls against a disposable database passed. The backend and worker deployment IDs/evidence are in `docs/implementation-progress.md`.
+
+## Earlier 0.3.0 update history
+
+The 0.3.0 release added native sharing. Its compatible updates remain available to older installations.
 
 Latest follow-up: [visible update controls and accurate draft errors, edbd1c73-5f5d-454d-b863-df59355d06a1](https://expo.dev/accounts/mo4180/projects/markos/updates/edbd1c73-5f5d-454d-b863-df59355d06a1), also on production as `0e1f544c-8e92-4a84-8d5d-08e8bcab6048`. Account now shows the running update, Check for updates and Restart to apply update. Compatible updates download on launch/foreground without forcing a restart during editing. The owner confirmed the previous Create update works after a full Android Recents close/reopen. Twenty-two focused follow-up tests, TypeScript and native exports passed.
 

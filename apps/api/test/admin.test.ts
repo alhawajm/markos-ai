@@ -7,6 +7,28 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 
 describe("admin routes", () => {
+  it("restricts delivery operations and refuses to retry an unconfirmed send", async () => {
+    const app = await buildApp();
+    const session = await registerTestUser(app);
+    const headers = authHeaders(session.tokens.accessToken);
+    const delivery = await prisma.analyticsReportDelivery.create({
+      data: { workspaceId: session.workspace.id, userId: session.user.id, month: "2026-08", locale: "EN", status: "UNKNOWN", failureCode: "SEND_UNCONFIRMED" }
+    });
+    const request = { method: "POST" as const, url: "/v1/admin/operations/retry", headers, payload: { kind: "REPORT", id: delivery.id } };
+    expect((await app.inject({ method: "GET", url: "/v1/admin/operations", headers })).statusCode).toBe(403);
+    expect((await app.inject(request)).statusCode).toBe(403);
+    await prisma.workspaceMember.updateMany({ where: { userId: session.user.id }, data: { role: "READONLY_ADMIN" } });
+    expect((await app.inject({ method: "GET", url: "/v1/admin/operations", headers })).statusCode).toBe(200);
+    expect((await app.inject(request)).statusCode).toBe(403);
+    await updateMemberRole(session.user.id, session.workspace.id, "PRODUCT_ADMIN");
+    expect((await app.inject(request)).statusCode).toBe(409);
+    await prisma.analyticsReportDelivery.update({ where: { id: delivery.id }, data: { status: "FAILED", attempts: 5 } });
+    expect((await app.inject(request)).statusCode).toBe(200);
+    expect(await prisma.analyticsReportDelivery.findUnique({ where: { id: delivery.id } })).toMatchObject({ status: "PENDING", attempts: 0 });
+    expect(await prisma.auditLog.count({ where: { actorId: session.user.id, action: "DELIVERY_MANUAL_RETRY", targetId: delivery.id } })).toBe(1);
+    await prisma.analyticsReportDelivery.delete({ where: { id: delivery.id } });
+    await app.close();
+  });
   it("keeps platform admin permissions separate from workspace owner permissions", () => {
     expect(hasPermission(["OWNER"], "admin:manage")).toBe(false);
     expect(hasPermission(["WORKSPACE_ADMIN"], "admin:manage")).toBe(false);

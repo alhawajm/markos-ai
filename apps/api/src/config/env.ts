@@ -61,6 +61,7 @@ export const envSchema = z
       "The verification API must use HTTPS"
     ),
     SENDGRID_API_KEY: optionalString,
+    EXPO_PUSH_ACCESS_TOKEN: optionalString,
     FROM_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
     MFA_ISSUER: z.string().min(1).default("MARKOS-AI"),
     GOOGLE_OAUTH_CLIENT_ID: optionalString,

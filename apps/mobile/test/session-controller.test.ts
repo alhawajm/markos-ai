@@ -41,13 +41,23 @@ function setup() {
     register: vi.fn(async () => ({ ...grant(), user: { ...grant().user, isVerified: false } })),
     login: vi.fn(async () => grant()),
     refresh: vi.fn(async () => grant("refresh-2")),
-    logout: vi.fn(async () => {})
+    logout: vi.fn(async () => {}),
+    revokeDevice: vi.fn(async (_access: string) => {})
   };
   return { controller: new SessionController(store, transport), store, transport, stored: () => stored };
 }
 const credentials = { email: "owner@example.test", password: "fixture-password" };
 
 describe("native session isolation", () => {
+  it("revokes phone alerts on explicit logout without blocking local sign-out on network failure", async () => {
+    const s = setup();
+    await s.controller.login(credentials);
+    s.transport.revokeDevice.mockRejectedValueOnce(new Error("offline"));
+    await s.controller.logout();
+    expect(s.transport.revokeDevice).toHaveBeenCalledWith("access-refresh-1");
+    expect(s.controller.getSnapshot().session).toBeNull();
+    expect(s.stored()).toBeNull();
+  });
   it("changes the identity epoch and stored token when switching workspaces", async () => {
     const s = setup();
     await s.controller.login(credentials);

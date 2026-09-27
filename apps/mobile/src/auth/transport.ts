@@ -35,6 +35,21 @@ function grant(value: NativeAuthSession): NativeAuthSession {
 }
 
 const transport: SessionTransport = {
+  revokeDevice: async (accessToken) => {
+    const deviceKey = `markos.push.${serviceKey}`;
+    const saved = await SecureStore.getItemAsync(deviceKey);
+    if (!saved) return;
+    const device = JSON.parse(saved) as { id?: string };
+    if (device.id) {
+      await fetch(`${config.apiUrl}/v1/notifications/devices/${encodeURIComponent(device.id)}`, {
+        method: "DELETE",
+        credentials: "omit",
+        headers: { Authorization: `Bearer ${accessToken}`, "X-Markos-Session": "native" },
+        signal: AbortSignal.timeout(5000)
+      });
+    }
+    await SecureStore.deleteItemAsync(deviceKey);
+  },
   switchWorkspace: async (input, accessToken) => grant(await request<NativeAuthSession>("workspace", input, true, accessToken)),
   verifyMfa: async (code, accessToken) => grant(await request<NativeAuthSession>("mfa/totp/verify", { code }, true, accessToken)),
   register: async (input) => grant(await request<NativeAuthSession>("register", input)),

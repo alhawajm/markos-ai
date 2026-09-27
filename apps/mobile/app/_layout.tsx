@@ -10,6 +10,8 @@ import { NativeOnboarding, VerifyEmail } from "../src/business/onboarding";
 import { Providers, useAppearance, useSession } from "../src/providers";
 import { Button, Loading, Screen, TaskHeader, Txt } from "../src/ui";
 import { AppUpdateMonitor } from "../src/app-updates";
+import { PushNotificationMonitor } from "../src/push-notifications";
+import { AccountDeletion } from "../src/account-deletion";
 
 function Navigation() {
   const { colors, mode, ready, t, rtl } = useAppearance();
@@ -18,6 +20,10 @@ function Navigation() {
   const navigation = useRootNavigationState();
   const [instagramDestination, setInstagramDestination] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [deletionOpen, setDeletionOpen] = useState(false);
+  useEffect(() => {
+    setDeletionOpen(false);
+  }, [scope]);
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
     const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
@@ -45,14 +51,29 @@ function Navigation() {
         <Loading />
       </View>
     );
+  if (status === "signedIn" && deletionOpen)
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 48 }}>
+        <Screen>
+          <Button secondary label={t("Back", "رجوع")} onPress={() => setDeletionOpen(false)} />
+          <AccountDeletion />
+        </Screen>
+      </View>
+    );
   if (status === "signedIn" && !session?.user.isVerified)
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 48 }}>
         <VerifyEmail />
+        <Button secondary label={t("Delete account", "حذف الحساب")} onPress={() => setDeletionOpen(true)} />
       </View>
     );
   if (status === "signedIn" && onboarding.data && onboarding.data.status !== "COMPLETE")
-    return <NativeOnboarding key={scope} initial={onboarding.data} onConnectInstagram={() => setInstagramDestination(scope)} />;
+    return (
+      <View style={{ flex: 1 }}>
+        <NativeOnboarding key={scope} initial={onboarding.data} onConnectInstagram={() => setInstagramDestination(scope)} />
+        <Button secondary label={t("Delete account", "حذف الحساب")} onPress={() => setDeletionOpen(true)} />
+      </View>
+    );
   if (status === "signedIn" && (onboarding.isPending || onboarding.isError))
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 48 }}>
@@ -120,6 +141,8 @@ function Navigation() {
           <Stack.Screen name="security" options={{ header: () => <TaskHeader title={t("Account security", "أمان الحساب")} /> }} />
           <Stack.Screen name="business" options={{ header: () => <TaskHeader title={t("Business profile", "ملف النشاط")} /> }} />
           <Stack.Screen name="notifications" options={{ header: () => <TaskHeader title={t("Notifications", "الإشعارات")} /> }} />
+          <Stack.Screen name="notification-settings" options={{ header: () => <TaskHeader title={t("Notification settings", "إعدادات الإشعارات")} /> }} />
+          <Stack.Screen name="administration" options={{ header: () => <TaskHeader title={t("Administration", "الإدارة")} /> }} />
           <Stack.Screen name="publishing" options={{ header: () => <TaskHeader title={t("Publishing activity", "نشاط النشر")} /> }} />
           <Stack.Screen name="content/publication" options={{ header: () => <TaskHeader title={t("Publishing details", "تفاصيل النشر")} /> }} />
         </Stack.Protected>
@@ -133,6 +156,7 @@ export default function RootLayout() {
       <Providers>
         <AppUpdateMonitor />
         <Navigation />
+        <PushNotificationMonitor />
       </Providers>
     </SafeAreaProvider>
   );

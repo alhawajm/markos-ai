@@ -6,11 +6,11 @@ import { prisma } from "../db/prisma";
 import { decryptCredential, encryptCredential } from "../security/credential-encryption";
 
 type Mail = { email: string; locale: Locale; code?: string };
-export type AuthMail = Mail & { kind: "RESET_CODE" | "PASSWORD_CHANGED" };
+export type AuthMail = Mail & { kind: "RESET_CODE" | "PASSWORD_CHANGED" | "DELETE_CODE" };
 const encryptionKey = () => createHash("sha256").update(`markos-auth-mail-v1:${env.JWT_REFRESH_SECRET}`).digest("base64");
 export async function queueAuthMail(
   tx: Prisma.TransactionClient,
-  kind: "RESET_CODE" | "PASSWORD_CHANGED" | "VERIFY",
+  kind: "RESET_CODE" | "PASSWORD_CHANGED" | "VERIFY" | "DELETE_CODE",
   mail: Mail,
   expiresAt: Date,
   challengeId?: string
@@ -24,20 +24,29 @@ export async function sendAuthMail(mail: AuthMail, fetchImpl: typeof fetch = fet
   if (!env.SENDGRID_API_KEY || !env.FROM_EMAIL) throw new Error("AUTH_EMAIL_NOT_CONFIGURED");
   const ar = mail.locale === "ar";
   const reset = mail.kind === "RESET_CODE";
-  const subject = reset
+  const deletion = mail.kind === "DELETE_CODE";
+  const subject = deletion
     ? ar
-      ? "رمز استعادة كلمة المرور في ماركوس"
-      : "Your MARKOS password reset code"
-    : ar
-      ? "تم تغيير كلمة مرور ماركوس"
-      : "Your MARKOS password was changed";
-  const body = reset
+      ? "تأكيد حذف حساب ماركوس"
+      : "Confirm MARKOS account deletion"
+    : reset
+      ? ar
+        ? "رمز استعادة كلمة المرور في ماركوس"
+        : "Your MARKOS password reset code"
+      : ar
+        ? "تم تغيير كلمة مرور ماركوس"
+        : "Your MARKOS password was changed";
+  const body = deletion
     ? ar
-      ? `رمز استعادة كلمة المرور: ${mail.code}\n\nأدخله في شاشة استعادة كلمة المرور في ماركوس. تنتهي صلاحيته خلال ١٠ دقائق. لا تشاركه مع أي شخص.\n\nإذا لم تطلب تغيير كلمة المرور، تجاهل هذه الرسالة؛ لم يتغير حسابك.`
-      : `Your password reset code is ${mail.code}.\n\nEnter it on the MARKOS password recovery screen. It expires in 10 minutes. Do not share this code.\n\nIf you did not request a password reset, ignore this email; your account has not changed.`
-    : ar
-      ? "تم تغيير كلمة مرور حسابك في ماركوس وتسجيل خروج الجلسات السابقة. إذا لم تقم بذلك، استخدم استعادة كلمة المرور فورًا وأمّن بريدك الإلكتروني."
-      : "Your MARKOS password was changed and previous sessions were signed out. If this was not you, reset your password immediately and secure your email account.";
+      ? `رمز تأكيد حذف الحساب: ${mail.code}\n\nأدخله في شاشة حذف الحساب في ماركوس. تنتهي صلاحيته خلال ١٠ دقائق. لا تشاركه مع أي شخص. إذا لم تطلب حذف حسابك فتجاهل الرسالة؛ لن يُحذف الحساب دون التأكيد.`
+      : `Your account deletion confirmation code is ${mail.code}.\n\nEnter it on the MARKOS account deletion screen. It expires in 10 minutes. Do not share it. If you did not request deletion, ignore this email; your account will not be deleted without confirmation.`
+    : reset
+      ? ar
+        ? `رمز استعادة كلمة المرور: ${mail.code}\n\nأدخله في شاشة استعادة كلمة المرور في ماركوس. تنتهي صلاحيته خلال ١٠ دقائق. لا تشاركه مع أي شخص.\n\nإذا لم تطلب تغيير كلمة المرور، تجاهل هذه الرسالة؛ لم يتغير حسابك.`
+        : `Your password reset code is ${mail.code}.\n\nEnter it on the MARKOS password recovery screen. It expires in 10 minutes. Do not share this code.\n\nIf you did not request a password reset, ignore this email; your account has not changed.`
+      : ar
+        ? "تم تغيير كلمة مرور حسابك في ماركوس وتسجيل خروج الجلسات السابقة. إذا لم تقم بذلك، استخدم استعادة كلمة المرور فورًا وأمّن بريدك الإلكتروني."
+        : "Your MARKOS password was changed and previous sessions were signed out. If this was not you, reset your password immediately and secure your email account.";
   const safeBody = body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   let response: Response;
   try {
@@ -101,6 +110,10 @@ export async function processAuthEmails(send: (mail: AuthMail) => Promise<void> 
           ignored = !challenge || !!challenge.consumedAt || challenge.authVersion !== user.authVersion || challenge.expiresAt <= new Date();
         }
         if (!ignored) await send({ ...mail, kind: "RESET_CODE" });
+      } else if (job.kind === "DELETE_CODE") {
+        const user = await prisma.user.findUnique({ where: { email: mail.email } });
+        ignored = !user || !!user.deletedAt;
+        if (!ignored) await send({ ...mail, kind: "DELETE_CODE" });
       } else if (job.kind === "VERIFY") {
         const { requestEmailVerification } = await import("./auth-service");
         await requestEmailVerification({ email: mail.email, locale: mail.locale });

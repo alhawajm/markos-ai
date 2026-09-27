@@ -21,6 +21,7 @@ export interface SessionTransport {
   login(input: { email: string; password: string; totpCode?: string }): Promise<NativeAuthSession>;
   refresh(refreshToken: string): Promise<NativeAuthSession>;
   logout(refreshToken: string): Promise<void>;
+  revokeDevice?(accessToken: string): Promise<void>;
 }
 export type SessionState = {
   status: "loading" | "signedOut" | "signedIn" | "offline";
@@ -197,6 +198,8 @@ export class SessionController {
 
   async logout(): Promise<void> {
     const token = this.refreshToken;
+    const accessToken = this.state.session?.tokens.accessToken;
+    if (accessToken) await this.transport.revokeDevice?.(accessToken).catch(() => {});
     await this.expire();
     if (token) await this.transport.logout(token).catch(() => {});
   }

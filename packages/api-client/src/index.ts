@@ -819,6 +819,40 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async notificationPreferences(): Promise<import("@markos/shared-types").NotificationPreferences> {
+    return (await this.request<import("@markos/shared-types").NotificationPreferences>("/v1/notifications/preferences")).data;
+  }
+  async accountDeletionPreview(): Promise<import("@markos/shared-types").AccountDeletionPreview> {
+    return (await this.request<import("@markos/shared-types").AccountDeletionPreview>("/v1/account/deletion")).data;
+  }
+  async deleteAccount(input: {
+    confirmation: "DELETE";
+    confirmationToken: string;
+    password?: string;
+    totpCode?: string;
+    challengeToken?: string;
+    emailCode?: string;
+  }): Promise<{ deleted: true; cleanup: "QUEUED" }> {
+    return (await this.request<{ deleted: true; cleanup: "QUEUED" }>("/v1/account/deletion", { method: "POST", body: input })).data;
+  }
+  async requestAccountDeletionCode(): Promise<{ challengeToken: string; expiresAt: string }> {
+    return (await this.request<{ challengeToken: string; expiresAt: string }>("/v1/account/deletion/code", { method: "POST", body: {} })).data;
+  }
+  async updateNotificationPreferences(
+    input: Partial<import("@markos/shared-types").NotificationPreferences>
+  ): Promise<import("@markos/shared-types").NotificationPreferences> {
+    return (await this.request<import("@markos/shared-types").NotificationPreferences>("/v1/notifications/preferences", { method: "PATCH", body: input })).data;
+  }
+  async registerPushDevice(input: { token: string; platform: "android" | "ios"; locale: "ar" | "en" }): Promise<{ id: string }> {
+    return (await this.request<{ id: string }>("/v1/notifications/devices", { method: "POST", body: input })).data;
+  }
+  async revokePushDevice(id: string): Promise<void> {
+    await this.request(`/v1/notifications/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async reportDeliveries(): Promise<import("@markos/shared-types").ReportDeliveryRecord[]> {
+    return (await this.request<import("@markos/shared-types").ReportDeliveryRecord[]>("/v1/notifications/report-deliveries")).data;
+  }
+
   async notificationFeed(input: { cursor?: string; unreadOnly?: boolean } = {}): Promise<import("@markos/shared-types").NotificationPage> {
     const query = new URLSearchParams();
     if (input.cursor) query.set("cursor", input.cursor);
@@ -985,6 +1019,12 @@ export class MarkosApiClient {
   async adminModelConfiguration(): Promise<AdminModelConfiguration> {
     const response = await this.request<AdminModelConfiguration>("/v1/admin/model-config");
     return response.data;
+  }
+  async deliveryOperations(): Promise<import("@markos/shared-types").DeliveryOperations> {
+    return (await this.request<import("@markos/shared-types").DeliveryOperations>("/v1/admin/operations")).data;
+  }
+  async retryDelivery(input: { kind: "REPORT" | "PUSH" | "ERASURE"; id: string }): Promise<void> {
+    await this.request("/v1/admin/operations/retry", { method: "POST", body: input });
   }
 
   async updateAdminModelSetting(

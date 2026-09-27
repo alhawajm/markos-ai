@@ -1,6 +1,14 @@
 # MARKOS AI — Experience and Behavioral Flows
 
-Status date: 2026-08-30. Create flows revised 2026-09-06; provider, Motion Reel and native account implementation notes revised 2026-09-24. See `../implementation-progress.md` for the current release and its validation boundaries.
+Status date: 2026-08-30. Create flows revised 2026-09-06; provider, Motion Reel and native account implementation notes revised 2026-09-24. Delivery and complete account deletion updated 2026-09-27. See `../implementation-progress.md` for the current release and its validation boundaries.
+
+### September 27 account and delivery behavior
+
+Notification preferences belong to the signed-in user and current workspace. Publishing phone alerts and monthly PDF email default off. Enable phone alerts explicitly from native; request OS permission only after that action. Report requests show queue, provider-accepted, failed or unconfirmed status without claiming inbox delivery. A one-time email does not enable the monthly subscription. Workspace switching changes the preference scope. A notification for another workspace offers a workspace switch instead of opening data under the current identity.
+
+Complete account deletion is separate from the existing single-workspace erasure action. The user first reviews every owned workspace and other membership, confirms their current password or a ten-minute email code for passwordless accounts, supplies MFA when enabled, and types DELETE. Reject an inventory changed since review. A successful transaction immediately revokes account/workspace access and publishing credentials and queues owned-workspace file/data removal. Remove the deleted user's memberships in other workspaces while preserving their owners' content. Sign out and clear device drafts after confirmation; expose a retry if device cleanup fails. Previously published Instagram posts remain. The public `/en/delete-account` and `/ar/delete-account` pages restore a signed-in browser session and offer the same process.
+
+Native Business profile exposes bilingual offering names, fixed/range/free/contact/unspecified pricing, currency minor units and availability. Platform operations/model configuration are only visible to the existing platform roles, with server permission enforcement; workspace ownership does not grant those roles. Confirmed failed delivery jobs can be retried, while unconfirmed sends require investigation to avoid duplicates.
 
 > **Purpose:** explain how MARKOS moves end to end: what the user does, what the interface shows, which application boundary acts, what changes, what comes next, and how failure is recovered.
 >

@@ -8,6 +8,10 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
       : undefined;
   const code = apiError?.code;
   switch (code) {
+    case "ACCOUNT_DELETE_AUTH_FAILED":
+      return t("Enter your current password to confirm deletion.", "أدخل كلمة مرورك الحالية لتأكيد الحذف.");
+    case "ACCOUNT_DELETE_CHANGED":
+      return t("Your account or workspaces changed. Refresh the list and review it again.", "تغيّر حسابك أو مساحاتك. حدّث القائمة وراجعها مجددًا.");
     case "SETTINGS_REVISION_CONFLICT":
       return t(
         "These details changed elsewhere. Reload saved details before trying again.",

@@ -607,8 +607,13 @@ describe("maintenance worker", () => {
   }, 60_000);
 
   it("simulates monthly analytics PDF emails once per workspace and month without counting delivery", async () => {
-    const now = new Date(Date.UTC(2026, 1, 2, 12));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 1, 2, 12)));
+    const now = new Date();
     const workspace = await createWorkspace("worker-analytics-email");
+    await prisma.user.update({ where: { id: workspace.ownerUserId }, data: { isVerified: true } });
+    await prisma.workspaceMember.create({ data: { workspaceId: workspace.id, userId: workspace.ownerUserId, role: "OWNER" } });
+    await prisma.notificationPreference.create({ data: { workspaceId: workspace.id, userId: workspace.ownerUserId, monthlyReportEmail: true } });
     const sentFilenames: string[] = [];
     const provider: AnalyticsEmailProvider = {
       mode: "dry_run",
@@ -645,21 +650,12 @@ describe("maintenance worker", () => {
         expect.objectContaining({
           delivered: false,
           month: "2026-01",
-          skippedReason: "DRY_RUN",
+          skippedReason: "SIMULATED",
           workspaceId: workspace.id
         })
       ])
     );
-    expect(second.analyticsEmail?.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          delivered: false,
-          month: "2026-01",
-          skippedReason: "DRY_RUN",
-          workspaceId: workspace.id
-        })
-      ])
-    );
+    expect(second.analyticsEmail?.results).toEqual([]);
     expect(sentFilenames.filter((filename) => filename.includes(workspace.name.toLowerCase().replace(/\s+/g, "-")))).toHaveLength(1);
     expect(first.analyticsEmail?.delivered).toBe(0);
     expect(second.analyticsEmail?.delivered).toBe(0);

@@ -12,6 +12,7 @@ import { sessionController } from "../src/auth/transport";
 import { briefStore } from "../src/campaigns/brief-store";
 import { clearStudioDeviceData } from "../src/studio/device-store";
 import { clearBusinessDeviceData } from "../src/business/device-store";
+import { AccountDeletion } from "../src/account-deletion";
 
 export default function DataControls() {
   const { scope } = useAccount();
@@ -65,6 +66,7 @@ function Controls() {
   return (
     <Screen>
       <Txt variant="title">{t("Your workspace data", "بيانات مساحة عملك")}</Txt>
+      <AccountDeletion />
       {settings.isPending ? (
         <Loading />
       ) : settings.isError ? (

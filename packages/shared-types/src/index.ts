@@ -848,6 +848,29 @@ export interface NotificationPage {
   nextCursor?: string;
 }
 
+export interface NotificationPreferences {
+  pushPublishing: boolean;
+  monthlyReportEmail: boolean;
+}
+export interface AccountDeletionPreview {
+  ownedWorkspaces: { id: string; name: string }[];
+  otherWorkspaces: { id: string; name: string }[];
+  mfaRequired: boolean;
+  passwordRequired: boolean;
+  confirmationToken: string;
+}
+export interface DeliveryOperations {
+  checkedAt: string;
+  failures: { id: string; workspaceId: string; kind: "REPORT" | "PUSH" | "ERASURE"; status: string; failureCode: string | null; updatedAt: string }[];
+}
+export interface ReportDeliveryRecord {
+  id: string;
+  month: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PublishingActivityPage {
   items: Array<{ content: ContentRecord; job: PublishJobRecord | null }>;
   total: number;
@@ -1070,7 +1093,7 @@ export interface AnalyticsEmailDeliveryResult {
   delivered: boolean;
   filename: string;
   messageId?: string;
-  mode: "dry_run";
+  mode: "dry_run" | "sendgrid";
   month: string;
   recipients: string[];
   skippedReason?: string;

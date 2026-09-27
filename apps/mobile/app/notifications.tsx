@@ -34,6 +34,7 @@ export default function Notifications() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
       <Txt variant="title">{t("Notifications", "الإشعارات")}</Txt>
+      <Button secondary label={t("Notification settings", "إعدادات الإشعارات")} onPress={() => router.push("/notification-settings")} />
       {result.data ? (
         <Txt muted>
           {result.data.pages[0]!.unreadCount.toLocaleString(locale)} {t("unread", "غير مقروء")}
