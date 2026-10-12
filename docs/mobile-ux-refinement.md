@@ -47,3 +47,16 @@ Focused validation commands:
 Sheets open immediately without a custom animation; existing route transitions continue to respect the device's reduced-motion setting. No repository-wide tests, database-backed checks or live campaign/publishing mutations were needed for this presentation-only pass.
 
 Physical-device keyboard, native document pickers, screen readers and notification/provider delivery are outside this fixture check. A phone walkthrough remains the final evidence for native layout and interaction quality. No Figma frame was claimed approved or required as a blocker for this owner-authorized implementation.
+
+## Delivery
+
+Implementation source: `484d4be8e0e1fddca5c8a84c0b72a1c17262c337`, pushed on `codex/production-mobile`. Both Android and iOS Hermes bundles exported successfully during publication on 12 October 2026. Expo project `@mo4180/markos`, runtime **0.4.0**.
+
+| Channel | Update group | Android update | iOS update |
+| --- | --- | --- | --- |
+| preview / TestFlight | [9dded374-106b-4a38-860b-bde0631cb18c](https://expo.dev/accounts/mo4180/projects/markos/updates/9dded374-106b-4a38-860b-bde0631cb18c) | `01a12fab-61a4-7e74-963c-55457ba89669` | `01a12fab-61a4-77f0-b2c9-7cc9c68ec91e` |
+| production | [b565864c-4fe1-4fe8-88d2-c752a3d97441](https://expo.dev/accounts/mo4180/projects/markos/updates/b565864c-4fe1-4fe8-88d2-c752a3d97441) | `01a12fab-d39c-7737-8ad1-a2fb3c2a5811` | `01a12fab-d39c-7f92-904d-ba156c305c62` |
+
+`node var/mobile-focus-preview/verify-update.mjs <channel> <android-id> <ios-id>` passed for both rows: all four manifest and bundle requests returned HTTP 200, the expected update IDs/runtime matched, downloaded SHA-256 hashes matched the manifests, and both native bundles contain the hosted Railway API URL. Android bundle: 5,089,328 bytes; iOS: 4,779,196 bytes. Preview and production use the same respective bundle hashes. The saved verification summaries contain no signed asset URLs or credentials.
+
+Installed 0.4.0 apps can use Settings → App and advanced settings → Check for updates → Restart to apply update, or download on launch and apply on a subsequent cold launch. The existing 0.4.0 Android installer/TestFlight build supports this update; 0.3.0 requires installing the newer binary. No public store release or physical-device acceptance is implied by OTA publication.
