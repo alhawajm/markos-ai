@@ -45,7 +45,12 @@ vi.mock("lucide-react-native", () =>
       "Send",
       "Bookmark",
       "FileText",
-      "Share2"
+      "Share2",
+      "Ellipsis",
+      "SlidersHorizontal",
+      "ChevronDown",
+      "RectangleVertical",
+      "Target"
     ].map((name) => [name, () => null])
   )
 );
@@ -81,17 +86,33 @@ vi.mock("../src/providers", () => ({
   })
 }));
 vi.mock("../src/ui", async () => {
-  const { createElement } = await import("react");
-  return Object.fromEntries(
-    ["Button", "Card", "Field", "IconButton", "Loading", "Notice", "Row", "Screen", "Txt"].map((name) => [
-      name,
-      (props: Record<string, unknown>) => createElement(name, props, props.children as React.ReactNode, props.footer as React.ReactNode)
-    ])
-  );
+  const { createElement, useState } = await import("react");
+  return {
+    ...Object.fromEntries(
+      ["Button", "Card", "Field", "IconButton", "ListGroup", "ListRow", "Loading", "Notice", "Row", "Screen", "TextAction", "TitleBar", "Txt"].map((name) => [
+        name,
+        (props: Record<string, unknown>) => createElement(name, props, props.children as React.ReactNode, props.footer as React.ReactNode)
+      ])
+    ),
+    Sheet: (props: Record<string, unknown>) => (props.visible ? createElement("Sheet", props, props.children as React.ReactNode) : null),
+    Segmented: (props: { options: Array<{ value: string; label: string }>; value: string; disabled?: boolean; onChange: (value: string) => void }) =>
+      createElement(
+        "Segmented",
+        props,
+        props.options.map((option) =>
+          createElement("Button", { key: option.value, label: option.label, disabled: props.disabled, onPress: () => props.onChange(option.value) })
+        )
+      ),
+    Disclosure: (props: { title: string; defaultOpen?: boolean; children: React.ReactNode }) => {
+      const [open, setOpen] = useState(!!props.defaultOpen);
+      return createElement("Disclosure", props, createElement("Button", { label: props.title, onPress: () => setOpen(!open) }), open ? props.children : null);
+    }
+  };
 });
 
 import ContentDraft from "../app/content/[id]";
 import CampaignReview from "../app/campaign/[id]";
+import Create from "../app/(tabs)/create";
 import { typeLabel } from "../src/content";
 
 let root: Root;
@@ -122,7 +143,7 @@ async function mount(element = <ContentDraft />) {
   await settle();
 }
 function buttons(label: string) {
-  return root.container.queryAll((node) => node.type === "Button" && node.props.label === label);
+  return root.container.queryAll((node) => ["Button", "IconButton", "TextAction", "ListRow"].includes(String(node.type)) && node.props.label === label);
 }
 async function press(label: string) {
   const button = buttons(label)[0];
@@ -202,6 +223,43 @@ afterEach(async () => {
 });
 
 describe("rendered native Create handoffs", () => {
+  it("keeps creation choices and lifecycle filters off the default content list", async () => {
+    state.api.contentItems = vi.fn(async () => [item]);
+    state.api.createContent = vi.fn(async () => item);
+    await mount(<Create />);
+    expect(buttons("New content")).toHaveLength(1);
+    expect(buttons("Post")).toHaveLength(0);
+    expect(buttons("Published")).toHaveLength(0);
+    await press("New content");
+    expect(buttons("Post")).toHaveLength(1);
+    await press("Post");
+    expect(state.api.createContent).toHaveBeenCalledWith({ contentType: "POST" });
+    expect(state.push).toHaveBeenCalledWith({ pathname: "/content/[id]", params: { id: "content" } });
+  });
+  it("preserves a lifecycle selection after closing its filter sheet", async () => {
+    state.api.contentItems = vi.fn(async () => [item]);
+    await mount(<Create />);
+    await press("Drafts");
+    await press("Published");
+    expect(buttons("Published")).toHaveLength(1);
+    expect(buttons("Ready")).toHaveLength(0);
+  });
+  it("edits one carousel slide at a time without discarding another slide's text", async () => {
+    item = { ...item, contentType: "CAROUSEL", mediaItems: [item.mediaItems[0]!, { ...item.mediaItems[0]!, id: "second", position: 1 }] };
+    await mount();
+    await press("Complete media");
+    await press("Slide text");
+    const title = () => root.container.queryAll((node) => node.type === "Field" && node.props.label === "Slide title");
+    expect(title()).toHaveLength(1);
+    await act(async () => title()[0]!.props.onChangeText("Keep this first slide"));
+    await press("2");
+    await press("Slide text");
+    expect(title()).toHaveLength(1);
+    expect(title()[0]!.props.value).toBe("");
+    await press("1");
+    await press("Slide text");
+    expect(title()[0]!.props.value).toBe("Keep this first slide");
+  });
   it("unlocks Ready when the queued video finishes and is attached", async () => {
     item = { ...item, contentType: "REEL", mediaItems: [{ ...item.mediaItems[0]!, mediaKind: "VIDEO" }] };
     let job: MediaGenerationJobRecord = {
@@ -275,6 +333,7 @@ describe("rendered native Create handoffs", () => {
     thread = { ...thread, latestRun: { id: "run", requestId: "request", status: "DISPATCHING", errorCode: null, proposedCaption: null } };
     await mount();
     expect(buttons("Generating…")[0]!.props.disabled).toBe(true);
+    await press("Draft options");
     expect(buttons("Change content format")[0]!.props.disabled).toBe(true);
     expect(state.api.updateContentStatus).not.toHaveBeenCalled();
   });
@@ -314,6 +373,7 @@ describe("rendered native Create handoffs", () => {
       return { applied: true, content: item, preview };
     });
     await mount();
+    await press("Draft options");
     await press("Change content format");
     await press("Reel");
     expect(item.contentType).toBe("POST");
@@ -368,7 +428,10 @@ describe("rendered native Create handoffs", () => {
     state.api.campaignReview = vi.fn(async () => data);
     state.api.approveCampaignSuggestion = vi.fn(async () => item);
     await mount(<CampaignReview />);
+    await press("Filters");
+    await press("Format");
     await press("Story");
+    await press("Show plan");
     await press("Prepare draft");
     expect(state.api.approveCampaignSuggestion).toHaveBeenCalledWith("content", { week: 1, actionIndex: 1 });
     expect(state.push).toHaveBeenCalledWith({ pathname: "/content/[id]", params: { id: "content" } });

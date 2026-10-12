@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { Plus, Target } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, Loading, Row, Screen, Txt } from "../../src/ui";
+import { Button, Card, Field, Loading, Row, Screen, TextAction, TitleBar, Txt } from "../../src/ui";
 import { QueryFailure, StatusBadge } from "../../src/content";
 
 export default function Campaigns() {
@@ -52,9 +52,9 @@ export default function Campaigns() {
         />
       }
     >
-      <Txt variant="title">{t("Campaigns", "الحملات")}</Txt>
-      <Txt muted>{t("From a clear idea to a considered campaign.", "من فكرة واضحة إلى حملة مدروسة.")}</Txt>
-      <Button icon={Plus} label={t("New campaign", "حملة جديدة")} onPress={() => router.push("/campaign/new")} />
+      <TitleBar title={t("Campaigns", "الحملات")}>
+        <TextAction icon={Plus} label={t("New", "جديدة")} onPress={() => router.push("/campaign/new")} />
+      </TitleBar>
       {generations.data
         ?.filter((job) => job.status !== "COMPLETED")
         .map((job) => (
@@ -65,8 +65,7 @@ export default function Campaigns() {
                 ? t("Generation needs your attention", "يتطلب الإنشاء انتباهك")
                 : t("MARKOS is drafting your campaign", "ماركوس يعدّ حملتك")}
             </Txt>
-            <Button
-              secondary
+            <TextAction
               label={t("View progress", "عرض التقدّم")}
               onPress={() => router.push({ pathname: "/campaign/generation", params: { requestId: job.requestId } })}
             />
@@ -104,27 +103,33 @@ export default function Campaigns() {
           accessibilityLabel={item.title}
           onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: item.id } })}
         >
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <View style={{ padding: 20, gap: 12, backgroundColor: colors.primarySoft }}>
-              <Target size={28} strokeWidth={1.5} color={colors.accent} />
-              <Txt variant="heading">{item.title}</Txt>
-            </View>
-            <View style={{ padding: 16, gap: 12 }}>
+          <Card style={{ padding: 20, gap: 14 }}>
+            <Txt variant="heading" numberOfLines={2}>
+              {item.title}
+            </Txt>
+            <Row>
               <StatusBadge status={item.status} />
               <Txt variant="meta" muted>
-                {new Date(item.startsAt).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" })} · {item.durationDays}{" "}
-                {t("days", "أيام")} · {item.publishesPerDay} {t("/ day", "/ يوم")}
+                {item.durationDays} {t("days", "أيام")}
               </Txt>
-              {item.objective ? <Txt numberOfLines={3}>{item.objective}</Txt> : null}
-              <Row>
-                <Txt variant="meta" muted>
-                  {item.postCounts.idea + item.postCounts.draft + item.postCounts.inReview} {t("to prepare", "للإعداد")}
-                </Txt>
-                <Txt variant="meta" muted>
-                  {item.postCounts.scheduled} {t("scheduled", "مجدولة")}
-                </Txt>
-              </Row>
-            </View>
+            </Row>
+            <Txt variant="meta" muted>
+              {new Date(item.startsAt).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" })} · {item.durationDays} {t("days", "أيام")}{" "}
+              · {item.publishesPerDay} {t("/ day", "/ يوم")}
+            </Txt>
+            {item.objective ? (
+              <Txt muted numberOfLines={2}>
+                {item.objective}
+              </Txt>
+            ) : null}
+            <Row>
+              <Txt variant="meta" muted>
+                {item.postCounts.idea + item.postCounts.draft + item.postCounts.inReview} {t("to prepare", "للإعداد")}
+              </Txt>
+              <Txt variant="meta" muted>
+                {item.postCounts.scheduled} {t("scheduled", "مجدولة")}
+              </Txt>
+            </Row>
           </Card>
         </Pressable>
       ))}

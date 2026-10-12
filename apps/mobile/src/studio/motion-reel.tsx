@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Image } from "react-native";
+import { Image, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { Clapperboard, Upload } from "lucide-react-native";
 import type { MediaAssetRecord } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
-import { Button, Card, Field, Notice, Txt } from "../ui";
+import { Button, Disclosure, Field, ListGroup, ListRow, Notice, TextAction, Txt } from "../ui";
 import { errorMessage } from "../errors";
 import { StudioDeviceStore } from "./device-store";
 
@@ -93,9 +93,9 @@ export function MotionReel({
     .map((text) => text.trim())
     .filter(Boolean);
   return (
-    <Card tone="tint">
-      <Txt variant="heading">{t("Motion Reel", "ريل متحرك")}</Txt>
-      <Txt>
+    <View style={{ gap: 16 }}>
+      <Txt variant="label">{t("Motion Reel", "ريل متحرك")}</Txt>
+      <Txt variant="meta" muted>
         {t(
           "Animate your artwork with a gentle zoom and exact text. No video AI fee.",
           "حرّك تصميمك بتقريب هادئ ونص دقيق، دون رسوم لتوليد الفيديو بالذكاء الاصطناعي."
@@ -107,16 +107,17 @@ export function MotionReel({
           <Txt variant="meta">{artwork.filename}</Txt>
         </>
       ) : null}
-      <Button secondary icon={Upload} disabled={locked} busy={busy} label={t("Upload JPEG artwork", "رفع تصميم JPEG")} onPress={() => void upload()} />
-      <Button secondary disabled={locked || busy} label={t("Choose library artwork", "اختر تصميمًا من المكتبة")} onPress={() => setChoosing(!choosing)} />
+      <ListGroup>
+        <ListRow icon={Upload} disabled={locked || busy} label={t("Upload JPEG artwork", "رفع تصميم JPEG")} onPress={() => void upload()} />
+        <ListRow last disabled={locked || busy} label={t("Choose library artwork", "اختر تصميمًا من المكتبة")} onPress={() => setChoosing(!choosing)} />
+      </ListGroup>
       {choosing ? (
         <>
           {assets
             .filter((asset) => asset.mimeType === "image/jpeg")
             .map((asset) => (
-              <Button
+              <TextAction
                 key={asset.id}
-                secondary
                 disabled={locked || busy}
                 label={asset.filename}
                 onPress={() => {
@@ -128,23 +129,32 @@ export function MotionReel({
           {!assets.some((asset) => asset.mimeType === "image/jpeg") ? <Txt>{t("Upload a JPEG to get started.", "ارفع صورة JPEG للبدء.")}</Txt> : null}
         </>
       ) : null}
-      {cards.slice(0, Math.min(3, duration / 2)).map((text, index) => (
-        <Field
-          key={index}
-          label={`${t("Text card", "بطاقة نصية")} ${index + 1} · ${t("optional", "اختياري")}`}
-          value={text}
-          multiline
-          maxLength={160}
-          editable={!locked && !busy}
-          onChangeText={(value) => setCards((current) => current.map((line, i) => (i === index ? value : line)))}
-        />
-      ))}
-      <Txt variant="meta" muted>
-        {t(
-          "Use English and Arabic on separate lines. Leave cards empty to preserve only the text already in your design.",
-          "اكتب الإنجليزية والعربية في سطرين منفصلين. اترك البطاقات فارغة للاكتفاء بالنص الموجود في تصميمك."
-        )}
-      </Txt>
+      <Disclosure
+        title={t("Text overlays", "النص على الشاشة")}
+        summary={
+          visibleCards.length
+            ? t(`${visibleCards.length} text cards`, `${visibleCards.length} بطاقات نصية`)
+            : t("Optional · exact English or Arabic text", "اختياري · نص إنجليزي أو عربي دقيق")
+        }
+      >
+        {cards.slice(0, Math.min(3, duration / 2)).map((text, index) => (
+          <Field
+            key={index}
+            label={`${t("Text card", "بطاقة نصية")} ${index + 1} · ${t("optional", "اختياري")}`}
+            value={text}
+            multiline
+            maxLength={160}
+            editable={!locked && !busy}
+            onChangeText={(value) => setCards((current) => current.map((line, i) => (i === index ? value : line)))}
+          />
+        ))}
+        <Txt variant="meta" muted>
+          {t(
+            "Use English and Arabic on separate lines. Leave cards empty to preserve only the text already in your design.",
+            "اكتب الإنجليزية والعربية في سطرين منفصلين. اترك البطاقات فارغة للاكتفاء بالنص الموجود في تصميمك."
+          )}
+        </Txt>
+      </Disclosure>
       {error ? <Notice error>{error}</Notice> : null}
       {!restored && error ? (
         <Button secondary label={t("Retry saved settings", "إعادة محاولة استعادة الإعدادات")} onPress={() => setAttempt((value) => value + 1)} />
@@ -163,6 +173,6 @@ export function MotionReel({
             .finally(() => setBusy(false));
         }}
       />
-    </Card>
+    </View>
   );
 }

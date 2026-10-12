@@ -6,7 +6,7 @@ import { useIsFocused } from "expo-router/react-navigation";
 import { Send, Sparkles } from "lucide-react-native";
 import type { ContentConversationRecord, ContentRecord, ConversationTurnInput } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
-import { Button, Card, Field, Loading, Notice, Row, Txt } from "../ui";
+import { Button, Card, Field, Loading, Notice, Row, TextAction, Txt } from "../ui";
 import { errorMessage } from "../errors";
 import { newRequestId } from "../request-id";
 import { conversationActive } from "./model";
@@ -149,8 +149,7 @@ export function StudioConversation({
               "أخبر ماركوس بما تريد إنشاءه أو تغييره. ملف نشاطك ومراجع حملتك جزء من سياق المحادثة."
             )}
           </Txt>
-          <Button
-            secondary
+          <TextAction
             disabled={busy || disabled || active || !restored || !!pending || !!message.trim()}
             label={t("Prepare this draft", "إعداد هذه المسودة")}
             onPress={() =>
@@ -267,8 +266,8 @@ export function StudioConversation({
               "راجع المسودة ووسائطها. المسودة المكتوبة لا تحتوي على صورة أو فيديو منشأ حتى تُرفق الوسائط."
             )}
           </Txt>
-          <Button secondary label={t("Review full draft", "مراجعة المسودة كاملة")} onPress={openPreview} />
-          <Button label={t("Generate or choose media", "إنشاء أو اختيار الوسائط")} onPress={openMedia} />
+          <TextAction label={t("Review full draft", "مراجعة المسودة كاملة")} onPress={openPreview} />
+          <TextAction label={t("Generate or choose media", "إنشاء أو اختيار الوسائط")} onPress={openMedia} />
         </Card>
       ) : null}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}

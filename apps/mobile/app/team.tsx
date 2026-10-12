@@ -3,7 +3,7 @@ import { Alert, Share } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { TeamRole, WorkspaceTeam } from "@markos/api-client";
 import { useAccount, useAppearance } from "../src/providers";
-import { Button, Card, Field, Loading, Notice, Screen, Txt } from "../src/ui";
+import { Button, Card, Disclosure, Field, ListRow, Loading, Notice, Screen, SelectField, TextAction, Txt } from "../src/ui";
 import { QueryFailure } from "../src/content";
 import { errorMessage } from "../src/errors";
 import { sessionController } from "../src/auth/transport";
@@ -49,11 +49,11 @@ function Team() {
         <Card>
           <Txt variant="heading">{t("Your workspaces", "مساحات عملك")}</Txt>
           {workspaces.data.map((workspace) => (
-            <Button
+            <ListRow
+              last
               key={workspace.id}
-              secondary={workspace.id !== session.workspace.id}
+              selected={workspace.id === session.workspace.id}
               label={workspace.name + (workspace.id === session.workspace.id ? t(" · Current", " · الحالية") : "")}
-              busy={enter.isPending && enter.variables === workspace.id}
               disabled={enter.isPending || workspace.id === session.workspace.id}
               onPress={() => enter.mutate(workspace.id)}
             />
@@ -67,10 +67,17 @@ function Team() {
               keyboardType="number-pad"
             />
           ) : null}
+          {enter.isPending ? (
+            <Txt variant="meta" muted>
+              {t("Switching workspace…", "جارٍ تبديل مساحة العمل…")}
+            </Txt>
+          ) : null}
           {enter.isError ? <Notice error>{errorMessage(enter.error, t)}</Notice> : null}
         </Card>
       )}
-      <JoinWorkspace />
+      <Disclosure title={t("Join an existing workspace", "الانضمام إلى مساحة عمل موجودة")}>
+        <JoinWorkspace />
+      </Disclosure>
       {canManage ? (
         <>
           {team.isPending ? (
@@ -79,8 +86,7 @@ function Team() {
             <QueryFailure error={team.error} retry={() => void team.refetch()} />
           ) : (
             <>
-              <Card>
-                <Txt variant="heading">{t("Invite a teammate", "دعوة زميل")}</Txt>
+              <Disclosure title={t("Invite a teammate", "دعوة زميل")}>
                 <Field
                   label={t("Email", "البريد الإلكتروني")}
                   value={email}
@@ -138,7 +144,7 @@ function Team() {
                     <Button secondary label={t("Done", "تم")} onPress={() => setInvitation(null)} />
                   </Card>
                 ) : null}
-              </Card>
+              </Disclosure>
               <Txt variant="heading">{t("Members", "الأعضاء")}</Txt>
               {team.data.members.map((member) => (
                 <Member
@@ -165,8 +171,7 @@ function Team() {
                 <Card key={invite.id}>
                   <Txt>{invite.email}</Txt>
                   <Txt muted>{t(roleNames[invite.role][0], roleNames[invite.role][1])}</Txt>
-                  <Button
-                    secondary
+                  <TextAction
                     disabled={action.isPending || (!isOwner && invite.role === "WORKSPACE_ADMIN")}
                     label={t("Revoke invitation", "إلغاء الدعوة")}
                     onPress={() =>
@@ -188,11 +193,16 @@ function Team() {
 function Roles({ value, onChange, allowAdmin, disabled }: { value: TeamRole; onChange: (role: TeamRole) => void; allowAdmin: boolean; disabled: boolean }) {
   const { t } = useAppearance();
   return (
-    <>
-      {(["VIEWER", "EDITOR", ...(allowAdmin ? ["WORKSPACE_ADMIN"] : [])] as TeamRole[]).map((role) => (
-        <Button key={role} secondary={value !== role} label={t(roleNames[role][0], roleNames[role][1])} disabled={disabled} onPress={() => onChange(role)} />
-      ))}
-    </>
+    <SelectField
+      label={t("Role", "الدور")}
+      value={value}
+      disabled={disabled}
+      options={(["VIEWER", "EDITOR", ...(allowAdmin ? ["WORKSPACE_ADMIN"] : [])] as TeamRole[]).map((role) => ({
+        value: role,
+        label: t(roleNames[role][0], roleNames[role][1])
+      }))}
+      onChange={onChange}
+    />
   );
 }
 function Member({
@@ -223,11 +233,11 @@ function Member({
           <>
             <Roles value={role} onChange={setRole} allowAdmin={allowAdmin} disabled={busy} />
             <Button disabled={busy || role === member.role} label={t("Save role", "حفظ الدور")} onPress={() => change(role)} />
-            <Button secondary disabled={busy} label={t("Remove member", "إزالة العضو")} onPress={() => change(null)} />
-            <Button secondary label={t("Close", "إغلاق")} onPress={() => setEditing(false)} />
+            <TextAction destructive disabled={busy} label={t("Remove member", "إزالة العضو")} onPress={() => change(null)} />
+            <TextAction label={t("Close", "إغلاق")} onPress={() => setEditing(false)} />
           </>
         ) : (
-          <Button secondary label={t("Manage access", "إدارة الصلاحيات")} onPress={() => setEditing(true)} />
+          <TextAction label={t("Manage access", "إدارة الصلاحيات")} onPress={() => setEditing(true)} />
         )
       ) : null}
     </Card>

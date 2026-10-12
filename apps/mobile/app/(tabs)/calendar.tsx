@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import { RefreshControl } from "react-native";
+import { RefreshControl, View } from "react-native";
+import { ArrowLeft, ArrowRight, History, SlidersHorizontal } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import type { ContentStatus } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Loading, Screen, Txt } from "../../src/ui";
+import { Button, Card, IconButton, ListGroup, ListRow, Loading, Row, Screen, Segmented, Sheet, TextAction, TitleBar, Txt } from "../../src/ui";
 import { ContentCard, QueryFailure } from "../../src/content";
 import { groupCalendar, weekRange } from "../../src/publishing/model";
-import { Choices } from "../../src/publishing/components";
 const filters: Record<string, ContentStatus[] | undefined> = {
   all: undefined,
   planned: ["DRAFT", "IN_REVIEW", "APPROVED"],
@@ -18,13 +18,21 @@ const filters: Record<string, ContentStatus[] | undefined> = {
 };
 export default function Calendar() {
   const { api, scope } = useAccount();
-  const { t, locale, colors } = useAppearance();
+  const { t, locale, colors, rtl } = useAppearance();
   const router = useRouter();
   const focused = useIsFocused();
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState("all");
   const [view, setView] = useState("week");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterOptions = [
+    { value: "all", label: t("All", "الكل") },
+    { value: "planned", label: t("Planned", "مخطّط") },
+    { value: "scheduled", label: t("Scheduled", "مجدول") },
+    { value: "attention", label: t("Needs attention", "يحتاج انتباهك") },
+    { value: "published", label: t("Published", "منشور") }
+  ];
   const range = weekRange(offset);
   const result = useQuery({
     queryKey: [scope, "calendar", range.from, filter, page],
@@ -44,10 +52,10 @@ export default function Calendar() {
   const dateLabel = (day: string) => new Date(`${day}T12:00:00+03:00`).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" });
   return (
     <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
-      <Txt variant="title">{t("Calendar", "التقويم")}</Txt>
-      <Txt muted>{t("Plan your week. Scheduling is a separate, deliberate step.", "خطّط لأسبوعك. الجدولة خطوة مستقلة تؤكّدها بنفسك.")}</Txt>
-      <Button secondary label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
-      <Choices
+      <TitleBar title={t("Calendar", "التقويم")}>
+        <IconButton icon={History} label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
+      </TitleBar>
+      <Segmented
         value={view}
         options={[
           { value: "week", label: t("Week agenda", "جدول الأسبوع") },
@@ -57,37 +65,22 @@ export default function Calendar() {
       />
       {view === "week" ? (
         <>
-          <Txt variant="heading">
-            {dateLabel(range.from)} — {dateLabel(range.to)}
-          </Txt>
-          <Txt variant="meta" muted>
-            {t("Bahrain · UTC+3", "البحرين · UTC+3")}
-          </Txt>
-          <Choices
-            value=""
-            options={[
-              { value: "previous", label: t("Previous week", "الأسبوع السابق") },
-              { value: "today", label: t("This week", "هذا الأسبوع") },
-              { value: "next", label: t("Next week", "الأسبوع القادم") }
-            ]}
-            onChange={(value) => setOffset(value === "today" ? 0 : offset + (value === "next" ? 1 : -1))}
-          />
+          <Row>
+            <IconButton icon={rtl ? ArrowRight : ArrowLeft} label={t("Previous week", "الأسبوع السابق")} onPress={() => setOffset(offset - 1)} />
+            <Txt variant="label" style={{ flex: 1, textAlign: "center", fontSize: 16 }}>
+              {dateLabel(range.from)} — {dateLabel(range.to)}
+            </Txt>
+            <IconButton icon={rtl ? ArrowLeft : ArrowRight} label={t("Next week", "الأسبوع القادم")} onPress={() => setOffset(offset + 1)} />
+          </Row>
+          {offset !== 0 ? <TextAction label={t("This week", "هذا الأسبوع")} onPress={() => setOffset(0)} /> : null}
         </>
       ) : null}
-      <Choices
-        value={filter}
-        options={[
-          { value: "all", label: t("All", "الكل") },
-          { value: "planned", label: t("Planned", "مخطّط") },
-          { value: "scheduled", label: t("Scheduled", "مجدول") },
-          { value: "attention", label: t("Needs attention", "يحتاج انتباهك") },
-          { value: "published", label: t("Published", "منشور") }
-        ]}
-        onChange={(value) => {
-          setFilter(value);
-          setPage(0);
-        }}
-      />
+      <Row style={{ justifyContent: "space-between" }}>
+        <Txt variant="meta" muted>
+          {t("Bahrain · UTC+3", "البحرين · UTC+3")}
+        </Txt>
+        <TextAction icon={SlidersHorizontal} label={filterOptions.find((option) => option.value === filter)!.label} onPress={() => setFiltersOpen(true)} />
+      </Row>
       {result.isPending ? (
         <Loading />
       ) : result.isError ? (
@@ -109,8 +102,7 @@ export default function Calendar() {
                   <React.Fragment key={item.id}>
                     <ContentCard item={item} />
                     {["SCHEDULED", "FAILED", "PUBLISHED"].includes(item.status) ? (
-                      <Button
-                        secondary
+                      <TextAction
                         label={t("Publishing details", "تفاصيل النشر")}
                         onPress={() => router.push({ pathname: "/content/publication", params: { id: item.id } })}
                       />
@@ -144,6 +136,23 @@ export default function Calendar() {
           ) : null}
         </>
       )}
+      <Sheet title={t("Show calendar", "عرض التقويم")} visible={filtersOpen} onClose={() => setFiltersOpen(false)}>
+        <ListGroup>
+          {filterOptions.map((option, index) => (
+            <ListRow
+              key={option.value}
+              label={option.label}
+              selected={filter === option.value}
+              last={index === filterOptions.length - 1}
+              onPress={() => {
+                setFilter(option.value);
+                setPage(0);
+                setFiltersOpen(false);
+              }}
+            />
+          ))}
+        </ListGroup>
+      </Sheet>
     </Screen>
   );
 }

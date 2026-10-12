@@ -3,11 +3,11 @@ import { Alert, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused, useNavigation, usePreventRemove } from "expo-router/react-navigation";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Check, Eye, MessageCircle, Save } from "lucide-react-native";
+import { CalendarDays, Check, Ellipsis, Save } from "lucide-react-native";
 import type { ContentAuthoringOperation, ContentMediaItemRecord, ContentRecord } from "@markos/shared-types";
 import { captionValidationIssue, captionCharacterCount, captionHashtagCount } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, Loading, Notice, Row, Screen, Txt } from "../../src/ui";
+import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, Sheet, TextAction, Txt } from "../../src/ui";
 import { QueryFailure, StatusBadge, typeLabel } from "../../src/content";
 import { errorMessage } from "../../src/errors";
 import { StudioConversation } from "../../src/studio/conversation";
@@ -76,6 +76,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [view, setView] = useState<"preview" | "assistant">("preview");
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [section, setSection] = useState<"review" | "caption" | "media" | "details">("review");
   const [restored, setRestored] = useState(false);
   const ready = useRef(false);
@@ -303,38 +304,45 @@ function Editor({ initial }: { initial: ContentRecord }) {
         <>
           {editable ? (
             <Row>
-              <View style={{ flex: 1 }}>
-                <Button
-                  secondary
-                  icon={Save}
-                  label={t("Save", "حفظ")}
-                  disabled={!dirty || locked || !!invalid}
-                  onPress={() => {
-                    void run(async () => {
-                      await save();
-                      setNotice(t("Draft saved.", "تم حفظ المسودة."));
-                    });
-                  }}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button
-                  icon={Check}
-                  label={
-                    generating
-                      ? t("Generating…", "جارٍ الإنشاء…")
-                      : readiness === "caption" || readiness === "caption-invalid"
-                        ? t("Prepare caption", "إعداد النص")
-                        : readiness
-                          ? t("Complete media", "إكمال الوسائط")
-                          : t("Mark ready", "اعتماد")
-                  }
-                  disabled={locked || readiness === "loading"}
-                  onPress={() =>
-                    readiness ? openSection(readiness === "caption" ? "assistant" : readiness === "caption-invalid" ? "caption" : "media") : markReady()
-                  }
-                />
-              </View>
+              {dirty ? (
+                <View>
+                  <TextAction
+                    icon={Save}
+                    label={t("Save", "حفظ")}
+                    disabled={!dirty || locked || !!invalid}
+                    onPress={() => {
+                      void run(async () => {
+                        await save();
+                        setNotice(t("Draft saved.", "تم حفظ المسودة."));
+                      });
+                    }}
+                  />
+                </View>
+              ) : null}
+              {view === "preview" && (section === "review" || !readiness || generating) ? (
+                <View style={{ flex: 1 }}>
+                  <Button
+                    icon={Check}
+                    label={
+                      generating
+                        ? t("Generating…", "جارٍ الإنشاء…")
+                        : readiness === "caption" || readiness === "caption-invalid"
+                          ? t("Prepare caption", "إعداد النص")
+                          : readiness
+                            ? t("Complete media", "إكمال الوسائط")
+                            : t("Mark ready", "اعتماد")
+                    }
+                    disabled={locked || readiness === "loading"}
+                    onPress={() =>
+                      readiness ? openSection(readiness === "caption" ? "assistant" : readiness === "caption-invalid" ? "caption" : "media") : markReady()
+                    }
+                  />
+                </View>
+              ) : (
+                <View style={{ flex: 1 }}>
+                  <TextAction label={t("Review draft", "مراجعة المسودة")} onPress={() => openSection("review")} />
+                </View>
+              )}
             </Row>
           ) : ["APPROVED", "SCHEDULED", "FAILED"].includes(base.status) ? (
             <Button
@@ -358,34 +366,29 @@ function Editor({ initial }: { initial: ContentRecord }) {
         </>
       }
     >
-      <Txt variant="title">{base.brief?.split("\n")[0] || typeLabel(base.contentType, t)}</Txt>
+      <Txt variant="title" numberOfLines={2} style={{ fontSize: 24 }}>
+        {base.brief?.split("\n")[0] || typeLabel(base.contentType, t)}
+      </Txt>
       <Row>
         <StatusBadge status={base.status} />
-        <Txt muted>{typeLabel(base.contentType, t)}</Txt>
+        <Txt variant="meta" muted style={{ flex: 1 }}>
+          {typeLabel(base.contentType, t)}
+        </Txt>
+        <IconButton icon={Ellipsis} label={t("Draft options", "خيارات المسودة")} onPress={() => setOptionsOpen(true)} />
       </Row>
-      {base.campaignId ? (
-        <Button
-          secondary
-          label={t("Open campaign", "فتح الحملة")}
-          onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: base.campaignId! } })}
-        />
-      ) : null}
-      {editable ? <FormatControl item={draft} disabled={locked} save={save} accept={commit} run={run} /> : null}
-      {["SCHEDULED", "FAILED", "PUBLISHED"].includes(base.status) ? (
-        <Button
-          secondary
-          label={t("Publishing status and recovery", "حالة النشر والمعالجة")}
-          onPress={() => router.push({ pathname: "/content/publication", params: { id: base.id } })}
-        />
-      ) : null}
-      <Row>
-        <View style={{ flex: 1 }}>
-          <Button secondary={view !== "preview"} icon={Eye} label={t("Preview", "معاينة")} onPress={() => setView("preview")} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button secondary={view !== "assistant"} icon={MessageCircle} label={t("Assistant", "المساعد")} onPress={() => setView("assistant")} />
-        </View>
-      </Row>
+      <Segmented
+        value={view === "assistant" ? "assistant" : section === "review" ? "review" : "edit"}
+        options={[
+          { value: "edit", label: t("Edit", "تعديل") },
+          { value: "review", label: t("Preview", "معاينة") },
+          { value: "assistant", label: t("Assistant", "المساعد") }
+        ]}
+        onChange={(value) => {
+          setView(value === "assistant" ? "assistant" : "preview");
+          if (value === "review") setSection("review");
+          if (value === "edit" && section === "review") setSection("caption");
+        }}
+      />
       {editable && view === "preview" && section === "review" ? (
         <Readiness item={draft} assets={assets.data} busy={busy || generating} open={openSection} />
       ) : null}
@@ -450,25 +453,17 @@ function Editor({ initial }: { initial: ContentRecord }) {
       {notice ? <Notice>{notice}</Notice> : null}
       {view === "preview" ? (
         <>
-          <Row style={{ flexWrap: "wrap" }}>
-            {(["review", "caption", "media", "details"] as const).map((key) => (
-              <View key={key} style={{ flexGrow: 1, flexBasis: "40%" }}>
-                <Button
-                  secondary={section !== key}
-                  label={
-                    key === "review"
-                      ? t("Full preview", "معاينة كاملة")
-                      : key === "caption"
-                        ? t("Caption", "النص")
-                        : key === "media"
-                          ? t("Media", "الوسائط")
-                          : t("Details", "التفاصيل")
-                  }
-                  onPress={() => setSection(key)}
-                />
-              </View>
-            ))}
-          </Row>
+          {section !== "review" ? (
+            <Segmented
+              value={section}
+              options={[
+                { value: "caption", label: t("Caption", "النص") },
+                { value: "media", label: t("Media", "الوسائط") },
+                { value: "details", label: t("Details", "التفاصيل") }
+              ]}
+              onChange={setSection}
+            />
+          ) : null}
           {section === "review" ? <PostPreview item={draft} assets={assets.data ?? []} /> : null}
           {section === "caption" ? (
             <>
@@ -539,44 +534,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
                 onChangeText={(tone) => setDraft((current) => ({ ...current, tone }))}
               />
               {draft.contentType === "REEL" ? <ReelScript item={draft} disabled={locked} edit={setDraft} mutate={structure} /> : null}
-              {["DRAFT", "IN_REVIEW", "APPROVED", "FAILED"].includes(base.status) ? (
-                <Button
-                  secondary
-                  disabled={busy || generating}
-                  label={t("Delete draft", "حذف المسودة")}
-                  onPress={() =>
-                    Alert.alert(
-                      t("Delete this draft?", "حذف هذه المسودة؟"),
-                      t("This removes the draft. Saved media remains in your library.", "سيُحذف المحتوى وتبقى الوسائط المحفوظة في مكتبتك."),
-                      [
-                        { text: t("Keep draft", "إبقاء المسودة"), style: "cancel" },
-                        {
-                          text: t("Delete", "حذف"),
-                          style: "destructive",
-                          onPress: () =>
-                            void run(async () => {
-                              await api.deleteContent(base.id, state.current.base.revision);
-                              leaving.current = true;
-                              await device.clearEditor().catch(() => {});
-                              setDeleted(true);
-                            })
-                        }
-                      ]
-                    )
-                  }
-                />
-              ) : null}
             </>
-          ) : null}
-          {base.status === "APPROVED" ? (
-            <Button
-              secondary
-              disabled={busy}
-              label={t("Return to draft to edit", "العودة إلى المسودة للتعديل")}
-              onPress={() => {
-                void run(async () => commit(await api.updateContentStatus(base.id, "DRAFT", base.revision)));
-              }}
-            />
           ) : null}
         </>
       ) : null}
@@ -591,6 +549,82 @@ function Editor({ initial }: { initial: ContentRecord }) {
         openMedia={() => openSection("media")}
         openPreview={() => openSection("review")}
       />
+      <Sheet title={t("Draft options", "خيارات المسودة")} visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
+        {editable ? (
+          <FormatControl
+            item={draft}
+            disabled={locked}
+            save={save}
+            accept={(next) => {
+              commit(next);
+              setOptionsOpen(false);
+            }}
+            run={run}
+          />
+        ) : null}
+        {error ? <Notice error>{error}</Notice> : null}
+        {base.campaignId ? (
+          <ListRow
+            last
+            label={t("Open campaign", "فتح الحملة")}
+            onPress={() => {
+              setOptionsOpen(false);
+              router.push({ pathname: "/campaign/[id]", params: { id: base.campaignId! } });
+            }}
+          />
+        ) : null}
+        {["SCHEDULED", "FAILED", "PUBLISHED"].includes(base.status) ? (
+          <ListRow
+            last
+            label={t("Publishing status and recovery", "حالة النشر والمعالجة")}
+            onPress={() => {
+              setOptionsOpen(false);
+              router.push({ pathname: "/content/publication", params: { id: base.id } });
+            }}
+          />
+        ) : null}
+        {base.status === "APPROVED" ? (
+          <ListRow
+            last
+            disabled={busy}
+            label={t("Return to draft to edit", "العودة إلى المسودة للتعديل")}
+            onPress={() => {
+              setOptionsOpen(false);
+              void run(async () => commit(await api.updateContentStatus(base.id, "DRAFT", base.revision)));
+            }}
+          />
+        ) : null}
+        {["DRAFT", "IN_REVIEW", "APPROVED", "FAILED"].includes(base.status) ? (
+          <ListRow
+            last
+            destructive
+            disabled={busy || generating}
+            label={t("Delete draft", "حذف المسودة")}
+            onPress={() =>
+              Alert.alert(
+                t("Delete this draft?", "حذف هذه المسودة؟"),
+                t("This removes the draft. Saved media remains in your library.", "سيُحذف المحتوى وتبقى الوسائط المحفوظة في مكتبتك."),
+                [
+                  { text: t("Keep draft", "إبقاء المسودة"), style: "cancel" },
+                  {
+                    text: t("Delete", "حذف"),
+                    style: "destructive",
+                    onPress: () => {
+                      setOptionsOpen(false);
+                      void run(async () => {
+                        await api.deleteContent(base.id, state.current.base.revision);
+                        leaving.current = true;
+                        await device.clearEditor().catch(() => {});
+                        setDeleted(true);
+                      });
+                    }
+                  }
+                ]
+              )
+            }
+          />
+        ) : null}
+      </Sheet>
     </Screen>
   );
 }

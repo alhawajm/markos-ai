@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { View } from "react-native";
 import type { ContentRecord, ContentType } from "@markos/shared-types";
 import type { ContentConversionResult } from "@markos/api-client";
 import { useAccount, useAppearance } from "../providers";
-import { Button, Card, Row, Txt } from "../ui";
+import { Button, Card, ListGroup, ListRow, Txt } from "../ui";
 import { typeLabel } from "../content";
 
 export function FormatControl({
@@ -39,22 +38,22 @@ export function FormatControl({
       } else setPreview(result);
     });
   }
-  if (!open && !preview) return <Button secondary disabled={disabled} label={t("Change content format", "تغيير نوع المحتوى")} onPress={() => setOpen(true)} />;
+  if (!open && !preview) return <ListRow last disabled={disabled} label={t("Change content format", "تغيير نوع المحتوى")} onPress={() => setOpen(true)} />;
   return (
     <Card>
       <Txt variant="label">{t("Content format", "نوع المحتوى")}</Txt>
-      <Row style={{ flexWrap: "wrap" }}>
-        {(["POST", "CAROUSEL", "REEL", "STORY"] as const).map((type) => (
-          <View key={type} style={{ flexGrow: 1, flexBasis: "40%" }}>
-            <Button
-              secondary={item.contentType !== type}
-              label={typeLabel(type, t)}
-              disabled={disabled || type === item.contentType}
-              onPress={() => void convert(type)}
-            />
-          </View>
+      <ListGroup>
+        {(["POST", "CAROUSEL", "REEL", "STORY"] as const).map((type, index) => (
+          <ListRow
+            key={type}
+            last={index === 3}
+            selected={item.contentType === type}
+            label={typeLabel(type, t)}
+            disabled={disabled || type === item.contentType}
+            onPress={() => void convert(type)}
+          />
         ))}
-      </Row>
+      </ListGroup>
       {!preview ? <Button secondary label={t("Done", "تم")} onPress={() => setOpen(false)} /> : null}
       {preview ? (
         <Card tone="warning">

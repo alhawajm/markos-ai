@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { FileText, Share2 } from "lucide-react-native";
+import { FileText, Share2, SlidersHorizontal } from "lucide-react-native";
 import type { ContentType } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, Loading, Notice, Row, Screen, Txt } from "../../src/ui";
+import { Button, Card, Disclosure, Field, ListGroup, ListRow, Loading, Notice, Row, Screen, Segmented, Sheet, TextAction, Txt } from "../../src/ui";
 import { ContentCard, QueryFailure, StatusBadge, typeLabel, statusLabel } from "../../src/content";
 import { errorMessage } from "../../src/errors";
 import { shareFile } from "../../src/share-file";
@@ -15,7 +15,7 @@ import { campaignRows } from "../../src/campaigns/review-model";
 export default function CampaignReview() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, scope, epoch, queryClient } = useAccount();
-  const { t, colors, locale, rtl } = useAppearance();
+  const { t, colors, locale } = useAppearance();
   const router = useRouter();
   const focused = useIsFocused();
   const [view, setView] = useState<"plan" | "strategy">("plan");
@@ -23,6 +23,7 @@ export default function CampaignReview() {
   const [format, setFormat] = useState<ContentType | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const result = useQuery({ queryKey: [scope, "campaign", id], queryFn: () => api.campaignReview(id), enabled: focused, refetchInterval: 6000 });
   const exportPdf = useMutation({
     mutationFn: async () =>
@@ -67,16 +68,16 @@ export default function CampaignReview() {
         {new Date(campaign.startsAt).toLocaleDateString(locale, { dateStyle: "medium", timeZone: "Asia/Bahrain" })} · {campaign.durationDays}{" "}
         {t("days", "أيام")} · {campaign.publishesPerDay} {t("/ day", "/ يوم")}
       </Txt>
-      <Button secondary icon={Share2} busy={exportPdf.isPending} label={t("Share campaign PDF", "مشاركة الحملة PDF")} onPress={() => exportPdf.mutate()} />
+      <TextAction icon={Share2} disabled={exportPdf.isPending} label={t("Share campaign PDF", "مشاركة الحملة PDF")} onPress={() => exportPdf.mutate()} />
       {exportPdf.isError ? <Notice error>{errorMessage(exportPdf.error, t)}</Notice> : null}
-      <Row>
-        <View style={{ flex: 1 }}>
-          <Button secondary={view !== "plan"} label={t("Content plan", "خطة المحتوى")} onPress={() => setView("plan")} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button secondary={view !== "strategy"} label={t("Strategy & context", "الاستراتيجية والسياق")} onPress={() => setView("strategy")} />
-        </View>
-      </Row>
+      <Segmented
+        value={view}
+        options={[
+          { value: "plan", label: t("Content plan", "خطة المحتوى") },
+          { value: "strategy", label: t("Strategy & context", "الاستراتيجية والسياق") }
+        ]}
+        onChange={setView}
+      />
       {view === "strategy" ? (
         <>
           <Txt>{plan.summary}</Txt>
@@ -146,44 +147,13 @@ export default function CampaignReview() {
         </>
       ) : (
         <>
-          <Txt muted>
-            {t("Prepare each idea, generate its media, review it, then mark ready and schedule.", "أعدّ كل فكرة وأنشئ وسائطها وراجعها ثم اعتمدها وجدولها.")}
-          </Txt>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: rtl ? "row-reverse" : "row", gap: 8 }}>
-            <Button secondary={status !== null} label={`${t("All", "الكل")} · ${rows.length}`} onPress={() => setStatus(null)} />
-            {states
-              .filter((state) => rows.some((row) => row.status === state))
-              .map((state) => (
-                <Button
-                  key={state}
-                  secondary={status !== state}
-                  label={`${state === "APPROVED" ? t("Ready", "جاهز") : statusLabel(state, t)} · ${rows.filter((row) => row.status === state).length}`}
-                  onPress={() => setStatus(state)}
-                />
-              ))}
-          </ScrollView>
-          <Field label={t("Search the campaign", "البحث في الحملة")} value={search} onChangeText={setSearch} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: rtl ? "row-reverse" : "row", gap: 8 }}>
-            <Button secondary={day !== null} label={t("All days", "كل الأيام")} onPress={() => setDay(null)} />
-            {days.map((value) => (
-              <Button
-                key={value}
-                secondary={day !== value}
-                label={new Date(rows.find((row) => row.day === value)!.date).toLocaleDateString(locale, {
-                  timeZone: "Asia/Bahrain",
-                  day: "numeric",
-                  month: "short"
-                })}
-                onPress={() => setDay(value)}
-              />
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: rtl ? "row-reverse" : "row", gap: 8 }}>
-            <Button secondary={format !== null} label={t("All formats", "كل الأنواع")} onPress={() => setFormat(null)} />
-            {(["POST", "CAROUSEL", "REEL", "STORY"] as const).map((type) => (
-              <Button key={type} secondary={format !== type} label={typeLabel(type, t)} onPress={() => setFormat(type)} />
-            ))}
-          </ScrollView>
+          <Row style={{ justifyContent: "space-between" }}>
+            <Txt variant="meta" muted>
+              {visible.length} / {rows.length} {t("ideas", "فكرة")}
+              {day !== null || format || status || search ? ` · ${t("Filtered", "تصفية مفعّلة")}` : ""}
+            </Txt>
+            <TextAction icon={SlidersHorizontal} label={t("Filters", "المرشحات")} onPress={() => setFiltersOpen(true)} />
+          </Row>
           {create.isError ? <Notice error>{errorMessage(create.error, t)}</Notice> : null}
           {visible.length === 0 ? (
             <Card>
@@ -234,6 +204,60 @@ export default function CampaignReview() {
           ))}
         </>
       )}
+      <Sheet title={t("Filter campaign", "تصفية الحملة")} visible={filtersOpen} onClose={() => setFiltersOpen(false)}>
+        <Field label={t("Search the campaign", "البحث في الحملة")} value={search} onChangeText={setSearch} />
+        <Disclosure title={t("Status", "الحالة")} summary={status ? statusLabel(status, t) : t("All", "الكل")}>
+          <ListGroup>
+            <ListRow label={`${t("All", "الكل")} · ${rows.length}`} selected={status === null} onPress={() => setStatus(null)} />
+            {states
+              .filter((state) => rows.some((row) => row.status === state))
+              .map((state) => (
+                <ListRow
+                  key={state}
+                  label={`${state === "APPROVED" ? t("Ready", "جاهز") : statusLabel(state, t)} · ${rows.filter((row) => row.status === state).length}`}
+                  selected={status === state}
+                  onPress={() => setStatus(state)}
+                />
+              ))}
+          </ListGroup>
+        </Disclosure>
+        <Disclosure title={t("Format", "النوع")} summary={format ? typeLabel(format, t) : t("All formats", "كل الأنواع")}>
+          <ListGroup>
+            <ListRow label={t("All formats", "كل الأنواع")} selected={format === null} onPress={() => setFormat(null)} />
+            {(["POST", "CAROUSEL", "REEL", "STORY"] as const).map((type, index) => (
+              <ListRow key={type} last={index === 3} label={typeLabel(type, t)} selected={format === type} onPress={() => setFormat(type)} />
+            ))}
+          </ListGroup>
+        </Disclosure>
+        <Disclosure title={t("Day", "اليوم")} summary={day === null ? t("All days", "كل الأيام") : String(day)}>
+          <ListGroup>
+            <ListRow label={t("All days", "كل الأيام")} selected={day === null} onPress={() => setDay(null)} />
+            {days.map((value, index) => (
+              <ListRow
+                key={value}
+                last={index === days.length - 1}
+                label={new Date(rows.find((row) => row.day === value)!.date).toLocaleDateString(locale, {
+                  timeZone: "Asia/Bahrain",
+                  day: "numeric",
+                  month: "short"
+                })}
+                selected={day === value}
+                onPress={() => setDay(value)}
+              />
+            ))}
+          </ListGroup>
+        </Disclosure>
+        <TextAction
+          label={t("Reset filters", "مسح المرشحات")}
+          onPress={() => {
+            setDay(null);
+            setStatus(null);
+            setFormat(null);
+            setSearch("");
+          }}
+        />
+        <Button label={t("Show plan", "عرض الخطة")} onPress={() => setFiltersOpen(false)} />
+      </Sheet>
     </Screen>
   );
 }

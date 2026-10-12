@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { FileText, Paperclip, Sparkles, X } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, IconButton, Loading, Notice, Row, Screen, Txt } from "../../src/ui";
+import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, Txt } from "../../src/ui";
 import { briefStore, ReferenceError } from "../../src/campaigns/brief-store";
 import { campaignStart, localDate, newBrief, validDate, type Brief } from "../../src/campaigns/brief-model";
 import { errorMessage } from "../../src/errors";
@@ -157,18 +157,17 @@ export default function NewCampaign() {
         </>
       }
     >
-      <Row>
-        {[1, 2].map((value) => (
-          <View key={value} style={{ flex: 1 }}>
-            <Button
-              label={value === 1 ? t("1. Brief", "١. الملخص") : t("2. Plan", "٢. الخطة")}
-              secondary={step !== value}
-              disabled={busy || (value === 2 && brief.objective.trim().length < 3)}
-              onPress={() => setStep(value)}
-            />
-          </View>
-        ))}
-      </Row>
+      <Segmented
+        value={String(step)}
+        disabled={busy}
+        options={[
+          { value: "1", label: t("1. Brief", "١. الملخص") },
+          { value: "2", label: t("2. Plan", "٢. الخطة") }
+        ]}
+        onChange={(value) => {
+          if (value === "1" || brief.objective.trim().length >= 3) setStep(Number(value));
+        }}
+      />
       <Txt variant="title">{step === 1 ? t("Give your idea context", "امنح فكرتك سياقًا") : t("Set the plan", "حدّد الخطة")}</Txt>
       {brief.pendingSince && !busy ? (
         <>
@@ -274,23 +273,15 @@ export default function NewCampaign() {
             {brief.description ? <Txt numberOfLines={4}>{brief.description}</Txt> : null}
           </Card>
           <Txt variant="label">{t("Duration", "المدة")}</Txt>
-          <Row>
-            {([3, 7, 14] as const).map((durationDays) => (
-              <View style={{ flex: 1 }} key={durationDays}>
-                <Button
-                  label={`${durationDays} ${t("days", "أيام")}`}
-                  secondary={brief.durationDays !== durationDays}
-                  disabled={busy}
-                  onPress={() => {
-                    void update({ durationDays });
-                  }}
-                />
-              </View>
-            ))}
-          </Row>
+          <Segmented
+            value={String(brief.durationDays)}
+            disabled={busy}
+            options={[3, 7, 14].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
+            onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 })}
+          />
           <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
-          <Button
-            secondary
+          <ListRow
+            last
             label={new Date(`${brief.startDate}T12:00:00`).toLocaleDateString(locale, { dateStyle: "long" })}
             disabled={busy}
             onPress={() => setShowDate(!showDate)}
@@ -309,20 +300,12 @@ export default function NewCampaign() {
             />
           ) : null}
           <Txt variant="label">{t("Publishing intensity", "وتيرة النشر")}</Txt>
-          <Row>
-            {[1, 2, 3].map((publishesPerDay) => (
-              <View style={{ flex: 1 }} key={publishesPerDay}>
-                <Button
-                  label={`${publishesPerDay} ${t("/ day", "/ يوم")}`}
-                  secondary={brief.publishesPerDay !== publishesPerDay}
-                  disabled={busy}
-                  onPress={() => {
-                    void update({ publishesPerDay });
-                  }}
-                />
-              </View>
-            ))}
-          </Row>
+          <Segmented
+            value={String(brief.publishesPerDay)}
+            disabled={busy}
+            options={[1, 2, 3].map((count) => ({ value: String(count), label: `${count} ${t("/ day", "/ يوم")}` }))}
+            onChange={(count) => void update({ publishesPerDay: Number(count) })}
+          />
           <Card tone="tint">
             <Txt variant="heading">
               {brief.durationDays * brief.publishesPerDay} {t("planned posts", "منشورًا مخطّطًا")}

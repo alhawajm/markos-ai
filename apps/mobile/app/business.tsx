@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useNavigation, usePreventRemove } from "expo-router/react-navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { BusinessKnowledgeRecord, BusinessKnowledgeModule } from "@markos/shared-types";
 import { MarkosApiError } from "@markos/api-client";
 import { Pencil, Plus } from "lucide-react-native";
 import { useAccount, useAppearance } from "../src/providers";
-import { Button, Card, Field, Loading, Notice, Row, Screen, Txt } from "../src/ui";
+import { Button, Card, Field, Loading, Notice, Row, Screen, SelectField, TextAction, Txt } from "../src/ui";
 import { QueryFailure, WebButton } from "../src/content";
 import { errorMessage } from "../src/errors";
 import { BusinessDeviceStore } from "../src/business/device-store";
@@ -207,15 +207,17 @@ export default function Business() {
                 editable={!busy}
                 onChangeText={(category) => change({ ...edit, value: { ...edit.value, category } })}
               />
-              {(["UNSPECIFIED", "PRODUCT", "SERVICE"] as const).map((kind) => (
-                <Button
-                  key={kind}
-                  disabled={busy}
-                  secondary={edit.value.kind !== kind}
-                  label={kind === "PRODUCT" ? t("Product", "منتج") : kind === "SERVICE" ? t("Service", "خدمة") : t("Not specified", "غير محدد")}
-                  onPress={() => change({ ...edit, value: { ...edit.value, kind } })}
-                />
-              ))}
+              <SelectField
+                label={t("Offering type", "نوع العرض")}
+                value={String(edit.value.kind)}
+                disabled={busy}
+                options={[
+                  { value: "UNSPECIFIED", label: t("Not specified", "غير محدد") },
+                  { value: "PRODUCT", label: t("Product", "منتج") },
+                  { value: "SERVICE", label: t("Service", "خدمة") }
+                ]}
+                onChange={(kind) => change({ ...edit, value: { ...edit.value, kind } })}
+              />
               <OfferingDetails value={edit.value} disabled={busy} onChange={(v) => change({ ...edit, value: v })} />
             </>
           ) : (
@@ -254,7 +256,7 @@ export default function Business() {
             label={t("Save changes", "حفظ التغييرات")}
             onPress={() => void save()}
           />
-          <Button secondary disabled={busy} label={t("Discard edits", "تجاهل التعديلات")} onPress={() => void cancel()} />
+          <TextAction disabled={busy} destructive label={t("Discard edits", "تجاهل التعديلات")} onPress={() => void cancel()} />
           <Txt variant="meta" muted>
             {disk === "saved"
               ? t("Edits saved on this device. Tap Save changes to update MARKOS.", "التعديلات محفوظة على الجهاز. اضغط حفظ التغييرات لتحديث ماركوس.")
@@ -266,19 +268,17 @@ export default function Business() {
         </>
       ) : (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <Row>
-              {groups.map((g, i) => (
-                <Button key={i} secondary={group !== i} label={t(...g.label)} onPress={() => setGroup(i)} />
-              ))}
-            </Row>
-          </ScrollView>
+          <SelectField
+            label={t("Section", "القسم")}
+            value={String(group)}
+            options={groups.map((g, i) => ({ value: String(i), label: t(...g.label) }))}
+            onChange={(next) => setGroup(Number(next))}
+          />
           {groups[group]!.modules.map((m) => (
             <Card key={m}>
               <Row style={{ justifyContent: "space-between" }}>
                 <Txt variant="heading">{t(...labels[m])}</Txt>
-                <Button
-                  secondary
+                <TextAction
                   icon={Pencil}
                   label={t("Edit", "تعديل")}
                   onPress={() => {
@@ -300,8 +300,7 @@ export default function Business() {
                 })}
               {m === "products" ? (
                 <>
-                  <Button
-                    secondary
+                  <TextAction
                     icon={Plus}
                     label={t("Add product or service", "إضافة منتج أو خدمة")}
                     onPress={() =>
@@ -330,8 +329,7 @@ export default function Business() {
                               ? `${o.priceType === "FROM" ? t("From ", "من ") : ""}${moneyText(o.priceMinor, o.currency)} ${o.currency}`
                               : t("Price not specified", "السعر غير محدد")}
                       </Txt>
-                      <Button
-                        secondary
+                      <TextAction
                         label={t("Edit offering", "تعديل العرض")}
                         onPress={() => {
                           const base = offeringValues(o as unknown as Values);

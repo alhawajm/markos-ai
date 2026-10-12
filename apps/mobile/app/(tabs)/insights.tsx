@@ -4,9 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Loading, Notice, Screen, Txt } from "../../src/ui";
+import { Card, Disclosure, Loading, Notice, Screen, Segmented, TextAction, Txt } from "../../src/ui";
 import { QueryFailure, typeLabel } from "../../src/content";
-import { Choices } from "../../src/publishing/components";
 import { percentageChange } from "../../src/publishing/model";
 import { InsightsAdvice } from "../../src/insights-advice";
 export default function Insights() {
@@ -31,10 +30,7 @@ export default function Insights() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
       <Txt variant="title">{t("Insights", "الأداء")}</Txt>
-      <Txt muted>
-        {t("See what your audience responds to, using your connected account’s data.", "تعرّف على ما يتفاعل معه جمهورك من بيانات حسابك المرتبط.")}
-      </Txt>
-      <Choices
+      <Segmented
         value={range}
         options={[
           { value: "7", label: t("Last 7 days", "آخر ٧ أيام") },
@@ -119,8 +115,7 @@ export default function Insights() {
                     <Txt>
                       {t("Engagement: ", "التفاعل: ") + value(item.engagement)} · {t("Reach: ", "الوصول: ") + value(item.metrics.reach)}
                     </Txt>
-                    <Button
-                      secondary
+                    <TextAction
                       label={t("Review this post", "مراجعة هذا المنشور")}
                       onPress={() => router.push({ pathname: "/content/[id]", params: { id: item.contentItemId } })}
                     />
@@ -136,15 +131,19 @@ export default function Insights() {
           ) : null}
         </>
       )}
-      <Button secondary label={t("Instagram connection", "اتصال إنستغرام")} onPress={() => router.push("/instagram")} />
-      <InsightsAdvice key={`${range}:${locale}`} days={Number(range)} />
-      <Button secondary label={t("Refresh saved results", "تحديث النتائج المحفوظة")} busy={result.isFetching} onPress={() => void result.refetch()} />
-      <Txt variant="meta" muted>
-        {t(
-          "A dash means unavailable, not zero. Refresh reads saved results; provider synchronization runs separately.",
-          "الشرطة تعني غير متاح وليست صفرًا. التحديث يقرأ النتائج المحفوظة؛ مزامنة المزوّد تتم بشكل مستقل."
-        )}
-      </Txt>
+      <Disclosure title={t("Advice and reports", "النصائح والتقارير")}>
+        <InsightsAdvice key={`${range}:${locale}`} days={Number(range)} />
+      </Disclosure>
+      <Disclosure title={t("Data and connection", "البيانات والاتصال")}>
+        <TextAction label={t("Instagram connection", "اتصال إنستغرام")} onPress={() => router.push("/instagram")} />
+        <TextAction label={t("Refresh saved results", "تحديث النتائج المحفوظة")} disabled={result.isFetching} onPress={() => void result.refetch()} />
+        <Txt variant="meta" muted>
+          {t(
+            "A dash means unavailable, not zero. Refresh reads saved results; provider synchronization runs separately.",
+            "الشرطة تعني غير متاح وليست صفرًا. التحديث يقرأ النتائج المحفوظة؛ مزامنة المزوّد تتم بشكل مستقل."
+          )}
+        </Txt>
+      </Disclosure>
     </Screen>
   );
 }

@@ -2,8 +2,9 @@ import React from "react";
 import { RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
+import { BriefcaseBusiness, CalendarDays, History } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Loading, Screen, Txt } from "../../src/ui";
+import { Button, Card, ListGroup, ListRow, Loading, Screen, Txt } from "../../src/ui";
 import { QueryFailure } from "../../src/content";
 
 export default function Overview() {
@@ -58,25 +59,29 @@ export default function Overview() {
             <Txt>
               {next ? next.title : t("Bring your next event, offer or idea to life with a campaign.", "حوّل فعاليتك أو عرضك أو فكرتك القادمة إلى حملة.")}
             </Txt>
+            <Button
+              label={next ? t("Continue campaign", "متابعة الحملة") : t("Create a campaign", "إنشاء حملة")}
+              onPress={() => (next ? router.push({ pathname: "/campaign/[id]", params: { id: next.id } }) : router.push("/campaign/new"))}
+            />
           </Card>
-          <Button
-            label={next ? t("Continue campaign", "متابعة الحملة") : t("Create a campaign", "إنشاء حملة")}
-            onPress={() => (next ? router.push({ pathname: "/campaign/[id]", params: { id: next.id } }) : router.push("/campaign/new"))}
-          />
         </>
       )}
-      <Txt variant="heading">{t("Coming up", "القادم")}</Txt>
-      <Card>
-        <Txt>{t("See your scheduled posts and drafts ready for a publishing time.", "استعرض منشوراتك المجدولة والمسودات الجاهزة لتحديد وقت نشرها.")}</Txt>
-        <Button secondary label={t("Open calendar", "فتح التقويم")} onPress={() => router.push("/(tabs)/calendar")} />
-        <Button secondary label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
-      </Card>
-      <Txt variant="heading">{t("Your business context", "سياق نشاطك التجاري")}</Txt>
-      <Card>
-        <Txt variant="label">{t("Keep MARKOS informed", "أبقِ ماركوس على اطلاع")}</Txt>
-        <Txt>{t("Review your audience, tone and business details when something changes.", "راجع جمهورك ونبرتك وتفاصيل نشاطك عندما يتغيّر شيء.")}</Txt>
-        <Button secondary label={t("Edit business profile", "تعديل ملف النشاط")} onPress={() => router.push("/business")} />
-      </Card>
+      <ListGroup title={t("Your workspace", "مساحة عملك")}>
+        <ListRow
+          icon={CalendarDays}
+          label={t("Open calendar", "فتح التقويم")}
+          detail={t("Your drafts and scheduled posts", "مسوداتك ومنشوراتك المجدولة")}
+          onPress={() => router.push("/(tabs)/calendar")}
+        />
+        <ListRow icon={History} label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
+        <ListRow
+          icon={BriefcaseBusiness}
+          last
+          label={t("Edit business profile", "تعديل ملف النشاط")}
+          detail={t("Audience, voice and business details", "الجمهور والنبرة وتفاصيل النشاط")}
+          onPress={() => router.push("/business")}
+        />
+      </ListGroup>
     </Screen>
   );
 }

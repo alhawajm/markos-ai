@@ -1,7 +1,7 @@
 import React from "react";
 import type { OfferingMaintenanceUpdate } from "@markos/shared-types";
 import { offeringMaintenanceSchema } from "@markos/validation";
-import { Button, Field, Txt } from "../ui";
+import { Field, SelectField, Txt } from "../ui";
 import { LocalAppError } from "../errors";
 import { useAppearance } from "../providers";
 import { display, type Values } from "./model";
@@ -86,18 +86,21 @@ export function OfferingDetails({ value, disabled, onChange }: { value: Values; 
         editable={!disabled}
         onChangeText={(s) => change("nameAr", s)}
       />
-      <Txt variant="heading">{t("Pricing", "التسعير")}</Txt>
-      {(
-        [
-          ["UNSPECIFIED", "Not specified", "غير محدد"],
-          ["FIXED", "Fixed price", "سعر ثابت"],
-          ["FROM", "Starting from", "ابتداءً من"],
-          ["RANGE", "Price range", "نطاق سعري"],
-          ["QUOTE", "On request", "عند الطلب"]
-        ] as const
-      ).map(([key, en, ar]) => (
-        <Button key={key} disabled={disabled} secondary={v.priceType !== key} label={t(en, ar)} onPress={() => change("priceType", key)} />
-      ))}
+      <SelectField
+        label={t("Pricing", "التسعير")}
+        value={String(v.priceType)}
+        disabled={disabled}
+        options={(
+          [
+            ["UNSPECIFIED", "Not specified", "غير محدد"],
+            ["FIXED", "Fixed price", "سعر ثابت"],
+            ["FROM", "Starting from", "ابتداءً من"],
+            ["RANGE", "Price range", "نطاق سعري"],
+            ["QUOTE", "On request", "عند الطلب"]
+          ] as const
+        ).map(([key, en, ar]) => ({ value: key, label: t(en, ar) }))}
+        onChange={(next) => change("priceType", next)}
+      />
       <Field
         label={t("Currency code (BHD, USD…)", "رمز العملة (BHD، USD…) ")}
         value={display(v.currency)}
@@ -133,16 +136,19 @@ export function OfferingDetails({ value, disabled, onChange }: { value: Values; 
           />
         </>
       ) : null}
-      <Txt variant="heading">{t("Availability", "التوفر")}</Txt>
-      {(
-        [
-          ["ACTIVE", "Available", "متاح"],
-          ["PAUSED", "Paused", "متوقف مؤقتًا"],
-          ["ARCHIVED", "Archived", "مؤرشف"]
-        ] as const
-      ).map(([key, en, ar]) => (
-        <Button key={key} disabled={disabled} secondary={v.status !== key} label={t(en, ar)} onPress={() => change("status", key)} />
-      ))}
+      <SelectField
+        label={t("Availability", "التوفر")}
+        value={String(v.status)}
+        disabled={disabled}
+        options={(
+          [
+            ["ACTIVE", "Available", "متاح"],
+            ["PAUSED", "Paused", "متوقف مؤقتًا"],
+            ["ARCHIVED", "Archived", "مؤرشف"]
+          ] as const
+        ).map(([key, en, ar]) => ({ value: key, label: t(en, ar) }))}
+        onChange={(next) => change("status", next)}
+      />
       {v.status !== "ACTIVE" ? (
         <Txt muted>
           {t(

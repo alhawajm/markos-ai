@@ -59,17 +59,28 @@ export default function TabLayout() {
                 onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
                 style={({ pressed }) => ({
                   flex: rail ? undefined : 1,
-                  minHeight: 64,
+                  minHeight: 60,
                   justifyContent: "center",
                   alignItems: "center",
                   gap: 4,
                   paddingHorizontal: 2,
                   paddingVertical: 8,
                   borderRadius: 12,
-                  backgroundColor: selected ? colors.secondarySoft : pressed ? colors.surfaceMuted : "transparent"
+                  backgroundColor: pressed ? colors.surfaceMuted : "transparent"
                 })}
               >
-                <Icon size={24} color={selected ? colors.accent : colors.muted} strokeWidth={1.5} />
+                <View
+                  style={{
+                    minWidth: 44,
+                    height: 30,
+                    borderRadius: 15,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: selected ? colors.secondarySoft : "transparent"
+                  }}
+                >
+                  <Icon size={22} color={selected ? colors.accent : colors.muted} strokeWidth={selected ? 2 : 1.6} />
+                </View>
                 <Txt variant="meta" style={{ textAlign: "center", color: selected ? colors.text : colors.muted, fontSize: 12 }}>
                   {item.label}
                 </Txt>
