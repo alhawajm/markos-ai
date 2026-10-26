@@ -1,7 +1,10 @@
 import { captureException, flushObservability, initObservability } from "./observability/sentry";
 import { startMaintenanceWorker } from "./worker/maintenance-worker";
+import { safeErrorLog } from "./http/safe-logging";
+import { startOperationalAlerts } from "./observability/operational-alerts";
 
 initObservability();
+const stopAlerts = startOperationalAlerts();
 
 const worker = startMaintenanceWorker({
   runImmediately: true
@@ -15,6 +18,7 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   worker.stop();
   const drained = await worker.drain();
   await flushObservability();
+  await stopAlerts();
   process.exit(drained ? 0 : 1);
 }
 
@@ -25,12 +29,12 @@ process.on("SIGTERM", (signal) => {
   void shutdown(signal);
 });
 process.on("uncaughtException", (error) => {
-  console.error(error);
+  console.error("Worker uncaught exception", safeErrorLog(error));
   captureException(error);
   void flushObservability().finally(() => process.exit(1));
 });
 process.on("unhandledRejection", (reason) => {
-  console.error(reason);
+  console.error("Worker unhandled rejection", safeErrorLog(reason));
   captureException(reason);
   void flushObservability().finally(() => process.exit(1));
 });

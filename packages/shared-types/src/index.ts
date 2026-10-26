@@ -1093,7 +1093,7 @@ export interface AnalyticsEmailDeliveryResult {
   delivered: boolean;
   filename: string;
   messageId?: string;
-  mode: "dry_run" | "sendgrid";
+  mode: "dry_run" | "sendgrid" | "brevo";
   month: string;
   recipients: string[];
   skippedReason?: string;
@@ -1363,3 +1363,4 @@ export type ContentAuthoringOperation =
   | { type: "updateReelBeat"; beatId: string; text: string }
   | { type: "removeReelBeat"; beatId: string }
   | { type: "reorderReelBeats"; orderedIds: string[] };
+export { sanitizeTelemetryEvent } from "./telemetry-privacy";

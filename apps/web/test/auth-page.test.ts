@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { legalCopy } from "../app/[locale]/_components/legal-copy";
 
 const authPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.tsx", import.meta.url));
 const authStylesPath = fileURLToPath(new URL("../app/[locale]/_components/auth-page.module.css", import.meta.url));
@@ -11,6 +12,7 @@ const termsPagePath = fileURLToPath(new URL("../app/[locale]/terms/page.tsx", im
 const privacyPagePath = fileURLToPath(new URL("../app/[locale]/privacy/page.tsx", import.meta.url));
 
 const authSource = readFileSync(authPath, "utf8");
+const recoverySource = readFileSync(new URL("../app/[locale]/_components/password-recovery-panel.tsx", import.meta.url), "utf8");
 const authStyles = readFileSync(authStylesPath, "utf8");
 const sunlitTheme = readFileSync(sunlitThemePath, "utf8");
 const themeTokens = readFileSync(themeTokensPath, "utf8");
@@ -36,10 +38,10 @@ describe("Sunlit authentication pages", () => {
 
   it("covers account creation, recovery, verification, and explicit legal consent", () => {
     expect(authSource).toContain('type AuthPageMode = "signup" | "login" | "forgot-password" | "reset-password" | "verify"');
-    expect(authSource).toContain("At least 12 characters");
+    expect(authSource).toContain("At least 15 characters");
     expect(authSource).toContain("Terms of Service");
     expect(authSource).toContain("Privacy Policy");
-    expect(authSource).toContain("If an account exists for this address");
+    expect(recoverySource).toContain("If this email has a password account");
     expect(authSource).toContain("Check your spam folder");
     expect(authSource).toContain("Resend verification email");
     expect(authSource).toContain('autoComplete="current-password"');
@@ -83,13 +85,15 @@ describe("Sunlit authentication pages", () => {
   });
 });
 
-describe("draft legal pages", () => {
-  it("marks both documents as unapproved drafts and attributes the operator", () => {
-    expect(legalSource).toContain("Working draft");
-    expect(legalSource).toContain("Final wording requires legal review before launch");
-    expect(legalSource).toContain("Ra'edat Software L.L.C.");
-    expect(legalSource).toContain("مسودة عمل");
-    expect(legalSource).toContain("مراجعة قانونية قبل الإطلاق");
+describe("public legal pages", () => {
+  it("attributes the owner-confirmed operator and monitored contact in both languages", () => {
+    for (const locale of ["en", "ar"] as const) {
+      const copy = JSON.stringify(legalCopy[locale]);
+      expect(copy).toContain("Raedat Software Company W.L.L");
+      expect(copy).toContain("support@raedat.online");
+      expect(copy).not.toContain("Ra'edat Software L.L.C.");
+    }
+    expect(legalSource).toContain('href="mailto:support@raedat.online"');
   });
 
   it("keeps both draft documents out of search indexes", () => {

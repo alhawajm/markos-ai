@@ -14,7 +14,7 @@ import { registerCalendarRoutes } from "../calendar/calendar-routes";
 import { env } from "../config/env";
 import { registerConversationRoutes } from "../content/conversation-routes";
 import { registerContentRoutes } from "../content/content-routes";
-import { getDeepHealth } from "../health/deep-health";
+import { getBackupHealth, getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
 import { registerMetaRoutes } from "../meta/meta-routes";
 import { registerNotificationRoutes } from "../notifications/notification-routes";
@@ -32,6 +32,7 @@ import { registerSettingsRoutes } from "../workspace/settings-routes";
 import { registerInstagramLearningRoutes } from "../instagram-learning/routes";
 import { errorEnvelope, ok } from "./envelope";
 import { reportUnexpectedRequestError } from "./error-telemetry";
+import { safeLogHooks, safeLogSerializers } from "./safe-logging";
 
 const devCorsOrigins = [
   env.WEB_BASE_URL,
@@ -66,7 +67,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const app = Fastify({
     logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug"
+      level: env.NODE_ENV === "production" ? "info" : "debug",
+      serializers: safeLogSerializers,
+      hooks: safeLogHooks,
+      redact: { paths: ["password", "token", "accessToken", "refreshToken", "authorization", "cookie", "body", "headers"], censor: "[REDACTED]" }
     }
   });
 
@@ -143,6 +147,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get("/v1/health/deep", async () => {
     return ok(await getDeepHealth());
+  });
+  app.get("/v1/health/backups", async (_request, reply) => {
+    const backup = await getBackupHealth();
+    return reply
+      .header("Cache-Control", "no-store")
+      .code(backup.status === "down" ? 503 : 200)
+      .send(ok({ status: backup.status === "down" ? "degraded" : "ok", timestamp: new Date().toISOString(), backup }));
   });
   app.get("/v1/ready", async (_request, reply) => {
     const health = await getDeepHealth();

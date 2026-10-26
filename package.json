@@ -25,15 +25,15 @@
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "local:auth-smoke": "node scripts/local-auth-smoke.mjs",
     "ui:screenshots": "node scripts/ui-screenshots.mjs",
-    "security:audit": "pnpm audit --audit-level moderate",
+    "security:audit": "node scripts/security-bulk-audit.mjs",
     "format": "prettier --write --ignore-unknown .",
     "format:check": "prettier --check --ignore-unknown ."
   },
   "devDependencies": {
-    "playwright-core": "^1.61.1",
+    "playwright-core": "^1.64.1",
     "pnpm": "11.5.2",
     "prettier": "3.8.3",
-    "turbo": "^2.9.17",
+    "turbo": "^2.11.10",
     "typescript": "^6.0.3"
   }
 }

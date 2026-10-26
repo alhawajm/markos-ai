@@ -2,10 +2,11 @@ import type { AnalyticsEmailDeliveryForAllWorkspacesResult, AnalyticsEmailDelive
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
 import { exportMonthlyAnalyticsPdf } from "./analytics-service";
+import { emailConfiguration, EmailDeliveryError, sendTransactionalMail, type EmailProvider } from "../email/transactional-mail";
 
 type Mail = { attachment: Buffer; filename: string; html: string; subject: string; text: string; to: string[] };
 export interface AnalyticsEmailProvider {
-  mode: "dry_run" | "sendgrid";
+  mode: "dry_run" | "sendgrid" | "brevo";
   send(input: Mail): Promise<{ messageId: string }>;
 }
 export class DryRunAnalyticsEmailProvider implements AnalyticsEmailProvider {
@@ -23,38 +24,37 @@ export class ReportMailError extends Error {
   }
 }
 export class SendGridAnalyticsEmailProvider implements AnalyticsEmailProvider {
-  readonly mode = "sendgrid" as const;
-  constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+  constructor(
+    private readonly fetchImpl: typeof fetch = fetch,
+    readonly mode: EmailProvider = "sendgrid"
+  ) {}
   async send(input: Mail): Promise<{ messageId: string }> {
-    if (!env.SENDGRID_API_KEY || !env.FROM_EMAIL) throw new ReportMailError("REPORT_EMAIL_NOT_CONFIGURED", "FAILED");
-    let response: Response;
+    const configuration = emailConfiguration({ ...env, EMAIL_PROVIDER: this.mode });
+    if (!configuration.apiKey || !configuration.from) throw new ReportMailError("REPORT_EMAIL_NOT_CONFIGURED", "FAILED");
     try {
-      response = await this.fetchImpl("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        redirect: "error",
-        signal: AbortSignal.timeout(15_000),
-        headers: { authorization: `Bearer ${env.SENDGRID_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          personalizations: [{ to: input.to.map((email) => ({ email })) }],
-          from: { email: env.FROM_EMAIL, name: "MARKOS" },
+      return await sendTransactionalMail(
+        configuration,
+        {
+          to: input.to,
           subject: input.subject,
-          content: [
-            { type: "text/plain", value: input.text },
-            { type: "text/html", value: input.html }
-          ],
-          attachments: [{ content: input.attachment.toString("base64"), filename: input.filename, type: "application/pdf", disposition: "attachment" }],
-          tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } }
-        })
-      });
-    } catch {
+          text: input.text,
+          html: input.html,
+          attachments: [{ content: input.attachment.toString("base64"), filename: input.filename, type: "application/pdf" }]
+        },
+        this.fetchImpl,
+        15000
+      );
+    } catch (error) {
+      if (error instanceof EmailDeliveryError && error.code === "EMAIL_REJECTED")
+        throw new ReportMailError("REPORT_EMAIL_REJECTED", error.retryable ? "PENDING" : "FAILED");
       throw new ReportMailError("REPORT_EMAIL_RESULT_UNKNOWN", "UNKNOWN");
     }
-    if (response.status !== 202) throw new ReportMailError("REPORT_EMAIL_REJECTED", response.status === 429 || response.status >= 500 ? "PENDING" : "FAILED");
-    return { messageId: response.headers.get("x-message-id") ?? "accepted" };
   }
 }
 export function createAnalyticsEmailProvider(): AnalyticsEmailProvider {
-  return env.EMAIL_PROVIDER === "local" && env.NODE_ENV !== "production" ? new DryRunAnalyticsEmailProvider() : new SendGridAnalyticsEmailProvider();
+  return env.EMAIL_PROVIDER === "local" && env.NODE_ENV !== "production"
+    ? new DryRunAnalyticsEmailProvider()
+    : new SendGridAnalyticsEmailProvider(fetch, env.EMAIL_PROVIDER === "brevo" ? "brevo" : "sendgrid");
 }
 function previousMonthKey(now: Date) {
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));

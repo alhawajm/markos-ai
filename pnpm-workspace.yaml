@@ -6,7 +6,13 @@ packages:
 overrides:
   "@opentelemetry/core": 2.8.0
   esbuild: 0.28.1
-  postcss: 8.5.15
+  postcss: 8.5.31
+  "@types/react": 19.2.18
+  deepmerge-ts: 8.0.2
+patchedDependencies:
+  node-forge@1.4.0: patches/node-forge@1.4.0.patch
+  zod@3.25.76: patches/zod@3.25.76.patch
+  decode-uri-component@0.2.2: patches/decode-uri-component@0.2.2.patch
 allowBuilds:
   "@prisma/client": true
   "@prisma/engines": true

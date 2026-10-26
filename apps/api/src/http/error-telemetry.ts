@@ -1,4 +1,5 @@
 import { captureException } from "../observability/sentry";
+import { reportOperationalFailure } from "../observability/failure-alerts";
 
 type ErrorLogger = {
   error(bindings: Record<string, unknown>, message: string): void;
@@ -28,4 +29,5 @@ export function reportUnexpectedRequestError(input: {
   };
   input.logger.error({ err: input.error, ...context }, "Request failed");
   (input.capture ?? captureException)(input.error, context);
+  reportOperationalFailure({ service: "api", code: "API_UNEXPECTED_ERROR", task: "request" });
 }

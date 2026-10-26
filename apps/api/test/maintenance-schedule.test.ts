@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/analytics/analytics-email-service", () => ({ sendMonthlyAnalyticsPdfEmailForAllWorkspaces: vi.fn().mockResolvedValue({}) }));
+vi.mock("../src/analytics/analytics-email-service", () => ({
+  sendMonthlyAnalyticsPdfEmailForAllWorkspaces: vi.fn().mockResolvedValue({}),
+  processReportDeliveries: vi.fn().mockResolvedValue([])
+}));
+vi.mock("../src/notifications/push-service", () => ({ processPushDeliveries: vi.fn().mockResolvedValue({ accepted: 0, failed: 0 }) }));
+vi.mock("../src/workspace/account-deletion", () => ({ processAccountErasures: vi.fn().mockResolvedValue({ completed: 0, failed: 0 }) }));
 vi.mock("../src/analytics/analytics-service", () => ({
   syncInstagramAnalyticsForAllWorkspaces: vi.fn().mockResolvedValue({ attempted: 0, results: [], failures: [] })
 }));
@@ -32,7 +37,7 @@ describe("maintenance scheduling", () => {
   it("continues delivery and video after a sibling maintenance task fails, and retries that task next tick", async () => {
     vi.mocked(sendMonthlyAnalyticsPdfEmailForAllWorkspaces).mockRejectedValueOnce(Object.assign(new Error("private provider body"), { code: "REPORT_FAILED" }));
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const worker = startMaintenanceWorker({ role: "all", logger });
+    const worker = startMaintenanceWorker({ role: "all", logger, analyticsEmailIntervalMs: 0 });
     try {
       const first = await worker.runNow();
       expect(first.failures).toEqual([{ task: "analyticsEmail", code: "REPORT_FAILED" }]);

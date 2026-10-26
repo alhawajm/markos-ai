@@ -591,7 +591,6 @@ Keep one foreground mutation at a time so delayed AI/save/media responses cannot
 
 Business Profile direct editing, offering refinements, durable conversational intelligence, provider optimization, and the dedicated mobile workflow remain separate passes. This UI implementation does not establish live AI or Instagram readiness.
 
-
 ## 2026-09-06 — One final publication caption
 
 Khalid approved replacing separate English, Arabic, CTA and hashtag fields with one canonical `ContentItem.caption` string. Preserve its exact text and ordering through manual save/reload, AI revision, preview and publishing for Posts, Carousels and Reels. Interface locale controls presentation only. Story copy is supporting draft text, not a caption or automatically rendered overlay.
@@ -599,7 +598,6 @@ Khalid approved replacing separate English, Arabic, CTA and hashtag fields with 
 The content AI contract and prompt `content.v3` return one caption with any languages, CTA and hashtags included once. English then Arabic is the default ordered preference; owner instructions may request other language choices or ordering. Manual captions are revisable without an AI origin or mandatory CTA/hashtags/pillar. Validate the complete caption before persistence and before provider submission; keep the existing 2,200-character and 30-hashtag application caps using Unicode-code-point counting consistently in TypeScript and Python. Invalid output is recoverable and must not replace the saved draft.
 
 The user waived preservation for the planned fresh-data stage. The migration drops all four retired copy columns and gives existing rows an empty caption; no compatibility writer or backfill is retained. It does not reset databases or delete other records. Hosted rollout must coordinate the schema, API, AI and frontend. Local migration execution does not constitute a Railway deployment or reset. This supersedes the earlier Create pass's restriction on prompt/schema changes only for this caption slice; durable chat, undo, content revision history and publication snapshots remain separate work.
-
 
 ## 2026-09-06 — Persistent Create conversations and deferred commercial quotas
 
@@ -666,6 +664,7 @@ Expose the existing `contentPillar`, `campaignGoal` (the post objective), and `t
 ## 2026-09-13: Publish now priority within the existing maintenance tick
 
 Refresh due Instagram credentials, then process due publish jobs before document cleanup, email, usage maintenance, and Insights synchronization. Reproduced that an email or Insights exception previously prevented publishing from running at all. Keep one timer, its running guard, durable leases, retry policy, and duplicate protection. This changes task order only. Publish now retains its existing MFA step-up requirement; tests explicitly distinguish authorization rejection before queueing from a queued Reel that creates a container, waits for processing, publishes, and persists the final media ID. This code-level defect is not proof of the cause of an individual production attempt.
+
 ## 2026-09-13 — Business Profile becomes the permanent knowledge editor
 
 Implement the approved maintenance prototype on `feat/business-profile-maintenance`, based on the merged color-system refinement. Tabs are Marketing Strategy (the default), Products & Services, Audience & Market, Brand & Voice, and Business. Use `/{locale}/app/knowledge?tab=...`; an absent or unknown tab opens Marketing Strategy. The September 7 product decision supersedes the August 20 return-to-onboarding maintenance requirement.
@@ -694,7 +693,6 @@ Email token links confirm the token owner and stay on a confirmation screen, wit
 
 Verification emails retain SendGrid delivery and plaintext fallback, add a modest bilingual branded button and return-to-tab instructions, and display the configured link lifetime. No production email, account or workspace data is mutated by the verification tests.
 
-
 ## 2026-09-14 — Initial Instagram learning extends onboarding and maintains Business Profile
 
 After business onboarding approval, enter a dedicated bilingual Instagram setup flow, with postponement to Overview before connection. Overview and Business Profile offer a connection banner while disconnected; Settings first connection enters the same flow. Inline MFA enrollment is required, but OAuth start does not require the existing 15-minute authorization window. Settings refresh/disconnect and other step-up behavior are unchanged.
@@ -711,13 +709,11 @@ Staging returned two 504 responses from the onboarding document-analysis endpoin
 
 Uploads remain temporary for 24 hours and are retained after analysis failure so an intentional Retry can reuse them. Worker expiration, approval/discard cleanup, the publishing schedule, and other AI provider timeouts are unchanged. Local mocked-provider and database tests cover timeout cancellation and upload retention/retry; successful analysis of the staging document still requires a hosted retest after deployment.
 
-
 ## 2026-09-14 — Optional observed Instagram palette
 
 Extend the first-learning field allowlist with `colors`, only when the business has no saved brand colors. A proposal contains one to seven six-digit hex values and cites posts with supplied cover images. The API omits unsupported palettes and palettes that would replace existing colors; approval rechecks authoritative colors under the existing knowledge lock. The UI starts palette suggestions unselected. Only explicit approval writes the reviewed values to the existing brand colors field. These are suggested visual choices, never automatically inferred official brand facts. No migration, additional provider request, or new palette store is needed. Existing saved learning records without a colors snapshot remain readable.
 
 Deferred separately: stronger restraint against invented facts during onboarding profile resolution (pending user evidence), email verification page arrangement, and Instagram connection ownership/revocation recovery. Document timeout handling remains the separate merged fix.
-
 
 ## 2026-09-16 — Focused notifications, carousel and Insights fixes
 
@@ -727,9 +723,7 @@ Deferred separately: stronger restraint against invented facts during onboarding
 - Insights starts at the latest chronological data on initial load or a range/metric change, with RTL-aware positioning. Ordinary renders do not override user scrolling.
 - Business Profile photo features remain outside this pass. Uncommitted onboarding integration is preserved separately while this branch is tested.
 
-
 Focused local verification for this pass: 22 API tests in media/notifications passed, including ownership, channel filtering, stale-order rejection, full-carousel replacement, failure preservation and removed-target recovery. Focused Create browser checks passed for multi-upload/library selection, drag/button order, generation retry, saved ordering, existing format limits/recovery and thinking visibility. Notification account-switch checks and latest-date chart positioning in English/Arabic passed. API/web TypeScript and affected web ESLint passed. Two targeted Create screenshots were inspected. No real provider generation, publishing, hosted environment changes, full-suite run or production build was performed. The first Create browser navigation timed out during cold compilation; its focused rerun passed.
-
 
 ## 2026-09-21 ? Complete local Windows launcher for project handover
 
@@ -793,7 +787,6 @@ health checks also passed. This recovery does not alter Railway deployments,
 apply migrations, or restart hosted workers. Live provider verification and its
 remaining showcase limits are recorded in [showcase-readiness.md](showcase-readiness.md).
 
-
 ## 2026-09-21: Reuse hosted SendGrid verification locally
 
 The Railway-connected local API can set EMAIL_VERIFICATION_API_BASE_URL to forward verification requests and token confirmation to the hosted API. Delivery and verification tokens stay with hosted SendGrid/Redis; login and refresh remain local and observe the shared user verification state. The setting is optional and leaves the existing deployed flow unchanged.
@@ -821,6 +814,7 @@ At the user's request, `Run MARKOS.cmd` opens the Railway web app directly. Loca
 ## 2026-09-21: Campaign description and reference files
 
 Campaign creation accepts an optional 5,000-character description and up to five PDF, DOCX, TXT, PNG, JPEG or WebP references (8 MB per file, 20 MB combined). The existing campaign generation call sends documents and visual references to the configured model alongside the Business Profile. Owner clarification takes precedence for campaign-specific intent; source conflicts and unreadable references must be surfaced in the generated plan. The saved campaign retains the description, file names/checksums and an extracted reference summary; original upload bytes are request-scoped and are not stored as Library assets or permanent Business Profile facts. The reference summary also grounds subsequent campaign-linked Create conversations. English/Arabic selection, removal, validation, retry retention and an Overview context section use the existing UI. Development proxy upload/deadline limits match this request; hosted browsers continue to call the API directly.
+
 ## 2026-09-22 — First native MARKOS slice
 
 Keep the existing Next.js web app and Railway services. Add one Expo SDK 57 app under `apps/mobile` for Android and iOS, owned by `mo4180/markos` in Expo. Share types, the API client and colors; generate native color values from the authoritative web token file. Use native layout components and Lucide with IBM Plex Sans / IBM Plex Sans Arabic.
@@ -887,7 +881,6 @@ Add a compatible paginated notification feed while retaining the existing web li
 
 Insights uses the existing analytics summary for seven- and thirty-day ranges, period comparisons, available daily reach and top content. Preserve unavailable metrics as unavailable, distinguish partial/failed synchronization, and label refresh as reading saved data. No synthetic performance, new provider metric contract or manual synchronization endpoint is introduced. Native changes remain compatible with runtime 0.2.0 and add no native dependencies.
 
-
 ## 2026-09-24 ? Real knowledge retrieval and agent contracts
 
 Production embeddings follow the configured text provider unless `AI_EMBEDDING_PROVIDER` explicitly selects another mode. Local hash embeddings identify themselves honestly and meter no provider tokens. Each vector stores its provider/model/dimension/aggregation space; migration leaves old vectors unlabelled and retrieval never compares incompatible spaces. Long Unicode facts are losslessly split into byte-bounded provider inputs, then pooled and normalized. Re-indexing is bounded and workspace-scoped, guarded by the fact revision. Provider outages preserve owner edits and return current facts with zero relevance score.
@@ -896,11 +889,9 @@ All eight agent routes use strict provider contracts in OpenAI mode, configured 
 
 The owner requires video software to be free and open source. Wan2.2 Apache-2.0 is selected; paid fal hosting is not activated. No new hosting account or payment was made. A suitable owned GPU is an external hardware requirement.
 
-
 ## 2026-09-24 ? Motion Reels on ordinary hardware
 
 Because the owner requires no paid video API and has no suitable GPU now, add a clearly labeled CPU Motion Reel mode. It animates an owner-uploaded JPEG and exact optional text cards; it does not synthesize new footage or call an AI planner. Persist artwork and copy as generation-job options, validate workspace ownership before queueing and rendering, retry interrupted rendering through the existing worker leases, and attach only if the generation intent still matches. Store output as VIDEO with renderer identity and zero provider tokens. Use three or fewer cards with at least two seconds each, preserve English/Arabic with libass, and retain the full uploaded design inside portrait margins. New Sora requests are disabled after the provider retirement. Future Wan deployment still needs GPU infrastructure; AWS GPU instances are paid.
-
 
 ## 2026-09-24: Account, team and native reporting
 
@@ -941,3 +932,42 @@ Native catalog controls expose bilingual names, price modes, integer currency mi
 Expo Notifications/Device require runtime 0.4.0 and new binaries. Do not target the installed 0.3.0 runtime with this native dependency change. Apple signing changes are restricted to MARKOS; reuse the existing distribution certificate and keep other apps untouched. Android alert activation still requires Firebase credentials. Store positioning is “MARKOS — Instagram Marketing”; no company name, support mailbox or business address is fabricated from that branding choice.
 
 An encrypted Railway logical backup was restored successfully into a new local disposable PostgreSQL database. Windows DPAPI wraps its AES key, so this copy requires the same Windows identity and is not off-site disaster recovery. Scheduled GitHub readiness checks are read-only and use no AI generation. Railway watch patterns exclude monitoring/documentation-only commits after the existing main-branch hook unexpectedly redeployed the old AI image; that image was restored to the previously working release and readiness rechecked.
+
+## 2026-10-26: Railway release preparation and portable recovery
+
+The owner selected Railway as the ongoing host for web, Android/iPhone backend services,
+AI and video rendering, and authorized the remaining release preparation. AWS migration
+is no longer an active prerequisite. CPU Motion Reels remain the working video mode;
+open-source generated footage is not advertised as activated without suitable compute.
+
+The owner confirmed Raedat Software Company W.L.L as operator and supplied
+support@raedat.online / info@raedat.online. Use the former for public support/privacy and
+the latter for operational alerts. No postal address has been supplied.
+
+Railway bucket versioning, object locks and lifecycle rules are currently unavailable.
+Native volume backups were rejected by the current workspace plan as Pro-only. Prepare
+a portable scheduled recovery service instead of purchasing an unrequested plan upgrade.
+Snapshots use a consistent exported PostgreSQL snapshot, the corresponding referenced
+media, per-object AES-256-GCM encryption and independently held recovery-key material.
+Only verified complete runs are restorable; retention never touches source media. Use
+30 days as the initial engineering retention setting, subject to the final public policy.
+
+Error telemetry retains classified error codes and sanitized code locations. It must not
+store request bodies, OAuth query parameters, credentials, prompts, business documents,
+frame locals or arbitrary error messages. Performance tracing stays disabled until its
+privacy contract is separately verified. Operational alerts are bounded and deduplicated.
+
+The owner declined paid SendGrid service when the trial allowance expired. Brevo Free
+is the selected transactional provider. Select exactly one configured provider;
+never fall back to a paid provider or replay an ambiguously accepted message.
+HTTP acceptance is separate from provider delivery and inbox receipt. The runtime
+key remains restricted; sender/domain ownership must be verified separately.
+
+Store successful snapshot receipts durably in the existing global operations audit
+log. Redis remains a compatibility cache, not the recovery system of record.
+Expose backup freshness separately from application serving readiness: an overdue
+snapshot must alert operators without making a healthy app unavailable.
+
+Concurrent workspace mutations retain serializable transactions and revision checks.
+Make Prisma transaction acquisition/operation budgets configurable (10/20 seconds by
+default) so a busy pool can queue without the previous two-second acquisition failure.

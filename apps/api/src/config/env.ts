@@ -43,6 +43,8 @@ export const envSchema = z
       .transform((value) => value === "true"),
     AI_VIDEO_MAX_BYTES: z.coerce.number().int().positive().max(250_000_000).default(100_000_000),
     DATABASE_URL: z.string().min(1).default("postgresql://markos:markos@localhost:5432/markos"),
+    DB_TRANSACTION_MAX_WAIT_MS: z.coerce.number().int().min(2000).max(30000).default(10000),
+    DB_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(20000),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     OPENSEARCH_URL: z.string().url().default("http://localhost:9200"),
     OPENSEARCH_HEALTH_REQUIRED: z
@@ -55,13 +57,20 @@ export const envSchema = z
     JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
     MFA_STEP_UP_TTL: z.coerce.number().int().positive().default(900),
     EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
-    EMAIL_PROVIDER: z.enum(["local", "sendgrid"]).default("local"),
+    EMAIL_PROVIDER: z.enum(["local", "sendgrid", "brevo"]).default("local"),
     EMAIL_VERIFICATION_API_BASE_URL: optionalUrl.refine(
       (value) => value === undefined || new URL(value).protocol === "https:",
       "The verification API must use HTTPS"
     ),
     SENDGRID_API_KEY: optionalString,
+    BREVO_API_KEY: optionalString,
     EXPO_PUSH_ACCESS_TOKEN: optionalString,
+    OPS_ALERT_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
+    OPS_ALERTS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    OPS_ALERT_COOLDOWN_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
     FROM_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
     MFA_ISSUER: z.string().min(1).default("MARKOS-AI"),
     GOOGLE_OAUTH_CLIENT_ID: optionalString,
@@ -129,7 +138,12 @@ export const envSchema = z
     HEALTH_DEPENDENCY_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
     HEALTH_DATABASE_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
     HEALTH_REDIS_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
-    HEALTH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(200)
+    HEALTH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(200),
+    BACKUP_HEALTH_REQUIRED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    BACKUP_MAX_AGE_HOURS: z.coerce.number().int().min(24).max(168).default(36)
   })
   .superRefine((value, context) => {
     if (value.MEDIA_STORAGE_DRIVER !== "s3") return;

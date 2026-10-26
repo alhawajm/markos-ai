@@ -8,6 +8,7 @@ from app.contracts.business_profile import (
     LocalizedBusinessProfileText,
 )
 from app.contracts.campaign import VaultContextChunk
+from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.providers.business_profile import (
     LocalBusinessProfileProvider,
@@ -79,7 +80,11 @@ def request() -> BusinessProfileGenerateRequest:
     )
 
 
-def test_openai_profile_provider_uses_strict_schema_and_validates_output() -> None:
+@pytest.mark.parametrize("store", [False, True])
+def test_openai_profile_provider_uses_strict_schema_and_validates_output(
+    monkeypatch: pytest.MonkeyPatch, store: bool
+) -> None:
+    monkeypatch.setattr(settings, "openai_store_responses", store)
     client = FakeClient(profile().model_dump_json(by_alias=True))
     provider = OpenAIBusinessProfileProvider(client=client)
 
@@ -87,7 +92,7 @@ def test_openai_profile_provider_uses_strict_schema_and_validates_output() -> No
     kwargs = client.fake_responses.last_kwargs
 
     assert kwargs is not None
-    assert kwargs["store"] is True
+    assert kwargs["store"] is store
     assert kwargs["model"] == "gpt-profile-configured"
     assert "workspace-secret-id" not in str(kwargs["input"])
     assert "Pearl Coffee" in str(kwargs["input"])

@@ -7,7 +7,21 @@ import { clearStudioDeviceData } from "../src/studio/device-store";
 import { clearBusinessDeviceData } from "../src/business/device-store";
 import { Card, Disclosure, ListGroup, ListRow, Notice, Screen, Sheet, TextAction, TitleBar, Txt } from "../src/ui";
 import { WebButton } from "../src/content";
-import { Bell, BookOpen, BriefcaseBusiness, Camera, Database, Globe2, History, LogOut, Monitor, ShieldCheck, UserRound, Users } from "lucide-react-native";
+import {
+  Bell,
+  BookOpen,
+  BriefcaseBusiness,
+  Camera,
+  Database,
+  Globe2,
+  History,
+  LogOut,
+  Monitor,
+  ShieldCheck,
+  UserRound,
+  Users,
+  CircleHelp
+} from "lucide-react-native";
 import { AppUpdateCard } from "../src/app-updates";
 
 export default function Account() {
@@ -73,7 +87,8 @@ export default function Account() {
           onPress={() => router.push("/account-details")}
         />
         <ListRow icon={ShieldCheck} label={t("Authenticator and security", "المصادقة والأمان")} onPress={() => router.push("/security")} />
-        <ListRow icon={Database} last label={t("Workspace data controls", "التحكم في بيانات مساحة العمل")} onPress={() => router.push("/data-controls")} />
+        <ListRow icon={Database} label={t("Workspace data controls", "التحكم في بيانات مساحة العمل")} onPress={() => router.push("/data-controls")} />
+        <ListRow icon={CircleHelp} last label={t("Help and legal", "المساعدة والمعلومات القانونية")} onPress={() => router.push("/support")} />
       </ListGroup>
       <Disclosure title={t("App and advanced settings", "التطبيق والإعدادات المتقدمة")}>
         <AppUpdateCard />

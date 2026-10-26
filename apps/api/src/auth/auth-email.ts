@@ -4,6 +4,7 @@ import type { Locale } from "@markos/shared-types";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { decryptCredential, encryptCredential } from "../security/credential-encryption";
+import { emailConfiguration, sendTransactionalMail } from "../email/transactional-mail";
 
 type Mail = { email: string; locale: Locale; code?: string };
 export type AuthMail = Mail & { kind: "RESET_CODE" | "PASSWORD_CHANGED" | "DELETE_CODE" };
@@ -21,7 +22,8 @@ export async function queueAuthMail(
 }
 export async function sendAuthMail(mail: AuthMail, fetchImpl: typeof fetch = fetch): Promise<void> {
   if (env.EMAIL_PROVIDER === "local" && env.NODE_ENV !== "production") return;
-  if (!env.SENDGRID_API_KEY || !env.FROM_EMAIL) throw new Error("AUTH_EMAIL_NOT_CONFIGURED");
+  const configuration = emailConfiguration(env);
+  if (!configuration.apiKey || !configuration.from) throw new Error("AUTH_EMAIL_NOT_CONFIGURED");
   const ar = mail.locale === "ar";
   const reset = mail.kind === "RESET_CODE";
   const deletion = mail.kind === "DELETE_CODE";
@@ -48,30 +50,20 @@ export async function sendAuthMail(mail: AuthMail, fetchImpl: typeof fetch = fet
         ? "تم تغيير كلمة مرور حسابك في ماركوس وتسجيل خروج الجلسات السابقة. إذا لم تقم بذلك، استخدم استعادة كلمة المرور فورًا وأمّن بريدك الإلكتروني."
         : "Your MARKOS password was changed and previous sessions were signed out. If this was not you, reset your password immediately and secure your email account.";
   const safeBody = body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  let response: Response;
   try {
-    response = await fetchImpl("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: { authorization: `Bearer ${env.SENDGRID_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: mail.email }] }],
-        from: { email: env.FROM_EMAIL, name: "MARKOS" },
+    await sendTransactionalMail(
+      configuration,
+      {
+        to: [mail.email],
         subject,
-        tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },
-        content: [
-          { type: "text/plain", value: body },
-          {
-            type: "text/html",
-            value: `<html lang="${mail.locale}" dir="${ar ? "rtl" : "ltr"}"><body style="font-family:Arial,sans-serif;line-height:1.8;white-space:pre-line;padding:24px">${safeBody}</body></html>`
-          }
-        ]
-      }),
-      signal: AbortSignal.timeout(10_000)
-    });
+        text: body,
+        html: `<html lang="${mail.locale}" dir="${ar ? "rtl" : "ltr"}"><body style="font-family:Arial,sans-serif;line-height:1.8;white-space:pre-line;padding:24px">${safeBody}</body></html>`
+      },
+      fetchImpl
+    );
   } catch {
     throw new Error("AUTH_EMAIL_DELIVERY_FAILED");
   }
-  if (response.status !== 202) throw new Error("AUTH_EMAIL_DELIVERY_FAILED");
 }
 
 /** Database leases survive deploys and coordinate API replicas. Payloads are erased on terminal states. */

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: markos
       POSTGRES_PASSWORD: markos
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./apps/api/prisma/init:/docker-entrypoint-initdb.d:ro
@@ -21,7 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -36,8 +36,8 @@ services:
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: LocalSearch9#Wave
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     ports:
-      - "9200:9200"
-      - "9600:9600"
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9600:9600"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
 

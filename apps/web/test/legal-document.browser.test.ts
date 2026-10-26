@@ -32,8 +32,8 @@ describe("rendered legal documents", () => {
 
     const sectionSelect = page.getByRole("combobox", { name: "On this page" });
     await expect(sectionSelect.isVisible()).resolves.toBe(true);
-    await sectionSelect.selectOption("account");
-    await expect(page.evaluate(() => window.location.hash)).resolves.toBe("#account");
+    await sectionSelect.selectOption("content");
+    await expect(page.evaluate(() => window.location.hash)).resolves.toBe("#content");
     await expect(noHorizontalOverflow(page)).resolves.toBe(true);
     await saveScreenshot(page, "legal-terms-en-mobile");
     await context.close();
@@ -53,6 +53,20 @@ describe("rendered legal documents", () => {
     }
 
     await saveScreenshot(page, "legal-privacy-en-final-section");
+    await context.close();
+  });
+
+  it("shows operator and support links in English and Arabic without mobile overflow", async () => {
+    const context = await browser.newContext({ viewport: { height: 844, width: 390 } });
+    const page = await context.newPage();
+    for (const locale of ["en", "ar"]) {
+      await page.goto(`${baseUrl}/${locale}/support`, { waitUntil: "networkidle" });
+      await expect(page.getByRole("heading", { level: 1 }).isVisible()).resolves.toBe(true);
+      await expect(page.locator('a[href="mailto:support@raedat.online"]').first().isVisible()).resolves.toBe(true);
+      await expect(noHorizontalOverflow(page)).resolves.toBe(true);
+      if (locale === "ar") await expect(page.locator("html").getAttribute("dir")).resolves.toBe("rtl");
+      await saveScreenshot(page, `legal-support-${locale}-mobile`);
+    }
     await context.close();
   });
 });

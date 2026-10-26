@@ -2,6 +2,7 @@ import Redis from "ioredis";
 import { performance } from "node:perf_hooks";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
+import { backupFreshness } from "./backup-freshness";
 
 export interface DependencyHealth {
   status: "ok" | "down" | "skipped";
@@ -44,6 +45,38 @@ export async function getDeepHealth(): Promise<DeepHealthResponse> {
       ai
     }
   };
+}
+
+export async function getBackupHealth(): Promise<DependencyHealth> {
+  if (!env.BACKUP_HEALTH_REQUIRED) return { status: "skipped", durationMs: 0 };
+  const startedAt = performance.now();
+  try {
+    const checkpoint = await withTimeout(
+      prisma.auditLog.findFirst({ where: { workspaceId: null, action: "BACKUP_COMPLETED" }, orderBy: { createdAt: "desc" }, select: { metadata: true } }),
+      env.HEALTH_DATABASE_TIMEOUT_MS
+    );
+    if (checkpoint) return { ...backupFreshness(JSON.stringify(checkpoint.metadata), env.BACKUP_MAX_AGE_HOURS), durationMs: elapsedMs(startedAt) };
+  } catch {
+    return { status: "down", durationMs: elapsedMs(startedAt), detail: "Backup status unavailable" };
+  }
+  // Compatibility with the first verified snapshot, before durable audit receipts.
+  const client = new Redis(env.REDIS_URL, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 0,
+    connectTimeout: env.HEALTH_REDIS_TIMEOUT_MS,
+    commandTimeout: env.HEALTH_REDIS_TIMEOUT_MS,
+    retryStrategy: null
+  });
+  client.on("error", () => {});
+  try {
+    await withTimeout(client.connect(), env.HEALTH_REDIS_TIMEOUT_MS);
+    const result = backupFreshness(await withTimeout(client.get("markos:ops:last-backup"), env.HEALTH_REDIS_TIMEOUT_MS), env.BACKUP_MAX_AGE_HOURS);
+    return { ...result, durationMs: elapsedMs(startedAt) };
+  } catch {
+    return { status: "down", durationMs: elapsedMs(startedAt), detail: "Backup status unavailable" };
+  } finally {
+    client.disconnect();
+  }
 }
 
 async function checkDatabase(): Promise<DependencyHealth> {

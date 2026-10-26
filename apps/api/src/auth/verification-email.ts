@@ -1,8 +1,9 @@
 import type { Locale } from "@markos/shared-types";
 import { env } from "../config/env";
+import { sendTransactionalMail } from "../email/transactional-mail";
 
 export interface VerificationEmailProvider {
-  readonly mode: "local" | "sendgrid";
+  readonly mode: "local" | "sendgrid" | "brevo";
   send(input: { email: string; locale: Locale; token: string }): Promise<void>;
 }
 
@@ -46,9 +47,9 @@ export function assertVerificationEmailConfiguration(
     apiKey: string | undefined;
     fromEmail: string | undefined;
     nodeEnv: "development" | "test" | "production";
-    provider: "local" | "sendgrid";
+    provider: "local" | "sendgrid" | "brevo";
   } = {
-    apiKey: env.SENDGRID_API_KEY,
+    apiKey: env.EMAIL_PROVIDER === "brevo" ? env.BREVO_API_KEY : env.SENDGRID_API_KEY,
     fromEmail: env.FROM_EMAIL,
     nodeEnv: env.NODE_ENV,
     provider: env.EMAIL_PROVIDER
@@ -58,7 +59,7 @@ export function assertVerificationEmailConfiguration(
     return;
   }
 
-  if (configuration.provider !== "sendgrid" || configuration.apiKey === undefined || configuration.fromEmail === undefined) {
+  if (configuration.provider === "local" || configuration.apiKey === undefined || configuration.fromEmail === undefined) {
     throw new VerificationEmailConfigurationError();
   }
 }
@@ -72,13 +73,16 @@ export class LocalVerificationEmailProvider implements VerificationEmailProvider
 }
 
 export class SendGridVerificationEmailProvider implements VerificationEmailProvider {
-  readonly mode = "sendgrid" as const;
+  get mode(): "sendgrid" | "brevo" {
+    return this.configuration.provider ?? "sendgrid";
+  }
 
   constructor(
     private readonly configuration: {
       apiKey: string | undefined;
       fromEmail: string | undefined;
       webBaseUrl: string;
+      provider?: "sendgrid" | "brevo";
     },
     private readonly fetchImpl: typeof fetch = fetch
   ) {}
@@ -136,37 +140,18 @@ export class SendGridVerificationEmailProvider implements VerificationEmailProvi
       ignore +
       "</p></td></tr></table></td></tr></table></body></html>";
 
-    let response: Response;
-
     try {
-      response = await this.fetchImpl("https://api.sendgrid.com/v3/mail/send", {
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: input.email }] }],
-          from: { email: this.configuration.fromEmail, name: "MARKOS AI" },
+      await sendTransactionalMail(
+        { provider: this.mode, apiKey: this.configuration.apiKey, from: this.configuration.fromEmail },
+        {
+          to: [input.email],
           subject,
-          content: [
-            {
-              type: "text/plain",
-              value: `${body}\n\n${verificationUrl.toString()}\n\n${returnHint}\n${expiry}\n\n${ignore}`
-            },
-            {
-              type: "text/html",
-              value: html
-            }
-          ]
-        }),
-        headers: {
-          Authorization: `Bearer ${this.configuration.apiKey}`,
-          "content-type": "application/json"
+          text: `${body}\n\n${verificationUrl.toString()}\n\n${returnHint}\n${expiry}\n\n${ignore}`,
+          html
         },
-        method: "POST",
-        signal: AbortSignal.timeout(10_000)
-      });
+        this.fetchImpl
+      );
     } catch {
-      throw new VerificationEmailDeliveryError();
-    }
-
-    if (response.status !== 202) {
       throw new VerificationEmailDeliveryError();
     }
   }
@@ -183,9 +168,10 @@ export function createVerificationEmailProvider(fetchImpl: typeof fetch = fetch)
 
   return new SendGridVerificationEmailProvider(
     {
-      apiKey: env.SENDGRID_API_KEY,
+      apiKey: env.EMAIL_PROVIDER === "brevo" ? env.BREVO_API_KEY : env.SENDGRID_API_KEY,
       fromEmail: env.FROM_EMAIL,
-      webBaseUrl: env.WEB_BASE_URL
+      webBaseUrl: env.WEB_BASE_URL,
+      provider: env.EMAIL_PROVIDER
     },
     fetchImpl
   );

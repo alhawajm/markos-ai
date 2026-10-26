@@ -3,6 +3,9 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
+# Unified patches preserve the upstream indentation in their context lines.
+patches/*.patch whitespace=-space-before-tab
+
 *.gif binary
 *.ico binary
 *.jpg binary

@@ -1,5 +1,27 @@
 # MARKOS service readiness and recovery
 
+## Current operations update — 26 October 2026
+
+Railway remains the host. The API, worker, web and AI services now use the current
+implementation-branch source. Daily encrypted database/reference-media recovery runs
+in a separate Railway project with 30-day retention; a real isolated restore has passed.
+See [the recovery runbook](recovery-runbook.md) for current configuration and limitations.
+The older native-backup authorization and computer-only recovery notes below are
+historical; native Railway snapshots remain unavailable on the current Hobby plan.
+
+The monitor checks application readiness and `/v1/health/backups` independently.
+Backup freshness uses a durable audit receipt, with a compatibility cache fallback.
+An overdue snapshot raises a monitor failure without blocking serving readiness.
+The revised GitHub workflow opens/resolves a deduplicated incident, but must be
+published to the default branch before its scheduled behavior is active.
+
+Brevo Free replaces the expired SendGrid trial for requested mail and bounded
+operations alerts. Keys/configuration are installed in API, worker and backup services.
+Controlled sends were accepted, then failed sender/domain authorization; email is
+not operational until verification and actual receipt pass. See [email delivery](email-delivery.md).
+Android FCM, real push receipt, Sentry account routing and physical-device/store/Meta
+acceptance remain separate release obligations. See [the current release ledger](release-readiness.md).
+
 `node scripts/check-service-readiness.mjs` checks the deployed API, PostgreSQL,
 Redis and the authenticated AI boundary without generating content or charging
 provider tokens. Set `MARKOS_API_URL` for another environment. HTTP 200 means
