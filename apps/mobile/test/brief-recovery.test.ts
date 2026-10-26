@@ -39,6 +39,11 @@ beforeEach(() => {
   state.epoch = 1;
 });
 describe("campaign device recovery", () => {
+  it.each([30, 60, 90] as const)("restores a %i-day brief without changing its submitted intent", async (durationDays) => {
+    const value = { ...newBrief(), durationDays, requestId: "long-campaign", requestLocale: "ar" as const, objective: "Blooms in Pink" };
+    await new BriefStore("account-one", 1).save(value);
+    expect(await new BriefStore("account-one", 1).read()).toEqual(value);
+  });
   it("restores the same request ID, locale and brief after reopening", async () => {
     const value = {
       ...newBrief(),

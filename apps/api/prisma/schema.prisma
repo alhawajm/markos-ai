@@ -570,6 +570,10 @@ model CampaignGenerationJob {
   objective      String
   status         String   @default("QUEUED")
   input          Json?
+  checkpoint     Json?
+  totalWeeks     Int?
+  completedWeeks Int      @default(0)
+  resumable      Boolean  @default(false)
   campaignId     String?  @db.Uuid
   errorCode      String?
   leaseExpiresAt DateTime?
@@ -579,6 +583,7 @@ model CampaignGenerationJob {
   @@unique([workspaceId, requestId])
   @@index([workspaceId, createdAt])
   @@index([status, createdAt])
+  @@index([status, updatedAt])
   @@map("campaign_generation_jobs")
 }
 

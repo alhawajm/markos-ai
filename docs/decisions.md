@@ -971,3 +971,25 @@ snapshot must alert operators without making a healthy app unavailable.
 Concurrent workspace mutations retain serializable transactions and revision checks.
 Make Prisma transaction acquisition/operation budgets configurable (10/20 seconds by
 default) so a busy pool can queue without the previous two-second acquisition failure.
+
+## 2026-10-26: Durable weekly planning for longer campaigns
+
+Enable 30-, 60- and 90-day campaigns through the existing durable generation queue.
+Keep the existing 14-day default and publishing choices of one to three posts daily.
+The synchronous compatibility endpoint rejects longer plans with CAMPAIGN_QUEUE_REQUIRED.
+Both browser and native clients submit an idempotent request and recover server status.
+
+Generate at most seven days per provider call. The first window establishes the whole
+campaign strategy and source summary; later windows receive that fixed outline, original
+business-context snapshot, actual window dates and previous ideas. Remove reference-file
+bytes after the first successful window. Save checkpoint, progress and actual token usage
+atomically. Metadata-only status reads never load uploaded bytes or the growing plan.
+
+Claim each queued revision once and fence every completion by its lease. A deploy can
+resume between committed windows. An interrupted provider call becomes an explicit failed
+state; only the creator's deliberate Continue planning action retries the unfinished step.
+Retain failed resumable checkpoints for seven days, then clear them. Access removal clears
+the working payload. Never replace an existing campaign or create a partial campaign.
+Final plan and completion receipt commit atomically. Creating ideas never approves,
+schedules or publishes their content. The final partial week still contains every requested
+day and exactly the selected number of ideas per day.

@@ -497,6 +497,10 @@ export class MarkosApiClient {
     return (await this.request<CampaignGenerationJobRecord>(`/v1/campaigns/generations/${encodeURIComponent(requestId)}`)).data;
   }
 
+  async resumeCampaignGeneration(requestId: string): Promise<CampaignGenerationJobRecord> {
+    return (await this.request<CampaignGenerationJobRecord>(`/v1/campaigns/generations/${encodeURIComponent(requestId)}/resume`, { method: "POST" })).data;
+  }
+
   async campaignGenerations(): Promise<CampaignGenerationJobRecord[]> {
     return (await this.request<CampaignGenerationJobRecord[]>("/v1/campaigns/generations")).data;
   }

@@ -63,6 +63,13 @@ export default function CampaignGeneration() {
       void queryClient.invalidateQueries({ queryKey: [scope, "campaign-generations"] });
     }
   });
+  const resume = useMutation({
+    mutationFn: () => api.resumeCampaignGeneration(requestId),
+    onSuccess: (value) => {
+      queryClient.setQueryData(queryKey, value);
+      void queryClient.invalidateQueries({ queryKey: [scope, "campaign-generations"] });
+    }
+  });
   async function editBrief() {
     try {
       await store.finishRequest(requestId, false);
@@ -111,7 +118,16 @@ export default function CampaignGeneration() {
             </Row>
             <Row>
               <Clock3 size={24} color={colors.accent} />
-              <Txt>{job.status === "QUEUED" ? t("Waiting to start", "بانتظار البدء") : t("Drafting the campaign", "جارٍ إعداد الحملة")}</Txt>
+              <Txt>
+                {job.progress
+                  ? t(
+                      `${job.progress.completedWeeks} of ${job.progress.totalWeeks} weeks saved`,
+                      `تم حفظ ${job.progress.completedWeeks} من ${job.progress.totalWeeks} أسابيع`
+                    )
+                  : job.status === "QUEUED"
+                    ? t("Waiting to start", "بانتظار البدء")
+                    : t("Drafting the campaign", "جارٍ إعداد الحملة")}
+              </Txt>
             </Row>
           </Card>
           <Notice>
@@ -133,12 +149,24 @@ export default function CampaignGeneration() {
               "لم يكتمل الإنشاء. لم تتغيّر حملاتك المحفوظة. راجع ملخصك قبل المحاولة مجددًا."
             )}
           </Txt>
-          <Button
-            label={hasBrief ? t("Review brief and retry", "مراجعة الملخص وإعادة المحاولة") : t("New campaign", "حملة جديدة")}
-            onPress={() => {
-              void editBrief();
-            }}
-          />
+          {job.canResume ? (
+            <>
+              <Txt muted>
+                {t(
+                  "Completed weeks are saved. Continue by regenerating only the unfinished week.",
+                  "الأسابيع المكتملة محفوظة. تابع بإعادة إنشاء الأسبوع غير المكتمل فقط."
+                )}
+              </Txt>
+              <Button label={t("Continue planning", "متابعة التخطيط")} busy={resume.isPending} onPress={() => resume.mutate()} />
+            </>
+          ) : (
+            <Button
+              label={hasBrief ? t("Review brief and retry", "مراجعة الملخص وإعادة المحاولة") : t("New campaign", "حملة جديدة")}
+              onPress={() => {
+                void editBrief();
+              }}
+            />
+          )}
         </Card>
       ) : null}
       {send.isError ? (
@@ -157,6 +185,7 @@ export default function CampaignGeneration() {
         </>
       ) : null}
       {localError ? <Notice error>{localError}</Notice> : null}
+      {resume.isError ? <Notice error>{errorMessage(resume.error, t)}</Notice> : null}
     </Screen>
   );
 }

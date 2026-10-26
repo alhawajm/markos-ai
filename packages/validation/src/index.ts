@@ -351,7 +351,7 @@ export const approveOnboardingDocumentAnalysisSchema = z.object({
   })
 });
 
-const campaignGenerationDurationSchema = z.union([z.literal(3), z.literal(7), z.literal(14)]);
+const campaignGenerationDurationSchema = z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30), z.literal(60), z.literal(90)]);
 
 export const generateCampaignSchema = z.object({
   objective: z.string().min(3).max(500).optional(),

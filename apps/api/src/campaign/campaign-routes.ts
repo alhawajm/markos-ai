@@ -3,8 +3,15 @@ import { approveCampaignSuggestionSchema, generateCampaignSchema } from "@markos
 import { CampaignReferenceFileError, maxCampaignReferenceBodyBytes } from "./campaign-reference-files";
 import { AiServiceRequestError } from "../ai/request";
 import { env } from "../config/env";
+import { hasPermissions } from "../auth/rbac";
 import { CampaignGenerationError } from "./campaign-generation-access";
-import { listCampaignGenerations, processCampaignGenerations, queueCampaignGeneration, readCampaignGeneration } from "./campaign-generation-service";
+import {
+  listCampaignGenerations,
+  processCampaignGenerations,
+  queueCampaignGeneration,
+  readCampaignGeneration,
+  resumeCampaignGeneration
+} from "./campaign-generation-service";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -23,15 +30,43 @@ import {
 } from "./campaign-service";
 
 export async function registerCampaignRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/v1/campaigns/generations/:requestId/resume",
+    { config: { workspaceRequired: true, verifiedUserRequired: true, permissions: ["campaign:generate"] } },
+    async (request, reply) => {
+      const { requestId } = request.params as { requestId: string };
+      if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(requestId))
+        return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid generation request ID"));
+      const { workspaceId, userId } = requireWorkspaceContext();
+      try {
+        return reply.status(202).send(ok(await resumeCampaignGeneration(workspaceId, userId, requestId)));
+      } catch (error) {
+        if (error instanceof CampaignGenerationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+        throw error;
+      }
+    }
+  );
   app.get("/v1/campaigns/generations", { config: { workspaceRequired: true, permissions: ["campaign:read"] } }, async () => {
-    return ok(await listCampaignGenerations(requireWorkspaceContext().workspaceId));
+    const context = requireWorkspaceContext();
+    return ok(
+      await listCampaignGenerations(context.workspaceId, {
+        userId: context.userId,
+        mayGenerate: context.isVerified && hasPermissions(context.roles, ["campaign:generate"])
+      })
+    );
   });
   app.get("/v1/campaigns/generations/:requestId", { config: { workspaceRequired: true, permissions: ["campaign:read"] } }, async (request, reply) => {
     const { requestId } = request.params as { requestId: string };
     if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(requestId))
       return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid generation request ID"));
     try {
-      return ok(await readCampaignGeneration(requireWorkspaceContext().workspaceId, requestId));
+      const context = requireWorkspaceContext();
+      return ok(
+        await readCampaignGeneration(context.workspaceId, requestId, {
+          userId: context.userId,
+          mayGenerate: context.isVerified && hasPermissions(context.roles, ["campaign:generate"])
+        })
+      );
     } catch (error) {
       if (error instanceof CampaignGenerationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
       throw error;
@@ -147,6 +182,9 @@ export async function registerCampaignRoutes(app: FastifyInstance): Promise<void
       if (!parsed.success) {
         return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid campaign generation request", parsed.error.issues));
       }
+
+      if (parsed.data.durationDays > 14)
+        return reply.status(409).send(errorEnvelope("CAMPAIGN_QUEUE_REQUIRED", "Use background generation for longer campaigns."));
 
       const { workspaceId } = requireWorkspaceContext();
 

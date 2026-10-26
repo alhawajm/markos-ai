@@ -4,7 +4,7 @@ const config: ExpoConfig = {
   name: "MARKOS",
   slug: "markos",
   owner: "mo4180",
-  version: "0.4.0",
+  version: "0.5.0",
   icon: "./assets/icon.png",
   scheme: "markos",
   updates: { url: "https://u.expo.dev/35017b4c-b19f-41ff-a16d-d5dee210f016" },
@@ -14,6 +14,7 @@ const config: ExpoConfig = {
   ios: { supportsTablet: true, bundleIdentifier: "com.markos.mobile", config: { usesNonExemptEncryption: false } },
   android: {
     package: "com.markos.mobile",
+    googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
     allowBackup: false,
     softwareKeyboardLayoutMode: "resize",
     adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#d88fa3" }

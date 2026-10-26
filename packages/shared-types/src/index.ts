@@ -124,6 +124,8 @@ export interface CampaignGenerationJobRecord {
   errorCode: string | null;
   createdAt: string;
   updatedAt: string;
+  progress?: { completedWeeks: number; totalWeeks: number };
+  canResume?: boolean;
 }
 
 export interface NativeAuthSession extends AuthSession {
@@ -540,7 +542,7 @@ export interface ApproveOnboardingDocumentAnalysisResult {
 
 export const campaignDurations = [3, 7, 14, 30, 60, 90] as const;
 export type CampaignDurationDays = (typeof campaignDurations)[number];
-export const campaignGenerationDurations = [3, 7, 14] as const;
+export const campaignGenerationDurations = campaignDurations;
 export type CampaignGenerationDurationDays = (typeof campaignGenerationDurations)[number];
 
 export const campaignStatuses = ["REVIEW", "APPROVED", "ACTIVE", "COMPLETED", "ARCHIVED"] as const;

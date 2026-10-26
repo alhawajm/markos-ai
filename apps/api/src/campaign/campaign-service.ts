@@ -4,7 +4,7 @@ import type { ApproveCampaignSuggestionInput, GenerateCampaignInput } from "@mar
 import { AiServiceRequestError } from "../ai/request";
 import { getContentToneLock } from "../content/content-service";
 import { contentAggregateInclude, createContentAggregate, getContentAggregate, loadContentAggregate, toContentRecord } from "../content/content-aggregate";
-import { generateCampaignPlan } from "../ai/campaign-client";
+import { generateCampaignPlan, type CampaignGenerateResponse } from "../ai/campaign-client";
 import { validateCampaignReferences } from "./campaign-reference-files";
 import { assertCampaignGenerationAccess, CampaignGenerationError } from "./campaign-generation-access";
 import { env } from "../config/env";
@@ -282,7 +282,7 @@ async function findWorkspaceCampaign(workspaceId: string, campaignId: string) {
   return row;
 }
 
-export async function generateWorkspaceCampaign(workspaceId: string, input: GenerateCampaignInput, job?: { id: string; userId: string }): Promise<CampaignRecord> {
+export async function prepareCampaignContext(workspaceId: string, input: GenerateCampaignInput) {
   const referenceFiles = validateCampaignReferences(input.referenceFiles ?? []);
   const score = await getVaultScore(workspaceId);
 
@@ -303,6 +303,17 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
     campaignAgentName,
     `${workspaceId}:${query}:${input.durationDays}:${input.publishesPerDay}:${input.startsAt}:${input.locale}`
   );
+  return { referenceFiles, context, promptTemplate: promptTemplate ? { body: promptTemplate.body, version: promptTemplate.version } : undefined };
+}
+export type PreparedCampaignContext = Awaited<ReturnType<typeof prepareCampaignContext>>;
+
+export async function generateWorkspaceCampaign(
+  workspaceId: string,
+  input: GenerateCampaignInput,
+  job?: { id: string; userId: string; leaseExpiresAt?: Date },
+  assembled?: { response: CampaignGenerateResponse; prepared: PreparedCampaignContext }
+): Promise<CampaignRecord> {
+  const { referenceFiles, context, promptTemplate } = assembled?.prepared ?? (await prepareCampaignContext(workspaceId, input));
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
@@ -325,16 +336,22 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
       context,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } })
     };
-    const generated = await generateCampaignPlan(
-      input.objective === undefined
-        ? request
-        : {
-            ...request,
-            objective: input.objective
-          }
-    );
+    const generated =
+      assembled?.response ??
+      (await generateCampaignPlan(
+        input.objective === undefined
+          ? request
+          : {
+              ...request,
+              objective: input.objective
+            }
+      ));
 
-    if (generated.campaign.durationDays !== input.durationDays || generated.campaign.publishesPerDay !== input.publishesPerDay || (referenceFiles.length > 0 && !generated.campaign.referenceSummary?.trim())) {
+    if (
+      generated.campaign.durationDays !== input.durationDays ||
+      generated.campaign.publishesPerDay !== input.publishesPerDay ||
+      (referenceFiles.length > 0 && !generated.campaign.referenceSummary?.trim())
+    ) {
       throw new AiServiceRequestError({
         code: "AI_SERVICE_RESPONSE_INVALID",
         message: "The AI service returned an invalid response",
@@ -357,7 +374,15 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
       // cannot create an orphan campaign after its lease has been recovered.
       if (job) {
         await tx.$queryRaw`SELECT id FROM campaign_generation_jobs WHERE id = ${job.id}::uuid AND "workspaceId" = ${workspaceId}::uuid FOR UPDATE`;
-        const active = await tx.campaignGenerationJob.findFirst({ where: { id: job.id, workspaceId, userId: job.userId, status: "RUNNING", leaseExpiresAt: { gt: new Date() } } });
+        const active = await tx.campaignGenerationJob.findFirst({
+          where: {
+            id: job.id,
+            workspaceId,
+            userId: job.userId,
+            status: "RUNNING",
+            leaseExpiresAt: { gt: new Date(), ...(job.leaseExpiresAt ? { equals: job.leaseExpiresAt } : {}) }
+          }
+        });
         if (!active) throw new CampaignGenerationError("CAMPAIGN_INTERRUPTED", "Campaign generation was interrupted. Review the brief before trying again.");
         await assertCampaignGenerationAccess(workspaceId, job.userId, tx);
       }
@@ -411,10 +436,11 @@ export async function generateWorkspaceCampaign(workspaceId: string, input: Gene
         now: usagePeriodDate
       });
 
-      if (job) await tx.campaignGenerationJob.update({
-        where: { id: job.id, workspaceId },
-        data: { status: "COMPLETED", campaignId: row.id, input: Prisma.DbNull, leaseExpiresAt: null }
-      });
+      if (job)
+        await tx.campaignGenerationJob.update({
+          where: { id: job.id, workspaceId },
+          data: { status: "COMPLETED", campaignId: row.id, input: Prisma.DbNull, checkpoint: Prisma.DbNull, resumable: false, leaseExpiresAt: null }
+        });
 
       return row;
     });

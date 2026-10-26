@@ -8,58 +8,71 @@ const generatedInputs = vi.hoisted(() => [] as Array<{ description?: string; ref
 
 vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
-    model: "test-embedding-model", space: "test:1536", tokens_in: 0,
+    model: "test-embedding-model",
+    space: "test:1536",
+    tokens_in: 0,
     dimensions: 1536,
     embeddings: texts.map(testEmbedding)
   })
 }));
 
 vi.mock("../src/ai/campaign-client", () => ({
-  generateCampaignPlan: async (input: { context: unknown[]; durationDays: number; objective?: string; description?: string; referenceFiles?: CampaignReferenceFileInput[]; publishesPerDay: number; workspaceId: string }) => (generatedInputs.push(input), {
-    model: "test-campaign-model",
-    prompt_version: "campaign.v2.test",
-    tokens_in: 101,
-    tokens_out: 202,
-    campaign: {
-      summary: `${input.durationDays}-day campaign for ${input.objective ?? "Instagram growth"}`,
-      referenceSummary: input.referenceFiles?.length ? "Proposal: event on 6–7 October in Hall B. Design: lavender and pink." : null,
-      durationDays: input.durationDays,
-      publishesPerDay: input.publishesPerDay,
-      objectives: [input.objective ?? "grow qualified Instagram inquiries"],
-      pillars: [
-        {
-          name: "Proof and trust",
-          rationale: "Grounded in Vault context",
-          contentAngles: ["customer outcomes", "process"]
-        }
-      ],
-      weeklyCadence: Array.from({ length: Math.ceil(input.durationDays / 7) }, (_, weekIndex) => ({
-        week: weekIndex + 1,
-        focus: weekIndex === 0 ? "Message clarity" : "Trust and action",
-        days: Array.from({ length: Math.min(7, input.durationDays - weekIndex * 7) }, (_, dayIndex) => {
-          const day = weekIndex * 7 + dayIndex + 1;
-          return {
-            day,
-            posts: Array.from({ length: input.publishesPerDay }, (_, postIndex) => ({
-              contentType: postIndex % 2 === 0 ? "CAROUSEL" : "REEL",
-              title: `Campaign day ${day} idea ${postIndex + 1}`,
-              description: "Explain the offer with a specific, grounded angle.",
-              goal: "Increase qualified awareness",
-              contentPillar: "Proof and trust"
-            }))
-          };
-        })
-      })),
-      kpis: [
-        {
-          name: "qualified inquiries",
-          target: "increase"
-        }
-      ],
-      risks: ["generic content"],
-      nextActions: ["review Vault context"]
+  generateCampaignPlan: async (input: {
+    context: unknown[];
+    durationDays: number;
+    objective?: string;
+    description?: string;
+    referenceFiles?: CampaignReferenceFileInput[];
+    publishesPerDay: number;
+    workspaceId: string;
+  }) => (
+    generatedInputs.push(input),
+    {
+      model: "test-campaign-model",
+      prompt_version: "campaign.v2.test",
+      tokens_in: 101,
+      tokens_out: 202,
+      campaign: {
+        summary: `${input.durationDays}-day campaign for ${input.objective ?? "Instagram growth"}`,
+        referenceSummary: input.referenceFiles?.length ? "Proposal: event on 6–7 October in Hall B. Design: lavender and pink." : null,
+        durationDays: input.durationDays,
+        publishesPerDay: input.publishesPerDay,
+        objectives: [input.objective ?? "grow qualified Instagram inquiries"],
+        pillars: [
+          {
+            name: "Proof and trust",
+            rationale: "Grounded in Vault context",
+            contentAngles: ["customer outcomes", "process"]
+          }
+        ],
+        weeklyCadence: Array.from({ length: Math.ceil(input.durationDays / 7) }, (_, weekIndex) => ({
+          week: weekIndex + 1,
+          focus: weekIndex === 0 ? "Message clarity" : "Trust and action",
+          days: Array.from({ length: Math.min(7, input.durationDays - weekIndex * 7) }, (_, dayIndex) => {
+            const day = weekIndex * 7 + dayIndex + 1;
+            return {
+              day,
+              posts: Array.from({ length: input.publishesPerDay }, (_, postIndex) => ({
+                contentType: postIndex % 2 === 0 ? "CAROUSEL" : "REEL",
+                title: `Campaign day ${day} idea ${postIndex + 1}`,
+                description: "Explain the offer with a specific, grounded angle.",
+                goal: "Increase qualified awareness",
+                contentPillar: "Proof and trust"
+              }))
+            };
+          })
+        })),
+        kpis: [
+          {
+            name: "qualified inquiries",
+            target: "increase"
+          }
+        ],
+        risks: ["generic content"],
+        nextActions: ["review Vault context"]
+      }
     }
-  })
+  )
 }));
 
 describe("campaign routes", () => {
@@ -68,11 +81,17 @@ describe("campaign routes", () => {
     const session = await registerTestUser(app);
     const other = await registerTestUser(app);
     const headers = authHeaders(session.tokens.accessToken);
-    await app.inject({ method: "PUT", url: "/v1/vault/company", headers, payload: {
-      entries: [{ key: "profile", value: { name: "Event Studio", industry: "events", location: "Bahrain" } }]
-    } });
-    const referenceFiles: CampaignReferenceFileInput[] = Array.from({length: 5}, (_, index) => ({
-      filename: `event-${index}.txt`, mimeType: "text/plain",
+    await app.inject({
+      method: "PUT",
+      url: "/v1/vault/company",
+      headers,
+      payload: {
+        entries: [{ key: "profile", value: { name: "Event Studio", industry: "events", location: "Bahrain" } }]
+      }
+    });
+    const referenceFiles: CampaignReferenceFileInput[] = Array.from({ length: 5 }, (_, index) => ({
+      filename: `event-${index}.txt`,
+      mimeType: "text/plain",
       // A valid request above Fastify's default 1 MB limit must reach generation.
       base64Data: Buffer.from(index === 0 ? "Event notes ".repeat(100_000) : "6–7 October; Hall B; lavender and pink").toString("base64")
     }));
@@ -93,8 +112,22 @@ describe("campaign routes", () => {
     const usage = await prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: session.workspace.id, agent: "STRATEGIST" } });
     expect(usage).toMatchObject({ tokensIn: 101, tokensOut: 202 });
     expect(JSON.stringify(usage.prompt)).not.toContain("base64Data");
-    expect((await app.inject({ method: "POST", url: "/v1/campaigns/generate", headers, payload: { ...payload, referenceFiles: [...referenceFiles, referenceFiles[0]] } })).statusCode).toBe(400);
-    const invalid = await app.inject({ method: "POST", url: "/v1/campaigns/generate", headers, payload: { ...payload, referenceFiles: [{ filename: "fake.pdf", mimeType: "application/pdf", base64Data: "aGVsbG8=" }] } });
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/v1/campaigns/generate",
+          headers,
+          payload: { ...payload, referenceFiles: [...referenceFiles, referenceFiles[0]] }
+        })
+      ).statusCode
+    ).toBe(400);
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns/generate",
+      headers,
+      payload: { ...payload, referenceFiles: [{ filename: "fake.pdf", mimeType: "application/pdf", base64Data: "aGVsbG8=" }] }
+    });
     expect(invalid.statusCode).toBe(400);
     expect(invalid.json().error.code).toBe("CAMPAIGN_REFERENCE_INVALID");
     expect(await prisma.campaign.count({ where: { workspaceId: session.workspace.id } })).toBe(1);
@@ -292,7 +325,7 @@ describe("campaign routes", () => {
     await app.close();
   });
 
-  it("keeps future campaign durations out of the generation contract", async () => {
+  it("requires the durable queue for longer campaigns", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
     const response = await app.inject({
@@ -305,8 +338,8 @@ describe("campaign routes", () => {
       }
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "CAMPAIGN_QUEUE_REQUIRED" } });
 
     await app.close();
   });

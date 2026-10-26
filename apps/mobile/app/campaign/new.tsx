@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { FileText, Paperclip, Sparkles, X } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, Txt } from "../../src/ui";
+import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, SelectField, Txt } from "../../src/ui";
 import { briefStore, ReferenceError } from "../../src/campaigns/brief-store";
 import { campaignStart, localDate, newBrief, validDate, type Brief } from "../../src/campaigns/brief-model";
 import { errorMessage } from "../../src/errors";
@@ -272,12 +272,12 @@ export default function NewCampaign() {
             </Txt>
             {brief.description ? <Txt numberOfLines={4}>{brief.description}</Txt> : null}
           </Card>
-          <Txt variant="label">{t("Duration", "المدة")}</Txt>
-          <Segmented
+          <SelectField
+            label={t("Duration", "المدة")}
             value={String(brief.durationDays)}
             disabled={busy}
-            options={[3, 7, 14].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
-            onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 })}
+            options={[3, 7, 14, 30, 60, 90].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
+            onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 | 30 | 60 | 90 })}
           />
           <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
           <ListRow

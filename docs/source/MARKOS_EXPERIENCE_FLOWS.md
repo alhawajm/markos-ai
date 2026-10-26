@@ -2,6 +2,19 @@
 
 Status date: 2026-08-30. Create flows revised 2026-09-06; provider, Motion Reel and native account implementation notes revised 2026-09-24. Delivery and complete account deletion updated 2026-09-27. See `../implementation-progress.md` for the current release and its validation boundaries.
 
+### October 26 long-campaign planning behavior
+
+Campaigns offer 3, 7, 14, 30, 60 or 90 days, retaining the existing 14-day default
+and one-to-three daily publishing choices. Web and native submit an idempotent job
+to `POST /v1/campaigns/generations`. Longer plans save one seven-day window at a
+time, show actual completed-week progress, and recover committed windows after a
+restart. A failed in-flight provider call is never replayed automatically. The
+verified creator can explicitly continue the unfinished step while retaining saved
+weeks. Checkpoints expire after seven days of failed inactivity. Uploaded bytes
+are removed after the first successful source summary; business context and prior
+ideas keep later weeks consistent. Completion saves one whole reviewable campaign;
+no draft approval, scheduling or publication is implied.
+
 ### September 27 account and delivery behavior
 
 Notification preferences belong to the signed-in user and current workspace. Publishing phone alerts and monthly PDF email default off. Enable phone alerts explicitly from native; request OS permission only after that action. Report requests show queue, provider-accepted, failed or unconfirmed status without claiming inbox delivery. A one-time email does not enable the monthly subscription. Workspace switching changes the preference scope. A notification for another workspace offers a workspace switch instead of opening data under the current identity.
@@ -59,29 +72,29 @@ Every feature should strengthen this loop or remove friction from it.
 
 ## 2. Actors and entry states
 
-| Actor | Intended entry | First useful goal |
-| --- | --- | --- |
-| Visitor | Localized marketing site | Understand the product and sign up |
-| Newly registered user | Email verification | Verify identity and resume onboarding |
-| Verified new user | Onboarding | Teach MARKOS the real business |
-| Onboarded owner | Overview or Campaigns | Generate the first business-specific Campaign |
-| Returning user | Overview | Continue planned work and review performance |
-| Team member | Role-scoped app | Create, review, or observe within permission |
-| Platform staff | Separate admin portal | Operate users, plans, prompts, health, and revenue |
+| Actor                 | Intended entry           | First useful goal                                  |
+| --------------------- | ------------------------ | -------------------------------------------------- |
+| Visitor               | Localized marketing site | Understand the product and sign up                 |
+| Newly registered user | Email verification       | Verify identity and resume onboarding              |
+| Verified new user     | Onboarding               | Teach MARKOS the real business                     |
+| Onboarded owner       | Overview or Campaigns    | Generate the first business-specific Campaign      |
+| Returning user        | Overview                 | Continue planned work and review performance       |
+| Team member           | Role-scoped app          | Create, review, or observe within permission       |
+| Platform staff        | Separate admin portal    | Operate users, plans, prompts, health, and revenue |
 
 Routing uses the browser session plus verified-user and onboarding state. Instagram connection state comes from the active encrypted credential record, not from legacy workspace token columns. A user who is not verified is sent to verification; an incomplete workspace resumes onboarding; a newly approved profile proceeds to guided Instagram setup, which can be postponed to Overview.
 
 ### 2.1 Current implementation overlay
 
-| Area | Current `main` | Final-system work still open |
-| --- | --- | --- |
-| Authentication | Email registration/login, verification, browser cookie refresh and native secure credential storage are mounted. Native signup records consent. Web and native password recovery use emailed single-use codes and revoke prior sessions after success. Google/Apple controls remain unavailable. | Physical-device and inbox walkthrough for recovery, approved legal wording, and provider sign-in journeys. |
-| Onboarding | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before guided Instagram setup. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path. |
-| Campaigns | The Sunlit UI lists and generates time-bound Campaign records, layers generated plans by week, and provides overview and daily-plan views. Each dated idea has one idempotent Create handoff that registers or restores the same Campaign-linked planning draft in Create and Calendar. | Richer lifecycle and library management, bulk approval, complex campaigns beyond the current generated showcase range, and mounted PDF export. |
-| Content/media | Standalone and Campaign drafts share a conversation-and-preview Create workspace, with persistent text conversations, revision checks, direct editing, Save/Leave protection, media jobs, and Ready/Draft transitions. Calendar retains bilingual planning and explicit publishing schedules. | The learning loop, full media-editor tools, publication snapshots, mobile design, and full live journey verification. |
-| Instagram | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes. | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access. |
-| Insights | An API-backed 7/30-day professional dashboard mounts real totals, daily trends, immediately preceding-period comparisons, content-type performance, top content, audience availability, honest empty/error/loading states, and monthly PDF download. | Full `AN-01`–`AN-06` drill-downs, live permission-backed sync evidence, 90-day/custom ranges, demographic data when the provider supplies it, provider-backed interpretation, digest/chat, and learning evidence. |
-| Operations | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history. | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal. |
+| Area           | Current `main`                                                                                                                                                                                                                                                                                                                                                                                                                             | Final-system work still open                                                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication | Email registration/login, verification, browser cookie refresh and native secure credential storage are mounted. Native signup records consent. Web and native password recovery use emailed single-use codes and revoke prior sessions after success. Google/Apple controls remain unavailable.                                                                                                                                           | Physical-device and inbox walkthrough for recovery, approved legal wording, and provider sign-in journeys.                                                                                                        |
+| Onboarding     | A minimal greeting offers two first-run paths: analyze business files or enter details manually. The document-assisted path extracts a reviewable draft across the same seven modules; the manual path presents those modules directly. Company and Products remain essential, the other modules remain skippable, and both paths converge on the information check and editable bilingual Business Profile before guided Instagram setup. | Permanent brand-asset storage, approved competitor verification, plan placement, additional recovery refinement, and deployed-provider evidence for the full document path.                                       |
+| Campaigns      | The Sunlit UI lists and generates time-bound Campaign records, layers generated plans by week, and provides overview and daily-plan views. Each dated idea has one idempotent Create handoff that registers or restores the same Campaign-linked planning draft in Create and Calendar.                                                                                                                                                    | Richer lifecycle and library management, bulk approval, complex campaigns beyond the current generated showcase range, and mounted PDF export.                                                                    |
+| Content/media  | Standalone and Campaign drafts share a conversation-and-preview Create workspace, with persistent text conversations, revision checks, direct editing, Save/Leave protection, media jobs, and Ready/Draft transitions. Calendar retains bilingual planning and explicit publishing schedules.                                                                                                                                              | The learning loop, full media-editor tools, publication snapshots, mobile design, and full live journey verification.                                                                                             |
+| Instagram      | The canonical basic, publish, and insights scope set is connected in staging, and the Railway worker completed a follower-visible automated JPEG publish on 2026-08-20. Source defaults remain `dry_run`, while the unreleased staging environment is deliberately exercising live modes.                                                                                                                                                  | Confirm persisted account and media insights, complete durable attempt/restart/cancellation proof, and later obtain App Review/Advanced Access.                                                                   |
+| Insights       | An API-backed 7/30-day professional dashboard mounts real totals, daily trends, immediately preceding-period comparisons, content-type performance, top content, audience availability, honest empty/error/loading states, and monthly PDF download.                                                                                                                                                                                       | Full `AN-01`–`AN-06` drill-downs, live permission-backed sync evidence, 90-day/custom ranges, demographic data when the provider supplies it, provider-backed interpretation, digest/chat, and learning evidence. |
+| Operations     | Sunlit Settings covers account/workspace summary, Instagram, MFA, billing summary, data export, and audit history.                                                                                                                                                                                                                                                                                                                         | Dedicated queue/recovery, complete Vault editor/history, team and notification management, and the separate `ADMIN-01`–`ADMIN-10` portal.                                                                         |
 
 The complete restoration inventory is maintained in `../ui-design-foundation.md`.
 
@@ -142,8 +155,8 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 **B1. Generate**
 
-- On the Campaigns surface, the user chooses an objective, start date, duration, and publishing intensity and calls `POST /v1/campaigns/generate`.
-- The current contract offers exactly 3, 7, 14, 30, 60, or 90 days, defaults to 30, and accepts one to five publishes per day. Plan availability remains undecided.
+- On the Campaigns surface, the user chooses an objective, start date, duration, and publishing intensity and submits `POST /v1/campaigns/generations`. The synchronous `/generate` endpoint remains a compatibility path for plans up to 14 days.
+- The implemented contract offers exactly 3, 7, 14, 30, 60, or 90 days, defaults to 14, and accepts one to three publishes per day. Four/five daily publishing choices remain outside this release. Commercial plan gates remain deferred.
 - The API retrieves workspace Vault context, selects the configured prompt/model, calls the protected AI service, validates strict output, persists a versioned `Campaign` and `ai_interaction`, and records provider token use when available.
 - The current plan shape is `{ summary, durationDays, publishesPerDay, objectives, pillars, weeklyCadence, kpis, risks, nextActions, retrievedContext }`.
 - Provider/schema failure receives only bounded retries and a sanitized recoverable message. Failed attempts preserve existing Campaigns and report a recoverable error.
@@ -340,19 +353,19 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 
 ## 6. Failure and edge behavior
 
-| Situation | Required behavior | Current limitation to remember |
-| --- | --- | --- |
-| Vault lacks grounding | Explain the missing section and link to Business Profile/Vault | Do not fill missing facts from placeholders or demo content |
+| Situation                                   | Required behavior                                                                      | Current limitation to remember                                                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vault lacks grounding                       | Explain the missing section and link to Business Profile/Vault                         | Do not fill missing facts from placeholders or demo content                                                                                                                                                             |
 | AI/provider fails or returns invalid output | Bounded retry, sanitized error, preserve user work, preserve diagnostic usage accuracy | Production agents, embeddings, Campaign/profile/content-copy, image and document-analysis paths use configured providers; local adapters are explicit. Motion Reels render owner artwork without paid video generation. |
-| Former commercial allowance is exhausted | Continue the development action | Quota enforcement is deferred; provider limits still apply |
-| Media generation/upload fails | Preserve content edits and offer retry/manual attachment | Provider image fallback and durable storage are not complete |
-| Instagram credential is missing/expired | Block provider actions and route to secure reconnect | A configuration variable cannot repair an old credential's permissions |
-| Publish container/provider fails | Never claim success; store safe failure and offer retry/reschedule | Complete Sunlit failure/queue UI is still missing |
-| Provider publishing cap is reached | Hold/reschedule transparently using the current provider response | Do not hardcode an obsolete approximate cap |
-| Analytics permission/data is missing | Show an honest empty/readiness state and keep live mode off | Dry-run data is not live insights evidence |
-| Payment fails | Follow server-side lifecycle and show actionable status | Gateways are not live-certified yet |
-| Network/API error | Preserve unsaved browser input and offer retry | Do not clear onboarding/content drafts on an unconfirmed write |
-| Arabic locale | Use RTL layout and natural Arabic with locale-aware dates/numbers | Source-level checks do not replace visual review |
+| Former commercial allowance is exhausted    | Continue the development action                                                        | Quota enforcement is deferred; provider limits still apply                                                                                                                                                              |
+| Media generation/upload fails               | Preserve content edits and offer retry/manual attachment                               | Provider image fallback and durable storage are not complete                                                                                                                                                            |
+| Instagram credential is missing/expired     | Block provider actions and route to secure reconnect                                   | A configuration variable cannot repair an old credential's permissions                                                                                                                                                  |
+| Publish container/provider fails            | Never claim success; store safe failure and offer retry/reschedule                     | Complete Sunlit failure/queue UI is still missing                                                                                                                                                                       |
+| Provider publishing cap is reached          | Hold/reschedule transparently using the current provider response                      | Do not hardcode an obsolete approximate cap                                                                                                                                                                             |
+| Analytics permission/data is missing        | Show an honest empty/readiness state and keep live mode off                            | Dry-run data is not live insights evidence                                                                                                                                                                              |
+| Payment fails                               | Follow server-side lifecycle and show actionable status                                | Gateways are not live-certified yet                                                                                                                                                                                     |
+| Network/API error                           | Preserve unsaved browser input and offer retry                                         | Do not clear onboarding/content drafts on an unconfirmed write                                                                                                                                                          |
+| Arabic locale                               | Use RTL layout and natural Arabic with locale-aware dates/numbers                      | Source-level checks do not replace visual review                                                                                                                                                                        |
 
 ## 7. Bahrain-wide behavior
 
@@ -364,15 +377,15 @@ Provider webhooks and server-side payment state are authoritative; the browser n
 
 ## 8. Active references
 
-| Need | Active document |
-| --- | --- |
-| Architecture, schema, target product areas, milestones | `MARKOS_BUILD_SPEC. 2.pdf` |
-| Current implementation, evidence, roadmap, ownership | `../project-status.md` |
-| Active visual direction and deferred product-surface restoration | `../ui-design-foundation.md` |
-| Durable implementation/product decisions | `../decisions.md` |
-| Detailed milestone state | `../milestone-checklist.md` |
-| Railway/configuration operations | `../staging-deploy.md` |
-| Instagram permission and external-verification boundary | `../instagram-app-review.md` |
-| Retired PRD/design/cost/implementation context | `../archive/source/README.md` |
+| Need                                                             | Active document               |
+| ---------------------------------------------------------------- | ----------------------------- |
+| Architecture, schema, target product areas, milestones           | `MARKOS_BUILD_SPEC. 2.pdf`    |
+| Current implementation, evidence, roadmap, ownership             | `../project-status.md`        |
+| Active visual direction and deferred product-surface restoration | `../ui-design-foundation.md`  |
+| Durable implementation/product decisions                         | `../decisions.md`             |
+| Detailed milestone state                                         | `../milestone-checklist.md`   |
+| Railway/configuration operations                                 | `../staging-deploy.md`        |
+| Instagram permission and external-verification boundary          | `../instagram-app-review.md`  |
+| Retired PRD/design/cost/implementation context                   | `../archive/source/README.md` |
 
 Build the final system so these sequences, approval boundaries, state transitions, and recovery behaviors remain true. Use the current-status overlay to choose the next safe slice without shrinking the target or overstating what is live.

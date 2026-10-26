@@ -18,6 +18,8 @@ from app.contracts.business_profile import (
 from app.contracts.campaign import (
     CampaignGenerateRequest,
     CampaignGenerateResponse,
+    CampaignRequest,
+    CampaignSegmentRequest,
     VaultContextChunk,
 )
 from app.contracts.content import ContentGenerateRequest, ContentGenerateResponse
@@ -157,6 +159,17 @@ async def embed_vault(request: VaultEmbedRequest) -> VaultEmbedResponse:
 
 @app.post("/ai/campaigns/generate", response_model=CampaignGenerateResponse)
 async def generate_campaign(request: CampaignGenerateRequest) -> CampaignGenerateResponse:
+    if request.duration_days > 14:
+        raise AiServiceError(code="CAMPAIGN_QUEUE_REQUIRED", message="Long campaigns require weekly planning", status_code=422, retryable=False)
+    return await _generate_campaign(request)
+
+
+@app.post("/ai/campaigns/segment", response_model=CampaignGenerateResponse)
+async def generate_campaign_segment(request: CampaignSegmentRequest) -> CampaignGenerateResponse:
+    return await _generate_campaign(request)
+
+
+async def _generate_campaign(request: CampaignRequest) -> CampaignGenerateResponse:
     if not request.context:
         raise AiServiceError(
             code="AI_CONTEXT_MISSING",

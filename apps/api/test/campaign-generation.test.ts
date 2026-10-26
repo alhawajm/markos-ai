@@ -7,11 +7,14 @@ import { buildApp } from "../src/http/app";
 import { env } from "../src/config/env";
 import { requireDisposableDatabase } from "./disposable-database";
 import { processCampaignGenerations, queueCampaignGeneration, readCampaignGeneration } from "../src/campaign/campaign-generation-service";
+import { resumeCampaignGeneration } from "../src/campaign/campaign-generation-service";
+import type { CampaignPlan } from "@markos/shared-types";
 import { AiServiceRequestError } from "../src/ai/request";
 import { createContentAggregate } from "../src/content/content-aggregate";
 
 const provider = vi.hoisted(() => vi.fn());
-vi.mock("../src/ai/campaign-client", () => ({ generateCampaignPlan: provider }));
+const segments = vi.hoisted(() => vi.fn());
+vi.mock("../src/ai/campaign-client", () => ({ generateCampaignPlan: provider, generateCampaignSegment: segments }));
 vi.mock("../src/vault/vault-service", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getVaultScore: async () => ({ entryCount: 1 }),
@@ -71,12 +74,167 @@ async function fixture() {
 }
 beforeEach(() => {
   provider.mockReset().mockResolvedValue(output());
+  segments.mockReset().mockImplementation(async (request, planning) => ({
+    ...output(),
+    campaign: {
+      ...output().campaign,
+      durationDays: request.durationDays,
+      publishesPerDay: request.publishesPerDay,
+      pillars: [{ name: "Awareness", rationale: "Source-informed event awareness", contentAngles: ["Event details"] }],
+      objectives: ["Event awareness"],
+      kpis: [{ name: "Inquiries", target: "Track actual inquiries" }],
+      risks: ["Review event dates"],
+      nextActions: ["Review plan"],
+      weeklyCadence: [
+        {
+          week: 1,
+          focus: `Window ${planning.start_day}`,
+          days: Array.from({ length: request.durationDays }, (_, i) => ({
+            day: i + 1,
+            posts: Array.from({ length: request.publishesPerDay }, (_, j) => ({
+              contentType: "POST",
+              title: `Day ${planning.start_day + i} idea ${j}`,
+              description: "Use the event proposal",
+              goal: "Awareness",
+              contentPillar: "Awareness"
+            }))
+          }))
+        }
+      ]
+    }
+  }));
 });
 afterAll(async () => {
   await prisma.$disconnect();
 });
 
 describe("durable campaign generation", () => {
+  it.each([30, 60, 90] as const)("saves a complete %i-day plan in bounded windows, removes document bytes and records each call once", async (durationDays) => {
+    const f = await fixture();
+    const requestId = randomUUID();
+    const brief = { ...input, durationDays, publishesPerDay: 3 };
+    await queueCampaignGeneration(f.workspaceId, f.userId, requestId, brief);
+    await processCampaignGenerations(f.workspaceId);
+    const first = await readCampaignGeneration(f.workspaceId, requestId);
+    const total = Math.ceil(durationDays / 7);
+    expect(first).toMatchObject({ status: "QUEUED", progress: { completedWeeks: 1, totalWeeks: total } });
+    const temporary = await prisma.campaignGenerationJob.findUniqueOrThrow({ where: { id: first.id } });
+    expect(JSON.stringify(temporary.input)).not.toContain("base64Data");
+    expect(JSON.stringify(temporary.checkpoint)).not.toContain("base64Data");
+    for (let i = 1; i <= total; i++) await processCampaignGenerations(f.workspaceId);
+    const completed = await readCampaignGeneration(f.workspaceId, requestId);
+    expect(completed.status).toBe("COMPLETED");
+    const saved = await prisma.campaign.findUniqueOrThrow({ where: { id: completed.campaignId! } });
+    const plan = saved.content as unknown as CampaignPlan;
+    expect(plan.weeklyCadence.flatMap((week) => week.days.map((day) => day.day))).toEqual(Array.from({ length: durationDays }, (_, i) => i + 1));
+    expect(plan.weeklyCadence.flatMap((week) => week.days.flatMap((day) => day.posts))).toHaveLength(durationDays * 3);
+    expect(plan.referenceFiles).toHaveLength(1);
+    expect(segments).toHaveBeenCalledTimes(total);
+    expect(segments.mock.calls[0]![0].referenceFiles).toHaveLength(1);
+    expect(segments.mock.calls.slice(1).every((call) => call[0].referenceFiles.length === 0)).toBe(true);
+    expect(segments.mock.calls[1]![1].outline.referenceSummary).toContain("event details");
+    const usage = await prisma.aiInteraction.aggregate({ where: { workspaceId: f.workspaceId }, _sum: { tokensIn: true, tokensOut: true } });
+    expect(usage._sum).toEqual({ tokensIn: 12 * total, tokensOut: 34 * total });
+    expect(await prisma.campaignGenerationJob.findUniqueOrThrow({ where: { id: completed.id } })).toMatchObject({ input: null, checkpoint: null });
+    expect(await queueCampaignGeneration(f.workspaceId, f.userId, requestId, brief)).toEqual(completed);
+    if (durationDays === 90) {
+      const app = await buildApp();
+      const lastWeek = plan.weeklyCadence.at(-1)!;
+      const actionIndex = (lastWeek.days.length - 1) * brief.publishesPerDay;
+      const handoff = await app.inject({
+        method: "POST",
+        url: `/v1/campaigns/${saved.id}/suggestions/approve`,
+        headers: f.headers,
+        payload: { week: lastWeek.week, actionIndex }
+      });
+      expect(handoff.statusCode).toBe(200);
+      const planned = new Date(input.startsAt);
+      planned.setUTCDate(planned.getUTCDate() + 89);
+      expect(handoff.json().data).toMatchObject({ status: "DRAFT", campaignId: saved.id, plannedAt: planned.toISOString(), caption: "" });
+      await app.close();
+    }
+  });
+
+  it("resumes only unfinished work after an explicit retry and rejects another workspace", async () => {
+    const f = await fixture(),
+      other = await fixture();
+    const requestId = randomUUID();
+    await queueCampaignGeneration(f.workspaceId, f.userId, requestId, { ...input, durationDays: 30 });
+    await processCampaignGenerations(f.workspaceId);
+    const savedJob = await readCampaignGeneration(f.workspaceId, requestId);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL ROLE markos_app");
+      await tx.$executeRaw`SELECT set_config('app.current_workspace', ${other.workspaceId}, true)`;
+      expect(await tx.campaignGenerationJob.findMany({ where: { id: savedJob.id }, select: { checkpoint: true } })).toEqual([]);
+      expect((await tx.campaignGenerationJob.updateMany({ where: { id: savedJob.id }, data: { checkpoint: {} } })).count).toBe(0);
+    });
+    segments.mockRejectedValueOnce(
+      new AiServiceRequestError({ code: "AI_PROVIDER_TIMEOUT", message: "PRIVATE_PROVIDER_BODY", retryable: true, statusCode: 504 })
+    );
+    await processCampaignGenerations(f.workspaceId);
+    expect(await readCampaignGeneration(f.workspaceId, requestId)).toMatchObject({
+      status: "FAILED",
+      canResume: true,
+      progress: { completedWeeks: 1, totalWeeks: 5 }
+    });
+    expect((await readCampaignGeneration(f.workspaceId, requestId, { userId: other.userId, mayGenerate: true })).canResume).toBe(false);
+    expect((await readCampaignGeneration(f.workspaceId, requestId, { userId: f.userId, mayGenerate: false })).canResume).toBe(false);
+    await processCampaignGenerations(f.workspaceId);
+    expect(segments).toHaveBeenCalledTimes(2);
+    const app = await buildApp();
+    const url = `/v1/campaigns/generations/${requestId}/resume`;
+    expect((await app.inject({ method: "POST", url, headers: other.headers })).statusCode).toBe(404);
+    const replies = await Promise.all([app.inject({ method: "POST", url, headers: f.headers }), app.inject({ method: "POST", url, headers: f.headers })]);
+    expect(replies.map((r) => r.statusCode)).toEqual([202, 202]);
+    expect(JSON.stringify(replies[0]!.json())).not.toMatch(/PRIVATE_PROVIDER_BODY|base64Data|checkpoint|referenceFiles/);
+    for (let i = 0; i < 5; i++) await processCampaignGenerations(f.workspaceId);
+    expect(await readCampaignGeneration(f.workspaceId, requestId)).toMatchObject({ status: "COMPLETED" });
+    expect(segments).toHaveBeenCalledTimes(6);
+    expect(await prisma.campaign.count({ where: { workspaceId: f.workspaceId } })).toBe(1);
+    await app.close();
+  });
+
+  it("does not replay a committed window from a stale queued-job read", async () => {
+    const f = await fixture();
+    const requestId = randomUUID();
+    const job = await queueCampaignGeneration(f.workspaceId, f.userId, requestId, { ...input, durationDays: 30 });
+    const stale = await prisma.campaignGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
+    await processCampaignGenerations(f.workspaceId);
+    const read = vi.spyOn(prisma.campaignGenerationJob, "findFirst").mockResolvedValueOnce(stale);
+    try {
+      await processCampaignGenerations(f.workspaceId);
+    } finally {
+      read.mockRestore();
+    }
+    expect(segments).toHaveBeenCalledTimes(1);
+    expect((await readCampaignGeneration(f.workspaceId, requestId)).progress?.completedWeeks).toBe(1);
+    for (let i = 0; i < 5; i++) await processCampaignGenerations(f.workspaceId);
+    expect((await readCampaignGeneration(f.workspaceId, requestId)).status).toBe("COMPLETED");
+  });
+
+  it("fences a late window response after its expired lease has been resumed", async () => {
+    const f = await fixture();
+    const requestId = randomUUID();
+    const job = await queueCampaignGeneration(f.workspaceId, f.userId, requestId, { ...input, durationDays: 30 });
+    await processCampaignGenerations(f.workspaceId);
+    const normal = segments.getMockImplementation()!;
+    const nextLease = new Date(Date.now() + 20 * 60_000);
+    segments.mockImplementationOnce(async (...args) => {
+      await prisma.campaignGenerationJob.update({ where: { id: job.id }, data: { leaseExpiresAt: new Date(0) } });
+      await processCampaignGenerations(f.workspaceId);
+      await resumeCampaignGeneration(f.workspaceId, f.userId, requestId);
+      await prisma.campaignGenerationJob.update({ where: { id: job.id }, data: { status: "RUNNING", leaseExpiresAt: nextLease } });
+      return normal(...args);
+    });
+    await processCampaignGenerations(f.workspaceId);
+    expect(await prisma.campaignGenerationJob.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: "RUNNING", leaseExpiresAt: nextLease });
+    expect((await readCampaignGeneration(f.workspaceId, requestId)).progress?.completedWeeks).toBe(1);
+    expect(await prisma.campaign.count({ where: { workspaceId: f.workspaceId } })).toBe(0);
+    await prisma.campaignGenerationJob.update({
+      where: { id: job.id },
+      data: { status: "FAILED", checkpoint: Prisma.DbNull, input: Prisma.DbNull, leaseExpiresAt: null }
+    });
+  });
   it("requires explicit readiness and the reviewed revision before scheduling, and scopes schedule changes", async () => {
     const f = await fixture();
     const other = await fixture();

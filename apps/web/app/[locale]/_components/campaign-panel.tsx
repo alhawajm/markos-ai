@@ -7,6 +7,7 @@ import {
   campaignDurations,
   campaignGenerationDurations,
   type CampaignGenerationDurationDays,
+  type CampaignGenerationJobRecord,
   type CampaignRecord,
   type CampaignReviewRecord,
   type CampaignSummary,
@@ -29,6 +30,7 @@ import {
 } from "./campaign-review-model";
 import styles from "./campaign-review.module.css";
 import { addCampaignReferenceFiles, campaignReferenceAccept, campaignReferencePayload } from "./campaign-reference-files";
+import { CampaignGenerationStatus } from "./campaign-generation-status";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -69,8 +71,14 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
   const reviewRequest = useRef(0);
   const actionPending = useRef(false);
   const generationPending = useRef(false);
+  const generationId = useRef<string | undefined>(undefined);
+  const [queuedJob, setQueuedJob] = useState<CampaignGenerationJobRecord>();
+  const [hasPlanningWork, setHasPlanningWork] = useState(false);
   const openedInitial = useRef<string | undefined>(undefined);
   const workspaceLifetime = useRef(0);
+  useEffect(() => {
+    generationId.current = undefined;
+  }, [objective, description, referenceFiles, durationDays, publishesPerDay, startsAt, locale]);
 
   useEffect(() => {
     const lifetime = workspaceLifetime;
@@ -113,6 +121,9 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
     },
     [client, locale, searchQuery, session]
   );
+  const refreshCompleted = useCallback(() => {
+    void refreshCampaigns();
+  }, [refreshCampaigns]);
 
   useEffect(() => {
     const requests = listRequest;
@@ -192,25 +203,26 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
     setGenerationError("");
     try {
       const files = await campaignReferencePayload(referenceFiles);
-      const base = { durationDays, locale, publishesPerDay, startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString(),
+      const base = {
+        durationDays,
+        locale,
+        publishesPerDay,
+        startsAt: new Date(`${startsAt}T00:00:00.000Z`).toISOString(),
         ...(description.trim() ? { description: description.trim() } : {}),
-        ...(files.length ? { referenceFiles: files } : {}) };
-      const campaign = await client.generateCampaign(objective.trim() ? { ...base, objective: objective.trim() } : base);
+        ...(files.length ? { referenceFiles: files } : {})
+      };
+      const requestId = generationId.current ?? (generationId.current = crypto.randomUUID());
+      const job = await client.queueCampaignGeneration(requestId, objective.trim() ? { ...base, objective: objective.trim() } : base);
       if (lifetime !== workspaceLifetime.current) return;
-      const result = { campaign, items: [], mediaAssets: [] };
-      setCampaigns((current) => [summaryFromReview(result), ...current.filter((item) => item.id !== campaign.id)]);
+      setQueuedJob(job);
+      generationId.current = undefined;
+      if (job.status === "COMPLETED") {
+        void refreshCampaigns();
+        if (job.campaignId) openCampaign(job.campaignId);
+      }
       setQuery("");
       setSearchQuery("");
       setShowComposer(false);
-      setReferenceFiles([]);
-      setDescription("");
-      setReview(result);
-      setSelections((current) => ({ ...current, [campaign.id]: initialReviewSelection(campaign) }));
-      setActiveId(campaign.id);
-      setLastId(campaign.id);
-      setReviewError("");
-      setActionError("");
-      updateCampaignUrl(campaign.id, initialReviewSelection(campaign));
     } catch (error) {
       if (lifetime === workspaceLifetime.current) setGenerationError(error instanceof Error ? t(locale, error.message) : t(locale, "failed"));
     } finally {
@@ -284,6 +296,15 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
         </label>
       </div>
       <div className={styles.indexScroll} aria-busy={listBusy}>
+        {session ? (
+          <CampaignGenerationStatus
+            locale={locale}
+            newJob={queuedJob}
+            onComplete={refreshCompleted}
+            onReviewBrief={() => setShowComposer(true)}
+            onHasWorkChange={setHasPlanningWork}
+          />
+        ) : null}
         {listError && (
           <p className={styles.error} role="alert">
             {listError}
@@ -330,7 +351,7 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
             <div className={styles.empty}>
               <h2>{locale === "ar" ? "لا توجد حملات مطابقة" : "No matching campaigns"}</h2>
             </div>
-          ) : (
+          ) : hasPlanningWork ? null : (
             <CampaignEmpty locale={locale} onNew={() => setShowComposer(true)} />
           )
         ) : null}
@@ -366,10 +387,17 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
           referenceFiles={referenceFiles}
           onDescription={setDescription}
           onAddFiles={(files) => {
-            try { setReferenceFiles(addCampaignReferenceFiles(referenceFiles, files)); setGenerationError(""); }
-            catch (error) { setGenerationError(t(locale, error instanceof Error ? error.message : "filesUnsupported")); }
+            try {
+              setReferenceFiles(addCampaignReferenceFiles(referenceFiles, files));
+              setGenerationError("");
+            } catch (error) {
+              setGenerationError(t(locale, error instanceof Error ? error.message : "filesUnsupported"));
+            }
           }}
-          onRemoveFile={(index) => { setReferenceFiles(current => current.filter((_, i) => i !== index)); setGenerationError(""); }}
+          onRemoveFile={(index) => {
+            setReferenceFiles((current) => current.filter((_, i) => i !== index));
+            setGenerationError("");
+          }}
           durationDays={durationDays}
           isBusy={generating}
           locale={locale}
@@ -517,8 +545,11 @@ function CampaignComposer({
           <span className="text-sm font-semibold">{t(locale, "description")}</span>
           <textarea
             className="sunlit-field mt-2 min-h-28 resize-y rounded-xl px-4 py-3 text-sm leading-6 outline-none"
-            rows={4} maxLength={5000} value={description} dir="auto"
-            onChange={event => onDescription(event.target.value)}
+            rows={4}
+            maxLength={5000}
+            value={description}
+            dir="auto"
+            onChange={(event) => onDescription(event.target.value)}
             placeholder={t(locale, "descriptionPlaceholder")}
           />
         </label>
@@ -528,19 +559,49 @@ function CampaignComposer({
             <span className="text-xs text-[var(--text-secondary)]">{referenceFiles.length}/5</span>
           </div>
           <p className="mt-1 text-sm leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceHint")}</p>
-          <input ref={fileInput} type="file" className="hidden" accept={campaignReferenceAccept} multiple
+          <input
+            ref={fileInput}
+            type="file"
+            className="hidden"
+            accept={campaignReferenceAccept}
+            multiple
             aria-label={t(locale, "addFiles")}
-            onChange={event => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
-          {referenceFiles.length > 0 && <ul className="mt-3 space-y-2">
-            {referenceFiles.map((file, index) => <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-3 rounded-lg bg-[var(--surface-raised)] p-2">
-              <FileText size={18} className="shrink-0 text-[var(--primary)]" aria-hidden="true" />
-              <span className="min-w-0 flex-1 break-words text-sm" dir="auto">{file.name}</span>
-              <span className="shrink-0 text-xs text-[var(--sunlit-muted)]">{file.size < 1_000_000 ? `${Math.max(1, Math.ceil(file.size / 1000))} KB` : `${(file.size / 1_000_000).toFixed(1)} MB`}</span>
-              <button type="button" className="sunlit-secondary grid h-9 w-9 shrink-0 place-items-center rounded-lg" aria-label={`${t(locale, "removeFile")}: ${file.name}`} onClick={() => onRemoveFile(index)}><X size={16} /></button>
-            </li>)}
-          </ul>}
-          <button type="button" className="sunlit-secondary mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold disabled:opacity-50" disabled={referenceFiles.length >= 5} onClick={() => fileInput.current?.click()}>
-            <Paperclip size={16} />{t(locale, "addFiles")}
+            onChange={(event) => {
+              onAddFiles(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
+          />
+          {referenceFiles.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {referenceFiles.map((file, index) => (
+                <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-3 rounded-lg bg-[var(--surface-raised)] p-2">
+                  <FileText size={18} className="shrink-0 text-[var(--primary)]" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 break-words text-sm" dir="auto">
+                    {file.name}
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--sunlit-muted)]">
+                    {file.size < 1_000_000 ? `${Math.max(1, Math.ceil(file.size / 1000))} KB` : `${(file.size / 1_000_000).toFixed(1)} MB`}
+                  </span>
+                  <button
+                    type="button"
+                    className="sunlit-secondary grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+                    aria-label={`${t(locale, "removeFile")}: ${file.name}`}
+                    onClick={() => onRemoveFile(index)}
+                  >
+                    <X size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            className="sunlit-secondary mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold disabled:opacity-50"
+            disabled={referenceFiles.length >= 5}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Paperclip size={16} />
+            {t(locale, "addFiles")}
           </button>
           <p className="mt-2 text-xs leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceFormats")}</p>
         </section>
@@ -565,7 +626,6 @@ function CampaignComposer({
               );
             })}
           </div>
-          <p className="mt-2 text-sm text-[var(--sunlit-muted)]">{t(locale, "futureDurations")}</p>
         </fieldset>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label>
@@ -707,7 +767,8 @@ function t(locale: Locale, key: string): string {
     },
     en: {
       description: "Description and context",
-      descriptionPlaceholder: "Tell MARKOS about the event, audience, dates and creative direction. Explain what to use from the files and any details that have changed.",
+      descriptionPlaceholder:
+        "Tell MARKOS about the event, audience, dates and creative direction. Explain what to use from the files and any details that have changed.",
       referenceFiles: "Campaign reference files (optional)",
       referenceHint: "Add proposals, event details or designs to help MARKOS draft a more accurate campaign.",
       referenceFormats: "PDF, Word (.docx), TXT, PNG, JPG or WebP. Up to 5 files, 8 MB each and 20 MB total.",

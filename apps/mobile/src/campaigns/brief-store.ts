@@ -36,7 +36,7 @@ export class BriefStore {
       const value = JSON.parse(raw) as Brief;
       if (typeof value.objective !== "string" || typeof value.description !== "string" || !Array.isArray(value.files) || !validDate(value.startDate))
         throw new Error("Invalid brief");
-      if (![3, 7, 14].includes(value.durationDays) || ![1, 2, 3].includes(value.publishesPerDay) || validateReferences(value.files))
+      if (![3, 7, 14, 30, 60, 90].includes(value.durationDays) || ![1, 2, 3].includes(value.publishesPerDay) || validateReferences(value.files))
         throw new Error("Invalid brief");
       // Restore only files that belong to this identity; missing OS files remain visible for removal.
       value.files = value.files.filter((file) => ownedReferenceUri(this.directory.uri, file.uri));

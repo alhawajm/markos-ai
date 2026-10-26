@@ -1,4 +1,37 @@
-# MARKOS implementation progress - 27 September 2026
+# MARKOS implementation progress - 26 October 2026
+
+## Current 0.5 preparation
+
+Web and native now support 30/60/90-day campaign briefs through the durable queue.
+Long plans commit seven-day windows, source summaries, frozen business context and
+actual usage before proceeding. Progress reads contain metadata only. Interrupted
+calls require an explicit creator retry; committed weeks are preserved and stale
+workers cannot overwrite a later lease. All days, including the final partial week,
+must validate before one campaign is saved. Draft approval and scheduling remain separate.
+
+The Railway API has both checkpoint/progress migrations applied (32 total), the AI
+segment route is reachable behind the internal boundary, and anonymous resume requests
+return 401. English desktop and Arabic 390px planning/recovery fixtures passed, including
+no horizontal overflow. Native uses a focused duration selector and saved brief recovery.
+
+Focused checks: campaign generation/RLS/baseline 18 passed; campaign-route 14 passed;
+AI campaign/provider/health 23 passed; mobile brief/transport 14 passed; web reference/auth
+10 passed; three rendered campaign checks passed (11 unrelated cases skipped). API,
+web and mobile typechecks, selected Python mypy/Ruff and both native exports passed.
+These checks do not establish a completed live-provider 90-day campaign or device receipt.
+
+Firebase CLI authorization and both provider terms were completed by the owner. Created
+dedicated project `markos-mobile-35017b4c`, registered `com.markos.mobile`, and linked
+an FCM-only service account to MARKOS's Expo credentials. Client configuration is an EAS
+secret file in preview and production; no server private key was written locally.
+Runtime 0.5.0 needs new native binaries. Google Play submission credentials, actual
+phone notification receipt, final store/Meta review and the remaining product depth
+remain open. The existing Apple push key/certificates and other apps were preserved.
+
+Daily encrypted database/media recovery and the core service checks are healthy.
+Brevo email remains parked pending company DNS/sender verification. The operational
+foundation, earlier full-suite results and remaining gates are tracked in
+[release readiness](release-readiness.md).
 
 ## Current 0.4 release
 

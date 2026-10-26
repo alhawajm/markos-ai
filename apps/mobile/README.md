@@ -2,6 +2,24 @@
 
 One Expo / React Native app for Android and iOS, connected to the existing Railway API. The existing Next.js site remains the web app. Expo project: [@mo4180/markos](https://expo.dev/accounts/mo4180/projects/markos).
 
+## 0.5.0 preparation — 26 October 2026
+
+Added 30/60/90-day campaign briefs, saved weekly planning progress and creator-only
+recovery of unfinished steps, plus the Help and Legal screen. The duration picker
+opens a focused sheet. Approval and scheduling remain separate from generation.
+
+Android FCM V1 is linked to MARKOS through the dedicated Firebase project
+`markos-mobile-35017b4c` and an FCM-only service account. Its private key was sent
+directly to Expo's credential store, without a local plaintext file. The Android
+client configuration is the `GOOGLE_SERVICES_JSON` secret file variable in both EAS
+preview and production environments. `app.config.ts` uses that file, with an ignored
+`google-services.json` fallback for local tooling. No Firebase Analytics module is added.
+See [Expo's FCM setup](https://docs.expo.dev/push-notifications/fcm-credentials/).
+
+Runtime 0.5.0 requires a new Android/iPhone binary. Keep the compatible 0.4.0 update
+available to existing installations. New build/store/device results must be recorded
+when observed; credential configuration alone does not prove notification receipt.
+
 Current release: **0.4.0**, connected to the same Railway services as the website. Adds exact offering pricing/availability, notification/report preferences, complete account deletion and platform administration. Expo Notifications requires installing a new binary; a 0.3.0 app cannot receive these native features through OTA.
 
 Latest 0.4.0 interface update, **12 October 2026**: cleaner Create, separate Edit / Preview / Assistant, one carousel slide at a time, focused media panels, compact campaign/calendar filters, grouped Settings and contextual business/team selectors. Research and exact validation are in [mobile UX refinement](../../docs/mobile-ux-refinement.md). Source `484d4be` is published to [preview/TestFlight update 9dded374-106b-4a38-860b-bde0631cb18c](https://expo.dev/accounts/mo4180/projects/markos/updates/9dded374-106b-4a38-860b-bde0631cb18c) and [production update b565864c-4fe1-4fe8-88d2-c752a3d97441](https://expo.dev/accounts/mo4180/projects/markos/updates/b565864c-4fe1-4fe8-88d2-c752a3d97441). Both Android/iOS native exports, 34 focused tests, mobile TypeScript and 17 rendered layouts passed. Both channels serve the expected 0.4.0 manifests and matching bundle hashes, with the Railway API URL present. Physical-device interaction acceptance remains separate.

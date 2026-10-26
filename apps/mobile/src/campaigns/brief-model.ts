@@ -4,7 +4,7 @@ export type Brief = {
   objective: string;
   description: string;
   files: Reference[];
-  durationDays: 3 | 7 | 14;
+  durationDays: 3 | 7 | 14 | 30 | 60 | 90;
   publishesPerDay: number;
   startDate: string;
   pendingSince?: string;
