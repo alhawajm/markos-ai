@@ -29,7 +29,7 @@ deferred. No public approval, live delivery or physical-device acceptance is inf
 | Live analytics / email     | Instagram analytics and publishing modes are live; real-account metrics/publishing acceptance remains pending. Brevo accepted controlled emails, then reported sender/domain delivery failures.    |
 | Product depth              | Longer campaigns, Vault/version operations, brand/media management and remaining analytics views need connected implementation and acceptance.                                                     |
 | Store preparation          | Native 0.4 binaries exist. Bilingual public privacy/terms/support pages now identify the real operator and email provider. Updated native binaries, screenshots and final disclosures remain.      |
-| Release source             | Current branch source deployed to API, worker, web and AI. Git publication and automatic deployment-source reconciliation remain pending; do not deploy the older main checkout.                   |
+| Release source             | Current branch source is deployed to API, worker, web and AI and saved on GitHub's `codex/production-mobile` branch. Default-branch/automatic-source reconciliation remains pending; do not deploy the older main checkout. |
 | Video                      | Railway CPU Motion Reels remain the runnable default. No paid video API or unverified GPU provider will be enabled.                                                                                |
 
 ## Verification recorded in this pass
@@ -41,6 +41,9 @@ deferred. No public approval, live delivery or physical-device acceptance is inf
   integrity/retention, workspace isolation and durable delivery coverage. Test files
   now have independent auth-limit namespaces; isolation fixtures do not queue fake
   executable erasure jobs. The real production rate limits remain unchanged.
+  The PowerShell wrapper reported exit 1 because initialization emitted a PostgreSQL
+  role-membership NOTICE on stderr; Vitest itself reported all files/tests passing
+  with no unhandled errors. The complete GitHub CI release gate has not run for this checkpoint.
 - All 42 workspace-owned Prisma models are covered by the isolation inventory;
   new RLS policies and campaign app-role grants are applied in production.
 - Public English/Arabic legal pages passed three rendered checks, including mobile
