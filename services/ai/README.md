@@ -74,51 +74,9 @@ Connect provider-backed embeddings, pgvector storage, workspace-scoped similarit
 
 ## Local development
 
-Python must satisfy `>=3.11,<3.12`.
+Follow the shared [local-development guide](../../docs/local-development.md) for Python installation, environment setup, and startup. The root launcher starts this service together with the web app and API; no separate AI launch is needed.
 
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
-```
-
-From the repository root, MARKOS has two explicit local modes. Both start the AI service through `scripts/python-runner.mjs` when the local environment is installed:
-
-```powershell
-# Default: deterministic local text; image generation disabled; no OpenAI key required.
-corepack pnpm dev
-# Equivalent explicit name:
-corepack pnpm dev:safe
-
-# OpenAI text generation; image generation remains disabled.
-corepack pnpm dev:live-ai
-```
-
-The launcher validates the local URLs, database, internal token, email provider, media storage, Instagram modes, provider choice, and model names before starting anything. Run only the preflight when you do not want to start servers:
-
-```powershell
-corepack pnpm local:check:safe
-corepack pnpm local:check:live-ai
-```
-
-Keep the OpenAI credential only in the ignored `services/ai/.env` file. The committed `.env.example` files remain secret-free, and the repository-root `.env` must not contain `OPENAI_API_KEY`. Local live-AI mode currently enables provider-backed text only; image generation is disabled, while email, media storage, and Instagram publishing/analytics remain local or dry-run.
-
-Use a dedicated local-development OpenAI project and project service-account key. The local AI environment should use:
-
-```dotenv
-AI_TEXT_PROVIDER=local
-AI_IMAGE_PROVIDER=disabled
-OPENAI_API_KEY=<dedicated-local-project-service-account-key>
-OPENAI_STORE_RESPONSES=true
-LLM_PRIMARY_MODEL=gpt-5.6-terra
-LLM_LONGFORM_MODEL=gpt-5.6-sol
-IMAGE_MODEL_PRIMARY=gpt-image-2
-AI_DOCUMENT_TIMEOUT_SECONDS=50
-AI_IMAGE_TIMEOUT_SECONDS=120
-INTERNAL_SERVICE_TOKEN=<same-local-token-as-api>
-```
-
-The mode launcher overrides `AI_TEXT_PROVIDER` to `openai` only for `dev:live-ai`; keeping the file default at `local` makes accidental direct starts fail safely. The root and AI environment files must agree on the model names and internal token. These local files and values must never be copied to a hosted environment.
+The configuration reference below is for service integration and hosted deployments, not a checklist for local onboarding.
 
 ## Current configuration names
 

@@ -5,6 +5,16 @@
 !.env.example
 .next
 .turbo
+.tmp
+.playwright-cli
+.pnpm-store
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/*.log
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
 **/.next
 **/.turbo
 **/.venv

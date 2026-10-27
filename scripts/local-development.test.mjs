@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import test from "node:test";
-import { findBusyApplicationPorts, parseDotEnv, resolveDevelopmentMode, validateLocalConfiguration } from "./local-development.mjs";
+import { createLocalEnvironment, findBusyApplicationPorts, parseDotEnv, resolveDevelopmentMode, validateLocalConfiguration } from "./local-development.mjs";
 
 const rootEnv = {
   AI_BASE_URL: "http://localhost:8000",
@@ -197,4 +197,37 @@ test("detects an application port already owned by another process", async (cont
   if (address === null || typeof address === "string") return;
 
   assert.deepEqual(await findBusyApplicationPorts([{ name: "test", port: address.port }]), [{ name: "test", port: address.port }]);
+});
+
+test("forces offline providers and disables telemetry despite inherited provider configuration", () => {
+  const configured = {
+    AI_TEXT_PROVIDER: "openai",
+    AI_IMAGE_PROVIDER: "openai",
+    AI_VIDEO_PROVIDER: "openai",
+    OPENAI_API_KEY: "test-only-key",
+    OPENAI_STORE_RESPONSES: "true",
+    SENTRY_DSN: "https://example.test/telemetry",
+    NEXT_PUBLIC_SENTRY_DSN: "https://example.test/telemetry"
+  };
+  const environment = createLocalEnvironment({ rootEnv: { ...rootEnv, ...configured }, parentEnv: configured });
+  assert.equal(environment.AI_TEXT_PROVIDER, "local");
+  assert.equal(environment.AI_IMAGE_PROVIDER, "disabled");
+  assert.equal(environment.AI_VIDEO_PROVIDER, "disabled");
+  assert.equal(environment.OPENAI_API_KEY, "");
+  assert.equal(environment.OPENAI_STORE_RESPONSES, "false");
+  assert.equal(environment.SENTRY_DSN, "");
+  assert.equal(environment.NEXT_PUBLIC_SENTRY_DSN, "");
+  assert.equal(environment.NEXT_TELEMETRY_DISABLED, "1");
+  assert.equal(environment.TURBO_TELEMETRY_DISABLED, "1");
+});
+
+test("validates inherited service overrides rather than only the dotenv values", () => {
+  const environment = createLocalEnvironment({ rootEnv, parentEnv: { DATABASE_URL: "postgresql://user:secret@hosted.example/markos" } });
+  const result = validateLocalConfiguration({ aiEnv, rootEnv: environment });
+  assert.ok(result.errors.includes("DATABASE_URL must point to this PC, not a hosted service."));
+});
+
+test("rejects a hosted browser API endpoint", () => {
+  const result = validateLocalConfiguration({ aiEnv, rootEnv: { ...rootEnv, NEXT_PUBLIC_API_BASE_URL: "https://api.example.test" } });
+  assert.ok(result.errors.includes("NEXT_PUBLIC_API_BASE_URL must point to this PC, not a hosted service."));
 });

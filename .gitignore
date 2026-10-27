@@ -6,6 +6,9 @@ build/
 coverage/
 apps/web/evidence/
 .turbo/
+.tmp/
+test-results/
+playwright-report/
 .env
 .env.*
 !.env.example

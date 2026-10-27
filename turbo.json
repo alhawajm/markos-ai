@@ -81,7 +81,29 @@
     },
     "dev": {
       "cache": false,
-      "passThroughEnv": ["AI_IMAGE_PROVIDER", "AI_TEXT_PROVIDER"],
+      "passThroughEnv": [
+        "AI_BASE_URL",
+        "API_BASE_URL",
+        "DATABASE_URL",
+        "EMAIL_PROVIDER",
+        "INSTAGRAM_ANALYTICS_SYNC_MODE",
+        "INSTAGRAM_PUBLISH_MODE",
+        "INTERNAL_SERVICE_TOKEN",
+        "MEDIA_STORAGE_DRIVER",
+        "NEXT_PUBLIC_API_BASE_URL",
+        "OPENSEARCH_URL",
+        "REDIS_URL",
+        "WEB_BASE_URL",
+        "AI_IMAGE_PROVIDER",
+        "AI_TEXT_PROVIDER",
+        "AI_VIDEO_PROVIDER",
+        "OPENAI_API_KEY",
+        "OPENAI_STORE_RESPONSES",
+        "SENTRY_DSN",
+        "NEXT_PUBLIC_SENTRY_DSN",
+        "NEXT_TELEMETRY_DISABLED",
+        "TURBO_TELEMETRY_DISABLED"
+      ],
       "persistent": true
     },
     "infra#build": {

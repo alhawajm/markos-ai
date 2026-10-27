@@ -5,10 +5,10 @@ These files are preserved for historical context and traceability. They are not 
 Retired on 2026-08-16:
 
 - `MARKOS_AGENTS. 2.0.pdf`
-- `MARKOS_AI_Cost_Model.docx`
 - `MARKOS_AI_Design_Document_Figma.docx`
-- `MARKOS_AI_Implementation_Plan.docx`
 - `MARKOS_AI_PRD_v1.0.docx`
+
+The [cost model](../../source/MARKOS_AI_Cost_Model.docx) and [implementation plan](../../source/MARKOS_AI_Implementation_Plan.docx) were restored to `docs/source/` as supporting handoff references. They are not current pricing or implementation evidence.
 
 Before retirement, their requirements were compared with the active source set:
 

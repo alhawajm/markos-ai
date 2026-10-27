@@ -1,59 +1,28 @@
 # MARKOS AI
 
-AI-powered marketing operating system for Bahrain SMBs. Version 1 is Instagram-only, bilingual Arabic/English, and built around a Knowledge Vault plus eight AI agents.
+An Instagram-first marketing OS for Bahrain businesses, with shared web, Android and iPhone accounts, campaigns and media.
 
-Start with M0 Foundation from [`docs/source/MARKOS_BUILD_SPEC. 2.pdf`](docs/source/MARKOS_BUILD_SPEC.%202.pdf).
+## Use MARKOS
 
-The active source set is intentionally small:
+Double-click **Run MARKOS.cmd** or open the [Railway app](https://web-production-94e63.up.railway.app/en/login). Railway is the current host; no local server is needed for everyday use.
 
-- [`AGENTS.md`](AGENTS.md) — repository operating instructions and precedence.
-- [`docs/source/MARKOS_BUILD_SPEC. 2.pdf`](docs/source/MARKOS_BUILD_SPEC.%202.pdf) — structural product target.
-- [`docs/source/MARKOS_EXPERIENCE_FLOWS.md`](docs/source/MARKOS_EXPERIENCE_FLOWS.md) — behavioral target and state transitions.
-- [`docs/project-status.md`](docs/project-status.md) — current implementation, evidence, roadmap, and ownership overlay.
+The native app lives in [apps/mobile](apps/mobile/README.md). The [Expo project](https://expo.dev/accounts/mo4180/projects/markos) holds native builds and updates. See [release readiness](docs/release-readiness.md) for verified results and external release gates.
 
-Superseded PRD, implementation, cost, design, and agent-instruction sources are retained under [`docs/archive/source/`](docs/archive/source/README.md) for history only. Do not use them as current contracts.
+## Develop locally
 
-Detailed progress is tracked in
-[`docs/milestone-checklist.md`](docs/milestone-checklist.md), durable engineering choices in
-[`docs/decisions.md`](docs/decisions.md), and Railway deployment operations in
-[`docs/staging-deploy.md`](docs/staging-deploy.md).
+Follow [Run MARKOS locally](docs/local-development.md) for offline setup and [Formatting and tests](docs/testing.md) for focused checks. Standard `pnpm dev` and `pnpm local:check` use the safe local profile.
 
-Double-click **Run MARKOS.cmd** to open the [Railway app](https://web-production-94e63.up.railway.app/en/login).
-This is the default application for demos and everyday use; it runs entirely on
-Railway with the existing accounts, workspaces, AI and media. No local server is needed.
-The optional developer setup remains documented in [Local handover](docs/local-handover.md).
+The optional [local handover](docs/local-handover.md) describes explicit developer profiles. `scripts/run-local.ps1 -Mode railway` uses the workstation's ignored environment and SSH identity; these are not included when cloning. Shared database edits affect Railway. **Stop MARKOS.cmd** stops local processes only.
 
-The Android/iOS app lives in [`apps/mobile`](apps/mobile/README.md), with the same Railway accounts and campaigns. Its [Expo project](https://expo.dev/accounts/mo4180/projects/markos) contains native preview builds; [the mobile plan](docs/mobile-app-plan.md) records the implemented slice and remaining milestones.
+Persistent tests require an explicitly named disposable database. Never run tests, seeds or migrations against the shared Railway environment.
 
-This workstation's ignored `.env` and SSH identity are required for that
-connection. They are not included when copying or cloning the repository. Current
-source also does not implement every planned feature, including complete live
-billing.
+## Project references
 
-Install the pinned Node dependencies with:
-
-```bash
-corepack pnpm install --frozen-lockfile
-```
-
-For explicit local development only, use `powershell -File scripts/run-local.ps1`.
-That launcher configures the database tunnel and hosted job ownership together.
-**Stop MARKOS.cmd** stops those local processes; it does not stop Railway.
-`pnpm dev` is for separately configured local development.
-
-Follow the focused testing rules in [`AGENTS.md`](AGENTS.md). Persistent tests
-require an explicitly named disposable database and separate test configuration.
-Do not run `pnpm verify`, persistent API tests, seeds or migrations against the
-shared Railway `.env`.
-
-Python 3.11 is required when running `services/ai` locally; the prepared Railway
-profile uses hosted AI. On Windows, use the Python launcher if `python` is
-shadowed by the Microsoft Store alias:
-
-```bash
-py -3.11 -m venv services/ai/.venv
-cd services/ai
-.venv/Scripts/python.exe -m pip install -e ".[dev]"
-```
-
-Full M0 local infra requires Docker Desktop with WSL enabled.
+- [AGENTS.md](AGENTS.md): repository instructions and precedence.
+- [Build specification](docs/source/MARKOS_BUILD_SPEC.%202.pdf): structural authority.
+- [Experience flows](docs/source/MARKOS_EXPERIENCE_FLOWS.md): behavioral authority.
+- [Implementation progress](docs/implementation-progress.md) and [release readiness](docs/release-readiness.md): current evidence and pending work.
+- [Project status](docs/project-status.md): dated handover and historical roadmap.
+- [Feature documentation](docs/features/README.md): Business Profile, Create and Campaign contracts.
+- [Decisions](docs/decisions.md), [source index](docs/source/README.md) and [milestone checklist](docs/milestone-checklist.md).
+- [Railway deployment operations](docs/staging-deploy.md) and [recovery runbook](docs/recovery-runbook.md).

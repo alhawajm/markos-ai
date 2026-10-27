@@ -18,9 +18,22 @@ const LOCAL_DEFAULTS = {
   INSTAGRAM_ANALYTICS_SYNC_MODE: "dry_run",
   INSTAGRAM_PUBLISH_MODE: "dry_run",
   MEDIA_STORAGE_DRIVER: "local",
+  NEXT_PUBLIC_API_BASE_URL: "http://localhost:4000",
   OPENSEARCH_URL: "http://localhost:9200",
   REDIS_URL: "redis://localhost:6379",
   WEB_BASE_URL: "http://localhost:3000"
+};
+
+const OFFLINE_ENV = {
+  AI_IMAGE_PROVIDER: "disabled",
+  AI_TEXT_PROVIDER: "local",
+  AI_VIDEO_PROVIDER: "disabled",
+  OPENAI_API_KEY: "",
+  OPENAI_STORE_RESPONSES: "false",
+  SENTRY_DSN: "",
+  NEXT_PUBLIC_SENTRY_DSN: "",
+  NEXT_TELEMETRY_DISABLED: "1",
+  TURBO_TELEMETRY_DISABLED: "1"
 };
 
 const ALLOWED_MODES = new Set(["safe", "live-ai", "railway"]);
@@ -100,6 +113,15 @@ function validateHostedHttpsUrl(errors, name, value) {
   }
 }
 
+export function createLocalEnvironment({ rootEnv = {}, parentEnv = process.env } = {}) {
+  const overrides = Object.fromEntries(
+    Object.keys(LOCAL_DEFAULTS)
+      .filter((key) => parentEnv[key] !== undefined)
+      .map((key) => [key, parentEnv[key]])
+  );
+  return { ...parentEnv, ...LOCAL_DEFAULTS, ...rootEnv, ...overrides, ...OFFLINE_ENV };
+}
+
 export function validateLocalConfiguration({ aiEnv = {}, mode: requestedMode, rootEnv = {} }) {
   const errors = [];
   const mode = resolveDevelopmentMode(requestedMode, rootEnv);
@@ -135,13 +157,16 @@ export function validateLocalConfiguration({ aiEnv = {}, mode: requestedMode, ro
   if (railway) validateHostedHttpsUrl(errors, "AI_BASE_URL", rootEnv.AI_BASE_URL);
   else validateLoopbackUrl(errors, "AI_BASE_URL", root.AI_BASE_URL, new Set(["http:", "https:"]));
   validateLoopbackUrl(errors, "API_BASE_URL", root.API_BASE_URL, new Set(["http:", "https:"]));
+  validateLoopbackUrl(errors, "NEXT_PUBLIC_API_BASE_URL", root.NEXT_PUBLIC_API_BASE_URL, new Set(["http:", "https:"]));
   validateLoopbackUrl(errors, "WEB_BASE_URL", root.WEB_BASE_URL, new Set(["http:", "https:"]));
 
   if (!railway && root.EMAIL_PROVIDER !== "local") {
     errors.push("EMAIL_PROVIDER must remain local in the two standard development modes.");
   }
   if (railway && root.EMAIL_PROVIDER === "local") {
-    errors.push("Railway mode cannot use EMAIL_PROVIDER=local because local verification tokens must not verify shared accounts. Configure sendgrid instead.");
+    errors.push(
+      "Railway mode cannot use EMAIL_PROVIDER=local because local verification tokens must not verify shared accounts. Configure a transactional email provider instead."
+    );
   }
   if (!railway && root.MEDIA_STORAGE_DRIVER !== "local") {
     errors.push("MEDIA_STORAGE_DRIVER must remain local in the two standard development modes.");
@@ -221,12 +246,17 @@ export function validateLocalConfiguration({ aiEnv = {}, mode: requestedMode, ro
   };
 }
 
-export function inspectLocalConfiguration(mode) {
-  return validateLocalConfiguration({
-    aiEnv: readOptionalEnv(aiEnvPath),
-    mode,
-    rootEnv: readOptionalEnv(repositoryEnvPath)
-  });
+export function inspectLocalConfiguration(requestedMode) {
+  const rootEnv = readOptionalEnv(repositoryEnvPath);
+  const mode = resolveDevelopmentMode(requestedMode, rootEnv);
+  const environment =
+    mode === "safe"
+      ? createLocalEnvironment({ rootEnv })
+      : { ...process.env, ...LOCAL_DEFAULTS, ...rootEnv, AI_IMAGE_PROVIDER: "disabled", AI_VIDEO_PROVIDER: "disabled", AI_TEXT_PROVIDER: "openai" };
+  return {
+    ...validateLocalConfiguration({ aiEnv: readOptionalEnv(aiEnvPath), mode, rootEnv: environment }),
+    environment
+  };
 }
 
 function isPortInUse(port) {
@@ -271,14 +301,10 @@ function printSummary(summary, checkOnly) {
   if (checkOnly) console.log("  Result: ready");
 }
 
-function startDevelopment(mode) {
+function startDevelopment(environment) {
   const child = spawn(process.execPath, [turboCliPath, "dev"], {
     cwd: repositoryRoot,
-    env: {
-      ...process.env,
-      AI_IMAGE_PROVIDER: "disabled",
-      AI_TEXT_PROVIDER: mode === "live-ai" ? "openai" : "local"
-    },
+    env: environment,
     shell: false,
     stdio: "inherit"
   });
@@ -295,7 +321,7 @@ function startDevelopment(mode) {
 async function main() {
   const modeArgument = process.argv[2]?.startsWith("--") ? undefined : process.argv[2];
   const checkOnly = process.argv.includes("--check");
-  const { errors, summary } = inspectLocalConfiguration(modeArgument);
+  const { errors, summary, environment } = inspectLocalConfiguration(modeArgument ?? "safe");
   const mode = summary.mode;
 
   if (process.argv.includes("--json")) {
@@ -314,9 +340,7 @@ async function main() {
   printSummary(summary, checkOnly);
   if (checkOnly) return;
   if (mode === "railway") {
-    console.error(
-      "Start this profile with Run MARKOS.cmd or scripts/run-local.ps1 -Mode railway so hosted job ownership and shared media settings are applied."
-    );
+    console.error("Start this developer profile with scripts/run-local.ps1 -Mode railway so hosted job ownership and shared media settings are applied.");
     process.exitCode = 1;
     return;
   }
@@ -330,7 +354,7 @@ async function main() {
     return;
   }
 
-  startDevelopment(mode);
+  startDevelopment(environment);
 }
 
 const entryPath = process.argv[1] === undefined ? undefined : pathToFileURL(resolve(process.argv[1])).href;

@@ -6,11 +6,8 @@
     "node": ">=20.16.0 <21 || >=22.3.0"
   },
   "scripts": {
-    "dev": "node scripts/local-development.mjs safe",
-    "dev:safe": "node scripts/local-development.mjs safe",
-    "dev:live-ai": "node scripts/local-development.mjs live-ai",
-    "local:check:safe": "node scripts/local-development.mjs safe --check",
-    "local:check:live-ai": "node scripts/local-development.mjs live-ai --check",
+    "dev": "node scripts/local-development.mjs",
+    "local:check": "node scripts/local-development.mjs --check",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",

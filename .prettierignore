@@ -4,6 +4,9 @@ node_modules/
 .vscode/
 **/.next/
 **/.turbo/
+**/.tmp/
+**/test-results/
+**/playwright-report/
 **/build/
 **/coverage/
 **/dist/

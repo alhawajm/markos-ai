@@ -1,5 +1,7 @@
 # MARKOS UI refinement: audit and implementation plan
 
+Handoff note: this document retains dated decisions and verification history. Private workstation evidence referenced below is not included in the repository; removed prototypes are not runnable onboarding steps. Use [project status](../project-status.md) for the handoff checkpoint.
+
 Date: 2026-09-10. Branch: `feat/business-profile`. Scope: the mounted application, preserving the existing backend, records, approvals, sessions, publishing and onboarding contracts. This pass builds on the uncommitted palette checkpoint and preserves the separate Business Profile prototype work.
 
 ## Audit method and coverage
