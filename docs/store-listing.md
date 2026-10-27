@@ -57,8 +57,10 @@ Suggested keywords: instagram,marketing,campaign,content,planner,reels,business,
 
 ## Required before public submission
 
-Confirm the real legal operator, a monitored support email and business address; finish privacy/retention wording and store disclosure forms. The Apple developer team name alone is not a confirmed public operator/contact assignment.
+The owner confirmed **Raedat Software Company W.L.L** and **support@raedat.online**. The real public business/postal address and final privacy/retention review remain pending. Do not infer an address from the developer team or invent one.
 
-Google Play Console/Firebase access and the Android FCM service account remain owner inputs. Record the actual screenshot/device acceptance results before submission. TestFlight is internal testing, not public release.
+Firebase and the dedicated Android FCM V1 service account are configured. Android 0.5.0/build 7 APK and build 8 AAB finished. The store bundle passed archive/signature checks and contains arm64, armv7, x86 and x86_64 libraries. The Play submission profile targets an internal draft and does not send changes for review; the separate Play publisher credential and app-level Console permission remain pending. Never reuse the FCM key for store submission.
+
+iPhone 0.5.0/build 7 is VALID / IN_BETA_TESTING in the existing owner-only internal group. Store release, screenshots and physical-device acceptance remain separate gates. The owner elected to test the phone later.
 
 Capture screenshots from the new native binaries using a dedicated business fixture: campaign brief with five references; Post/Carousel/Reel editor; full preview; calendar; Insights; Arabic business profile. Never use customer documents, live credentials or another app's screenshots. Required screenshot sizes must be checked in each store's current upload form.

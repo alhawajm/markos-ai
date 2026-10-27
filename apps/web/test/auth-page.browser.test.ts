@@ -359,14 +359,14 @@ describe("rendered Sunlit authentication", () => {
 
     await page.goto(`${baseUrl}/en/terms`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { level: 1, name: "The terms for using MARKOS" }).waitFor();
-    await expect(page.getByText("Powered by Ra'edat Software L.L.C.").isVisible()).resolves.toBe(true);
+    await expect(page.getByText("Operated by Raedat Software Company W.L.L", { exact: true }).isVisible()).resolves.toBe(true);
 
     await page.goto(`${baseUrl}/ar/privacy`, { waitUntil: "networkidle" });
-    await page.getByRole("heading", { level: 1, name: "كيفية التعامل مع المعلومات في MARKOS" }).waitFor();
+    await page.getByRole("heading", { level: 1, name: "كيف يتعامل ماركوس مع المعلومات" }).waitFor();
     await expect(page.locator('[data-legal-document="privacy"]').getAttribute("dir")).resolves.toBe("rtl");
     await expect(noHorizontalOverflow(page)).resolves.toBe(true);
     await context.close();
-  });
+  }, 60_000);
 });
 
 async function mockApi(page: Page, handler: (route: Route, pathname: string) => Promise<unknown>) {

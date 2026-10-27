@@ -1,6 +1,27 @@
 # Instagram Integration and App Review Status
 
-Status date: 2026-08-17.
+Current overlay: 2026-10-27. The August investigation below is retained as dated evidence.
+
+## Current submission preparation
+
+- Operator: **Raedat Software Company W.L.L**. Public support/privacy contact: **support@raedat.online**. The public postal address and final legal review remain pending.
+- Railway hosts the website, API, AI, workers, private media and CPU Motion Reels. Current deployment/recovery evidence is in [release readiness](release-readiness.md) and the [recovery runbook](recovery-runbook.md).
+- The deployed request set is exactly `instagram_business_basic`, `instagram_business_content_publish` and `instagram_business_manage_insights`. Comments and messaging are outside this release.
+- On 27 October the stored review-account connection was CONNECTED with an unexpired token and the canonical requested scopes. Read-only requests for reach, views and profile_views each returned HTTP 200, and live worker snapshots are stored. Requested scopes and successful account insights do not establish publishing permission or Advanced Access approval.
+- The application supports reviewed Post, Carousel, Reel and eligible Story workflows. Generation and marking ready do not publish. Formal review and controlled live publishing per format remain unverified external gates.
+
+### Reviewer walkthrough to complete in the Meta dashboard
+
+1. Use an isolated reviewer workspace and eligible professional Instagram account. Supply credentials through Meta's protected reviewer fields, never this repository, logs or a screen recording.
+2. Demonstrate login, account connection and the visible connected identity. Explain `instagram_business_basic` through the account/profile information MARKOS displays.
+3. Demonstrate creating content, reviewing its caption/media, explicitly approving it and choosing the publish/schedule action. Explain `instagram_business_content_publish` through that owner-controlled action. Use specifically reviewed test content and record the real Instagram result.
+4. Open Insights, synchronize and show the same account/date range in Instagram. Explain `instagram_business_manage_insights` through the displayed account and media metrics; distinguish unavailable values from zero.
+5. Demonstrate disconnect and the account-deletion entry point. Show privacy/support links and the real operator. Record callback and deletion evidence separately from ordinary disconnect.
+6. Verify dashboard app mode, business verification, permission-review status, callback/website domains and reviewer access before submitting. A prepared packet, local fixture or successful developer-role connection is not App Review approval.
+
+Use the actual public `/en/privacy`, `/ar/privacy`, `/en/support`, `/ar/support`, `/en/delete-account` and `/ar/delete-account` pages on the Railway website. Finalize the address and privacy disclosures before public store submission. The owner has Meta dashboard access; dashboard submission and the real-account recording remain pending.
+
+## Historical August status
 
 The production-verified connection used Instagram Login with `instagram_business_basic`. The Milestone A working implementation now requests the canonical ordered set `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_insights`, but it has not been deployed, reconnected, or live-verified. Each added permission retains its own dashboard, provider-call, persistence, App Review, and external-evidence gate. Comments and messaging are not confirmed first-release requirements.
 
@@ -60,18 +81,18 @@ Permission names and dashboard availability are provider-managed and must be che
 
 The following is historical handoff context, not repository-proven current dashboard state. Confirm each item in Meta before using it in an App Review submission or operational decision.
 
-| Item                      | Handoff record requiring dashboard verification                                                                                                       |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App/portfolio             | Business app under the Ra'edat Business Portfolio, intended for multiple external client accounts.                                                    |
-| Login/product             | Instagram Login.                                                                                                                                      |
-| Selected use case         | `Manage messaging & content on Instagram`; this selection does not make messaging/comments MARKOS requirements.                                       |
+| Item                      | Handoff record requiring dashboard verification                                                                                                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App/portfolio             | Business app under the Ra'edat Business Portfolio, intended for multiple external client accounts.                                                                                                         |
+| Login/product             | Instagram Login.                                                                                                                                                                                           |
+| Selected use case         | `Manage messaging & content on Instagram`; this selection does not make messaging/comments MARKOS requirements.                                                                                            |
 | Graph version at creation | v25.0. The Milestone A application contract now fixes versioned Instagram Login account, publishing, and insights calls to `graph.instagram.com/v25.0`; verify current dashboard/runtime state separately. |
-| App mode at creation      | Development.                                                                                                                                          |
-| Initial permission        | `instagram_business_basic`.                                                                                                                           |
-| Remaining permissions     | `instagram_business_content_publish` and `instagram_business_manage_insights`; both are in the working OAuth request, but deployment, fresh authorization, live calls, and App Review remain unverified. |
-| Access model              | Least privilege. Khalid had scoped app/technical access rather than portfolio-wide administration.                                                    |
-| Custody                   | Yahya Alawadhi retained portfolio control; Maryam Buzaboon and Mohamed Al-Hawaj received longer-term app/business custody appropriate to their roles. |
-| Cloud owner access        | Sarah does not require Meta access solely because she owns cloud work; grant only a concrete least-privilege need.                                    |
+| App mode at creation      | Development.                                                                                                                                                                                               |
+| Initial permission        | `instagram_business_basic`.                                                                                                                                                                                |
+| Remaining permissions     | `instagram_business_content_publish` and `instagram_business_manage_insights`; both are in the working OAuth request, but deployment, fresh authorization, live calls, and App Review remain unverified.   |
+| Access model              | Least privilege. Khalid had scoped app/technical access rather than portfolio-wide administration.                                                                                                         |
+| Custody                   | Yahya Alawadhi retained portfolio control; Maryam Buzaboon and Mohamed Al-Hawaj received longer-term app/business custody appropriate to their roles.                                                      |
+| Cloud owner access        | Sarah does not require Meta access solely because she owns cloud work; grant only a concrete least-privilege need.                                                                                         |
 
 Do not copy dashboard secrets, real provider-account identifiers, callback query data, user details, or access tokens into this inventory.
 

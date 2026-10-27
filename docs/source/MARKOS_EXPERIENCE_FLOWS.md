@@ -151,6 +151,8 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 ### Flow B — Generate the first Campaign
 
+**Maintaining approved business facts:** web and native Business Profile editors offer module-specific version history. Selecting an earlier version populates the editor only; review and Save are required to apply it. Save uses the current profile revision, canonical module validation and Vault projection updates, and preserves unrelated modules and offerings. Concurrent edits return a conflict while keeping the form. The history response is bounded to recent authoritative snapshots and exposes only the selected module.
+
 **Goal:** demonstrate that MARKOS understands this business and give the user a concrete next direction.
 
 **B1. Generate**
@@ -252,7 +254,7 @@ The complete restoration inventory is maintained in `../ui-design-foundation.md`
 
 - `POST /v1/analytics/sync` runs a workspace-scoped sync through the selected provider; `GET /v1/analytics` returns the summarized range.
 - Current live-readiness requires the canonical three-scope Milestone A request, a fresh appropriately requested credential, live mode, and Instagram Login configuration. A configured or requested scope is still not evidence that Meta granted it.
-- The live provider uses separate account `reach,profile_views` and media `shares,comments` requests and preserves unavailable data separately from explicit zero. Local provider and workspace-isolation tests pass, but live metrics are not externally verified and `INSTAGRAM_ANALYTICS_SYNC_MODE` defaults to `dry_run`.
+- The live provider uses format-specific account/media metrics, exact range totals, daily reach and current follower counts. It preserves unavailable values separately from explicit zero and isolates unsupported metrics. Railway runs live mode; controlled read-only account requests and stored live metrics were verified on 27 October 2026. App Review, visual comparison to Instagram and live publish acceptance remain separate gates. See `docs/instagram-analytics-live-verification.md` for the dated evidence.
 
 **F2. View and interpret**
 

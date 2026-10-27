@@ -231,7 +231,7 @@ const copyByLocale = {
       changeEmail: "Change email",
       back: "Back to login"
     },
-    footer: "© 2026 Ra'edat Software L.L.C."
+    footer: "© 2026 Raedat Software Company W.L.L"
   },
   ar: {
     brand: "MARKOS AI",
@@ -407,7 +407,7 @@ const copyByLocale = {
       changeEmail: "تغيير البريد الإلكتروني",
       back: "العودة إلى تسجيل الدخول"
     },
-    footer: "© 2026 Ra'edat Software L.L.C."
+    footer: "© 2026 Raedat Software Company W.L.L"
   }
 } as const;
 

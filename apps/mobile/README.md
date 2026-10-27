@@ -8,7 +8,7 @@ One Expo / React Native app for Android and iOS, connected to the existing Railw
 
 [iPhone build 7](https://expo.dev/accounts/mo4180/projects/markos/builds/590e6f81-6beb-4b2c-9f6b-beb3ffd928ed) and [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/89d20c7b-92fa-4352-b575-0bf7e55ba0e8) finished. Apple reports VALID and IN_BETA_TESTING with no missing encryption declaration. The existing internal group still has one owner tester and no public link. Other Apple apps were not changed.
 
-Android production AAB build 8 is being prepared for the Play internal track. A dedicated publisher credential and Play Console app permission are still required. Physical-device installation and push receipt remain pending; the owner elected to test later.
+[Android production AAB build 8](https://expo.dev/accounts/mo4180/projects/markos/builds/0cd6e94b-027e-4c53-b566-2e068e880b5c) finished and passed archive/signature checks for all four supported CPU architectures. It is prepared for the Play internal track. A dedicated publisher credential and Play Console app permission are still required. Physical-device installation and push receipt remain pending; the owner elected to test later.
 
 ### Included in the native build
 
