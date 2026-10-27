@@ -74,36 +74,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  await app.register(helmet);
-  await app.register(cors, {
-    origin: env.NODE_ENV === "development" ? Array.from(new Set(devCorsOrigins)) : env.WEB_BASE_URL,
-    credentials: true,
-    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
-  });
-  await registerWorkspaceContext(app);
-  await registerAuthRateLimits(app);
-  await registerAdminRoutes(app);
-  await registerAuthRoutes(app);
-  await registerPasswordRoutes(app);
-  await registerAgentRoutes(app);
-  await registerAnalyticsRoutes(app);
-  await registerBillingRoutes(app);
-  await registerCalendarRoutes(app);
-  await registerOnboardingRoutes(app);
-  await registerBusinessKnowledgeRoutes(app);
-  await registerCampaignRoutes(app);
-  await registerContentRoutes(app);
-  await registerConversationRoutes(app);
-  await registerMediaRoutes(app);
-  await registerMetaRoutes(app);
-  await registerNotificationRoutes(app);
-  await registerPromptRoutes(app);
-  await registerPublishingRoutes(app);
-  await registerWorkspaceRoutes(app);
-  await registerSettingsRoutes(app);
-  await registerInstagramLearningRoutes(app);
-  await registerVaultRoutes(app);
-
+  // Fastify captures the error handler when a route is registered.
   app.setErrorHandler((error, request, reply) => {
     const details = getErrorDetails(error);
     const statusCode = details.statusCode;
@@ -134,6 +105,36 @@ export async function buildApp(): Promise<FastifyInstance> {
         errorEnvelope(details.code ?? (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"), statusCode >= 500 ? "Unexpected server error" : details.message)
       );
   });
+
+  await app.register(helmet);
+  await app.register(cors, {
+    origin: env.NODE_ENV === "development" ? Array.from(new Set(devCorsOrigins)) : env.WEB_BASE_URL,
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+  });
+  await registerWorkspaceContext(app);
+  await registerAuthRateLimits(app);
+  await registerAdminRoutes(app);
+  await registerAuthRoutes(app);
+  await registerPasswordRoutes(app);
+  await registerAgentRoutes(app);
+  await registerAnalyticsRoutes(app);
+  await registerBillingRoutes(app);
+  await registerCalendarRoutes(app);
+  await registerOnboardingRoutes(app);
+  await registerBusinessKnowledgeRoutes(app);
+  await registerCampaignRoutes(app);
+  await registerContentRoutes(app);
+  await registerConversationRoutes(app);
+  await registerMediaRoutes(app);
+  await registerMetaRoutes(app);
+  await registerNotificationRoutes(app);
+  await registerPromptRoutes(app);
+  await registerPublishingRoutes(app);
+  await registerWorkspaceRoutes(app);
+  await registerSettingsRoutes(app);
+  await registerInstagramLearningRoutes(app);
+  await registerVaultRoutes(app);
 
   app.get("/v1/health", async () => {
     const response: HealthResponse = {

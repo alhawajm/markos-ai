@@ -2,7 +2,15 @@
 
 One Expo / React Native app for Android and iOS, connected to the existing Railway API. The existing Next.js site remains the web app. Expo project: [@mo4180/markos](https://expo.dev/accounts/mo4180/projects/markos).
 
-## 0.5.0 preparation — 26 October 2026
+## 0.5.0 release — 27 October 2026
+
+[Android APK build 7](https://expo.dev/accounts/mo4180/projects/markos/builds/abfe757f-218b-4943-9df7-54e125df53be) finished and passed archive, package/version, arm64 and target SDK 36 checks. Dedicated Firebase FCM V1 is linked.
+
+[iPhone build 7](https://expo.dev/accounts/mo4180/projects/markos/builds/590e6f81-6beb-4b2c-9f6b-beb3ffd928ed) and [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/89d20c7b-92fa-4352-b575-0bf7e55ba0e8) finished. Apple reports VALID and IN_BETA_TESTING with no missing encryption declaration. The existing internal group still has one owner tester and no public link. Other Apple apps were not changed.
+
+Android production AAB build 8 is being prepared for the Play internal track. A dedicated publisher credential and Play Console app permission are still required. Physical-device installation and push receipt remain pending; the owner elected to test later.
+
+### Included in the native build
 
 Added 30/60/90-day campaign briefs, saved weekly planning progress and creator-only
 recovery of unfinished steps, plus the Help and Legal screen. The duration picker
@@ -20,7 +28,9 @@ Runtime 0.5.0 requires a new Android/iPhone binary. Keep the compatible 0.4.0 up
 available to existing installations. New build/store/device results must be recorded
 when observed; credential configuration alone does not prove notification receipt.
 
-Current release: **0.4.0**, connected to the same Railway services as the website. Adds exact offering pricing/availability, notification/report preferences, complete account deletion and platform administration. Expo Notifications requires installing a new binary; a 0.3.0 app cannot receive these native features through OTA.
+### Previous 0.4.0 release
+
+Version 0.4.0 connects to the same Railway services as the website. It added exact offering pricing/availability, notification/report preferences, complete account deletion and platform administration. Older binaries remain documented below as historical release evidence.
 
 Latest 0.4.0 interface update, **12 October 2026**: cleaner Create, separate Edit / Preview / Assistant, one carousel slide at a time, focused media panels, compact campaign/calendar filters, grouped Settings and contextual business/team selectors. Research and exact validation are in [mobile UX refinement](../../docs/mobile-ux-refinement.md). Source `484d4be` is published to [preview/TestFlight update 9dded374-106b-4a38-860b-bde0631cb18c](https://expo.dev/accounts/mo4180/projects/markos/updates/9dded374-106b-4a38-860b-bde0631cb18c) and [production update b565864c-4fe1-4fe8-88d2-c752a3d97441](https://expo.dev/accounts/mo4180/projects/markos/updates/b565864c-4fe1-4fe8-88d2-c752a3d97441). Both Android/iOS native exports, 34 focused tests, mobile TypeScript and 17 rendered layouts passed. Both channels serve the expected 0.4.0 manifests and matching bundle hashes, with the Railway API URL present. Physical-device interaction acceptance remains separate.
 
@@ -30,7 +40,7 @@ On 0.4.0, use Settings → App and advanced settings → Check for updates → R
 - [iPhone 0.4.0/build 6](https://expo.dev/accounts/mo4180/projects/markos/builds/8ae6e14d-8ee8-4f2d-9b37-ec37b05518f8). IPA integrity, iPhoneOS, MARKOS identity/team and production push entitlement checked. [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/d2bc4a39-35b4-4aef-9aeb-5a1d48ebb7ca) finished. Apple build `6e8e84c0-5a91-4e54-a47e-14e7ef54605d` is VALID and IN_BETA_TESTING with no missing encryption declaration. The existing internal group remains owner-only, with no public link; this is not public App Store publication.
 - [Android store AAB build](https://expo.dev/accounts/mo4180/projects/markos/builds/591a919a-b0b4-4fd3-85d8-2cd203a4a0e4) finished, 0.4.0/code 6. [Download the store bundle](https://expo.dev/artifacts/eas/31S18SKFdpPLw44aJkQXzSlc0058oCXoZnY_dufAobM.aab). Play Console access remains unconfigured; a finished bundle is not store publication.
 
-Android FCM credentials are not configured, so phone alerts are not yet activated on Android. In-app notifications remain available. iOS now has an assigned push key and a new MARKOS-only provisioning profile; no other app or distribution certificate was modified. Actual phone notification receipt, keyboard/back behavior, screen-reader use and the real Instagram publishing walkthrough remain device/owner acceptance work. Public legal/contact and store disclosures are tracked in `docs/store-listing.md`.
+Android FCM credentials were configured on 26 October; version 0.5.0 includes the Firebase native configuration. iOS has an assigned push key and MARKOS-only provisioning profile. Actual phone notification receipt, keyboard/back behavior, screen-reader use and the real Instagram publishing walkthrough remain device/owner acceptance work. Public legal/contact and store disclosures are tracked in `docs/store-listing.md`.
 
 0.4 focused validation: 21 native pricing/session tests, relevant API isolation/deletion/email/administration tests, TypeScript for mobile/API/web, native bundle exports, and English/Arabic browser controls against a disposable database passed. The backend and worker deployment IDs/evidence are in `docs/implementation-progress.md`.
 

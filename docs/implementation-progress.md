@@ -107,3 +107,9 @@ Follow-up source `710d757` is published as preview/TestFlight group `edbd1c73-5f
 - Commercial billing remains deferred by explicit product decision. No simulated payments or quota gates were activated. Live merchant credentials/certification are external requirements.
 
 Website: https://web-production-94e63.up.railway.app
+
+## 2026-10-27 - Native release and profile version recovery
+
+Android APK and iPhone IPA 0.5.0/build 7 finished. The iPhone TestFlight submission finished and Apple confirms VALID / IN_BETA_TESTING in the existing owner-only group. Android store AAB build 8 was queued separately; phone notification receipt is deferred by the owner. Today's scheduled recovery snapshot restored all 32 migrations, five workspaces and 22 referenced media objects into a disposable local database, which was removed afterward. Read-only Meta calls proved reach, views and profile_views access; live worker snapshots are present.
+
+Web and native business editors now expose bounded, module-specific version history. Selecting a revision only populates the form. Ordinary Save applies the selected fields through canonical validation, revision conflict checks and Vault projections; other modules/catalog remain current. The API error handler is registered before route setup so conflict responses use the expected envelope. English/Arabic desktop/narrow browser checks and focused API/native checks passed. This source checkpoint still requires final CI, deployment and compatible 0.5 OTA delivery.

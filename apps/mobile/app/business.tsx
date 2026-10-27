@@ -129,6 +129,7 @@ export default function Business() {
           changes: changesBetween(edit.base, { ...edit.value, ...Object.fromEntries(Object.entries(clean(edit.value)).filter(([, v]) => Array.isArray(v))) })
         });
       queryClient.setQueryData([scope, "business"], value);
+      void queryClient.invalidateQueries({ queryKey: [scope, "business-history"] });
       await store.clear();
       setEdit(null);
       setConflict(null);
@@ -183,6 +184,9 @@ export default function Business() {
       {edit ? (
         <>
           <Txt variant="heading">{edit.offering ? t("Product or service", "منتج أو خدمة") : t(...labels[edit.module])}</Txt>
+          {!edit.offering && edit.module !== "products" ? (
+            <ProfileHistory module={edit.module} disabled={busy} onSelect={(values) => change({ ...edit, value: values })} />
+          ) : null}
           {edit.offering ? (
             <>
               <Field
@@ -346,5 +350,77 @@ export default function Business() {
       )}
       <WebButton label={t("Open full profile on web", "فتح الملف الكامل على الموقع")} path="app/knowledge" />
     </Screen>
+  );
+}
+
+function ProfileHistory({ module, disabled, onSelect }: { module: BusinessKnowledgeModule; disabled: boolean; onSelect: (values: Values) => void }) {
+  const { api, scope } = useAccount();
+  const { t, locale } = useAppearance();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState("");
+  const history = useQuery({ queryKey: [scope, "business-history", module], queryFn: () => api.businessKnowledgeHistory(module), enabled: open });
+  const row = history.data?.find((item) => String(item.version) === selected);
+  return (
+    <>
+      <TextAction label={open ? t("Hide version history", "إخفاء سجل الإصدارات") : t("Version history", "سجل الإصدارات")} onPress={() => setOpen(!open)} />
+      {open ? (
+        <Card tone="tint">
+          <Txt muted>
+            {t(
+              "Review an earlier version, then save to apply it. Other sections stay as they are.",
+              "راجع إصدارًا سابقًا، ثم احفظ لتطبيقه. تبقى الأقسام الأخرى كما هي."
+            )}
+          </Txt>
+          {history.isPending ? (
+            <Loading />
+          ) : history.isError ? (
+            <QueryFailure error={history.error} retry={() => void history.refetch()} />
+          ) : !history.data.length ? (
+            <Txt muted>{t("No saved versions yet.", "لا توجد إصدارات محفوظة بعد.")}</Txt>
+          ) : (
+            <>
+              <SelectField
+                label={t("Saved version", "الإصدار المحفوظ")}
+                value={selected}
+                options={[
+                  { value: "", label: t("Choose a version", "اختر إصدارًا") },
+                  ...history.data.map((item) => ({
+                    value: String(item.version),
+                    label: `${t("Version", "الإصدار")} ${item.version} · ${new Date(item.createdAt).toLocaleDateString(locale)}`
+                  }))
+                ]}
+                onChange={setSelected}
+              />
+              {row ? (
+                <Button
+                  secondary
+                  disabled={disabled}
+                  label={t("Review this version", "مراجعة هذا الإصدار")}
+                  onPress={() =>
+                    Alert.alert(
+                      t("Load this version?", "تحميل هذا الإصدار؟"),
+                      t(
+                        "This replaces the unsaved values in this editor. Review them and tap Save to apply.",
+                        "سيستبدل هذا القيم غير المحفوظة في المحرر. راجعها واضغط حفظ لتطبيقها."
+                      ),
+                      [
+                        { text: t("Cancel", "إلغاء"), style: "cancel" },
+                        {
+                          text: t("Review version", "مراجعة الإصدار"),
+                          onPress: () => {
+                            onSelect(row.values);
+                            setOpen(false);
+                          }
+                        }
+                      ]
+                    )
+                  }
+                />
+              ) : null}
+            </>
+          )}
+        </Card>
+      ) : null}
+    </>
   );
 }

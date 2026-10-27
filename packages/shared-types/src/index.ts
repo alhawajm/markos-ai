@@ -267,6 +267,12 @@ export * from "./instagram-learning";
 
 export type BusinessKnowledgeModule = "company" | "story" | "audience" | "competitors" | "brand" | "objectives";
 
+export interface BusinessKnowledgeRevision {
+  version: number;
+  createdAt: string;
+  values: Record<string, unknown>;
+}
+
 export interface BusinessKnowledgeRecord {
   version: number;
   updatedAt: string | null;

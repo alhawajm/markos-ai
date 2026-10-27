@@ -25,6 +25,8 @@ import type {
   BillingVatComplianceReport,
   BusinessProfile,
   BusinessKnowledgeRecord,
+  BusinessKnowledgeModule,
+  BusinessKnowledgeRevision,
   UpdateBusinessKnowledge,
   CampaignGenerationDurationDays,
   CampaignGenerationJobRecord,
@@ -415,6 +417,10 @@ export class MarkosApiClient {
   async vault(): Promise<Record<VaultSection, KnowledgeVaultEntry[]>> {
     const response = await this.request<Record<VaultSection, KnowledgeVaultEntry[]>>("/v1/vault");
     return response.data;
+  }
+
+  async businessKnowledgeHistory(module: BusinessKnowledgeModule): Promise<BusinessKnowledgeRevision[]> {
+    return (await this.request<BusinessKnowledgeRevision[]>(`/v1/business-profile/history/${module}`)).data;
   }
 
   async vaultScore(): Promise<VaultCompletenessScore> {

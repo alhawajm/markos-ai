@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type {
   BusinessKnowledgeModule,
   BusinessKnowledgeRecord,
+  BusinessKnowledgeRevision,
   BusinessProfile,
   KnowledgeVaultEntry,
   UpdateBusinessKnowledge,
@@ -36,6 +37,28 @@ export const knowledgeSchemas = {
   brand: z.object(brandOnboardingSchema.shape),
   objectives: z.object(objectivesOnboardingSchema.shape)
 };
+
+/** Bounded, workspace-scoped snapshots for review; writes still use the canonical editor. */
+export async function listBusinessKnowledgeHistory(workspaceId: string, module: BusinessKnowledgeModule): Promise<BusinessKnowledgeRevision[]> {
+  const rows = await prisma.knowledgeVaultHistory.findMany({
+    where: { workspaceId, section: "COMPANY", key: authoritativeProfileKey },
+    orderBy: { version: "desc" },
+    take: 50,
+    select: { version: true, createdAt: true, value: true }
+  });
+  const revisions: BusinessKnowledgeRevision[] = [];
+  let previous: string | undefined;
+  for (const row of rows) {
+    const stored = row.value as unknown as StoredKnowledge;
+    const values = stored?.modules?.[module];
+    if (!values || !knowledgeSchemas[module].safeParse(values).success) continue;
+    const serialized = JSON.stringify(values);
+    if (serialized === previous) continue;
+    previous = serialized;
+    revisions.push({ version: row.version, createdAt: row.createdAt.toISOString(), values });
+  }
+  return revisions;
+}
 
 const bindings: Record<BusinessKnowledgeModule, Array<[VaultSection, string]>> = {
   company: [["COMPANY", "profile"]],

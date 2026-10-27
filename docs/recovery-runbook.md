@@ -15,6 +15,12 @@ isolation migrations: **30 migrations, five workspaces and 22 media objects** re
 successfully. Its durable operations receipt is present in the production database.
 The rehearsal again removed its disposable database and all temporary plaintext.
 
+On 27 October the scheduled run completed at 00:18 UTC. A fresh isolated restore
+verified **32 migrations, five workspaces and 22 media objects**, including the
+campaign checkpoint migrations. The rehearsal removed its own disposable database
+and all temporary plaintext. This proves recovery within the current Railway
+account; it does not provide independent-provider disaster recovery.
+
 ## Storage and keys
 
 Source media stays in the app project's existing bucket. Recovery objects live in

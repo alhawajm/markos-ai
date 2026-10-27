@@ -1,10 +1,12 @@
 import json
 
+from sentry_sdk.types import Event
+
 from app.core.observability import sanitize_event
 
 
 def test_monitoring_never_retains_prompts_requests_or_frame_locals() -> None:
-    event = {
+    event: Event = {
         "event_id": "diagnostic-1",
         "level": "error",
         "request": {"data": "PRIVATE_PROMPT", "url": "/call?token=PRIVATE_TOKEN"},
