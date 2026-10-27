@@ -198,6 +198,7 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
     {
       config: {
         permissions: ["analytics:read"],
+        verifiedUserRequired: true,
         workspaceRequired: true
       }
     },

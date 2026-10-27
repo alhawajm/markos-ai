@@ -68,6 +68,7 @@ class OpenAIOnboardingDocumentProvider:
             output_label="onboarding document extraction",
             schema=OnboardingDocumentExtraction,
             schema_name="markos_onboarding_document_extraction",
+            max_output_tokens=settings.onboarding_document_max_output_tokens,
         )
         return OnboardingDocumentAnalysisResponse(
             model=generated.model,

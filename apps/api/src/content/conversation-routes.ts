@@ -64,7 +64,8 @@ export async function registerConversationRoutes(app: FastifyInstance) {
       }
     }
   );
-  if (env.NODE_ENV !== "test") {
+  // Another API deployment can own durable runs while this instance serves the same routes.
+  if (env.NODE_ENV !== "test" && env.CONVERSATION_PROCESSOR_ENABLED) {
     let running: Promise<void> | undefined;
     let timer: ReturnType<typeof setInterval> | undefined;
     app.addHook("onReady", async () => {

@@ -23,6 +23,7 @@ declare module "fastify" {
 
   interface FastifyRequest {
     auth?: {
+      authVersion: number;
       isVerified: boolean;
       mfaVerified: boolean;
       mfaVerifiedUntil: number | null;
@@ -91,7 +92,8 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
         select: {
           deletedAt: true,
           isVerified: true,
-          mfaEnabled: true
+          mfaEnabled: true,
+          authVersion: true
         }
       });
 
@@ -106,8 +108,13 @@ export async function registerWorkspaceContext(app: FastifyInstance): Promise<vo
         await reply.status(401).send(errorEnvelope("USER_NOT_ACTIVE", "User is not active"));
         return;
       }
+      if (user.authVersion !== (principal.authVersion ?? 0)) {
+        await reply.status(401).send(errorEnvelope("INVALID_TOKEN", "Sign in again after your password change"));
+        return;
+      }
 
       const auth = {
+        authVersion: user.authVersion,
         isVerified: user.isVerified,
         mfaVerified: principal.mfaVerified ?? false,
         mfaVerifiedUntil: principal.mfaVerifiedUntil ?? null,

@@ -31,6 +31,10 @@ _analysis/
 # credentials out of repository history.
 AGENTS.override.md
 
+# Native build configuration is supplied through EAS file variables.
+apps/mobile/google-services.json
+**/*service-account*.json
+
 # Launch evidence can include provider screenshots, payment proof, tokens,
 # customer data, or app review artifacts. Commit only templates/docs.
 /evidence/**

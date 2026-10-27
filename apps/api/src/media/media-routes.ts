@@ -11,6 +11,7 @@ import {
   updateContentMediaSchema
 } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
+import { requestAi } from "../ai/request";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
@@ -47,6 +48,9 @@ import {
 const maxDirectUploadBodyBytes = 12 * 1024 * 1024;
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/media/video-capabilities", { config: { workspaceRequired: true, permissions: ["media:read"] } }, async () =>
+    ok(await requestAi<{ motion: boolean; generatedFootage: boolean }>("/ai/videos/capabilities", { body: {} }))
+  );
   app.patch("/v1/content/:contentItemId/media", { config: { workspaceRequired: true, permissions: ["media:write"] } }, async (request, reply) => {
     const { contentItemId } = request.params as { contentItemId: string };
     const parsed = updateContentMediaSchema.safeParse(request.body);

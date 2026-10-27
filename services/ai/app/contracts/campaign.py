@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Locale = Literal["ar", "en"]
-CampaignDurationDays = Literal[3, 7, 14]
+CampaignDurationDays = Literal[3, 7, 14, 30, 60, 90]
 CampaignContentType = Literal["POST", "CAROUSEL", "STORY", "REEL"]
 ShortText = Annotated[str, Field(min_length=1, max_length=500)]
 
@@ -44,7 +44,7 @@ class CampaignPostSuggestion(StrictContract):
 
 
 class CampaignDay(StrictContract):
-    day: int = Field(ge=1, le=14)
+    day: int = Field(ge=1, le=90)
     posts: list[CampaignPostSuggestion] = Field(min_length=1, max_length=3)
 
 
@@ -59,15 +59,11 @@ class CampaignKpi(StrictContract):
     target: str = Field(min_length=1, max_length=500)
 
 
-class GeneratedCampaignContent(StrictContract):
+class CampaignOutline(StrictContract):
     summary: str = Field(min_length=1, max_length=2_000)
+    reference_summary: str | None = Field(default=None, alias="referenceSummary", max_length=4_000)
     objectives: list[ShortText] = Field(min_length=1, max_length=8)
     pillars: list[CampaignPillar] = Field(min_length=1, max_length=6)
-    weekly_cadence: list[CampaignWeek] = Field(
-        alias="weeklyCadence",
-        min_length=1,
-        max_length=26,
-    )
     kpis: list[CampaignKpi] = Field(min_length=1, max_length=10)
     risks: list[ShortText] = Field(min_length=1, max_length=10)
     next_actions: list[ShortText] = Field(
@@ -77,8 +73,12 @@ class GeneratedCampaignContent(StrictContract):
     )
 
 
+class GeneratedCampaignContent(CampaignOutline):
+    weekly_cadence: list[CampaignWeek] = Field(alias="weeklyCadence", min_length=1, max_length=13)
+
+
 class CampaignPlan(GeneratedCampaignContent):
-    duration_days: CampaignDurationDays = Field(alias="durationDays")
+    duration_days: int = Field(alias="durationDays", ge=1, le=90)
     publishes_per_day: int = Field(alias="publishesPerDay", ge=1, le=3)
 
     @model_validator(mode="after")
@@ -101,16 +101,55 @@ class CampaignPlan(GeneratedCampaignContent):
         return self
 
 
-class CampaignGenerateRequest(StrictContract):
+class CampaignReferenceFile(StrictContract):
+    filename: str = Field(min_length=1, max_length=180)
+    mime_type: Literal[
+        "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain", "image/jpeg", "image/png", "image/webp",
+    ]
+    base64_data: str = Field(min_length=4, max_length=11_200_000)
+
+
+class CampaignRequestBase(StrictContract):
     workspace_id: str = Field(min_length=1, max_length=120)
     objective: str | None = Field(default=None, min_length=3, max_length=500)
-    duration_days: CampaignDurationDays = 14
+    description: str | None = Field(default=None, max_length=5_000)
+    reference_files: list[CampaignReferenceFile] = Field(default_factory=list, max_length=5)
+    duration_days: int = Field(default=14, ge=1, le=90)
     publishes_per_day: int = Field(default=1, ge=1, le=3)
     starts_at: datetime
     locale: Locale = "en"
     context: list[VaultContextChunk] = Field(default_factory=list, max_length=10)
     prompt_template: CampaignPromptTemplate | None = None
     model: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class CampaignGenerateRequest(CampaignRequestBase):
+    duration_days: CampaignDurationDays = 14
+
+
+class CampaignPlanningContext(StrictContract):
+    total_duration_days: CampaignDurationDays
+    start_day: int = Field(ge=1, le=90)
+    outline: CampaignOutline | None = None
+    previous_weeks: list[str] = Field(default_factory=list, max_length=13)
+
+
+class CampaignSegmentRequest(CampaignRequestBase):
+    duration_days: int = Field(ge=1, le=7)
+    planning_context: CampaignPlanningContext
+
+    @model_validator(mode="after")
+    def validate_window(self) -> "CampaignSegmentRequest":
+        window = self.planning_context
+        if (window.start_day - 1) % 7 or window.start_day + self.duration_days - 1 > window.total_duration_days:
+            raise ValueError("invalid campaign planning window")
+        if window.start_day > 1 and (window.outline is None or self.reference_files):
+            raise ValueError("later windows require the established outline and no repeated document upload")
+        return self
+
+
+CampaignRequest = CampaignGenerateRequest | CampaignSegmentRequest
 
 
 class CampaignGenerateResponse(StrictContract):

@@ -22,6 +22,8 @@ vi.mock("../src/ai/onboarding-document-client", async (importOriginal) => {
 vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
     model: "test-embedding-model",
+    space: "test:1536",
+    tokens_in: 0,
     dimensions: 1536,
     embeddings: texts.map(() => [1, ...Array.from({ length: 1535 }, () => 0)])
   })

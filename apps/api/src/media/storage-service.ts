@@ -90,7 +90,8 @@ export class LocalMediaStorageDriver implements MediaStorageDriver {
 
     try {
       await unlink(safeChildPath(workspaceDir, storedFilename));
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw new MediaStorageError("MEDIA_STORAGE_DELETE_FAILED");
     }
   }

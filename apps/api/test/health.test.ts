@@ -1,9 +1,42 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/http/app";
 import { isObservabilityEnabled } from "../src/observability/sentry";
+import { prisma } from "../src/db/prisma";
 
 describe("health routes", () => {
+  it("checks the authenticated AI boundary and skips unused OpenSearch", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const app = await buildApp();
+    try {
+      const response = await app.inject({ method: "GET", url: "/v1/ready" });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.dependencies.opensearch.status).toBe("skipped");
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/ai/ready"),
+        expect.objectContaining({ headers: { authorization: expect.stringMatching(/^Bearer /) } })
+      );
+    } finally {
+      fetch.mockRestore();
+      await app.close();
+    }
+  });
+  it("returns 503 for a broken AI boundary without leaking database failure details", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 401 }));
+    const database = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("postgres://private-user:private-password@internal/production"));
+    const app = await buildApp();
+    try {
+      const response = await app.inject({ method: "GET", url: "/v1/ready" });
+      expect(response.statusCode).toBe(503);
+      expect(response.json().data.dependencies.ai.detail).toBe("HTTP 401");
+      expect(response.body).not.toContain("private-password");
+      expect(response.body).not.toContain("internal/production");
+    } finally {
+      fetch.mockRestore();
+      database.mockRestore();
+      await app.close();
+    }
+  });
   it("keeps observability disabled without a DSN", async () => {
     const app = await buildApp();
 

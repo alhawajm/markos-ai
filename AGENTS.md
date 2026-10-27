@@ -10,6 +10,13 @@ This repo is built from one authoritative spec and one behavioral companion:
 
 MARKOS AI is an Instagram-first AI marketing OS for Bahrain SMBs. It learns a business during onboarding, stores that knowledge in a workspace-scoped Knowledge Vault, retrieves it with RAG over pgvector, and uses eight AI agents to generate strategy, content, scheduling, analytics, and advice.
 
+## Working style during prototyping
+
+- Implement tasks directly. Do not delegate to helper agents unless the user explicitly requests it.
+- Continue within the user's authorized scope without adding routine review handoffs or approval steps.
+- Use the smallest focused checks needed to confirm the change works. Keep updates brief; avoid extra audits and reports unless requested.
+- Raise concrete doubts, missing information, or blockers directly with the user so they can resolve them.
+
 ## Build Rules
 
 1. Build milestones in order: M0 -> M6.

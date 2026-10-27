@@ -1,0 +1,32 @@
+diff --git a/v3/helpers/parseUtil.cjs b/v3/helpers/parseUtil.cjs
+--- a/v3/helpers/parseUtil.cjs
++++ b/v3/helpers/parseUtil.cjs
+@@ -38,6 +38,12 @@
+ exports.makeIssue = makeIssue;
+ exports.EMPTY_PATH = [];
+ function addIssueToContext(ctx, issueData) {
++    // Bound diagnostic allocation for untrusted oversized collections in the legacy CLI.
++    var root = ctx;
++    while (root.parent) root = root.parent;
++    var count = root.common._markosIssueCount || 0;
++    if (count >= 200 && (ctx.common !== root.common || root.common.issues.length > 0)) return;
++    root.common._markosIssueCount = count + 1;
+     const overrideMap = (0, errors_js_1.getErrorMap)();
+     const issue = (0, exports.makeIssue)({
+         issueData: issueData,
+diff --git a/v3/helpers/parseUtil.js b/v3/helpers/parseUtil.js
+--- a/v3/helpers/parseUtil.js
++++ b/v3/helpers/parseUtil.js
+@@ -30,6 +30,12 @@
+ };
+ export const EMPTY_PATH = [];
+ export function addIssueToContext(ctx, issueData) {
++    // Bound diagnostic allocation for untrusted oversized collections in the legacy CLI.
++    var root = ctx;
++    while (root.parent) root = root.parent;
++    var count = root.common._markosIssueCount || 0;
++    if (count >= 200 && (ctx.common !== root.common || root.common.issues.length > 0)) return;
++    root.common._markosIssueCount = count + 1;
+     const overrideMap = getErrorMap();
+     const issue = makeIssue({
+         issueData: issueData,

@@ -80,11 +80,19 @@ jobs:
       - name: Generate Prisma Client
         run: corepack pnpm --filter api prisma generate
 
+      - name: Verify security backports and dependency advisories
+        run: |
+          corepack pnpm --filter api exec vitest run test/toolchain-security.test.ts
+          corepack pnpm security:audit
+
       - name: Install AI Python dependencies
         run: |
           python -m venv services/ai/.venv
           services/ai/.venv/bin/python -m pip install --upgrade pip
+          services/ai/.venv/bin/python -m pip install --require-hashes --no-deps -r services/ai/requirements.lock
           services/ai/.venv/bin/python -m pip install -e "./services/ai[dev]"
+          services/ai/.venv/bin/python -m pip install pip-audit
+          services/ai/.venv/bin/python -m pip_audit --requirement services/ai/requirements.lock --require-hashes --disable-pip
 
       - name: Prepare OpenSearch host settings
         run: sudo sysctl -w vm.max_map_count=262144
@@ -151,6 +159,9 @@ jobs:
             --file apps/web/Dockerfile \
             --tag markos-web:ci \
             .
+
+      - name: Validate scheduled recovery image
+        run: docker build --file apps/api/backup.Dockerfile --tag markos-backup:ci .
 
       - name: Validate AI deployment image
         run: docker build --file services/ai/Dockerfile --tag markos-ai:ci .

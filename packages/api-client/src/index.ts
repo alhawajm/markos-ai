@@ -1,4 +1,4 @@
-import type { ContentAuthoringOperation } from "@markos/shared-types";
+import type { CampaignReferenceFileInput, ContentAuthoringOperation } from "@markos/shared-types";
 import type {
   AgentName,
   AgentRunRecord,
@@ -25,8 +25,11 @@ import type {
   BillingVatComplianceReport,
   BusinessProfile,
   BusinessKnowledgeRecord,
+  BusinessKnowledgeModule,
+  BusinessKnowledgeRevision,
   UpdateBusinessKnowledge,
   CampaignGenerationDurationDays,
+  CampaignGenerationJobRecord,
   CampaignRecord,
   CampaignReviewRecord,
   CampaignSummaryPage,
@@ -79,6 +82,8 @@ import type {
 
 export interface MarkosApiClientOptions {
   baseUrl: string;
+  /** Supply a scoped native transport; the browser default remains fetch with cookies. */
+  fetch?: typeof fetch;
   accessToken?: string;
   onSessionExpired?: () => Promise<void> | void;
   renewAccessToken?: () => Promise<string>;
@@ -98,13 +103,49 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
+  async accountSettings(): Promise<AccountSettings> {
+    return (await this.request<AccountSettings>("/v1/account")).data;
+  }
+  async updateAccount(input: { fullName: string; locale: "en" | "ar"; expectedUpdatedAt: string }): Promise<void> {
+    await this.request("/v1/account", { method: "PATCH", body: input });
+  }
+  async updateWorkspaceSettings(input: { name: string; expectedUpdatedAt: string }): Promise<void> {
+    await this.request("/v1/workspace/settings", { method: "PATCH", body: input });
+  }
+  async workspaces(): Promise<WorkspaceChoice[]> {
+    return (await this.request<WorkspaceChoice[]>("/v1/workspaces")).data;
+  }
+  async team(): Promise<WorkspaceTeam> {
+    return (await this.request<WorkspaceTeam>("/v1/workspace/team")).data;
+  }
+  async inviteTeam(input: { email: string; role: TeamRole }): Promise<TeamInvitation & { code: string }> {
+    return (await this.request<TeamInvitation & { code: string }>("/v1/workspace/team/invitations", { method: "POST", body: input })).data;
+  }
+  async revokeTeamInvitation(id: string): Promise<void> {
+    await this.request(`/v1/workspace/team/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async changeTeamRole(id: string, role: TeamRole): Promise<void> {
+    await this.request(`/v1/workspace/team/members/${encodeURIComponent(id)}`, { method: "PATCH", body: { role } });
+  }
+  async removeTeamMember(id: string): Promise<void> {
+    await this.request(`/v1/workspace/team/members/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async acceptTeamInvitation(code: string): Promise<{ workspaceId: string; name: string; role: TeamRole }> {
+    return (await this.request<{ workspaceId: string; name: string; role: TeamRole }>("/v1/workspaces/accept-invitation", { method: "POST", body: { code } }))
+      .data;
+  }
+  async switchWorkspace(workspaceId: string, totpCode?: string): Promise<AuthSession> {
+    return (await this.request<AuthSession>("/v1/auth/workspace", { method: "POST", body: { workspaceId, ...(totpCode ? { totpCode } : {}) } })).data;
+  }
   private readonly baseUrl: string;
+  private readonly fetchImpl: typeof fetch;
   private accessToken: string | undefined;
   private readonly onSessionExpired: (() => Promise<void> | void) | undefined;
   private readonly renewAccessToken: (() => Promise<string>) | undefined;
   private readonly workspaceId: string | undefined;
 
   constructor(options: MarkosApiClientOptions) {
+    this.fetchImpl = options.fetch ?? ((...args) => fetch(...args));
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.accessToken = options.accessToken;
     this.onSessionExpired = options.onSessionExpired;
@@ -117,7 +158,15 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async register(input: { email: string; password: string; fullName: string; workspaceName?: string; locale?: "ar" | "en" }): Promise<AuthSession> {
+  async register(input: {
+    email: string;
+    password: string;
+    fullName: string;
+    workspaceName?: string;
+    locale?: "ar" | "en";
+    acceptedTerms?: true;
+    policyVersion?: string;
+  }): Promise<AuthSession> {
     const response = await this.request<AuthSession>("/v1/auth/register", {
       body: input,
       method: "POST"
@@ -204,6 +253,12 @@ export class MarkosApiClient {
   async onboarding(): Promise<OnboardingState> {
     const response = await this.request<OnboardingState>("/v1/onboarding");
     return response.data;
+  }
+  async requestPasswordReset(input: { email: string; locale: "en" | "ar" }): Promise<{ challengeId: string; expiresAt: string }> {
+    return (await this.request<{ challengeId: string; expiresAt: string }>("/v1/auth/password/forgot", { method: "POST", body: input })).data;
+  }
+  async resetPassword(input: { challengeId: string; code: string; password: string; confirmPassword: string }): Promise<{ reset: true }> {
+    return (await this.request<{ reset: true }>("/v1/auth/password/reset", { method: "POST", body: input })).data;
   }
 
   async onboardingDocumentAnalysis(): Promise<OnboardingDocumentAnalysisRecord | null> {
@@ -364,6 +419,10 @@ export class MarkosApiClient {
     return response.data;
   }
 
+  async businessKnowledgeHistory(module: BusinessKnowledgeModule): Promise<BusinessKnowledgeRevision[]> {
+    return (await this.request<BusinessKnowledgeRevision[]>(`/v1/business-profile/history/${module}`)).data;
+  }
+
   async vaultScore(): Promise<VaultCompletenessScore> {
     const response = await this.request<VaultCompletenessScore>("/v1/vault/score");
     return response.data;
@@ -411,6 +470,8 @@ export class MarkosApiClient {
 
   async generateCampaign(input: {
     objective?: string;
+    description?: string;
+    referenceFiles?: CampaignReferenceFileInput[];
     durationDays?: CampaignGenerationDurationDays;
     publishesPerDay?: number;
     startsAt: string;
@@ -426,6 +487,28 @@ export class MarkosApiClient {
   async campaignDrafts(campaignId: string): Promise<ContentRecord[]> {
     const response = await this.request<ContentRecord[]>(`/v1/campaigns/${campaignId}/drafts`);
     return response.data;
+  }
+
+  async queueCampaignGeneration(requestId: string, input: Parameters<MarkosApiClient["generateCampaign"]>[0]): Promise<CampaignGenerationJobRecord> {
+    return (
+      await this.request<CampaignGenerationJobRecord>("/v1/campaigns/generations", {
+        method: "POST",
+        idempotencyKey: requestId,
+        body: input
+      })
+    ).data;
+  }
+
+  async campaignGeneration(requestId: string): Promise<CampaignGenerationJobRecord> {
+    return (await this.request<CampaignGenerationJobRecord>(`/v1/campaigns/generations/${encodeURIComponent(requestId)}`)).data;
+  }
+
+  async resumeCampaignGeneration(requestId: string): Promise<CampaignGenerationJobRecord> {
+    return (await this.request<CampaignGenerationJobRecord>(`/v1/campaigns/generations/${encodeURIComponent(requestId)}/resume`, { method: "POST" })).data;
+  }
+
+  async campaignGenerations(): Promise<CampaignGenerationJobRecord[]> {
+    return (await this.request<CampaignGenerationJobRecord[]>("/v1/campaigns/generations")).data;
   }
 
   async approveCampaignSuggestion(campaignId: string, input: { week: number; actionIndex: number }): Promise<ContentRecord> {
@@ -677,20 +760,22 @@ export class MarkosApiClient {
     return response.data;
   }
 
-  async scheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+  async scheduleContent(contentItemId: string, scheduledAt: string, expectedRevision?: number): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/schedule`, {
       body: {
-        scheduledAt
+        scheduledAt,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
       },
       method: "POST"
     });
     return response.data;
   }
 
-  async rescheduleContent(contentItemId: string, scheduledAt: string): Promise<ContentRecord> {
+  async rescheduleContent(contentItemId: string, scheduledAt: string, expectedRevision?: number): Promise<ContentRecord> {
     const response = await this.request<ContentRecord>(`/v1/content/${contentItemId}/reschedule`, {
       body: {
-        scheduledAt
+        scheduledAt,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
       },
       method: "POST"
     });
@@ -715,8 +800,15 @@ export class MarkosApiClient {
   async generateContentImage(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<AiImageGenerationResult> {
     return (await this.request<AiImageGenerationResult>(`/v1/content/${contentItemId}/generate-image`, { method: "POST", body: input })).data;
   }
-  async generateContentVideo(contentItemId: string, input: { contentMediaItemId: string; expectedRevision: number }): Promise<MediaGenerationJobRecord> {
+  async generateContentVideo(
+    contentItemId: string,
+    input: { contentMediaItemId: string; expectedRevision: number; durationSeconds?: 4 | 8 | 12; motion?: { artworkMediaAssetId: string; textCards: string[] } }
+  ): Promise<MediaGenerationJobRecord> {
     return (await this.request<MediaGenerationJobRecord>(`/v1/content/${contentItemId}/generate-video`, { method: "POST", body: input })).data;
+  }
+
+  async videoCapabilities(): Promise<{ motion: boolean; generatedFootage: boolean }> {
+    return (await this.request<{ motion: boolean; generatedFootage: boolean }>("/v1/media/video-capabilities")).data;
   }
 
   async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {
@@ -735,6 +827,56 @@ export class MarkosApiClient {
   async notifications(): Promise<NotificationRecord[]> {
     const response = await this.request<NotificationRecord[]>("/v1/notifications");
     return response.data;
+  }
+
+  async notificationPreferences(): Promise<import("@markos/shared-types").NotificationPreferences> {
+    return (await this.request<import("@markos/shared-types").NotificationPreferences>("/v1/notifications/preferences")).data;
+  }
+  async accountDeletionPreview(): Promise<import("@markos/shared-types").AccountDeletionPreview> {
+    return (await this.request<import("@markos/shared-types").AccountDeletionPreview>("/v1/account/deletion")).data;
+  }
+  async deleteAccount(input: {
+    confirmation: "DELETE";
+    confirmationToken: string;
+    password?: string;
+    totpCode?: string;
+    challengeToken?: string;
+    emailCode?: string;
+  }): Promise<{ deleted: true; cleanup: "QUEUED" }> {
+    return (await this.request<{ deleted: true; cleanup: "QUEUED" }>("/v1/account/deletion", { method: "POST", body: input })).data;
+  }
+  async requestAccountDeletionCode(): Promise<{ challengeToken: string; expiresAt: string }> {
+    return (await this.request<{ challengeToken: string; expiresAt: string }>("/v1/account/deletion/code", { method: "POST", body: {} })).data;
+  }
+  async updateNotificationPreferences(
+    input: Partial<import("@markos/shared-types").NotificationPreferences>
+  ): Promise<import("@markos/shared-types").NotificationPreferences> {
+    return (await this.request<import("@markos/shared-types").NotificationPreferences>("/v1/notifications/preferences", { method: "PATCH", body: input })).data;
+  }
+  async registerPushDevice(input: { token: string; platform: "android" | "ios"; locale: "ar" | "en" }): Promise<{ id: string }> {
+    return (await this.request<{ id: string }>("/v1/notifications/devices", { method: "POST", body: input })).data;
+  }
+  async revokePushDevice(id: string): Promise<void> {
+    await this.request(`/v1/notifications/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  async reportDeliveries(): Promise<import("@markos/shared-types").ReportDeliveryRecord[]> {
+    return (await this.request<import("@markos/shared-types").ReportDeliveryRecord[]>("/v1/notifications/report-deliveries")).data;
+  }
+
+  async notificationFeed(input: { cursor?: string; unreadOnly?: boolean } = {}): Promise<import("@markos/shared-types").NotificationPage> {
+    const query = new URLSearchParams();
+    if (input.cursor) query.set("cursor", input.cursor);
+    if (input.unreadOnly) query.set("unreadOnly", "true");
+    return (await this.request<import("@markos/shared-types").NotificationPage>(`/v1/notifications/feed?${query}`)).data;
+  }
+
+  async publishingActivity(
+    input: { status?: "SCHEDULED" | "FAILED" | "PUBLISHED"; offset?: number } = {}
+  ): Promise<import("@markos/shared-types").PublishingActivityPage> {
+    const query = new URLSearchParams();
+    if (input.status) query.set("status", input.status);
+    if (input.offset !== undefined) query.set("offset", String(input.offset));
+    return (await this.request<import("@markos/shared-types").PublishingActivityPage>(`/v1/publishing/activity?${query}`)).data;
   }
 
   async markNotificationRead(notificationId: string): Promise<NotificationRecord> {
@@ -887,6 +1029,12 @@ export class MarkosApiClient {
   async adminModelConfiguration(): Promise<AdminModelConfiguration> {
     const response = await this.request<AdminModelConfiguration>("/v1/admin/model-config");
     return response.data;
+  }
+  async deliveryOperations(): Promise<import("@markos/shared-types").DeliveryOperations> {
+    return (await this.request<import("@markos/shared-types").DeliveryOperations>("/v1/admin/operations")).data;
+  }
+  async retryDelivery(input: { kind: "REPORT" | "PUSH" | "ERASURE"; id: string }): Promise<void> {
+    await this.request("/v1/admin/operations/retry", { method: "POST", body: input });
   }
 
   async updateAdminModelSetting(
@@ -1074,6 +1222,7 @@ export class MarkosApiClient {
     options: {
       body?: Record<string, unknown>;
       browserSession?: boolean;
+      idempotencyKey?: string;
       method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
     } = {}
   ): Promise<ApiEnvelope<TData>> {
@@ -1082,6 +1231,7 @@ export class MarkosApiClient {
 
       if (options.body !== undefined) headers["Content-Type"] = "application/json";
       if (options.browserSession) headers["X-Markos-Session"] = "browser";
+      if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
 
       const init: RequestInit = {
         credentials: "include",
@@ -1091,7 +1241,7 @@ export class MarkosApiClient {
 
       if (options.body !== undefined) init.body = JSON.stringify(options.body);
 
-      const response = await fetch(`${this.baseUrl}${path}`, init);
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, init);
       if (!response.ok) throw await apiError(response);
       return (await response.json()) as ApiEnvelope<TData>;
     };
@@ -1106,7 +1256,7 @@ export class MarkosApiClient {
     }
   ): Promise<ArrayBuffer> {
     const perform = async () => {
-      const response = await fetch(`${this.baseUrl}${path}`, {
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         credentials: "include",
         headers: this.requestHeaders(options.accept),
         method: options.method ?? "GET"
@@ -1168,6 +1318,29 @@ function isTerminalSessionError(error: unknown): boolean {
     error instanceof MarkosApiError &&
     ["INVALID_REFRESH_TOKEN", "REFRESH_TOKEN_REUSE_DETECTED", "MFA_REQUIRED", "MFA_SETUP_REQUIRED"].includes(error.code ?? "")
   );
+}
+
+export interface AccountSettings {
+  user: { id: string; email: string; fullName: string; locale: "en" | "ar"; updatedAt: string; mfaEnabled: boolean };
+  workspace: { id: string; name: string; ownerUserId: string; updatedAt: string };
+}
+export type TeamRole = "WORKSPACE_ADMIN" | "EDITOR" | "VIEWER";
+export interface WorkspaceChoice {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  roles: string[];
+}
+export interface TeamInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  expiresAt: string;
+}
+export interface WorkspaceTeam {
+  ownerUserId: string;
+  members: Array<{ id: string; userId: string; fullName: string; email: string; role: string }>;
+  invitations: TeamInvitation[];
 }
 
 export interface ContentConversionResult {

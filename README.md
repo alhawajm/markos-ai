@@ -1,26 +1,28 @@
 # MARKOS AI
 
-AI-powered marketing operating system for Bahrain SMBs. Version 1 is Instagram-only, bilingual Arabic/English, and built around a Knowledge Vault plus eight AI agents.
+An Instagram-first marketing OS for Bahrain businesses, with shared web, Android and iPhone accounts, campaigns and media.
 
-## Get started
+## Use MARKOS
 
-Follow [Run MARKOS locally](docs/local-development.md) for first-time setup, daily startup, and shutdown. It uses offline providers and does not require paid-service credentials.
+Double-click **Run MARKOS.cmd** or open the [Railway app](https://web-production-94e63.up.railway.app/en/login). Railway is the current host; no local server is needed for everyday use.
 
-For code changes, see [Formatting and tests](docs/testing.md).
+The native app lives in [apps/mobile](apps/mobile/README.md). The [Expo project](https://expo.dev/accounts/mo4180/projects/markos) holds native builds and updates. See [release readiness](docs/release-readiness.md) for verified results and external release gates.
 
-For handoff priorities and ownership, start with [Project status](docs/project-status.md). **Immediate open issue:** production Campaign generation times out; details and next steps are recorded there. Local startup has been manually tested, but this is not full feature or production acceptance.
+## Develop locally
+
+Follow [Run MARKOS locally](docs/local-development.md) for offline setup and [Formatting and tests](docs/testing.md) for focused checks. Standard `pnpm dev` and `pnpm local:check` use the safe local profile.
+
+The optional [local handover](docs/local-handover.md) describes explicit developer profiles. `scripts/run-local.ps1 -Mode railway` uses the workstation's ignored environment and SSH identity; these are not included when cloning. Shared database edits affect Railway. **Stop MARKOS.cmd** stops local processes only.
+
+Persistent tests require an explicitly named disposable database. Never run tests, seeds or migrations against the shared Railway environment.
 
 ## Project references
 
-- [Feature documentation](docs/features/README.md) — Business Profile, Create, and Campaign contracts and proposals.
-- [`AGENTS.md`](AGENTS.md) — repository operating instructions and precedence.
-- [`docs/source/MARKOS_BUILD_SPEC. 2.pdf`](docs/source/MARKOS_BUILD_SPEC.%202.pdf) — structural product target.
-- [`docs/source/MARKOS_EXPERIENCE_FLOWS.md`](docs/source/MARKOS_EXPERIENCE_FLOWS.md) — behavioral target and state transitions.
-- [`docs/project-status.md`](docs/project-status.md) — current implementation, evidence, roadmap, and ownership overlay.
-
-The [source index](docs/source/README.md) separates authoritative specifications from supporting references. Retired documents remain in the [source archive](docs/archive/source/README.md).
-
-Detailed progress is tracked in
-[`docs/milestone-checklist.md`](docs/milestone-checklist.md), durable engineering choices in
-[`docs/decisions.md`](docs/decisions.md), and Railway deployment operations in
-[`docs/staging-deploy.md`](docs/staging-deploy.md).
+- [AGENTS.md](AGENTS.md): repository instructions and precedence.
+- [Build specification](docs/source/MARKOS_BUILD_SPEC.%202.pdf): structural authority.
+- [Experience flows](docs/source/MARKOS_EXPERIENCE_FLOWS.md): behavioral authority.
+- [Implementation progress](docs/implementation-progress.md) and [release readiness](docs/release-readiness.md): current evidence and pending work.
+- [Project status](docs/project-status.md): dated handover and historical roadmap.
+- [Feature documentation](docs/features/README.md): Business Profile, Create and Campaign contracts.
+- [Decisions](docs/decisions.md), [source index](docs/source/README.md) and [milestone checklist](docs/milestone-checklist.md).
+- [Railway deployment operations](docs/staging-deploy.md) and [recovery runbook](docs/recovery-runbook.md).

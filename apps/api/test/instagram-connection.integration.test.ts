@@ -378,8 +378,8 @@ async function workspace(): Promise<string> {
 async function persist(
   workspaceId: string,
   accessToken: string,
-  issuedAt = new Date("2026-07-25T00:00:00Z"),
-  expiresAt = new Date("2026-09-25T00:00:00Z"),
+  issuedAt = new Date(Date.now() - 2 * 86400000),
+  expiresAt = new Date(Date.now() + 60 * 86400000),
   providerUserId = "17841400000000000",
   media: Array<{ id: string; mediaType: string; timestamp?: string }> = []
 ) {

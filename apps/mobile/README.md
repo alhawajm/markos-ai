@@ -1,0 +1,162 @@
+# MARKOS mobile
+
+One Expo / React Native app for Android and iOS, connected to the existing Railway API. The existing Next.js site remains the web app. Expo project: [@mo4180/markos](https://expo.dev/accounts/mo4180/projects/markos).
+
+## 0.5.0 release — 27 October 2026
+
+[Android APK build 7](https://expo.dev/accounts/mo4180/projects/markos/builds/abfe757f-218b-4943-9df7-54e125df53be) finished and passed archive, package/version, arm64 and target SDK 36 checks. Dedicated Firebase FCM V1 is linked.
+
+[iPhone build 7](https://expo.dev/accounts/mo4180/projects/markos/builds/590e6f81-6beb-4b2c-9f6b-beb3ffd928ed) and [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/89d20c7b-92fa-4352-b575-0bf7e55ba0e8) finished. Apple reports VALID and IN_BETA_TESTING with no missing encryption declaration. The existing internal group still has one owner tester and no public link. Other Apple apps were not changed.
+
+[Android production AAB build 8](https://expo.dev/accounts/mo4180/projects/markos/builds/0cd6e94b-027e-4c53-b566-2e068e880b5c) finished and passed archive/signature checks for all four supported CPU architectures. It is prepared for the Play internal track. A dedicated publisher credential and Play Console app permission are still required. Physical-device installation and push receipt remain pending; the owner elected to test later.
+
+### Included in the native build
+
+Added 30/60/90-day campaign briefs, saved weekly planning progress and creator-only
+recovery of unfinished steps, plus the Help and Legal screen. The duration picker
+opens a focused sheet. Approval and scheduling remain separate from generation.
+
+Android FCM V1 is linked to MARKOS through the dedicated Firebase project
+`markos-mobile-35017b4c` and an FCM-only service account. Its private key was sent
+directly to Expo's credential store, without a local plaintext file. The Android
+client configuration is the `GOOGLE_SERVICES_JSON` secret file variable in both EAS
+preview and production environments. `app.config.ts` uses that file, with an ignored
+`google-services.json` fallback for local tooling. No Firebase Analytics module is added.
+See [Expo's FCM setup](https://docs.expo.dev/push-notifications/fcm-credentials/).
+
+Runtime 0.5.0 requires a new Android/iPhone binary. Keep the compatible 0.4.0 update
+available to existing installations. New build/store/device results must be recorded
+when observed; credential configuration alone does not prove notification receipt.
+
+### Previous 0.4.0 release
+
+Version 0.4.0 connects to the same Railway services as the website. It added exact offering pricing/availability, notification/report preferences, complete account deletion and platform administration. Older binaries remain documented below as historical release evidence.
+
+Latest 0.4.0 interface update, **12 October 2026**: cleaner Create, separate Edit / Preview / Assistant, one carousel slide at a time, focused media panels, compact campaign/calendar filters, grouped Settings and contextual business/team selectors. Research and exact validation are in [mobile UX refinement](../../docs/mobile-ux-refinement.md). Source `484d4be` is published to [preview/TestFlight update 9dded374-106b-4a38-860b-bde0631cb18c](https://expo.dev/accounts/mo4180/projects/markos/updates/9dded374-106b-4a38-860b-bde0631cb18c) and [production update b565864c-4fe1-4fe8-88d2-c752a3d97441](https://expo.dev/accounts/mo4180/projects/markos/updates/b565864c-4fe1-4fe8-88d2-c752a3d97441). Both Android/iOS native exports, 34 focused tests, mobile TypeScript and 17 rendered layouts passed. Both channels serve the expected 0.4.0 manifests and matching bundle hashes, with the Railway API URL present. Physical-device interaction acceptance remains separate.
+
+On 0.4.0, use Settings → App and advanced settings → Check for updates → Restart to apply update after saving unfinished work. Alternatively open online, allow the download, then close and reopen. Older 0.3.0 installations need the 0.4.0 binary below first.
+
+- [Android 0.4.0/code 5 installer](https://expo.dev/artifacts/eas/3Hg_-ChvyZxmOTPvvga-E2oEJZ3TgtOnu3L8zW7LPbg.apk), build `d919c0f9-851e-44a6-b032-6ba3fbfe625a`. ZIP integrity and ARM64 payload checked.
+- [iPhone 0.4.0/build 6](https://expo.dev/accounts/mo4180/projects/markos/builds/8ae6e14d-8ee8-4f2d-9b37-ec37b05518f8). IPA integrity, iPhoneOS, MARKOS identity/team and production push entitlement checked. [TestFlight submission](https://expo.dev/accounts/mo4180/projects/markos/submissions/d2bc4a39-35b4-4aef-9aeb-5a1d48ebb7ca) finished. Apple build `6e8e84c0-5a91-4e54-a47e-14e7ef54605d` is VALID and IN_BETA_TESTING with no missing encryption declaration. The existing internal group remains owner-only, with no public link; this is not public App Store publication.
+- [Android store AAB build](https://expo.dev/accounts/mo4180/projects/markos/builds/591a919a-b0b4-4fd3-85d8-2cd203a4a0e4) finished, 0.4.0/code 6. [Download the store bundle](https://expo.dev/artifacts/eas/31S18SKFdpPLw44aJkQXzSlc0058oCXoZnY_dufAobM.aab). Play Console access remains unconfigured; a finished bundle is not store publication.
+
+Android FCM credentials were configured on 26 October; version 0.5.0 includes the Firebase native configuration. iOS has an assigned push key and MARKOS-only provisioning profile. Actual phone notification receipt, keyboard/back behavior, screen-reader use and the real Instagram publishing walkthrough remain device/owner acceptance work. Public legal/contact and store disclosures are tracked in `docs/store-listing.md`.
+
+0.4 focused validation: 21 native pricing/session tests, relevant API isolation/deletion/email/administration tests, TypeScript for mobile/API/web, native bundle exports, and English/Arabic browser controls against a disposable database passed. The backend and worker deployment IDs/evidence are in `docs/implementation-progress.md`.
+
+Earlier 0.4.0 foundation source `232cff2` was published to [preview update 4d4a11bc-99e4-4fd9-9c02-85e94335b0cf](https://expo.dev/accounts/mo4180/projects/markos/updates/4d4a11bc-99e4-4fd9-9c02-85e94335b0cf) and production `f9cde78e-01d6-4f5f-8e14-199c0f5c165a`, runtime 0.4.0 only. Both platform manifests and downloaded bundle hashes verified on both channels. Existing 0.3.0 installations keep their compatible update until the new binary is installed.
+
+## Earlier 0.3.0 update history
+
+The 0.3.0 release added native sharing. Its compatible updates remain available to older installations.
+
+Latest follow-up: [visible update controls and accurate draft errors, edbd1c73-5f5d-454d-b863-df59355d06a1](https://expo.dev/accounts/mo4180/projects/markos/updates/edbd1c73-5f5d-454d-b863-df59355d06a1), also on production as `0e1f544c-8e92-4a84-8d5d-08e8bcab6048`. Account now shows the running update, Check for updates and Restart to apply update. Compatible updates download on launch/foreground without forcing a restart during editing. The owner confirmed the previous Create update works after a full Android Recents close/reopen. Twenty-two focused follow-up tests, TypeScript and native exports passed.
+
+Create/Campaign update (24 September): [preview/TestFlight c11fc46b-4bbc-4d97-aef5-ac9a4d924931](https://expo.dev/accounts/mo4180/projects/markos/updates/c11fc46b-4bbc-4d97-aef5-ac9a4d924931), also republished to [production d828ee4c-5020-4d8b-b0a7-1631219f2619](https://expo.dev/accounts/mo4180/projects/markos/updates/d828ee4c-5020-4d8b-b0a7-1631219f2619). Both platforms serve the expected runtime 0.3.0 manifests and downloadable bundles with verified SHA-256 hashes. Open online, allow the download, then close and reopen. Source commit `ab0a795`; 52 focused mobile tests, TypeScript and both native exports passed. Physical-device acceptance remains separate.
+
+- **Android:** [download the signed ARM64 APK](https://expo.dev/artifacts/eas/P0wfAFDb-PMuI5or77zRiBeDvFlTh5zmdEcpFP7FJ0w.apk), version 0.3.0/code 3, 51.4 MB. [Build record](https://expo.dev/accounts/mo4180/projects/markos/builds/da2f543b-7492-4f8c-bd04-46376ff518be).
+- **iPhone:** update MARKOS in TestFlight to **0.3.0/build 4**. [App Store Connect](https://appstoreconnect.apple.com/apps/6814797764/testflight/ios). Apple reports VALID and ready for internal testing, with the encryption declaration complete. The existing internal group has only the owner's account and no public link; other Apple apps and credentials were not changed.
+- **Android store bundle:** [production build 793e803b-7445-4b49-a3b9-36f35e1b4ab3](https://expo.dev/accounts/mo4180/projects/markos/builds/793e803b-7445-4b49-a3b9-36f35e1b4ab3) finished, version 0.3.0/code 4. The AAB was downloaded. Google Play Console access and submission remain pending.
+- **Website:** [hosted MARKOS](https://web-production-94e63.up.railway.app).
+
+Account now includes profile/workspace editing, secure workspace switching, team invitations and roles, saved knowledge/history, activity, private workspace JSON sharing and confirmed workspace erasure. Insights adds provider-backed advice and PDF report sharing. Free Motion Reels animate your JPEG artwork with exact optional Arabic/English cards. Open **Create > Reel > Media > Motion Reel**, choose artwork, enter optional copy and create the Reel. No paid video API is enabled; generated AI footage still needs separately provisioned GPU infrastructure. Text and image AI retain their existing provider costs.
+
+Latest compatible update for older 0.2.0 installations: [Motion Reels, be13c85d-c6cd-4b94-8b2d-09c9be56ab58](https://expo.dev/accounts/mo4180/projects/markos/updates/be13c85d-c6cd-4b94-8b2d-09c9be56ab58). Open online, then close and reopen. This includes earlier publishing/onboarding features but not the new 0.3.0 sharing controls.
+
+APK/IPA integrity and iPhone bundle/version/platform were checked. Focused API/native/browser checks, TypeScript and both native exports passed. Physical-device keyboards, pickers, Arabic, access revocation, app-kill recovery, accessibility and live Instagram publishing still require acceptance. This is an internal release, not public store approval. See [current implementation status](../../docs/implementation-progress.md) for remaining work.
+
+## Working slice
+
+- Email/password and authenticator sign-in; rotating refresh credential in SecureStore, access credential in memory. Existing email verification, onboarding and workspace roles remain authoritative.
+- Native signup with consent and queued verification; password recovery with an emailed eight-digit code, new-password confirmation and normal login after success. Recovery revokes previous sessions without disabling MFA. Passwords and recovery codes stay in memory.
+- Native verification resend/check, seven-step business setup, up to five business documents/images, extracted-fact review, and separate English/Arabic profile approval. A completed setup offers Instagram connection or entering the workspace.
+- Native Business Profile in workspace settings: strategy, products, audience/market, brand/voice and business details. Focused edits and basic product/service maintenance use the existing revision checks; advanced pricing/availability remain on the website.
+- Overview, Campaigns, Create, Calendar and Insights. Phone tabs become a tablet side rail. Business profile and account controls sit in the workspace menu.
+- Campaign search and pagination; objective, description, five document/image references; two-step Brief / Plan composer; durable generation with recovery; campaign review and idea-to-content drafts.
+- Native Create studio: Post, Carousel, Reel and Story; safe format conversion; full media/caption preview; saved AI conversations; JPEG/MP4 upload, library attach/detach and replacement; sequential missing-slide generation and reorder; Story image/video selection; editable Reel hook/scenes; pillar, tone and planned date. The primary action leads through Prepare caption / Complete media / Mark ready, then Schedule. Assistant and media jobs lock approval while active, and revision conflicts preserve manual edits.
+- Campaign review: actual day dates, status counts, day/format filters, search, complete strategy/objectives/references/KPIs and native PDF sharing. Filtering preserves the correct campaign idea-to-draft identity.
+- Separate Mark Ready and Schedule actions, a Bahrain date/time picker with half-hour slots, rescheduling and cancellation. Scheduling checks live readiness, connection, media, caption and the reviewed revision again at confirmation.
+- Native Instagram connection/reconnection, renewal and confirmed disconnection; native authenticator enrollment and sensitive-action confirmation. Instagram consent opens the system browser and returns to the app through a fixed, credential-free link.
+- Bahrain weekly calendar with planned drafts, status filters and paginated unscheduled content; publishing activity and per-post progress/recovery. Uncertain publishing results ask the owner to check Instagram before rescheduling.
+- Paginated in-app notifications with unread counts and links to post status. Publishing success and failure notices use actual worker outcomes; operating-system push alerts are not included.
+- Seven- and thirty-day Insights, period comparisons, available daily reach and top content, with explicit missing/partial data and synchronization timestamps.
+- English/Arabic, IBM Plex Sans and IBM Plex Sans Arabic, system/light/dark themes, reduced-motion support and shared Lucide icons.
+
+## Run and build
+
+From the repository root:
+
+```powershell
+corepack pnpm install
+corepack pnpm --filter @markos/mobile start
+corepack pnpm --filter @markos/mobile typecheck
+corepack pnpm --filter @markos/mobile exec vitest run test/studio-device-store.test.ts test/studio-model.test.ts test/campaign-client.test.ts test/brief-recovery.test.ts test/brief-model.test.ts test/scoped-fetch.test.ts
+corepack pnpm --filter @markos/mobile build
+```
+
+Run EAS commands inside `apps/mobile`:
+
+```powershell
+eas.cmd build --platform android --profile preview
+eas.cmd build --platform ios --profile simulator
+```
+
+The Android preview is a signed **ARM64 APK** with its JavaScript bundled; it uses Railway without a PC or Metro server. The preview targets current 64-bit Android phones to reduce build time and download size; production retains the default architecture set. The simulator profile produces an iOS Simulator app, which requires a Mac to run. An iPhone device build needs Apple Developer signing credentials and device registration or TestFlight. Neither preview is a store submission.
+
+The owner's older TestFlight build 3 and Android runtime 0.2.0 remain compatible only with the 0.2.0 update listed above. Install 0.3.0 for the current account/team/share release.
+
+Preview builds use the `preview` Expo Updates channel and Expo's [app-version runtime policy](https://docs.expo.dev/eas-update/runtime-versions/). Compatible JavaScript/asset changes can be delivered with `eas.cmd update --channel preview --environment preview --message "Describe the change"`. **Bump `version` in `app.config.ts` before changing native dependencies or native configuration**, then create new builds. Windows and EAS use different pnpm dependency paths, so the initial automatic fingerprints did not match; the explicit app version is the runtime contract for this prototype. Do not publish an update that targets an unverified backend contract.
+
+Public service defaults are in `src/config.ts`. `.env.local` may override only public API/web URLs. Database passwords, AI keys and email keys stay on Railway. Native login uses `/v1/auth/native/*`; browser login keeps its existing cookie transport.
+
+## Persistence and generation
+
+Device drafts and copied references are keyed by API host, user and workspace. Credentials do not enter AsyncStorage. Explicit logout clears the device's current campaign brief and references. Reference limits match the API: five files, 8 MB each, 20 MB combined; PDF, DOCX, TXT, PNG, JPEG and WebP. Start dates are sent as Bahrain calendar days.
+
+Business setup and maintenance drafts use separate identity-scoped records; onboarding copies files into its own directory and logout clears those records/files. A lost document-analysis response reads the active server analysis before offering a retry. Extracted facts remain editable, with provenance/confidence and separate approval before generating the bilingual introduction. Files expire after 24 hours or are removed by approval/discard. This uses the existing synchronous analysis service and status lookup, not the durable campaign-job mechanism. Business maintenance preserves approved status and patches only edited fields. Catalog revisions are distinct from profile revisions. Account signup, recovery, authenticator and Instagram management are native; advanced catalog controls retain their hosted web flow.
+
+Campaign creation persists one request ID with the brief before calling `POST /v1/campaigns/generations`. The API returns a durable receipt; after acceptance, generation continues when the phone is locked or the app closes. Reopening polls the same request. If transmission was interrupted before acceptance, Recover resends the same ID and body. A matching replay returns the original job; a changed brief cannot silently reuse that ID. Completion clears only the matching device brief, preserving a newer one.
+
+PostgreSQL coordinates claims across API instances. The campaign, usage record and completion receipt commit together. Queued work survives API restart. An interrupted running attempt expires after ten minutes and requires an intentional retry; ambiguous paid provider work is not automatically replayed. Raw reference bytes live temporarily in the job and are cleared on completion/failure. Original files are not cloud Library assets; the campaign retains reference metadata and the extracted summary. The web app keeps its compatible synchronous generation route.
+
+Submitted Assistant messages retain a scoped request ID on the device until acknowledged, and conversation history lives on the server. Unfinished captions, media directions, details and unsent messages now save on this device as they change. The status distinguishes a completed device write from the explicit Save to MARKOS. Reopening fetches the authoritative content first, then restores the local working copy. A newer server revision requires reconciliation; removed slides retain their local text for copying. A Save that completed on the server but lost its response does not resurrect identical pending edits. Device recovery requires restored sign-in and access to the content; this is not offline authentication or offline publishing.
+
+Device records are scoped by API host, user, workspace and content. Motion artwork selection and exact text cards additionally persist per media slot across tab changes/reopening. Logout clears this identity's editor/message/submission/Motion records after in-flight writes finish, while session expiry preserves recoverable work until access is revalidated. Storage failures remain visible and do not claim the edit is safe to close. Leaving an edited screen offers Keep editing, Save and leave, and Discard. Confirmed discard removes the device copy; an interrupted server save preserves it.
+
+JPEG/MP4 media uploads currently allow 8 MB per file. Existing server video planning and FFmpeg/libass render requested English/Arabic lettering separately from footage; previous video assets are not rewritten.
+
+## Shared foundations
+
+`packages/api-client` supplies typed requests and workspace headers. Its injected native fetch cancels obsolete requests through body completion. Query caches are isolated by identity; refreshing cannot change the workspace of an existing session.
+
+`packages/ui-tokens/src/native.ts` is generated from `apps/web/app/theme-tokens.css` by `scripts/generate-native-tokens.mjs`. `pnpm --filter @markos/mobile check:tokens` and EAS post-install reject stale colors. Phone layout uses explicit direction once in shared rows/tab navigation, mirrored back arrows/transitions, and directional text; the root stays LTR to prevent automatic double mirroring. Device RTL and assistive-technology checks are still required.
+
+## Earlier 0.2.0 validation history
+
+The earlier preview used runtime **`0.2.0`** because adding `expo-video` required a new binary. [Android ARM64 build](https://expo.dev/accounts/mo4180/projects/markos/builds/df2ba5e0-e2f0-4398-af9b-2665c9e971de) finished successfully on 22 September 2026. Its downloaded APK passed ZIP integrity and confirms package `com.markos.mobile`, version 0.2.0/code 2, ARM64 libraries and the hosted Railway API URL in its bundle. [Download the Android APK](https://expo.dev/artifacts/eas/HxGFvtSm7aQrS5fdJm_4vNMnZnbTa_ia5MqzMA9cpOI.apk) (50.8 MB).
+
+The [iOS Simulator build](https://expo.dev/accounts/mo4180/projects/markos/builds/521919bb-61bc-44c9-844e-f3c7899b677c) also finished successfully; its downloaded artifact confirms bundle `com.markos.mobile`, version/runtime 0.2.0, Simulator platform and the preview update channel. Its embedded `CFBundleVersion` is 1 despite EAS reporting remote build version 2. [Download the Simulator archive](https://expo.dev/artifacts/eas/SDumJDmuiwbXNFbSUNODLJnH0yavIyDLNw9I6NpSzaY.tar.gz).
+
+The combined EAS invocation labels both with the `simulator` profile; Android inherits the signed phone APK settings from `preview`. Install 0.2.0 over the previous APK; an OTA update cannot add its native video player to 0.1.0.
+
+Focused 0.2.0 results: 19 mobile studio/recovery/request/file/date/transport tests, six campaign-job and scheduling integration tests, and four existing browser-renewal tests passed. Mobile, API and shared API-client TypeScript checks passed; Expo Doctor reported 21/21 checks and dependency compatibility passed. Both native JavaScript bundles export. Database tests used only the explicitly disposable local `markos_mobile_jobs_test` database with mocked AI; no live test campaigns, schedules or paid generations were created.
+
+Railway API deployment `651b2a1f-d1c0-46c9-b3ec-b4ec24f2b87a` is successful and Prisma reports all 21 migrations applied. `/v1/health` is `ok`; the deep check reports database, Redis and AI `ok`, with OpenSearch down (the current API references OpenSearch only in configuration and that diagnostic). The new job endpoints require authentication. Scheduling accepts an optional reviewed revision; existing browser callers remain compatible.
+
+The owner checked the earlier 0.1.0 layout on a phone. The new studio, interrupted upload recovery, native pickers, keyboard/back behavior, Arabic glyph shaping and screen readers still need a physical-device walkthrough. Compilation and focused integration tests do not substitute for that walkthrough. iPhone distribution requires Apple Developer signing; the simulator artifact cannot install on an iPhone.
+
+The subsequent device-recovery pass adds seven persistence tests (identity isolation, bilingual restore, conflicting/newly saved revisions, write failure, message replay, legacy intent migration and logout during a write). These and the four studio-model tests pass; mobile TypeScript passes. [Update group c13b59ab-083f-4b96-ab00-39ca2637f38d](https://expo.dev/accounts/mo4180/projects/markos/updates/c13b59ab-083f-4b96-ab00-39ca2637f38d) is published for Android/iOS on the existing 0.2.0 runtime and preview channel. Both platform update-manifest requests returned HTTP 200 and the exact published update IDs. No native dependency or Railway deployment changed. Phone app-kill and storage-failure walkthroughs remain device checks. The original APK downloads this compatible update on launch and applies it on the next cold launch.
+
+## iPhone signing and TestFlight
+
+The owner completed Apple sign-in and signing setup on 22 September. Apple team `UP2APD2U2R` now has a dedicated provisioning profile for `com.markos.mobile`. The owner chose to reuse the existing valid distribution certificate; no certificate was changed or revoked.
+
+The owner has other Apple apps and explicitly requires MARKOS to be a **new app**. Scope signing and submission to `com.markos.mobile` and a separate MARKOS App Store Connect record. Do not alter existing apps, select an unrelated app record, or revoke their signing certificates/profiles. A new provisioning profile for MARKOS is appropriate; an identifier or app-record conflict requires checking ownership rather than repurposing another app.
+
+Created a separate [MARKOS App Store Connect app, 6814797764](https://appstoreconnect.apple.com/apps/6814797764/testflight/ios); `eas.json` pins submission to this app, bundle and team. The existing App Store Connect submission key was assigned to the MARKOS Expo project without modifying or revoking the key. [Signed iPhone build 524674ac-db18-4421-84cd-e326f1edc4f6](https://expo.dev/accounts/mo4180/projects/markos/builds/524674ac-db18-4421-84cd-e326f1edc4f6) finished successfully. Its downloaded IPA passed ZIP integrity and confirms version 0.2.0/build 3, iPhoneOS, runtime 0.2.0, preview channel, MARKOS's team/bundle entitlement and disabled debugger entitlement. [Submission 65e33f8f-262d-4529-844e-17be2710558e](https://expo.dev/accounts/mo4180/projects/markos/submissions/65e33f8f-262d-4529-844e-17be2710558e) finished successfully.
+
+At 14:03 Bahrain time Apple reported build `154730dc-e7ae-4b86-bbdc-878f87f48190` **VALID and ready for internal testing**, with no missing export declaration. MARKOS uses platform HTTPS/Keychain APIs, so this build's `usesNonExemptEncryption` was set to `false` following [Apple's platform-encryption guidance](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations). English test notes were added directly to this build. The internal `Team (Expo)` group includes build 3, has automatic build access, has no enabled public link, and contains exactly the owner's invited Apple account. An actual iPhone installation and walkthrough are still separate checks. Future native builds should declare the same exemption in their Info.plist when the native configuration is next versioned.
+
+Expo's first interactive submission automatically created `Team (Expo)` on the new MARKOS app and added all four existing team admins. This was disclosed and corrected immediately: removed the three other testers' relationships to MARKOS only, then verified that the new group contains only the owner's Apple account. No existing app or account-wide tester was removed. Future setup must set `EAS_NO_AUTO_TESTFLIGHT_SETUP=1`; the pinned `ascAppId` also avoids automatic app/group setup.
+
+`testflight` is a store-distribution build profile using the preview update channel; `production` has a separate production channel. Build with `eas.cmd build --platform ios --profile testflight --freeze-credentials`, then set `$env:EAS_NO_AUTO_TESTFLIGHT_SETUP='1'` and submit the exact build with `eas.cmd submit --platform ios --profile testflight --id <build-id>`. Avoid `--what-to-test` with EAS Submit on this Expo plan: the service rejected changelog submission as Enterprise-only. Test notes can be set directly in MARKOS's App Store Connect record. This does not release a public App Store version. See [Expo's TestFlight workflow](https://docs.expo.dev/submit/testflight/).

@@ -8,6 +8,7 @@ import { env } from "../config/env";
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 const accessClaimsSchema = z.object({
+  authVersion: z.number().int().nonnegative().default(0),
   mfaVerified: z.boolean().default(false),
   mfaVerifiedUntil: z.number().int().positive().nullable().default(null),
   sub: z.string().uuid(),
@@ -19,6 +20,7 @@ const refreshClaimsSchema = accessClaimsSchema.extend({
 });
 
 export interface TokenInput {
+  authVersion?: number;
   userId: string;
   workspaceId: string;
   roles: Role[];
@@ -37,6 +39,7 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
   const mfaVerifiedUntil = input.mfaVerifiedUntil === undefined ? (input.mfaVerified ? now + env.MFA_STEP_UP_TTL : null) : input.mfaVerifiedUntil;
 
   const accessToken = await new SignJWT({
+    authVersion: input.authVersion ?? 0,
     mfaVerified: input.mfaVerified ?? false,
     mfaVerifiedUntil,
     workspaceId: input.workspaceId,
@@ -49,6 +52,7 @@ export async function issueAuthTokens(input: TokenInput): Promise<{
     .sign(accessSecret);
 
   const refreshToken = await new SignJWT({
+    authVersion: input.authVersion ?? 0,
     mfaVerified: input.mfaVerified ?? false,
     mfaVerifiedUntil,
     workspaceId: input.workspaceId,
@@ -77,6 +81,7 @@ export async function verifyAccessToken(token: string): Promise<TokenInput> {
 
   return {
     userId: claims.sub,
+    authVersion: claims.authVersion,
     workspaceId: claims.workspaceId,
     mfaVerified: claims.mfaVerified,
     mfaVerifiedUntil: claims.mfaVerifiedUntil,
@@ -123,6 +128,7 @@ export async function consumeRefreshToken(token: string): Promise<TokenInput> {
 
   return {
     userId: claims.sub,
+    authVersion: claims.authVersion,
     workspaceId: claims.workspaceId,
     mfaVerified: claims.mfaVerified,
     mfaVerifiedUntil: claims.mfaVerifiedUntil,
@@ -134,7 +140,7 @@ export function isMfaStepUpActive(mfaVerifiedUntil: number | null | undefined, n
   return mfaVerifiedUntil !== null && mfaVerifiedUntil !== undefined && mfaVerifiedUntil > now;
 }
 
-export async function revokeRefreshToken(token: string): Promise<void> {
+export async function revokeRefreshToken(token: string, expectedUserId?: string): Promise<void> {
   let claims: z.infer<typeof refreshClaimsSchema>;
 
   try {
@@ -144,6 +150,7 @@ export async function revokeRefreshToken(token: string): Promise<void> {
     return;
   }
 
+  if (expectedUserId !== undefined && claims.sub !== expectedUserId) return;
   const redis = createRedisClient();
 
   try {

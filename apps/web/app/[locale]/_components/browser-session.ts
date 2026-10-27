@@ -73,6 +73,38 @@ export function refreshBrowserSession(): Promise<AuthSession> {
   return renewBrowserSession();
 }
 
+export async function switchBrowserWorkspace(workspaceId: string, locale: Locale, totpCode?: string): Promise<void> {
+  await renewalPromise;
+  const current = useSessionStore.getState().session;
+  if (!current) throw new MarkosApiError("Sign in again", 401, "INVALID_TOKEN");
+  const switchSession = async () => {
+    const client = new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl(), accessToken: current.tokens.accessToken, workspaceId: current.workspace.id });
+    let next: AuthSession;
+    try {
+      next = await client.switchWorkspace(workspaceId, totpCode);
+    } catch (error) {
+      if (!(error instanceof MarkosApiError) || error.code !== "INVALID_TOKEN") throw error;
+      // This operation already owns the refresh lock. Rotate directly once.
+      const refreshed = await new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }).refreshSession();
+      if (refreshed.user.id !== current.user.id || refreshed.workspace.id !== current.workspace.id) {
+        window.location.reload();
+        return;
+      }
+      setBrowserSession(refreshed);
+      next = await new MarkosApiClient({
+        baseUrl: getBrowserApiBaseUrl(),
+        accessToken: refreshed.tokens.accessToken,
+        workspaceId: refreshed.workspace.id
+      }).switchWorkspace(workspaceId, totpCode);
+    }
+    if (useSessionStore.getState().session?.user.id !== current.user.id) return;
+    setBrowserSession(next);
+    // A full navigation discards every old workspace cache and in-flight view.
+    window.location.replace(`/${locale}/app`);
+  };
+  await (navigator.locks ? navigator.locks.request(REFRESH_LOCK_NAME, switchSession) : switchSession());
+}
+
 export function setBrowserSession(session: AuthSession): void {
   const identity: StoredIdentity = {
     roles: session.roles,
@@ -96,8 +128,15 @@ export async function logoutBrowserSession(locale: Locale): Promise<void> {
 
 export function watchBrowserSession(locale: Locale): () => void {
   const onStorage = (event: StorageEvent) => {
-    if (event.key !== SESSION_KEY || event.newValue !== null) return;
+    if (event.key !== SESSION_KEY) return;
     if (!useSessionStore.getState().session) return;
+
+    if (event.newValue !== null) {
+      const identity = readStoredIdentity();
+      const current = useSessionStore.getState().session;
+      if (identity && (identity.workspace.id !== current?.workspace.id || identity.user.id !== current?.user.id)) window.location.reload();
+      return;
+    }
 
     useSessionStore.getState().setSession(null);
     redirectToLogin(locale, false);

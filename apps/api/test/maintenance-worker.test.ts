@@ -429,6 +429,14 @@ describe("maintenance worker", () => {
     expect(publishedContentIds).toEqual(expect.arrayContaining([first.content.id, second.content.id]));
     expect(firstAfter.status).toBe("PUBLISHED");
     expect(secondAfter.status).toBe("PUBLISHED");
+    await processDuePublishJobs({ now, publisher });
+    for (const target of [first, second]) {
+      const notices = await prisma.notification.findMany({
+        where: { userId: target.workspace.ownerUserId, workspaceId: target.workspace.id, templateKey: "publishing_succeeded" }
+      });
+      expect(notices).toHaveLength(1);
+      expect(notices[0]!.payload).toMatchObject({ contentItemId: target.content.id });
+    }
     await expect(
       prisma.publishJob.findFirstOrThrow({
         where: { contentItemId: first.content.id }
@@ -598,9 +606,14 @@ describe("maintenance worker", () => {
     expect(currentStorageCounter).toBeNull();
   }, 60_000);
 
-  it("sends monthly analytics PDF emails once per workspace and month", async () => {
-    const now = new Date(Date.UTC(2026, 1, 2, 12));
+  it("simulates monthly analytics PDF emails once per workspace and month without counting delivery", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 1, 2, 12)));
+    const now = new Date();
     const workspace = await createWorkspace("worker-analytics-email");
+    await prisma.user.update({ where: { id: workspace.ownerUserId }, data: { isVerified: true } });
+    await prisma.workspaceMember.create({ data: { workspaceId: workspace.id, userId: workspace.ownerUserId, role: "OWNER" } });
+    await prisma.notificationPreference.create({ data: { workspaceId: workspace.id, userId: workspace.ownerUserId, monthlyReportEmail: true } });
     const sentFilenames: string[] = [];
     const provider: AnalyticsEmailProvider = {
       mode: "dry_run",
@@ -635,23 +648,17 @@ describe("maintenance worker", () => {
     expect(first.analyticsEmail?.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          delivered: true,
-          month: "2026-01",
-          workspaceId: workspace.id
-        })
-      ])
-    );
-    expect(second.analyticsEmail?.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
           delivered: false,
           month: "2026-01",
-          skippedReason: "ALREADY_SENT",
+          skippedReason: "SIMULATED",
           workspaceId: workspace.id
         })
       ])
     );
+    expect(second.analyticsEmail?.results).toEqual([]);
     expect(sentFilenames.filter((filename) => filename.includes(workspace.name.toLowerCase().replace(/\s+/g, "-")))).toHaveLength(1);
+    expect(first.analyticsEmail?.delivered).toBe(0);
+    expect(second.analyticsEmail?.delivered).toBe(0);
   }, 60_000);
 });
 

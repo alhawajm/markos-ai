@@ -34,7 +34,7 @@ describe("Sunlit Social Studio marketing landing", () => {
     expect(componentSource).not.toContain("/${locale}/plans");
     expect(componentSource).not.toContain("/${locale}/contact");
     expect(componentSource).toContain("Powered by Ra'edat Software");
-    expect(componentSource).toContain("© 2026 Ra'edat Software L.L.C.");
+    expect(componentSource).toContain("© 2026 Raedat Software Company W.L.L");
   });
 
   it("declares a localized RTL experience with mirrored directional affordances", () => {

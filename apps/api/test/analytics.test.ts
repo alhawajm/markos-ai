@@ -11,7 +11,9 @@ vi.mock("../src/ai/embeddings-client", () => ({
   embedVaultTexts: async (texts: string[]) => ({
     dimensions: 1536,
     embeddings: texts.map(testEmbedding),
-    model: "test-embedding-model"
+    model: "test-embedding-model",
+    space: "test:1536",
+    tokens_in: 0
   })
 }));
 
@@ -731,54 +733,27 @@ describe("analytics routes", () => {
     await app.close();
   });
 
-  it("sends a monthly analytics PDF email and records delivery evidence", async () => {
+  it("queues a monthly report only to the requesting account without claiming delivery", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);
-    const headers = authHeaders(session.tokens.accessToken);
-
+    await prisma.user.update({ where: { id: session.user.id }, data: { isVerified: true } });
     const response = await app.inject({
       method: "POST",
       url: "/v1/analytics/monthly-email",
-      headers,
-      payload: {
-        locale: "en",
-        month: "2026-01"
-      }
+      headers: authHeaders(session.tokens.accessToken),
+      payload: { locale: "en", month: "2026-01" }
     });
-    const notification = await prisma.notification.findFirstOrThrow({
-      where: {
-        channel: "EMAIL",
-        templateKey: "MONTHLY_ANALYTICS_PDF",
-        workspaceId: session.workspace.id
-      }
-    });
-    const auditLog = await prisma.auditLog.findFirstOrThrow({
-      where: {
-        action: "MONTHLY_ANALYTICS_PDF_EMAIL_SENT",
-        workspaceId: session.workspace.id
-      }
-    });
-
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      data: {
-        delivered: true,
-        filename: expect.stringContaining("2026-01.pdf"),
-        mode: "dry_run",
-        month: "2026-01",
-        recipients: [session.user.email],
-        workspaceId: session.workspace.id
-      }
-    });
-    expect(notification.payload).toMatchObject({
+    expect(response.json().data).toMatchObject({
+      delivered: false,
       month: "2026-01",
-      recipients: [session.user.email]
+      recipients: [session.user.email],
+      skippedReason: "PENDING",
+      workspaceId: session.workspace.id
     });
-    expect(auditLog.metadata).toMatchObject({
-      month: "2026-01",
-      recipients: [session.user.email]
-    });
-
+    expect(
+      await prisma.analyticsReportDelivery.count({ where: { workspaceId: session.workspace.id, userId: session.user.id, requested: true, status: "PENDING" } })
+    ).toBe(1);
     await app.close();
   });
 

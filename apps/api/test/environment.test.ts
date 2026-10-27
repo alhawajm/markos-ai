@@ -22,6 +22,22 @@ describe("environment configuration", () => {
     expect(repositoryEnvPath).toBe(resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env"));
   });
 
+  it("preserves the deployed bind default and supports an explicit local API host", () => {
+    expect(parseEnvironment({}).API_HOST).toBe("0.0.0.0");
+    expect(parseEnvironment({ API_HOST: "127.0.0.1" }).API_HOST).toBe("127.0.0.1");
+    expect(() => parseEnvironment({ API_HOST: " " })).toThrow();
+  });
+
+  it("enables conversation processing by default and parses explicit boolean strings", () => {
+    expect(parseEnvironment({}).CONVERSATION_PROCESSOR_ENABLED).toBe(true);
+    expect(parseEnvironment({ CONVERSATION_PROCESSOR_ENABLED: "true" }).CONVERSATION_PROCESSOR_ENABLED).toBe(true);
+    expect(parseEnvironment({ CONVERSATION_PROCESSOR_ENABLED: "false" }).CONVERSATION_PROCESSOR_ENABLED).toBe(false);
+  });
+
+  it.each(["", "FALSE", "0", "1", "yes", "invalid"])("rejects invalid conversation processor value %j", (value) => {
+    expect(() => parseEnvironment({ CONVERSATION_PROCESSOR_ENABLED: value })).toThrow();
+  });
+
   it.each([
     ["omitted", {}, undefined],
     ["empty", { MEDIA_PUBLIC_BASE_URL: "" }, undefined],

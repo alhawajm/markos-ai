@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -43,15 +43,21 @@ class OfferingDocumentCandidate(StrictContract):
     price_minor: int | None = Field(default=None, alias="priceMinor", ge=0)
     currency: str = Field(min_length=3, max_length=3)
     confidence: Confidence
-    source_files: list[str] = Field(alias="sourceFiles", min_length=1, max_length=5)
+    source_files: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(
+        alias="sourceFiles", min_length=1, max_length=5
+    )
 
 
 class OfferingDocumentCatalog(StrictContract):
     summary: str | None = Field(default=None, max_length=4_000)
     items: list[OfferingDocumentCandidate] = Field(default_factory=list, max_length=30)
-    differentiators: list[str] = Field(default_factory=list, max_length=20)
+    differentiators: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(
+        default_factory=list, max_length=20
+    )
     price_range: str | None = Field(default=None, alias="priceRange", max_length=120)
-    sales_channels: list[str] = Field(default_factory=list, alias="salesChannels", max_length=12)
+    sales_channels: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, alias="salesChannels", max_length=12
+    )
 
 
 class OfferingDocumentIssue(StrictContract):
@@ -60,7 +66,9 @@ class OfferingDocumentIssue(StrictContract):
     message: str = Field(min_length=1, max_length=500)
     field: str | None = Field(default=None, max_length=120)
     offering_name: str | None = Field(default=None, alias="offeringName", max_length=160)
-    source_files: list[str] = Field(default_factory=list, alias="sourceFiles", max_length=2)
+    source_files: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(
+        default_factory=list, alias="sourceFiles", max_length=2
+    )
 
 
 class OfferingDocumentExtraction(StrictContract):

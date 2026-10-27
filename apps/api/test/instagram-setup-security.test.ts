@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({ enabled: true, verified: true, member: true })
 vi.mock("../src/db/prisma", () => ({
   prisma: {
     workspaceMember: { findFirst: async () => (state.member ? { role: "OWNER" } : null) },
-    user: { findUnique: async () => ({ deletedAt: null, isVerified: state.verified, mfaEnabled: state.enabled }) }
+    user: { findUnique: async () => ({ authVersion: 0, deletedAt: null, isVerified: state.verified, mfaEnabled: state.enabled }) }
   }
 }));
 vi.mock("../src/auth/tokens", async (original) => ({

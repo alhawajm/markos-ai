@@ -6,13 +6,15 @@ import { registerAdminRoutes } from "../admin/admin-routes";
 import { registerAgentRoutes } from "../agents/agent-routes";
 import { registerAnalyticsRoutes } from "../analytics/analytics-routes";
 import { registerAuthRoutes } from "../auth/auth-routes";
+import { registerPasswordRoutes } from "../auth/password-routes";
+import { registerAuthRateLimits } from "../auth/auth-rate-limit";
 import { assertVerificationEmailConfiguration } from "../auth/verification-email";
 import { registerBillingRoutes } from "../billing/billing-routes";
 import { registerCalendarRoutes } from "../calendar/calendar-routes";
 import { env } from "../config/env";
 import { registerConversationRoutes } from "../content/conversation-routes";
 import { registerContentRoutes } from "../content/content-routes";
-import { getDeepHealth } from "../health/deep-health";
+import { getBackupHealth, getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
 import { registerMetaRoutes } from "../meta/meta-routes";
 import { registerNotificationRoutes } from "../notifications/notification-routes";
@@ -26,9 +28,11 @@ import { getWorkspaceContext } from "../tenancy/workspace-context";
 import { registerWorkspaceContext } from "../tenancy/workspace-plugin";
 import { registerVaultRoutes } from "../vault/vault-routes";
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes";
+import { registerSettingsRoutes } from "../workspace/settings-routes";
 import { registerInstagramLearningRoutes } from "../instagram-learning/routes";
 import { errorEnvelope, ok } from "./envelope";
 import { reportUnexpectedRequestError } from "./error-telemetry";
+import { safeLogHooks, safeLogSerializers } from "./safe-logging";
 
 const devCorsOrigins = [
   env.WEB_BASE_URL,
@@ -63,37 +67,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const app = Fastify({
     logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug"
+      level: env.NODE_ENV === "production" ? "info" : "debug",
+      serializers: safeLogSerializers,
+      hooks: safeLogHooks,
+      redact: { paths: ["password", "token", "accessToken", "refreshToken", "authorization", "cookie", "body", "headers"], censor: "[REDACTED]" }
     }
   });
 
-  await app.register(helmet);
-  await app.register(cors, {
-    origin: env.NODE_ENV === "development" ? Array.from(new Set(devCorsOrigins)) : env.WEB_BASE_URL,
-    credentials: true,
-    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
-  });
-  await registerWorkspaceContext(app);
-  await registerAdminRoutes(app);
-  await registerAuthRoutes(app);
-  await registerAgentRoutes(app);
-  await registerAnalyticsRoutes(app);
-  await registerBillingRoutes(app);
-  await registerCalendarRoutes(app);
-  await registerOnboardingRoutes(app);
-  await registerBusinessKnowledgeRoutes(app);
-  await registerCampaignRoutes(app);
-  await registerContentRoutes(app);
-  await registerConversationRoutes(app);
-  await registerMediaRoutes(app);
-  await registerMetaRoutes(app);
-  await registerNotificationRoutes(app);
-  await registerPromptRoutes(app);
-  await registerPublishingRoutes(app);
-  await registerWorkspaceRoutes(app);
-  await registerInstagramLearningRoutes(app);
-  await registerVaultRoutes(app);
-
+  // Fastify captures the error handler when a route is registered.
   app.setErrorHandler((error, request, reply) => {
     const details = getErrorDetails(error);
     const statusCode = details.statusCode;
@@ -125,6 +106,36 @@ export async function buildApp(): Promise<FastifyInstance> {
       );
   });
 
+  await app.register(helmet);
+  await app.register(cors, {
+    origin: env.NODE_ENV === "development" ? Array.from(new Set(devCorsOrigins)) : env.WEB_BASE_URL,
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+  });
+  await registerWorkspaceContext(app);
+  await registerAuthRateLimits(app);
+  await registerAdminRoutes(app);
+  await registerAuthRoutes(app);
+  await registerPasswordRoutes(app);
+  await registerAgentRoutes(app);
+  await registerAnalyticsRoutes(app);
+  await registerBillingRoutes(app);
+  await registerCalendarRoutes(app);
+  await registerOnboardingRoutes(app);
+  await registerBusinessKnowledgeRoutes(app);
+  await registerCampaignRoutes(app);
+  await registerContentRoutes(app);
+  await registerConversationRoutes(app);
+  await registerMediaRoutes(app);
+  await registerMetaRoutes(app);
+  await registerNotificationRoutes(app);
+  await registerPromptRoutes(app);
+  await registerPublishingRoutes(app);
+  await registerWorkspaceRoutes(app);
+  await registerSettingsRoutes(app);
+  await registerInstagramLearningRoutes(app);
+  await registerVaultRoutes(app);
+
   app.get("/v1/health", async () => {
     const response: HealthResponse = {
       service: "api",
@@ -137,6 +148,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get("/v1/health/deep", async () => {
     return ok(await getDeepHealth());
+  });
+  app.get("/v1/health/backups", async (_request, reply) => {
+    const backup = await getBackupHealth();
+    return reply
+      .header("Cache-Control", "no-store")
+      .code(backup.status === "down" ? 503 : 200)
+      .send(ok({ status: backup.status === "down" ? "degraded" : "ok", timestamp: new Date().toISOString(), backup }));
+  });
+  app.get("/v1/ready", async (_request, reply) => {
+    const health = await getDeepHealth();
+    return reply
+      .header("Cache-Control", "no-store")
+      .code(health.status === "ok" ? 200 : 503)
+      .send(ok(health));
   });
 
   app.get(

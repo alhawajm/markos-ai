@@ -591,7 +591,6 @@ Keep one foreground mutation at a time so delayed AI/save/media responses cannot
 
 Business Profile direct editing, offering refinements, durable conversational intelligence, provider optimization, and the dedicated mobile workflow remain separate passes. This UI implementation does not establish live AI or Instagram readiness.
 
-
 ## 2026-09-06 — One final publication caption
 
 Khalid approved replacing separate English, Arabic, CTA and hashtag fields with one canonical `ContentItem.caption` string. Preserve its exact text and ordering through manual save/reload, AI revision, preview and publishing for Posts, Carousels and Reels. Interface locale controls presentation only. Story copy is supporting draft text, not a caption or automatically rendered overlay.
@@ -599,7 +598,6 @@ Khalid approved replacing separate English, Arabic, CTA and hashtag fields with 
 The content AI contract and prompt `content.v3` return one caption with any languages, CTA and hashtags included once. English then Arabic is the default ordered preference; owner instructions may request other language choices or ordering. Manual captions are revisable without an AI origin or mandatory CTA/hashtags/pillar. Validate the complete caption before persistence and before provider submission; keep the existing 2,200-character and 30-hashtag application caps using Unicode-code-point counting consistently in TypeScript and Python. Invalid output is recoverable and must not replace the saved draft.
 
 The user waived preservation for the planned fresh-data stage. The migration drops all four retired copy columns and gives existing rows an empty caption; no compatibility writer or backfill is retained. It does not reset databases or delete other records. Hosted rollout must coordinate the schema, API, AI and frontend. Local migration execution does not constitute a Railway deployment or reset. This supersedes the earlier Create pass's restriction on prompt/schema changes only for this caption slice; durable chat, undo, content revision history and publication snapshots remain separate work.
-
 
 ## 2026-09-06 — Persistent Create conversations and deferred commercial quotas
 
@@ -666,6 +664,7 @@ Expose the existing `contentPillar`, `campaignGoal` (the post objective), and `t
 ## 2026-09-13: Publish now priority within the existing maintenance tick
 
 Refresh due Instagram credentials, then process due publish jobs before document cleanup, email, usage maintenance, and Insights synchronization. Reproduced that an email or Insights exception previously prevented publishing from running at all. Keep one timer, its running guard, durable leases, retry policy, and duplicate protection. This changes task order only. Publish now retains its existing MFA step-up requirement; tests explicitly distinguish authorization rejection before queueing from a queued Reel that creates a container, waits for processing, publishes, and persists the final media ID. This code-level defect is not proof of the cause of an individual production attempt.
+
 ## 2026-09-13 — Business Profile becomes the permanent knowledge editor
 
 Implement the approved maintenance prototype on `feat/business-profile-maintenance`, based on the merged color-system refinement. Tabs are Marketing Strategy (the default), Products & Services, Audience & Market, Brand & Voice, and Business. Use `/{locale}/app/knowledge?tab=...`; an absent or unknown tab opens Marketing Strategy. The September 7 product decision supersedes the August 20 return-to-onboarding maintenance requirement.
@@ -694,7 +693,6 @@ Email token links confirm the token owner and stay on a confirmation screen, wit
 
 Verification emails retain SendGrid delivery and plaintext fallback, add a modest bilingual branded button and return-to-tab instructions, and display the configured link lifetime. No production email, account or workspace data is mutated by the verification tests.
 
-
 ## 2026-09-14 — Initial Instagram learning extends onboarding and maintains Business Profile
 
 After business onboarding approval, enter a dedicated bilingual Instagram setup flow, with postponement to Overview before connection. Overview and Business Profile offer a connection banner while disconnected; Settings first connection enters the same flow. Inline MFA enrollment is required, but OAuth start does not require the existing 15-minute authorization window. Settings refresh/disconnect and other step-up behavior are unchanged.
@@ -711,13 +709,11 @@ Staging returned two 504 responses from the onboarding document-analysis endpoin
 
 Uploads remain temporary for 24 hours and are retained after analysis failure so an intentional Retry can reuse them. Worker expiration, approval/discard cleanup, the publishing schedule, and other AI provider timeouts are unchanged. Local mocked-provider and database tests cover timeout cancellation and upload retention/retry; successful analysis of the staging document still requires a hosted retest after deployment.
 
-
 ## 2026-09-14 — Optional observed Instagram palette
 
 Extend the first-learning field allowlist with `colors`, only when the business has no saved brand colors. A proposal contains one to seven six-digit hex values and cites posts with supplied cover images. The API omits unsupported palettes and palettes that would replace existing colors; approval rechecks authoritative colors under the existing knowledge lock. The UI starts palette suggestions unselected. Only explicit approval writes the reviewed values to the existing brand colors field. These are suggested visual choices, never automatically inferred official brand facts. No migration, additional provider request, or new palette store is needed. Existing saved learning records without a colors snapshot remain readable.
 
 Deferred separately: stronger restraint against invented facts during onboarding profile resolution (pending user evidence), email verification page arrangement, and Instagram connection ownership/revocation recovery. Document timeout handling remains the separate merged fix.
-
 
 ## 2026-09-16 — Focused notifications, carousel and Insights fixes
 
@@ -727,5 +723,283 @@ Deferred separately: stronger restraint against invented facts during onboarding
 - Insights starts at the latest chronological data on initial load or a range/metric change, with RTL-aware positioning. Ordinary renders do not override user scrolling.
 - Business Profile photo features remain outside this pass. Uncommitted onboarding integration is preserved separately while this branch is tested.
 
-
 Focused local verification for this pass: 22 API tests in media/notifications passed, including ownership, channel filtering, stale-order rejection, full-carousel replacement, failure preservation and removed-target recovery. Focused Create browser checks passed for multi-upload/library selection, drag/button order, generation retry, saved ordering, existing format limits/recovery and thinking visibility. Notification account-switch checks and latest-date chart positioning in English/Arabic passed. API/web TypeScript and affected web ESLint passed. Two targeted Create screenshots were inspected. No real provider generation, publishing, hosted environment changes, full-suite run or production build was performed. The first Create browser navigation timed out during cold compilation; its focused rerun passed.
+
+## 2026-09-21 ? Complete local Windows launcher for project handover
+
+The local handover uses a single Run MARKOS.cmd entry point for the existing Compose dependencies, web, API, Python AI service and API-owned worker. Stop MARKOS.cmd stops only launcher-owned processes and preserves database/media storage. A Windows Job Object contains application descendants, while checked process identity prevents a repeated Run/Stop from affecting unrelated listeners. Logs and ownership state stay in ignored var/local-run. Startup validates local configuration and migration compatibility; it does not reset, migrate or seed an existing database.
+
+The default retains the repository local text provider, disabled image/video generation, local email/media and Instagram publishing/analytics dry-run settings. The worker retains its normal all role; this is not a network-isolated mode if real Instagram credentials are later configured. The existing text-only live-ai mode remains explicit. Provider credentials and hosted account/data access require a separate handover and are not supplied by Git.
+
+For this workstation, the current Compose project markos-ai created new volumes and an empty database for the latest baseline and relational migrations. Older markosai volumes were preserved. Focused persistent tests and browser journey validation use separately named disposable databases. See local-handover.md for operation and evidence.
+
+## 2026-09-21: The Windows handover uses current Railway data directly
+
+Supersede the default local-data/provider configuration in the preceding Windows
+launcher decision. The user approved connecting this workstation directly to the
+existing Railway production project. The prepared ignored root `.env` selects
+`MARKOS_RUN_MODE=railway`: local web/API, local Docker Redis/OpenSearch, hosted AI,
+existing hosted worker and shared S3-compatible media. Application edits through
+the local UI affect the same shared data. The earlier local database and all
+disposable/older volumes remain preserved and inactive in this profile.
+
+Keep PostgreSQL private. The launcher owns an SSH tunnel from
+`127.0.0.1:15432` to the database service's `127.0.0.1:5432`, using a workstation
+identity and pinned known-hosts file outside Git. The API binds to loopback with
+`API_HOST=127.0.0.1`. Disable local job processing and start no local worker, so
+the hosted worker retains job ownership. Use the hosted API as
+`MEDIA_PUBLIC_BASE_URL` for the shared storage. Run/Stop own only the local web,
+API and tunnel; hosted services and local Docker dependencies survive Stop.
+
+Do not introduce local email verification bypasses to compensate for SendGrid
+credentials unavailable through the Railway handover. Existing verified users
+sign in locally; new-account
+verification uses the hosted application. Instagram connection/reconnection also
+uses hosted Settings because the approved OAuth redirect returns there, followed
+by a local reload of the shared connection. Current live billing remains
+incomplete; this infrastructure handover does not change deferred commercial
+gates or declare all product milestones complete.
+
+Read-only catalog checks confirmed the 20 applied migrations, pgvector,
+37 RLS-enabled tables and a `markos_app` role without RLS bypass; they did not
+test every workspace boundary through that role. Runtime checks for the
+new profile are tracked separately in [local-handover.md](local-handover.md);
+historical local/disposable tests are not hosted evidence. Never run persistent
+tests, seeds or migrations against the shared `.env`; verification requires an
+explicitly named disposable database and separate test configuration. Copying
+the Git checkout alone omits the ignored configuration and external SSH identity
+and does not make the cloud-dependent setup portable or offline.
+
+## 2026-09-21: Recover a stalled local Railway connection
+
+Showcase verification found a live SSH process whose database forwarding had
+stalled; a new SSH connection to the same database worked. The Windows launcher
+now monitors dependency health after startup and reports degraded/recovering
+states. After three failed database checks, or an exited owned tunnel/API, it
+recreates only those two local services. Each service has its own Windows Job
+Object, so the web app and unrelated processes remain running. Recovery is
+bounded to three attempts and resets after three healthy checks. Repeated Run
+waits for the existing session to recover.
+
+An actual paused-tunnel drill restored full dependency health in about 70 seconds
+with the same supervisor and web processes. Focused offline process-ownership and
+health checks also passed. This recovery does not alter Railway deployments,
+apply migrations, or restart hosted workers. Live provider verification and its
+remaining showcase limits are recorded in [showcase-readiness.md](showcase-readiness.md).
+
+## 2026-09-21: Reuse hosted SendGrid verification locally
+
+The Railway-connected local API can set EMAIL_VERIFICATION_API_BASE_URL to forward verification requests and token confirmation to the hosted API. Delivery and verification tokens stay with hosted SendGrid/Redis; login and refresh remain local and observe the shared user verification state. The setting is optional and leaves the existing deployed flow unchanged.
+
+## 2026-09-21: Complete and recover onboarding document analysis
+
+Full-business PDF analysis exhausted the shared 4,000-token output allowance. Its output budget is now independently configurable through `ONBOARDING_DOCUMENT_MAX_OUTPUT_TOKENS` (default 8,000). The AI document schemas enforce the API's existing list-item lengths and uppercase hex colors, so successful provider responses satisfy the same review contract. A lost browser response recovers the retained analysis and polls processing state; canonical business knowledge still requires the owner's review and approval.
+
+## 2026-09-21: Give campaign generation one complete attempt
+
+Real 14-day campaign requests hit the 50-second route deadline while the OpenAI client used a separate 45-second timeout with retries. Campaign generation now uses one attempt with `AI_CAMPAIGN_TIMEOUT_SECONDS` (default 120 seconds, below the API's 130-second deadline) and a separate `CAMPAIGN_MAX_OUTPUT_TOKENS` allowance (default 8,000). Other workflows keep their own limits.
+
+## 2026-09-21: Reuse active video requests and show current outcomes
+
+Submitting the same video direction from Assistant and Generate previously replaced the first job's intent. Under the existing content lock, identical active video requests now return the same job; changed direction, duration, or aspect ratio still creates a new request. Create polls the latest video job, disables duplicate manual submission during assistant generation, shows provider moderation failures explicitly in English and Arabic, and clears the queued notice when generation ends. Provider moderation remains authoritative; a separately rendered motion-graphic draft is an uploaded creative asset, not a successful Sora generation.
+
+## 2026-09-21: Render Reel lettering separately from generated footage
+
+Video planning separates visual direction from requested visible copy. The worker saves the immutable render plan and its token usage in a workspace-scoped `ai_interaction` before starting footage. Sora receives a visual-only direction; the AI service composites the saved Unicode text with FFmpeg/libass, Arabic shaping and per-line RTL direction before storing or attaching the MP4. Download retries reuse the same plan and provider video. Captions and script beats are not automatically overlaid. Existing generated files are unchanged and need regeneration to remove lettering already drawn into their frames. Provider moderation remains authoritative.
+
+## 2026-09-21: Use hosted MARKOS by default
+
+At the user's request, `Run MARKOS.cmd` opens the Railway web app directly. Local development remains an explicit `scripts/run-local.ps1` command. Local browser requests use a same-origin Next development proxy to the IPv4 API; deployed API routing is unchanged.
+
+## 2026-09-21: Campaign description and reference files
+
+Campaign creation accepts an optional 5,000-character description and up to five PDF, DOCX, TXT, PNG, JPEG or WebP references (8 MB per file, 20 MB combined). The existing campaign generation call sends documents and visual references to the configured model alongside the Business Profile. Owner clarification takes precedence for campaign-specific intent; source conflicts and unreadable references must be surfaced in the generated plan. The saved campaign retains the description, file names/checksums and an extracted reference summary; original upload bytes are request-scoped and are not stored as Library assets or permanent Business Profile facts. The reference summary also grounds subsequent campaign-linked Create conversations. English/Arabic selection, removal, validation, retry retention and an Overview context section use the existing UI. Development proxy upload/deadline limits match this request; hosted browsers continue to call the API directly.
+
+## 2026-09-22 — First native MARKOS slice
+
+Keep the existing Next.js web app and Railway services. Add one Expo SDK 57 app under `apps/mobile` for Android and iOS, owned by `mo4180/markos` in Expo. Share types, the API client and colors; generate native color values from the authoritative web token file. Use native layout components and Lucide with IBM Plex Sans / IBM Plex Sans Arabic.
+
+Add explicit `/v1/auth/native/login`, `/refresh` and `/logout` routes which call the existing credential, MFA and one-use refresh services. Native requests require the native transport header and reject browser Origin headers; they return the rotating credential for SecureStore and never set browser cookies. Browser session behavior is unchanged. Scope query caches, copied files and requests to the API host, user and workspace; reject late responses after identity changes.
+
+The first campaign implementation reuses synchronous generation with up to five reference files, preserved device briefs and an in-session concurrent-submission guard. App-kill recovery and server idempotency remain the planned durable-job step; the UI explicitly asks owners to keep generation open and check saved campaigns after a lost response. Native content supports caption/brief editing; media generation, readiness and scheduling continue in the hosted studio for this slice. This milestone does not imply mobile feature parity or store readiness.
+
+Preview OTA delivery uses Expo's `appVersion` runtime policy and the `preview` channel. The initial fingerprint policy produced different hashes on Windows and EAS because pnpm's native dependency paths differ across platforms. Native dependency/configuration changes therefore require an explicit app version bump and new binaries; compatible UI changes can use EAS Update. Android internal previews target ARM64 for build/download size; production keeps the default architecture set.
+
+## 2026-09-22: Durable native campaigns and the Create-to-Schedule flow
+
+Use a workspace-scoped PostgreSQL campaign job with one idempotency key per saved brief intent. An independent API timer claims queued rows, reusing the current conversation-processor convention without blocking the publishing tick. Record campaign output, AI usage and the completion receipt in one transaction guarded by the job lease and current actor access. Replays with the same brief return the same receipt; changed briefs require a new key. A running job interrupted by an API restart fails after its ten-minute lease and needs explicit retry, avoiding automatic replay of uncertain paid requests. Temporary reference bytes are cleared on every terminal state. The synchronous web endpoint remains available.
+
+Use the existing content, conversation, media and scheduling APIs in the native studio. Preserve conflicting manual edits for reconciliation and keep Mark Ready distinct from Schedule. Scheduling accepts an optional `expectedRevision` so the mobile confirmation applies to the draft the owner reviewed, while old clients remain compatible. Native times use Bahrain's timezone and the server's half-hour boundaries. Submitted conversation intents persist by API/user/workspace/content identity; unsaved editor fields remain memory-only for this slice.
+
+Add Expo Video for actual in-app Reel playback. Bump the app/runtime to 0.2.0 and increment native build numbers; require new binaries before compatible updates. Keep the accepted navigation, shared Sunlit tokens, Lucide icons and English/Arabic typography. Existing server visual-only video generation and separately rendered lettering remain the Reel text path.
+
+## 2026-09-22: Preserve unfinished native work on the device
+
+Persist editor base/working snapshots and unsent Assistant text in AsyncStorage scoped by API host, user, workspace and content. Serialize writes and logout cleanup by identity, reject writes from an expired identity epoch, and clear only the completed submitted message's request ID. Revalidate server content access before restoring device edits. Newer revisions require review; a lost Save response is reconciled against current server fields. Local write success is displayed separately from explicit server Save and approval. Failed local storage never claims durable recovery. Explicit logout clears local studio work; session expiry retains it for reauthentication. This remains device recovery rather than offline authentication or publishing.
+
+Deliver this JavaScript-only change on runtime 0.2.0's preview channel. Add a store-distribution TestFlight profile on that channel and keep production updates on a separate channel. Apple account sign-in stays in the owner's interactive Expo credential setup; a paid membership alone is not signing configuration.
+
+## 2026-09-22: Native business setup and profile maintenance
+
+Reuse the existing Railway onboarding, staged-document, profile-generation and knowledge-maintenance APIs. Keep seven setup modules and the two explicit approvals: extracted business facts first, bilingual business profile second. Optional manual steps remain skippable. The native entry point now handles email resend/check and setup; completion offers the existing Instagram setup flow or the workspace. Do not create a campaign automatically.
+
+Business Profile lives in workspace settings, grouped into strategy, products, audience/market, brand/voice and business. Patch only edited fields and use the correct independent profile/catalog revision. Preserve pending edits on conflicts and require an explicit choice before applying them to the latest version. Native offering maintenance covers names, descriptions, categories and kind; pricing/availability and account/Instagram administration retain their hosted web controls.
+
+Persist setup and maintenance drafts separately by API/user/workspace and identity epoch. Keep onboarding file copies separate from campaign references. Serialize cleanup after pending writes. Use the existing active-analysis lookup after interrupted responses rather than replaying paid requests. Reuse shared validation as a JavaScript-only dependency; the native runtime remains 0.2.0.
+
+## 2026-09-22: Native signup and durable account recovery
+
+Provide signup and password recovery in the native app and the hosted Sunlit authentication pages. Native registration records consent and issues the same OS-protected rotating session as login, then uses the existing verification/onboarding gate. Record the displayed legal revision (`draft-0.1`) and acceptance timestamp; the legal pages still need owner-approved final wording before a public launch. This implementation does not claim that draft policies are launch-ready.
+
+Use an eight-digit random email code plus an opaque UUID challenge, with ten-minute expiry and five persisted attempts. Store only its keyed hash in the challenge table. Return identical recovery responses without looking up accounts in the request handler; resolve eligibility in the mail processor. Atomic challenge consumption and conditional user credential-version updates prevent concurrent/replayed resets. New passwords are 15–128 characters; existing shorter passwords remain usable for login. Successful resets invalidate previous access and refresh tokens across devices, preserve enabled MFA, and require normal login. Verification token rotation and consumption are also atomic. Recovery matches [OWASP's recovery guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) on generic responses, bounded single-use codes, session invalidation and change notices.
+
+After any reset has occurred, rollback must retain credential-version enforcement; an older API that ignores the version would undermine revocation. Prefer a forward fix, or invalidate all old sessions before returning to such a release.
+
+Write encrypted delivery jobs in the account transaction. PostgreSQL leases coordinate replicas and recover after process restarts; retry at most five times, then erase the payload. Expiry also erases payloads, with expired challenge/job records pruned after a further day. SMTP/API acceptance cannot prove inbox delivery and a timed-out accepted email can be delivered more than once; reset retries retain the same code. The AES-GCM key derives from a purpose-specific hash of `JWT_REFRESH_SECRET`; rotating that secret invalidates pending encrypted mail and recovery codes as well as sessions. Auth tables are user credentials, not workspace-owned resources; tests verify that resetting one account cannot affect another.
+
+Redis limits auth requests by socket peer and keyed normalized email/challenge. Do not trust arbitrary forwarded headers. Railway's proxy peer may be shared by users; verified edge/proxy attribution and capacity tuning remain a public-scale deployment concern. Runtime SendGrid credentials are sealed and omitted from CLI variable export; runtime startup validation and a remote [SendGrid sandbox check](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/sandbox-mode) validate configuration without extracting credentials or delivering test mail.
+
+Focused evidence: 41 API tests on disposable `markos_account_recovery_test` with Redis database 14; 10 native session-controller tests; three rendered browser tests covering signup consent, English/Arabic recovery, mismatches/expired codes, success, secret non-persistence, RTL width and actual Plex glyphs. API, web and native TypeScript checks, focused web lint, and both native bundle exports pass. An initial hosted build failed because the isolated deployment stage omitted an existing email-forwarding dependency; that dependency was included and deployment `8364e766-9073-427a-b129-591c922d7c05` succeeded with all 22 migrations applied. Hosted health and invalid-request checks pass. Both localized SendGrid sandbox requests returned HTTP 200. Actual inbox delivery and physical-device interaction remain separate checks; the older broad auth browser file was interrupted after local build-cache failures, so this is focused coverage, not a full regression claim.
+
+## 2026-09-24: Native Instagram management and scheduling preflight
+
+Account settings and completed onboarding now open native Instagram controls. Reuse the established Instagram Login scopes, signed state, single-use nonce, encrypted provider credentials and server callback. Consent uses the OS browser, consistent with [RFC 8252](https://www.rfc-editor.org/info/rfc8252/). Only `/en/mobile/instagram` and `/ar/mobile/instagram` are added to the return allowlist. The public return page always opens `markos:///instagram`; it forwards no credentials and does not assert connection success from query parameters. Focus/foreground re-fetch the authenticated server state. Reconnecting an existing account and disconnecting require explicit user confirmation; unconfirmed provider revocation remains visible.
+
+Native authenticator setup reuses the existing setup/enable service. The new authenticated native verification route issues a native grant without browser cookies, binding user/workspace and credential version to the current principal. Setup and enable use conditional writes to protect concurrent enrollment. Browser and native MFA attempts share a five-per-five-minute user limit. Session rotation is serialized with step-up and logout; late grants cannot restore another identity. Setup secrets and codes stay in component memory, with manual setup-key entry and an authenticator-app link.
+
+Before scheduling, read both content and live-publishing readiness. Replace only checks against an already-existing schedule with the proposed future Bahrain time; preserve all connection, media, caption, role and revision constraints. Re-fetch at confirmation and pass the reviewed revision to the existing schedule service. Cancelling a scheduled post remains possible when publishing checks fail. This client preflight does not reserve provider quota or promise delivery: the worker remains authoritative and rechecks at execution.
+
+Focused evidence: 30 API tests (including the existing browser TOTP case; its 11 unrelated auth cases skipped), 25 native model/session tests, two rendered return-page tests with English desktop and Arabic phone-width captures and actual Plex font checks. API, mobile and web TypeScript and focused web ESLint passed. Persistent tests used only disposable `markos_account_recovery_test` and Redis database 14. No schema migration, provider authorization change, live post, message, or customer account mutation was performed. Railway runtime read-only checks confirm the required Instagram/S3 configuration is present and publishing is in live mode; this does not establish Meta App Review approval or a successful real-account consent flow. Actual phone consent, keyboard, authenticator switching and accessibility checks remain device acceptance work.
+
+## 2026-09-24: Native calendar, publishing activity and performance
+
+Use Bahrain calendar dates for the seven-day Sunday–Saturday agenda, matching the existing API's inclusive date-only contract. Place drafts by planned time, scheduled/failed posts by scheduled time and published posts by actual publication time. Keep planned content visibly separate from a confirmed schedule. Unscheduled content and publishing activity paginate in groups of 20; all reads remain scoped to the authenticated workspace.
+
+Expose publishing progress through the existing durable job states. A historical job must not override a later schedule. Rescheduling an uncertain provider result requires an explicit acknowledgement that the owner checked Instagram and found no published post. Preserve server readiness/revision enforcement and invalidate calendar, content and publishing caches after schedule changes. This acknowledgement helps prevent accidental duplicates; it is not proof from Instagram or a server-side deduplication guarantee.
+
+Add a compatible paginated notification feed while retaining the existing web list endpoint. Cursor lookup, unread counts and read operations bind both recipient and workspace. Record the owner's in-app success notification atomically with completion of the claimed publishing job, so replay cannot create a second success notice. Existing failure notifications remain. Native navigation recognizes only known publishing templates and validated content IDs; arbitrary notification URLs are never followed. These are in-app notifications, not operating-system push alerts.
+
+Insights uses the existing analytics summary for seven- and thirty-day ranges, period comparisons, available daily reach and top content. Preserve unavailable metrics as unavailable, distinguish partial/failed synchronization, and label refresh as reading saved data. No synthetic performance, new provider metric contract or manual synchronization endpoint is introduced. Native changes remain compatible with runtime 0.2.0 and add no native dependencies.
+
+## 2026-09-24 ? Real knowledge retrieval and agent contracts
+
+Production embeddings follow the configured text provider unless `AI_EMBEDDING_PROVIDER` explicitly selects another mode. Local hash embeddings identify themselves honestly and meter no provider tokens. Each vector stores its provider/model/dimension/aggregation space; migration leaves old vectors unlabelled and retrieval never compares incompatible spaces. Long Unicode facts are losslessly split into byte-bounded provider inputs, then pooled and normalized. Re-indexing is bounded and workspace-scoped, guarded by the fact revision. Provider outages preserve owner edits and return current facts with zero relevance score.
+
+All eight agent routes use strict provider contracts in OpenAI mode, configured models, real usage, approved Vault facts and localized outputs. Performance advice includes server-loaded analytics with missing-data instructions; source identifiers are validated. Local presets remain isolated to explicit local text mode. Content suggestions do not execute publishing or profile changes.
+
+The owner requires video software to be free and open source. Wan2.2 Apache-2.0 is selected; paid fal hosting is not activated. No new hosting account or payment was made. A suitable owned GPU is an external hardware requirement.
+
+## 2026-09-24 ? Motion Reels on ordinary hardware
+
+Because the owner requires no paid video API and has no suitable GPU now, add a clearly labeled CPU Motion Reel mode. It animates an owner-uploaded JPEG and exact optional text cards; it does not synthesize new footage or call an AI planner. Persist artwork and copy as generation-job options, validate workspace ownership before queueing and rendering, retry interrupted rendering through the existing worker leases, and attach only if the generation intent still matches. Store output as VIDEO with renderer identity and zero provider tokens. Use three or fewer cards with at least two seconds each, preserve English/Arabic with libass, and retain the full uploaded design inside portrait margins. New Sora requests are disabled after the provider retirement. Future Wan deployment still needs GPU infrastructure; AWS GPU instances are paid.
+
+## 2026-09-24: Account, team and native reporting
+
+Expose account name/language and owner workspace-name edits with revision checks. Team invitations expire in seven days, use 256-bit random codes stored as SHA-256 hashes, and bind to the verified invited email. The owner explicitly shares the code; no invitation email is sent automatically. Serialize membership changes within each workspace, reserve administrator-role changes for its owner, protect owner/self access and never promote an existing member through an old invitation. Export invitation metadata without hashes and erase it with its owning workspace.
+
+Workspace switching issues a fresh workspace-scoped session and preserves an unexpired MFA confirmation without extending it. Native switching replaces the identity epoch and query cache; browser switching reloads the application and informs other tabs. Native export sharing uses a temporary private file removed after the share sheet returns. Workspace erasure has a typed-name confirmation plus destructive confirmation; it follows the existing scoped erasure contract and is not represented as deletion of published Instagram posts.
+
+Runtime 0.3.0 includes Expo Sharing and needs new binaries. Insights advice uses the actual analytics agent with saved business context; reports use the existing PDF backend. Knowledge/history and activity views read the existing workspace-owned endpoints. Billing activation and physical-device/store acceptance remain separate.
+
+## 2026-09-24: Release status must reflect actual delivery
+
+The monthly report email adapter remains simulated. Return `delivered: false` and `skippedReason: DRY_RUN`, record new audits as `MONTHLY_ANALYTICS_PDF_EMAIL_SIMULATED`, and count zero deliveries in worker summaries. Existing historical dry-run records are not inbox evidence. Activating real report email requires an owner preference and durable handling of ambiguous provider outcomes; do not automatically email every existing workspace merely because SendGrid is configured for authentication.
+
+The native application uses platform transport and secure storage. The existing platform-encryption declaration used for TestFlight build 3 also applies to 0.3.0/build 4. Completed that declaration only on the verified MARKOS build and set `ios.config.usesNonExemptEncryption: false` for future builds, following [Apple's encryption export guidance](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations). This metadata does not add a native module or change the JavaScript runtime contract. No other app, distribution certificate or provisioning profile was modified.
+
+## 2026-09-24: Native Create and campaign completion
+
+Give Story its own visible format and choose image/video per Story slot. Post and Carousel generate images; Reel generates video. Native conversion uses the existing revision-checked preview/confirmation contract. Assistant preparation preserves the chosen format. The primary action guides missing caption/media work before offering Mark Ready; approval and scheduling remain separate from generation, as on the website.
+
+Use content revision before timestamp when accepting Assistant/polling updates, and reconsider deferred snapshots when a foreground operation finishes. Sequential carousel generation refreshes the revision after every attachment and stops after an ambiguous failure. Long script saves use the API's maximum 50 operations per batch and retain remaining local edits after a partial save. Motion artwork/text inputs persist per identity/content/slot on the device and are cleared on logout.
+
+Native campaign review retains week/action identities before filtering, exposes actual dates, status/format search, full strategy/reference context and the existing PDF export through the native share sheet. This is a runtime 0.3.0 JavaScript update; no new native module, provider, database schema or automatic publishing behavior is introduced.
+
+## 2026-09-24: Visible native update delivery and accurate request failures
+
+The owner's 0.3.0 installation was still running the embedded Create screen. Closing it from Android Recents and reopening applied the published update; the owner confirmed the new controls and working flow. Check/download compatible updates on launch and foreground, throttled to five minutes, and expose the running update plus manual check/restart in Account. Only an explicit restart action applies an update while the app is open, preserving the editing journey.
+
+The observed failed approval request returned HTTP 409; the saved item was a Story with an empty image slot. The response body was not captured, so do not infer a network outage or a specific conflict code from the status alone. Preserve known validation messages, classify unknown HTTP conflicts separately from networking, and identify transport timeouts explicitly. No customer draft, media or publishing status was changed during diagnosis.
+
+## 2026-09-27: Opt-in delivery, complete deletion and native administration
+
+Publishing phone alerts and monthly report email default off for every user/workspace. A one-time email request does not subscribe the user. SendGrid report jobs are unique per user/workspace/month, recheck membership and verified email before sending, and distinguish provider acceptance from actual inbox delivery. Ambiguous sends stop at UNKNOWN and cannot be retried by the ordinary operator action. Confirmed rejections use bounded retries. Push tokens are encrypted, recipient-owned and revoked on explicit logout; notification content omits business/customer details. Provider receipts do not prove that a person saw an alert.
+
+Account deletion previews all owned workspaces and memberships, requires a current password (or a signed ten-minute email-code challenge for passwordless accounts), enforces MFA when enabled, and rejects a changed workspace inventory. Access revocation, credential removal and durable cleanup requests commit atomically. Cleanup removes owned business payloads and stored media; other owners' content stays intact. Existing published Instagram posts remain. Keep only bounded/security/transaction retention where applicable, and do not promise immediate deletion from backups. Authentication confirmation endpoints are rate limited.
+
+Native catalog controls expose bilingual names, price modes, integer currency minor units and ACTIVE/PAUSED/ARCHIVED availability. Decimal text is converted without floating-point rounding, including BHD fils. Native and web platform operations expose failure recovery and model configuration only through existing platform-admin permissions; ordinary workspace owners gain no platform access.
+
+Expo Notifications/Device require runtime 0.4.0 and new binaries. Do not target the installed 0.3.0 runtime with this native dependency change. Apple signing changes are restricted to MARKOS; reuse the existing distribution certificate and keep other apps untouched. Android alert activation still requires Firebase credentials. Store positioning is “MARKOS — Instagram Marketing”; no company name, support mailbox or business address is fabricated from that branding choice.
+
+An encrypted Railway logical backup was restored successfully into a new local disposable PostgreSQL database. Windows DPAPI wraps its AES key, so this copy requires the same Windows identity and is not off-site disaster recovery. Scheduled GitHub readiness checks are read-only and use no AI generation. Railway watch patterns exclude monitoring/documentation-only commits after the existing main-branch hook unexpectedly redeployed the old AI image; that image was restored to the previously working release and readiness rechecked.
+
+## 2026-10-26: Railway release preparation and portable recovery
+
+The owner selected Railway as the ongoing host for web, Android/iPhone backend services,
+AI and video rendering, and authorized the remaining release preparation. AWS migration
+is no longer an active prerequisite. CPU Motion Reels remain the working video mode;
+open-source generated footage is not advertised as activated without suitable compute.
+
+The owner confirmed Raedat Software Company W.L.L as operator and supplied
+support@raedat.online / info@raedat.online. Use the former for public support/privacy and
+the latter for operational alerts. No postal address has been supplied.
+
+Railway bucket versioning, object locks and lifecycle rules are currently unavailable.
+Native volume backups were rejected by the current workspace plan as Pro-only. Prepare
+a portable scheduled recovery service instead of purchasing an unrequested plan upgrade.
+Snapshots use a consistent exported PostgreSQL snapshot, the corresponding referenced
+media, per-object AES-256-GCM encryption and independently held recovery-key material.
+Only verified complete runs are restorable; retention never touches source media. Use
+30 days as the initial engineering retention setting, subject to the final public policy.
+
+Error telemetry retains classified error codes and sanitized code locations. It must not
+store request bodies, OAuth query parameters, credentials, prompts, business documents,
+frame locals or arbitrary error messages. Performance tracing stays disabled until its
+privacy contract is separately verified. Operational alerts are bounded and deduplicated.
+
+The owner declined paid SendGrid service when the trial allowance expired. Brevo Free
+is the selected transactional provider. Select exactly one configured provider;
+never fall back to a paid provider or replay an ambiguously accepted message.
+HTTP acceptance is separate from provider delivery and inbox receipt. The runtime
+key remains restricted; sender/domain ownership must be verified separately.
+
+Store successful snapshot receipts durably in the existing global operations audit
+log. Redis remains a compatibility cache, not the recovery system of record.
+Expose backup freshness separately from application serving readiness: an overdue
+snapshot must alert operators without making a healthy app unavailable.
+
+Concurrent workspace mutations retain serializable transactions and revision checks.
+Make Prisma transaction acquisition/operation budgets configurable (10/20 seconds by
+default) so a busy pool can queue without the previous two-second acquisition failure.
+
+## 2026-10-26: Durable weekly planning for longer campaigns
+
+Enable 30-, 60- and 90-day campaigns through the existing durable generation queue.
+Keep the existing 14-day default and publishing choices of one to three posts daily.
+The synchronous compatibility endpoint rejects longer plans with CAMPAIGN_QUEUE_REQUIRED.
+Both browser and native clients submit an idempotent request and recover server status.
+
+Generate at most seven days per provider call. The first window establishes the whole
+campaign strategy and source summary; later windows receive that fixed outline, original
+business-context snapshot, actual window dates and previous ideas. Remove reference-file
+bytes after the first successful window. Save checkpoint, progress and actual token usage
+atomically. Metadata-only status reads never load uploaded bytes or the growing plan.
+
+Claim each queued revision once and fence every completion by its lease. A deploy can
+resume between committed windows. An interrupted provider call becomes an explicit failed
+state; only the creator's deliberate Continue planning action retries the unfinished step.
+Retain failed resumable checkpoints for seven days, then clear them. Access removal clears
+the working payload. Never replace an existing campaign or create a partial campaign.
+Final plan and completion receipt commit atomically. Creating ideas never approves,
+schedules or publishes their content. The final partial week still contains every requested
+day and exactly the selected number of ideas per day.
+
+## 2026-10-27 ? Reconcile developer handover with hosted release
+
+Railway remains the daily application. Retain the team's offline developer setup and moved feature references alongside the native release and recovery work. Standard Node development commands select the safe local profile and force offline providers/telemetry settings; the explicit PowerShell Railway developer profile remains available with its SSH tunnel and hosted worker ownership. Historical September status remains dated rather than overriding October release evidence.
+
+## 2026-10-27 ? Review profile history through the canonical editor
+
+Expose up to the latest 50 authoritative profile snapshots, filtered to one requested module and folded when adjacent values are identical. History reads require the active workspace and vault read permission. Owner-selected facts load into the existing editor; review and an ordinary Save are required. Use the current profile revision for conflict detection, retain canonical module validation and projection/RAG updates, and leave other sections and the offering catalog untouched. History must never overwrite raw managed Vault projections.
+
+Register the API error handler before plugins/routes so errors keep the API envelope, including revision conflicts. Keep Google Play submission configured as an internal draft with review submission disabled; the separate publisher credential and Play Console app permission remain external inputs.

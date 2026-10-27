@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  Bell,
   Check,
   Copy as CopyIcon,
   CreditCard,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   Sun,
   UserRound,
+  Users,
   type LucideIcon
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -26,14 +28,27 @@ import { MarkosApiClient } from "@markos/api-client";
 import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, Locale, MfaStatus, MfaTotpSetup } from "@markos/shared-types";
 import { NotificationToast } from "./notification-toast";
 import { SectionNavigation, type SectionNavigationItem } from "./section-navigation";
+import { OperationsSettings } from "./operations-settings";
 import { logoutBrowserSession, setBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { instagramStatusLabel, sanitizedCallbackUrl } from "./instagram-settings-state";
 import { AppearanceSettings } from "../../_components/theme-control";
+import { AccountDetailsEditor, TeamSettings } from "./team-settings";
+import { DeliverySettings, AccountDeletionSettings } from "./delivery-settings";
 
 type NotificationTone = "error" | "info" | "success" | "warning";
-type SettingsSectionId = "profile" | "appearance" | "connections" | "security" | "billing" | "data";
+type SettingsSectionId = "profile" | "team" | "appearance" | "connections" | "security" | "billing" | "data" | "notifications" | "operations";
 
-const settingsSectionIds: readonly SettingsSectionId[] = ["profile", "appearance", "connections", "security", "billing", "data"];
+const settingsSectionIds: readonly SettingsSectionId[] = [
+  "profile",
+  "team",
+  "appearance",
+  "connections",
+  "security",
+  "billing",
+  "data",
+  "notifications",
+  "operations"
+];
 
 export function SettingsPanel({ locale }: { locale: Locale }) {
   const router = useRouter();
@@ -409,6 +424,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       status: session?.user.isVerified ? copy(locale, "verified") : copy(locale, "pending"),
       statusTone: session?.user.isVerified ? "success" : "warning"
     },
+    { id: "team", icon: Users, label: locale === "ar" ? "الفريق ومساحات العمل" : "Workspaces and team" },
+    { id: "notifications", icon: Bell, label: locale === "ar" ? "الإشعارات والتقارير" : "Notifications and reports" },
     {
       id: "appearance",
       icon: Sun,
@@ -449,6 +466,8 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
       label: copy(locale, "dataControls")
     }
   ];
+  const platformAdmin = session?.roles.some((role) => ["SUPER_ADMIN", "PRODUCT_ADMIN", "SUPPORT_ADMIN", "FINANCE_ADMIN", "READONLY_ADMIN"].includes(role));
+  if (platformAdmin) navigationItems.push({ id: "operations", icon: ShieldCheck, label: locale === "ar" ? "عمليات المنصة" : "Platform operations" });
 
   function selectSettingsSection(id: string) {
     if (!isSettingsSectionId(id)) return;
@@ -505,12 +524,28 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         />
 
         <div className="grid min-w-0 gap-5">
+          {selectedSection === "operations" ? (
+            <article className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+              {platformAdmin && session ? (
+                <OperationsSettings key={`${session.user.id}:${session.workspace.id}`} locale={locale} />
+              ) : (
+                <p>{locale === "ar" ? "يلزم وصول مسؤول المنصة." : "Platform administrator access is required."}</p>
+              )}
+            </article>
+          ) : null}
+          {selectedSection === "team" && session ? <TeamSettings key={session.workspace.id} locale={locale} /> : null}
+          {selectedSection === "notifications" && session ? (
+            <article className="sunlit-panel rounded-[1.75rem] p-5 sm:p-6">
+              <DeliverySettings key={`${session.user.id}:${session.workspace.id}`} locale={locale} />
+            </article>
+          ) : null}
           <article className={`${selectedSection === "appearance" ? "" : "hidden"} sunlit-panel scroll-mt-28 rounded-[1.75rem] p-5 sm:p-6`} id="appearance">
             <h2 className="mb-5 text-xl font-semibold text-[var(--text)]">{locale === "ar" ? "المظهر" : "Appearance"}</h2>
             <AppearanceSettings locale={locale} />
           </article>
           <div className="grid gap-5">
             <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} title={userName} body={userEmail}>
+              {selectedSection === "profile" && session ? <AccountDetailsEditor key={session.workspace.id} locale={locale} /> : null}
               <div className="mt-4 grid gap-2">
                 <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
                 <SettingRow label={copy(locale, "role")} value={session?.roles.map(formatAction).join(", ") ?? "—"} />
@@ -805,6 +840,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
                 </a>
               </div>
 
+              {selectedSection === "data" && session ? <AccountDeletionSettings key={`${session.user.id}:${session.workspace.id}`} locale={locale} /> : null}
               <div className="mt-7 border-t border-[var(--sunlit-line)] pt-6">
                 <h3 className="text-base font-semibold text-[var(--sunlit-ink)]">{copy(locale, "auditTitle")}</h3>
                 <p className="mt-1 text-[15px] text-[var(--sunlit-muted)]">{copy(locale, "auditBody")}</p>

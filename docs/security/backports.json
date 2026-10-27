@@ -1,0 +1,35 @@
+[
+  {
+    "package": "node-forge",
+    "version": "1.4.0",
+    "advisory": "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+    "patch": "patches/node-forge@1.4.0.patch",
+    "sha256": "2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8",
+    "mitigation": "Nested DigestAlgorithm element-count check backported from upstream PR 1152.",
+    "test": "apps/api/test/toolchain-security.test.ts",
+    "reviewBy": "2026-11-26",
+    "lockHash": "2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8"
+  },
+  {
+    "package": "zod",
+    "version": "3.25.76",
+    "advisory": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+    "patch": "patches/zod@3.25.76.patch",
+    "sha256": "01728267fc7f4350c65342d38f6d63f271674bb134ee32e8b8566b1a7eba439c",
+    "mitigation": "Legacy Expo CLI diagnostic issue allocation bounded across nested parse contexts; API validation uses patched Zod 4.6.7.",
+    "test": "apps/api/test/toolchain-security.test.ts",
+    "reviewBy": "2026-11-26",
+    "lockHash": "01728267fc7f4350c65342d38f6d63f271674bb134ee32e8b8566b1a7eba439c"
+  },
+  {
+    "package": "decode-uri-component",
+    "version": "0.2.2",
+    "advisory": "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr",
+    "patch": "patches/decode-uri-component@0.2.2.patch",
+    "sha256": "ef149c055137f592130207f8cd057633d86c43d19a48a266f83880ced8ae5ece",
+    "mitigation": "Malformed input is preserved instead of entering recursive fallback decoding.",
+    "test": "apps/api/test/toolchain-security.test.ts",
+    "reviewBy": "2026-11-26",
+    "lockHash": "ef149c055137f592130207f8cd057633d86c43d19a48a266f83880ced8ae5ece"
+  }
+]

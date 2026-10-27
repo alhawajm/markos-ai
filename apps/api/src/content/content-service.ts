@@ -324,7 +324,7 @@ export async function updateContentItemStatus(workspaceId: string, contentItemId
 export async function scheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const row = await prisma.$transaction(async (tx) => {
-    const current = await lockContentRoot(tx, workspaceId, contentItemId);
+    const current = await lockContentRoot(tx, workspaceId, contentItemId, input.expectedRevision);
     if (!current) throw new ContentItemNotFoundError();
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
     if (current.status !== "APPROVED") throw new ContentScheduleError();
@@ -349,7 +349,7 @@ export async function scheduleContentItem(workspaceId: string, contentItemId: st
 export async function rescheduleContentItem(workspaceId: string, contentItemId: string, input: ScheduleContentInput): Promise<ContentRecord> {
   const scheduledAt = parseFutureScheduleTime(input.scheduledAt);
   const row = await prisma.$transaction(async (tx) => {
-    const current = await lockContentRoot(tx, workspaceId, contentItemId);
+    const current = await lockContentRoot(tx, workspaceId, contentItemId, input.expectedRevision);
     if (!current) throw new ContentItemNotFoundError();
     await cancelUnclaimedPublishJobs(tx, workspaceId, contentItemId);
     if (current.status !== "SCHEDULED" && current.status !== "FAILED") {

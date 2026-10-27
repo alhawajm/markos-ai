@@ -1,5 +1,7 @@
 import { env } from "../config/env";
-import { sendMonthlyAnalyticsPdfEmailForAllWorkspaces, type AnalyticsEmailProvider } from "../analytics/analytics-email-service";
+import { processPushDeliveries } from "../notifications/push-service";
+import { processAccountErasures } from "../workspace/account-deletion";
+import { processReportDeliveries, sendMonthlyAnalyticsPdfEmailForAllWorkspaces, type AnalyticsEmailProvider } from "../analytics/analytics-email-service";
 import { syncInstagramAnalyticsForAllWorkspaces, type AnalyticsSyncForAllWorkspacesResult } from "../analytics/analytics-service";
 import { processDuePublishJobs, type PublishJobWorkerResult } from "../publishing/publish-job-service";
 import type { AnalyticsEmailDeliveryForAllWorkspacesResult, OfferingDocumentCleanupResult } from "@markos/shared-types";
@@ -16,6 +18,7 @@ import { observeWorkerTask, settleWorkerBatch, workerErrorCode, workerLogger, ty
 export type MaintenanceWorkerLogger = WorkerLogger;
 
 export interface MaintenanceWorkerTickResult {
+  failures?: { task: string; code: string }[];
   analyticsEmail?: AnalyticsEmailDeliveryForAllWorkspacesResult;
   analyticsSync?: AnalyticsSyncForAllWorkspacesResult;
   documentCleanup?: OfferingDocumentCleanupResult;
@@ -23,6 +26,8 @@ export interface MaintenanceWorkerTickResult {
   tokenRefresh?: InstagramTokenRefreshResult[];
   usageReset?: UsagePeriodResetResult;
   videoGeneration?: VideoGenerationWorkerResult;
+  push?: { accepted: number; failed: number };
+  accountErasure?: { completed: number; failed: number };
 }
 
 export interface MaintenanceWorkerHandle {
@@ -48,12 +53,23 @@ export async function runMaintenanceWorkerTick(
     runTokenRefresh?: boolean;
     runUsageReset?: boolean;
     runVideoGeneration?: boolean;
+    runPush?: boolean;
+    runReportDelivery?: boolean;
+    runAccountErasure?: boolean;
   } = {}
 ): Promise<MaintenanceWorkerTickResult> {
   const started = Date.now();
   const base = input.now ?? new Date();
   const clock = () => new Date(base.getTime() + Date.now() - started);
-  const run = <T>(name: string, work: () => Promise<T>) => observeWorkerTask(input.logger ?? workerLogger, name, work);
+  const failures: { task: string; code: string }[] = [];
+  const run = async <T>(name: string, work: () => Promise<T>): Promise<T | undefined> => {
+    try {
+      return await observeWorkerTask(input.logger ?? workerLogger, name, work);
+    } catch (error) {
+      failures.push({ task: name, code: workerErrorCode(error) });
+      return undefined;
+    }
+  };
   const tokenRefresh =
     input.runTokenRefresh === false || input.shouldStop?.()
       ? undefined
@@ -76,6 +92,9 @@ export async function runMaintenanceWorkerTick(
             ...(input.publisher === undefined ? {} : { publisher: input.publisher })
           })
         );
+  const push = input.runPush === false || input.shouldStop?.() ? undefined : await run("push", () => processPushDeliveries(input.fetchImpl, clock()));
+  const accountErasure =
+    input.runAccountErasure === true && !input.shouldStop?.() ? await run("accountErasure", () => processAccountErasures(clock())) : undefined;
   const documentCleanup =
     input.runDocumentCleanup === false || input.shouldStop?.()
       ? undefined
@@ -87,7 +106,7 @@ export async function runMaintenanceWorkerTick(
             })
           )
         );
-  const analyticsEmail =
+  let analyticsEmail =
     input.runAnalyticsEmail === false || input.shouldStop?.()
       ? undefined
       : await run("analyticsEmail", () =>
@@ -97,6 +116,12 @@ export async function runMaintenanceWorkerTick(
             ...(input.analyticsEmailProvider === undefined ? {} : { provider: input.analyticsEmailProvider })
           })
         );
+  if (!analyticsEmail && input.runReportDelivery === true && !input.shouldStop?.()) {
+    analyticsEmail = await run("reportDelivery", async () => {
+      const results = await processReportDeliveries({ now: clock(), ...(input.analyticsEmailProvider ? { provider: input.analyticsEmailProvider } : {}) });
+      return { attempted: results.length, delivered: 0, results, skipped: results.filter((r) => r.skippedReason !== "ACCEPTED").length };
+    });
+  }
   const usageReset =
     input.runUsageReset === false || input.shouldStop?.() ? undefined : await run("usageReset", () => ensureCurrentUsagePeriods({ now: clock() }));
   const analyticsSync =
@@ -114,6 +139,9 @@ export async function runMaintenanceWorkerTick(
       : await run("videoGeneration", () => processDueVideoGenerationJobs({ now: clock(), shouldStop: input.shouldStop, logger: input.logger }));
 
   return {
+    ...(push === undefined ? {} : { push }),
+    ...(accountErasure === undefined ? {} : { accountErasure }),
+    ...(failures.length ? { failures } : {}),
     ...(analyticsEmail === undefined ? {} : { analyticsEmail }),
     ...(analyticsSync === undefined ? {} : { analyticsSync }),
     ...(documentCleanup === undefined ? {} : { documentCleanup }),
@@ -183,6 +211,9 @@ export function startMaintenanceWorker(
         shouldStop: () => stopping,
         runAnalyticsSync: shouldSyncAnalytics,
         runPublishing: delivery,
+        runPush: delivery,
+        runReportDelivery: delivery,
+        runAccountErasure: maintenance,
         runDocumentCleanup: maintenance,
         runTokenRefresh: shouldRefreshTokens,
         runUsageReset: shouldResetUsage,
@@ -193,19 +224,20 @@ export function startMaintenanceWorker(
         ...(input.publisher === undefined ? {} : { publisher: input.publisher })
       });
 
-      if (shouldEmailAnalytics) {
+      if (shouldEmailAnalytics && result.analyticsEmail !== undefined) {
         lastAnalyticsEmailAt = now.getTime();
       }
-      if (shouldRefreshTokens) {
+      if (shouldRefreshTokens && result.tokenRefresh !== undefined) {
         lastTokenRefreshAt = now.getTime();
       }
-      if (shouldResetUsage) {
+      if (shouldResetUsage && result.usageReset !== undefined) {
         lastUsageResetAt = now.getTime();
       }
-      if (shouldSyncAnalytics) {
+      if (shouldSyncAnalytics && result.analyticsSync !== undefined) {
         lastAnalyticsSyncAt = now.getTime();
       }
 
+      if (result.failures?.length) logger.warn("Maintenance worker tick completed with task failures", { failures: result.failures });
       logger.info("Maintenance worker tick completed", { ...summarizeTick(result), durationMs: Math.round(performance.now() - tickStarted) });
       return result;
     } catch (error) {
@@ -259,6 +291,10 @@ export function startMaintenanceWorker(
 function summarizeTick(result: MaintenanceWorkerTickResult): Record<string, unknown> {
   return {
     attemptedPublishes: result.publishing?.attempted ?? 0,
+    pushAccepted: result.push?.accepted ?? 0,
+    pushFailed: result.push?.failed ?? 0,
+    erasuresCompleted: result.accountErasure?.completed ?? 0,
+    erasuresFailed: result.accountErasure?.failed ?? 0,
     analyticsEmailsDelivered: result.analyticsEmail?.delivered ?? 0,
     analyticsEmailsSkipped: result.analyticsEmail?.skipped ?? 0,
     analyticsWorkspacesSynced: result.analyticsSync?.results.filter((sync) => !sync.diagnostics || sync.diagnostics.status === "COMPLETE").length ?? 0,

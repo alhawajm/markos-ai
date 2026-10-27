@@ -14,6 +14,12 @@ Accepted UI-specific decisions belong in docs/ui-ux-decisions.md. Product behavi
 
 **Current focused follow-ups:** Create keeps conversation primary, with an explicit View preview control and a shorter `9:19` preview. The collapsed rail is now 96px, with the same comfortable icon targets. Media integrity passed focused editor/API/generation-worker checks. Khalid and Mohamed approved the full-screen Campaign reviewer, now connected to the application; Khalid owns its visual verification to conserve usage. The dedicated Business Profile editor remains a later integration pass. See [the focused delivery plan](analysis/focused-product-followups-2026-09-10.md) for current status and evidence. These changes supersede the earlier preview ratio; they do not alter the agreed Create workflow.
 
+## Mobile application direction — September 22
+
+Status: **Proposed / interactive study**. Mohamed requested researched Android and iOS design and architecture alongside the existing web application. Detailed mobile navigation is now in active scope. The [mobile design and architecture plan](mobile-app-plan.md) records the research, proposed five-destination phone shell, larger-screen sidebar behavior, bilingual design system, connected campaign journey and backend reliability work. The [interactive study](prototypes/markos-mobile-direction.html) is illustrative and does not call the application API. Existing brand and content lifecycle decisions remain authoritative; the candidate is not marked approved or implemented.
+
+**Figma candidate created:** [MARKOS Sunlit UI Lab — Web, Android & iOS](https://www.figma.com/design/rpxaHSd5RCGo1h7XRk8YEp?node-id=7-53) now contains reusable foundations, 18 connected English mobile screens, two Arabic previews and desktop/tablet comparisons. The connected Figma catalog lacks IBM Plex Sans Arabic, so Arabic previews temporarily use Noto Sans Arabic; the approved app font is unchanged. Coverage and focused verification are recorded in the [Figma workspace section](mobile-app-plan.md#14-editable-figma-workspace).
+
 ## Decision states
 
 - Accepted direction — the problem and intended outcome are clear; visual details may still need review.

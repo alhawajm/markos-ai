@@ -1,10 +1,19 @@
 # MARKOS AI Current Status, Roadmap, and Ownership
 
+Current overlay: 2026-10-27. The September handover below is retained as historical evidence. Current release evidence lives in [release readiness](release-readiness.md) and [implementation progress](implementation-progress.md).
+
 Handoff update: 2026-09-20. The detailed implementation snapshot below dates from 2026-09-01 and is historical unless explicitly updated; do not treat every pending item as a newly verified gap.
 
 This document is the current implementation and operating overlay for MARKOS AI. It does not replace the structural source of truth in `source/MARKOS_BUILD_SPEC. 2.pdf` or the behavioral source of truth in `source/MARKOS_EXPERIENCE_FLOWS.md`. Use it to avoid treating target architecture, implemented code, automated tests, and external production evidence as the same thing.
 
 Detailed milestone gates remain in `milestone-checklist.md`. Durable engineering decisions remain in `decisions.md`. Railway reconstruction and operations remain in `staging-deploy.md`.
+
+## Current release overlay ? 2026-10-27
+
+- Railway remains the application host. Web and native clients share its accounts and data. The daily Windows launcher opens the hosted app.
+- Campaign generation now uses durable weekly checkpoints, progress and explicit resume for 3, 7, 14, 30, 60 and 90 days at 1?3 posts per day. Focused tests and Railway deployment checks passed; complete long-plan acceptance against a real provider remains pending. The September timeout report below describes the earlier implementation.
+- Android APK and iPhone IPA builds for version 0.5.0, build 7, finished successfully in EAS. Dedicated MARKOS Firebase/FCM configuration is linked. Physical-device push receipt and store submission acceptance remain pending.
+- Recovery snapshots and restore drills have passed. Email sender/domain authentication remains pending company DNS access. Meta review and live publish acceptance are external gates.
 
 ## Handoff checkpoint — 2026-09-20
 

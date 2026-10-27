@@ -12,8 +12,26 @@ import {
   updateAdminPlanLimits
 } from "./admin-service";
 import { updateModelSetting } from "./model-settings-service";
+import { z } from "zod";
+import { getDeliveryOperations, retryDelivery } from "./operations-service";
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/admin/operations", { config: { workspaceRequired: true, permissions: ["admin:read"] } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    return ok(await getDeliveryOperations());
+  });
+  app.post(
+    "/v1/admin/operations/retry",
+    { config: { workspaceRequired: true, verifiedUserRequired: true, permissions: ["admin:manage"] } },
+    async (request, reply) => {
+      const input = z
+        .object({ kind: z.enum(["REPORT", "PUSH", "ERASURE"]), id: z.string().uuid() })
+        .strict()
+        .safeParse(request.body);
+      if (!input.success) return reply.code(400).send(errorEnvelope("VALIDATION_ERROR", "Choose a failed delivery"));
+      return ok(await retryDelivery(requireWorkspaceContext().userId, input.data.kind, input.data.id));
+    }
+  );
   app.get(
     "/v1/admin/plans",
     {

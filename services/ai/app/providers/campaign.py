@@ -7,12 +7,13 @@ from openai import AsyncOpenAI
 from app.contracts.campaign import (
     CampaignContentType,
     CampaignDay,
-    CampaignGenerateRequest,
     CampaignGenerateResponse,
     CampaignKpi,
     CampaignPillar,
     CampaignPlan,
     CampaignPostSuggestion,
+    CampaignRequest,
+    CampaignSegmentRequest,
     CampaignWeek,
     GeneratedCampaignContent,
 )
@@ -22,6 +23,7 @@ from app.prompts.campaign import (
     CAMPAIGN_PROMPT_VERSION,
     build_campaign_input,
     build_campaign_instructions,
+    build_campaign_multimodal_input,
 )
 from app.providers.openai_structured import OpenAIClient, generate_structured
 
@@ -29,15 +31,19 @@ from app.providers.openai_structured import OpenAIClient, generate_structured
 class CampaignProvider(Protocol):
     async def generate_campaign(
         self,
-        request: CampaignGenerateRequest,
+        request: CampaignRequest,
     ) -> CampaignGenerateResponse: ...
 
 
 class LocalCampaignProvider:
     async def generate_campaign(
         self,
-        request: CampaignGenerateRequest,
+        request: CampaignRequest,
     ) -> CampaignGenerateResponse:
+        if request.reference_files:
+            raise AiServiceError(code="AI_PROVIDER_NOT_CONFIGURED",
+                                 message="Campaign reference analysis requires a configured AI provider",
+                                 status_code=503, retryable=False)
         campaign = build_local_campaign(request)
         prompt = f"{build_campaign_instructions(request)}\n{build_campaign_input(request)}"
         model = (
@@ -49,7 +55,7 @@ class LocalCampaignProvider:
 
         return CampaignGenerateResponse(
             model=model,
-            prompt_version=f"{CAMPAIGN_PROMPT_VERSION}.local",
+            prompt_version=f"{campaign_prompt_version(request)}.local",
             tokens_in=estimate_tokens(prompt),
             tokens_out=estimate_tokens(campaign.model_dump_json(by_alias=True)),
             campaign=campaign,
@@ -74,14 +80,15 @@ class OpenAICampaignProvider:
             OpenAIClient,
             AsyncOpenAI(
                 api_key=settings.openai_api_key.get_secret_value(),
-                max_retries=settings.openai_max_retries,
-                timeout=settings.openai_timeout_seconds,
+                # Keep the full campaign deadline for one generation attempt.
+                max_retries=0,
+                timeout=settings.ai_campaign_timeout_seconds,
             ),
         )
 
     async def generate_campaign(
         self,
-        request: CampaignGenerateRequest,
+        request: CampaignRequest,
     ) -> CampaignGenerateResponse:
         model = request.model or settings.llm_longform_model or settings.llm_primary_model
 
@@ -95,12 +102,14 @@ class OpenAICampaignProvider:
 
         generated = await generate_structured(
             client=self._client,
-            input_text=build_campaign_input(request),
+            input_text=None if request.reference_files else build_campaign_input(request),
+            input_items=build_campaign_multimodal_input(request) if request.reference_files else None,
             instructions=build_campaign_instructions(request),
             model=model,
             output_label="campaign",
             schema=GeneratedCampaignContent,
             schema_name="markos_campaign",
+            max_output_tokens=settings.campaign_max_output_tokens,
         )
 
         campaign = CampaignPlan.model_validate(
@@ -113,7 +122,7 @@ class OpenAICampaignProvider:
 
         return CampaignGenerateResponse(
             model=generated.model,
-            prompt_version=f"{CAMPAIGN_PROMPT_VERSION}.openai",
+            prompt_version=f"{campaign_prompt_version(request)}.openai",
             tokens_in=generated.tokens_in,
             tokens_out=generated.tokens_out,
             campaign=campaign,
@@ -128,11 +137,15 @@ def get_campaign_provider() -> CampaignProvider:
     return LocalCampaignProvider()
 
 
+def campaign_prompt_version(request: CampaignRequest) -> str:
+    return "campaign.v4.weekly" if isinstance(request, CampaignSegmentRequest) else CAMPAIGN_PROMPT_VERSION
+
+
 def estimate_tokens(text: str) -> int:
     return max(1, len(re.findall(r"\S+", text)))
 
 
-def build_local_campaign(request: CampaignGenerateRequest) -> CampaignPlan:
+def build_local_campaign(request: CampaignRequest) -> CampaignPlan:
     context_summary = summarize_context(request)
 
     if request.locale == "ar":
@@ -241,7 +254,7 @@ def build_local_campaign(request: CampaignGenerateRequest) -> CampaignPlan:
     )
 
 
-def summarize_context(request: CampaignGenerateRequest) -> str:
+def summarize_context(request: CampaignRequest) -> str:
     labels: list[str] = []
 
     for chunk in request.context:

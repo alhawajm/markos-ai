@@ -38,11 +38,12 @@ import { ContentStatusBadge } from "./content-status-badge";
 import { useModalDialog } from "./use-modal-dialog";
 import { PublishTimeFields } from "./publish-time-fields";
 import { plannedAtInputToIso } from "./content-studio-draft-state";
+import { runningVideoGeneration as running, videoGenerationMessage } from "./video-generation-state";
+import { MotionReelComposer } from "./motion-reel-composer";
 import "./content-studio.css";
 import "./create-workspace.css";
 
 const icons = { POST: ImageIcon, CAROUSEL: Images, REEL: Clapperboard, STORY: RectangleVertical };
-const running = (job: MediaGenerationJobRecord | null) => !!job && ["QUEUED", "STARTING", "GENERATING", "PROCESSING"].includes(job.status);
 export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const client = useMarkosClient(locale),
     session = useMarkosSession();
@@ -57,6 +58,19 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const current = useRef<CreateSaveCoordinator | null>(null);
   const navigation = useRef<{ url: string; state: unknown } | null>(null);
   const [assets, setAssets] = useState<MediaAssetRecord[]>([]);
+  const [generatedFootage, setGeneratedFootage] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void client
+      .videoCapabilities()
+      .then((value) => {
+        if (active) setGeneratedFootage(value.generatedFootage);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [client]);
   const [records, setRecords] = useState<ContentRecord[]>([]);
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -163,7 +177,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     const timer = setTimeout(async () => {
       try {
         const thread = await api.current.contentConversation(coordinator.record.id);
-        const job = videoJob ? await api.current.mediaGenerationJob(videoJob.id) : null;
+        const job = await api.current.latestMediaGenerationJob(coordinator.record.id);
         const freshAssets = await api.current.mediaAssets();
         const publication = publishing ? await api.current.latestPublishJob(coordinator.record.id) : null;
         const finished = (job && !running(job)) || (publication && !["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(publication.status));
@@ -173,6 +187,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         setConversation(thread);
         setAssets(freshAssets);
         if (job) setVideoJob(job);
+        if (job && !running(job) && (running(videoJob) || activeGeneration)) setNotice("");
         if (publication) setPublishJob(publication);
       } catch (cause) {
         if (!cancelled) {
@@ -826,14 +841,22 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                         )}
                       </div>
                       <div className="create-media-actions">
-                        <button
-                          className="studio-button studio-button-primary"
-                          disabled={locked || !selected.visualDirection?.trim() || (running(videoJob) && videoJob?.contentMediaItemId === selected.id)}
-                          onClick={() => void run("generate", generate)}
-                        >
-                          <Sparkles size={17} />
-                          {t("Generate", "توليد")}
-                        </button>
+                        {(selected.mediaKind !== "VIDEO" || generatedFootage) && (
+                          <button
+                            className="studio-button studio-button-primary"
+                            disabled={
+                              locked ||
+                              conversationActive ||
+                              activeGeneration ||
+                              !selected.visualDirection?.trim() ||
+                              (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
+                            }
+                            onClick={() => void run("generate", generate)}
+                          >
+                            <Sparkles size={17} />
+                            {selected.mediaKind === "VIDEO" ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي") : t("Generate", "توليد")}
+                          </button>
+                        )}
                         <button className="studio-button" disabled={locked} onClick={() => upload.current?.click()}>
                           {t("Replace", "استبدال")}
                         </button>
@@ -859,15 +882,35 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                           </button>
                         )}
                       </div>
+                      {selected.mediaKind === "VIDEO" && (
+                        <MotionReelComposer
+                          key={`${record.id}:${selected.id}`}
+                          api={client}
+                          assets={assets}
+                          duration={selected.generationDurationSeconds ?? 8}
+                          disabled={locked || !!activeGeneration || conversationActive || running(videoJob)}
+                          t={t}
+                          onUploaded={(asset) => setAssets((current) => [...current.filter((row) => row.id !== asset.id), asset])}
+                          generate={async (motion) => {
+                            await run("motion-reel", async () => {
+                              await coordinator.action(async (current) => {
+                                setVideoJob(
+                                  await api.current.generateContentVideo(current.id, {
+                                    contentMediaItemId: selected.id,
+                                    expectedRevision: current.revision,
+                                    motion
+                                  })
+                                );
+                                setNotice(t("Motion Reel queued.", "أُضيف الريل المتحرك إلى الانتظار."));
+                                return { result: undefined, record: await api.current.contentItem(current.id) };
+                              });
+                            });
+                          }}
+                        />
+                      )}
                       {videoJob && videoJob.contentMediaItemId === selected.id && (
                         <p role="status" className="create-muted">
-                          {running(videoJob)
-                            ? t("Video generation in progress…", "جارٍ توليد الفيديو…")
-                            : videoJob.status === "COMPLETED"
-                              ? videoJob.attachmentApplied
-                                ? t("Video attached.", "أُرفق الفيديو.")
-                                : t("Video saved to Library; newer draft preserved.", "حُفظ الفيديو في المكتبة دون تغيير المسودة الأحدث.")
-                              : videoJob.errorMessage || t("Video generation stopped.", "توقف توليد الفيديو.")}
+                          {videoGenerationMessage(videoJob, locale)}
                         </p>
                       )}
                       {videoJob && videoJob.contentMediaItemId === selected.id && running(videoJob) && (
@@ -1097,18 +1140,18 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               {conversation?.latestRun?.actions?.generation.map((item) => (
                 <p className="create-muted" role="status" key={item.itemId}>
                   {t("Generation", "التوليد")}:{" "}
-                  {
-                    {
-                      PENDING: t("Requested", "طُلب"),
-                      DISPATCHING: t("Requesting", "جارٍ الطلب"),
-                      QUEUED: t("Queued", "في الانتظار"),
-                      RUNNING: t("Running", "جارٍ"),
-                      ATTACHED: t("Completed and attached", "اكتمل وأُرفق"),
-                      LIBRARY_ONLY: t("Saved to Library only", "حُفظ في المكتبة فقط"),
-                      FAILED: t("Failed", "فشل"),
-                      UNKNOWN: t("Outcome unknown — no automatic retry", "النتيجة غير معروفة — لن يُعاد تلقائياً")
-                    }[item.status]
-                  }
+                  {videoJob?.contentMediaItemId === item.itemId
+                    ? videoGenerationMessage(videoJob, locale)
+                    : {
+                        PENDING: t("Requested", "طُلب"),
+                        DISPATCHING: t("Requesting", "جارٍ الطلب"),
+                        QUEUED: t("Queued", "في الانتظار"),
+                        RUNNING: t("Running", "جارٍ"),
+                        ATTACHED: t("Completed and attached", "اكتمل وأُرفق"),
+                        LIBRARY_ONLY: t("Saved to Library only", "حُفظ في المكتبة فقط"),
+                        FAILED: t("Failed", "فشل"),
+                        UNKNOWN: t("Outcome unknown — no automatic retry", "النتيجة غير معروفة — لن يُعاد تلقائياً")
+                      }[item.status]}
                 </p>
               ))}
             </div>

@@ -1,5 +1,5 @@
 import type { Notification } from "@prisma/client";
-import type { NotificationRecord } from "@markos/shared-types";
+import type { NotificationRecord, NotificationPage } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
 
 export class NotificationNotFoundError extends Error {
@@ -15,6 +15,29 @@ export async function listNotifications(userId: string, workspaceId: string): Pr
     take: 50
   });
   return rows.map(toNotificationRecord);
+}
+
+export async function notificationFeed(
+  userId: string,
+  workspaceId: string,
+  input: { cursor?: string | undefined; unreadOnly?: boolean }
+): Promise<NotificationPage> {
+  const base = { userId, workspaceId, channel: "IN_APP", deletedAt: null };
+  const cursor = input.cursor ? await prisma.notification.findFirst({ where: { ...base, id: input.cursor }, select: { id: true, createdAt: true } }) : null;
+  if (input.cursor && !cursor) throw new NotificationNotFoundError();
+  const [rows, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: {
+        ...base,
+        ...(input.unreadOnly ? { readAt: null } : {}),
+        ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {})
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 21
+    }),
+    prisma.notification.count({ where: { ...base, readAt: null } })
+  ]);
+  return { items: rows.slice(0, 20).map(toNotificationRecord), unreadCount, ...(rows.length > 20 ? { nextCursor: rows[19]!.id } : {}) };
 }
 
 export async function markNotificationRead(userId: string, workspaceId: string, notificationId: string): Promise<NotificationRecord> {

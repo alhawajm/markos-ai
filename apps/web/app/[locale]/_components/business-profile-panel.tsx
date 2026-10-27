@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Building2, Check, ChevronLeft, ChevronRight, LoaderCircle, Package, Palette, Pencil, Plus, Search, Target, Users, X } from "lucide-react";
 import { MarkosApiError } from "@markos/api-client";
-import type { BusinessKnowledgeRecord, Locale, OfferingMaintenanceUpdate, OfferingRecord } from "@markos/shared-types";
+import type { BusinessKnowledgeRecord, BusinessKnowledgeRevision, Locale, OfferingMaintenanceUpdate, OfferingRecord } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import { useModalDialog } from "./use-modal-dialog";
 import styles from "./business-profile-panel.module.css";
@@ -326,9 +326,23 @@ type EditorProps = {
   onSave: (values: Record<string, unknown>, revision: number) => Promise<void>;
   onReload: () => Promise<{ values: Record<string, unknown>; revision: number }>;
   warning?: (values: Record<string, unknown>) => string | undefined;
+  loadHistory?: () => Promise<BusinessKnowledgeRevision[]>;
+  historyValues?: (values: Record<string, unknown>) => Record<string, unknown>;
 };
 
-function EditDialog({ locale, title, fields, initial, revision: initialRevision, onClose, onSave, onReload, warning }: EditorProps) {
+function EditDialog({
+  locale,
+  title,
+  fields,
+  initial,
+  revision: initialRevision,
+  onClose,
+  onSave,
+  onReload,
+  warning,
+  loadHistory,
+  historyValues
+}: EditorProps) {
   const [values, setValues] = useState(initial);
   const [revision, setRevision] = useState(initialRevision);
   const [busy, setBusy] = useState(false);
@@ -339,6 +353,10 @@ function EditDialog({ locale, title, fields, initial, revision: initialRevision,
   const [discard, setDiscard] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [history, setHistory] = useState<BusinessKnowledgeRevision[] | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyVersion, setHistoryVersion] = useState("");
   const allowExit = useRef(false);
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -427,6 +445,77 @@ function EditDialog({ locale, title, fields, initial, revision: initialRevision,
           </button>
         </header>
         <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-5">
+          {loadHistory ? (
+            <details
+              className="rounded-xl border border-[var(--border)] p-4"
+              onToggle={(event) => {
+                if (!event.currentTarget.open || history !== null || historyBusy) return;
+                setHistoryBusy(true);
+                setHistoryError("");
+                void loadHistory()
+                  .then(setHistory)
+                  .catch((cause) => setHistoryError(message(cause, locale)))
+                  .finally(() => setHistoryBusy(false));
+              }}
+            >
+              <summary className="cursor-pointer font-medium">{t("Version history", "سجل الإصدارات")}</summary>
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-[var(--muted)]">
+                  {t(
+                    "Load an earlier version into this editor, review it, then save. Other sections stay as they are.",
+                    "حمّل إصدارًا سابقًا في المحرر، وراجعه ثم احفظه. تبقى الأقسام الأخرى كما هي."
+                  )}
+                </p>
+                {historyBusy ? (
+                  <p role="status">{t("Loading versions…", "جارٍ تحميل الإصدارات…")}</p>
+                ) : historyError ? (
+                  <p role="alert">{historyError}</p>
+                ) : history?.length ? (
+                  <>
+                    <label className="grid gap-2">
+                      <span id="profile-history-version-label">{t("Saved version", "الإصدار المحفوظ")}</span>
+                      <select
+                        aria-labelledby="profile-history-version-label"
+                        className={fieldClass}
+                        value={historyVersion}
+                        disabled={busy}
+                        onChange={(event) => setHistoryVersion(event.target.value)}
+                      >
+                        <option value="">{t("Choose a version", "اختر إصدارًا")}</option>
+                        {history.map((row) => (
+                          <option key={row.version} value={row.version}>
+                            {t("Version", "الإصدار")} {row.version} ·{" "}
+                            {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.createdAt))}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className={secondary}
+                      disabled={busy || !historyVersion}
+                      onClick={() => {
+                        const row = history.find((item) => String(item.version) === historyVersion);
+                        if (!row) return;
+                        setValues(historyValues ? historyValues(row.values) : row.values);
+                        setReviewed(false);
+                      }}
+                    >
+                      {t("Review this version", "مراجعة هذا الإصدار")}
+                    </button>
+                    <p className="text-sm text-[var(--muted)]">
+                      {t(
+                        "Review replaces unsaved values in this editor. Your saved profile changes only when you save.",
+                        "تستبدل المراجعة القيم غير المحفوظة في المحرر. لا يتغير ملفك المحفوظ إلا عند الحفظ."
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <p>{t("No saved versions yet.", "لا توجد إصدارات محفوظة بعد.")}</p>
+                )}
+              </div>
+            </details>
+          ) : null}
           {fields
             .filter((field) =>
               field.key === "price"
@@ -563,7 +652,7 @@ function FieldInput({
     <label className="block space-y-2 text-base font-medium">
       <span>{label}</span>
       {options ? (
-        <select className={fieldClass} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
+        <select aria-label={label} className={fieldClass} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
           {options.map(([key, text]) => (
             <option key={key} value={key}>
               {text}
@@ -572,6 +661,7 @@ function FieldInput({
         </select>
       ) : field.kind === "long" || field.kind === "list" ? (
         <textarea
+          aria-label={label}
           className={`${fieldClass} min-h-28 font-normal`}
           rows={4}
           dir="auto"
@@ -582,6 +672,7 @@ function FieldInput({
         />
       ) : (
         <input
+          aria-label={label}
           className={`${fieldClass} font-normal`}
           dir={field.kind === "url" || field.kind === "email" ? "ltr" : "auto"}
           type={field.kind === "url" ? "url" : field.kind === "email" ? "email" : "text"}
@@ -749,6 +840,7 @@ function ProfileEditor({
   onClose: () => void;
   onReload: () => Promise<BusinessKnowledgeRecord>;
 }) {
+  const client = useMarkosClient(locale);
   const values = (record: BusinessKnowledgeRecord) =>
     Object.fromEntries(section.fields.map((field) => [field.key, profileFieldValue(field, record.modules[section.module][field.key])]));
   return (
@@ -758,6 +850,8 @@ function ProfileEditor({
       fields={section.fields}
       initial={values(data)}
       revision={data.version}
+      loadHistory={() => client.businessKnowledgeHistory(section.module)}
+      historyValues={(record) => Object.fromEntries(section.fields.map((field) => [field.key, profileFieldValue(field, record[field.key])]))}
       onClose={onClose}
       onSave={(input, revision) => onSave(profileChanges(section.fields, input, locale), revision)}
       onReload={async () => {

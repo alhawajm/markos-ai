@@ -20,13 +20,13 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 **Approved by Khalid for direct application to the project**
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| `--text` | `#20212b` | `#f2faf7` |
+| Token          | Light     | Dark      |
+| -------------- | --------- | --------- |
+| `--text`       | `#20212b` | `#f2faf7` |
 | `--background` | `#f7fafa` | `#151821` |
-| `--primary` | `#d88fa3` | `#8fe3da` |
-| `--secondary` | `#81d8d0` | `#7b6af0` |
-| `--accent` | `#6c3ce8` | `#d9a0b1` |
+| `--primary`    | `#d88fa3` | `#8fe3da` |
+| `--secondary`  | `#81d8d0` | `#7b6af0` |
+| `--accent`     | `#6c3ce8` | `#d9a0b1` |
 
 - Apply both palettes to the real public and authenticated site, including shared controls, forms, cards, dialogs, navigation, and data displays. A sandbox or prototype-only update does not satisfy this decision.
 - Preserve these base values and derive the supporting semantic roles centrally. Map surviving Sunlit and legacy aliases to the same theme so older components do not retain unrelated brand colors.
@@ -436,7 +436,6 @@ The older entries below retain their historical rationale. Their action-hub, sep
 - A conversational assistant that asks follow-up questions about ambiguous extraction; the current proposal/issues/review flow is the implemented boundary.
 - The dedicated post-onboarding Business Profile knowledge editor described above.
 
-
 ## 2026-09-06 — Persistent Create conversations and deferred commercial quotas
 
 Khalid selected durable text conversations first, keeping image/video generation in the existing Media controls. Each post owns one saved thread across Create, Campaign and Calendar. Clear draft-text requests apply and save directly; discussion and suggestions remain messages. Messages, request identity, processing state and failed/conflicting outcomes persist. Revision checks protect current copy and approval without adding Undo. The API validates allowed changes and rechecks workspace authorization.
@@ -466,14 +465,43 @@ Use **Marketing strategy** as the section name. Add a simple owner-reported esta
 
 The September 10 full-screen Campaign review prototype is approved for implementation. Preserve its Campaign index → Overview/Week/Month → Day → Post hierarchy and direct short-plan entry. Use independent panel scrolling where useful, without requiring visible panel borders. Frequently used Previous/Next actions must stay visible and in a stable position while navigating or scrolling. Apply restrained semantic color to status/count/category distinctions where the real data benefits; labels remain visible. These refinements do not add a reviewed state, expand generation beyond 3/7/14 days, or change the same-record Create handoff.
 
-
 ## 2026-09-14 — Guided Instagram learning review
 
 Approved after Khalid's staging test. Reduce the setup heading and progress indicator footprint, explain once how learning improves future captions, visuals and campaigns, and keep the main action row outside the scrolling content. Inline MFA enrollment and connection retain the same behavior. Review Brand & Voice first, then Marketing Strategy; navigation and failed saves preserve selections and edited values. Display the account summary, limitations and post analytics on demand, while retaining reasoning and supporting-post links alongside each proposal. Use existing semantic theme colors for the current step, completed steps, selected suggestions and evidence categories. Do not reduce ordinary text sizing to fit more content.
 
 When brand colors are absent, an optional observed palette may appear with swatches, editable hex values and native color pickers. It starts unselected and explicitly describes its evidential limits. Existing saved colors appear as the business's palette and are preserved. No new global design tokens or theme behavior are introduced.
 
-
 ## 2026-09-16 — Carousel media and thinking visibility
 
 Carousel media uses numbered image previews, per-slide replacement/library/generation controls, and drag reordering with keyboard-accessible move buttons. Multi-selection in the library preserves selection order. Generation failures retain the direction input and existing slide. The existing MARKOS thinking spinner is larger, centered in a contrasting circular surface/ring, and visible while a message is being submitted as well as while the saved run is active. Reduced-motion preferences remain respected. These changes refine Create without changing its editor/chat/preview layout.
+
+## 2026-09-24: Native account and team completion
+
+Reuse Sunlit cards, native task headers, Lucide icons and existing bilingual controls. Keep team/workspace access within Account and web Settings, and knowledge history alongside Business profile. Preserve the main navigation. New teammates can enter an invitation during the native onboarding welcome instead of recreating an existing business. Role selection explains editor/viewer/administrator access; owner access cannot be changed here. Use the existing MARKOS wand and rose color for native launch assets. Rendered web checks cover English desktop, Arabic phone width, invitation creation/revocation and profile saving. Physical-device share sheet and screen-reader acceptance remain pending.
+
+## 2026-09-24: Native Create and campaign workflow
+
+Preserve Sunlit components and the phone/tablet navigation. Show all four formats by name, including Story. Keep format conversion collapsed until requested. Provide Full preview, Caption, Media and Details inside the editor, with an explicit Assistant handoff and a persistent context-sensitive primary action. Missing media leads to generation/upload/library, then Ready, then Schedule. A written Assistant response is never represented as a finished visual.
+
+Campaign review separates Content plan from Strategy & context. Use horizontally scrolling day/status/format controls, actual Bahrain dates and the existing draft handoff, plus native PDF sharing. Story choices, captions and recovery explanations remain bilingual. Rendered component tests cover these handoffs and Arabic Story controls; they do not replace physical-device keyboard, picker, layout or accessibility acceptance.
+
+## 2026-10-12: Focused native screens
+
+The owner requested direct implementation to reduce mobile clutter. This presentation decision supersedes the September 24 arrangement of permanent format/filter button rows and duplicate preview navigation. Retain the five destinations, tablet rail, Sunlit tokens, bilingual controls and all approval/recovery contracts. Create exposes one New content action. The editor uses Edit / Preview / Assistant, with Caption / Media / Details only inside Edit. Secondary actions belong in Draft options, media-source sheets, collapsed settings or grouped navigation rows. Campaign filters show current selections and open on request. Business price/availability and team roles use focused selectors. Keep unfinished form children mounted while collapsed and keep parent draft state across slide changes. The primary action describes the next actual operation; a media preparation action is not approval or publishing.
+
+Research, scope and validation boundaries are in [mobile-ux-refinement.md](mobile-ux-refinement.md). This is an owner-authorized coded refinement; it does not claim a separate Figma approval or completed physical-device acceptance.
+
+## 2026-10-26: Longer campaigns and saved planning progress
+
+Retain the existing campaign brief, review navigation, Sunlit components and bilingual
+copy. Native duration selection becomes one focused selector containing all six supported
+durations. Browser and native show saved weeks in the existing campaign journey, with
+one Continue planning action after an interruption. Browser recovers server jobs after
+reload and retains the current brief/files in memory for a deliberate new attempt.
+Hide the first-campaign empty prompt while a planning/recovery card is present. Never
+show scheduling or approval as a result of planning. English desktop and Arabic 390px
+browser fixtures cover the resumed state; those fixtures are not live-provider acceptance.
+
+## 2026-10-27 ? Profile version recovery
+
+Put Version history inside the existing profile editor as a collapsed secondary disclosure. Show one version selector and one Review action; load the selected fields into the ordinary form and retain its Save and conflict controls. The native editor confirms replacement of unsaved form values first. English and Arabic copy explain that reviewing does not save. Keep field labels explicit for assistive technology. This extends the accepted editor and does not change primary navigation or introduce a Figma approval dependency.

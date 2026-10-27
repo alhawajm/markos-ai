@@ -36,6 +36,53 @@ describe("presentation journey", () => {
     await browser?.close();
   });
 
+  it.each([
+    { locale: "en", width: 1440 },
+    { locale: "ar", width: 390 }
+  ])("recovers saved weekly planning and resumes one request ($locale, $width)", async ({ locale, width }) => {
+    const page = await sessionPage();
+    await page.setViewportSize({ width, height: 900 });
+    let resumes = 0;
+    let submissions = 0;
+    await mockApi(page, async (route, pathname) => {
+      if (pathname === "/v1/campaigns/summaries") return route.fulfill(json({ items: [], nextCursor: null }));
+      if (pathname.endsWith("/resume")) {
+        resumes++;
+        return route.fulfill(json(job()));
+      }
+      if (pathname === "/v1/campaigns/generations") {
+        if (route.request().method() === "POST") submissions++;
+        return route.fulfill(json([job()]));
+      }
+      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-10-26T10:00:00Z")));
+      return route.fulfill(json([]));
+    });
+    function job() {
+      return {
+        id: "weekly-planning-fixture",
+        requestId: "request-fixture",
+        objective: "Blooms in Pink",
+        status: resumes ? "RUNNING" : "FAILED",
+        campaignId: null,
+        errorCode: resumes ? null : "AI_PROVIDER_TIMEOUT",
+        progress: { completedWeeks: 3, totalWeeks: 13 },
+        canResume: !resumes,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+    await page.goto(`${baseUrl}/${locale}/app/campaigns`, { waitUntil: "domcontentloaded" });
+    const planning = page.getByRole("region", { name: locale === "ar" ? "حالة إنشاء الحملات" : "Campaign planning status" });
+    await planning.getByRole("button", { name: locale === "ar" ? "متابعة التخطيط" : "Continue planning", exact: true }).click();
+    await planning.getByText(locale === "ar" ? /جارٍ إعداد الحملة/ : /Drafting your campaign/).waitFor();
+    await expect(planning.getByText(/3\/13/).isVisible()).resolves.toBe(true);
+    expect(resumes).toBe(1);
+    expect(submissions).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `evidence/campaign-weekly-${locale}-${width}.png`, fullPage: true });
+    await page.close();
+  });
+
   it("redirects an approved workspace away from onboarding", async () => {
     const page = await sessionPage();
     await page.addInitScript(() => localStorage.setItem("markos.onboarding.draft.v2", JSON.stringify({ companyName: "stale" })));
@@ -376,7 +423,7 @@ describe("presentation journey", () => {
           json({ items: [campaignSummaryFixture(snackLabCampaign()), campaignSummaryFixture(snackLabCommunitySprint())], nextCursor: null })
         );
       }
-      if (pathname === "/v1/campaigns/generate" && route.request().method() === "POST") {
+      if (pathname === "/v1/campaigns/generations" && route.request().method() === "POST") {
         generationPayload = route.request().postDataJSON() as Record<string, unknown>;
         await generationHold;
         if (failGeneration)
@@ -385,7 +432,18 @@ describe("presentation journey", () => {
             contentType: "application/json",
             body: JSON.stringify({ error: { code: "UNAVAILABLE", message: "Campaign generation is unavailable. Try again." } })
           });
-        return route.fulfill(json({ ...snackLabCampaign(), id: "campaign-snacklab-generated" }));
+        return route.fulfill(
+          json({
+            id: "generation-fixture",
+            requestId: "request-fixture",
+            objective: "SnackLab plan",
+            status: "COMPLETED",
+            campaignId: "campaign-snacklab-generated",
+            errorCode: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          })
+        );
       }
       if (pathname.endsWith("/review") && pathname.startsWith("/v1/campaigns/")) {
         if (failRefresh)
@@ -445,7 +503,7 @@ describe("presentation journey", () => {
     expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     await expect(composer.getByRole("button", { name: "14 days", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     for (const duration of [30, 60, 90]) {
-      await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(true);
+      await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(false);
     }
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
@@ -1136,14 +1194,19 @@ async function sessionPage(): Promise<Page> {
 }
 
 async function mockApi(page: Page, handler: (route: Route, pathname: string) => Promise<unknown>) {
-  await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-    const pathname = new URL(route.request().url()).pathname;
-    if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-    if (pathname === "/v1/workspace/instagram") return route.fulfill(json({ status: "CONNECTED", username: "the.snacklab" }));
-    if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) return route.fulfill(json(null));
-    if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));
-    await handler(route, pathname);
-  });
+  await page.route(
+    (url) =>
+      url.pathname.startsWith("/v1/") &&
+      (url.origin === new URL(baseUrl!).origin || (["127.0.0.1", "localhost"].includes(url.hostname) && url.port === "4000")),
+    async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (pathname === "/v1/workspace/instagram") return route.fulfill(json({ status: "CONNECTED", username: "the.snacklab" }));
+      if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) return route.fulfill(json(null));
+      if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));
+      await handler(route, pathname);
+    }
+  );
 }
 
 function approvedOnboardingState(updatedAt: string) {

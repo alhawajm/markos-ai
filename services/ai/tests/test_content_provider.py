@@ -11,6 +11,7 @@ from app.contracts.content import (
     ContentPromptTemplate,
     ContentToneLock,
 )
+from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.prompts.content import build_content_instructions
 from app.providers.content import LocalContentProvider, OpenAIContentProvider
@@ -148,7 +149,11 @@ def content_batch(count: int = 1) -> ContentDraftBatch:
     )
 
 
-def test_openai_content_provider_uses_grounded_strict_caption_contract() -> None:
+@pytest.mark.parametrize("store", [False, True])
+def test_openai_content_provider_uses_grounded_strict_caption_contract(
+    monkeypatch: pytest.MonkeyPatch, store: bool
+) -> None:
+    monkeypatch.setattr(settings, "openai_store_responses", store)
     client = FakeClient(content_batch().model_dump_json(by_alias=True))
     provider = OpenAIContentProvider(client=client)
 
@@ -156,7 +161,7 @@ def test_openai_content_provider_uses_grounded_strict_caption_contract() -> None
     kwargs = client.fake_responses.last_kwargs
 
     assert kwargs is not None
-    assert kwargs["store"] is True
+    assert kwargs["store"] is store
     assert kwargs["model"] == "gpt-content-configured"
     assert kwargs["reasoning"] == {"effort": "low"}
     assert "workspace-secret-id" not in str(kwargs["input"])

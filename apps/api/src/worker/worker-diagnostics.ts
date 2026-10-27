@@ -5,7 +5,14 @@ export interface WorkerLogger {
 }
 
 export const workerLogger: WorkerLogger = {
-  error: (message, meta) => console.error(message, meta ?? {}),
+  error: (message, meta) => {
+    console.error(message, meta ?? {});
+    reportOperationalFailure({
+      service: "worker",
+      code: typeof meta?.errorCode === "string" ? meta.errorCode : "WORKER_UNEXPECTED_ERROR",
+      task: typeof meta?.task === "string" ? meta.task : "maintenance"
+    });
+  },
   info: (message, meta) => console.info(message, meta ?? {}),
   warn: (message, meta) => console.warn(message, meta ?? {})
 };
@@ -36,3 +43,4 @@ export async function observeWorkerTask<T>(logger: WorkerLogger, task: string, w
     throw error;
   }
 }
+import { reportOperationalFailure } from "../observability/failure-alerts";

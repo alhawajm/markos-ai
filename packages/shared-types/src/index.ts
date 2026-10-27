@@ -114,6 +114,24 @@ export interface AuthSession {
   tokens: AuthTokens;
 }
 
+/** Native-only grant. The rotating credential must be persisted in the OS secure store. */
+export interface CampaignGenerationJobRecord {
+  id: string;
+  requestId: string;
+  objective: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+  campaignId: string | null;
+  errorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+  progress?: { completedWeeks: number; totalWeeks: number };
+  canResume?: boolean;
+}
+
+export interface NativeAuthSession extends AuthSession {
+  tokens: AuthTokens & { refreshToken: string };
+}
+
 export interface EmailVerificationChallenge {
   alreadyVerified: boolean;
   email: string;
@@ -124,6 +142,10 @@ export interface EmailVerificationChallenge {
 export interface EmailVerificationResult {
   email: string;
   isVerified: boolean;
+}
+export interface PasswordResetChallenge {
+  challengeId: string;
+  expiresAt: string;
 }
 
 export interface GoogleLoginConfigurationStatus {
@@ -244,6 +266,12 @@ export interface OnboardingBusinessProfileState {
 export * from "./instagram-learning";
 
 export type BusinessKnowledgeModule = "company" | "story" | "audience" | "competitors" | "brand" | "objectives";
+
+export interface BusinessKnowledgeRevision {
+  version: number;
+  createdAt: string;
+  values: Record<string, unknown>;
+}
 
 export interface BusinessKnowledgeRecord {
   version: number;
@@ -520,7 +548,7 @@ export interface ApproveOnboardingDocumentAnalysisResult {
 
 export const campaignDurations = [3, 7, 14, 30, 60, 90] as const;
 export type CampaignDurationDays = (typeof campaignDurations)[number];
-export const campaignGenerationDurations = [3, 7, 14] as const;
+export const campaignGenerationDurations = campaignDurations;
 export type CampaignGenerationDurationDays = (typeof campaignGenerationDurations)[number];
 
 export const campaignStatuses = ["REVIEW", "APPROVED", "ACTIVE", "COMPLETED", "ARCHIVED"] as const;
@@ -551,7 +579,23 @@ export interface CampaignWeek {
   days: CampaignDay[];
 }
 
+export const campaignReferenceLimits = { files: 5, fileBytes: 8_000_000, totalBytes: 20_000_000 } as const;
+export interface CampaignReferenceFileInput {
+  filename: string;
+  mimeType:
+    | "application/pdf"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    | "text/plain"
+    | "image/jpeg"
+    | "image/png"
+    | "image/webp";
+  base64Data: string;
+}
+
 export interface CampaignPlan {
+  description?: string;
+  referenceFiles?: Array<{ filename: string; mimeType: string; sizeBytes: number; checksumSha256: string }>;
+  referenceSummary?: string | null;
   summary: string;
   durationDays: CampaignDurationDays;
   publishesPerDay: number;
@@ -806,6 +850,41 @@ export interface NotificationRecord {
   updatedAt: string;
 }
 
+export interface NotificationPage {
+  items: NotificationRecord[];
+  unreadCount: number;
+  nextCursor?: string;
+}
+
+export interface NotificationPreferences {
+  pushPublishing: boolean;
+  monthlyReportEmail: boolean;
+}
+export interface AccountDeletionPreview {
+  ownedWorkspaces: { id: string; name: string }[];
+  otherWorkspaces: { id: string; name: string }[];
+  mfaRequired: boolean;
+  passwordRequired: boolean;
+  confirmationToken: string;
+}
+export interface DeliveryOperations {
+  checkedAt: string;
+  failures: { id: string; workspaceId: string; kind: "REPORT" | "PUSH" | "ERASURE"; status: string; failureCode: string | null; updatedAt: string }[];
+}
+export interface ReportDeliveryRecord {
+  id: string;
+  month: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublishingActivityPage {
+  items: Array<{ content: ContentRecord; job: PublishJobRecord | null }>;
+  total: number;
+  nextOffset?: number;
+}
+
 export interface PromptTemplateRecord {
   id: string;
   workspaceId: string;
@@ -1022,7 +1101,7 @@ export interface AnalyticsEmailDeliveryResult {
   delivered: boolean;
   filename: string;
   messageId?: string;
-  mode: "dry_run";
+  mode: "dry_run" | "sendgrid" | "brevo";
   month: string;
   recipients: string[];
   skippedReason?: string;
@@ -1292,3 +1371,4 @@ export type ContentAuthoringOperation =
   | { type: "updateReelBeat"; beatId: string; text: string }
   | { type: "removeReelBeat"; beatId: string }
   | { type: "reorderReelBeats"; orderedIds: string[] };
+export { sanitizeTelemetryEvent } from "./telemetry-privacy";

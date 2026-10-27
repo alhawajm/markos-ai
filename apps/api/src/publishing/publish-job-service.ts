@@ -1,3 +1,4 @@
+import { notifyPublication } from "../notifications/push-service";
 import type { PublishJob } from "@prisma/client";
 import type { PublishJobRecord } from "@markos/shared-types";
 import { prisma } from "../db/prisma";
@@ -262,18 +263,24 @@ async function claimPublishJob(now: Date): Promise<{ job: PublishJob; interrupte
 }
 
 async function finishPublishAttempt(job: PublishJob, attemptId: string, status: string, now: Date): Promise<void> {
-  await prisma.$transaction([
-    prisma.publishAttempt.update({ where: { id: attemptId }, data: { status, completedAt: now } }),
-    prisma.publishJob.update({
+  await prisma.$transaction(async (tx) => {
+    await tx.publishAttempt.update({ where: { id: attemptId }, data: { status, completedAt: now } });
+    await tx.publishJob.update({
       where: { id: job.id, status: "PROCESSING", attempts: job.attempts },
       data: { status: "PUBLISHED", publishedAt: now, leasedAt: null, leaseExpiresAt: null, lastErrorCode: null, lastErrorMessage: null }
-    })
-  ]);
+    });
+    await notifyPublication(tx, job.workspaceId, "publishing_succeeded", {
+      contentItemId: job.contentItemId,
+      publishJobId: job.id,
+      title: "Published on Instagram",
+      message: "Your content was published successfully.",
+      occurredAt: now.toISOString()
+    });
+  });
 }
 
 async function failPublishJob(job: PublishJob, attemptId: string, outcome: PublishAttemptRecord, now: Date): Promise<void> {
   const errorCode = outcome.reasons[0] ?? "INSTAGRAM_PUBLISH_FAILED";
-  const owner = await prisma.workspace.findFirst({ where: { id: job.workspaceId }, select: { ownerUserId: true } });
   await prisma.$transaction(async (tx) => {
     await tx.publishAttempt.update({
       where: { id: attemptId },
@@ -293,23 +300,13 @@ async function failPublishJob(job: PublishJob, attemptId: string, outcome: Publi
       where: { id: job.contentItemId, workspaceId: job.workspaceId, status: { not: "PUBLISHED" } },
       data: { status: "FAILED", failureReason: errorCode }
     });
-    if (owner) {
-      await tx.notification.create({
-        data: {
-          userId: owner.ownerUserId,
-          workspaceId: job.workspaceId,
-          channel: "IN_APP",
-          templateKey: "publishing_failed",
-          payload: {
-            contentItemId: job.contentItemId,
-            publishJobId: job.id,
-            errorCode,
-            message: safePublishMessage(errorCode),
-            occurredAt: now.toISOString()
-          }
-        }
-      });
-    }
+    await notifyPublication(tx, job.workspaceId, "publishing_failed", {
+      contentItemId: job.contentItemId,
+      publishJobId: job.id,
+      errorCode,
+      message: safePublishMessage(errorCode),
+      occurredAt: now.toISOString()
+    });
   });
 }
 

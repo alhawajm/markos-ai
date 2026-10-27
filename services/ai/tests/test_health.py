@@ -40,7 +40,9 @@ def test_vault_embedding_contract() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["model"] == "text-embedding-3-small"
+    assert body["model"] == "local-hash-v1"
+    assert body["space"] == "local:hash-v1:1536"
+    assert body["tokens_in"] == 0
     assert body["dimensions"] == 1536
     assert len(body["embeddings"]) == 1
     assert len(body["embeddings"][0]) == 1536
@@ -72,7 +74,7 @@ def test_campaign_generation_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "test-campaign-model"
-    assert body["prompt_version"] == "campaign.v2.local"
+    assert body["prompt_version"] == "campaign.v3.local"
     assert body["tokens_in"] > 0
     assert body["tokens_out"] > 0
     assert body["campaign"]["durationDays"] == 14

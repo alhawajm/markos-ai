@@ -13,6 +13,15 @@ import { instagramJpegFixture } from "./helpers/jpeg";
 import { validateInstagramDatabaseTarget } from "./helpers/instagram-database";
 
 const provider = vi.hoisted(() => ({ image: vi.fn(), start: vi.fn(), status: vi.fn(), download: vi.fn() }));
+vi.mock("../src/ai/video-plan-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/ai/video-plan-client")>()),
+  prepareVideoRender: vi.fn(async (input: { prompt: string }) => ({
+    result: { visual_prompt: input.prompt, text_cues: [] },
+    model: "fixture-plan",
+    tokens_in: 1,
+    tokens_out: 1
+  }))
+}));
 vi.mock("../src/ai/image-client", () => ({ generateImageAsset: provider.image }));
 vi.mock("../src/ai/video-client", () => ({
   startVideoGeneration: provider.start,

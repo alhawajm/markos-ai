@@ -191,7 +191,7 @@ const copyByLocale = {
           ]
         }
       ],
-      copyright: "© 2026 Ra'edat Software L.L.C."
+      copyright: "© 2026 Raedat Software Company W.L.L"
     }
   },
   ar: {
@@ -343,7 +343,7 @@ const copyByLocale = {
           ]
         }
       ],
-      copyright: "© 2026 Ra'edat Software L.L.C."
+      copyright: "© 2026 Raedat Software Company W.L.L"
     }
   }
 } as const;

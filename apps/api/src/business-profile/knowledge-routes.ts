@@ -4,9 +4,14 @@ import { offeringMaintenanceSchema, updateBusinessKnowledgeSchema } from "@marko
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { maintainOffering, saveOfferingCatalog } from "../offerings/offering-catalog-service";
-import { getBusinessKnowledge, saveBusinessKnowledge } from "./knowledge-service";
+import { getBusinessKnowledge, listBusinessKnowledgeHistory, saveBusinessKnowledge } from "./knowledge-service";
 
 export async function registerBusinessKnowledgeRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/business-profile/history/:module", { config: { workspaceRequired: true, permissions: ["vault:read"] } }, async (request, reply) => {
+    const parsed = updateBusinessKnowledgeSchema.shape.module.safeParse((request.params as { module?: string }).module);
+    if (!parsed.success) return reply.code(400).send(errorEnvelope("VALIDATION_ERROR", "Choose a business profile section."));
+    return ok(await listBusinessKnowledgeHistory(requireWorkspaceContext().workspaceId, parsed.data));
+  });
   app.patch(
     "/v1/business-profile/catalog",
     { config: { workspaceRequired: true, verifiedUserRequired: true, permissions: ["vault:write"] } },

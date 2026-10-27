@@ -1,8 +1,10 @@
 import asyncio
+import base64
 from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from pydantic import SecretStr
 
 from app.contracts.campaign import (
     CampaignDay,
@@ -11,11 +13,14 @@ from app.contracts.campaign import (
     CampaignPillar,
     CampaignPostSuggestion,
     CampaignPromptTemplate,
+    CampaignReferenceFile,
     CampaignWeek,
     GeneratedCampaignContent,
     VaultContextChunk,
 )
+from app.core.config import settings
 from app.core.errors import AiServiceError
+from app.providers import campaign as campaign_provider
 from app.providers.campaign import (
     LocalCampaignProvider,
     OpenAICampaignProvider,
@@ -155,7 +160,10 @@ def campaign_request(*, locale: Literal["ar", "en"] = "en") -> CampaignGenerateR
     )
 
 
-def test_openai_provider_stores_structured_request_and_reports_real_usage() -> None:
+def test_openai_provider_stores_structured_request_and_reports_real_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "openai_store_responses", True)
     response = FakeResponse(output_text=generated_content().model_dump_json(by_alias=True))
     client = FakeClient(response)
     provider = OpenAICampaignProvider(client=client)
@@ -186,6 +194,43 @@ def test_openai_provider_stores_structured_request_and_reports_real_usage() -> N
     assert result.campaign.publishes_per_day == 2
 
 
+def test_campaign_reads_designs_and_documents_with_owner_context() -> None:
+    request = campaign_request().model_copy(update={
+        "description": "Use the proposal dates and the lavender design. Venue changed to Hall B.",
+        "reference_files": [
+            CampaignReferenceFile(filename="proposal.pdf", mime_type="application/pdf",
+                                  base64_data=base64.b64encode(b"%PDF-test").decode()),
+            CampaignReferenceFile(filename="look.png", mime_type="image/png",
+                                  base64_data=base64.b64encode(b"\x89PNG-test").decode()),
+        ],
+    })
+    output = generated_content().model_copy(update={"reference_summary": "Hall B. Lavender design from look.png; event dates from proposal.pdf."})
+    client = FakeClient(FakeResponse(output_text=output.model_dump_json(by_alias=True)))
+    result = asyncio.run(OpenAICampaignProvider(client=client).generate_campaign(request))
+    assert client.fake_responses.last_kwargs is not None
+    messages = client.fake_responses.last_kwargs["input"]
+    assert isinstance(messages, list)
+    serialized = str(messages)
+    assert "input_file" in serialized and "input_image" in serialized
+    assert "proposal.pdf" in serialized and "look.png" in serialized
+    assert "Venue changed to Hall B" in serialized
+    assert "workspace-secret-id" not in serialized
+    instructions = str(client.fake_responses.last_kwargs["instructions"])
+    assert "untrusted source evidence" in instructions
+    assert "takes precedence" in instructions
+    assert result.campaign.reference_summary == output.reference_summary
+    assert result.tokens_in == 321 and result.tokens_out == 654
+
+
+def test_local_campaign_cannot_claim_to_read_references() -> None:
+    request = campaign_request().model_copy(update={"reference_files": [
+        CampaignReferenceFile(filename="event.txt", mime_type="text/plain", base64_data="ZXZlbnQ=")
+    ]})
+    with pytest.raises(AiServiceError) as raised:
+        asyncio.run(LocalCampaignProvider().generate_campaign(request))
+    assert raised.value.code == "AI_PROVIDER_NOT_CONFIGURED"
+
+
 def test_openai_provider_surfaces_refusal_without_raw_provider_content(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -205,6 +250,32 @@ def test_openai_provider_surfaces_refusal_without_raw_provider_content(
     assert "raw refusal" not in caplog.text
 
 
+def test_campaign_uses_its_full_deadline_without_restarting_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options: dict[str, object] = {}
+    client = FakeClient(FakeResponse(output_text=generated_content().model_dump_json(by_alias=True)))
+
+    def create_client(**kwargs: object) -> OpenAIClient:
+        options.update(kwargs)
+        return client
+
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test-key"))
+    monkeypatch.setattr(settings, "ai_campaign_timeout_seconds", 110)
+    monkeypatch.setattr(settings, "openai_timeout_seconds", 45)
+    monkeypatch.setattr(settings, "openai_max_retries", 3)
+    monkeypatch.setattr(settings, "campaign_max_output_tokens", 8_000)
+    monkeypatch.setattr(campaign_provider, "AsyncOpenAI", create_client)
+
+    result = asyncio.run(OpenAICampaignProvider().generate_campaign(campaign_request()))
+
+    assert options["timeout"] == 110
+    assert options["max_retries"] == 0
+    assert client.fake_responses.last_kwargs is not None
+    assert client.fake_responses.last_kwargs["max_output_tokens"] == 8_000
+    assert len([day for week in result.campaign.weekly_cadence for day in week.days]) == 14
+
+
 def test_openai_provider_rejects_invalid_structured_output() -> None:
     provider = OpenAICampaignProvider(client=FakeClient(FakeResponse(output_text='{"summary":true}')))
 
@@ -219,7 +290,7 @@ def test_local_provider_generates_natural_arabic_without_a_key() -> None:
     provider = LocalCampaignProvider()
     result = asyncio.run(provider.generate_campaign(campaign_request(locale="ar")))
 
-    assert result.prompt_version == "campaign.v2.local"
+    assert result.prompt_version == "campaign.v3.local"
     assert "حملة" in result.campaign.summary
     assert result.campaign.pillars[0].name == "الثقة والدليل"
     assert result.tokens_in > 0

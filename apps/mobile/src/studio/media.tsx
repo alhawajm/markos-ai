@@ -1,0 +1,552 @@
+import React, { useEffect, useState } from "react";
+import { Alert, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
+import { useQuery } from "@tanstack/react-query";
+import { useIsFocused } from "expo-router/react-navigation";
+import { ArrowDown, ArrowUp, FolderOpen, Plus, Sparkles, Trash2, Upload } from "lucide-react-native";
+import type { ContentAuthoringOperation, ContentMediaItemRecord, ContentRecord, MediaAssetRecord } from "@markos/shared-types";
+import { useAccount, useAppearance } from "../providers";
+import { Button, Card, Disclosure, Field, IconButton, ListGroup, ListRow, Notice, Row, Segmented, Sheet, TextAction, Txt } from "../ui";
+import { MediaPreview } from "./media-preview";
+import { MotionReel } from "./motion-reel";
+import { generationActive } from "./model";
+import { mediaKind, generateMissingImages } from "./workflow";
+import { errorMessage, LocalAppError } from "../errors";
+
+export function StudioMedia({
+  item,
+  editable,
+  busy,
+  edit,
+  save,
+  accept,
+  run
+}: {
+  item: ContentRecord;
+  editable: boolean;
+  busy: boolean;
+  edit: (id: string, fields: Partial<ContentMediaItemRecord>) => void;
+  save: () => Promise<ContentRecord>;
+  accept: (item: ContentRecord) => void;
+  run: (work: () => Promise<void>) => Promise<void>;
+}) {
+  const { api, scope, queryClient } = useAccount();
+  const focused = useIsFocused();
+  const { t, colors } = useAppearance();
+  const [libraryTarget, setLibraryTarget] = useState<string | null>(null);
+  const [sourceTarget, setSourceTarget] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState(item.mediaItems[0]?.id ?? null);
+  const selectedMedia = item.mediaItems.find((media) => media.id === selectedId) ?? item.mediaItems[0];
+  const assets = useQuery({ queryKey: [scope, "media"], queryFn: () => api.mediaAssets() });
+  const capabilities = useQuery({ queryKey: [scope, "video-capabilities"], queryFn: () => api.videoCapabilities() });
+  const jobResult = useQuery({
+    enabled: focused,
+    queryKey: [scope, "video-job", item.id],
+    queryFn: () => api.latestMediaGenerationJob(item.id),
+    refetchInterval: (query) => (generationActive(query.state.data?.status) ? 2500 : 6000)
+  });
+  const job = item.mediaItems.some((media) => media.id === jobResult.data?.contentMediaItemId && mediaKind(item, media) === "VIDEO") ? jobResult.data : null;
+  const active = generationActive(job?.status);
+  useEffect(() => {
+    if (job?.status === "COMPLETED") {
+      void queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+      void queryClient.invalidateQueries({ queryKey: [scope, "content", item.id] });
+    }
+  }, [job?.id, job?.status]);
+  const locked = !editable || busy || active;
+  const missingImages = item.mediaItems.filter((media) => mediaKind(item, media) === "IMAGE" && !media.mediaAssetId && !!media.visualDirection?.trim());
+  async function mutate(operations: ContentAuthoringOperation[]) {
+    await run(async () => {
+      const saved = await save();
+      accept(await api.mutateContent(item.id, { expectedRevision: saved.revision, operations }));
+    });
+  }
+  async function attach(target: string, asset: MediaAssetRecord) {
+    const saved = await save();
+    accept(await api.attachMediaToContent(item.id, { contentMediaItemId: target, mediaAssetId: asset.id, expectedRevision: saved.revision }));
+    setLibraryTarget(null);
+  }
+  async function upload(target: string) {
+    await run(async () => {
+      const video = mediaKind(item, item.mediaItems.find((media) => media.id === target)!) === "VIDEO";
+      const picked = await DocumentPicker.getDocumentAsync({ type: video ? ["video/mp4"] : ["image/jpeg"], copyToCacheDirectory: true });
+      if (picked.canceled) return;
+      const file = picked.assets[0]!;
+      const local = new File(file.uri);
+      if (!local.size || local.size > 8_000_000) throw new LocalAppError(t("Choose a file no larger than 8 MB.", "اختر ملفًا لا يتجاوز ٨ ميغابايت."));
+      const asset = await api.uploadMedia({
+        type: video ? "VIDEO" : "IMAGE",
+        filename: file.name,
+        mimeType: video ? "video/mp4" : "image/jpeg",
+        base64Data: await local.base64()
+      });
+      await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+      await attach(target, asset);
+    });
+  }
+  async function generate(target: string) {
+    await run(async () => {
+      const saved = await save();
+      const input = { contentMediaItemId: target, expectedRevision: saved.revision };
+      const video = mediaKind(saved, saved.mediaItems.find((media) => media.id === target)!) === "VIDEO";
+      if (video) {
+        const next = await api.generateContentVideo(item.id, input);
+        queryClient.setQueryData([scope, "video-job", item.id], next);
+      } else {
+        await api.generateContentImage(item.id, input);
+        await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+      }
+      accept(await api.contentItem(item.id));
+    });
+  }
+  return (
+    <View style={{ gap: 20 }}>
+      {assets.isError ? <Notice error>{errorMessage(assets.error, t)}</Notice> : null}
+      {item.contentType === "CAROUSEL" && missingImages.length > 1 ? (
+        <Button
+          icon={Sparkles}
+          disabled={locked}
+          label={t(`Generate ${missingImages.length} missing slide images`, `إنشاء صور الشرائح الناقصة (${missingImages.length})`)}
+          onPress={() =>
+            void run(async () => {
+              const saved = await save();
+              try {
+                await generateMissingImages(api, saved, accept);
+              } finally {
+                await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+              }
+            })
+          }
+        />
+      ) : null}
+      {item.contentType === "CAROUSEL" && item.mediaItems.length > 1 ? (
+        <>
+          <Txt variant="label">{t("Choose a slide to edit", "اختر شريحة لتعديلها")}</Txt>
+          <Row style={{ flexWrap: "wrap", gap: 8 }}>
+            {item.mediaItems.map((media, index) => (
+              <TextAction
+                key={media.id}
+                label={String(index + 1)}
+                selected={selectedMedia?.id === media.id}
+                accessibilityLabel={`${t("Slide", "الشريحة")} ${index + 1}`}
+                disabled={busy}
+                onPress={() => setSelectedId(media.id)}
+              />
+            ))}
+          </Row>
+        </>
+      ) : null}
+      {item.mediaItems
+        .filter((media) => media.id === selectedMedia?.id)
+        .map((media) => {
+          const index = item.mediaItems.findIndex((slot) => slot.id === media.id);
+          const kind = mediaKind(item, media);
+          const video = kind === "VIDEO";
+          const asset = assets.data?.find((asset) => asset.id === media.mediaAssetId);
+          return (
+            <Card key={media.id}>
+              <Row>
+                <Txt variant="heading" style={{ flex: 1 }}>
+                  {item.contentType === "CAROUSEL" ? `${t("Slide", "الشريحة")} ${index + 1}` : t("Media", "الوسائط")}
+                </Txt>
+              </Row>
+              {item.contentType === "STORY" && editable ? (
+                <>
+                  <Txt variant="label">{t("Story media", "وسائط القصة")}</Txt>
+                  <Segmented
+                    value={kind ?? ""}
+                    disabled={locked}
+                    options={[
+                      { value: "IMAGE", label: t("Image", "صورة") },
+                      { value: "VIDEO", label: t("Video", "فيديو") }
+                    ]}
+                    onChange={(nextKind) => {
+                      if (nextKind === kind || (nextKind !== "IMAGE" && nextKind !== "VIDEO")) return;
+                      const change = () =>
+                        void mutate([
+                          {
+                            type: "updateMediaItem",
+                            itemId: media.id,
+                            fields: {
+                              mediaKind: nextKind,
+                              mediaAssetId: null,
+                              aspectRatio: "VERTICAL",
+                              generationDurationSeconds: nextKind === "VIDEO" ? 8 : null
+                            }
+                          }
+                        ]);
+                      if (media.mediaAssetId)
+                        Alert.alert(
+                          t("Change Story media?", "تغيير وسائط القصة؟"),
+                          t(
+                            "The current attachment stays in your library. Review the new media before approval.",
+                            "سيبقى المرفق الحالي في مكتبتك. راجع الوسائط الجديدة قبل الاعتماد."
+                          ),
+                          [
+                            { text: t("Cancel", "إلغاء"), style: "cancel" },
+                            { text: t("Change", "تغيير"), onPress: change }
+                          ]
+                        );
+                      else change();
+                    }}
+                  />
+                  {!kind ? <Notice>{t("Choose an image or video to start this Story.", "اختر صورة أو فيديو لبدء هذه القصة.")}</Notice> : null}
+                </>
+              ) : null}
+              {asset ? (
+                <MediaPreview asset={asset} portrait={video} />
+              ) : (
+                <View style={{ backgroundColor: colors.surfaceMuted, padding: 32, borderRadius: 16 }}>
+                  <Txt muted>
+                    {media.mediaAssetId
+                      ? t("Loading attached media…", "جارٍ تحميل الوسائط المرفقة…")
+                      : t("Give MARKOS a visual direction, or choose your own media.", "حدّد التوجّه البصري لماركوس أو اختر وسائطك.")}
+                  </Txt>
+                </View>
+              )}
+              {editable ? (
+                <>
+                  <TextAction
+                    icon={Plus}
+                    label={asset ? t("Replace media", "استبدال الوسائط") : t("Add media", "إضافة وسائط")}
+                    disabled={locked || !kind}
+                    onPress={() => setSourceTarget(media.id)}
+                  />
+                  {item.contentType === "CAROUSEL" ? (
+                    <Disclosure title={t("Slide text", "نص الشريحة")} summary={media.title || t("Purpose, title and copy", "الهدف والعنوان والنص")}>
+                      <Field
+                        label={t("Slide purpose", "هدف الشريحة")}
+                        value={media.purpose ?? ""}
+                        maxLength={160}
+                        editable={!locked}
+                        onChangeText={(purpose) => edit(media.id, { purpose })}
+                      />
+                      <Field
+                        label={t("Slide title", "عنوان الشريحة")}
+                        value={media.title ?? ""}
+                        maxLength={160}
+                        editable={!locked}
+                        onChangeText={(title) => edit(media.id, { title })}
+                      />
+                      <Field
+                        label={t("Slide copy", "نص الشريحة")}
+                        value={media.body ?? ""}
+                        maxLength={800}
+                        multiline
+                        editable={!locked}
+                        onChangeText={(body) => edit(media.id, { body })}
+                      />
+                    </Disclosure>
+                  ) : null}
+                  <Disclosure
+                    title={video ? t("Create a video", "إنشاء فيديو") : t("Image settings", "إعدادات الصورة")}
+                    summary={
+                      video
+                        ? t("Motion Reel and generation settings", "الريل المتحرك وإعدادات الإنشاء")
+                        : t("Visual direction and image size", "التوجّه البصري وحجم الصورة")
+                    }
+                    defaultOpen={!media.mediaAssetId}
+                  >
+                    {!video || capabilities.data?.generatedFootage ? (
+                      <>
+                        <Field
+                          label={
+                            video ? t("Visual direction and on-screen wording", "التوجّه البصري والنص على الشاشة") : t("Visual direction", "التوجّه البصري")
+                          }
+                          value={media.visualDirection ?? ""}
+                          maxLength={2000}
+                          multiline
+                          style={{ minHeight: 120 }}
+                          editable={!locked}
+                          onChangeText={(visualDirection) => edit(media.id, { visualDirection })}
+                          hint={
+                            video
+                              ? t(
+                                  "Include the exact English or Arabic wording in quotes. Review the generated Reel before marking ready.",
+                                  "ضع النص الإنجليزي أو العربي المطلوب بين علامتَي اقتباس. راجع الريل قبل اعتماده."
+                                )
+                              : undefined
+                          }
+                        />
+                      </>
+                    ) : null}
+                    {video ? (
+                      <>
+                        <Txt variant="label">{t("Duration", "المدة")}</Txt>
+                        <Segmented
+                          value={String(media.generationDurationSeconds ?? 8)}
+                          disabled={locked}
+                          options={[4, 8, 12].map((seconds) => ({ value: String(seconds), label: `${seconds} ${t("sec", "ث")}` }))}
+                          onChange={(seconds) => edit(media.id, { generationDurationSeconds: Number(seconds), aspectRatio: "VERTICAL" })}
+                        />
+                      </>
+                    ) : (
+                      <Segmented
+                        value={media.aspectRatio ?? "PORTRAIT"}
+                        disabled={locked}
+                        options={[
+                          { value: "SQUARE", label: "1:1" },
+                          { value: "PORTRAIT", label: "4:5" },
+                          { value: "VERTICAL", label: "9:16" }
+                        ]}
+                        onChange={(aspectRatio) => edit(media.id, { aspectRatio })}
+                      />
+                    )}
+                    {video ? (
+                      <MotionReel
+                        key={media.id}
+                        contentId={item.id}
+                        mediaId={media.id}
+                        disabled={locked}
+                        duration={media.generationDurationSeconds ?? 8}
+                        assets={assets.data ?? []}
+                        generate={async (motion) => {
+                          await run(async () => {
+                            const saved = await save();
+                            const next = await api.generateContentVideo(saved.id, { contentMediaItemId: media.id, expectedRevision: saved.revision, motion });
+                            queryClient.setQueryData([scope, "video-job", item.id], next);
+                            accept(await api.contentItem(saved.id));
+                          });
+                        }}
+                      />
+                    ) : null}
+                    {!video || capabilities.data?.generatedFootage ? (
+                      <Button
+                        icon={Sparkles}
+                        secondary={!!asset}
+                        label={
+                          video
+                            ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي")
+                            : asset
+                              ? t("Generate a replacement", "إنشاء بديل")
+                              : t("Generate image", "إنشاء صورة")
+                        }
+                        disabled={locked || !kind || (media.visualDirection?.trim().length ?? 0) < 3}
+                        onPress={() => {
+                          void generate(media.id);
+                        }}
+                      />
+                    ) : null}
+                    {(!video || capabilities.data?.generatedFootage) && !media.visualDirection?.trim() && kind ? (
+                      <Txt variant="meta" muted>
+                        {t(
+                          "Add visual direction above, or ask the Assistant to prepare it, then generate your media.",
+                          "أضف التوجّه البصري أعلاه أو اطلب من المساعد إعداده، ثم أنشئ الوسائط."
+                        )}
+                      </Txt>
+                    ) : null}
+                    {video && capabilities.data?.generatedFootage === false ? (
+                      <Notice>
+                        {t(
+                          "Use Motion Reel with your artwork, or upload a video. AI footage is currently unavailable.",
+                          "استخدم الريل المتحرك مع تصميمك أو ارفع فيديو. توليد المشاهد بالذكاء الاصطناعي غير متاح حاليًا."
+                        )}
+                      </Notice>
+                    ) : null}
+                    {video && capabilities.isError ? (
+                      <Notice error>
+                        {t(
+                          "Could not check AI footage availability. Motion Reel and upload are still available.",
+                          "تعذّر التحقق من توفر توليد المشاهد. يمكنك استخدام الريل المتحرك أو رفع فيديو."
+                        )}
+                      </Notice>
+                    ) : null}
+                  </Disclosure>
+                  <Txt variant="meta" muted>
+                    {video ? t("MP4 · up to 8 MB", "MP4 · حتى ٨ ميغابايت") : t("JPEG · up to 8 MB", "JPEG · حتى ٨ ميغابايت")}
+                  </Txt>
+                  {media.mediaAssetId || item.contentType === "CAROUSEL" ? (
+                    <Disclosure title={t("Media options", "خيارات الوسائط")}>
+                      {item.contentType === "CAROUSEL" ? (
+                        <Row>
+                          <IconButton
+                            icon={ArrowUp}
+                            label={t("Move slide earlier", "تقديم الشريحة")}
+                            disabled={locked || index === 0}
+                            onPress={() => {
+                              const ids = item.mediaItems.map((slot) => slot.id);
+                              [ids[index - 1], ids[index]] = [ids[index]!, ids[index - 1]!];
+                              void mutate([{ type: "reorderMediaItems", orderedIds: ids }]);
+                            }}
+                          />
+                          <IconButton
+                            icon={ArrowDown}
+                            label={t("Move slide later", "تأخير الشريحة")}
+                            disabled={locked || index === item.mediaItems.length - 1}
+                            onPress={() => {
+                              const ids = item.mediaItems.map((slot) => slot.id);
+                              [ids[index], ids[index + 1]] = [ids[index + 1]!, ids[index]!];
+                              void mutate([{ type: "reorderMediaItems", orderedIds: ids }]);
+                            }}
+                          />
+                        </Row>
+                      ) : null}
+                      {media.mediaAssetId ? (
+                        <TextAction
+                          icon={Trash2}
+                          disabled={locked}
+                          label={t("Detach media", "فصل الوسائط")}
+                          onPress={() => void mutate([{ type: "updateMediaItem", itemId: media.id, fields: { mediaAssetId: null } }])}
+                        />
+                      ) : null}
+                      {item.contentType === "CAROUSEL" ? (
+                        <TextAction
+                          icon={Trash2}
+                          disabled={locked || item.mediaItems.length <= 1}
+                          label={t("Remove slide", "إزالة الشريحة")}
+                          onPress={() =>
+                            Alert.alert(t("Remove this slide?", "إزالة هذه الشريحة؟"), t("Its media stays in your library.", "ستبقى وسائطها في مكتبتك."), [
+                              { text: t("Keep", "إبقاء"), style: "cancel" },
+                              {
+                                text: t("Remove", "إزالة"),
+                                style: "destructive",
+                                onPress: () => {
+                                  void mutate([{ type: "removeMediaItem", itemId: media.id }]);
+                                }
+                              }
+                            ])
+                          }
+                        />
+                      ) : null}
+                    </Disclosure>
+                  ) : null}
+                </>
+              ) : null}
+            </Card>
+          );
+        })}
+      {editable && item.contentType === "CAROUSEL" && item.mediaItems.length < 10 ? (
+        <TextAction
+          icon={Plus}
+          label={item.contentType === "CAROUSEL" ? t("Add slide", "إضافة شريحة") : t("Add media", "إضافة وسائط")}
+          disabled={locked}
+          onPress={() => {
+            void mutate([
+              {
+                type: "addMediaItem",
+                fields: { mediaKind: "IMAGE", aspectRatio: "PORTRAIT", generationDurationSeconds: null }
+              }
+            ]);
+          }}
+        />
+      ) : null}
+      {job ? (
+        <Card tone={job.status === "FAILED" ? "warning" : "tint"}>
+          <Txt variant="heading">
+            {active
+              ? t("Generating your video", "جارٍ إنشاء الفيديو")
+              : job.status === "COMPLETED"
+                ? t("Video generation complete", "اكتمل إنشاء الفيديو")
+                : job.status === "CANCELLED"
+                  ? t("Generation cancelled", "تم إلغاء الإنشاء")
+                  : t("Video generation needs attention", "يتطلب إنشاء الفيديو انتباهك")}
+          </Txt>
+          {active ? (
+            <>
+              <Txt>
+                {t("You can leave this screen. We’ll keep the result with this draft.", "يمكنك مغادرة هذه الشاشة. سنحفظ النتيجة مع هذه المسودة.")}{" "}
+                {job.progress}%
+              </Txt>
+              <Button
+                secondary
+                disabled={busy}
+                label={t("Cancel generation", "إلغاء الإنشاء")}
+                onPress={() => {
+                  void run(async () => {
+                    queryClient.setQueryData([scope, "video-job", item.id], await api.cancelMediaGeneration(job.id));
+                  });
+                }}
+              />
+            </>
+          ) : null}
+          {job.status === "FAILED" ? (
+            <>
+              <Txt>{t("Review the direction and try again, or upload your own video.", "راجع التوجّه وحاول مجددًا أو ارفع فيديو من جهازك.")}</Txt>
+              {job.errorCode === "AI_VIDEO_START_RESULT_UNKNOWN" ? (
+                <Notice>
+                  {t(
+                    "The provider may have started the previous video. A new attempt can incur another charge.",
+                    "ربما بدأ المزوّد إنشاء الفيديو السابق. قد تترتّب تكلفة إضافية على محاولة جديدة."
+                  )}
+                </Notice>
+              ) : null}
+              <Button
+                secondary
+                disabled={busy || !editable}
+                label={t("Retry video", "إعادة محاولة الفيديو")}
+                onPress={() => {
+                  void run(async () => {
+                    const saved = await save();
+                    queryClient.setQueryData([scope, "video-job", item.id], await api.retryMediaGeneration(job.id, saved.revision));
+                    accept(await api.contentItem(item.id));
+                  });
+                }}
+              />
+            </>
+          ) : null}
+          {job.status === "COMPLETED" && !item.mediaItems.some((media) => media.mediaAssetId === job.outputMediaAssetId) ? (
+            <Txt>
+              {t("The draft changed during generation. Your video is available in the library.", "تغيّرت المسودة أثناء الإنشاء. الفيديو متاح في المكتبة.")}
+            </Txt>
+          ) : null}
+        </Card>
+      ) : null}
+      {jobResult.isError ? <Notice error>{errorMessage(jobResult.error, t)}</Notice> : null}
+      <Sheet title={t("Add media", "إضافة وسائط")} visible={!!sourceTarget} onClose={() => setSourceTarget(null)}>
+        <ListGroup>
+          <ListRow
+            icon={Upload}
+            label={t("Upload", "رفع")}
+            detail={t("Choose a file from your device", "اختر ملفًا من جهازك")}
+            disabled={locked}
+            onPress={() => {
+              const target = sourceTarget;
+              setSourceTarget(null);
+              if (target) void upload(target);
+            }}
+          />
+          <ListRow
+            icon={FolderOpen}
+            last
+            label={t("Library", "المكتبة")}
+            detail={t("Use saved MARKOS media", "استخدم وسائط ماركوس المحفوظة")}
+            disabled={locked}
+            onPress={() => {
+              setLibraryTarget(sourceTarget);
+              setSourceTarget(null);
+            }}
+          />
+        </ListGroup>
+      </Sheet>
+      <Sheet title={t("Choose from your library", "اختر من مكتبتك")} visible={!!libraryTarget} onClose={() => setLibraryTarget(null)}>
+        <ListGroup>
+          {(assets.data ?? [])
+            .filter(
+              (asset) =>
+                asset.mimeType ===
+                (item.mediaItems.find((slot) => slot.id === libraryTarget)?.mediaKind === "VIDEO" || item.contentType === "REEL" ? "video/mp4" : "image/jpeg")
+            )
+            .map((asset) => (
+              <ListRow
+                key={asset.id}
+                last
+                disabled={locked}
+                label={asset.filename}
+                onPress={() => {
+                  if (libraryTarget) void run(() => attach(libraryTarget, asset));
+                }}
+              />
+            ))}
+        </ListGroup>
+        {!(assets.data ?? []).some(
+          (asset) =>
+            asset.mimeType ===
+            (item.mediaItems.find((slot) => slot.id === libraryTarget)?.mediaKind === "VIDEO" || item.contentType === "REEL" ? "video/mp4" : "image/jpeg")
+        ) ? (
+          <Txt muted>{t("No matching media yet.", "لا توجد وسائط مناسبة بعد.")}</Txt>
+        ) : null}
+      </Sheet>
+    </View>
+  );
+}

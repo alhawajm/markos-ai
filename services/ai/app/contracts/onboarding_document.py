@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -42,16 +42,22 @@ class CompanyExtraction(StrictContract):
     industry: str | None = Field(default=None, max_length=120)
     size: str | None = Field(default=None, max_length=80)
     location: str | None = Field(default=None, max_length=120)
-    socials: list[str] = Field(default_factory=list, max_length=20)
+    socials: list[Annotated[str, Field(min_length=1, max_length=160)]] = Field(
+        default_factory=list, max_length=20
+    )
     website: str | None = Field(default=None, max_length=500)
-    languages: list[str] = Field(default_factory=list, max_length=30)
+    languages: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
 
 
 class StoryExtraction(StrictContract):
     mission: str | None = Field(default=None, max_length=2_000)
     origin: str | None = Field(default=None, max_length=2_000)
     problem_solved: str | None = Field(default=None, alias="problemSolved", max_length=1_000)
-    values: list[str] = Field(default_factory=list, max_length=30)
+    values: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
     usp: str | None = Field(default=None, max_length=1_000)
     vision: str | None = Field(default=None, max_length=1_000)
 
@@ -60,10 +66,18 @@ class AudienceExtraction(StrictContract):
     age_range: str | None = Field(default=None, alias="ageRange", max_length=80)
     demographics: str | None = Field(default=None, max_length=1_000)
     gender_breakdown: str | None = Field(default=None, alias="genderBreakdown", max_length=120)
-    interests: list[str] = Field(default_factory=list, max_length=30)
-    locations: list[str] = Field(default_factory=list, max_length=20)
-    motivations: list[str] = Field(default_factory=list, max_length=20)
-    pain_points: list[str] = Field(default_factory=list, alias="painPoints", max_length=30)
+    interests: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
+    locations: list[Annotated[str, Field(min_length=1, max_length=120)]] = Field(
+        default_factory=list, max_length=20
+    )
+    motivations: list[Annotated[str, Field(min_length=1, max_length=120)]] = Field(
+        default_factory=list, max_length=20
+    )
+    pain_points: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, alias="painPoints", max_length=30
+    )
 
 
 class CompetitorCandidate(StrictContract):
@@ -83,16 +97,26 @@ class CompetitorsExtraction(StrictContract):
 
 
 class BrandExtraction(StrictContract):
-    aesthetic_words: list[str] = Field(default_factory=list, alias="aestheticWords", max_length=20)
-    colors: list[str] = Field(default_factory=list, max_length=7)
-    fonts: list[str] = Field(default_factory=list, max_length=12)
-    tone_words: list[str] = Field(default_factory=list, alias="toneWords", max_length=4)
+    aesthetic_words: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, alias="aestheticWords", max_length=20
+    )
+    colors: list[Annotated[str, Field(pattern=r"^#[0-9A-F]{6}$")]] = Field(
+        default_factory=list, max_length=7
+    )
+    fonts: list[Annotated[str, Field(min_length=1, max_length=120)]] = Field(
+        default_factory=list, max_length=12
+    )
+    tone_words: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, alias="toneWords", max_length=4
+    )
     voice_notes: str | None = Field(default=None, alias="voiceNotes", max_length=1_000)
 
 
 class ObjectivesExtraction(StrictContract):
     current_priority: str | None = Field(default=None, alias="currentPriority", max_length=1_000)
-    goals: list[str] = Field(default_factory=list, max_length=30)
+    goals: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
     budget_range: str | None = Field(default=None, alias="budgetRange", max_length=120)
     instagram_experience: str | None = Field(
         default=None, alias="instagramExperience", max_length=120
@@ -112,7 +136,9 @@ class OnboardingDocumentProfile(StrictContract):
 
 class OnboardingDocumentEvidence(StrictContract):
     field: str = Field(min_length=1, max_length=120)
-    source_files: list[str] = Field(alias="sourceFiles", min_length=1, max_length=5)
+    source_files: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(
+        alias="sourceFiles", min_length=1, max_length=5
+    )
     confidence: Confidence
     basis: EvidenceBasis
 
@@ -122,7 +148,9 @@ class OnboardingDocumentIssue(StrictContract):
     severity: IssueSeverity
     message: str = Field(min_length=1, max_length=500)
     field: str | None = Field(default=None, max_length=120)
-    source_files: list[str] = Field(default_factory=list, alias="sourceFiles", max_length=5)
+    source_files: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(
+        default_factory=list, alias="sourceFiles", max_length=5
+    )
 
 
 class OnboardingDocumentExtraction(StrictContract):

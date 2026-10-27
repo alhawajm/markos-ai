@@ -1,0 +1,13 @@
+diff --git a/index.js b/index.js
+--- a/index.js
++++ b/index.js
+@@ -88,7 +88,7 @@
+ 		// Try the built in decoder first
+ 		return decodeURIComponent(encodedURI);
+ 	} catch (err) {
+-		// Fallback to a more advanced decoder
+-		return customDecodeURIComponent(encodedURI);
++		// Preserve malformed input rather than recursively splitting hostile encodings.
++		return encodedURI;
+ 	}
+ };

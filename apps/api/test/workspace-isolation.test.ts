@@ -9,6 +9,7 @@ import { buildApp } from "../src/http/app";
 import { env } from "../src/config/env";
 import { encryptCredential } from "../src/security/credential-encryption";
 import { createContentAggregate } from "../src/content/content-aggregate";
+import { withWorkspaceDbContext } from "../src/db/workspace-transaction";
 
 interface WorkspaceFixture {
   userId: string;
@@ -28,6 +29,63 @@ interface IsolationCase {
 }
 
 const isolationCases: IsolationCase[] = [
+  {
+    model: "CampaignGenerationJob",
+    create: (f) =>
+      prisma.campaignGenerationJob.create({
+        data: { workspaceId: f.workspaceId, userId: f.userId, requestId: randomUUID(), requestHash: "fixture", objective: "Isolated brief" },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.campaignGenerationJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "WorkspaceInvitation",
+    create: (f) =>
+      prisma.workspaceInvitation.create({
+        data: {
+          workspaceId: f.workspaceId,
+          createdBy: f.userId,
+          email: "invited@markos.test",
+          role: "EDITOR",
+          tokenHash: randomUUID(),
+          expiresAt: new Date(Date.now() + 60000)
+        },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.workspaceInvitation.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "NotificationPreference",
+    create: (f) => prisma.notificationPreference.create({ data: { workspaceId: f.workspaceId, userId: f.userId }, select: { id: true, workspaceId: true } }),
+    list: (workspaceId) => prisma.notificationPreference.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "PushDelivery",
+    create: (f) =>
+      prisma.pushDelivery.create({
+        data: { workspaceId: f.workspaceId, userId: f.userId, notificationId: randomUUID(), deviceId: randomUUID() },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.pushDelivery.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "AnalyticsReportDelivery",
+    create: (f) =>
+      prisma.analyticsReportDelivery.create({
+        data: { workspaceId: f.workspaceId, userId: f.userId, month: "2026-10" },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.analyticsReportDelivery.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
+    model: "WorkspaceErasureJob",
+    create: (f) =>
+      prisma.workspaceErasureJob.create({
+        data: { workspaceId: f.workspaceId, userId: f.userId, status: "COMPLETE" },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.workspaceErasureJob.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
   {
     model: "WorkspaceMember",
     create: async (fixture) =>
@@ -596,6 +654,12 @@ describe("workspace-owned data isolation", () => {
     expect(secondRows).toEqual(expect.arrayContaining([expect.objectContaining({ id: secondRow.id, workspaceId: second.workspaceId })]));
     expect(secondRows).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: firstRow.id })]));
     expect(secondRows.every((row) => row.workspaceId === second.workspaceId)).toBe(true);
+
+    const table = Prisma.dmmf.datamodel.models.find((model) => model.name === entry.model)?.dbName;
+    if (!table || !/^[a-z_]+$/.test(table)) throw new Error("Isolation case needs a validated mapped table");
+    const visible = await withWorkspaceDbContext(first.workspaceId, (tx) => tx.$queryRawUnsafe<IsolatedRow[]>(`SELECT id, "workspaceId" FROM "${table}"`));
+    expect(visible).toEqual(expect.arrayContaining([expect.objectContaining({ id: firstRow.id })]));
+    expect(visible).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: secondRow.id })]));
 
     await app.close();
   });

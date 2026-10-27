@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { sanitizeTelemetryEvent } from "@markos/shared-types";
 import { env } from "../config/env";
 
 let initialized = false;
@@ -12,7 +13,10 @@ export function initObservability(): void {
     dsn: env.SENTRY_DSN,
     environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
     release: env.SENTRY_RELEASE,
-    tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE
+    tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE,
+    sendDefaultPii: false,
+    beforeSend: sanitizeTelemetryEvent,
+    beforeSendTransaction: () => null
   });
   initialized = true;
 }

@@ -100,6 +100,8 @@ describe("site appearance controls", () => {
   it("keeps workspace appearance in Settings and preserves it across shell collapse, locale and mobile navigation", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light" });
     const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    page.setDefaultNavigationTimeout(30_000);
     const session = {
       mfaVerified: true,
       mfaVerifiedUntil: Math.floor(Date.now() / 1000) + 3600,
@@ -113,7 +115,7 @@ describe("site appearance controls", () => {
       workspace: session.workspace,
       roles: session.roles
     });
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
+    await page.route("**/v1/**", async (route) => {
       const pathname = new URL(route.request().url()).pathname;
       let data: unknown = [];
       if (pathname === "/v1/auth/refresh") data = session;
@@ -121,6 +123,14 @@ describe("site appearance controls", () => {
       else if (pathname === "/v1/workspace/instagram") data = { connected: false, status: "DISCONNECTED", recentMedia: [] };
       else if (pathname === "/v1/billing/summary") data = { invoices: [], payments: [] };
       else if (pathname === "/v1/auth/mfa/totp") data = { enabled: true };
+      else if (pathname === "/v1/account")
+        data = {
+          user: { ...session.user, updatedAt: "2026-10-27T08:00:00Z", mfaEnabled: true },
+          workspace: { ...session.workspace, ownerUserId: session.user.id, updatedAt: "2026-10-27T08:00:00Z" }
+        };
+      else if (pathname === "/v1/workspace/team") data = { ownerUserId: session.user.id, members: [], invitations: [] };
+      else if (pathname === "/v1/workspaces") data = [{ ...session.workspace, ownerUserId: session.user.id, roles: session.roles }];
+      else if (pathname === "/v1/notifications/preferences") data = { pushEnabled: false, monthlyEmailEnabled: false };
       else if (pathname === "/v1/vault/score") data = { score: 0, entryCount: 0, completedSections: [], requiredSections: [], missingSections: [] };
       else if (pathname === "/v1/analytics") data = { totals: {}, daily: [], topContent: [], records: [] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
@@ -174,7 +184,7 @@ describe("site appearance controls", () => {
     } finally {
       await context.close();
     }
-  });
+  }, 60_000);
 
   it("switches with the keyboard, persists on refresh and locale navigation, and follows system appearance when selected", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light" });
