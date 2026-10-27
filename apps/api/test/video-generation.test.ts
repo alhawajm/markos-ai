@@ -46,14 +46,12 @@ describe("durable video generation", () => {
     provider.status.mockReset();
     provider.start.mockReset();
     provider.motion.mockReset().mockResolvedValue(Buffer.from("fixture motion video"));
-    provider.prepare
-      .mockReset()
-      .mockResolvedValue({
-        result: { visual_prompt: "Pink flowers blooming, no lettering", text_cues: [{ text: "Save the dates\nاحفظوا الموعد", start: 0.5, end: 1 }] },
-        model: "planner-test",
-        tokens_in: 120,
-        tokens_out: 70
-      });
+    provider.prepare.mockReset().mockResolvedValue({
+      result: { visual_prompt: "Pink flowers blooming, no lettering", text_cues: [{ text: "Save the dates\nاحفظوا الموعد", start: 0.5, end: 1 }] },
+      model: "planner-test",
+      tokens_in: 120,
+      tokens_out: 70
+    });
   });
 
   it("renders a Motion Reel without AI calls and records it as a regular video", async () => {
