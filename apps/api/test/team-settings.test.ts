@@ -130,19 +130,41 @@ describe("workspace team and settings boundaries", () => {
     expect(response.json().error.code).toBe("MFA_SETUP_REQUIRED");
   });
   it("rotates the browser workspace cookie and revokes only the previous user's refresh grant", async () => {
-    const owner = await identity(), member = await identity();
+    const owner = await identity(),
+      member = await identity();
     await prisma.workspaceMember.create({ data: { workspaceId: owner.workspace.id, userId: member.user.id, role: "VIEWER" } });
-    const response = await app.inject({ method: "POST", url: "/v1/auth/workspace", headers: { ...member.headers, cookie: `markos_refresh=${member.refreshToken}` }, payload: { workspaceId: owner.workspace.id } });
-    expect(response.statusCode).toBe(200); expect(response.json().data.workspace.id).toBe(owner.workspace.id);
-    expect(response.json().data.tokens.refreshToken).toBeUndefined(); expect(response.headers["set-cookie"]).toContain("HttpOnly");
-    const previous = await app.inject({ method: "POST", url: "/v1/auth/native/refresh", headers: { "x-markos-session": "native" }, payload: { refreshToken: member.refreshToken } });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/workspace",
+      headers: { ...member.headers, cookie: `markos_refresh=${member.refreshToken}` },
+      payload: { workspaceId: owner.workspace.id }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.workspace.id).toBe(owner.workspace.id);
+    expect(response.json().data.tokens.refreshToken).toBeUndefined();
+    expect(response.headers["set-cookie"]).toContain("HttpOnly");
+    const previous = await app.inject({
+      method: "POST",
+      url: "/v1/auth/native/refresh",
+      headers: { "x-markos-session": "native" },
+      payload: { refreshToken: member.refreshToken }
+    });
     expect(previous.statusCode).toBe(401);
-    const ownerStillActive = await app.inject({ method: "POST", url: "/v1/auth/native/refresh", headers: { "x-markos-session": "native" }, payload: { refreshToken: owner.refreshToken } });
+    const ownerStillActive = await app.inject({
+      method: "POST",
+      url: "/v1/auth/native/refresh",
+      headers: { "x-markos-session": "native" },
+      payload: { refreshToken: owner.refreshToken }
+    });
     expect(ownerStillActive.statusCode).toBe(200);
   });
   it("accepts concurrent invitation attempts only once", async () => {
-    const owner = await identity(), member = await identity(); const invitation = await invite(owner, member.user.email);
-    const attempts = await Promise.all([1, 2].map(() => app.inject({ method: "POST", url: "/v1/workspaces/accept-invitation", headers: member.headers, payload: { code: invitation.code } })));
+    const owner = await identity(),
+      member = await identity();
+    const invitation = await invite(owner, member.user.email);
+    const attempts = await Promise.all(
+      [1, 2].map(() => app.inject({ method: "POST", url: "/v1/workspaces/accept-invitation", headers: member.headers, payload: { code: invitation.code } }))
+    );
     expect(attempts.map((r) => r.statusCode).sort()).toEqual([200, 400]);
     expect(await prisma.workspaceMember.count({ where: { userId: member.user.id, workspaceId: owner.workspace.id, deletedAt: null } })).toBe(1);
   });

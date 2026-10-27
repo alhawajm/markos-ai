@@ -6,14 +6,12 @@ import { scopedFetchFor } from "../src/auth/scoped-fetch";
 const english = (en: string) => en;
 describe("native request failure messages", () => {
   it("preserves the missing-media approval error through the native transport", async () => {
-    const network = vi
-      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: { code: "CONTENT_MEDIA_REQUIRED", message: "Attach compatible media" } }), {
-          status: 409,
-          headers: { "content-type": "application/json; charset=utf-8" }
-        })
-      );
+    const network = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>().mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "CONTENT_MEDIA_REQUIRED", message: "Attach compatible media" } }), {
+        status: 409,
+        headers: { "content-type": "application/json; charset=utf-8" }
+      })
+    );
     const api = new MarkosApiClient({
       baseUrl: "https://example.test",
       fetch: scopedFetchFor({ assertEpoch: () => {}, getEpoch: () => 1, subscribe: () => () => {} }, 1, network)

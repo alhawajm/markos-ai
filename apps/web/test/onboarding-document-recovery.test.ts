@@ -101,7 +101,9 @@ describe("persisted onboarding analysis polling", () => {
     expect(read).toHaveBeenCalledOnce();
 
     let resolve!: (value: OnboardingDocumentAnalysisRecord) => void;
-    const pending = new Promise<OnboardingDocumentAnalysisRecord>((done) => { resolve = done; });
+    const pending = new Promise<OnboardingDocumentAnalysisRecord>((done) => {
+      resolve = done;
+    });
     const onAnalysis = vi.fn();
     const stopPending = pollOnboardingDocumentAnalysis({ analysisId: "analysis-1", read: () => pending, onAnalysis, onError: vi.fn() });
     stopPending();

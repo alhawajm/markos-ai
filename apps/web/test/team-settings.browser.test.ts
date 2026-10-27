@@ -75,7 +75,10 @@ async function noOverflow(page: Page) {
 }
 describe("team and account settings", () => {
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
+    browser = await chromium.launch({
+      headless: true,
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {})
+    });
     mkdirSync("evidence", { recursive: true });
   });
   afterAll(async () => {

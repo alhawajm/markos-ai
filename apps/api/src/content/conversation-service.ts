@@ -419,11 +419,17 @@ export async function processConversationRuns(workspaceId?: string) {
       })
     ]);
     const campaignPlan = campaign?.content as Record<string, unknown> | undefined;
-    const campaignContext = campaign ? {
-      id: campaign.id, title: campaign.title, objective: campaign.objective, version: campaign.version,
-      description: campaignPlan?.description, referenceSummary: campaignPlan?.referenceSummary,
-      referenceFiles: campaignPlan?.referenceFiles
-    } : null;
+    const campaignContext = campaign
+      ? {
+          id: campaign.id,
+          title: campaign.title,
+          objective: campaign.objective,
+          version: campaign.version,
+          description: campaignPlan?.description,
+          referenceSummary: campaignPlan?.referenceSummary,
+          referenceFiles: campaignPlan?.referenceFiles
+        }
+      : null;
     const context = { profile, offerings, campaign: campaignContext, tone: tone.lock, brand: tone.context, offeringsMayBePartial: offerings.length === 20 };
     const generated = await respondToConversation({
       workspace_id: candidate.workspaceId,

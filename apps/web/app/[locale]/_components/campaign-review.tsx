@@ -579,12 +579,39 @@ function Overview({
         ))}
       </div>
       <div className={styles.rationale}>
-        {(campaign.content.description || campaign.content.referenceFiles?.length || campaign.content.referenceSummary) && <details>
-          <summary>{label(locale, "referenceContext")}</summary>
-          {campaign.content.description && <section><h3>{label(locale, "description")}</h3><p className="whitespace-pre-wrap" dir="auto">{campaign.content.description}</p></section>}
-          {!!campaign.content.referenceFiles?.length && <section><h3>{label(locale, "sourceFiles")}</h3><ul>{campaign.content.referenceFiles.map((file, index) => <li key={index} dir="auto">{file.filename}</li>)}</ul></section>}
-          {campaign.content.referenceSummary && <section><h3>{label(locale, "referenceSummary")}</h3><p className="whitespace-pre-wrap" dir="auto">{campaign.content.referenceSummary}</p></section>}
-        </details>}
+        {(campaign.content.description || campaign.content.referenceFiles?.length || campaign.content.referenceSummary) && (
+          <details>
+            <summary>{label(locale, "referenceContext")}</summary>
+            {campaign.content.description && (
+              <section>
+                <h3>{label(locale, "description")}</h3>
+                <p className="whitespace-pre-wrap" dir="auto">
+                  {campaign.content.description}
+                </p>
+              </section>
+            )}
+            {!!campaign.content.referenceFiles?.length && (
+              <section>
+                <h3>{label(locale, "sourceFiles")}</h3>
+                <ul>
+                  {campaign.content.referenceFiles.map((file, index) => (
+                    <li key={index} dir="auto">
+                      {file.filename}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {campaign.content.referenceSummary && (
+              <section>
+                <h3>{label(locale, "referenceSummary")}</h3>
+                <p className="whitespace-pre-wrap" dir="auto">
+                  {campaign.content.referenceSummary}
+                </p>
+              </section>
+            )}
+          </details>
+        )}
         <details>
           <summary>{label(locale, "pillars")}</summary>
           {campaign.content.pillars.map((pillar, index) => (

@@ -825,7 +825,15 @@ export function OnboardingPanel({
       window.removeEventListener("online", resumePolling);
       window.removeEventListener("focus", resumePolling);
     };
-  }, [client, copy.businessDocuments.failed, editMode, onboardingDocumentAnalysis?.id, onboardingDocumentAnalysis?.status, session, syncOnboardingDocumentAnalysis]);
+  }, [
+    client,
+    copy.businessDocuments.failed,
+    editMode,
+    onboardingDocumentAnalysis?.id,
+    onboardingDocumentAnalysis?.status,
+    session,
+    syncOnboardingDocumentAnalysis
+  ]);
 
   const activeStep = steps[step - 1]!;
   const validationIssue = validateOnboardingStep(step, draft);

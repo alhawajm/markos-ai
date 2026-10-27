@@ -9,7 +9,7 @@ describe("campaign reference selection", () => {
     expect(addCampaignReferenceFiles([], files)).toHaveLength(5);
   });
   it("keeps the previous selection when a sixth or unsupported file is chosen", () => {
-    const files = Array.from({length: 5}, (_, i) => file(`${i}.pdf`));
+    const files = Array.from({ length: 5 }, (_, i) => file(`${i}.pdf`));
     expect(() => addCampaignReferenceFiles(files, [file("sixth.pdf")])).toThrow("filesTooMany");
     expect(files).toHaveLength(5);
     expect(() => addCampaignReferenceFiles([], [file("script.exe")])).toThrow("filesUnsupported");
