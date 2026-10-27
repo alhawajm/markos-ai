@@ -22,3 +22,7 @@ For controlled acceptance, choose the owner's review account, inspect diagnostic
 - Compare displayed totals, daily buckets and media metrics to Instagram for identical windows.
 - Record a reviewed live publish per supported format separately from analytics.
 - Verify reconnect, expiry and partial-provider failures on the intended review account.
+
+## Application summary after rollout
+
+The main release's application summary returned live account totals, daily buckets and top content after the new worker synchronized. The result remains PARTIAL for three media items. Controlled provider requests returned error code 100/subcode 2108006 with the pre-professional-conversion restriction. Account insights and newer media remain available. This is a provider data limit; do not fill those older metrics with zeros or claim a complete sync. No customer metric values, tokens or media IDs were recorded here.

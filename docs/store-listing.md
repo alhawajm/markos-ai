@@ -64,3 +64,9 @@ Firebase and the dedicated Android FCM V1 service account are configured. Androi
 iPhone 0.5.0/build 7 is VALID / IN_BETA_TESTING in the existing owner-only internal group. Store release, screenshots and physical-device acceptance remain separate gates. The owner elected to test the phone later.
 
 Capture screenshots from the new native binaries using a dedicated business fixture: campaign brief with five references; Post/Carousel/Reel editor; full preview; calendar; Insights; Arabic business profile. Never use customer documents, live credentials or another app's screenshots. Required screenshot sizes must be checked in each store's current upload form.
+
+## Prepared Play publisher identity
+
+The Android Publisher API is enabled in MARKOS's dedicated Google project. The separate identity is `markos-play-publisher@markos-mobile-35017b4c.iam.gserviceaccount.com`. No publisher private key or Google project IAM role was created/granted. The FCM identity remains separate.
+
+The owner must confirm/create the MARKOS app entry and grant this identity app-specific Play Console access. Limit the invitation to MARKOS and use the current [Expo service-account guide](https://expo.fyi/creating-google-service-account); account-wide Admin, finance and subscription access are not needed. Once granted, provision the submission key directly into EAS and submit the exact signed build 8 as an internal draft. The current [Expo Android submission guide](https://docs.expo.dev/submit/android/) supports first releases through EAS once the app entry and credential are configured; do not require a manual first upload based on older instructions.

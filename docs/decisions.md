@@ -994,11 +994,11 @@ Final plan and completion receipt commit atomically. Creating ideas never approv
 schedules or publishes their content. The final partial week still contains every requested
 day and exactly the selected number of ideas per day.
 
-## 2026-10-27 ? Reconcile developer handover with hosted release
+## 2026-10-27 - Reconcile developer handover with hosted release
 
 Railway remains the daily application. Retain the team's offline developer setup and moved feature references alongside the native release and recovery work. Standard Node development commands select the safe local profile and force offline providers/telemetry settings; the explicit PowerShell Railway developer profile remains available with its SSH tunnel and hosted worker ownership. Historical September status remains dated rather than overriding October release evidence.
 
-## 2026-10-27 ? Review profile history through the canonical editor
+## 2026-10-27 - Review profile history through the canonical editor
 
 Expose up to the latest 50 authoritative profile snapshots, filtered to one requested module and folded when adjacent values are identical. History reads require the active workspace and vault read permission. Owner-selected facts load into the existing editor; review and an ordinary Save are required. Use the current profile revision for conflict detection, retain canonical module validation and projection/RAG updates, and leave other sections and the offering catalog untouched. History must never overwrite raw managed Vault projections.
 

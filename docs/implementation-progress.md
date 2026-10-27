@@ -113,3 +113,13 @@ Website: https://web-production-94e63.up.railway.app
 Android APK and iPhone IPA 0.5.0/build 7 finished. The iPhone TestFlight submission finished and Apple confirms VALID / IN_BETA_TESTING in the existing owner-only group. Android store AAB build 8 was queued separately; phone notification receipt is deferred by the owner. Today's scheduled recovery snapshot restored all 32 migrations, five workspaces and 22 referenced media objects into a disposable local database, which was removed afterward. Read-only Meta calls proved reach, views and profile_views access; live worker snapshots are present.
 
 Web and native business editors now expose bounded, module-specific version history. Selecting a revision only populates the form. Ordinary Save applies the selected fields through canonical validation, revision conflict checks and Vault projections; other modules/catalog remain current. The API error handler is registered before route setup so conflict responses use the expected envelope. English/Arabic desktop/narrow browser checks and focused API/native checks passed. This source checkpoint still requires final CI, deployment and compatible 0.5 OTA delivery.
+
+### 27 October release deployed
+
+PR #37 is merged as main release 9363386. API, web, worker and AI all report SUCCESS for that GitHub source. Serving and backup freshness, the history authorization boundary, campaign checkpoint contracts, live summary reads and browser-login CORS passed. Production source triggers now wait for GitHub checks. The availability/backup monitor is active on main and its manual run passed.
+
+Full CI passed on the PR and on main: 81 API files/638 tests, 154 AI tests, 18 native files/119 tests, 17 web unit files/97 tests and 16 browser files/82 tests. All type/lint/security/build/image gates passed.
+
+The 0.5 profile-history update is published and verified on preview (79251581-f4e1-47d6-93ca-f244ca33aa0e) and production (315aca56-c1c7-4f63-a7f4-adc5dc04afd9). Both platforms' served bundle hashes match the checked exports and all static assets pass integrity checks. Physical-device acceptance remains deferred by the owner. Meta cannot supply insights for three posts predating professional conversion; account and newer media data remain usable with a PARTIAL status.
+
+The dedicated Google Play publisher identity and API are prepared in the MARKOS Google project. No private key or project-wide IAM role was created/granted for this publisher. Play Console app authorization/entry verification, Meta review, email DNS, real postal address and device acceptance remain external inputs. Expanded brand/media management, offering-catalog rollback and deeper Insights remain product follow-ups.

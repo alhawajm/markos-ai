@@ -502,6 +502,6 @@ Hide the first-campaign empty prompt while a planning/recovery card is present. 
 show scheduling or approval as a result of planning. English desktop and Arabic 390px
 browser fixtures cover the resumed state; those fixtures are not live-provider acceptance.
 
-## 2026-10-27 ? Profile version recovery
+## 2026-10-27 - Profile version recovery
 
 Put Version history inside the existing profile editor as a collapsed secondary disclosure. Show one version selector and one Review action; load the selected fields into the ordinary form and retain its Save and conflict controls. The native editor confirms replacement of unsaved form values first. English and Arabic copy explain that reviewing does not save. Keep field labels explicit for assistive technology. This extends the accepted editor and does not change primary navigation or introduce a Figma approval dependency.

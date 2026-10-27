@@ -516,3 +516,7 @@ The preflight and artifacts record names/readiness, not secret values. Optional 
 - Provision/reference the confirmed private Bucket contract and prove upload, read, delete, and an external just-in-time signed fetch before live publishing.
 
 See `project-status.md` for roadmap/ownership and `instagram-app-review.md` for the Meta boundary.
+
+## Production source gate - 27 October 2026
+
+API, web, AI and worker production triggers use main and have checkSuites enabled. Their verified 0.5 release deployed successfully through the GitHub source connection after the complete release gate passed. Other environments' feature-branch triggers were not modified. Documentation-only checkpoints can follow without changing the deployed application source; service watch patterns determine whether a rebuild is needed.
