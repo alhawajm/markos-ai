@@ -1,4 +1,12 @@
-import type { CampaignReferenceFileInput, ContentAuthoringOperation, ContentReportInput, ContentReportReceipt, ContentReportRecord, ContentReportReviewInput, ContentReportStatus } from "@markos/shared-types";
+import type {
+  CampaignReferenceFileInput,
+  ContentAuthoringOperation,
+  ContentReportInput,
+  ContentReportReceipt,
+  ContentReportRecord,
+  ContentReportReviewInput,
+  ContentReportStatus
+} from "@markos/shared-types";
 import type {
   AgentName,
   AgentRunRecord,

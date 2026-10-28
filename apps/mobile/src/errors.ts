@@ -128,7 +128,10 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
     case "REPORT_ALREADY_REVIEWED":
       return t("This report was already reviewed. Refresh the list.", "تمت مراجعة البلاغ بالفعل. حدّث القائمة.");
     case "REPORT_SOURCE_NOT_FOUND":
-      return t("This content is no longer available. You can describe the issue under Help → Report AI content.", "لم يعد المحتوى متاحًا. يمكنك وصف المشكلة في المساعدة ← الإبلاغ عن محتوى الذكاء الاصطناعي.");
+      return t(
+        "This content is no longer available. You can describe the issue under Help → Report AI content.",
+        "لم يعد المحتوى متاحًا. يمكنك وصف المشكلة في المساعدة ← الإبلاغ عن محتوى الذكاء الاصطناعي."
+      );
     case "REPORT_NOT_FOUND":
       return t("Report not found. Refresh the list.", "البلاغ غير موجود. حدّث القائمة.");
     case "FORBIDDEN":

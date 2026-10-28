@@ -48,7 +48,9 @@ export function ContentReportDialog({
       dir={locale === "ar" ? "rtl" : "ltr"}
     >
       <header className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold" id="content-report-title">{t("Report AI content", "الإبلاغ عن محتوى الذكاء الاصطناعي")}</h2>
+        <h2 className="text-xl font-semibold" id="content-report-title">
+          {t("Report AI content", "الإبلاغ عن محتوى الذكاء الاصطناعي")}
+        </h2>
         <button type="button" className="studio-button" aria-label={t("Close", "إغلاق")} disabled={busy} onClick={onClose}>
           <X size={18} />
         </button>
