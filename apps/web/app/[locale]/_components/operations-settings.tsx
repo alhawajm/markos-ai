@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AdminModelConfiguration, DeliveryOperations, Locale } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
+import { ContentReportQueue } from "./content-report-queue";
 const button = "min-h-11 rounded-xl border border-[var(--border)] px-4 py-2 font-semibold disabled:opacity-50";
 export function OperationsSettings({ locale }: { locale: Locale }) {
   const api = useMarkosClient(locale),
@@ -87,6 +88,7 @@ export function OperationsSettings({ locale }: { locale: Locale }) {
           </div>
         ))
       )}
+      <ContentReportQueue locale={locale} />
       <h3 className="font-semibold">{t("AI model configuration", "إعدادات نماذج الذكاء الاصطناعي")}</h3>
       {models?.models.map((model) => (
         <div className="grid gap-3 border-t border-[var(--border)] pt-4" key={model.key}>

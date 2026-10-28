@@ -35,6 +35,7 @@ import { CreateSaveCoordinator, selectedMediaId, fieldValue, type FieldEdit, typ
 import { ContentStudioPreview } from "./content-studio-preview";
 import { ContentStudioMediaLibrary } from "./content-studio-media-library";
 import { ContentStatusBadge } from "./content-status-badge";
+import { ContentReportDialog } from "./content-report-dialog";
 import { useModalDialog } from "./use-modal-dialog";
 import { PublishTimeFields } from "./publish-time-fields";
 import { plannedAtInputToIso } from "./content-studio-draft-state";
@@ -79,6 +80,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
   const [tab, setTab] = useState<"caption" | "media" | "details">("media");
   const [panel, setPanel] = useState<"assistant" | "preview">("assistant");
   const [selection, setSelection] = useState<string | null>(null);
+  const [report, setReport] = useState<{ source: "CONTENT" | "ASSISTANT_MESSAGE"; id: string } | null>(null);
   const [conversation, setConversation] = useState<ContentConversationRecord | null>(null);
   const [prompt, setPrompt] = useState("");
   const [publishJob, setPublishJob] = useState<PublishJobRecord | null>(null);
@@ -512,6 +514,9 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                   <MoreHorizontal />
                 </summary>
                 <div>
+                  <button className="studio-button" onClick={() => setReport({ source: "CONTENT", id: record.id })}>
+                    {t("Report content", "الإبلاغ عن المحتوى")}
+                  </button>
                   <button
                     className="studio-button"
                     onClick={() =>
@@ -1100,6 +1105,11 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
               {conversation?.messages.map((turn) => (
                 <div key={turn.id} className={`create-message create-message-${turn.role}`} dir="auto">
                   {turn.text}
+                  {turn.role === "assistant" ? (
+                    <button className="studio-button mt-2" onClick={() => setReport({ source: "ASSISTANT_MESSAGE", id: turn.id })}>
+                      {t("Report reply", "الإبلاغ عن الرد")}
+                    </button>
+                  ) : null}
                 </div>
               ))}
               {conversationActive && (
@@ -1220,6 +1230,15 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
           });
         }}
       />
+      {report ? (
+        <ContentReportDialog
+          key={`${session?.workspace.id}:${report.source}:${report.id}`}
+          locale={locale}
+          source={report.source}
+          sourceId={report.id}
+          onClose={() => setReport(null)}
+        />
+      ) : null}
       {dialog && (
         <StudioDialog
           title={dialog === "library" ? t("Media Library", "مكتبة الوسائط") : dialog === "open" ? t("Open content", "فتح محتوى") : t("Schedule", "جدولة")}

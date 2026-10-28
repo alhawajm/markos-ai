@@ -12,6 +12,7 @@ import { newRequestId } from "../request-id";
 import { conversationActive } from "./model";
 import { sessionController } from "../auth/transport";
 import { StudioDeviceStore } from "./device-store";
+import { ContentReportSheet } from "../content-report";
 
 export function StudioConversation({
   item,
@@ -38,6 +39,7 @@ export function StudioConversation({
   const focused = useIsFocused();
   const { t, locale, colors } = useAppearance();
   const [message, setMessage] = useState("");
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<ConversationTurnInput | null>(null);
   const pendingRef = useRef(pending);
   const [error, setError] = useState("");
@@ -180,6 +182,7 @@ export function StudioConversation({
             {entry.role === "user" ? t("You", "أنت") : "MARKOS"}
           </Txt>
           <Txt selectable>{entry.text}</Txt>
+          {entry.role === "assistant" ? <TextAction label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReportMessage(entry.id)} /> : null}
         </View>
       ))}
       {active ? (
@@ -354,6 +357,12 @@ export function StudioConversation({
           />
         </>
       )}
+      <ContentReportSheet
+        visible={reportMessage !== null}
+        onClose={() => setReportMessage(null)}
+        source="ASSISTANT_MESSAGE"
+        {...(reportMessage ? { sourceId: reportMessage } : {})}
+      />
     </View>
   );
 }

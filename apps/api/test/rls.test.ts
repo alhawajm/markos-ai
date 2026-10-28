@@ -26,6 +26,7 @@ const rlsTables = [
   "analytics_report_deliveries",
   "workspace_erasure_jobs",
   "content_items",
+  "content_reports",
   "content_media_items",
   "content_reel_scripts",
   "content_reel_beats",

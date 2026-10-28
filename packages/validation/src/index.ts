@@ -869,3 +869,4 @@ export type GenerateImageForContentInput = z.infer<typeof generateImageForConten
 export type GenerateVideoForContentInput = z.infer<typeof generateVideoForContentSchema>;
 
 export * from "./authoring-assistant";
+export * from "./content-reports";

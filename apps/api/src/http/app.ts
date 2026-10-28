@@ -13,6 +13,7 @@ import { registerBillingRoutes } from "../billing/billing-routes";
 import { registerCalendarRoutes } from "../calendar/calendar-routes";
 import { env } from "../config/env";
 import { registerConversationRoutes } from "../content/conversation-routes";
+import { registerContentReportRoutes } from "../content/content-report-routes";
 import { registerContentRoutes } from "../content/content-routes";
 import { getBackupHealth, getDeepHealth } from "../health/deep-health";
 import { registerMediaRoutes } from "../media/media-routes";
@@ -126,6 +127,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerCampaignRoutes(app);
   await registerContentRoutes(app);
   await registerConversationRoutes(app);
+  await registerContentReportRoutes(app);
   await registerMediaRoutes(app);
   await registerMetaRoutes(app);
   await registerNotificationRoutes(app);

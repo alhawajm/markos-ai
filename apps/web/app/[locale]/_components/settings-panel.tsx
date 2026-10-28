@@ -29,6 +29,7 @@ import type { AuditLogRecord, AuthSession, BillingSummary, InstagramConnection, 
 import { NotificationToast } from "./notification-toast";
 import { SectionNavigation, type SectionNavigationItem } from "./section-navigation";
 import { OperationsSettings } from "./operations-settings";
+import { ContentReportDialog } from "./content-report-dialog";
 import { logoutBrowserSession, setBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
 import { instagramStatusLabel, sanitizedCallbackUrl } from "./instagram-settings-state";
 import { AppearanceSettings } from "../../_components/theme-control";
@@ -65,6 +66,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
   const [disconnectWarningUrl, setDisconnectWarningUrl] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState<SettingsSectionId>("profile");
   const [, setMfaWindowTick] = useState(0);
 
@@ -478,6 +480,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
 
   return (
     <section className="min-w-0" data-settings-page="sunlit">
+      {reportOpen && session ? (
+        <ContentReportDialog key={session.workspace.id} locale={locale} source="GENERAL_AI" onClose={() => setReportOpen(false)} />
+      ) : null}
       <NotificationToast
         action={
           disconnectWarningUrl ? (
@@ -546,6 +551,9 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
           <div className="grid gap-5">
             <Panel active={selectedSection === "profile"} id="profile" icon={UserRound} title={userName} body={userEmail}>
               {selectedSection === "profile" && session ? <AccountDetailsEditor key={session.workspace.id} locale={locale} /> : null}
+              <button type="button" className="sunlit-secondary mt-4 min-h-11 rounded-xl px-4 py-2" onClick={() => setReportOpen(true)}>
+                {locale === "ar" ? "الإبلاغ عن محتوى الذكاء الاصطناعي" : "Report AI content"}
+              </button>
               <div className="mt-4 grid gap-2">
                 <SettingRow label={copy(locale, "workspace")} value={workspaceName} />
                 <SettingRow label={copy(locale, "role")} value={session?.roles.map(formatAction).join(", ") ?? "—"} />
