@@ -20,6 +20,7 @@ import { Readiness } from "../../src/studio/readiness";
 import { PostPreview } from "../../src/studio/post-preview";
 import { draftReadiness, saveDraftEdits } from "../../src/studio/workflow";
 import { PlannedTime } from "../../src/studio/planned-time";
+import { ContentReportSheet } from "../../src/content-report";
 
 export default function ContentDraft() {
   const focused = useIsFocused();
@@ -77,6 +78,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
   const [notice, setNotice] = useState("");
   const [view, setView] = useState<"preview" | "assistant">("preview");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [section, setSection] = useState<"review" | "caption" | "media" | "details">("review");
   const [restored, setRestored] = useState(false);
   const ready = useRef(false);
@@ -550,6 +552,13 @@ function Editor({ initial }: { initial: ContentRecord }) {
         openPreview={() => openSection("review")}
       />
       <Sheet title={t("Draft options", "خيارات المسودة")} visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
+        <ListRow
+          label={t("Report content", "الإبلاغ عن المحتوى")}
+          onPress={() => {
+            setOptionsOpen(false);
+            setReportOpen(true);
+          }}
+        />
         {editable ? (
           <FormatControl
             item={draft}
@@ -625,6 +634,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
           />
         ) : null}
       </Sheet>
+      <ContentReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} source="CONTENT" sourceId={base.id} />
     </Screen>
   );
 }

@@ -1078,6 +1078,51 @@ model AnalyticsReportDelivery {
   @@map("analytics_report_deliveries")
 }
 
+enum ContentReportSource {
+  CONTENT
+  ASSISTANT_MESSAGE
+  CAMPAIGN
+  GENERAL_AI
+}
+
+enum ContentReportReason {
+  OFFENSIVE
+  HARMFUL
+  COPYRIGHT
+  INACCURATE
+  OTHER
+}
+
+enum ContentReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+model ContentReport {
+  id            String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  workspaceId   String              @db.Uuid
+  reportedById  String              @db.Uuid
+  requestId     String              @db.Uuid
+  source        ContentReportSource
+  sourceId      String?             @db.Uuid
+  reason        ContentReportReason
+  note          String              @default("")
+  excerpt       String              @default("")
+  mediaAssetIds String[]            @default([]) @db.Uuid
+  status        ContentReportStatus @default(OPEN)
+  resolutionNote String             @default("")
+  reviewedById  String?             @db.Uuid
+  reviewedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([workspaceId, reportedById, requestId])
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@map("content_reports")
+}
+
 model AuditLog {
   id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
   actorId     String?  @db.Uuid

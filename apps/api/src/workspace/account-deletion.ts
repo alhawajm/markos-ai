@@ -75,6 +75,7 @@ export async function deleteAccount(
       });
       await tx.instagramConnectionCredential.deleteMany({ where: { workspaceId: { in: ids } } });
       await tx.workspaceMember.updateMany({ where: { OR: [{ userId }, { workspaceId: { in: ids } }] }, data: { deletedAt: now } });
+      await tx.contentReport.deleteMany({ where: { reportedById: userId } });
       await tx.workspaceInvitation.deleteMany({ where: { OR: [{ workspaceId: { in: ids } }, { email: user.email }] } });
       await tx.pushDevice.deleteMany({ where: { userId } });
       await tx.pushDelivery.deleteMany({ where: { OR: [{ userId }, { workspaceId: { in: ids } }] } });

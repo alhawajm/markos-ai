@@ -1,4 +1,4 @@
-import type { CampaignReferenceFileInput, ContentAuthoringOperation } from "@markos/shared-types";
+import type { CampaignReferenceFileInput, ContentAuthoringOperation, ContentReportInput, ContentReportReceipt, ContentReportRecord, ContentReportReviewInput, ContentReportStatus } from "@markos/shared-types";
 import type {
   AgentName,
   AgentRunRecord,
@@ -1032,6 +1032,18 @@ export class MarkosApiClient {
   }
   async deliveryOperations(): Promise<import("@markos/shared-types").DeliveryOperations> {
     return (await this.request<import("@markos/shared-types").DeliveryOperations>("/v1/admin/operations")).data;
+  }
+  async reportContent(input: ContentReportInput): Promise<ContentReportReceipt> {
+    return (await this.request<ContentReportReceipt>("/v1/content-reports", { method: "POST", body: { ...input } })).data;
+  }
+  async contentReports(status: ContentReportStatus = "OPEN"): Promise<ContentReportRecord[]> {
+    return (await this.request<ContentReportRecord[]>(`/v1/admin/content-reports?status=${status}`)).data;
+  }
+  async contentReportMedia(id: string): Promise<import("@markos/shared-types").ContentReportMedia[]> {
+    return (await this.request<import("@markos/shared-types").ContentReportMedia[]>(`/v1/admin/content-reports/${id}/media`)).data;
+  }
+  async reviewContentReport(id: string, input: ContentReportReviewInput): Promise<ContentReportRecord> {
+    return (await this.request<ContentReportRecord>(`/v1/admin/content-reports/${id}/review`, { method: "POST", body: { ...input } })).data;
   }
   async retryDelivery(input: { kind: "REPORT" | "PUSH" | "ERASURE"; id: string }): Promise<void> {
     await this.request("/v1/admin/operations/retry", { method: "POST", body: input });

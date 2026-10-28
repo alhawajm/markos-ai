@@ -140,6 +140,7 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
       subscriptions: toJsonRows(subscriptions),
       usageCounters: toJsonRows(usageCounters),
       contentConversations: toJsonRows(contentConversations),
+      contentReports: toJsonRows(await prisma.contentReport.findMany({ where: { workspaceId } })),
       vault: toJsonRows(vault),
       vaultHistory: toJsonRows(vaultHistory)
     },
@@ -196,6 +197,7 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
     counts.contentCalendars = (await tx.contentCalendar.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.campaigns = (await tx.campaign.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.contentConversations = (await tx.contentConversation.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
+    counts.contentReports = (await tx.contentReport.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.contentMediaItems = (await tx.contentMediaItem.updateMany({ where: { workspaceId: input.workspaceId, deletedAt: null }, data: markDeleted })).count;
     counts.contentReelScripts = (await tx.contentReelScript.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.mediaGenerationJobs = (await tx.mediaGenerationJob.deleteMany({ where: { workspaceId: input.workspaceId } })).count;

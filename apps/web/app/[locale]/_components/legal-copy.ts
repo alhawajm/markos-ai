@@ -128,6 +128,7 @@ export const legalCopy = {
           id: "use",
           title: "2. Why information is used",
           paragraphs: [
+            "If you report AI content in the app, your explanation and a limited excerpt or media reference are stored for authorized MARKOS moderators to investigate and improve safeguards. Reports follow the workspace export and deletion controls below.",
             "We use this information to operate and secure accounts, maintain workspace knowledge, produce requested AI assistance, manage content and approved publishing, show available analytics, deliver requested reports and alerts, provide support and investigate failures or misuse.",
             "You choose whether to upload optional files, connect Instagram or enable phone alerts and monthly report emails. A one-time report request does not subscribe you to monthly email. We do not sell personal information or use advertising SDKs in this release."
           ]
@@ -309,6 +310,7 @@ export const legalCopy = {
           id: "use",
           title: "٢. أغراض الاستخدام",
           paragraphs: [
+            "عند الإبلاغ عن محتوى الذكاء الاصطناعي داخل التطبيق، نخزّن توضيحك ومقتطفًا محدودًا أو مرجع الوسائط ليتحقق مشرفو ماركوس المخولون من المشكلة ويحسّنوا إجراءات الحماية. تخضع البلاغات لضوابط تصدير بيانات مساحة العمل وحذفها الموضحة أدناه.",
             "نستخدم المعلومات لتشغيل الحسابات وحمايتها وحفظ معرفة النشاط وتقديم المساعدة المطلوبة وإدارة المحتوى والنشر المعتمد وعرض الإحصاءات وإرسال التقارير والتنبيهات المطلوبة والدعم والتحقيق في الأعطال وإساءة الاستخدام.",
             "أنت تختار رفع الملفات الاختيارية وربط إنستغرام وتفعيل إشعارات الهاتف وبريد التقارير الشهرية. طلب تقرير واحد لا يفعّل الاشتراك الشهري. لا نبيع المعلومات الشخصية ولا نستخدم حزم إعلانات في هذا الإصدار."
           ]

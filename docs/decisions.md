@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-10-28 - Report AI output inside MARKOS
+
+Users can report draft content or an assistant reply directly, or describe another AI output from mobile Help / web Settings. Submit a reason and optional explanation (required for a general report); share only a bounded server-captured excerpt and owned media references. Reporting never changes the draft, readiness, schedule or publication. Retries reuse an idempotency key; changed reports use a new key.
+
+Store reports in a workspace-isolated table with RLS. Include them in workspace export and erasure; remove a deleting account's submitted reports. Platform Super/Product/Support administrators can investigate reports and retrieve only captured media from the reported workspace. Only Super/Product administrators can resolve or dismiss, with an investigation note and an audited, concurrency-checked decision. Finance and Readonly administrators cannot read private reports. Public store review remains blocked until the reporting flow is deployed and verified; listing saves alone do not establish policy compliance.
+
 ## 2026-06-10: Canonical Documents
 
 At that time, the project treated `MARKOS_BUILD_SPEC. 2.pdf` and `MARKOS_AGENTS. 2.0.pdf` as canonical over the other planning files. The agent PDF is now retired; this text records the historical rule rather than the current source contract.

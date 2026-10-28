@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Linking } from "react-native";
-import { FileText, Mail, ShieldCheck } from "lucide-react-native";
+import { FileText, Flag, Mail, ShieldCheck } from "lucide-react-native";
+import { ContentReportSheet } from "../src/content-report";
 import { config } from "../src/config";
 import { useAppearance } from "../src/providers";
 import { Card, ListGroup, ListRow, Notice, Screen, TaskHeader, Txt } from "../src/ui";
@@ -8,6 +9,7 @@ import { Card, ListGroup, ListRow, Notice, Screen, TaskHeader, Txt } from "../sr
 export default function Support() {
   const { t, locale } = useAppearance();
   const [error, setError] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   async function open(url: string) {
     setError(false);
     try {
@@ -34,6 +36,7 @@ export default function Support() {
         </Notice>
       ) : null}
       <ListGroup>
+        <ListRow icon={Flag} label={t("Report AI content", "الإبلاغ عن محتوى الذكاء الاصطناعي")} onPress={() => setReportOpen(true)} />
         <ListRow
           icon={Mail}
           label={t("Contact support", "التواصل مع الدعم")}
@@ -42,6 +45,7 @@ export default function Support() {
         <ListRow icon={ShieldCheck} label={t("Privacy policy", "سياسة الخصوصية")} onPress={() => void open(`${config.webUrl}/${locale}/privacy`)} />
         <ListRow icon={FileText} last label={t("Terms of service", "شروط الاستخدام")} onPress={() => void open(`${config.webUrl}/${locale}/terms`)} />
       </ListGroup>
+      <ContentReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} source="GENERAL_AI" />
       <Txt variant="meta" muted>
         Raedat Software Company W.L.L
       </Txt>

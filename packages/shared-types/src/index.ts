@@ -1372,3 +1372,4 @@ export type ContentAuthoringOperation =
   | { type: "removeReelBeat"; beatId: string }
   | { type: "reorderReelBeats"; orderedIds: string[] };
 export { sanitizeTelemetryEvent } from "./telemetry-privacy";
+export * from "./content-reports";

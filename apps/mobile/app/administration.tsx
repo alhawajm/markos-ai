@@ -5,6 +5,7 @@ import { useAccount, useAppearance } from "../src/providers";
 import { Button, Card, Field, Loading, Notice, Screen, Txt } from "../src/ui";
 import { QueryFailure } from "../src/content";
 import { errorMessage } from "../src/errors";
+import { ContentReportQueue } from "../src/content-report-queue";
 
 export default function Administration() {
   const { session } = useAccount();
@@ -90,6 +91,7 @@ function Operations() {
         ))
       )}
       <Button secondary label={t("Refresh operations", "تحديث العمليات")} onPress={() => void status.refetch()} />
+      <ContentReportQueue />
       <Txt variant="heading">{t("AI model configuration", "إعدادات نماذج الذكاء الاصطناعي")}</Txt>
       {models.isPending ? (
         <Loading />
