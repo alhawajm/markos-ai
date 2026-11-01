@@ -542,7 +542,7 @@ describe("active SettingsPanel Instagram interactions", () => {
         color: styles.color
       };
     });
-    expect(fieldColors.color).toBe("rgb(32, 33, 43)");
+    expect(fieldColors.color).toBe("rgb(38, 54, 64)");
     expect(fieldColors.backgroundColor).toBe("rgb(255, 255, 255)");
     await page.screenshot({
       path: "evidence/settings-mfa-setup.png",

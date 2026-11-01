@@ -16,6 +16,12 @@ Each surface entry should state what is accepted, what remains deferred or open,
 
 ## Shared visual foundation
 
+### 2026-11-01 — Align release browser checks with the palette
+
+The release gate exposed an MFA-input assertion for the superseded text color and a calendar geometry check that could run while the Month grid was still loading. Expect the accepted slate `#263640` and wait for the Month calendar to become visible before measuring it. Keep the existing enrollment, scheduling, cancellation, and viewport assertions intact.
+
+Both focused browser cases passed against a local production build (2 passed, 28 skipped by the intentional name filter). Prettier and targeted ESLint cover the changed test files; GitHub CI reruns the full release gate. The PDF dependency follow-up also passed the four document tests, `mypy app/documents.py`, and the hashed Python runtime audit.
+
 ### 2026-11-01 — Publish the reviewed UI refresh
 
 The user explicitly authorized committing, pushing, and deploying the current reviewed palette, interaction, theme-control, and icon-cleanup changes. This supersedes the local-only restriction for this release. Publish through the existing GitHub `main` source and Railway deployment configuration, preserving unrelated workstation files and production data. Earlier validation entries below describe the local checkpoints before this publication request.

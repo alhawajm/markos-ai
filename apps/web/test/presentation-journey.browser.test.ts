@@ -929,6 +929,7 @@ describe("presentation journey", () => {
     await expect(page.getByRole("button", { name: "Month", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     await expect(statusFilters.locator("[data-calendar-status]").count()).resolves.toBe(5);
     await expect(page.getByLabel("Month calendar").getByText("Product story scheduled for this week", { exact: true }).count()).resolves.toBe(0);
+    await page.getByLabel("Month calendar").waitFor({ state: "visible" });
     const monthCalendar = await page.getByLabel("Month calendar").boundingBox();
     if (!monthCalendar) throw new Error("Expected the Month calendar to be visible.");
     expect(monthCalendar.y + monthCalendar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 900);
