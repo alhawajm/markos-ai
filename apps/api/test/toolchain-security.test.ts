@@ -1,5 +1,6 @@
 import { constants, createHash, generateKeyPairSync, privateEncrypt, sign } from "node:crypto";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const mobile = createRequire(new URL("../../mobile/package.json", import.meta.url));
@@ -22,7 +23,7 @@ const routerPackage = createRequire(mobile.resolve("expo-router/package.json"));
 const queryString = createRequire(routerPackage.resolve("query-string"));
 const decode = queryString("decode-uri-component") as (value: string) => string;
 
-describe("Expo toolchain security backports", () => {
+describe("Expo toolchain security regressions", () => {
   it("rejects nested DigestAlgorithm garbage while retaining valid RSA signatures", () => {
     const keys = generateKeyPairSync("rsa", {
       modulusLength: 1024,
@@ -70,5 +71,67 @@ describe("Expo toolchain security backports", () => {
     expect(decode("hello+world")).toBe("hello world");
     const hostile = "%E0%A4%A".repeat(5000);
     expect(decode(hostile)).toBe(hostile);
+  });
+  it("bounds malformed URI decoding with many distinct percent-encoded runs", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        String.raw`
+          const assert = require("node:assert/strict");
+          const decode = require(process.argv[1]);
+          let payload = "";
+          for (let i = 0; i < 32000; i++) {
+            const high = Math.floor(i / 256).toString(16).padStart(2, "0");
+            const low = (i % 256).toString(16).padStart(2, "0");
+            payload += "%" + high + "%" + low + "x";
+          }
+          payload += "%zz";
+          assert.equal(decode(payload), payload);
+        `,
+        queryString.resolve("decode-uri-component")
+      ],
+      { timeout: 3000, encoding: "utf8" }
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+  });
+  it("bounds glob pattern amplification while retaining normal file matching", () => {
+    const fingerprint = createRequire(expo.resolve("@expo/fingerprint"));
+    const result = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        String.raw`
+          const assert = require("node:assert/strict");
+          const { minimatch, Minimatch } = require(process.argv[1]);
+          assert.equal(minimatch("src/app.ts", "**/*.ts"), true);
+          assert.equal(minimatch("src/app.js", "**/*.ts"), false);
+          const hostile = "**/../".repeat(32) + "leaf.txt";
+          const matcher = new Minimatch(hostile, { optimizationLevel: 2 });
+          assert.equal(typeof matcher.match("leaf.txt"), "boolean");
+        `,
+        fingerprint.resolve("minimatch")
+      ],
+      { timeout: 3000, encoding: "utf8" }
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+  });
+  it("stops an aborted glob walk before reading directories", async () => {
+    const fs = await import("node:fs");
+    const { glob } = cli("glob") as { glob: (pattern: string, options: unknown) => Promise<string[]> };
+    let reads = 0;
+    const abort = new Error("toolchain glob cancelled");
+    const filesystem = {
+      ...fs,
+      readdir: (...args: Parameters<typeof fs.readdir>) => {
+        reads++;
+        return fs.readdir(...args);
+      }
+    };
+    await expect(glob("**/*", { cwd: process.cwd(), signal: AbortSignal.abort(abort), fs: filesystem })).rejects.toThrow(abort.message);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(reads).toBe(0);
   });
 });

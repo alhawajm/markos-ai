@@ -1,4 +1,42 @@
-# Security preparation — 26 October 2026
+# Security maintenance
+
+## 1 November 2026 deployment gate
+
+Railway skipped the UI release because the GitHub dependency audit failed. Keep
+the CI deployment gate enabled. Pin the affected transitive node-forge to 1.4.2,
+glob 13 to 14.0.3 and minimatch 10 to 11.0.3, which include upstream fixes for the
+newly reported findings. Remove the superseded node-forge 1.4.0 source patch.
+These overrides preserve the supported native React/Expo versions.
+
+The existing CommonJS decode-uri-component mitigation returns malformed input
+before entering the custom decoder, so it also prevents the newly reported
+[quadratic replacement loop](https://github.com/advisories/GHSA-qr28-fpjm-wq7f).
+Record that exact patch against the new advisory and exercise the distinct-run
+payload in a subprocess with a timeout. Retain normal decoding and existing RSA
+and Zod regressions; check ordinary glob matching and cancellation as well.
+
+The low-severity [deepmerge finding](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+has no published fixed version and remains visible to the audit. It is not a
+clean scan or an exception to the existing moderate-or-higher failure threshold.
+
+Local release checks passed:
+
+- `corepack pnpm install --frozen-lockfile`.
+- `corepack pnpm security:audit`: exit 0; one unmitigated low finding, with the
+  remaining Zod/decoder findings covered by verified source patches.
+- `corepack pnpm --filter api exec vitest run test/toolchain-security.test.ts`:
+  six tests passed.
+- `corepack pnpm --filter api prisma generate`, then
+  `corepack pnpm --filter api typecheck`. The first typecheck attempt lacked the
+  generated Prisma client; generation resolved it without source/schema changes.
+- `corepack pnpm --filter @markos/mobile typecheck` and
+  `corepack pnpm --filter web build`.
+- Prettier for the changed test/JSON/workspace files and `git diff --check`.
+
+Full regression and container/browser release gates run in GitHub CI; local checks
+above do not claim that coverage. No local database or infrastructure was started.
+
+## Previous preparation — 26 October 2026
 
 The initial production dependency scan reported 7 critical, 41 high, 19 moderate
 and 3 low advisories. Updated the existing major versions, including Next.js
