@@ -59,7 +59,7 @@
 }
 .create-type svg,
 .create-companion-header svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .create-type select {
   background: var(--surface);
@@ -207,7 +207,7 @@
   background: var(--surface-muted);
 }
 .create-slide-select[aria-pressed="true"] {
-  border-color: var(--accent);
+  border-color: var(--link);
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 .create-slide-select img {
@@ -322,7 +322,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 1rem;
   background: var(--accent-soft);
   border-radius: 0.75rem;

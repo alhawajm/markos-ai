@@ -400,7 +400,7 @@ export function NativeOnboarding({ initial, onConnectInstagram }: { initial: Onb
         {done ? (
           <>
             <Card tone="tint">
-              <Check color={colors.accent} size={32} />
+              <Check color={colors.accentText} size={32} />
               <Txt variant="title">{t("Your business is ready", "نشاطك جاهز")}</Txt>
               <Txt>
                 {t(
@@ -468,7 +468,7 @@ export function NativeOnboarding({ initial, onConnectInstagram }: { initial: Onb
                 {(analysis?.files ?? saved.files).map((file, index) => (
                   <Card key={file.id}>
                     <Row>
-                      <FileText size={22} color={colors.accent} />
+                      <FileText size={22} color={colors.accentText} />
                       <View style={{ flex: 1 }}>
                         <Txt variant="label">{file.filename}</Txt>
                         <Txt muted variant="meta">

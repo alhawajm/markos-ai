@@ -136,9 +136,9 @@ export function InstagramSetup({ locale }: { locale: Locale }) {
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                   <div className="mb-3 flex items-center gap-3">
                     {enabled ? (
-                      <Instagram aria-hidden="true" className="text-[var(--accent)]" size={26} />
+                      <Instagram aria-hidden="true" className="text-[var(--accent-text)]" size={26} />
                     ) : (
-                      <ShieldCheck aria-hidden="true" className="text-[var(--accent)]" size={26} />
+                      <ShieldCheck aria-hidden="true" className="text-[var(--accent-text)]" size={26} />
                     )}
                     <h2 className="text-2xl font-semibold">
                       {enabled

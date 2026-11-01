@@ -265,7 +265,7 @@ export function ListRow({
         {selected === undefined ? (
           <ChevronRight size={18} color={colors.muted} style={{ transform: [{ scaleX: rtl ? -1 : 1 }] }} />
         ) : selected ? (
-          <Check size={20} color={colors.accent} />
+          <Check size={20} color={colors.accentText} />
         ) : (
           <View style={{ width: 20 }} />
         )}
@@ -489,7 +489,7 @@ export function Loading() {
   const { colors, t } = useAppearance();
   return (
     <View style={{ padding: 32, gap: 12, alignItems: "center" }}>
-      <ActivityIndicator color={colors.accent} />
+      <ActivityIndicator color={colors.accentText} />
       <Txt muted>{t("Loading…", "جارٍ التحميل…")}</Txt>
     </View>
   );

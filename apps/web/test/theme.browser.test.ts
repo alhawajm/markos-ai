@@ -25,14 +25,19 @@ async function primaryButtonContrast(page: Page) {
       const style = getComputedStyle(element);
       const luminance = (color: string) => {
         const channels = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((part) => {
-          const channel = Number(part) / 255;
+          const channel = color.startsWith("color(srgb ") ? Number(part) : Number(part) / 255;
           return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
         });
         return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
       };
       const foreground = luminance(style.color);
-      const background = luminance(style.backgroundColor);
-      return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      const backgrounds = style.backgroundImage.match(/(?:rgba?|color)\([^)]+\)/g) ?? [style.backgroundColor];
+      return Math.min(
+        ...backgrounds.map((color) => {
+          const background = luminance(color);
+          return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+        })
+      );
     });
 }
 
@@ -198,7 +203,7 @@ describe("site appearance controls", () => {
       await page.goto(`${baseUrl}/en`, { waitUntil: "networkidle" });
       const appearance = page.getByRole("combobox", { name: "Appearance", exact: true });
       await appearance.selectOption("light");
-      expect(await readPalette(page)).toEqual({ text: "#20212b", background: "#f7fafa", primary: "#d88fa3", secondary: "#81d8d0", accent: "#6c3ce8" });
+      expect(await readPalette(page)).toEqual({ text: "#263640", background: "#f0fafa", primary: "#e7b7c8", secondary: "#47cacc", accent: "#cdb3d4" });
       expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "landing-en-light-desktop.png"), fullPage: true });
@@ -207,7 +212,7 @@ describe("site appearance controls", () => {
       await appearance.press("Enter");
       await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark");
       expect(await appearance.inputValue()).toBe("dark");
-      expect(await readPalette(page)).toEqual({ text: "#f2faf7", background: "#151821", primary: "#8fe3da", secondary: "#7b6af0", accent: "#d9a0b1" });
+      expect(await readPalette(page)).toEqual({ text: "#eef4f6", background: "#14181f", primary: "#e7b7c8", secondary: "#47cacc", accent: "#cdb3d4" });
       expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "landing-en-dark-desktop.png"), fullPage: true });
 
@@ -236,4 +241,130 @@ describe("site appearance controls", () => {
       await context.close();
     }
   });
+  it("applies matching brand chrome, accessible button states, and a persistent night switch on responsive pages", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", reducedMotion: "no-preference" });
+    const page = await context.newPage();
+    const background = (selector: string) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((element) => getComputedStyle(element).backgroundColor);
+    try {
+      await page.goto(`${baseUrl}/en`, { waitUntil: "networkidle" });
+      const chrome = await page.locator(".brand-chrome").evaluateAll((elements) =>
+        elements.map((element) => ({
+          background: getComputedStyle(element).backgroundImage,
+          width: element.getBoundingClientRect().width
+        }))
+      );
+      expect(chrome).toHaveLength(2);
+      expect(chrome[0]!.background).toBe(chrome[1]!.background);
+      expect(chrome[0]!.background.match(/rgb\([^)]+\)/g)).toEqual([
+        "rgb(71, 202, 204)",
+        "rgb(99, 188, 201)",
+        "rgb(205, 179, 212)",
+        "rgb(231, 183, 200)",
+        "rgb(255, 190, 136)"
+      ]);
+      chrome.forEach((item) => expect(item.width).toBe(1440));
+      const action = page.locator(".brand-action").nth(1);
+      expect(await action.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(231, 183, 200)");
+      expect(await action.evaluate((element) => getComputedStyle(element).transitionDuration)).toContain("0.3s");
+      expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+      await action.hover();
+      await expect.poll(() => action.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(205, 179, 212)");
+      await expect.poll(() => action.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m42)).toBe(-2);
+      expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+      await page.mouse.down();
+      await expect.poll(() => action.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(184, 156, 193)");
+      await expect.poll(() => action.evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m42)).toBe(0);
+      expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+      await page.mouse.move(4, 100);
+      await page.mouse.up();
+      await page.locator(".brand-nav-item").first().hover();
+      await expect.poll(() => background(".brand-nav-item")).toBe("rgb(205, 179, 212)");
+      await page.locator(".brand-card").first().hover();
+      await expect
+        .poll(() =>
+          page
+            .locator(".brand-card")
+            .first()
+            .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).m42)
+        )
+        .toBe(-2);
+      await expect
+        .poll(() =>
+          page
+            .locator(".brand-card")
+            .first()
+            .evaluate((element) => getComputedStyle(element).borderTopColor)
+        )
+        .toBe("rgb(205, 179, 212)");
+
+      const nightSwitch = page.getByRole("switch", { name: "Dark mode", exact: true });
+      await nightSwitch.focus();
+      await page.keyboard.press("Space");
+      await expect.poll(() => nightSwitch.getAttribute("aria-checked")).toBe("true");
+      await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark");
+      expect(await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
+      for (const selector of ["header.brand-chrome", "footer.brand-chrome"]) {
+        expect(await page.locator(selector).evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
+        expect(await background(selector)).toBe("rgb(28, 36, 45)");
+        expect(
+          await page.locator(selector).evaluate((element) => {
+            const style = getComputedStyle(element);
+            return parseFloat(element.tagName === "HEADER" ? style.borderBottomWidth : style.borderTopWidth);
+          })
+        ).toBeGreaterThanOrEqual(1);
+      }
+      await page.reload({ waitUntil: "networkidle" });
+      expect(await nightSwitch.getAttribute("aria-checked")).toBe("true");
+      await page.getByRole("combobox", { name: "Appearance", exact: true }).selectOption("system");
+      await expect.poll(() => nightSwitch.getAttribute("aria-checked")).toBe("false");
+      await page.emulateMedia({ colorScheme: "dark" });
+      await expect.poll(() => nightSwitch.getAttribute("aria-checked")).toBe("true");
+      for (const locale of ["en", "ar"]) {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${baseUrl}/${locale}/login`, { waitUntil: "networkidle" });
+        const toggle = page.getByRole("switch");
+        expect(await toggle.getAttribute("aria-checked")).toBe("true");
+        await toggle.click();
+        await expect.poll(() => toggle.getAttribute("aria-checked")).toBe("false");
+        expect(await page.locator("html").getAttribute("dir")).toBe(locale === "ar" ? "rtl" : "ltr");
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        for (const selector of ["header.brand-chrome", "footer.brand-chrome"]) {
+          expect(await page.locator(selector).evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(390);
+        }
+        await toggle.click();
+        await expect.poll(() => toggle.getAttribute("aria-checked")).toBe("true");
+      }
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+  it("keeps labeled controls and password visibility usable after removing decorative icons", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light" });
+    const page = await context.newPage();
+    try {
+      for (const route of ["en/login", "en/signup"]) {
+        await page.goto(`${baseUrl}/${route}`, { waitUntil: "networkidle" });
+        const password = page.getByLabel("Password", { exact: true });
+        await password.fill("local-preview-password-only");
+        await page.getByRole("button", { name: "Show password", exact: true }).first().click();
+        expect(await password.getAttribute("type")).toBe("text");
+        await page.getByRole("button", { name: "Hide password", exact: true }).first().click();
+        expect(await password.getAttribute("type")).toBe("password");
+      }
+      await page.goto(`${baseUrl}/en`, { waitUntil: "networkidle" });
+      expect(await page.getByRole("tab").count()).toBe(4);
+      expect(await page.getByRole("img").count()).toBeGreaterThan(0);
+      expect(await page.locator("svg.lucide").count()).toBe(0);
+      await page.getByRole("tab", { name: "Create", exact: true }).click();
+      await expect.poll(() => page.getByRole("tab", { name: "Create", exact: true }).getAttribute("aria-selected")).toBe("true");
+      await page.goto(`${baseUrl}/en/login`, { waitUntil: "networkidle" });
+      expect(await page.locator("svg.lucide").count()).toBe(0);
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
 });

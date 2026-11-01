@@ -1,8 +1,6 @@
-import { ArrowLeft, FileText, Globe2, ShieldCheck } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import { ThemeSelect } from "../../_components/theme-control";
 import { SectionNavigation } from "./section-navigation";
-import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./legal-document.module.css";
 import { legalCopy } from "./legal-copy";
 
@@ -20,30 +18,22 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
 
   return (
     <main className={`sunlit-theme ${styles.legalPage}`} data-legal-document={kind} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
-      <header className={styles.header}>
-        <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
-          <span className={styles.brandMark} aria-hidden="true">
-            <MarkosAiIcon size={21} />
-          </span>
+      <header className={`brand-chrome ${styles.header}`}>
+        <a className={`brand-logo ${styles.brand}`} href={landingHref} aria-label={copy.brand}>
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المستند" : "Document navigation"}>
           <ThemeSelect locale={locale} />
           <a className={styles.backLink} href={signupHref}>
-            <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
             {copy.back}
           </a>
           <a className={styles.languageLink} href={`/${otherLocale}/${kind}`}>
-            <Globe2 aria-hidden="true" size={17} />
             {copy.language}
           </a>
         </nav>
       </header>
 
       <div className={styles.draftBanner} role="note">
-        <span aria-hidden="true">
-          <FileText size={19} />
-        </span>
         <p>
           <strong>{copy.draftLabel}</strong>
           {copy.draftMessage}
@@ -63,9 +53,6 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
 
         <article className={styles.document}>
           <div className={styles.documentHeading}>
-            <span className={styles.documentIcon} aria-hidden="true">
-              {kind === "privacy" ? <ShieldCheck size={25} /> : <FileText size={25} />}
-            </span>
             <h1>{document.title}</h1>
             <p className={styles.intro}>{document.intro}</p>
             <div className={styles.documentMeta}>
@@ -95,7 +82,7 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
         </article>
       </div>
 
-      <footer className={styles.footer}>
+      <footer className={`brand-chrome ${styles.footer}`}>
         <span>{copy.footer}</span>
         <span>
           <a aria-current={kind === "terms" ? "page" : undefined} href={termsHref}>

@@ -726,7 +726,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
                     className={
                       selected
                         ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-3 text-base font-semibold text-[var(--on-primary)]"
-                        : "inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-3 text-base font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
+                        : "inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-3 text-base font-bold text-[var(--sunlit-ink-soft)] hover:border-[var(--lavender)]"
                     }
                     key={option.value ?? "all"}
                     onClick={() => changeFilter(selected ? null : option.value)}
@@ -782,7 +782,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
               <div className="flex rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-1">
                 <button
                   aria-label={locale === "ar" ? "الفترة السابقة" : "Previous period"}
-                  className="grid h-11 w-11 place-items-center rounded-lg text-[var(--sunlit-ink-soft)] hover:bg-[var(--sunlit-paper)]"
+                  className="grid h-11 w-11 place-items-center rounded-lg text-[var(--sunlit-ink-soft)] hover:bg-[var(--accent-soft)]"
                   onClick={() => navigate(-1)}
                   type="button"
                 >
@@ -790,7 +790,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
                 </button>
                 <button
                   aria-label={locale === "ar" ? "الفترة التالية" : "Next period"}
-                  className="grid h-11 w-11 place-items-center rounded-lg text-[var(--sunlit-ink-soft)] hover:bg-[var(--sunlit-paper)]"
+                  className="grid h-11 w-11 place-items-center rounded-lg text-[var(--sunlit-ink-soft)] hover:bg-[var(--accent-soft)]"
                   onClick={() => navigate(1)}
                   type="button"
                 >
@@ -1058,7 +1058,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
           <p className="min-w-0 flex-1 pt-1 text-sm font-semibold leading-6 text-[var(--sunlit-ink-soft)]">{notice.text}</p>
           <button
             aria-label={locale === "ar" ? "إخفاء الرسالة" : "Dismiss message"}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)]"
             onClick={() => setNotice(null)}
             type="button"
           >
@@ -1153,7 +1153,7 @@ function CalendarRecordFocus({
           <div className="flex shrink-0 gap-1.5">
             <button
               aria-label={copy.previousDay}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] hover:bg-[var(--sunlit-paper)]"
+              className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] hover:bg-[var(--accent-soft)]"
               onClick={() => onNavigate(-1)}
               type="button"
             >
@@ -1161,7 +1161,7 @@ function CalendarRecordFocus({
             </button>
             <button
               aria-label={copy.nextDay}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] hover:bg-[var(--sunlit-paper)]"
+              className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] hover:bg-[var(--accent-soft)]"
               onClick={() => onNavigate(1)}
               type="button"
             >
@@ -1194,7 +1194,7 @@ function CalendarRecordFocus({
                 className={`group flex min-w-0 items-center gap-3 rounded-2xl border p-2.5 text-start transition ${statusCardClass(dayRecord.status)} ${
                   selected
                     ? "ring-2 ring-[var(--focus)] ring-offset-1 ring-offset-[var(--surface)] shadow-sm"
-                    : "hover:border-[var(--sunlit-line-strong)] hover:shadow-sm"
+                    : "hover:border-[var(--lavender)] hover:shadow-[var(--card-glow)]"
                 }`}
                 data-calendar-status={dayRecord.status}
                 key={dayRecord.id}
@@ -1246,7 +1246,7 @@ function CalendarRecordFocus({
           <div className="flex items-start justify-between gap-4 border-b border-[var(--sunlit-line)] pb-5">
             <div className="min-w-0">
               <button
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--sunlit-muted)] hover:text-[var(--link-hover)]"
                 onClick={onBackToDay}
                 type="button"
               >
@@ -1262,7 +1262,7 @@ function CalendarRecordFocus({
             </div>
             <button
               aria-label={copy.close}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)]"
               onClick={onClose}
               type="button"
             >
@@ -1464,7 +1464,7 @@ function CalendarDayView({
         </div>
         <button
           aria-label={copy.close}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)]"
           onClick={onClose}
           type="button"
         >
@@ -1475,7 +1475,7 @@ function CalendarDayView({
       <div className="mt-4 flex items-center justify-center gap-2">
         <button
           aria-label={copy.previousDay}
-          className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--sunlit-paper)]"
+          className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--accent-soft)]"
           onClick={() => onNavigate(-1)}
           type="button"
         >
@@ -1486,7 +1486,7 @@ function CalendarDayView({
         </button>
         <button
           aria-label={copy.nextDay}
-          className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--sunlit-paper)]"
+          className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink-soft)] transition hover:bg-[var(--accent-soft)]"
           onClick={() => onNavigate(1)}
           type="button"
         >
@@ -1595,7 +1595,7 @@ function UnscheduledDrawer({
           </div>
           <button
             aria-label={copy.close}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)]"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)]"
             onClick={onClose}
             type="button"
           >
@@ -1608,7 +1608,7 @@ function UnscheduledDrawer({
             <div className="grid gap-2.5">
               {records.map((record) => (
                 <Link
-                  className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                  className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--lavender)] hover:shadow-[var(--card-glow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                   href={`/${locale}/app/content-studio?item=${record.id}&source=calendar`}
                   key={record.id}
                 >
@@ -1698,7 +1698,7 @@ function CalendarDayColumn({
     >
       <button
         aria-label={`${openDayLabel}: ${formatDayHeading(dateKey, locale)} · ${formatItemCount(records.length, locale)}`}
-        className="flex w-full items-center justify-between gap-2 rounded-xl text-start outline-none transition hover:bg-[var(--surface)] focus-visible:ring-2 focus-visible:ring-[var(--focus)] md:block"
+        className="flex w-full items-center justify-between gap-2 rounded-xl text-start outline-none transition hover:bg-[var(--accent-soft)] focus-visible:ring-2 focus-visible:ring-[var(--focus)] md:block"
         onClick={(event) => onChooseDate(event.currentTarget.closest("section") ?? event.currentTarget)}
         type="button"
       >
@@ -1721,7 +1721,7 @@ function CalendarDayColumn({
             {records.slice(0, 3).map((record) => (
               <m.button
                 aria-label={`${statusLabel(record.status, locale)}: ${contentTitle(record, locale)} · ${contentTypeLabel(record, locale)} · ${calendarPlacementLabel(record, locale)}`}
-                className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-2.5 py-1.5 text-start outline-none transition hover:-translate-y-0.5 hover:border-[var(--sunlit-line-strong)] hover:shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--focus)] motion-reduce:transition-none"
+                className="min-w-0 rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] px-2.5 py-1.5 text-start outline-none transition hover:-translate-y-0.5 hover:border-[var(--lavender)] hover:shadow-[var(--card-glow)] focus-visible:ring-2 focus-visible:ring-[var(--focus)] motion-reduce:transition-none"
                 key={record.id}
                 onClick={(event) => onChooseRecord(record, event.currentTarget)}
                 transition={shouldReduceMotion ? { duration: 0 } : calendarLayoutTransition}
@@ -1738,7 +1738,7 @@ function CalendarDayColumn({
             ))}
             {records.length > 3 ? (
               <button
-                className="rounded-lg py-1 text-center text-[13px] font-semibold text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                className="rounded-lg py-1 text-center text-[13px] font-semibold text-[var(--sunlit-muted)] hover:text-[var(--link-hover)]"
                 onClick={(event) => onChooseDate(event.currentTarget.closest("section") ?? event.currentTarget)}
                 type="button"
               >
@@ -1749,7 +1749,7 @@ function CalendarDayColumn({
         ) : (
           <button
             aria-label={`${openDayLabel}: ${formatDayHeading(dateKey, locale)}`}
-            className="rounded-xl border border-dashed border-[var(--sunlit-line)] bg-[var(--surface)] px-2 py-3 text-center text-[13px] font-bold text-[var(--sunlit-muted)] hover:border-[var(--sunlit-line-strong)]"
+            className="rounded-xl border border-dashed border-[var(--sunlit-line)] bg-[var(--surface)] px-2 py-3 text-center text-[13px] font-bold text-[var(--sunlit-muted)] hover:border-[var(--lavender)]"
             onClick={(event) => onChooseDate(event.currentTarget.closest("section") ?? event.currentTarget)}
             type="button"
           >
@@ -1816,7 +1816,7 @@ function MonthOverview({
               className={
                 selected
                   ? "h-16 overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--secondary)_55%,transparent)] bg-[var(--surface)] p-1.5 text-start shadow-[0_8px_20px_color-mix(in_srgb,var(--secondary)_9%,transparent)]"
-                  : "h-16 overflow-hidden rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-1.5 text-start hover:border-[var(--sunlit-line-strong)]"
+                  : "h-16 overflow-hidden rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] p-1.5 text-start hover:border-[var(--lavender)]"
               }
               key={dateKey}
               onClick={(event) => onChooseDate(dateKey, event.currentTarget)}
@@ -1895,7 +1895,7 @@ function CalendarDayRecordButton({
 }) {
   return (
     <button
-      className={`group min-w-0 rounded-2xl border p-3 text-start transition hover:-translate-y-0.5 hover:shadow-md motion-reduce:transition-none ${statusCardClass(record.status)}`}
+      className={`group min-w-0 rounded-2xl border p-3 text-start transition hover:-translate-y-0.5 hover:shadow-[var(--card-glow)] motion-reduce:transition-none ${statusCardClass(record.status)}`}
       onClick={(event) => onClick(event.currentTarget)}
       type="button"
     >
@@ -1917,7 +1917,7 @@ function CalendarDayRecordButton({
           <span className="mt-2 min-w-0 line-clamp-2 text-base font-semibold leading-6 text-[var(--sunlit-ink)]">{contentTitle(record, locale)}</span>
           <span className="mt-1.5 block text-xs font-medium text-[var(--sunlit-muted)]">{recordMomentLabel(record, copy, locale)}</span>
         </span>
-        <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)] motion-reduce:transition-none">
+        <span className="self-center text-[var(--sunlit-muted)] transition group-hover:text-[var(--link-hover)] motion-reduce:transition-none">
           {locale === "ar" ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </span>
       </span>

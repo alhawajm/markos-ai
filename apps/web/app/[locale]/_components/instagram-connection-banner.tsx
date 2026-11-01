@@ -30,7 +30,7 @@ export function InstagramConnectionBanner({ locale }: { locale: Locale }) {
   const ar = locale === "ar";
   return (
     <aside className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-      <Instagram aria-hidden="true" className="shrink-0 text-[var(--accent)]" size={26} />
+      <Instagram aria-hidden="true" className="shrink-0 text-[var(--accent-text)]" size={26} />
       <div className="min-w-0 flex-1">
         <p className="text-base font-semibold">{ar ? "اربط إنستغرام لإكمال الإعداد" : "Connect Instagram to complete your setup"}</p>
         <p className="mt-1 text-[15px] text-[var(--text-muted)]">

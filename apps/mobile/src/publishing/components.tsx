@@ -27,7 +27,7 @@ export function Choices<T extends string>({
             paddingVertical: 8,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: option.value === value ? colors.accent : colors.border,
+            borderColor: option.value === value ? colors.accentText : colors.border,
             backgroundColor: option.value === value ? colors.secondarySoft : colors.surface
           }}
         >

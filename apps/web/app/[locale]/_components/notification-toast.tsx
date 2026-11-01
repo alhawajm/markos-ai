@@ -52,7 +52,7 @@ export function NotificationToast({
               {action}
               <button
                 aria-label={dismissLabel}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:border-[var(--sunlit-line-strong)] hover:text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition hover:border-[var(--lavender)] hover:text-[var(--link-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
                 onClick={onDismiss}
                 title={dismissLabel}
                 type="button"

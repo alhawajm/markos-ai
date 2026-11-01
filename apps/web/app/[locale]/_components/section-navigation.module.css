@@ -42,9 +42,9 @@
 }
 
 .navigationLink:hover {
-  border-color: var(--section-menu-hover-border, color-mix(in srgb, var(--primary) 18%, transparent));
-  background: var(--section-menu-hover, var(--primary-soft));
-  color: var(--section-menu-active-text, var(--link));
+  border-color: var(--lavender);
+  background: var(--accent-soft);
+  color: var(--link-hover);
   font-weight: 600;
   transform: translateX(2px);
 }

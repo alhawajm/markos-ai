@@ -6,10 +6,19 @@ import { format, resolveConfig } from "prettier";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const css = fs.readFileSync(path.join(root, "apps/web/app/theme-tokens.css"), "utf8");
 const blocks = css.split("}");
-const parse = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6});/g)].map((m) => [m[1], m[2]]));
-const light = parse(blocks[0]);
-const dark = { ...light, ...parse(blocks[1]) };
-if (!light.primary || !dark.primary || light.primary === dark.primary) throw new Error("Could not read both MARKOS themes");
+const parse = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6}|var\(--[\w-]+\));/g)].map((m) => [m[1], m[2]]));
+const resolveColors = (tokens) => {
+  const resolve = (name, visited = new Set()) => {
+    if (visited.has(name) || !tokens[name]) throw new Error(`Invalid color token: ${name}`);
+    const reference = /^var\(--([\w-]+)\)$/.exec(tokens[name]);
+    return reference ? resolve(reference[1], new Set([...visited, name])) : tokens[name];
+  };
+  return Object.fromEntries(Object.keys(tokens).map((name) => [name, resolve(name)]));
+};
+const lightTokens = parse(blocks[0]);
+const light = resolveColors(lightTokens);
+const dark = resolveColors({ ...lightTokens, ...parse(blocks[1]) });
+if (!light.primary || !dark.primary || light.background === dark.background) throw new Error("Could not read both MARKOS themes");
 const mix = (a, b, amount) =>
   "#" +
   [1, 3, 5]
@@ -24,6 +33,8 @@ for (const colors of [light, dark]) {
     ["primary", 0.15],
     ["secondary", 0.2],
     ["accent", 0.12],
+    ["supporting", 0.2],
+    ["highlight", 0.15],
     ["success", 0.1],
     ["warning", 0.1],
     ["danger", 0.1]

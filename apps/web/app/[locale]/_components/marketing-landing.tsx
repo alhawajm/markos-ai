@@ -1,45 +1,12 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { LucideIcon } from "lucide-react";
-import {
-  ArrowRight,
-  BarChart3,
-  CalendarDays,
-  Check,
-  CircleCheck,
-  Compass,
-  Globe2,
-  Instagram,
-  Lightbulb,
-  Lock,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  Wand2
-} from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 import { ThemeSelect } from "../../_components/theme-control";
-import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./marketing-landing.module.css";
 
 type WorkspaceKey = "plan" | "create" | "publish" | "insights";
 type FooterLinkKey = "capabilities" | "how" | "insights" | "terms" | "privacy";
-
-const workspaceIcons: Record<WorkspaceKey, LucideIcon> = {
-  plan: Compass,
-  create: Wand2,
-  publish: Send,
-  insights: BarChart3
-};
-
-const capabilityIcons: Record<WorkspaceKey, LucideIcon> = {
-  plan: Target,
-  create: Wand2,
-  publish: CalendarDays,
-  insights: BarChart3
-};
 
 const copyByLocale = {
   en: {
@@ -358,7 +325,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceKey>("plan");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeTab = copy.workspace.tabs.find((tab) => tab.key === activeWorkspace) ?? copy.workspace.tabs[0];
-  const ActiveWorkspaceIcon = workspaceIcons[activeTab.key];
   const footerHrefs: Record<FooterLinkKey, string> = {
     capabilities: "#capabilities",
     how: "#how",
@@ -396,30 +362,35 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
       </a>
 
       <div className={styles.siteShell} id="marketing-content">
-        <header className={`${styles.container} ${styles.header}`}>
-          <a className={styles.brand} href={`/${locale}`} aria-label={copy.brand}>
-            <span className={styles.brandMark} aria-hidden="true">
-              <MarkosAiIcon size={21} />
-            </span>
+        <header className={`brand-chrome ${styles.header}`}>
+          <a className={`brand-logo ${styles.brand}`} href={`/${locale}`} aria-label={copy.brand}>
             <strong>{copy.brand}</strong>
           </a>
 
           <nav className={styles.desktopNav} aria-label={isArabic ? "التنقل في الصفحة" : "Landing page navigation"}>
-            <a href="#capabilities">{copy.nav.capabilities}</a>
-            <a href="#how">{copy.nav.how}</a>
-            <a href="#example">{copy.nav.insights}</a>
+            <a className="brand-nav-item" href="#capabilities">
+              {copy.nav.capabilities}
+            </a>
+            <a className="brand-nav-item" href="#how">
+              {copy.nav.how}
+            </a>
+            <a className="brand-nav-item" href="#example">
+              {copy.nav.insights}
+            </a>
           </nav>
 
           <div className={styles.headerActions}>
             <ThemeSelect locale={locale} />
-            <a className={styles.languageLink} href={localeHref}>
-              <Globe2 aria-hidden="true" size={18} />
-              <span>{localeLabel}</span>
+            <a aria-label={localeLabel} className={styles.languageLink} href={localeHref}>
+              <span className={styles.languageFull}>{localeLabel}</span>
+              <span aria-hidden="true" className={styles.languageShort}>
+                {isArabic ? "EN" : "ع"}
+              </span>
             </a>
             <a className={styles.loginLink} href={loginHref}>
               {copy.actions.login}
             </a>
-            <a className={`${styles.button} ${styles.buttonDark} ${styles.headerCta}`} href={signupHref}>
+            <a className={`brand-action ${styles.button} ${styles.buttonDark} ${styles.headerCta}`} href={signupHref}>
               {copy.actions.getStarted}
             </a>
           </div>
@@ -430,17 +401,13 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
           <div className={styles.heroGlowAqua} aria-hidden="true" />
 
           <div className={styles.heroCopy}>
-            <span className={styles.heroIcon} aria-hidden="true">
-              <Instagram size={22} />
-            </span>
             <h1>
               {copy.hero.headlineLead} <span>{copy.hero.headlineAccent}</span>
             </h1>
             <p className={styles.heroBody}>{copy.hero.body}</p>
             <div className={styles.heroActions}>
-              <a className={`${styles.button} ${styles.buttonPrimary}`} href={signupHref}>
+              <a className={`brand-action ${styles.button} ${styles.buttonPrimary}`} href={signupHref}>
                 {copy.actions.getStarted}
-                <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={19} />
               </a>
               <a className={`${styles.button} ${styles.buttonSecondary}`} href="#how">
                 {copy.actions.seeHow}
@@ -448,27 +415,18 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
             </div>
             <ul className={styles.assuranceList} aria-label={isArabic ? "مزايا أساسية" : "Key assurances"}>
               {copy.hero.assurances.map((assurance) => (
-                <li key={assurance}>
-                  <CircleCheck aria-hidden="true" size={18} />
-                  {assurance}
-                </li>
+                <li key={assurance}>{assurance}</li>
               ))}
             </ul>
           </div>
 
           <figure className={styles.workspace} aria-label={copy.workspace.tourLabel}>
             <figcaption className={styles.workspaceHeader}>
-              <span className={styles.workspaceBrand}>
-                <span aria-hidden="true">
-                  <Sparkles size={17} />
-                </span>
-                {copy.workspace.label}
-              </span>
+              <span className={styles.workspaceBrand}>{copy.workspace.label}</span>
             </figcaption>
 
             <div className={styles.workspaceTabs} role="tablist" aria-label={copy.workspace.tabListLabel}>
               {copy.workspace.tabs.map((tab, index) => {
-                const Icon = workspaceIcons[tab.key];
                 const selected = tab.key === activeWorkspace;
                 const tabId = `workspace-${tab.key}-tab`;
                 const panelId = `workspace-${tab.key}-panel`;
@@ -490,7 +448,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
                     tabIndex={selected ? 0 : -1}
                     type="button"
                   >
-                    <Icon aria-hidden="true" size={18} />
                     {tab.label}
                   </button>
                 );
@@ -506,9 +463,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
               tabIndex={0}
             >
               <div className={styles.workspacePanelHeading}>
-                <span aria-hidden="true">
-                  <ActiveWorkspaceIcon size={27} />
-                </span>
                 <h2>{activeTab.title}</h2>
               </div>
               <ol className={styles.workspaceItems}>
@@ -519,14 +473,10 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
                       <strong>{item.label}</strong>
                       <span>{item.value}</span>
                     </div>
-                    <Check aria-hidden="true" size={18} />
                   </li>
                 ))}
               </ol>
-              <p className={styles.workspaceFooter}>
-                <Sparkles aria-hidden="true" size={17} />
-                {copy.workspace.footer}
-              </p>
+              <p className={styles.workspaceFooter}>{copy.workspace.footer}</p>
             </div>
           </figure>
         </section>
@@ -537,12 +487,8 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
           </div>
           <div className={styles.capabilityGrid}>
             {copy.capabilities.items.map((item, index) => {
-              const Icon = capabilityIcons[item.key];
               return (
-                <article className={styles.capabilityCard} data-position={index} key={item.key}>
-                  <span className={styles.capabilityIcon} aria-hidden="true">
-                    <Icon size={23} />
-                  </span>
+                <article className={`brand-card ${styles.capabilityCard}`} data-position={index} key={item.key}>
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
                 </article>
@@ -583,9 +529,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
                 <strong>{copy.example.businessName}</strong>
               </header>
               <div className={styles.goalCard}>
-                <span className={styles.exampleIcon} aria-hidden="true">
-                  <Target size={21} />
-                </span>
                 <div>
                   <small>{copy.example.goalLabel}</small>
                   <p>{copy.example.goal}</p>
@@ -607,10 +550,7 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
 
             <div className={styles.exampleInsights}>
               <header className={styles.insightsHeader}>
-                <span>
-                  <BarChart3 aria-hidden="true" size={21} />
-                  {copy.example.insightsLabel}
-                </span>
+                <span>{copy.example.insightsLabel}</span>
                 <strong>{copy.example.exampleData}</strong>
               </header>
 
@@ -655,9 +595,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
               </div>
 
               <div className={styles.insightCard}>
-                <span className={styles.exampleIcon} aria-hidden="true">
-                  <Lightbulb size={21} />
-                </span>
                 <div>
                   <small>{copy.example.insightTitle}</small>
                   <p>{copy.example.insightBody}</p>
@@ -676,12 +613,9 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
               <p>{copy.trust.body}</p>
             </div>
             <div className={styles.trustGrid}>
-              {copy.trust.items.map((item, index) => {
-                const icons = [ShieldCheck, Lightbulb, Lock, Check] as const;
-                const Icon = icons[index] ?? Check;
+              {copy.trust.items.map((item) => {
                 return (
                   <article key={item.title}>
-                    <Icon aria-hidden="true" size={23} />
                     <h3>{item.title}</h3>
                     <p>{item.body}</p>
                   </article>
@@ -697,9 +631,8 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
             <p>{copy.closing.body}</p>
           </div>
           <div className={styles.closingActions}>
-            <a className={`${styles.button} ${styles.buttonLight}`} href={signupHref}>
+            <a className={`brand-action ${styles.button} ${styles.buttonLight}`} href={signupHref}>
               {copy.actions.getStarted}
-              <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={19} />
             </a>
             <a className={`${styles.button} ${styles.buttonGhostLight}`} href="#how">
               {copy.actions.seeHow}
@@ -707,13 +640,10 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
           </div>
         </section>
 
-        <footer className={styles.footer} id="footer">
+        <footer className={`brand-chrome ${styles.footer}`} id="footer">
           <div className={`${styles.container} ${styles.footerMain}`}>
             <div className={styles.footerBrand}>
-              <a className={styles.brand} href={`/${locale}`} aria-label={copy.brand}>
-                <span className={styles.brandMark} aria-hidden="true">
-                  <Sparkles size={21} strokeWidth={2.4} />
-                </span>
+              <a className={`brand-logo ${styles.brand}`} href={`/${locale}`} aria-label={copy.brand}>
                 <strong>{copy.brand}</strong>
               </a>
               <p>{copy.footer.descriptor}</p>
@@ -735,7 +665,6 @@ export function MarketingLanding({ locale }: { locale: Locale }) {
           <div className={`${styles.container} ${styles.footerBottom}`}>
             <span>{copy.footer.copyright}</span>
             <a className={styles.footerLanguage} href={localeHref}>
-              <Globe2 aria-hidden="true" size={17} />
               {localeLabel}
             </a>
           </div>

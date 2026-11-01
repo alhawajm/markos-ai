@@ -4,28 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  ArrowRight,
-  BarChart3,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Images,
-  Instagram,
-  KeyRound,
-  Languages,
-  Lock,
-  Mail,
-  Play,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-  UsersRound,
-  type LucideIcon
-} from "lucide-react";
+import { Check, CheckCircle2, ShieldCheck, type LucideIcon } from "lucide-react";
 import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
 import type { Locale } from "@markos/shared-types";
 import { accountPolicyVersion, loginSchema, registerSchema } from "@markos/validation";
@@ -33,7 +12,6 @@ import { ThemeSelect } from "../../_components/theme-control";
 import { getBrowserApiBaseUrl } from "./api-base-url";
 import { refreshBrowserSession, setBrowserSession, createMarkosClient, useMarkosSession } from "./browser-session";
 import { appEntryRedirect } from "./app-entry";
-import { MarkosAiIcon } from "./markos-ai-icon";
 import styles from "./auth-page.module.css";
 
 import { PasswordRecoveryPanel } from "./password-recovery-panel";
@@ -738,18 +716,14 @@ export function AuthPage({
 
   return (
     <main className={`sunlit-theme ${styles.authPage}`} data-auth-page={mode} dir={isArabic ? "rtl" : "ltr"} lang={locale}>
-      <header className={styles.header}>
-        <a className={styles.brand} href={landingHref} aria-label={copy.brand}>
-          <span className={styles.brandMark} aria-hidden="true">
-            <MarkosAiIcon size={21} />
-          </span>
+      <header className={`brand-chrome ${styles.header}`}>
+        <a className={`brand-logo ${styles.brand}`} href={landingHref} aria-label={copy.brand}>
           <strong>{copy.brand}</strong>
         </a>
         <nav aria-label={isArabic ? "تنقل المصادقة" : "Authentication navigation"}>
           <ThemeSelect locale={locale} />
           {mode === "login" ? null : (
             <a className={styles.backLink} href={landingHref}>
-              <ArrowLeft className={styles.backIcon} aria-hidden="true" size={17} />
               {copy.back}
             </a>
           )}
@@ -799,7 +773,7 @@ export function AuthPage({
                     </a>
                   </div>
                   <NoticeMessage notice={notice} />
-                  <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                  <button className={`brand-action ${styles.primaryButton}`} disabled={isSubmitting} type="submit">
                     {isSubmitting ? (isArabic ? "جارٍ تسجيل الدخول…" : "Logging in…") : copy.login.action}
                   </button>
                 </fieldset>
@@ -850,9 +824,8 @@ export function AuthPage({
                         termsHref={termsHref}
                       />
                       <NoticeMessage notice={notice} />
-                      <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+                      <button className={`brand-action ${styles.primaryButton}`} disabled={isSubmitting} type="submit">
                         {isSubmitting ? (isArabic ? "جارٍ إنشاء الحساب…" : "Creating account…") : copy.signup.action}
-                        <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                       </button>
                     </fieldset>
                   </form>
@@ -911,13 +884,12 @@ export function AuthPage({
                       : copy.verify.instructions}
                   </p>
                   <button
-                    className={styles.primaryButton}
+                    className={`brand-action ${styles.primaryButton}`}
                     disabled={isSubmitting || verificationChecking || !email || !isInteractive}
                     onClick={() => void checkVerification(true)}
                     type="button"
                   >
                     {verifiedReady ? (isArabic ? "متابعة الإعداد" : "Continue setup") : isArabic ? "أكدت بريدي الإلكتروني" : "I’ve verified my email"}
-                    <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                   </button>
                   <NoticeMessage notice={notice} />
                   <button
@@ -926,18 +898,16 @@ export function AuthPage({
                     onClick={() => void requestVerification()}
                     type="button"
                   >
-                    <Mail aria-hidden="true" size={17} />
                     {resendSeconds > 0 ? copy.verify.resendIn(resendSeconds) : copy.verify.resend}
                   </button>
                   {localVerificationToken ? (
                     <button
-                      className={styles.primaryButton}
+                      className={`brand-action ${styles.primaryButton}`}
                       disabled={isSubmitting}
                       onClick={() => void verifyEmailToken(localVerificationToken)}
                       type="button"
                     >
                       {isArabic ? "تأكيد البريد محلياً" : "Verify locally"}
-                      <ArrowRight className={styles.directionalIcon} aria-hidden="true" size={18} />
                     </button>
                   ) : null}
                   <div className={styles.statusLinks}>
@@ -956,7 +926,7 @@ export function AuthPage({
         )}
       </div>
 
-      <footer className={styles.footer}>
+      <footer className={`brand-chrome ${styles.footer}`}>
         <span>{copy.footer}</span>
         <span>
           <a href={termsHref}>{copy.legal.terms}</a>
@@ -973,18 +943,18 @@ function SignupCalendarPreview({ locale }: { locale: Locale }) {
   const days = isArabic ? ["الأحد 6", "الاثنين 7", "الثلاثاء 8", "الأربعاء 9", "الخميس 10"] : ["Sun 6", "Mon 7", "Tue 8", "Wed 9", "Thu 10"];
   const posts = isArabic
     ? [
-        { day: 0, icon: Play, time: "10:00", title: "جولة سريعة في المطبخ", tone: "coral", type: "ريل" },
-        { day: 1, icon: Images, time: "13:30", title: "ثلاث نصائح لاختيار الوجبة", tone: "aqua", type: "كاروسيل" },
-        { day: 2, icon: Instagram, time: "09:00", title: "قصة عميلة هذا الأسبوع", tone: "pink", type: "منشور" },
-        { day: 3, icon: Play, time: "18:00", title: "من الفكرة إلى المنتج", tone: "yellow", type: "ريل" },
-        { day: 4, icon: Instagram, time: "11:30", title: "اختيار الجمهور", tone: "aqua", type: "قصة" }
+        { day: 0, time: "10:00", title: "جولة سريعة في المطبخ", tone: "coral", type: "ريل" },
+        { day: 1, time: "13:30", title: "ثلاث نصائح لاختيار الوجبة", tone: "aqua", type: "كاروسيل" },
+        { day: 2, time: "09:00", title: "قصة عميلة هذا الأسبوع", tone: "pink", type: "منشور" },
+        { day: 3, time: "18:00", title: "من الفكرة إلى المنتج", tone: "yellow", type: "ريل" },
+        { day: 4, time: "11:30", title: "اختيار الجمهور", tone: "aqua", type: "قصة" }
       ]
     : [
-        { day: 0, icon: Play, time: "10:00", title: "A quick kitchen tour", tone: "coral", type: "Reel" },
-        { day: 1, icon: Images, time: "13:30", title: "3 ways to choose your plan", tone: "aqua", type: "Carousel" },
-        { day: 2, icon: Instagram, time: "09:00", title: "This week's customer story", tone: "pink", type: "Post" },
-        { day: 3, icon: Play, time: "18:00", title: "From idea to finished product", tone: "yellow", type: "Reel" },
-        { day: 4, icon: Instagram, time: "11:30", title: "Audience choice", tone: "aqua", type: "Story" }
+        { day: 0, time: "10:00", title: "A quick kitchen tour", tone: "coral", type: "Reel" },
+        { day: 1, time: "13:30", title: "3 ways to choose your plan", tone: "aqua", type: "Carousel" },
+        { day: 2, time: "09:00", title: "This week's customer story", tone: "pink", type: "Post" },
+        { day: 3, time: "18:00", title: "From idea to finished product", tone: "yellow", type: "Reel" },
+        { day: 4, time: "11:30", title: "Audience choice", tone: "aqua", type: "Story" }
       ];
 
   return (
@@ -993,9 +963,6 @@ function SignupCalendarPreview({ locale }: { locale: Locale }) {
       className={`${styles.authPreview} ${styles.signupPreview}`}
     >
       <div className={styles.authPreviewHeader}>
-        <span className={styles.authPreviewIcon} aria-hidden="true">
-          <CalendarDays size={22} />
-        </span>
         <div>
           <p>{isArabic ? "تقويم MARKOS" : "MARKOS CALENDAR"}</p>
           <h2>{isArabic ? "خطتك جاهزة للأسبوع" : "Your week, already taking shape"}</h2>
@@ -1014,12 +981,9 @@ function SignupCalendarPreview({ locale }: { locale: Locale }) {
               {posts
                 .filter((post) => post.day === index)
                 .map((post) => {
-                  const Icon = post.icon;
                   return (
                     <article data-tone={post.tone} key={post.title}>
-                      <span>
-                        <Icon size={14} /> {post.type}
-                      </span>
+                      <span>{post.type}</span>
                       <strong>{post.title}</strong>
                       <small>{post.time}</small>
                     </article>
@@ -1045,9 +1009,6 @@ function LoginInsightsPreview({ locale }: { locale: Locale }) {
       className={`${styles.authPreview} ${styles.insightsPreview}`}
     >
       <div className={styles.authPreviewHeader}>
-        <span className={styles.authPreviewIcon} aria-hidden="true">
-          <BarChart3 size={22} />
-        </span>
         <div>
           <p>{isArabic ? "رؤى MARKOS" : "MARKOS INSIGHTS"}</p>
           <h2>{isArabic ? "اعرف ما الذي يحرّك النمو" : "See what is moving the business"}</h2>
@@ -1056,19 +1017,16 @@ function LoginInsightsPreview({ locale }: { locale: Locale }) {
       </div>
       <div className={styles.insightMetricGrid}>
         <article>
-          <TrendingUp aria-hidden="true" size={18} />
           <span>{isArabic ? "الوصول" : "Reach"}</span>
           <strong>38.4K</strong>
           <small>+18.6%</small>
         </article>
         <article>
-          <UsersRound aria-hidden="true" size={18} />
           <span>{isArabic ? "تفاعل الجمهور" : "Engagement"}</span>
           <strong>7.8%</strong>
           <small>+2.1%</small>
         </article>
         <article>
-          <CalendarDays aria-hidden="true" size={18} />
           <span>{isArabic ? "محتوى منشور" : "Published"}</span>
           <strong>16</strong>
           <small>{isArabic ? "هذا الشهر" : "this month"}</small>
@@ -1125,7 +1083,6 @@ function LoginInsightsPreview({ locale }: { locale: Locale }) {
         </article>
       </div>
       <div className={styles.insightCallout}>
-        <Sparkles aria-hidden="true" size={18} />
         <span>{isArabic ? "مقاطع الريل التعليمية تحقق أفضل وصول هذا الشهر." : "Educational Reels are delivering your strongest reach this month."}</span>
       </div>
     </aside>
@@ -1135,7 +1092,6 @@ function LoginInsightsPreview({ locale }: { locale: Locale }) {
 function AuthLanguageSelector({ arabicHref, englishHref, locale }: { arabicHref: string; englishHref: string; locale: Locale }) {
   return (
     <span aria-label={locale === "ar" ? "اختر اللغة" : "Choose language"} className={styles.authLanguageSelector} dir="ltr" role="group">
-      <Languages aria-hidden="true" size={16} />
       {locale === "en" ? <strong aria-current="page">English</strong> : <Link href={englishHref}>English</Link>}
       <span aria-hidden="true">/</span>
       {locale === "ar" ? (
@@ -1151,14 +1107,9 @@ function AuthLanguageSelector({ arabicHref, englishHref, locale }: { arabicHref:
   );
 }
 
-function AuthHeading({ body, icon: Icon, title }: { body?: string; icon?: LucideIcon; title: string }) {
+function AuthHeading({ body, title }: { body?: string; title: string }) {
   return (
     <div className={styles.authHeading}>
-      {Icon ? (
-        <span aria-hidden="true">
-          <Icon size={22} />
-        </span>
-      ) : null}
       <h1>{title}</h1>
       {body ? <p>{body}</p> : null}
     </div>
@@ -1244,7 +1195,6 @@ function EmailField({ copy, email, onChange }: { copy: (typeof copyByLocale)[Loc
   return (
     <Field id="email" label={copy.email}>
       <span className={styles.inputWrap}>
-        <Mail aria-hidden="true" size={19} />
         <input
           autoComplete="email"
           id="email"
@@ -1268,7 +1218,7 @@ function PasswordField({
   onChange,
   password,
   placeholder,
-  revealVariant = "icon",
+  revealVariant = "text",
   requirement = false,
   show,
   toggle
@@ -1299,7 +1249,6 @@ function PasswordField({
       label={label ?? copy.password}
     >
       <span className={styles.inputWrap}>
-        <Lock aria-hidden="true" size={19} />
         <input
           autoComplete={autoComplete}
           id={id}
@@ -1315,17 +1264,7 @@ function PasswordField({
           onClick={toggle}
           type="button"
         >
-          {revealVariant === "text" ? (
-            show ? (
-              copy.hidePasswordShort
-            ) : (
-              copy.showPasswordShort
-            )
-          ) : show ? (
-            <EyeOff aria-hidden="true" size={19} />
-          ) : (
-            <Eye aria-hidden="true" size={19} />
-          )}
+          {show ? copy.hidePasswordShort : copy.showPasswordShort}
         </button>
       </span>
       {requirement ? (

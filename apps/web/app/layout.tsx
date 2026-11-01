@@ -5,6 +5,7 @@ import { themeInitializationScript } from "./theme";
 import { plexArabic, plexSans } from "./fonts";
 import "./globals.css";
 import "./sunlit-theme.css";
+import "./brand-interactions.css";
 
 export const metadata: Metadata = {
   title: "MARKOS AI",

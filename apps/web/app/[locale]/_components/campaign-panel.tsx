@@ -575,7 +575,7 @@ function CampaignComposer({
             <ul className="mt-3 space-y-2">
               {referenceFiles.map((file, index) => (
                 <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-3 rounded-lg bg-[var(--surface-raised)] p-2">
-                  <FileText size={18} className="shrink-0 text-[var(--primary)]" aria-hidden="true" />
+                  <FileText size={18} className="shrink-0 text-[var(--link)]" aria-hidden="true" />
                   <span className="min-w-0 flex-1 break-words text-sm" dir="auto">
                     {file.name}
                   </span>
@@ -614,7 +614,7 @@ function CampaignComposer({
               return (
                 <button
                   aria-pressed={selected}
-                  className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : supported ? "border-[var(--sunlit-line)] bg-[var(--surface)] hover:border-[var(--sunlit-coral)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
+                  className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : supported ? "border-[var(--sunlit-line)] bg-[var(--surface)] hover:border-[var(--lavender)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
                   disabled={!supported}
                   key={days}
                   onClick={() => supported && onDuration(days as CampaignGenerationDurationDays)}

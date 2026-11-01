@@ -2,9 +2,9 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-09-10
+- Last updated: 2026-11-01
 
-This document is the active visual and interaction reference for MARKOS. The September 10 light/dark palette replaces the earlier Sunlit colors and light-only guidance. It does not restore the retired "AI Marketing Command Center" composition. The canonical marketing, authentication, onboarding, legal, and application routes are the coded reference; there is no separate design-preview route family.
+This document is the active visual and interaction reference for MARKOS. The November 1 pink and teal palette supersedes the September 10 brand colors while retaining light and dark themes. It does not restore the retired "AI Marketing Command Center" composition. The canonical marketing, authentication, onboarding, legal, and application routes are the coded reference; there is no separate design-preview route family.
 
 Product behavior still comes from:
 
@@ -31,7 +31,7 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 ### Clear, capable, and human
 
 - Support the approved light and dark themes across the same product surfaces, with consistent hierarchy, readable contrast, and user control.
-- Use rose, aqua, and violet in the semantic roles below. Preserve the quiet canvas and distinguish adjacent surfaces without adding decorative complexity.
+- Keep pink and teal as the main brand colors, with muted teal, lavender, and peach in supporting roles. Preserve the quiet canvas and distinguish adjacent surfaces without adding decorative complexity.
 - Keep the interface polished without making it feel futuristic, robotic, or overly "AI."
 - Prefer purposeful examples and lightweight interaction over decorative complexity.
 
@@ -59,23 +59,23 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 
 ## Visual foundation
 
-### Core palette — approved 2026-09-10
+### Core palette — updated 2026-11-01
 
-Khalid explicitly selected both palettes for the actual site. These exact base values supersede the former coral/berry/yellow palette and the unimplemented Tangerine Slate experiments.
+The requested palette keeps teal and pink dominant across the actual site. Lavender is the interaction color; muted teal supports the primary pair, and peach is limited to small accents outside the matching header/footer gradient. The explicit November 1 light/night interaction specification supersedes the earlier faded-gradient treatment.
 
 | Role | Token reference | Light | Dark | Primary use |
 | --- | --- | --- | --- | --- |
-| Text | `--text` | `#20212b` | `#f2faf7` | Primary text and readable hierarchy |
-| Background | `--background` | `#f7fafa` | `#151821` | Application and public-page canvas |
-| Primary | `--primary` | `#d88fa3` | `#8fe3da` | Primary actions and key emphasis |
-| Secondary | `--secondary` | `#81d8d0` | `#7b6af0` | Supporting accents, selected surfaces, and charts |
-| Accent | `--accent` | `#6c3ce8` | `#d9a0b1` | Focus, emphasis, and supporting highlights |
+| Text | `--text` | `#263640` | `#eef4f6` | Soft slate/off-white text |
+| Background | `--background` | `#f0fafa` | `#14181f` | Flat, quiet page canvas |
+| Primary | `--primary` | `#e7b7c8` | `#e7b7c8` | Pink primary actions in both modes |
+| Secondary | `--secondary` | `#47cacc` | `#47cacc` | Teal highlights, selected surfaces, and charts |
+| Accent | `--accent` | `#cdb3d4` | `#cdb3d4` | Lavender supporting accents |
+| Supporting | `--supporting` | `#63bcc9` | `#63bcc9` | Muted teal surfaces and decorative details |
+| Highlight | `--highlight` | `#ffbe88` | `#ffbe88` | Restrained peach highlights and chart accents |
 
 Keep the exact base tokens. Derive semantic surfaces, borders, muted text, links, focus, overlays, and on-color text centrally; do not scatter independent replacements across components. Preserve separate warning, error, success, disabled, and lifecycle roles so brand color changes do not erase status meaning.
 
-The latest September 10 refinement changes dark text from the initial `#f2f4f7` to `#f2faf7`. The other approved base colors remain unchanged.
-
-Use dark labels on the light primary and secondary fills and on the dark primary and accent fills. Light-theme violet supports white labels and readable links. Do not assume that white text works on every brand fill: white on the dark secondary violet is only about `4.07:1`, below the normal-text target. Use an appropriately contrasting on-color or a tinted surface with regular text. Light primary and secondary are also too pale to serve as ordinary text links or the sole focus indicator against the light canvas.
+Use soft slate labels on pastel buttons in both modes. Light-theme links and focus indicators use deep teal (`#19696b`); links shift to readable deep lavender (`#71567a`) on hover. Dark-theme links/focus use the supplied teal and hover to the supplied lavender. Header/footer links use deeper teal (`#15434b`) and lavender (`#4f3659`) on the full light gradient so each stop meets normal-text contrast. Use `--accent-text` for functional icons and lavender text. Validate normal text at a minimum `4.5:1` contrast and focus indicators at `3:1` against their adjacent surfaces.
 
 The September 10 semantic lifecycle roles supersede the earlier Calendar palette: Draft neutral, Ready teal, Scheduled violet/blue, Published green, Failed red, and review/attention amber where distinct from failure. Shared foreground, background, and border tokens support each status in both themes. Preserve labels, icons, counts, and accessible names; color never replaces those cues and must not change lifecycle meaning.
 
@@ -85,12 +85,14 @@ The standalone IBM Plex plus Tangerine Slate prototypes were historical experime
 
 The canonical palette lives in `apps/web/app/theme-tokens.css`, with root light/dark tokens selected through `data-theme`. `apps/web/app/sunlit-theme.css` imports those tokens, and the shared Sunlit stylesheet and surviving legacy/Tailwind aliases stay connected to that one palette, including public pages, authentication, onboarding, Settings, and the authenticated shell. Existing alias names are compatibility layers, not permission to maintain separate old palettes. New components should use semantic roles instead of adding `luxury-*` values.
 
-The shared Appearance control offers Light, Dark, and System. Settings is its primary home; any quick access before sign-in or in a user menu should remain compact and secondary. Do not give appearance the same prominence as the user's main task. Preserve the browser-local preference across navigation and refresh; System follows the operating system. Apply the saved choice before the page paints, and keep explicit switching available when browser storage cannot persist it.
+The shared Appearance control provides a visible keyboard-accessible night-mode switch plus a compact Light/Dark/System selector; Settings retains its three explicit options. The first visit follows the system preference, with a light CSS fallback. Explicit choices persist across navigation and refresh and synchronize across tabs. Apply the saved choice before the page paints, and permit switching when browser storage is blocked.
 
 ### Gradients and surfaces
 
-- Primary actions use the theme's primary fill and a contrasting label. Reserve gradients for a small number of intentional brand or summary surfaces.
-- Light mode uses the approved near-white canvas with clear card and input surfaces. Dark mode uses the approved dark canvas with slightly raised neutral surfaces and restrained violet, aqua, or rose accents.
+- Light headers and footers are a matching full-width horizontal gradient: teal → soft teal → lavender → pink → peach. Dark headers/footers use a flat dark surface with a thin teal accent line. Pages stay flat in both modes; `--brand-wash` and `--brand-panel` now resolve to the background and surface colors.
+- Primary buttons are pink by default, lavender on hover with a `-2px` lift and subtle lavender glow, and darker lavender when pressed with the lift removed. Animate background, text, shadow, and transform over `0.3s ease`; preserve keyboard focus and reduced-motion support.
+- Keep cards and form fields on white or slightly tinted surfaces in light mode and neutral raised surfaces in dark mode. Reuse `brand-card` for gentle purple hover lift/glow, `brand-nav-item` for lavender interaction pills, and `brand-action` for primary actions. All hover feedback uses purple/lavender fills, tints, text, borders, or glows; normal-state pink/teal colors remain in place. Keep contrasting dark labels and functional icons on filled lavender controls.
+- Prefer clear text over redundant mini icons. Public headers and footers use the MARKOS AI wordmark; hero actions, labeled tabs, metric/feature cards, forms, and legal headings omit decorative icons. Preserve chart graphics, provider branding, and icons needed for navigation or status. Theme and password controls use plain switches or text labels.
 - Cards use theme-aware surfaces, visible borders, generous radii, and restrained shadows. Dark surfaces must remain distinguishable from the page and from modal backdrops.
 - Ambient gradients may use the approved palette, but must not reduce text contrast or compete with content.
 - Large effects should remain uncommon so important panels retain emphasis.

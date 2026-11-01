@@ -1,34 +1,45 @@
-/* MARKOS palette approved September 10, 2026. All application themes inherit here. */
+/* MARKOS palette updated November 1, 2026. Pink and teal lead both themes. */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --text: #20212b;
-  --background: #f7fafa;
-  --primary: #d88fa3;
-  --secondary: #81d8d0;
-  --accent: #6c3ce8;
+  --teal: #47cacc;
+  --soft-teal: #63bcc9;
+  --lavender: #cdb3d4;
+  --pink: #e7b7c8;
+  --peach: #ffbe88;
+  --text: #263640;
+  --background: #f0fafa;
+  --primary: var(--pink);
+  --secondary: var(--teal);
+  --accent: var(--lavender);
+  --supporting: var(--soft-teal);
+  --highlight: var(--peach);
 
   --surface: #ffffff;
-  --surface-muted: #edf2f3;
+  --surface-muted: #e9f5f5;
   --surface-raised: #ffffff;
   --text-soft: #454956;
   --muted: #606572;
   --border: #dbe1e5;
   --border-strong: #808794;
-  --on-primary: #20212b;
-  --on-secondary: #20212b;
-  --on-accent: #ffffff;
-  --link: #6c3ce8;
-  --focus: #6c3ce8;
+  --on-primary: var(--text);
+  --on-secondary: var(--text);
+  --on-accent: var(--text);
+  --button-hover: var(--lavender);
+  --button-active: #b89cc1;
+  --accent-text: #71567a;
+  --link: #19696b;
+  --link-hover: #71567a;
+  --focus: #19696b;
   --success: #18734f;
   --warning: #855100;
   --danger: #b52647;
   --on-danger: #ffffff;
   --info: #3c52ad;
-  --feature-surface: #262139;
+  --feature-surface: #21363b;
   --on-feature: #f2f4f7;
-  --shadow-sm: 0 12px 34px rgb(32 33 43 / 6%);
-  --shadow-md: 0 24px 70px rgb(32 33 43 / 12%);
+  --shadow-sm: 0 8px 24px rgb(32 33 43 / 4%);
+  --shadow-md: 0 18px 48px rgb(32 33 43 / 8%);
 
   --status-draft: #596273;
   --status-ready: #006d73;
@@ -40,32 +51,31 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --text: #f2faf7;
-  --background: #151821;
-  --primary: #8fe3da;
-  --secondary: #7b6af0;
-  --accent: #d9a0b1;
+  --text: #eef4f6;
+  --background: #14181f;
 
-  --surface: #1d202b;
-  --surface-muted: #242836;
-  --surface-raised: #2b3040;
+  --surface: #1c242d;
+  --surface-muted: #242f39;
+  --surface-raised: #2b3742;
   --text-soft: #d1d5e0;
   --muted: #a8afbf;
   --border: #353b4d;
   --border-strong: #717b92;
-  --on-primary: #20212b;
-  --on-secondary: #10121b;
-  --on-accent: #20212b;
-  --link: #d9a0b1;
-  --focus: #8fe3da;
+  --on-primary: #263640;
+  --on-secondary: #263640;
+  --on-accent: #263640;
+  --accent-text: #cdb3d4;
+  --link: var(--teal);
+  --link-hover: var(--lavender);
+  --focus: var(--teal);
   --success: #8fe3bd;
   --warning: #efc582;
   --danger: #ffa4b5;
   --on-danger: #20212b;
   --info: #acb9ff;
-  --feature-surface: #302a51;
-  --shadow-sm: 0 12px 34px rgb(0 0 0 / 16%);
-  --shadow-md: 0 24px 70px rgb(0 0 0 / 28%);
+  --feature-surface: #273b40;
+  --shadow-sm: 0 8px 24px rgb(0 0 0 / 12%);
+  --shadow-md: 0 18px 48px rgb(0 0 0 / 20%);
 
   --status-draft: #b3bdd1;
   --status-ready: #79d8df;
@@ -76,6 +86,21 @@
 }
 
 :root {
+  --brand-pink: var(--pink);
+  --brand-teal: var(--teal);
+  --on-brand: var(--on-primary);
+  --brand-gradient: linear-gradient(90deg, var(--teal), var(--soft-teal) 25%, var(--lavender) 50%, var(--pink) 75%, var(--peach));
+  --brand-wash: var(--background);
+  --brand-panel: var(--surface);
+  --brand-text-gradient: linear-gradient(110deg, var(--link), var(--focus));
+  --chrome-background: var(--brand-gradient);
+  --chrome-text: #263640;
+  --chrome-link: #15434b;
+  --chrome-hover: #4f3659;
+  --chrome-line: color-mix(in srgb, var(--teal) 40%, var(--surface));
+  --interaction-duration: 0.3s;
+  --button-glow: 0 8px 22px color-mix(in srgb, var(--lavender) 42%, transparent);
+  --card-glow: 0 12px 30px color-mix(in srgb, var(--lavender) 28%, transparent);
   --font-ui: var(--font-plex-latin), var(--font-plex-arabic), Arial, sans-serif;
   --type-body: 1rem;
   --type-control: 0.9375rem;
@@ -100,6 +125,8 @@
   --primary-soft: color-mix(in srgb, var(--primary) 15%, var(--surface));
   --secondary-soft: color-mix(in srgb, var(--secondary) 20%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --supporting-soft: color-mix(in srgb, var(--supporting) 20%, var(--surface));
+  --highlight-soft: color-mix(in srgb, var(--highlight) 15%, var(--surface));
   --success-soft: color-mix(in srgb, var(--success) 10%, var(--surface));
   --warning-soft: color-mix(in srgb, var(--warning) 10%, var(--surface));
   --danger-soft: color-mix(in srgb, var(--danger) 10%, var(--surface));
@@ -117,9 +144,9 @@
   --sunlit-pink: var(--link);
   --sunlit-aqua: var(--secondary);
   --sunlit-aqua-dark: var(--success);
-  --sunlit-aqua-soft: var(--secondary-soft);
-  --sunlit-yellow: var(--secondary);
-  --sunlit-yellow-soft: var(--secondary-soft);
+  --sunlit-aqua-soft: var(--supporting-soft);
+  --sunlit-yellow: var(--highlight);
+  --sunlit-yellow-soft: var(--highlight-soft);
   --sunlit-line: var(--border);
   --sunlit-line-strong: var(--border-strong);
   --sunlit-danger: var(--danger);
@@ -157,11 +184,10 @@
   --white: var(--surface);
   --coral: var(--primary);
   --coral-deep: var(--link);
-  --pink: var(--link);
   --aqua: var(--secondary);
   --aqua-dark: var(--success);
-  --aqua-soft: var(--secondary-soft);
-  --yellow: var(--secondary);
+  --aqua-soft: var(--supporting-soft);
+  --yellow: var(--highlight);
   --line: var(--border);
   --luxury-turquoise: var(--primary);
   --luxury-turquoise-dark: var(--primary);
@@ -173,4 +199,14 @@
   --luxury-shadow: var(--shadow-md);
   --luxury-glow-turquoise: 0 0 34px color-mix(in srgb, var(--primary) 20%, transparent);
   --luxury-glow-gold: 0 0 34px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+:root[data-theme="dark"] {
+  --chrome-background: var(--surface);
+  --chrome-text: var(--text);
+  --chrome-link: var(--teal);
+  --chrome-hover: var(--lavender);
+  --chrome-line: color-mix(in srgb, var(--teal) 45%, var(--surface));
+  --button-glow: 0 6px 18px color-mix(in srgb, var(--lavender) 20%, transparent);
+  --card-glow: 0 10px 24px color-mix(in srgb, var(--lavender) 18%, transparent);
 }

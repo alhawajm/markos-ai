@@ -69,7 +69,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
           <div className="flex min-w-0 items-center gap-3">
             <Link
               aria-label={locale === "ar" ? "العودة إلى مساحة العمل" : "Back to workspace"}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink)] transition hover:border-[var(--sunlit-line-strong)]"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-ink)] transition hover:border-[var(--lavender)]"
               href={returnTo}
             >
               <BackIcon size={19} />
@@ -127,4 +127,4 @@ export function SettingsPage({ locale }: { locale: Locale }) {
 
 const activeLanguageClass = "shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-extrabold text-[var(--on-primary)]";
 const languageClass =
-  "shrink-0 rounded-lg px-3 py-2 text-xs font-extrabold text-[var(--sunlit-muted)] transition hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]";
+  "shrink-0 rounded-lg px-3 py-2 text-xs font-extrabold text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]";

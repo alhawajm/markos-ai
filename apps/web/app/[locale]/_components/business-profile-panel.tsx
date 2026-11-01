@@ -113,7 +113,7 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
               href={`${pathname}?${search}`}
               scroll={false}
               aria-current={tab === item.id ? "page" : undefined}
-              className={`inline-flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-base font-medium ${tab === item.id ? "border-[var(--link)] text-[var(--link)]" : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"}`}
+              className={`inline-flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-base font-medium ${tab === item.id ? "border-[var(--link)] text-[var(--link)]" : "border-transparent text-[var(--muted)] hover:text-[var(--link-hover)]"}`}
             >
               <Icon size={19} aria-hidden="true" />
               {profileText(item.label, locale)}
@@ -169,7 +169,7 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
                       </h2>
                       {editable ? (
                         <button
-                          className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-[var(--link)] hover:bg-[var(--surface-muted)]"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-[var(--link)] hover:bg-[var(--accent-soft)]"
                           onClick={() => setEditing({ kind: "section", section })}
                           aria-label={`${t("Edit", "تعديل")} ${profileText(section.title, locale)}`}
                         >
@@ -744,7 +744,7 @@ function BrandColorsInput({
             />
             <button
               type="button"
-              className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--danger)]"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
               aria-label={t(`Remove brand color ${index + 1}`, `إزالة لون العلامة ${index + 1}`)}
               onClick={() => onChange(colors.filter((_, i) => i !== index))}
             >

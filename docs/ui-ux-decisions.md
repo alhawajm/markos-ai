@@ -4,7 +4,7 @@ Handoff note: this document retains dated decisions and verification history. Pr
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-09-14
+- Last updated: 2026-11-01
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -15,6 +15,52 @@ Product behavior, lifecycle rules, data contracts, security, permissions, and in
 Each surface entry should state what is accepted, what remains deferred or open, and the observable consequence for implementation and review.
 
 ## Shared visual foundation
+
+### 2026-11-01 — Publish the reviewed UI refresh
+
+The user explicitly authorized committing, pushing, and deploying the current reviewed palette, interaction, theme-control, and icon-cleanup changes. This supersedes the local-only restriction for this release. Publish through the existing GitHub `main` source and Railway deployment configuration, preserving unrelated workstation files and production data. Earlier validation entries below describe the local checkpoints before this publication request.
+
+### 2026-11-01 — Purple hover feedback and fewer decorative icons
+
+Requested for direct local implementation: every hover color change uses the purple/lavender family, and unnecessary mini icons are removed. Pink and teal retain their normal-state brand roles.
+
+- Unify CSS and Tailwind hover styles for primary/secondary buttons, links, tabs, navigation, cards, rows, controls, borders, glows, and scrollbars. Use lavender fills/tints, readable deeper purple text, and purple glows. Preserve media visibility under a translucent lavender hover wash and keep dark labels/functional icons readable on filled lavender controls. Disabled controls do not gain hover feedback.
+- Remove repeated decorative icons from public headers/footers, hero actions, assurances, labeled workspace tabs, feature cards, sample calendars, metric cards, callouts, legal headings, and form fields. Use the MARKOS AI wordmark and keep labeled charts, provider branding, functional navigation controls, and important status indicators.
+- Simplify theme controls to a plain switch and visible Light/Dark/System choice; use native radio indicators in Settings. Password visibility remains an explicit Show/Hide text action. Hide the development badge from the local preview.
+- Constrain authentication grids and fields to prevent the larger text controls from widening Arabic mobile cards. Keep all application/data behavior unchanged and leave the work local.
+
+**Validation:** 17 focused unit tests passed in `theme.test.ts`, `auth-page.test.ts`, and `marketing-landing.test.ts`. Three selected cases in `theme.browser.test.ts` passed for keyboard/theme persistence, hover/pressed states, responsive chrome, labeled tabs, and Show/Hide password; the authenticated workspace case was skipped. Initial icon-count and Arabic mobile width checks failed and were corrected by the wordmark cleanup and constrained grid/field sizing. Final Chrome checks passed 24 page/locale/theme/viewport combinations, including card/form bounds, visible controls, preserved charts, and no decorative Lucide icons on landing/login. Web typecheck passed. Targeted ESLint reported zero errors and three existing navigation warnings in `app-shell.tsx` and `settings-page.tsx`. Formatting, native-token freshness, and the 41 contrast checks passed. The hover inventory contains only purple/lavender feedback tokens, with contrasting text and preserved autofill styling. Screenshots and focused checks are under ignored `var/palette-qa/hover-cleanup/`. Authenticated workflows, native rendering, and broad regression suites were not run; no push or deployment was performed.
+
+### 2026-11-01 — Apply the explicit light/night interaction specification
+
+Requested for direct implementation: retain all five supplied brand colors, with teal/pink dominant, lavender as the interaction payoff, and peach as a small accent. This supersedes the faded page/button gradients below.
+
+- Use a flat `#F0FAFA` light canvas with soft slate text, neutral cards, rounded controls, and gentle shadows. Keep the night canvas flat `#14181F`, with off-white text and restrained accents.
+- Match light headers and footers with the exact horizontal teal → soft teal → lavender → pink → peach gradient. In night mode, use a flat dark surface and a thin teal line. Apply the shared chrome across public, authentication, and legal pages, and to the existing mobile app header.
+- Use pink primary buttons in both modes, lavender hover with a two-pixel lift and glow, darker lavender pressed with no lift, and `0.3s ease` transitions. Keep visible keyboard focus, disabled/destructive semantics, and reduced-motion behavior.
+- Reuse the shared interaction stylesheet for action buttons, animated link underlines, navigation pills, card lift/glow, and icon hover colors. Use deeper teal/lavender text on light surfaces and the gradient to meet AA contrast while preserving the supplied pastel fills.
+- Provide a visible night-mode switch backed by the existing preference controller, plus the existing Light/Dark/System selection. Preserve first-load system preference, stored choices, tab synchronization, blocked-storage behavior, and English/Arabic parity. Keep changes local; no push or deployment is authorized.
+
+**Validation:** 17 focused unit tests passed in `theme.test.ts`, `auth-page.test.ts`, and `marketing-landing.test.ts`. The selected theme keyboard/persistence and chrome/button/toggle browser cases passed; the authenticated workspace case was skipped by the name filter. Web and shared-token typechecks passed. Targeted ESLint reported zero errors and one existing `window.location.assign` navigation warning in `app-shell.tsx`. Local Chrome checks passed 24 public-page/locale/theme/viewport combinations at `1440x900` and `390x844`, including full-width matching chrome, flat night backgrounds, and no clipped header controls or page errors. Contrast checks cover 41 text/button/focus/gradient-stop pairs; the lowest ratio is `4.77:1`. The first contrast check exposed insufficient header-link contrast at the soft-teal stop; the derived text shades were darkened and the check passed. Native palette output is regenerated from the aliased CSS tokens; authenticated workflows and native rendering were not exercised. Screenshots and focused checks are under ignored `var/palette-qa/interactive/`.
+
+### 2026-11-01 — Use a faded pink-to-teal treatment
+
+The requested refinement is a soft transition from pink to teal that feels lively, simple, and easy on the eyes. Apply this directly to the mounted website: a faint page wash, pastel gradient primary actions with dark text, neutral cards, quieter borders, and lighter shadows. Keep lavender and peach secondary. Centralize the gradients in the shared theme and preserve their pink-to-teal direction in both themes. Preserve layouts, theme selection, English/Arabic behavior, and all application contracts. Validate the actual gradient stops for action-label contrast, keyboard focus, and representative public/authentication pages in both locales and themes.
+
+This refines the flat primary fills from the palette pass below without replacing its five supplied base colors. Native components retain their existing palette; this gradient refinement applies to web CSS.
+
+**Local validation:** the 14 theme/authentication unit tests passed; the selected keyboard/theme browser test passed with the unrelated authenticated workspace case skipped. That browser check now evaluates the actual gradient color stops for primary-action contrast in both themes. ESLint on the changed browser test, formatting, and native-token freshness passed. Chrome checks covered landing/login in English and Arabic in both themes at `1440x900 @ 1x`, plus login keyboard focus at `1366x768`; the visible page and primary action use gradients, with correct direction, no horizontal overflow, and no page errors. Screenshots are under ignored `var/palette-qa/faded/`. No authenticated workspace journey or native rendering was tested, and this refinement remains local.
+
+### 2026-11-01 — Keep pink and teal dominant in the refreshed palette
+
+Requested directly for implementation: use `#47CACC`, `#63BCC9`, `#CDB3D4`, `#E7B7C8`, and `#FFBE88`, retaining pink and teal as the main colors. This supersedes the September 10 brand values below.
+
+- Light mode uses pink primary actions and teal secondary accents. Dark mode retains teal primary actions and uses pink secondary accents. Lavender, muted teal, and peach support the main pair.
+- Apply the palette through `apps/web/app/theme-tokens.css`, including the existing Sunlit and legacy aliases. Muted teal supplies supporting surface tints; peach replaces the legacy yellow accents. Regenerate the native token artifact from that same source to preserve the shared palette contract.
+- Use dark labels on pastel buttons, deep rose links and deep teal focus indicators on light surfaces, and bright pink links and teal focus indicators in dark mode. Preserve readable status colors and their existing labels, icons, and lifecycle meaning.
+- Retain the current layouts, bilingual typography, English/Arabic direction handling, theme preference behavior, and application contracts. Acceptance requires all five supplied colors, visible pink/teal emphasis, readable text and focus contrast, and representative light/dark checks in English and Arabic.
+
+**Local validation:** `vitest run test/theme.test.ts test/auth-page.test.ts` passed all 14 tests. Web and shared UI-token typechecks, ESLint on the changed web TypeScript files, formatting, and `node scripts/generate-native-tokens.mjs --check` passed. The selected keyboard/theme persistence test in `test/theme.browser.test.ts` initially exceeded its 30-second limit during the first compilation; the warmed rerun passed in 5.52 seconds with a 60-second limit, with the separate authenticated workspace case skipped by the explicit name filter. Local Chrome checks also passed eight landing/login locale/theme combinations at `1440x900 @ 1x` and two login focus checks at `1366x768`, with correct direction, no horizontal overflow, and no page errors. Screenshots and the focused visual-check script are under ignored `var/palette-qa/`. These checks do not cover authenticated workspace workflows or native rendering. Changes remain local and are not deployed.
 
 ### 2026-09-10 — Adopt the light and dark site palette
 

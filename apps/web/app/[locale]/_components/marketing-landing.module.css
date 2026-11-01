@@ -1,7 +1,7 @@
 .marketingPage {
   min-height: 100vh;
   overflow-x: clip;
-  background: var(--paper);
+  background: var(--brand-wash);
   color: var(--ink);
   font-family: inherit;
 }
@@ -13,8 +13,9 @@
 }
 
 .marketingPage a {
-  color: inherit;
-  text-decoration: none;
+  color: var(--link);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
 }
 
 .marketingPage button {
@@ -59,7 +60,8 @@
   align-items: center;
   min-height: 86px;
   gap: 28px;
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  width: 100%;
+  padding-inline: max(16px, calc((100% - 1180px) / 2));
 }
 
 .brand {
@@ -76,9 +78,9 @@
   place-items: center;
   flex: 0 0 auto;
   border-radius: 14px;
-  background: var(--primary);
-  color: var(--on-primary);
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--brand-gradient);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-sm);
 }
 
 .brand strong {
@@ -91,7 +93,7 @@
   display: flex;
   justify-self: center;
   align-items: center;
-  gap: clamp(20px, 2.3vw, 34px);
+  gap: clamp(8px, 1.2vw, 20px);
   color: var(--ink-soft);
   font-size: var(--type-control);
   font-weight: 600;
@@ -110,7 +112,11 @@
 .desktopNav a:hover,
 .loginLink:hover,
 .languageLink:hover {
-  color: var(--link);
+  color: var(--link-hover);
+}
+
+.desktopNav a {
+  padding: 10px 12px;
 }
 
 .headerActions {
@@ -127,6 +133,10 @@
   color: var(--ink-soft);
   font-size: var(--type-control);
   font-weight: 600;
+}
+
+.languageShort {
+  display: none;
 }
 
 .loginLink {
@@ -154,19 +164,19 @@
 }
 
 .button:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .buttonPrimary {
   background: var(--primary);
   color: var(--on-primary) !important;
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .buttonDark {
-  background: var(--surface-muted);
-  color: var(--text) !important;
-  box-shadow: 0 12px 26px color-mix(in srgb, var(--text) 16%, transparent);
+  background: var(--primary);
+  color: var(--on-primary) !important;
+  box-shadow: var(--shadow-sm);
 }
 
 .buttonSecondary {
@@ -210,7 +220,7 @@
   height: 420px;
   inset-block-start: -100px;
   inset-inline-start: -210px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--primary) 18%, transparent), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand-pink) 8%, transparent), transparent 68%);
 }
 
 .heroGlowAqua {
@@ -218,7 +228,7 @@
   height: 360px;
   inset-inline-end: -160px;
   inset-block-end: 10px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--secondary) 17%, transparent), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand-teal) 8%, transparent), transparent 70%);
 }
 
 .heroCopy {
@@ -251,7 +261,7 @@
 
 .hero h1 span {
   display: inline;
-  background: linear-gradient(100deg, var(--coral-deep), var(--pink));
+  background: var(--brand-text-gradient);
   background-clip: text;
   color: transparent;
 }
@@ -302,9 +312,7 @@
   border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
   border-radius: 30px;
   background: color-mix(in srgb, var(--surface) 91%, transparent);
-  box-shadow:
-    0 32px 80px rgb(82 42 55 / 15%),
-    0 3px 0 color-mix(in srgb, var(--surface) 90%, transparent) inset;
+  box-shadow: var(--shadow-md);
   backdrop-filter: blur(16px);
 }
 
@@ -390,8 +398,8 @@
 }
 
 .workspaceTab:hover {
-  background: var(--paper-deep);
-  color: var(--ink);
+  background: var(--button-hover);
+  color: var(--on-primary);
 }
 
 .workspaceTab[data-active="true"] {
@@ -421,7 +429,7 @@
 
 .workspacePanelHeading {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 15px;
 }
@@ -456,7 +464,7 @@
 
 .workspaceItems li {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   min-height: 70px;
@@ -598,7 +606,7 @@
 }
 
 .capabilityCard h3 {
-  margin: 34px 0 0;
+  margin: 0;
   font-size: 1.28rem;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -700,15 +708,13 @@
   border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
   border-radius: 30px;
   background: var(--surface);
-  box-shadow: 0 28px 72px rgb(78 45 56 / 12%);
+  box-shadow: var(--shadow-md);
 }
 
 .exampleBrief {
   padding: 30px;
   border-inline-end: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  background:
-    radial-gradient(circle at 15% 5%, color-mix(in srgb, var(--primary) 17%, transparent), transparent 36%),
-    linear-gradient(155deg, var(--primary-soft), var(--secondary-soft));
+  background: var(--brand-panel);
 }
 
 .exampleBrief > header {
@@ -729,7 +735,7 @@
 
 .goalCard {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-block-start: 26px;
   padding: 20px;
@@ -939,7 +945,7 @@
 .insightCard {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 20px;
   background: linear-gradient(135deg, var(--primary-soft), var(--secondary-soft));
@@ -977,9 +983,7 @@
 
 .trustSection {
   padding-block: 112px 124px;
-  background:
-    radial-gradient(circle at 8% 80%, color-mix(in srgb, var(--secondary) 14%, transparent), transparent 30%),
-    radial-gradient(circle at 92% 10%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 32%), var(--background);
+  background: var(--brand-wash);
 }
 
 .trustHeading {
@@ -1021,7 +1025,7 @@
 }
 
 .trustGrid h3 {
-  margin: 34px 0 0;
+  margin: 0;
   font-size: 1.08rem;
   font-weight: 600;
   letter-spacing: -0.018em;
@@ -1042,11 +1046,9 @@
   margin-block: 100px;
   padding: 54px 58px;
   border-radius: 30px;
-  background:
-    radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--secondary) 36%, transparent), transparent 32%),
-    linear-gradient(130deg, var(--primary), var(--primary));
-  color: var(--on-primary);
-  box-shadow: 0 28px 65px rgb(164 42 82 / 22%);
+  background: var(--secondary-soft);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
 }
 
 .closingSection > div:first-child {
@@ -1059,7 +1061,7 @@
 
 .closingSection p {
   margin: 17px 0 0;
-  color: var(--on-primary);
+  color: var(--text-soft);
   font-size: 1.08rem;
   line-height: 1.6;
 }
@@ -1074,8 +1076,8 @@
 
 .footer {
   padding-block: 72px 26px;
-  background: var(--surface-muted);
-  color: var(--text);
+  background: var(--chrome-background);
+  color: var(--chrome-text);
 }
 
 .footerMain {
@@ -1120,14 +1122,14 @@
 }
 
 .footerGroup a {
-  color: var(--muted);
+  color: var(--link);
   font-size: var(--type-control);
   line-height: 1.45;
 }
 
 .footerGroup a:hover,
 .footerLanguage:hover {
-  color: var(--link);
+  color: var(--link-hover);
 }
 
 .footerBottom {
@@ -1302,8 +1304,12 @@
     display: none;
   }
 
-  .languageLink span {
+  .languageLink .languageFull {
     display: none;
+  }
+
+  .languageLink .languageShort {
+    display: inline;
   }
 
   .languageLink {
@@ -1450,9 +1456,7 @@
     min-height: 0;
   }
 
-  .capabilityCard h3,
-  .steps h3,
-  .trustGrid h3 {
+  .steps h3 {
     margin-block-start: 25px;
   }
 
@@ -1535,9 +1539,12 @@
 }
 
 @media (max-width: 430px) {
+  .header .brandMark {
+    display: none;
+  }
+
   .headerCta {
-    padding-inline: 11px;
-    font-size: var(--type-meta);
+    display: none;
   }
 
   .heroActions .button {

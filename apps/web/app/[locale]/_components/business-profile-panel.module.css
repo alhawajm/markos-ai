@@ -69,7 +69,7 @@
 
 .table tbody tr:hover,
 .table tbody tr:focus-within {
-  background: var(--surface-muted);
+  background: var(--accent-soft);
 }
 
 .table .price,

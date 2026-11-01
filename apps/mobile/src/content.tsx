@@ -48,7 +48,7 @@ export function ContentCard({ item }: { item: ContentRecord }) {
       <Card>
         <Row style={{ alignItems: "flex-start" }}>
           <View style={{ backgroundColor: colors.secondarySoft, padding: 12, borderRadius: 12 }}>
-            <Icon color={colors.accent} size={24} strokeWidth={1.5} />
+            <Icon color={colors.accentText} size={24} strokeWidth={1.5} />
           </View>
           <View style={{ flex: 1, gap: 8 }}>
             <Txt variant="label" numberOfLines={2} style={{ fontSize: 16 }}>

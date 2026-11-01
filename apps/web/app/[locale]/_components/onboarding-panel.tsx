@@ -1272,7 +1272,7 @@ export function OnboardingPanel({
             </div>
             <button
               aria-label={copy.dismiss}
-              className="rounded-lg p-1 text-[var(--sunlit-muted)] hover:bg-[var(--surface)] hover:text-[var(--sunlit-ink)]"
+              className="rounded-lg p-1 text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
               onClick={() => setMessage("")}
               type="button"
             >
@@ -1402,7 +1402,7 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
             transition={{ duration: reducedMotion ? 0 : 0.28, delay: 0 }}
             whileHover={reducedMotion ? {} : { y: -3 }}
             whileTap={reducedMotion ? {} : { y: -1, scale: 0.995 }}
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition-shadow duration-200 hover:shadow-[0_30px_72px_rgb(32_33_43_/_28%)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition-shadow duration-200 hover:shadow-[var(--card-glow)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onDocuments}
             type="button"
           >
@@ -1429,7 +1429,7 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
             transition={{ duration: reducedMotion ? 0 : 0.28, delay: 0.08 }}
             whileHover={reducedMotion ? {} : { y: -3 }}
             whileTap={reducedMotion ? {} : { y: -1, scale: 0.995 }}
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[linear-gradient(145deg,var(--surface),var(--primary-soft))] p-6 text-start shadow-[0_20px_50px_color-mix(in_srgb,var(--primary)_14%,transparent)] transition-shadow duration-200 hover:border-[color-mix(in_srgb,var(--primary)_48%,transparent)] hover:shadow-[0_28px_64px_color-mix(in_srgb,var(--primary)_19%,transparent)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[linear-gradient(145deg,var(--surface),var(--primary-soft))] p-6 text-start shadow-[0_20px_50px_color-mix(in_srgb,var(--primary)_14%,transparent)] transition-shadow duration-200 hover:border-[var(--lavender)] hover:shadow-[var(--card-glow)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onStart}
             type="button"
           >
@@ -1514,7 +1514,7 @@ function BusinessDocumentScreen({
         <p className="mt-3 max-w-2xl text-[16px] leading-7 text-[var(--sunlit-ink-soft)]">{copy.businessDocuments.body}</p>
 
         <button
-          className="mt-7 flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] px-6 py-8 text-center transition hover:border-[var(--sunlit-aqua-dark)] hover:bg-[var(--surface)] disabled:cursor-wait disabled:opacity-60"
+          className="mt-7 flex min-h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sunlit-line-strong)] bg-[var(--sunlit-paper)] px-6 py-8 text-center transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] disabled:cursor-wait disabled:opacity-60"
           disabled={waiting || failed}
           onClick={() => inputRef.current?.click()}
           type="button"
@@ -1565,7 +1565,7 @@ function BusinessDocumentScreen({
                   </span>
                   <button
                     aria-label={`${copy.businessDocuments.removeSelected}: ${file.name}`}
-                    className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[var(--surface)] hover:text-[var(--sunlit-danger)] disabled:opacity-50"
+                    className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)] disabled:opacity-50"
                     disabled={waiting}
                     onClick={() => {
                       setSelectedFiles((current) => current.filter((_item, fileIndex) => fileIndex !== index));
@@ -1631,7 +1631,7 @@ function BusinessDocumentScreen({
             </div>
           ) : (
             <button
-              className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper)]"
+              className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)]"
               disabled={waiting}
               onClick={onManual}
               type="button"
@@ -1801,7 +1801,7 @@ function StepScreen({
                         className={
                           active
                             ? "rounded-full border border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] bg-[var(--sunlit-aqua-soft)] px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)]"
-                            : "rounded-full border border-[var(--sunlit-line)] bg-[var(--surface)] px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line-strong)]"
+                            : "rounded-full border border-[var(--sunlit-line)] bg-[var(--surface)] px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-ink-soft)] hover:border-[var(--lavender)]"
                         }
                         key={suggestion}
                         onClick={() => onSuggestion(suggestion)}
@@ -1896,7 +1896,7 @@ function StepScreen({
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
               {step.skippable ? (
                 <button
-                  className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--sunlit-paper-deep)] hover:text-[var(--sunlit-ink)]"
+                  className="rounded-xl px-5 py-3 text-[15px] font-semibold text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
                   disabled={saving}
                   onClick={onSkip}
                   type="button"
@@ -2039,7 +2039,7 @@ function BusinessColorEditor({ colors, locale, onChange }: { colors: string[]; l
               <code className="text-[13px] font-semibold text-[var(--sunlit-ink-soft)]">{color}</code>
               <button
                 aria-label={remove}
-                className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] hover:text-[var(--sunlit-danger)]"
+                className="rounded-lg p-1.5 text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
                 onClick={() => onChange(colors.filter((_item, colorIndex) => colorIndex !== index))}
                 type="button"
               >
@@ -2136,7 +2136,7 @@ function OfferingEditor({
                 />
                 <button
                   aria-label={`${copy.offerings.remove} ${item.name || index + 1}`}
-                  className="grid h-10 w-10 place-items-center rounded-lg text-[var(--sunlit-muted)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] hover:text-[var(--sunlit-danger)]"
+                  className="grid h-10 w-10 place-items-center rounded-lg text-[var(--sunlit-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
                   onClick={() => removeItem(index)}
                   type="button"
                 >
@@ -2150,7 +2150,7 @@ function OfferingEditor({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <button
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--sunlit-aqua-soft)]"
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] hover:bg-[var(--accent-soft)]"
           disabled={items.length >= 30}
           onClick={() => onItemsChange([...items, emptyOnboardingOffering()])}
           type="button"
@@ -2255,7 +2255,7 @@ function OfferingDocumentLauncher({
 
       {!active ? (
         <label
-          className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-3 py-3 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)] hover:border-[var(--sunlit-aqua)] hover:bg-[var(--surface)]"
+          className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-3 py-3 text-[13px] font-semibold text-[var(--sunlit-aqua-dark)] hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)]"
           onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
           onDrop={(event: DragEvent<HTMLLabelElement>) => {
             event.preventDefault();
@@ -2347,7 +2347,7 @@ function OfferingDocumentAssistant({
 
       {analysis === null && !busy ? (
         <label
-          className="mx-4 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-4 py-3 hover:border-[var(--sunlit-aqua)] hover:bg-[color-mix(in_srgb,var(--sunlit-aqua-soft)_35%,transparent)] sm:mx-5"
+          className="mx-4 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-[color-mix(in_srgb,var(--secondary)_48%,transparent)] bg-[var(--surface)] px-4 py-3 hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] sm:mx-5"
           onDragOver={(event: DragEvent<HTMLLabelElement>) => event.preventDefault()}
           onDrop={(event: DragEvent<HTMLLabelElement>) => {
             event.preventDefault();
@@ -2398,7 +2398,7 @@ function OfferingDocumentAssistant({
               </button>
             ) : null}
             <button
-              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
+              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[var(--accent-soft)]"
               onClick={onDiscard}
               type="button"
             >
@@ -2434,7 +2434,7 @@ function OfferingDocumentAssistant({
 
           <div className="mt-5 flex flex-col-reverse gap-2 border-t border-[var(--sunlit-line)] pt-4 sm:flex-row sm:justify-end">
             <button
-              className="rounded-lg px-4 py-2.5 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
+              className="rounded-lg px-4 py-2.5 text-[15px] font-semibold text-[var(--sunlit-danger)] hover:bg-[var(--accent-soft)]"
               onClick={onDiscard}
               type="button"
             >
@@ -2572,7 +2572,7 @@ function ReviewScreen({
                   {documentAnalysis.files.length} {locale === "ar" ? "ملف" : documentAnalysis.files.length === 1 ? "file" : "files"}
                 </span>
                 <button
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-[var(--sunlit-danger)] transition hover:bg-[var(--surface)] disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-[var(--sunlit-danger)] transition hover:bg-[var(--accent-soft)] disabled:opacity-50"
                   disabled={saving}
                   onClick={onDiscardDocumentAnalysis}
                   type="button"
@@ -2605,7 +2605,7 @@ function ReviewScreen({
             const required = target === 1 || target === 2;
             return (
               <button
-                className={`group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--secondary)_32%,transparent)] hover:bg-[var(--surface)] hover:shadow-sm ${index === copy.review.rows.length - 1 ? "md:col-span-2" : ""}`}
+                className={`group flex w-full items-center justify-between gap-4 rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] px-5 py-4 text-start transition hover:-translate-y-0.5 hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] hover:shadow-[var(--card-glow)] ${index === copy.review.rows.length - 1 ? "md:col-span-2" : ""}`}
                 key={title}
                 onClick={() => onEdit(target)}
                 type="button"
@@ -2812,7 +2812,7 @@ function ProfileScreen({
                         <button
                           aria-controls={`${fieldId}-content`}
                           aria-expanded={expanded}
-                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] transition hover:bg-[var(--sunlit-aqua-soft)]"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[15px] font-semibold text-[var(--sunlit-aqua-dark)] transition hover:bg-[var(--accent-soft)]"
                           onClick={() => toggleExpanded(field)}
                           type="button"
                         >

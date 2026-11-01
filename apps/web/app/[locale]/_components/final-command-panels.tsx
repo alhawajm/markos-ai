@@ -88,7 +88,7 @@ const accent = {
   gold: {
     bg: "color-mix(in srgb, var(--accent) 12%, transparent)",
     border: "color-mix(in srgb, var(--accent) 28.000000000000004%, transparent)",
-    className: "text-[var(--accent)]",
+    className: "text-[var(--accent-text)]",
     hex: "var(--accent)"
   },
   teal: {
@@ -536,7 +536,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
         <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {readyItems.slice(0, 4).map((item) => (
             <a
-              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
+              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[var(--lavender)]"
               href={`/${locale}/app/content-studio?item=${item.id}`}
               key={item.id}
             >
@@ -622,8 +622,8 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
             well with your target audience, driving 3.2x higher engagement than your baseline.
           </p>
           <p>
-            I have identified a <span className="font-bold text-[var(--accent)]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your audience
-            will be most receptive.
+            I have identified a <span className="font-bold text-[var(--accent-text)]">golden opportunity window</span> this evening, 7:30-9:00 PM, when your
+            audience will be most receptive.
           </p>
           <p>
             <span className="font-bold text-[var(--success)]">24-hour growth: +847 followers</span> with engagement rate at 92%, significantly above your
@@ -682,7 +682,7 @@ export function DailyBriefingPanel({ locale }: { locale: Locale }) {
               <p className="mt-1 text-base text-[var(--muted)] xl:text-lg">{duration}</p>
             </div>
             <a
-              className="rounded-full bg-[color-mix(in_srgb,var(--muted)_18%,transparent)] px-5 py-2.5 text-center font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_20%,transparent)] xl:px-7 xl:py-3"
+              className="rounded-full bg-[color-mix(in_srgb,var(--muted)_18%,transparent)] px-5 py-2.5 text-center font-bold text-[var(--text)] transition hover:bg-[var(--accent-soft)] xl:px-7 xl:py-3"
               href={`/${locale}/app/campaign-builder`}
             >
               Schedule
@@ -853,7 +853,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               value={campaignPrompt}
             />
             <button
-              className="mt-5 inline-flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] px-6 py-3.5 text-base font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_18%,transparent)] disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
+              className="mt-5 inline-flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_20%,transparent)] bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] px-6 py-3.5 text-base font-bold text-[var(--text)] transition hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-60 xl:px-7 xl:py-4 xl:text-lg"
               disabled={generatingCampaign}
               onClick={generateCampaignDrafts}
               type="button"
@@ -866,7 +866,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
           <section className="grid gap-5 lg:grid-cols-3 xl:gap-6">
             {templates.map(([title, body, posts, days, Icon]) => (
               <button
-                className="lux-card-muted rounded-[1.5rem] p-5 text-left transition hover:border-[color-mix(in_srgb,var(--secondary)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--secondary)_8%,transparent)] xl:p-6"
+                className="lux-card-muted rounded-[1.5rem] p-5 text-left transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] xl:p-6"
                 key={title}
                 onClick={() => {
                   setCampaignPrompt(
@@ -918,7 +918,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               <div className="grid gap-4">
                 {timelineRecords.map((record, index) => (
                   <a
-                    className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
+                    className="lux-card-muted grid gap-4 rounded-[1.5rem] p-5 transition hover:border-[var(--lavender)] md:grid-cols-[80px_1fr_auto] xl:grid-cols-[90px_1fr_auto] xl:gap-5"
                     href={`/${locale}/app/content-studio?item=${record.id}`}
                     key={record.id}
                   >
@@ -962,7 +962,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
               <Calendar size={24} /> {schedulingCampaign ? "Scheduling..." : "Schedule Campaign"} <ArrowRight size={24} />
             </button>
             <button
-              className="rounded-[1.5rem] bg-[var(--surface)] px-8 py-4 text-lg font-bold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_16%,transparent)] xl:px-10 xl:py-5 xl:text-xl"
+              className="rounded-[1.5rem] bg-[var(--surface)] px-8 py-4 text-lg font-bold text-[var(--text)] transition hover:bg-[var(--accent-soft)] xl:px-10 xl:py-5 xl:text-xl"
               onClick={() => setSaved(true)}
               type="button"
             >
@@ -1154,7 +1154,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                 <button
                   aria-pressed={days === option}
                   className={`min-h-9 rounded-lg px-4 text-sm font-extrabold transition ${
-                    days === option ? "bg-[var(--surface)] text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                    days === option ? "bg-[var(--surface)] text-[var(--sunlit-ink)] shadow-sm" : "text-[var(--sunlit-muted)] hover:text-[var(--link-hover)]"
                   }`}
                   key={option}
                   onClick={() => setDays(option)}
@@ -1241,7 +1241,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                       className={`rounded-lg border px-3 py-2 text-xs font-extrabold transition ${
                         trendMetric === metric
                           ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]"
-                          : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--sunlit-ink)]"
+                          : "border-[var(--sunlit-line)] text-[var(--sunlit-muted)] hover:text-[var(--link-hover)]"
                       }`}
                       key={metric}
                       onClick={() => setTrendMetric(metric)}
@@ -1359,7 +1359,7 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
                 {summary?.topContent.length ? (
                   summary.topContent.slice(0, 4).map((item, index) => (
                     <a
-                      className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--sunlit-line-strong)]"
+                      className="rounded-2xl border border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] p-4 transition hover:border-[var(--lavender)]"
                       href={item.contentItemId ? `/${locale}/app/content-studio?item=${item.contentItemId}` : item.permalink}
                       key={item.contentItemId || item.instagramMediaId}
                     >
@@ -1796,7 +1796,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[0_16px_50px_rgba(0,0,0,.28)] transition hover:border-[color-mix(in_srgb,var(--secondary)_35%,transparent)] hover:bg-[var(--surface-raised)]"
+        className="flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[0_16px_50px_rgba(0,0,0,.28)] transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)]"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -1823,7 +1823,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
               const Icon = item.icon;
               return (
                 <a
-                  className="flex items-center gap-4 rounded-2xl px-4 py-3 text-base font-semibold text-[var(--text)] transition hover:bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] hover:text-[var(--text)] focus:bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] focus:text-[var(--text)] focus:outline-none"
+                  className="flex items-center gap-4 rounded-2xl px-4 py-3 text-base font-semibold text-[var(--text)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)] focus:bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)] focus:text-[var(--text)] focus:outline-none"
                   href={item.href}
                   key={item.label}
                   onClick={() => setOpen(false)}
@@ -1835,7 +1835,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
               );
             })}
             <button
-              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-base font-semibold text-[var(--danger)] transition hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus:outline-none"
+              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-base font-semibold text-[var(--danger)] transition hover:bg-[var(--accent-soft)] focus:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus:outline-none"
               onClick={() => {
                 setLogoutQueued(true);
                 void logoutBrowserSession(locale);
@@ -1972,7 +1972,7 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
       return (
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <div className="flex justify-end">
-            <span className="grid h-8 w-8 place-items-center rounded-lg border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent-text)]">
               <Play size={15} fill="currentColor" />
             </span>
           </div>
@@ -2019,7 +2019,7 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
             <Eye size={32} />
           </span>
           <p className="font-display text-xl font-bold text-[var(--text)]">{title}</p>
-          <p className="mt-1 text-sm font-bold text-[var(--accent)]">{subtitle}</p>
+          <p className="mt-1 text-sm font-bold text-[var(--accent-text)]">{subtitle}</p>
         </div>
       </div>
     );
@@ -2027,11 +2027,11 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
 
   return (
     <article
-      className="group overflow-hidden rounded-[1.5rem] border bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] transition hover:bg-[var(--surface-raised)]"
+      className="group overflow-hidden rounded-[1.5rem] border bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] transition hover:bg-[var(--accent-soft)]"
       style={{ borderColor }}
     >
       <div className="relative aspect-square overflow-hidden" style={{ background: previewBackground }}>
-        <div className="absolute inset-0 bg-[#0F1419]/14 transition group-hover:bg-transparent" />
+        <div className="absolute inset-0 bg-[#0F1419]/14 transition group-hover:bg-[color-mix(in_srgb,var(--lavender)_12%,transparent)]" />
         {previewArtwork()}
       </div>
       <div className="bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4">

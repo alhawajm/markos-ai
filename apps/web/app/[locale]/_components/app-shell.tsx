@@ -261,7 +261,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             onClick={toggleSidebar}
             type="button"
           >
-            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-[var(--surface)] text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--sunlit-coral)] group-hover:text-[var(--link)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--focus)]">
+            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-[var(--surface)] text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--lavender)] group-hover:text-[var(--link-hover)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--focus)]">
               <SidebarToggleIcon aria-hidden="true" size={14} strokeWidth={2.4} />
             </span>
           </button>
@@ -289,7 +289,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </aside>
 
         <section className="sunlit-card-scroll min-w-0 lg:h-screen lg:overflow-y-auto lg:overscroll-contain" data-app-content-scroll>
-          <header className="sticky top-0 z-30 border-b border-[var(--sunlit-line)] bg-[var(--surface)] px-5 py-3 backdrop-blur-xl sm:px-7 lg:hidden">
+          <header className="brand-chrome sticky top-0 z-30 border-b border-[var(--sunlit-line)] px-5 py-3 sm:px-7 lg:hidden">
             <div className="mx-auto flex max-w-[1500px] items-center gap-3">
               <Link
                 aria-label="MARKOS AI"
@@ -384,7 +384,7 @@ function SidebarNotificationsButton({ collapsed, count, locale, onClick }: { col
   return (
     <button
       aria-label={locale === "ar" ? `التنبيهات غير المقروءة: ${count}` : `Notifications, ${count} unread`}
-      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] ${
+      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       }`}
       onClick={onClick}
@@ -520,13 +520,13 @@ function SidebarLanguageToggle({ collapsed, locale, onSwitch }: { collapsed: boo
   return (
     <button
       aria-label={switchLabel}
-      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] outline-none transition hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)] ${
+      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border border-transparent text-[15px] font-medium text-[var(--sunlit-ink-soft)] outline-none transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)] ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       }`}
       onClick={onSwitch}
       type="button"
     >
-      <span className="grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg text-[var(--sunlit-muted)] transition group-hover:text-[var(--sunlit-ink)]">
+      <span className="grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg text-[var(--sunlit-muted)] transition group-hover:text-[var(--link-hover)]">
         <Languages aria-hidden="true" size={20} strokeWidth={1.95} />
       </span>
       <span
@@ -569,18 +569,18 @@ function SidebarNavLink({ activeSection, collapsed, item, locale }: { activeSect
   return (
     <Link
       aria-current={active ? "page" : undefined}
-      className={`group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border text-[15px] outline-none transition ${
+      className={`brand-nav-item group relative grid min-h-12 min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center rounded-xl border text-[15px] outline-none transition ${
         collapsed ? "w-[2.75rem] gap-0" : "w-full gap-2"
       } ${
         active
           ? "sunlit-sidebar-link-active border-[color-mix(in_srgb,var(--primary)_26%,transparent)] bg-[var(--sunlit-paper-deep)] font-semibold text-[var(--sunlit-ink)]"
-          : "border-transparent font-medium text-[var(--sunlit-ink-soft)] hover:border-[var(--sunlit-line)] hover:bg-[var(--sunlit-paper)] hover:text-[var(--sunlit-ink)]"
+          : "border-transparent font-medium text-[var(--sunlit-ink-soft)] hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]"
       }`}
       href={localizedHref(locale, item.slug)}
     >
       <span
         className={`grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg transition ${
-          active ? "text-[var(--link)]" : "text-[var(--sunlit-muted)] group-hover:text-[var(--sunlit-ink)]"
+          active ? "text-[var(--link)]" : "text-[var(--sunlit-muted)] group-hover:text-[var(--link-hover)]"
         }`}
       >
         <Icon aria-hidden="true" size={20} strokeWidth={active ? 2.35 : 1.95} />

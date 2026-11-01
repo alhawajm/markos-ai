@@ -1,0 +1,251 @@
+.brand-chrome {
+  --text-soft: var(--chrome-text);
+  --muted: var(--chrome-text);
+  --ink: var(--chrome-text);
+  --ink-soft: var(--chrome-text);
+  --sunlit-ink: var(--chrome-text);
+  --sunlit-ink-soft: var(--chrome-text);
+  --sunlit-muted: var(--chrome-text);
+  --link: var(--chrome-link);
+  --link-hover: var(--chrome-hover);
+  background: var(--chrome-background);
+  color: var(--chrome-text);
+  border-color: var(--chrome-line);
+}
+
+header.brand-chrome {
+  border-block-end: 1px solid var(--chrome-line);
+}
+
+footer.brand-chrome {
+  border-block-start: 1px solid var(--chrome-line);
+}
+
+.sunlit-theme :is(button, [role="button"], select, input, textarea) {
+  transition:
+    background-color var(--interaction-duration) ease,
+    color var(--interaction-duration) ease,
+    border-color var(--interaction-duration) ease,
+    box-shadow var(--interaction-duration) ease,
+    transform var(--interaction-duration) ease;
+}
+
+.sunlit-theme :is(button, [role="button"]):hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--button-hover);
+  color: var(--on-primary);
+  border-color: var(--lavender);
+  box-shadow: var(--button-glow);
+}
+
+.sunlit-theme :is(button, [role="button"]):active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--button-active);
+  color: var(--on-primary);
+}
+
+.sunlit-theme :is(select, input, textarea):hover:not(:disabled) {
+  border-color: var(--lavender);
+}
+
+.sunlit-theme :is(.brand-action, .sunlit-primary, .lux-button-primary, .studio-button-primary) {
+  min-height: var(--control-height);
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.875rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  transition:
+    background-color var(--interaction-duration) ease,
+    color var(--interaction-duration) ease,
+    box-shadow var(--interaction-duration) ease,
+    transform var(--interaction-duration) ease;
+}
+
+.sunlit-theme :is(.brand-action, .sunlit-primary, .lux-button-primary, .studio-button-primary):hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--button-hover);
+  color: var(--on-primary);
+  box-shadow: var(--button-glow);
+  transform: translateY(-2px);
+  filter: none;
+}
+
+.sunlit-theme :is(.brand-action, .sunlit-primary, .lux-button-primary, .studio-button-primary):active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--button-active);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(0);
+}
+
+.sunlit-theme a {
+  text-decoration-color: transparent;
+  text-underline-offset: 0.3em;
+  text-decoration-thickness: 1.5px;
+  transition:
+    color var(--interaction-duration) ease,
+    text-decoration-color var(--interaction-duration) ease,
+    background-color var(--interaction-duration) ease;
+}
+
+.sunlit-theme a:hover {
+  text-decoration-color: currentColor;
+}
+
+.sunlit-theme a:not(.brand-action):not(.brand-logo):not(.brand-nav-item) {
+  color: var(--link);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+}
+
+.sunlit-theme a:not(.brand-action):not(.brand-logo):not(.brand-nav-item):hover {
+  color: var(--link-hover);
+}
+
+.sunlit-theme :is(.brand-action, .brand-logo, .brand-nav-item) {
+  text-decoration: none;
+}
+
+.brand-logo {
+  min-height: var(--control-height);
+}
+
+.brand-nav-item {
+  border-radius: 0.75rem;
+  transition:
+    color var(--interaction-duration) ease,
+    background-color var(--interaction-duration) ease,
+    box-shadow var(--interaction-duration) ease;
+}
+
+.sunlit-theme .brand-nav-item:hover {
+  background: var(--button-hover);
+  color: var(--on-primary);
+  box-shadow: inset 0 -2px 0 var(--lavender);
+}
+
+.brand-card {
+  transition:
+    transform var(--interaction-duration) ease,
+    box-shadow var(--interaction-duration) ease,
+    border-color var(--interaction-duration) ease;
+}
+
+@media (hover: hover) {
+  .brand-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--lavender);
+    box-shadow: var(--card-glow);
+  }
+}
+
+.sunlit-theme :is(a, button) svg {
+  transition: color var(--interaction-duration) ease;
+}
+
+.sunlit-theme :is(a, button):hover:not(:disabled) svg {
+  color: var(--link-hover);
+}
+
+.sunlit-theme :is(button, [role="button"], .brand-action, .brand-nav-item):hover:not(:disabled) svg {
+  color: var(--on-primary);
+}
+
+.theme-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--text);
+}
+
+.theme-toggle {
+  display: grid;
+  width: 50px;
+  min-height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-toggle-track {
+  display: flex;
+  width: 46px;
+  height: 28px;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  transition: background-color var(--interaction-duration) ease;
+}
+
+.theme-toggle-thumb {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pink);
+  color: var(--on-primary);
+  transition:
+    transform var(--interaction-duration) ease,
+    background-color var(--interaction-duration) ease;
+}
+
+.theme-toggle[aria-checked="true"] .theme-toggle-track {
+  background: var(--surface-muted);
+}
+
+.theme-toggle[aria-checked="true"] .theme-toggle-thumb {
+  transform: translateX(18px);
+  background: var(--teal);
+}
+
+[dir="rtl"] .theme-toggle[aria-checked="true"] .theme-toggle-thumb {
+  transform: translateX(-18px);
+}
+
+.theme-system-control {
+  position: relative;
+  display: grid;
+  min-width: 62px;
+  min-height: 44px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--link);
+}
+
+.theme-system-control select {
+  min-height: 44px;
+  max-width: 90px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: var(--type-label);
+  cursor: pointer;
+}
+
+.theme-system-control select:hover {
+  background: var(--accent-soft);
+  color: var(--link-hover);
+}
+
+.theme-system-control:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+:root[data-theme="dark"] .onboarding-orb {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-card,
+  .theme-control *,
+  .sunlit-theme :is(a, button) {
+    transition-duration: 0.01ms !important;
+  }
+}

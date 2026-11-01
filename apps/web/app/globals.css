@@ -19,7 +19,7 @@ html {
 
 body {
   margin: 0;
-  background: var(--background);
+  background: var(--brand-wash);
   color: var(--luxury-text);
   font-family: var(--font-ui);
   font-size: var(--type-body);
@@ -63,7 +63,7 @@ select {
 @layer components {
   .lux-page {
     min-height: 100vh;
-    background: var(--background);
+    background: var(--brand-wash);
   }
 
   .lux-card {
@@ -97,8 +97,8 @@ select {
 
   .lux-button-primary {
     background: var(--primary);
-    color: var(--luxury-charcoal);
-    box-shadow: var(--luxury-glow-turquoise);
+    color: var(--on-primary);
+    box-shadow: var(--shadow-sm);
   }
 
   .lux-button-gold {

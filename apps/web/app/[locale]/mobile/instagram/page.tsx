@@ -8,7 +8,7 @@ export default async function MobileInstagramReturn({ params }: { params: Promis
     <main className="sunlit-theme flex min-h-dvh items-center justify-center bg-[var(--background)] p-6 text-[var(--text)]">
       <section className="w-full max-w-lg space-y-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 sm:p-10">
         <p className="font-semibold">MARKOS AI</p>
-        <Instagram aria-hidden="true" className="h-9 w-9 text-[var(--primary)]" />
+        <Instagram aria-hidden="true" className="h-9 w-9 text-[var(--link)]" />
         <h1 className="text-3xl font-semibold">{ar ? "المتابعة في ماركوس" : "Continue in MARKOS"}</h1>
         <p>
           {ar

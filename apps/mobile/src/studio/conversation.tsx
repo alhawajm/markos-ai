@@ -140,7 +140,7 @@ export function StudioConversation({
   return (
     <View style={{ gap: 16 }}>
       <Row>
-        <Sparkles size={24} strokeWidth={1.5} color={colors.accent} />
+        <Sparkles size={24} strokeWidth={1.5} color={colors.accentText} />
         <Txt variant="heading">MARKOS</Txt>
       </Row>
       {!result.data?.messages.length && !result.isPending ? (

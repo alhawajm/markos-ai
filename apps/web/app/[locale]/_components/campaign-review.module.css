@@ -118,8 +118,9 @@
   flex-shrink: 0;
 }
 .button:hover:not(:disabled) {
-  background: var(--surface-muted);
-  border-color: var(--border-strong);
+  background: var(--button-hover);
+  border-color: var(--lavender);
+  color: var(--on-primary);
 }
 .button:focus-visible,
 .dialog button:focus-visible,
@@ -137,7 +138,7 @@
   color: var(--on-primary);
 }
 .primaryButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 90%, var(--text));
+  background: var(--button-hover);
   color: var(--on-primary);
 }
 .dialog {
@@ -248,7 +249,7 @@
   color: var(--text);
 }
 .railButton:hover {
-  background: var(--surface-muted);
+  background: var(--accent-soft);
 }
 .workspace {
   display: flex;
@@ -479,7 +480,7 @@
   text-align: start;
 }
 .overviewPeriod:hover {
-  border-color: var(--focus);
+  border-color: var(--lavender);
 }
 .overviewPeriod > span,
 .overviewPeriod p {
@@ -584,9 +585,12 @@
   border: 1px solid var(--border);
   border-radius: 12px;
 }
-.postRow:hover,
 .postRow[data-selected="true"] {
   border-color: var(--focus);
+}
+
+.postRow:hover {
+  border-color: var(--lavender);
 }
 .postRow strong {
   display: block;

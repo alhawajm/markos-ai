@@ -487,7 +487,7 @@ export function SettingsPanel({ locale }: { locale: Locale }) {
         action={
           disconnectWarningUrl ? (
             <a
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 text-[15px] font-semibold text-[var(--warning)] transition hover:bg-[color-mix(in_srgb,var(--warning)_15%,transparent)]"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 text-[15px] font-semibold text-[var(--warning)] transition hover:bg-[var(--accent-soft)]"
               href={disconnectWarningUrl}
               rel="noreferrer"
               target="_blank"
