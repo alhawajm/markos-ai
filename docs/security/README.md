@@ -36,6 +36,13 @@ Local release checks passed:
 Full regression and container/browser release gates run in GitHub CI; local checks
 above do not claim that coverage. No local database or infrastructure was started.
 
+The subsequent CI run passed the JavaScript gate and identified seven advisories
+in the Python runtime's pypdf 6.21.2. Raise its minimum and pinned version to 6.21.4,
+the upstream [security patch release](https://pypdf.readthedocs.io/en/6.21.4/meta/CHANGELOG.html).
+Regenerate `services/ai/uv.lock` and its hashed runtime export while retaining all
+other Python package versions. CI validates the Python audit and document tests
+before Railway may deploy this follow-up; the release gate remains enabled.
+
 ## Previous preparation — 26 October 2026
 
 The initial production dependency scan reported 7 critical, 41 high, 19 moderate
