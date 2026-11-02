@@ -26,7 +26,7 @@ export default function Overview() {
           onRefresh={() => {
             void result.refetch();
           }}
-          tintColor={colors.accent}
+          tintColor={colors.accentText}
         />
       }
     >

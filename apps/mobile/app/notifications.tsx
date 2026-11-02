@@ -32,7 +32,7 @@ export default function Notifications() {
   });
   const items = [...new Map((result.data?.pages.flatMap((page) => page.items) ?? []).map((item) => [item.id, item])).values()];
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <Txt variant="title">{t("Notifications", "الإشعارات")}</Txt>
       <Button secondary label={t("Notification settings", "إعدادات الإشعارات")} onPress={() => router.push("/notification-settings")} />
       {result.data ? (

@@ -2,9 +2,9 @@
 
 - Status: adopted MARKOS visual and interaction foundation
 - Working name: **Sunlit Social Studio**
-- Last updated: 2026-11-01
+- Last updated: 2026-11-02
 
-This document is the active visual and interaction reference for MARKOS. The November 1 pink and teal palette supersedes the September 10 brand colors while retaining light and dark themes. It does not restore the retired "AI Marketing Command Center" composition. The canonical marketing, authentication, onboarding, legal, and application routes are the coded reference; there is no separate design-preview route family.
+This document is the active visual and interaction reference for MARKOS. The November 1 pink and teal palette supersedes the September 10 brand colors while retaining light and dark themes. The November 2 refinement carries those same brand colors into a warmer dark theme with quiet surfaces and shadows. It does not restore the retired "AI Marketing Command Center" composition. The canonical marketing, authentication, onboarding, legal, and application routes are the coded reference; there is no separate design-preview route family.
 
 Product behavior still comes from:
 
@@ -59,21 +59,25 @@ MARKOS is adaptable by default. The interface must not imply that users need to 
 
 ## Visual foundation
 
-### Core palette — updated 2026-11-01
+### Core palette — updated 2026-11-02
 
-The requested palette keeps teal and pink dominant across the actual site. Lavender is the interaction color; muted teal supports the primary pair, and peach is limited to small accents outside the matching header/footer gradient. The explicit November 1 light/night interaction specification supersedes the earlier faded-gradient treatment.
+The requested palette keeps teal and pink dominant across the actual site. Lavender is the interaction color; muted teal supports the primary pair, and peach is limited to small accents outside the matching header/footer gradient. The November 2 dark refinement retains the five November 1 brand anchors and replaces blue-black surfaces and colored glows with warm charcoal, softened brand tints and neutral shadows.
 
-| Role | Token reference | Light | Dark | Primary use |
-| --- | --- | --- | --- | --- |
-| Text | `--text` | `#263640` | `#eef4f6` | Soft slate/off-white text |
-| Background | `--background` | `#f0fafa` | `#14181f` | Flat, quiet page canvas |
-| Primary | `--primary` | `#e7b7c8` | `#e7b7c8` | Pink primary actions in both modes |
-| Secondary | `--secondary` | `#47cacc` | `#47cacc` | Teal highlights, selected surfaces, and charts |
-| Accent | `--accent` | `#cdb3d4` | `#cdb3d4` | Lavender supporting accents |
-| Supporting | `--supporting` | `#63bcc9` | `#63bcc9` | Muted teal surfaces and decorative details |
-| Highlight | `--highlight` | `#ffbe88` | `#ffbe88` | Restrained peach highlights and chart accents |
+| Role       | Token reference | Light     | Dark      | Primary use                                   |
+| ---------- | --------------- | --------- | --------- | --------------------------------------------- |
+| Text       | `--text`        | `#263640` | `#f7f0f3` | Soft slate/warm off-white text                |
+| Background | `--background`  | `#f0fafa` | `#262326` | Flat, quiet page canvas                       |
+| Primary    | `--primary`     | `#e7b7c8` | `#e7b7c8` | Pink primary actions in both modes            |
+| Secondary  | `--secondary`   | `#47cacc` | `#47cacc` | Teal information highlights and charts        |
+| Accent     | `--accent`      | `#cdb3d4` | `#cdb3d4` | Lavender supporting accents                   |
+| Supporting | `--supporting`  | `#63bcc9` | `#63bcc9` | Muted teal surfaces and decorative details    |
+| Highlight  | `--highlight`   | `#ffbe88` | `#ffbe88` | Restrained peach highlights and chart accents |
 
 Keep the exact base tokens. Derive semantic surfaces, borders, muted text, links, focus, overlays, and on-color text centrally; do not scatter independent replacements across components. Preserve separate warning, error, success, disabled, and lifecycle roles so brand color changes do not erase status meaning.
+
+Apply this system throughout the signed-in website and native app: Overview, Campaigns and their review workspace, Create and its editor tabs, Calendar, Insights, Business profile, Settings, notifications, lists, sheets and forms. Selected navigation and tabs use the soft pink primary surface, normal text and readable lavender icons; hover/press feedback uses lavender. Teal remains useful for links, information and charts. Default prose-link styling must not override component labels or selected states.
+
+Native workspace/task headers use a restrained pink tint and a neutral divider. Their cards, fields, bottom navigation and editor controls derive both modes from the generated shared palette. Keep field focus visible and preserve the parent form's state when switching sections. Use theme-aware dimming for dialogs and sheets; avoid independent black/blue overlays and large colored glows. The native launch-screen colors follow the same canvas, taking effect in the next binary build.
 
 Use soft slate labels on pastel buttons in both modes. Light-theme links and focus indicators use deep teal (`#19696b`); links shift to readable deep lavender (`#71567a`) on hover. Dark-theme links/focus use the supplied teal and hover to the supplied lavender. Header/footer links use deeper teal (`#15434b`) and lavender (`#4f3659`) on the full light gradient so each stop meets normal-text contrast. Use `--accent-text` for functional icons and lavender text. Validate normal text at a minimum `4.5:1` contrast and focus indicators at `3:1` against their adjacent surfaces.
 
@@ -89,9 +93,9 @@ The shared Appearance control provides a visible keyboard-accessible night-mode 
 
 ### Gradients and surfaces
 
-- Light headers and footers are a matching full-width horizontal gradient: teal → soft teal → lavender → pink → peach. Dark headers/footers use a flat dark surface with a thin teal accent line. Pages stay flat in both modes; `--brand-wash` and `--brand-panel` now resolve to the background and surface colors.
+- Headers and footers share the same full-width teal → soft teal → lavender → pink → peach sequence. Light mode uses the five base colors; dark mode mixes each at 16% into its warm surface and uses a neutral divider. Pages stay flat in both modes; `--brand-wash` and `--brand-panel` resolve to the background and surface colors.
 - Primary buttons are pink by default, lavender on hover with a `-2px` lift and subtle lavender glow, and darker lavender when pressed with the lift removed. Animate background, text, shadow, and transform over `0.3s ease`; preserve keyboard focus and reduced-motion support.
-- Keep cards and form fields on white or slightly tinted surfaces in light mode and neutral raised surfaces in dark mode. Reuse `brand-card` for gentle purple hover lift/glow, `brand-nav-item` for lavender interaction pills, and `brand-action` for primary actions. All hover feedback uses purple/lavender fills, tints, text, borders, or glows; normal-state pink/teal colors remain in place. Keep contrasting dark labels and functional icons on filled lavender controls.
+- Keep cards and form fields on white or slightly tinted surfaces in light mode. Dark mode uses `#332d32` cards, `#3d353c` muted surfaces and `#473e45` raised surfaces. Reuse `brand-card` for gentle hover lift, `brand-nav-item` for lavender interaction pills, and `brand-action` for primary actions. Dark mode uses quiet neutral shadows instead of colored glow and disables legacy glass blur/ambient core glow. Keep contrasting dark labels and functional icons on filled lavender controls. Filled selection links use `brand-filled-control` so ordinary link colors do not replace their on-color labels.
 - Prefer clear text over redundant mini icons. Public headers and footers use the MARKOS AI wordmark; hero actions, labeled tabs, metric/feature cards, forms, and legal headings omit decorative icons. Preserve chart graphics, provider branding, and icons needed for navigation or status. Theme and password controls use plain switches or text labels.
 - Cards use theme-aware surfaces, visible borders, generous radii, and restrained shadows. Dark surfaces must remain distinguishable from the page and from modal backdrops.
 - Ambient gradients may use the approved palette, but must not reduce text contrast or compete with content.
@@ -202,31 +206,31 @@ This is mounted-frontend evidence, with fictional browser-local sessions, API re
 
 Each route is available in English and Arabic beneath `/{locale}`.
 
-| Surface | Route |
-| --- | --- |
-| Landing | `/` |
-| Login | `/login` |
-| Signup | `/signup` |
-| Email verification | `/verify` |
-| Forgot password | `/forgot-password` |
-| Reset password | `/reset-password` |
-| Terms | `/terms` |
-| Privacy | `/privacy` |
+| Surface            | Route              |
+| ------------------ | ------------------ |
+| Landing            | `/`                |
+| Login              | `/login`           |
+| Signup             | `/signup`          |
+| Email verification | `/verify`          |
+| Forgot password    | `/forgot-password` |
+| Reset password     | `/reset-password`  |
+| Terms              | `/terms`           |
+| Privacy            | `/privacy`         |
 
 Email/password signup, login, session handoff, verification delivery, token verification, and the verified onboarding handoff use the application API. Google and Apple controls remain visibly deferred, and password recovery remains an honest unavailable state until its API contract is implemented. Terms and Privacy remain draft legal content and are excluded from search indexing.
 
 The authenticated Sunlit journey is mounted at the real application routes:
 
-| Surface | Route |
-| --- | --- |
-| Overview | `/app` |
-| Campaigns | `/app/campaigns` |
-| Create | `/app/content-studio` |
-| Calendar | `/app/calendar` |
-| Insights | `/app/analytics` |
-| Business Profile | `/app/knowledge` |
-| Settings | `/app/settings` |
-| Onboarding and profile review | `/onboarding` |
+| Surface                       | Route                 |
+| ----------------------------- | --------------------- |
+| Overview                      | `/app`                |
+| Campaigns                     | `/app/campaigns`      |
+| Create                        | `/app/content-studio` |
+| Calendar                      | `/app/calendar`       |
+| Insights                      | `/app/analytics`      |
+| Business Profile              | `/app/knowledge`      |
+| Settings                      | `/app/settings`       |
+| Onboarding and profile review | `/onboarding`         |
 
 These routes preserve their existing session, workspace, API, approval, and failure behavior. A mounted screen proves that its UI is connected to the application contract; it does not by itself prove that an external provider or undeveloped feature is live.
 
@@ -244,19 +248,19 @@ These routes preserve their existing session, workspace, API, approval, and fail
 
 PR #19 deliberately removed the preview route family and replaced the old visual direction, but it also deleted several mounted operational panels before equivalent Sunlit pages existed. Their deletion is not a product-scope decision. The final-system inventory below comes from the build specification and the reviewed original PRD/design sources; the current column records what is actually mounted now.
 
-| Final-system area | Current Sunlit implementation | Required restoration or completion |
-| --- | --- | --- |
-| Authentication (`AUTH-01`–`AUTH-05`) | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable. | Complete and mount approved provider login and password-recovery contracts before calling those paths live. |
-| Onboarding (`OB-01`–`OB-10`) | A concise greeting and seven real workspace areas are mounted. Company and Products are the two essentials; the other five areas can be explicitly skipped and resumed. The information check links directly to focused editing, and bilingual profile review/approval completes the journey without claiming 100% Vault completeness. | Build the focused document extraction, issue-reporting, mapping, and owner-confirmation path before exposing upload; restore plan/trial placement if still required and add any approved competitor verification or recovery refinements. |
-| Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view. | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen. |
-| Campaigns (`CAMP-01`–`CAMP-03`) | Campaign list/generation is API-backed. Generated plans expose a compact overview and one week at a time; the daily-plan selector is compact, and every dated idea has one existing Create action that idempotently opens the same Campaign-linked draft in Create and Calendar. The duration UI still offers 3/7/14/30/60/90 days, while generation is intentionally optimized only for showcase requests up to 14 days and three posts per day. | Add richer lifecycle/library management, bulk approval, complex long-campaign generation, and mount the existing PDF export contract. |
-| Content and calendar (`CONT-01`–`CONT-06`) | Create normally opens a two-choice greeting and Campaign handoff bypasses it with a durable prefilled draft. Generation uses the complete Campaign/form context and enters a bilingual in-place review/revision loop on the same record. The focused editor supports approval, JPEG media, and scheduling. Calendar is a primary bilingual/RTL destination with week/month views, dated Campaign planning drafts, semantic lifecycle colors, URL-backed focus, unscheduled handling, atomic rescheduling, and confirmed cancellation. | Add content revision history/comments, broader planned-slot orchestration, deployed provider evidence, separately hardened Carousel/Reel/Story flows, and queue-recovery states. |
-| Media (`MEDIA-01`–`MEDIA-04`) | The mounted Create surface supports authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist. | Live-verify provider generation and define the standalone Media Library, reusable generated-media ownership, asset-detail flows, brand-asset management, storage meter, and richer transformations. A prototype gallery is not implementation proof. |
-| Instagram scheduling (`SCHED-01`–`SCHED-04`) | Settings mounts the secure Instagram connection. Create requires explicit approval before scheduling and can return a scheduled item to `APPROVED`; Calendar manages saved times and exposes safe failure detail/recovery. Publishing/readiness and operator queue APIs exist. | Build the durable publishing queue/worker surface, evidence-based time and live-cap guidance, attempt history, close-race cancellation, and complete per-format live-publish behavior. |
-| Analytics (`AN-01`–`AN-06`) | Insights mounts an API-backed 7/30-day professional dashboard with compact real metrics, daily trends, prior-period percentages, content-type performance, top content, explicit audience-data availability, empty/loading/error states, and monthly PDF download. | Add the full post-detail and format drill-down views, 90-day/custom ranges, provider-supplied demographic views, and real provider-backed interpretation once permission evidence exists. |
-| AI consultant (`AI-01`–`AI-04`) | Digest/chat/report API foundations and deterministic agent-shaped responses exist; no complete consultant surface is mounted. | Restore weekly digest, proactive recommendations, conversational consultant, monthly-report preview, and approved competitor analysis with provider-backed behavior. |
-| Settings and team (`SET-01`–`SET-06`) | Account/workspace summary, Instagram connection, MFA, billing summary, export, and audit history are mounted. | Complete editable account/workspace controls, team membership/roles, notification preferences, billing actions/invoices, and any approved password/provider settings. |
-| Admin (`ADMIN-01`–`ADMIN-10`) | Admin APIs, permissions, audit, plans, gateways, model config, and prompt foundations exist. The old admin UI was deleted; the legacy `/admin` route currently redirects to Settings. | Build a Sunlit admin portal for business metrics, users, workspaces, moderation, AI usage, prompts, plans, system health, Instagram status, and revenue. A redirect is not replacement evidence. |
+| Final-system area                                  | Current Sunlit implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Required restoration or completion                                                                                                                                                                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication (`AUTH-01`–`AUTH-05`)               | Landing, email signup/login, verification, and honest unavailable states are mounted. The backend Google ID-token exchange exists, but Google and Apple provider controls do not authenticate; password recovery is also unavailable.                                                                                                                                                                                                                                                                                                 | Complete and mount approved provider login and password-recovery contracts before calling those paths live.                                                                                                                                          |
+| Onboarding (`OB-01`–`OB-10`)                       | A concise greeting and seven real workspace areas are mounted. Company and Products are the two essentials; the other five areas can be explicitly skipped and resumed. The information check links directly to focused editing, and bilingual profile review/approval completes the journey without claiming 100% Vault completeness.                                                                                                                                                                                                | Build the focused document extraction, issue-reporting, mapping, and owner-confirmation path before exposing upload; restore plan/trial placement if still required and add any approved competitor verification or recovery refinements.            |
+| Overview and Knowledge Vault (`DASH-01`–`DASH-02`) | Overview loads workspace content, queue summary, analytics, and Vault score. Business Profile loads a summarized Vault view.                                                                                                                                                                                                                                                                                                                                                                                                          | Build the complete editable Vault, gaps, per-entry history/versioning, and richer dashboard habit loop. Do not treat the current summary panel as the full Vault screen.                                                                             |
+| Campaigns (`CAMP-01`–`CAMP-03`)                    | Campaign list/generation is API-backed. Generated plans expose a compact overview and one week at a time; the daily-plan selector is compact, and every dated idea has one existing Create action that idempotently opens the same Campaign-linked draft in Create and Calendar. The duration UI still offers 3/7/14/30/60/90 days, while generation is intentionally optimized only for showcase requests up to 14 days and three posts per day.                                                                                     | Add richer lifecycle/library management, bulk approval, complex long-campaign generation, and mount the existing PDF export contract.                                                                                                                |
+| Content and calendar (`CONT-01`–`CONT-06`)         | Create normally opens a two-choice greeting and Campaign handoff bypasses it with a durable prefilled draft. Generation uses the complete Campaign/form context and enters a bilingual in-place review/revision loop on the same record. The focused editor supports approval, JPEG media, and scheduling. Calendar is a primary bilingual/RTL destination with week/month views, dated Campaign planning drafts, semantic lifecycle colors, URL-backed focus, unscheduled handling, atomic rescheduling, and confirmed cancellation. | Add content revision history/comments, broader planned-slot orchestration, deployed provider evidence, separately hardened Carousel/Reel/Story flows, and queue-recovery states.                                                                     |
+| Media (`MEDIA-01`–`MEDIA-04`)                      | The mounted Create surface supports authenticated JPEG upload, provider-selected JPEG generation, attachment/removal, thumbnails, and selected-asset preview; workspace media list/upload/read/delete APIs exist.                                                                                                                                                                                                                                                                                                                     | Live-verify provider generation and define the standalone Media Library, reusable generated-media ownership, asset-detail flows, brand-asset management, storage meter, and richer transformations. A prototype gallery is not implementation proof. |
+| Instagram scheduling (`SCHED-01`–`SCHED-04`)       | Settings mounts the secure Instagram connection. Create requires explicit approval before scheduling and can return a scheduled item to `APPROVED`; Calendar manages saved times and exposes safe failure detail/recovery. Publishing/readiness and operator queue APIs exist.                                                                                                                                                                                                                                                        | Build the durable publishing queue/worker surface, evidence-based time and live-cap guidance, attempt history, close-race cancellation, and complete per-format live-publish behavior.                                                               |
+| Analytics (`AN-01`–`AN-06`)                        | Insights mounts an API-backed 7/30-day professional dashboard with compact real metrics, daily trends, prior-period percentages, content-type performance, top content, explicit audience-data availability, empty/loading/error states, and monthly PDF download.                                                                                                                                                                                                                                                                    | Add the full post-detail and format drill-down views, 90-day/custom ranges, provider-supplied demographic views, and real provider-backed interpretation once permission evidence exists.                                                            |
+| AI consultant (`AI-01`–`AI-04`)                    | Digest/chat/report API foundations and deterministic agent-shaped responses exist; no complete consultant surface is mounted.                                                                                                                                                                                                                                                                                                                                                                                                         | Restore weekly digest, proactive recommendations, conversational consultant, monthly-report preview, and approved competitor analysis with provider-backed behavior.                                                                                 |
+| Settings and team (`SET-01`–`SET-06`)              | Account/workspace summary, Instagram connection, MFA, billing summary, export, and audit history are mounted.                                                                                                                                                                                                                                                                                                                                                                                                                         | Complete editable account/workspace controls, team membership/roles, notification preferences, billing actions/invoices, and any approved password/provider settings.                                                                                |
+| Admin (`ADMIN-01`–`ADMIN-10`)                      | Admin APIs, permissions, audit, plans, gateways, model config, and prompt foundations exist. The old admin UI was deleted; the legacy `/admin` route currently redirects to Settings.                                                                                                                                                                                                                                                                                                                                                 | Build a Sunlit admin portal for business metrics, users, workspaces, moderation, AI usage, prompts, plans, system health, Instagram status, and revenue. A redirect is not replacement evidence.                                                     |
 
 Universal obligations from the retired design source still apply to every restored surface: explicit empty/loading/error/success/limit states, a useful next action, WCAG AA intent, keyboard operation, reduced motion, Arabic/RTL parity, and responsive behavior. Historical components may be inspected for behavior, but they must not be restored wholesale or used as the active visual source.
 

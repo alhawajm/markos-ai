@@ -1,8 +1,9 @@
 import React, { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "test-renderer";
+import { nativeColors } from "@markos/ui-tokens/native";
 
-const appearance = vi.hoisted(() => ({ rtl: false }));
+const appearance = vi.hoisted(() => ({ rtl: false, mode: "light" as "light" | "dark" }));
 vi.mock("react-native", async () => {
   const { createElement } = await import("react");
   return {
@@ -16,15 +17,16 @@ vi.mock("lucide-react-native", () => Object.fromEntries(["ArrowLeft", "Bell", "C
 vi.mock("expo-router", () => ({ useRouter: () => ({}) }));
 vi.mock("../src/providers", () => ({
   useSession: () => ({}),
-  useAppearance: () => ({ rtl: appearance.rtl, colors: {}, t: (en: string, ar: string) => (appearance.rtl ? ar : en) })
+  useAppearance: () => ({ rtl: appearance.rtl, colors: nativeColors[appearance.mode], t: (en: string, ar: string) => (appearance.rtl ? ar : en) })
 }));
 
-import { Disclosure, Field, Row, Segmented, SelectField, Sheet } from "../src/ui";
+import { Button, Card, Disclosure, Field, Row, Segmented, SelectField, Sheet, TaskHeader } from "../src/ui";
 
 let root: Root;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   appearance.rtl = false;
+  appearance.mode = "light";
   root = createRoot();
 });
 afterEach(async () => {
@@ -39,6 +41,47 @@ const press = async (label: string) => {
 };
 
 describe("focused mobile panels", () => {
+  it.each(["light", "dark"] as const)("keeps editor controls readable and preserves focus callbacks in %s mode", async (mode) => {
+    appearance.mode = mode;
+    const focused = vi.fn();
+    const blurred = vi.fn();
+    await act(async () =>
+      root.render(
+        <>
+          <TaskHeader title="Content draft" />
+          <Card>
+            <Field label="Caption" value="Blooms in Pink" onFocus={focused} onBlur={blurred} />
+            <Button label="Mark ready" onPress={() => undefined} />
+            <Segmented
+              value="media"
+              options={[
+                { value: "caption", label: "Caption" },
+                { value: "media", label: "Media" }
+              ]}
+              onChange={() => undefined}
+            />
+          </Card>
+        </>
+      )
+    );
+    const colors = nativeColors[mode];
+    const primary = root.container.queryAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === "Mark ready")[0]!;
+    const text = root.container.queryAll((node) => node.type === "Text" && node.props.children === "Mark ready")[0]!;
+    const labelColor = text.props.style[1].color;
+    expect(contrast(labelColor, primary.props.style({ pressed: false }).backgroundColor)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(labelColor, primary.props.style({ pressed: true }).backgroundColor)).toBeGreaterThanOrEqual(4.5);
+    const selected = root.container.queryAll((node) => node.type === "Pressable" && node.props.accessibilityState?.selected)[0]!;
+    expect(contrast(colors.text, selected.props.style({ pressed: false }).backgroundColor)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colors.accentText, colors.primarySoft)).toBeGreaterThanOrEqual(3);
+    const input = () => root.container.queryAll((node) => node.type === "TextInput")[0]!;
+    await act(async () => input().props.onFocus({ nativeEvent: {} }));
+    expect(input().props.style[0].borderColor).toBe(colors.focus);
+    expect(focused).toHaveBeenCalledOnce();
+    await act(async () => input().props.onBlur({ nativeEvent: {} }));
+    expect(input().props.style[0].borderColor).toBe(colors.borderStrong);
+    expect(blurred).toHaveBeenCalledOnce();
+    expect(input().props.value).toBe("Blooms in Pink");
+  });
   it("keeps an unfinished field mounted and inaccessible while its section is collapsed", async () => {
     function Form() {
       const [text, setText] = useState("");
@@ -149,3 +192,13 @@ describe("focused mobile panels", () => {
     expect(root.container.queryAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === "Price range")).toHaveLength(1);
   });
 });
+
+function contrast(a: string, b: string) {
+  const luminance = (hex: string) =>
+    [1, 3, 5].reduce((total, offset, index) => {
+      const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return total + (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][index]!;
+    }, 0);
+  const values = [luminance(a), luminance(b)].sort((x, y) => x - y);
+  return (values[1]! + 0.05) / (values[0]! + 0.05);
+}

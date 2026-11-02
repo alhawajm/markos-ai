@@ -70,9 +70,9 @@
 }
 .create-toolbar [aria-current],
 .create-panel-toggle [aria-pressed="true"] {
-  background: var(--secondary-soft);
-  border-color: var(--secondary);
-  color: var(--text);
+  background: var(--selected);
+  border-color: var(--selected-border);
+  color: var(--selected-text);
 }
 .create-editor-body {
   flex: 1;

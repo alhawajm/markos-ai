@@ -4,7 +4,7 @@ Handoff note: this document retains dated decisions and verification history. Pr
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-11-01
+- Last updated: 2026-11-02
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -15,6 +15,29 @@ Product behavior, lifecycle rules, data contracts, security, permissions, and in
 Each surface entry should state what is accepted, what remains deferred or open, and the observable consequence for implementation and review.
 
 ## Shared visual foundation
+
+### 2026-11-02 ? Apply the design throughout web and mobile
+
+The user clarified that the design must cover every application page and tab, rather than authentication alone. Apply the shared pink/teal/lavender system to the signed-in website and native app, with the same warm dark surfaces and readable light surfaces.
+
+- Unify desktop/mobile website navigation, Business profile and Settings section menus, Campaign review controls and Create editor tabs around soft pink selection, normal text and readable lavender icons. Keep prose-link defaults in their own CSS cascade layer so they cannot replace component text colors.
+- Use shared elevation and overlay tokens for the workspace menu, notifications, Calendar dialogs, Create dialogs and onboarding cards. Remove legacy glass treatment from workspace cards and retain the muted five-color header treatment in Settings.
+- Apply the native system through shared workspace/task headers, cards, fields, list selections, editor segments, sheets and all five bottom/rail destinations. Preserve pressed-label contrast, increase navigation labels to 13px, and use the readable accent color for functional icons and refresh indicators. Focused inputs retain their parent callbacks and unfinished values.
+- Generate native overlay colors from the same CSS source. Align future binary launch screens with the shared light/dark canvas. Instagram media previews, user artwork and semantic publishing/failure statuses retain their meaning.
+
+**Validation checkpoint:** desktop page captures passed for Overview, Campaigns, Create, Calendar, Insights, Business profile and Settings in English/Arabic and both themes. The corrected narrow checks passed in English/light and Arabic/dark: 42 workspace captures total, with Caption, Details and Media exercised in all six combinations. These use explicitly isolated presentation fixtures, not a live customer workspace. Android and iOS bundles exported successfully; 22 focused mobile tests and seven web theme unit tests passed. Web/mobile typechecks, generated-token freshness and targeted ESLint passed (zero errors; three existing internal-navigation warnings). All four existing browser theme-interaction cases passed across focused runs. Initial cold-development compilation timeouts and a temporary incomplete development manifest were resolved by warming the public routes; the locale-persistence case now waits for its destination and network-idle before inspecting the hydrated control (one passed, three intentionally filtered on the final rerun). Physical-device work remains deferred at the user's request. Evidence is under ignored `var/whole-app-theme-2026-11-02/`; Chrome DevTools MCP was unavailable, so the existing Playwright/headless Chromium harness was used.
+
+### 2026-11-02 — Carry the light palette into a warmer dark theme
+
+The user authorized merging the colleague's November 1 refresh and asked that dark mode use the same color system without the futuristic appearance. Fast-forwarded the local working branch to `dd9492f`, preserving the existing store-preparation work.
+
+- Retain the exact pink, teal, lavender, muted-teal and peach brand anchors in both modes. Keep light-mode colors intact.
+- Replace blue-black dark surfaces with warm charcoal `#262326`, cards `#332d32`, muted surfaces `#3d353c`, raised surfaces `#473e45` and warm off-white text `#f7f0f3`.
+- Give dark header/footer chrome the same five-color sequence as light mode, mixed at 16% into the warm surface. Replace teal divider lines and colored glow with neutral borders and quiet shadows; disable legacy glass blur and ambient core glow in dark mode.
+- Regenerate shared native colors from the authoritative CSS. Preserve theme persistence, language/RTL, lifecycle/status meaning, navigation and all data/approval contracts.
+- Correct the selected Settings language link: a generic link rule had replaced its dark on-pink label with teal. `brand-filled-control` preserves the on-color label and lavender hover feedback in either mode.
+
+**Focused validation:** seven `theme.test.ts` cases and four `theme.browser.test.ts` cases passed. After adding the selected-language contrast assertions, three browser cases passed; the workspace case initially placed an assertion after leaving Settings. Moving it into the Settings step and rerunning only that case passed (one passed, three intentionally filtered). The browser file covers public theme controls plus a clearly mocked Settings/sidebar fixture; it is not live account or provider acceptance. Web and mobile typechecks passed. All 116 rendered palette/gradient-stop contrast pairs passed: minimum normal-text ratios were 4.77:1 in light and 4.65:1 in dark; interface/focus minimums were 3.24:1 and 3.03:1. Eight landing/login captures covered English/Arabic and light/dark at `1440x900 @ 1x`; compact `1366x768` and narrow `390x844` Arabic dark-login checks had no horizontal overflow. Targeted ESLint reported zero errors and two existing `window.location.assign` navigation warnings in Settings. Formatting and generated-native-token freshness passed. Evidence is under ignored `var/dark-theme-2026-11-02/`. Chrome DevTools MCP was unavailable, so the existing Playwright harness and a headless Chromium were used. Native handset work remains deferred. This is a local implementation checkpoint, not a new Railway deployment or Expo update.
 
 ### 2026-11-01 — Align release browser checks with the palette
 

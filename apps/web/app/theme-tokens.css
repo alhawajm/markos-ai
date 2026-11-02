@@ -1,4 +1,4 @@
-/* MARKOS palette updated November 1, 2026. Pink and teal lead both themes. */
+/* MARKOS palette updated November 2, 2026. Both modes share the same brand colors. */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
@@ -40,6 +40,7 @@
   --on-feature: #f2f4f7;
   --shadow-sm: 0 8px 24px rgb(32 33 43 / 4%);
   --shadow-md: 0 18px 48px rgb(32 33 43 / 8%);
+  --overlay-color: #090c148c;
 
   --status-draft: #596273;
   --status-ready: #006d73;
@@ -51,16 +52,16 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --text: #eef4f6;
-  --background: #14181f;
+  --text: #f7f0f3;
+  --background: #262326;
 
-  --surface: #1c242d;
-  --surface-muted: #242f39;
-  --surface-raised: #2b3742;
-  --text-soft: #d1d5e0;
-  --muted: #a8afbf;
-  --border: #353b4d;
-  --border-strong: #717b92;
+  --surface: #332d32;
+  --surface-muted: #3d353c;
+  --surface-raised: #473e45;
+  --text-soft: #e1d3dc;
+  --muted: #c7b6c1;
+  --border: #564851;
+  --border-strong: #9c8593;
   --on-primary: #263640;
   --on-secondary: #263640;
   --on-accent: #263640;
@@ -73,9 +74,11 @@
   --danger: #ffa4b5;
   --on-danger: #20212b;
   --info: #acb9ff;
-  --feature-surface: #273b40;
-  --shadow-sm: 0 8px 24px rgb(0 0 0 / 12%);
-  --shadow-md: 0 18px 48px rgb(0 0 0 / 20%);
+  --feature-surface: #42373f;
+  --on-feature: #f7f0f3;
+  --shadow-sm: 0 4px 12px rgb(18 12 16 / 12%);
+  --shadow-md: 0 10px 28px rgb(18 12 16 / 18%);
+  --overlay-color: #1712169e;
 
   --status-draft: #b3bdd1;
   --status-ready: #79d8df;
@@ -120,8 +123,12 @@
   --surface-elevated: var(--surface-raised);
   --interactive: var(--link);
   --interactive-soft: var(--accent-soft);
-  --selected: var(--secondary-soft);
-  --overlay: rgb(9 12 20 / 55%);
+  --selected: var(--primary-soft);
+  --selected-text: var(--text);
+  --selected-icon: var(--accent-text);
+  --selected-border: var(--accent-text);
+  --shadow-card: var(--shadow-md);
+  --overlay: var(--overlay-color);
   --primary-soft: color-mix(in srgb, var(--primary) 15%, var(--surface));
   --secondary-soft: color-mix(in srgb, var(--secondary) 20%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
@@ -202,11 +209,21 @@
 }
 
 :root[data-theme="dark"] {
-  --chrome-background: var(--surface);
+  --chrome-background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--teal) 16%, var(--surface)),
+    color-mix(in srgb, var(--soft-teal) 16%, var(--surface)) 25%,
+    color-mix(in srgb, var(--lavender) 16%, var(--surface)) 50%,
+    color-mix(in srgb, var(--pink) 16%, var(--surface)) 75%,
+    color-mix(in srgb, var(--peach) 16%, var(--surface))
+  );
   --chrome-text: var(--text);
   --chrome-link: var(--teal);
   --chrome-hover: var(--lavender);
-  --chrome-line: color-mix(in srgb, var(--teal) 45%, var(--surface));
-  --button-glow: 0 6px 18px color-mix(in srgb, var(--lavender) 20%, transparent);
-  --card-glow: 0 10px 24px color-mix(in srgb, var(--lavender) 18%, transparent);
+  --chrome-line: var(--border);
+  --button-glow: var(--shadow-sm);
+  --card-glow: var(--shadow-md);
+  --luxury-glow-turquoise: var(--shadow-sm);
+  --luxury-glow-gold: var(--shadow-sm);
+  --overlay: var(--overlay-color);
 }

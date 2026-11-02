@@ -34,6 +34,8 @@ export default function TabLayout() {
             width: rail ? 108 : undefined,
             backgroundColor: colors.surface,
             borderTopWidth: rail ? 0 : 1,
+            borderRightWidth: rail && !rtl ? 1 : 0,
+            borderLeftWidth: rail && rtl ? 1 : 0,
             borderColor: colors.border,
             padding: 8,
             paddingTop: rail ? insets.top + 20 : 8,
@@ -66,7 +68,7 @@ export default function TabLayout() {
                   paddingHorizontal: 2,
                   paddingVertical: 8,
                   borderRadius: 12,
-                  backgroundColor: pressed ? colors.surfaceMuted : "transparent"
+                  backgroundColor: pressed ? colors.accentSoft : "transparent"
                 })}
               >
                 <View
@@ -76,12 +78,12 @@ export default function TabLayout() {
                     borderRadius: 15,
                     justifyContent: "center",
                     alignItems: "center",
-                    backgroundColor: selected ? colors.secondarySoft : "transparent"
+                    backgroundColor: selected ? colors.primarySoft : "transparent"
                   }}
                 >
-                  <Icon size={22} color={selected ? colors.accent : colors.muted} strokeWidth={selected ? 2 : 1.6} />
+                  <Icon size={22} color={selected ? colors.accentText : colors.muted} strokeWidth={selected ? 2 : 1.6} />
                 </View>
-                <Txt variant="meta" style={{ textAlign: "center", color: selected ? colors.text : colors.muted, fontSize: 12 }}>
+                <Txt variant="meta" style={{ textAlign: "center", color: selected ? colors.text : colors.muted, fontSize: 13 }}>
                   {item.label}
                 </Txt>
               </Pressable>

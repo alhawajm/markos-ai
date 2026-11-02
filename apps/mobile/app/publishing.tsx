@@ -23,7 +23,7 @@ export default function Publishing() {
     refetchOnWindowFocus: "always"
   });
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <Txt variant="title">{t("Publishing activity", "نشاط النشر")}</Txt>
       <Txt muted>
         {t(

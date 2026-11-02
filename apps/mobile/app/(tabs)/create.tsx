@@ -44,7 +44,7 @@ export default function Create() {
         `${item.brief ?? ""} ${item.caption}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
     ) ?? [];
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <TitleBar title={t("Create", "إنشاء")} />
       <Button icon={Plus} label={t("New content", "محتوى جديد")} onPress={() => setPanel("new")} />
       <Row style={{ justifyContent: "space-between" }}>

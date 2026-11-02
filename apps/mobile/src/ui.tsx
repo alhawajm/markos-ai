@@ -108,8 +108,8 @@ export function Button({
         paddingVertical: 12,
         borderWidth: secondary ? 1 : 0,
         borderColor: colors.borderStrong,
-        backgroundColor: secondary ? colors.surface : colors.primary,
-        opacity: disabled || busy ? 0.55 : pressed ? 0.8 : 1,
+        backgroundColor: secondary ? (pressed ? colors.accentSoft : colors.surface) : pressed ? colors.buttonActive : colors.primary,
+        opacity: disabled || busy ? 0.55 : 1,
         justifyContent: "center"
       })}
     >
@@ -136,7 +136,7 @@ export function IconButton({ label, icon: Icon, onPress, disabled }: { label: st
         alignItems: "center",
         justifyContent: "center",
         borderRadius: 12,
-        backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+        backgroundColor: pressed ? colors.accentSoft : "transparent",
         opacity: disabled ? 0.4 : 1
       })}
     >
@@ -177,9 +177,9 @@ export function TextAction({
         paddingVertical: 10,
         paddingHorizontal: selected === undefined ? 4 : 12,
         borderRadius: 12,
-        backgroundColor: selected ? colors.secondarySoft : "transparent",
+        backgroundColor: pressed ? colors.accentSoft : selected ? colors.primarySoft : "transparent",
         justifyContent: "center",
-        opacity: disabled ? 0.45 : pressed ? 0.65 : 1
+        opacity: disabled ? 0.45 : 1
       })}
     >
       <Row style={{ gap: 8 }}>
@@ -248,7 +248,7 @@ export function ListRow({
         paddingVertical: 12,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.border,
-        backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+        backgroundColor: pressed ? colors.accentSoft : selected ? colors.primarySoft : "transparent",
         opacity: disabled ? 0.45 : 1
       })}
     >
@@ -303,8 +303,8 @@ export function Segmented<T extends string>({
             paddingVertical: 8,
             justifyContent: "center",
             borderRadius: 10,
-            backgroundColor: value === option.value ? colors.surface : "transparent",
-            opacity: disabled ? 0.45 : pressed ? 0.7 : 1
+            backgroundColor: pressed ? colors.accentSoft : value === option.value ? colors.primarySoft : "transparent",
+            opacity: disabled ? 0.45 : 1
           })}
         >
           <Txt variant="label" style={{ textAlign: "center", fontSize: 14, color: value === option.value ? colors.text : colors.muted }}>
@@ -363,7 +363,7 @@ export function Sheet({ title, visible, onClose, children }: PropsWithChildren<{
             accessibilityRole="button"
             accessibilityLabel={t("Close panel", "إغلاق اللوحة")}
             onPress={onClose}
-            style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
+            style={{ position: "absolute", inset: 0, backgroundColor: colors.overlayColor }}
           />
           <View
             accessibilityViewIsModal
@@ -436,8 +436,9 @@ export function SelectField<T extends string>({
     </View>
   );
 }
-export function Field({ label, hint, style, ...props }: TextInputProps & { label: string; hint?: string }) {
+export function Field({ label, hint, style, onFocus, onBlur, ...props }: TextInputProps & { label: string; hint?: string }) {
   const { colors, rtl } = useAppearance();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 8 }}>
       <Txt variant="label">{label}</Txt>
@@ -446,11 +447,19 @@ export function Field({ label, hint, style, ...props }: TextInputProps & { label
         accessibilityLabel={label}
         placeholderTextColor={colors.muted}
         selectionColor={colors.primary}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={[
           {
             minHeight: 52,
             borderWidth: 1,
-            borderColor: colors.borderStrong,
+            borderColor: focused ? colors.focus : colors.borderStrong,
             borderRadius: 12,
             padding: 14,
             backgroundColor: colors.surface,
@@ -531,7 +540,7 @@ export function WorkspaceHeader() {
   const { colors, t } = useAppearance();
   const router = useRouter();
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ backgroundColor: colors.background }}>
+    <SafeAreaView edges={["top", "left", "right"]} style={{ backgroundColor: colors.primarySoft, borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <Row style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
         <Pressable
           accessibilityRole="button"
@@ -540,8 +549,10 @@ export function WorkspaceHeader() {
           style={{ flex: 1 }}
         >
           <Row>
-            <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.secondarySoft }}>
-              <Txt variant="label">{session?.workspace.name.slice(0, 1).toUpperCase() ?? "M"}</Txt>
+            <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary }}>
+              <Txt variant="label" style={{ color: colors.onPrimary }}>
+                {session?.workspace.name.slice(0, 1).toUpperCase() ?? "M"}
+              </Txt>
             </View>
             <Txt variant="label" numberOfLines={1} style={{ flex: 1, fontSize: 16 }}>
               {session?.workspace.name ?? "MARKOS"}
@@ -574,7 +585,7 @@ export function TaskHeader({ title, close = false }: { title: string; close?: bo
   const { colors, t, rtl } = useAppearance();
   const router = useRouter();
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={{ backgroundColor: colors.background }}>
+    <SafeAreaView edges={["top", "left", "right"]} style={{ backgroundColor: colors.primarySoft, borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <Row style={{ paddingHorizontal: 12, minHeight: 64 }}>
         <View style={{ transform: [{ scaleX: rtl ? -1 : 1 }] }}>
           <IconButton label={t("Back", "رجوع")} icon={ArrowLeft} onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/campaigns"))} />

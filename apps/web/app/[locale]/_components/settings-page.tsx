@@ -64,7 +64,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
 
   return (
     <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <header className="sticky top-0 z-40 border-b border-[var(--sunlit-line)] bg-[var(--surface-muted)] px-5 py-3 backdrop-blur-xl sm:px-7 xl:px-10">
+      <header className="brand-chrome sticky top-0 z-40 border-b px-5 py-3 sm:px-7 xl:px-10">
         <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -125,6 +125,6 @@ export function SettingsPage({ locale }: { locale: Locale }) {
   );
 }
 
-const activeLanguageClass = "shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-extrabold text-[var(--on-primary)]";
+const activeLanguageClass = "brand-filled-control shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-extrabold text-[var(--on-primary)]";
 const languageClass =
   "shrink-0 rounded-lg px-3 py-2 text-xs font-extrabold text-[var(--sunlit-muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--link-hover)]";

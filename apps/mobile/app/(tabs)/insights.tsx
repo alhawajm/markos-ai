@@ -28,7 +28,7 @@ export default function Insights() {
   ] as const;
   const value = (number: number | null | undefined) => (number == null ? "—" : number.toLocaleString(locale));
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <Txt variant="title">{t("Insights", "الأداء")}</Txt>
       <Segmented
         value={range}

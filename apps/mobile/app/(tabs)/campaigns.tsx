@@ -48,7 +48,7 @@ export default function Campaigns() {
           onRefresh={() => {
             void result.refetch();
           }}
-          tintColor={colors.accent}
+          tintColor={colors.accentText}
         />
       }
     >
@@ -84,7 +84,7 @@ export default function Campaigns() {
       ) : null}
       {!result.isPending && !result.isError && items.length === 0 ? (
         <Card tone="tint">
-          <Target size={32} strokeWidth={1.5} color={colors.accent} />
+          <Target size={32} strokeWidth={1.5} color={colors.accentText} />
           <Txt variant="heading">{query ? t("No matching campaigns", "لا توجد حملات مطابقة") : t("Your next idea starts here", "فكرتك القادمة تبدأ هنا")}</Txt>
           <Txt muted>
             {query

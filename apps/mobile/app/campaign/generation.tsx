@@ -87,7 +87,7 @@ export default function CampaignGeneration() {
             ? t("Let’s try that again", "لنحاول مجددًا")
             : t("Drafting your campaign", "جارٍ إعداد حملتك")}
       </Txt>
-      <Sparkles size={40} strokeWidth={1.5} color={colors.accent} />
+      <Sparkles size={40} strokeWidth={1.5} color={colors.accentText} />
       {job?.objective ? <Txt>{job.objective}</Txt> : null}
       {result.isPending ? <Loading /> : null}
       {missing ? (
@@ -113,11 +113,11 @@ export default function CampaignGeneration() {
           <Txt muted>{t("MARKOS is bringing your business context and event references together.", "يجمع ماركوس سياق نشاطك التجاري ومراجع الفعالية.")}</Txt>
           <Card>
             <Row>
-              <Check size={24} color={colors.accent} />
+              <Check size={24} color={colors.accentText} />
               <Txt>{t("Brief and references received", "تم استلام الملخص والمراجع")}</Txt>
             </Row>
             <Row>
-              <Clock3 size={24} color={colors.accent} />
+              <Clock3 size={24} color={colors.accentText} />
               <Txt>
                 {job.progress
                   ? t(

@@ -6,7 +6,7 @@ import { format, resolveConfig } from "prettier";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const css = fs.readFileSync(path.join(root, "apps/web/app/theme-tokens.css"), "utf8");
 const blocks = css.split("}");
-const parse = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6}|var\(--[\w-]+\));/g)].map((m) => [m[1], m[2]]));
+const parse = (block) => Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6}(?:[\da-fA-F]{2})?|var\(--[\w-]+\));/g)].map((m) => [m[1], m[2]]));
 const resolveColors = (tokens) => {
   const resolve = (name, visited = new Set()) => {
     if (visited.has(name) || !tokens[name]) throw new Error(`Invalid color token: ${name}`);

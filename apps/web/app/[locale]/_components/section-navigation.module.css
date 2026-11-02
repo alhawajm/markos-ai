@@ -50,9 +50,9 @@
 }
 
 .navigationLink[data-active="true"] {
-  border-color: var(--section-menu-active-border, color-mix(in srgb, var(--primary) 24%, transparent));
-  background: var(--section-menu-active, linear-gradient(135deg, var(--primary-soft), var(--secondary-soft)));
-  color: var(--section-menu-active-text, var(--link));
+  border-color: var(--section-menu-active-border, var(--selected-border));
+  background: var(--section-menu-active, var(--selected));
+  color: var(--section-menu-active-text, var(--selected-text));
   box-shadow: inset 3px 0 0 var(--section-menu-accent, var(--primary));
 }
 
@@ -68,7 +68,7 @@
 
 .navigationLink[data-active="true"] .icon {
   background: var(--section-menu-active-icon-background, var(--surface));
-  color: var(--section-menu-accent, var(--primary));
+  color: var(--selected-icon);
 }
 
 .label {
@@ -139,12 +139,11 @@
     padding: 10px 12px;
     border: 1px solid var(--section-menu-border, color-mix(in srgb, var(--text) 12%, transparent));
     border-radius: 16px;
-    background: var(--section-menu-mobile-background, color-mix(in srgb, var(--surface) 92%, transparent));
+    background: var(--section-menu-mobile-background, var(--surface));
     box-shadow: var(--shadow-sm);
     color: var(--section-menu-heading, var(--text));
     font-size: var(--type-label);
     font-weight: 600;
-    backdrop-filter: blur(20px);
   }
 
   .mobileMenu select {

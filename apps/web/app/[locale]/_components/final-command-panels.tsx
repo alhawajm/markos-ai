@@ -1796,7 +1796,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-3 rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[0_16px_50px_rgba(0,0,0,.28)] transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)]"
+        className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[var(--shadow-md)] transition hover:border-[var(--lavender)] hover:bg-[var(--accent-soft)]"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -1815,7 +1815,7 @@ function ProfileRow({ locale, name }: { locale: Locale; name: string }) {
 
       {open ? (
         <div
-          className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[22rem] rounded-[1.5rem] border border-[color-mix(in_srgb,var(--secondary)_22%,transparent)] bg-[var(--surface)] p-2 shadow-[0_28px_90px_rgba(0,0,0,.62)]"
+          className="absolute right-0 top-[calc(100%+0.85rem)] z-50 w-[22rem] rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-2 shadow-[var(--shadow-md)]"
           role="menu"
         >
           <div className="rounded-[1.2rem] border border-[color-mix(in_srgb,var(--secondary)_10%,transparent)] bg-[var(--surface-muted)] p-2">
@@ -1950,7 +1950,7 @@ function ContentReadyCard({ accent: accentName, cta, href, label, locale, status
       return (
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <div className="flex items-center justify-between">
-            <span className="h-2 w-2 rounded-full bg-[var(--secondary)] shadow-[0_0_14px_color-mix(in_srgb,var(--secondary)_75%,transparent)]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--secondary)] " />
             <div className="flex gap-1">
               <span className="h-1 w-12 rounded-full bg-[var(--secondary)]" />
               <span className="h-1 w-12 rounded-full bg-[color-mix(in_srgb,var(--secondary)_30%,transparent)]" />
@@ -2134,13 +2134,13 @@ function OpportunityCard({
           <Sparkles size={20} /> Generate Content <ArrowRight size={20} />
         </a>
         <a
-          className="rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
+          className="rounded-full border border-[var(--border)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
           href={`/${locale}/app/analytics`}
         >
           View Analysis
         </a>
         <a
-          className="rounded-full border border-[color-mix(in_srgb,var(--secondary)_18%,transparent)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
+          className="rounded-full border border-[var(--border)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"
           href={`/${locale}/app/campaign-builder`}
         >
           Schedule Later

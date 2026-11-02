@@ -244,9 +244,9 @@
   line-height: 1.5;
 }
 .railButton[aria-current="true"] {
-  background: var(--secondary-soft);
-  border-color: color-mix(in srgb, var(--secondary) 40%, var(--border));
-  color: var(--text);
+  background: var(--selected);
+  border-color: var(--selected-border);
+  color: var(--selected-text);
 }
 .railButton:hover {
   background: var(--accent-soft);
@@ -282,8 +282,8 @@
   color: var(--text-muted);
 }
 .zoom button[aria-pressed="true"] {
-  color: var(--text);
-  background: var(--secondary-soft);
+  color: var(--selected-text);
+  background: var(--selected);
   font-weight: 600;
 }
 .workScroll {

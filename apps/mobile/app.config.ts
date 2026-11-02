@@ -27,7 +27,7 @@ const config: ExpoConfig = {
     "expo-notifications",
     ["expo-localization", { supportsRTL: true, supportedLocales: ["en", "ar"] }],
     "expo-status-bar",
-    ["expo-splash-screen", { image: "./assets/splash.png", imageWidth: 160, backgroundColor: "#f7fafa", dark: { backgroundColor: "#171a23" } }],
+    ["expo-splash-screen", { image: "./assets/splash.png", imageWidth: 160, backgroundColor: "#f0fafa", dark: { backgroundColor: "#262326" } }],
     "@react-native-community/datetimepicker"
   ],
   experiments: { typedRoutes: true },

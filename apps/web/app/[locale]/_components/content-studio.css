@@ -127,9 +127,9 @@
 }
 .studio-companion-switch [aria-pressed="true"],
 .studio-edit-actions [aria-pressed="true"] {
-  color: var(--text);
-  background: var(--primary-soft);
-  border-color: var(--focus);
+  color: var(--selected-text);
+  background: var(--selected);
+  border-color: var(--selected-border);
 }
 .studio-conversation {
   display: flex;
@@ -534,7 +534,7 @@
   background: var(--sunlit-paper);
 }
 .studio-dialog::backdrop {
-  background: rgb(32 33 43 / 45%);
+  background: var(--overlay);
 }
 .studio-workspace :is(button, input, textarea, select, a):focus-visible {
   outline: 2px solid var(--focus);

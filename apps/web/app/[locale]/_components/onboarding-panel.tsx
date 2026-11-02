@@ -1252,7 +1252,7 @@ export function OnboardingPanel({
 
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
         <a className="flex items-center gap-3 text-[var(--sunlit-ink)]" href={`/${locale}`}>
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[0_14px_30px_rgb(32_33_43_/_18%)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[var(--shadow-md)]">
             <MarkosAiIcon size={21} />
           </span>
           <strong className="text-[16px] font-semibold tracking-tight">MARKOS AI</strong>
@@ -1402,7 +1402,7 @@ function Greeting({ copy, onDocuments, onStart }: { copy: OnboardingCopy; onDocu
             transition={{ duration: reducedMotion ? 0 : 0.28, delay: 0 }}
             whileHover={reducedMotion ? {} : { y: -3 }}
             whileTap={reducedMotion ? {} : { y: -1, scale: 0.995 }}
-            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[0_24px_60px_rgb(32_33_43_/_24%)] transition-shadow duration-200 hover:shadow-[var(--card-glow)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
+            className="group relative min-h-48 overflow-hidden rounded-[1.8rem] bg-[var(--primary)] p-6 text-start text-[var(--on-primary)] shadow-[var(--shadow-md)] transition-shadow duration-200 hover:shadow-[var(--card-glow)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)] sm:p-7"
             onClick={onDocuments}
             type="button"
           >

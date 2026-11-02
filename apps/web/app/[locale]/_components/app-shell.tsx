@@ -230,7 +230,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         data-sidebar-collapsed={sidebarCollapsed}
       >
         <aside
-          className={`relative hidden min-w-0 border-e border-[var(--sunlit-line)] bg-[var(--surface)] py-5 backdrop-blur-xl lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-visible ${sidebarCollapsed ? "px-4" : "px-6"}`}
+          className={`relative hidden min-w-0 border-e border-[var(--sunlit-line)] bg-[var(--surface)] py-5 lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:self-start lg:flex-col lg:overflow-visible ${sidebarCollapsed ? "px-4" : "px-6"}`}
           data-app-sidebar
         >
           <Link
@@ -239,7 +239,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             }`}
             href={`/${locale}/app`}
           >
-            <span className="grid h-[40px] w-[40px] shrink-0 place-items-center justify-self-center rounded-xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[0_10px_24px_rgb(32_33_43_/_16%)]">
+            <span className="grid h-[40px] w-[40px] shrink-0 place-items-center justify-self-center rounded-xl bg-[var(--primary)] text-[var(--on-primary)] shadow-[var(--shadow-md)]">
               <MarkosAiIcon size={21} />
             </span>
             <span
@@ -261,7 +261,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             onClick={toggleSidebar}
             type="button"
           >
-            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-[var(--surface)] text-[var(--sunlit-muted)] shadow-[0_8px_20px_rgb(32_33_43_/_10%)] transition group-hover:border-[var(--lavender)] group-hover:text-[var(--link-hover)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--focus)]">
+            <span className="grid h-[28px] w-[28px] place-items-center rounded-full border border-[var(--sunlit-line-strong)] bg-[var(--surface)] text-[var(--sunlit-muted)] shadow-[var(--shadow-md)] transition group-hover:border-[var(--lavender)] group-hover:text-[var(--link-hover)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--focus)]">
               <SidebarToggleIcon aria-hidden="true" size={14} strokeWidth={2.4} />
             </span>
           </button>
@@ -315,8 +315,8 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
                   aria-current={active ? "page" : undefined}
                   className={
                     active
-                      ? "flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
-                      : "flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
+                      ? "brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
+                      : "brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
                   }
                   href={localizedHref(locale, item.slug)}
                   key={item.slug}
@@ -327,7 +327,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               );
             })}
             <button
-              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
+              className="brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
               onClick={switchLocale}
               type="button"
             >
@@ -335,7 +335,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               {locale === "ar" ? "العربية" : "English"}
             </button>
             <button
-              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
+              className="brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
               onClick={() => setNotificationsOpen(true)}
               type="button"
             >
@@ -421,14 +421,14 @@ function NotificationDrawer({
   return (
     <dialog
       aria-labelledby="workspace-notifications-title"
-      className="sunlit-modal-shell z-[100] flex justify-end bg-[rgb(32_33_43_/_35%)]"
+      className="sunlit-modal-shell z-[100] flex justify-end bg-[var(--overlay)]"
       onCancel={onCancel}
       onKeyDown={onKeyDown}
       ref={dialogRef}
     >
       <button
         aria-label={locale === "ar" ? "إغلاق التنبيهات" : "Close notifications"}
-        className="absolute inset-0"
+        className="brand-scrim absolute inset-0"
         onClick={onClose}
         tabIndex={-1}
         type="button"
@@ -550,8 +550,8 @@ function MobileNavLink({ activeSection, item, locale }: { activeSection: Section
       aria-current={active ? "page" : undefined}
       className={
         active
-          ? "flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
-          : "flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
+          ? "brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--sunlit-paper-deep)] px-3 py-2 text-sm font-semibold text-[var(--sunlit-ink)]"
+          : "brand-nav-item flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sunlit-muted)]"
       }
       href={localizedHref(locale, item.slug)}
     >
@@ -580,7 +580,7 @@ function SidebarNavLink({ activeSection, collapsed, item, locale }: { activeSect
     >
       <span
         className={`grid h-9 w-9 shrink-0 place-items-center justify-self-center rounded-lg transition ${
-          active ? "text-[var(--link)]" : "text-[var(--sunlit-muted)] group-hover:text-[var(--link-hover)]"
+          active ? "text-[var(--selected-icon)]" : "text-[var(--sunlit-muted)] group-hover:text-[var(--link-hover)]"
         }`}
       >
         <Icon aria-hidden="true" size={20} strokeWidth={active ? 2.35 : 1.95} />

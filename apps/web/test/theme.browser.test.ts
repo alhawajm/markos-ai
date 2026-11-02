@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertPlexFonts } from "./browser-fonts";
 
@@ -18,27 +18,28 @@ async function readPalette(page: Page) {
 }
 
 async function primaryButtonContrast(page: Page) {
-  return page
-    .getByRole("link", { name: "Start free", exact: true })
-    .nth(1)
-    .evaluate((element) => {
-      const style = getComputedStyle(element);
-      const luminance = (color: string) => {
-        const channels = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((part) => {
-          const channel = color.startsWith("color(srgb ") ? Number(part) : Number(part) / 255;
-          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-        });
-        return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
-      };
-      const foreground = luminance(style.color);
-      const backgrounds = style.backgroundImage.match(/(?:rgba?|color)\([^)]+\)/g) ?? [style.backgroundColor];
-      return Math.min(
-        ...backgrounds.map((color) => {
-          const background = luminance(color);
-          return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-        })
-      );
-    });
+  return controlContrast(page.getByRole("link", { name: "Start free", exact: true }).nth(1));
+}
+
+async function controlContrast(control: Locator) {
+  return control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const luminance = (color: string) => {
+      const channels = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((part) => {
+        const channel = color.startsWith("color(srgb ") ? Number(part) : Number(part) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+    };
+    const foreground = luminance(style.color);
+    const backgrounds = style.backgroundImage.match(/(?:rgba?|color)\([^)]+\)/g) ?? [style.backgroundColor];
+    return Math.min(
+      ...backgrounds.map((color) => {
+        const background = luminance(color);
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      })
+    );
+  });
 }
 
 async function assertCollapsedSidebar(page: Page, rtl = false) {
@@ -155,6 +156,7 @@ describe("site appearance controls", () => {
       await page.reload({ waitUntil: "networkidle" });
       await expect.poll(() => darkRadio.isChecked()).toBe(true);
       expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
+      expect(await controlContrast(page.getByRole("link", { name: "English", exact: true }))).toBeGreaterThanOrEqual(4.5);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "settings-appearance-en-dark.png"), fullPage: true });
 
       await page.getByRole("link", { name: "Back to workspace", exact: true }).click();
@@ -177,6 +179,7 @@ describe("site appearance controls", () => {
       await page.getByRole("link", { name: "الإعدادات", exact: true }).click();
       await page.getByRole("link", { name: "المظهر", exact: true }).click();
       await expect.poll(() => page.getByRole("radio", { name: "داكن", exact: true }).isChecked()).toBe(true);
+      expect(await controlContrast(page.getByRole("link", { name: "العربية", exact: true }))).toBeGreaterThanOrEqual(4.5);
       await page.setViewportSize({ width: 390, height: 844 });
       const systemRadio = page.getByRole("radio", { name: "النظام", exact: true });
       await systemRadio.focus();
@@ -212,7 +215,7 @@ describe("site appearance controls", () => {
       await appearance.press("Enter");
       await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark");
       expect(await appearance.inputValue()).toBe("dark");
-      expect(await readPalette(page)).toEqual({ text: "#eef4f6", background: "#14181f", primary: "#e7b7c8", secondary: "#47cacc", accent: "#cdb3d4" });
+      expect(await readPalette(page)).toEqual({ text: "#f7f0f3", background: "#262326", primary: "#e7b7c8", secondary: "#47cacc", accent: "#cdb3d4" });
       expect(await primaryButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "landing-en-dark-desktop.png"), fullPage: true });
 
@@ -221,6 +224,10 @@ describe("site appearance controls", () => {
       expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
 
       await page.getByRole("link", { name: "العربية", exact: true }).first().click();
+      await page.waitForURL(`${baseUrl}/ar`);
+      await page.waitForLoadState("networkidle");
+      expect(await page.evaluate(() => localStorage.getItem("markos.theme"))).toBe("dark");
+      expect(await page.locator("html").getAttribute("data-theme-preference")).toBe("dark");
       const arabicAppearance = page.getByRole("combobox", { name: "المظهر", exact: true });
       await arabicAppearance.waitFor();
       await expect.poll(() => arabicAppearance.inputValue()).toBe("dark");
@@ -307,9 +314,12 @@ describe("site appearance controls", () => {
       await expect.poll(() => nightSwitch.getAttribute("aria-checked")).toBe("true");
       await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark");
       expect(await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
+      const darkChrome = await page.locator(".brand-chrome").evaluateAll((elements) => elements.map((element) => getComputedStyle(element).backgroundImage));
+      expect(darkChrome).toHaveLength(2);
+      expect(darkChrome[0]).toBe(darkChrome[1]);
+      expect(darkChrome[0]).toContain("linear-gradient");
+      expect(darkChrome[0]!.match(/color\(srgb [^)]+\)/g)).toHaveLength(5);
       for (const selector of ["header.brand-chrome", "footer.brand-chrome"]) {
-        expect(await page.locator(selector).evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
-        expect(await background(selector)).toBe("rgb(28, 36, 45)");
         expect(
           await page.locator(selector).evaluate((element) => {
             const style = getComputedStyle(element);

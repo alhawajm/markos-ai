@@ -229,7 +229,7 @@ export default function NewCampaign() {
           {brief.files.map((file) => (
             <Card key={file.id}>
               <Row>
-                <FileText size={24} strokeWidth={1.5} color={colors.accent} />
+                <FileText size={24} strokeWidth={1.5} color={colors.accentText} />
                 <View style={{ flex: 1, gap: 4 }}>
                   <Txt variant="label" numberOfLines={2}>
                     {file.filename}

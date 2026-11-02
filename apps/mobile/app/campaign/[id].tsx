@@ -61,7 +61,7 @@ export default function CampaignReview() {
   const days = [...new Set(rows.map((row) => row.day))];
   const states = ["IDEA", "DRAFT", "IN_REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED"];
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <Txt variant="title">{campaign.title}</Txt>
       <StatusBadge status={campaign.status} />
       <Txt muted>
@@ -101,7 +101,7 @@ export default function CampaignReview() {
               {plan.referenceSummary ? <Txt>{plan.referenceSummary}</Txt> : null}
               {plan.referenceFiles.map((file, index) => (
                 <Row key={index}>
-                  <FileText size={20} color={colors.accent} />
+                  <FileText size={20} color={colors.accentText} />
                   <Txt variant="meta">{file.filename}</Txt>
                 </Row>
               ))}

@@ -908,7 +908,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
               animate="enter"
               aria-labelledby="calendar-focus-title"
               aria-modal="true"
-              className={`sunlit-panel relative z-10 max-h-[calc(100vh-7rem)] w-full max-w-[1180px] rounded-[2rem] p-4 shadow-[0_28px_80px_rgb(53_38_31_/_20%)] outline-none sm:p-6 ${
+              className={`sunlit-panel relative z-10 max-h-[calc(100vh-7rem)] w-full max-w-[1180px] rounded-[2rem] p-4 shadow-[var(--shadow-md)] outline-none sm:p-6 ${
                 layer === "record" ? "overflow-y-auto lg:overflow-hidden" : "overflow-y-auto"
               }`}
               data-calendar-motion="focus-surface"
@@ -993,7 +993,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
         <div
           aria-labelledby="calendar-cancel-title"
           aria-modal="true"
-          className="fixed inset-0 z-[80] grid place-items-center bg-[rgb(32_33_43_/_52%)] p-5 backdrop-blur-sm"
+          className="fixed inset-0 z-[80] grid place-items-center bg-[var(--overlay)] p-5 backdrop-blur-sm"
           role="dialog"
         >
           <section
@@ -1043,7 +1043,7 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
       {notice ? (
         <div
           aria-live={notice.tone === "error" ? "assertive" : "polite"}
-          className={`fixed bottom-5 end-5 z-[90] flex w-[min(26rem,calc(100vw-2.5rem))] items-start gap-3 rounded-2xl border bg-[var(--surface)] p-4 shadow-[0_18px_48px_rgb(53_38_31_/_20%)] ${
+          className={`fixed bottom-5 end-5 z-[90] flex w-[min(26rem,calc(100vw-2.5rem))] items-start gap-3 rounded-2xl border bg-[var(--surface)] p-4 shadow-[var(--shadow-md)] ${
             notice.tone === "error" ? "border-[var(--danger)]" : "border-[color-mix(in_srgb,var(--secondary)_38%,transparent)]"
           }`}
           role={notice.tone === "error" ? "alert" : "status"}
@@ -1562,7 +1562,7 @@ function UnscheduledDrawer({
     <m.dialog
       animate={{ opacity: 1 }}
       aria-labelledby="calendar-unscheduled-title"
-      className="sunlit-modal-shell z-[70] bg-[rgb(32_33_43_/_34%)] backdrop-blur-[2px]"
+      className="sunlit-modal-shell z-[70] bg-[var(--overlay)] backdrop-blur-[2px]"
       exit={{ opacity: 0 }}
       initial={shouldReduceMotion ? false : { opacity: 0 }}
       onCancel={onCancel}
@@ -1575,7 +1575,7 @@ function UnscheduledDrawer({
     >
       <m.aside
         animate={{ opacity: 1, x: 0 }}
-        className="sunlit-panel absolute inset-y-0 end-0 flex w-[min(31rem,calc(100vw-1rem))] flex-col rounded-none border-y-0 border-e-0 shadow-[0_24px_80px_rgb(32_33_43_/_22%)] sm:w-[min(31rem,calc(100vw-2rem))] sm:rounded-s-[2rem]"
+        className="sunlit-panel absolute inset-y-0 end-0 flex w-[min(31rem,calc(100vw-1rem))] flex-col rounded-none border-y-0 border-e-0 shadow-[var(--shadow-md)] sm:w-[min(31rem,calc(100vw-2rem))] sm:rounded-s-[2rem]"
         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, x: locale === "ar" ? -24 : 24 }}
         id="calendar-unscheduled-drawer"
         initial={shouldReduceMotion ? false : { opacity: 0, x: locale === "ar" ? -24 : 24 }}

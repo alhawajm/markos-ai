@@ -51,7 +51,7 @@ export default function Calendar() {
   const groups = groupCalendar(result.data?.items ?? []);
   const dateLabel = (day: string) => new Date(`${day}T12:00:00+03:00`).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" });
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accent} />}>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <TitleBar title={t("Calendar", "التقويم")}>
         <IconButton icon={History} label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
       </TitleBar>

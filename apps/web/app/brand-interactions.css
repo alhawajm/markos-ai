@@ -89,18 +89,30 @@ footer.brand-chrome {
   text-decoration-color: currentColor;
 }
 
-.sunlit-theme a:not(.brand-action):not(.brand-logo):not(.brand-nav-item) {
-  color: var(--link);
-  text-decoration-line: underline;
-  text-decoration-color: transparent;
+/* Default prose links must not override navigation, cards or filled controls. */
+@layer brand-link-defaults {
+  .sunlit-theme a {
+    color: var(--link);
+    text-decoration-line: underline;
+  }
+
+  .sunlit-theme a:hover {
+    color: var(--link-hover);
+  }
 }
 
-.sunlit-theme a:not(.brand-action):not(.brand-logo):not(.brand-nav-item):hover {
-  color: var(--link-hover);
-}
-
-.sunlit-theme :is(.brand-action, .brand-logo, .brand-nav-item) {
+.sunlit-theme :is(.brand-action, .brand-logo, .brand-nav-item, .brand-filled-control) {
   text-decoration: none;
+}
+
+.sunlit-theme .brand-filled-control {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.sunlit-theme .brand-filled-control:hover {
+  background: var(--button-hover);
+  color: var(--on-primary);
 }
 
 .brand-logo {
@@ -119,6 +131,29 @@ footer.brand-chrome {
   background: var(--button-hover);
   color: var(--on-primary);
   box-shadow: inset 0 -2px 0 var(--lavender);
+}
+
+.sunlit-theme .brand-nav-item[aria-current="page"]:not(:hover) {
+  border-color: var(--selected-border);
+  background: var(--selected);
+  color: var(--selected-text);
+}
+
+.sunlit-theme .brand-nav-item[aria-current="page"]:not(:hover) svg {
+  color: var(--selected-icon);
+}
+
+/* One quiet surface treatment for all signed-in workspace cards. */
+.sunlit-app :is(.sunlit-panel, .lux-card, .lux-card-muted, .lux-card-quiet) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sunlit-theme button.brand-scrim:is(:hover, :active) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .brand-card {
@@ -240,6 +275,19 @@ footer.brand-chrome {
 
 :root[data-theme="dark"] .onboarding-orb {
   display: none;
+}
+
+:root[data-theme="dark"] :is(.lux-card, .lux-card-muted, .lux-card-quiet) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"] :is(.lux-ai-core, .lux-thinking-dot) {
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .lux-ai-core::before {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
