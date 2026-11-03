@@ -74,6 +74,22 @@ for (const { kind, device } of selected) {
   try {
     if (device.state !== "Booted") command("xcrun", ["simctl", "boot", id]);
     command("xcrun", ["simctl", "bootstatus", id, "-b"], { timeout: 180_000 });
+    // Maestro documents simulator Password AutoFill interfering with secure-text entry.
+    // Only this disposable simulator's settings are touched; the shipping app is unchanged.
+    const simulatorData = path.join(process.env.HOME, "Library/Developer/CoreSimulator/Devices", id, "data");
+    for (const relative of [
+      "Library/UserConfigurationProfiles/EffectiveUserSettings.plist",
+      "Containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/UserSettings.plist"
+    ]) {
+      const settings = path.join(simulatorData, relative);
+      if (existsSync(settings)) {
+        try {
+          command("plutil", ["-replace", "restrictedBool.allowPasswordAutoFill.value", "-bool", "NO", settings], { stdio: ["ignore", "pipe", "pipe"] });
+        } catch {
+          // OS versions may change these internal files. The normal visibility toggle below also avoids secure input.
+        }
+      }
+    }
     command("xcrun", [
       "simctl",
       "status_bar",

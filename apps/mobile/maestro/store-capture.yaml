@@ -16,12 +16,14 @@ appId: com.markos.mobile
 - inputText:
     text: ${MAESTRO_STORE_EMAIL}
     label: Enter protected reviewer email
+- tapOn: Show password
 - tapOn:
     text: Password
     index: 1
 - inputText:
     text: ${MAESTRO_STORE_PASSWORD}
     label: Enter protected reviewer password
+- tapOn: Hide password
 - tapOn:
     text: Password
     index: 0
