@@ -18,6 +18,12 @@ appId: com.markos.mobile
 - inputText:
     text: ${MAESTRO_STORE_EMAIL}
     label: Enter protected reviewer email
+- tapOn:
+    text: Email
+    index: 0
+- scrollUntilVisible:
+    element: Show password
+    direction: DOWN
 - tapOn: Show password
 - tapOn:
     text: Password
@@ -27,10 +33,13 @@ appId: com.markos.mobile
 - inputText:
     text: ${MAESTRO_STORE_PASSWORD}
     label: Enter protected reviewer password
-- tapOn: Hide password
 - tapOn:
     text: Password
     index: 0
+- scrollUntilVisible:
+    element: Hide password
+    direction: DOWN
+- tapOn: Hide password
 - scrollUntilVisible:
     element: Log in
     direction: DOWN
