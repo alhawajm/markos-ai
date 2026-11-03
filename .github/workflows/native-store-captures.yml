@@ -24,6 +24,7 @@ jobs:
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_NO_DOTENV: "1"
+      MAESTRO_CLI_NO_ANALYTICS: "1"
       EXPO_PUBLIC_API_URL: https://api-production-dbba.up.railway.app
       EXPO_PUBLIC_WEB_URL: https://web-production-94e63.up.railway.app
     steps:

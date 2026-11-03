@@ -5,7 +5,13 @@ appId: com.markos.mobile
 - extendedWaitUntil:
     visible: Welcome back
     timeout: 60000
-- tapOn: Email
+- takeScreenshot: diagnostic-empty-login
+- scrollUntilVisible:
+    element:
+      text: ".*Email.*"
+    direction: DOWN
+    timeout: 20000
+- tapOn: ".*Email.*"
 - inputText: ${MAESTRO_STORE_EMAIL}
 - tapOn: Password
 - inputText: ${MAESTRO_STORE_PASSWORD}

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
@@ -74,7 +74,13 @@ for (const { kind, device } of selected) {
     } catch {
       flowFailed = true;
     }
-    const captures = existsSync(artifactDirectory) ? (await pngFiles(artifactDirectory)).filter((file) => path.basename(file).startsWith("store-")) : [];
+    const allPngs = existsSync(artifactDirectory) ? await pngFiles(artifactDirectory) : [];
+    const captures = allPngs.filter((file) => path.basename(file).startsWith("store-"));
+    if (flowFailed && !captures.length) {
+      // This explicit frame is taken before any credentials are entered. Never retain general failure screenshots.
+      const emptyLogin = allPngs.find((file) => path.basename(file) === "diagnostic-empty-login.png");
+      if (emptyLogin) await copyFile(emptyLogin, path.join(output, `${kind}-diagnostic-empty-login.png`));
+    }
     const records = [];
     for (const file of captures) {
       const bytes = await readFile(file);
