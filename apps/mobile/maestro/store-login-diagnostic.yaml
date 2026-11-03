@@ -9,5 +9,7 @@ appId: com.markos.mobile
     text: Password
     index: 1
 - eraseText: 1000
-- hideKeyboard
+- tapOn:
+    text: Password
+    index: 0
 - takeScreenshot: diagnostic-cleared-login

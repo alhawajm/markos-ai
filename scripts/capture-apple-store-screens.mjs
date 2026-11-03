@@ -106,6 +106,19 @@ for (const { kind, device } of selected) {
     }
     if (flowFailed) {
       try {
+        const raw = command("maestro", ["--device", id, "hierarchy"], { timeout: 90_000, stdio: ["ignore", "pipe", "pipe"] });
+        const safeText = /^(?:Email|Password|Overview|Campaigns|Create|Calendar|Search|Log in|Business profile|Caption|Edit|Preview)(?:[\s,.:;0-9-]|tab|button|selected|of)*$/i;
+        const scrub = (value) => {
+          if (typeof value === "string") return safeText.test(value) || /^XCUIElementType\w+$/.test(value) || /^(true|false|\[[0-9,\]\[ -]+\])$/.test(value) ? value : "[redacted]";
+          if (Array.isArray(value)) return value.map(scrub);
+          if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrub(item)]));
+          return value;
+        };
+        await writeFile(path.join(output, `${kind}-diagnostic-hierarchy.json`), JSON.stringify(scrub(JSON.parse(raw)), null, 2));
+      } catch {
+        // Never retain unparsed hierarchy output or unknown string values.
+      }
+      try {
         command("maestro", ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-login-diagnostic.yaml"], {
           timeout: 180_000,
           stdio: "inherit"

@@ -22,7 +22,12 @@ appId: com.markos.mobile
 - inputText:
     text: ${MAESTRO_STORE_PASSWORD}
     label: Enter protected reviewer password
-- hideKeyboard
+- tapOn:
+    text: Password
+    index: 0
+- scrollUntilVisible:
+    element: Log in
+    direction: DOWN
 - tapOn:
     text: Log in
     enabled: true
@@ -35,7 +40,9 @@ appId: com.markos.mobile
     text: Search
     index: 1
 - inputText: Pearl Studio workshop launch
-- hideKeyboard
+- tapOn:
+    text: Search
+    index: 0
 - extendedWaitUntil:
     visible: ".*Pearl Studio workshop launch.*"
     timeout: 60000
