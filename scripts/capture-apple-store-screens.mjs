@@ -123,9 +123,11 @@ for (const { kind, device } of selected) {
     if (flowFailed) {
       try {
         const raw = command("maestro", ["--device", id, "hierarchy"], { timeout: 90_000, stdio: ["ignore", "pipe", "pipe"] });
-        const safeText = /^(?:Email|Password|Overview|Campaigns|Create|Calendar|Search|Log in|Business profile|Caption|Edit|Preview)(?:[\s,.:;0-9-]|tab|button|selected|of)*$/i;
+        const safeText =
+          /^(?:Email|Password|Overview|Campaigns|Create|Calendar|Search|Log in|Business profile|Caption|Edit|Preview)(?:[\s,.:;0-9-]|tab|button|selected|of)*$/i;
         const scrub = (value) => {
-          if (typeof value === "string") return safeText.test(value) || /^XCUIElementType\w+$/.test(value) || /^(true|false|\[[0-9,\]\[ -]+\])$/.test(value) ? value : "[redacted]";
+          if (typeof value === "string")
+            return safeText.test(value) || /^XCUIElementType\w+$/.test(value) || /^(true|false|\[[0-9,\]\[ -]+\])$/.test(value) ? value : "[redacted]";
           if (Array.isArray(value)) return value.map(scrub);
           if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrub(item)]));
           return value;

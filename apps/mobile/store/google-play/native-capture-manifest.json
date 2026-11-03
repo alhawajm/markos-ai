@@ -3,10 +3,7 @@
   "nativeSource": "Physical Android device running com.markos.mobile 0.5.0 with production Railway APIs",
   "uiCommit": "d7f167e37458d0725471a3276525e969d74b4ea2",
   "syntheticUi": false,
-  "viewport": [
-    1080,
-    2160
-  ],
+  "viewport": [1080, 2160],
   "conversion": "Lossless alpha removal only; no resizing or cropping",
   "fictionalWorkspace": true,
   "captures": [

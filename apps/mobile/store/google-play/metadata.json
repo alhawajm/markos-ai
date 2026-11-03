@@ -11,9 +11,7 @@
   "operator": "Raedat Software Company W.L.L",
   "category": "BUSINESS",
   "containsAds": false,
-  "targetAgeGroups": [
-    "18_AND_OVER"
-  ],
+  "targetAgeGroups": ["18_AND_OVER"],
   "reviewStatus": "draft",
   "track": "production",
   "releaseName": "0.5.0 (10)",

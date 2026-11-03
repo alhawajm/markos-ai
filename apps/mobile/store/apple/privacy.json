@@ -9,103 +9,63 @@
   "dataTypes": [
     {
       "category": "NAME",
-      "purposes": [
-        "APP_FUNCTIONALITY"
-      ]
+      "purposes": ["APP_FUNCTIONALITY"]
     },
     {
       "category": "EMAIL_ADDRESS",
-      "purposes": [
-        "APP_FUNCTIONALITY"
-      ]
+      "purposes": ["APP_FUNCTIONALITY"]
     },
     {
       "category": "PHONE_NUMBER",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "PRODUCT_PERSONALIZATION"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
     },
     {
       "category": "PHYSICAL_ADDRESS",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "PRODUCT_PERSONALIZATION"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
     },
     {
       "category": "USER_ID",
-      "purposes": [
-        "APP_FUNCTIONALITY"
-      ]
+      "purposes": ["APP_FUNCTIONALITY"]
     },
     {
       "category": "DEVICE_ID",
-      "purposes": [
-        "APP_FUNCTIONALITY"
-      ]
+      "purposes": ["APP_FUNCTIONALITY"]
     },
     {
       "category": "PHOTOS_OR_VIDEOS",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "PRODUCT_PERSONALIZATION"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
     },
     {
       "category": "EMAILS_OR_TEXT_MESSAGES",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "PRODUCT_PERSONALIZATION"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
     },
     {
       "category": "OTHER_USER_CONTENT",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "PRODUCT_PERSONALIZATION"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
     },
     {
       "category": "CUSTOMER_SUPPORT",
-      "purposes": [
-        "APP_FUNCTIONALITY"
-      ]
+      "purposes": ["APP_FUNCTIONALITY"]
     },
     {
       "category": "PRODUCT_INTERACTION",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "ANALYTICS"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
     },
     {
       "category": "OTHER_USAGE_DATA",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "ANALYTICS"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
     },
     {
       "category": "CRASH_DATA",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "ANALYTICS"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
     },
     {
       "category": "PERFORMANCE_DATA",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "ANALYTICS"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
     },
     {
       "category": "OTHER_DIAGNOSTIC_DATA",
-      "purposes": [
-        "APP_FUNCTIONALITY",
-        "ANALYTICS"
-      ]
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
     }
   ],
   "notes": [
