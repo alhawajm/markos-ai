@@ -10,17 +10,35 @@ appId: com.markos.mobile
       text: ".*Email.*"
     direction: DOWN
     timeout: 20000
-- tapOn: ".*Email.*"
-- inputText: ${MAESTRO_STORE_EMAIL}
-- tapOn: Password
-- inputText: ${MAESTRO_STORE_PASSWORD}
+- tapOn:
+    text: Email
+    index: 1
+- assertVisible:
+    text: Email
+    focused: true
+- inputText:
+    text: ${MAESTRO_STORE_EMAIL}
+    label: Enter protected reviewer email
+- tapOn:
+    text: Password
+    index: 1
+- assertVisible:
+    text: Password
+    focused: true
+- inputText:
+    text: ${MAESTRO_STORE_PASSWORD}
+    label: Enter protected reviewer password
 - hideKeyboard
-- tapOn: Log in
+- tapOn:
+    text: Log in
+    enabled: true
 - extendedWaitUntil:
     visible: Overview
     timeout: 60000
 - tapOn: Campaigns
-- tapOn: Search
+- tapOn:
+    text: Search
+    index: 1
 - inputText: Pearl Studio workshop launch
 - hideKeyboard
 - extendedWaitUntil:
