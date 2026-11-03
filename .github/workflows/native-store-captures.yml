@@ -19,6 +19,10 @@ concurrency:
 jobs:
   capture:
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: ${{ fromJSON(inputs.existing_build_run != '' && '["iphone","ipad"]' || '["all"]') }}
     timeout-minutes: 90
     env:
       CI: "1"
@@ -86,18 +90,34 @@ jobs:
           native_commit=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/native-app/native-build.json", "utf8")).commit')
           git diff --exit-code --quiet "$native_commit" HEAD -- apps/mobile packages pnpm-lock.yaml pnpm-workspace.yaml package.json ':(exclude)apps/mobile/maestro/**' ':(exclude)apps/mobile/store/**' ':(exclude)apps/mobile/test/**'
           tar -xzf "$RUNNER_TEMP/native-app/MARKOS-simulator.tar.gz" -C "$RUNNER_TEMP/native-app"
+      - name: Ad-hoc sign disposable simulator app for Keychain
+        run: |
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$RUNNER_TEMP/native-app/MARKOS.app/Info.plist")" = "com.markos.mobile"
+          cat > "$RUNNER_TEMP/markos-simulator-entitlements.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>application-identifier</key><string>MARKOS0000.com.markos.mobile</string>
+            <key>com.apple.developer.team-identifier</key><string>MARKOS0000</string>
+            <key>keychain-access-groups</key><array><string>MARKOS0000.com.markos.mobile</string></array>
+            <key>get-task-allow</key><true/>
+          </dict></plist>
+          PLIST
+          codesign --force --sign - --entitlements "$RUNNER_TEMP/markos-simulator-entitlements.plist" --generate-entitlement-der "$RUNNER_TEMP/native-app/MARKOS.app"
+          codesign --verify "$RUNNER_TEMP/native-app/MARKOS.app"
       - name: Capture actual iPhone and iPad UI
         env:
           MAESTRO_STORE_EMAIL: ${{ secrets.MARKOS_STORE_REVIEW_EMAIL }}
           MAESTRO_STORE_PASSWORD: ${{ secrets.MARKOS_STORE_REVIEW_PASSWORD }}
           MARKOS_SIMULATOR_APP: ${{ runner.temp }}/native-app/MARKOS.app
           MARKOS_SIMULATOR_BUILD_META: ${{ runner.temp }}/native-app/native-build.json
+          MARKOS_CAPTURE_DEVICE_KIND: ${{ matrix.kind }}
         run: node scripts/capture-apple-store-screens.mjs
       - name: Upload only reviewed-page candidates and capture receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: native-apple-store-captures
+          name: native-apple-store-captures-${{ matrix.kind }}
           path: var/native-apple-store-captures/
           retention-days: 1
           if-no-files-found: ignore

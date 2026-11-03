@@ -16,13 +16,17 @@ const devices = Object.entries(deviceList.devices)
   .filter(([runtime]) => runtime.includes("iOS"))
   .reverse()
   .flatMap(([, list]) => list);
-const selected = [
+const available = [
   { kind: "iphone", device: devices.find((d) => d.name === "iPhone 17 Pro") },
   { kind: "ipad", device: devices.find((d) => /^iPad Pro 13-inch/.test(d.name)) }
 ];
+const captureKind = process.env.MARKOS_CAPTURE_DEVICE_KIND ?? "all";
+if (!["all", "iphone", "ipad"].includes(captureKind)) throw new Error("Invalid capture device kind");
+const selected = available.filter((item) => captureKind === "all" || item.kind === captureKind);
 if (selected.some((item) => !item.device)) throw new Error("The runner needs an iPhone 17 Pro and a 13-inch iPad simulator");
 await mkdir(output, { recursive: true });
 const receipt = { source: "Native iOS simulator screenshots", syntheticUi: false, backendMocked: false, commit: process.env.GITHUB_SHA, devices: [] };
+const receiptPath = path.join(output, captureKind === "all" ? "capture-receipt.json" : `capture-receipt-${captureKind}.json`);
 if (process.env.MARKOS_SIMULATOR_BUILD_META) {
   const nativeBuild = JSON.parse(await readFile(process.env.MARKOS_SIMULATOR_BUILD_META, "utf8"));
   if (nativeBuild.bundleIdentifier !== "com.markos.mobile" || nativeBuild.appVersion !== "0.5.0") throw new Error("Wrong simulator app identity");
@@ -104,7 +108,7 @@ for (const { kind, device } of selected) {
       records.push({ file: destination, width, height, native: true, conversion: "PNG to JPEG only", uploadedToStore: false });
     }
     receipt.devices.push({ kind, name: device.name, screenshots: records });
-    await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+    await writeFile(receiptPath, JSON.stringify(receipt, null, 2));
     if (flowFailed || captures.length < 4) failures.push(kind);
   } finally {
     try {
@@ -114,6 +118,6 @@ for (const { kind, device } of selected) {
     }
   }
 }
-await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+await writeFile(receiptPath, JSON.stringify(receipt, null, 2));
 if (failures.length) throw new Error(`Native capture flow incomplete for ${failures.join(", ")}; completed candidate screenshots were retained`);
 console.log(JSON.stringify({ nativeScreenshotsCaptured: true, devices: receipt.devices.map((d) => ({ kind: d.kind, count: d.screenshots.length })) }));
