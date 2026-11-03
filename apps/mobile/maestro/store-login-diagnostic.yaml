@@ -3,11 +3,15 @@ appId: com.markos.mobile
 # Clear protected input values before retaining an explicit diagnostic frame.
 - tapOn:
     text: Email
-    index: 1
+    below:
+      text: Email
+      index: 0
 - eraseText: 1000
 - tapOn:
     text: Password
-    index: 1
+    below:
+      text: Password
+      index: 0
 - eraseText: 1000
 - tapOn:
     text: Password
