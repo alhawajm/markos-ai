@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
@@ -10,19 +10,52 @@ const app = process.env.MARKOS_SIMULATOR_APP;
 if (process.platform !== "darwin" || !temporary || !app || !existsSync(app)) throw new Error("A genuine Mac simulator build is required");
 if (!process.env.MAESTRO_STORE_EMAIL || !process.env.MAESTRO_STORE_PASSWORD) throw new Error("Protected fictional reviewer credentials are required");
 
+// Check the real native endpoint separately, without injecting its tokens into the app.
+// This separates runner/network/secret failures from UI automation and secure storage.
+const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+if (apiUrl !== "https://api-production-dbba.up.railway.app") throw new Error("The capture runner must use the real MARKOS API");
+const authHeaders = { "Content-Type": "application/json", "X-Markos-Session": "native" };
+const loginResponse = await fetch(`${apiUrl}/v1/auth/native/login`, {
+  method: "POST",
+  headers: authHeaders,
+  body: JSON.stringify({ email: process.env.MAESTRO_STORE_EMAIL, password: process.env.MAESTRO_STORE_PASSWORD }),
+  signal: AbortSignal.timeout(30_000)
+});
+const login = await loginResponse.json();
+if (!loginResponse.ok || login.data?.user?.email !== process.env.MAESTRO_STORE_EMAIL || !login.data?.tokens?.refreshToken) {
+  throw new Error(`Native reviewer preflight failed (${loginResponse.status})`);
+}
+const logoutResponse = await fetch(`${apiUrl}/v1/auth/native/logout`, {
+  method: "POST",
+  headers: authHeaders,
+  body: JSON.stringify({ refreshToken: login.data.tokens.refreshToken }),
+  signal: AbortSignal.timeout(30_000)
+});
+if (!logoutResponse.ok) throw new Error("Could not revoke the temporary preflight session");
+console.log("Real native reviewer login verified; temporary preflight session revoked");
+
 const command = (binary, args, options = {}) => execFileSync(binary, args, { encoding: "utf8", timeout: 120_000, ...options });
 const deviceList = JSON.parse(command("xcrun", ["simctl", "list", "devices", "available", "--json"]));
 const devices = Object.entries(deviceList.devices)
   .filter(([runtime]) => runtime.includes("iOS"))
   .reverse()
   .flatMap(([, list]) => list);
-const selected = [
+const available = [
   { kind: "iphone", device: devices.find((d) => d.name === "iPhone 17 Pro") },
   { kind: "ipad", device: devices.find((d) => /^iPad Pro 13-inch/.test(d.name)) }
 ];
+const captureKind = process.env.MARKOS_CAPTURE_DEVICE_KIND ?? "all";
+if (!["all", "iphone", "ipad"].includes(captureKind)) throw new Error("Invalid capture device kind");
+const selected = available.filter((item) => captureKind === "all" || item.kind === captureKind);
 if (selected.some((item) => !item.device)) throw new Error("The runner needs an iPhone 17 Pro and a 13-inch iPad simulator");
 await mkdir(output, { recursive: true });
 const receipt = { source: "Native iOS simulator screenshots", syntheticUi: false, backendMocked: false, commit: process.env.GITHUB_SHA, devices: [] };
+const receiptPath = path.join(output, captureKind === "all" ? "capture-receipt.json" : `capture-receipt-${captureKind}.json`);
+if (process.env.MARKOS_SIMULATOR_BUILD_META) {
+  const nativeBuild = JSON.parse(await readFile(process.env.MARKOS_SIMULATOR_BUILD_META, "utf8"));
+  if (nativeBuild.bundleIdentifier !== "com.markos.mobile" || nativeBuild.appVersion !== "0.5.0") throw new Error("Wrong simulator app identity");
+  receipt.nativeBuildCommit = nativeBuild.commit;
+}
 
 async function pngFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -34,12 +67,29 @@ async function pngFiles(directory) {
   return lists.flat();
 }
 
+const failures = [];
 for (const { kind, device } of selected) {
   const id = device.udid;
   const artifactDirectory = path.join(temporary, `maestro-${kind}`);
   try {
     if (device.state !== "Booted") command("xcrun", ["simctl", "boot", id]);
     command("xcrun", ["simctl", "bootstatus", id, "-b"], { timeout: 180_000 });
+    // Maestro documents simulator Password AutoFill interfering with secure-text entry.
+    // Only this disposable simulator's settings are touched; the shipping app is unchanged.
+    const simulatorData = path.join(process.env.HOME, "Library/Developer/CoreSimulator/Devices", id, "data");
+    for (const relative of [
+      "Library/UserConfigurationProfiles/EffectiveUserSettings.plist",
+      "Containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/UserSettings.plist"
+    ]) {
+      const settings = path.join(simulatorData, relative);
+      if (existsSync(settings)) {
+        try {
+          command("plutil", ["-replace", "restrictedBool.allowPasswordAutoFill.value", "-bool", "NO", settings], { stdio: ["ignore", "pipe", "pipe"] });
+        } catch {
+          // OS versions may change these internal files. The normal visibility toggle below also avoids secure input.
+        }
+      }
+    }
     command("xcrun", [
       "simctl",
       "status_bar",
@@ -60,11 +110,50 @@ for (const { kind, device } of selected) {
     ]);
     command("xcrun", ["simctl", "ui", id, "appearance", "light"]);
     command("xcrun", ["simctl", "install", id, app]);
+    command("xcrun", ["simctl", "launch", id, "com.markos.mobile"]);
     const maestroArgs = ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-capture.yaml"];
     // Credentials stay in the inherited MAESTRO_ environment, never command-line arguments.
-    command("maestro", maestroArgs, { timeout: 600_000, stdio: "inherit" });
-    const captures = (await pngFiles(artifactDirectory)).filter((file) => path.basename(file).startsWith("store-"));
-    if (captures.length < 4) throw new Error(`Too few completed native captures for ${kind}`);
+    let flowFailed = false;
+    try {
+      // XCTest startup on a standard hosted Mac can take several minutes before navigation begins.
+      command("maestro", maestroArgs, { timeout: 1_200_000, stdio: "inherit" });
+    } catch {
+      flowFailed = true;
+    }
+    if (flowFailed) {
+      try {
+        const raw = command("maestro", ["--device", id, "hierarchy"], { timeout: 90_000, stdio: ["ignore", "pipe", "pipe"] });
+        const safeText =
+          /^(?:Email|Password|Overview|Campaigns|Create|Calendar|Search|Log in|Business profile|Caption|Edit|Preview)(?:[\s,.:;0-9-]|tab|button|selected|of)*$/i;
+        const scrub = (value) => {
+          if (typeof value === "string")
+            return safeText.test(value) || /^XCUIElementType\w+$/.test(value) || /^(true|false|\[[0-9,\]\[ -]+\])$/.test(value) ? value : "[redacted]";
+          if (Array.isArray(value)) return value.map(scrub);
+          if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, scrub(item)]));
+          return value;
+        };
+        await writeFile(path.join(output, `${kind}-diagnostic-hierarchy.json`), JSON.stringify(scrub(JSON.parse(raw)), null, 2));
+      } catch {
+        // Never retain unparsed hierarchy output or unknown string values.
+      }
+      try {
+        command("maestro", ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-login-diagnostic.yaml"], {
+          timeout: 180_000,
+          stdio: "inherit"
+        });
+      } catch {
+        // No diagnostic is retained unless every protected-field clearing step completed.
+      }
+    }
+    const allPngs = existsSync(artifactDirectory) ? await pngFiles(artifactDirectory) : [];
+    const captures = allPngs.filter((file) => path.basename(file).startsWith("store-"));
+    if (flowFailed && !captures.length) {
+      // This explicit frame is taken before any credentials are entered. Never retain general failure screenshots.
+      const emptyLogin = allPngs.find((file) => path.basename(file) === "diagnostic-empty-login.png");
+      if (emptyLogin) await copyFile(emptyLogin, path.join(output, `${kind}-diagnostic-empty-login.png`));
+      const clearedLogin = allPngs.find((file) => path.basename(file) === "diagnostic-cleared-login.png");
+      if (clearedLogin) await copyFile(clearedLogin, path.join(output, `${kind}-diagnostic-cleared-login.png`));
+    }
     const records = [];
     for (const file of captures) {
       const bytes = await readFile(file);
@@ -88,7 +177,8 @@ for (const { kind, device } of selected) {
       records.push({ file: destination, width, height, native: true, conversion: "PNG to JPEG only", uploadedToStore: false });
     }
     receipt.devices.push({ kind, name: device.name, screenshots: records });
-    await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+    await writeFile(receiptPath, JSON.stringify(receipt, null, 2));
+    if (flowFailed || captures.length < 4) failures.push(kind);
   } finally {
     try {
       command("xcrun", ["simctl", "shutdown", id]);
@@ -97,5 +187,6 @@ for (const { kind, device } of selected) {
     }
   }
 }
-await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+await writeFile(receiptPath, JSON.stringify(receipt, null, 2));
+if (failures.length) throw new Error(`Native capture flow incomplete for ${failures.join(", ")}; completed candidate screenshots were retained`);
 console.log(JSON.stringify({ nativeScreenshotsCaptured: true, devices: receipt.devices.map((d) => ({ kind: d.kind, count: d.screenshots.length })) }));

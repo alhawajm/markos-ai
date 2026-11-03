@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+<rect width="1024" height="500" fill="#f0fafa"/>
+<circle cx="945" cy="60" r="260" fill="#e7b7c8"/>
+<circle cx="1068" cy="502" r="245" fill="#cdb3d4"/>
+<path d="M784 98c-67 80-27 166 54 170 98 4 120 69 58 137" fill="none" stroke="#47cacc" stroke-width="3"/>
+<g fill="#263640" font-family="Markos" >
+<text x="80" y="100" font-size="27" letter-spacing="3">MARKOS</text>
+<text x="80" y="211" font-size="58">Your next campaign,</text>
+<text x="80" y="285" font-size="58">all in one place.</text>
+<text x="80" y="365" font-size="24" fill="#454956">Plan. Create. Review. Schedule.</text>
+</g>
+<g transform="translate(829 154)" fill="none" stroke="#263640" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<rect width="92" height="112" rx="22" fill="#ffffff"/><path d="M24 37h44M24 56h33M24 75h21"/>
+<circle cx="80" cy="99" r="26" fill="#cdb3d4"/><path d="m68 99 8 8 16-18"/>
+</g></svg>

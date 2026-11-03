@@ -1,0 +1,89 @@
+{
+  "applicationId": "com.markos.mobile",
+  "status": "published_and_read_back_in_app_store_connect",
+  "collectsData": true,
+  "tracking": false,
+  "linkedToUser": true,
+  "privacyPolicyUrl": "https://web-production-94e63.up.railway.app/en/privacy",
+  "privacyChoicesUrl": "https://web-production-94e63.up.railway.app/en/delete-account",
+  "dataTypes": [
+    {
+      "category": "NAME",
+      "purposes": ["APP_FUNCTIONALITY"]
+    },
+    {
+      "category": "EMAIL_ADDRESS",
+      "purposes": ["APP_FUNCTIONALITY"]
+    },
+    {
+      "category": "PHONE_NUMBER",
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
+    },
+    {
+      "category": "PHYSICAL_ADDRESS",
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
+    },
+    {
+      "category": "USER_ID",
+      "purposes": ["APP_FUNCTIONALITY"]
+    },
+    {
+      "category": "DEVICE_ID",
+      "purposes": ["APP_FUNCTIONALITY"]
+    },
+    {
+      "category": "PHOTOS_OR_VIDEOS",
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
+    },
+    {
+      "category": "EMAILS_OR_TEXT_MESSAGES",
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
+    },
+    {
+      "category": "OTHER_USER_CONTENT",
+      "purposes": ["APP_FUNCTIONALITY", "PRODUCT_PERSONALIZATION"]
+    },
+    {
+      "category": "CUSTOMER_SUPPORT",
+      "purposes": ["APP_FUNCTIONALITY"]
+    },
+    {
+      "category": "PRODUCT_INTERACTION",
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
+    },
+    {
+      "category": "OTHER_USAGE_DATA",
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
+    },
+    {
+      "category": "CRASH_DATA",
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
+    },
+    {
+      "category": "PERFORMANCE_DATA",
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
+    },
+    {
+      "category": "OTHER_DIAGNOSTIC_DATA",
+      "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"]
+    }
+  ],
+  "notes": [
+    "All listed data is conservatively treated as linked to the account or workspace; no anonymous-data claim is made.",
+    "Phone/address refer to optional business details. The app does not read device contacts or GPS location.",
+    "User content covers business knowledge, documents, prompts, assistant conversations, drafts and selected media. Data types are translated from the current accepted Play disclosure; Apple definitions govern the final form.",
+    "Device identifiers include notification/device bindings. Diagnostic/security events and usage records remain collected even when raw payloads are filtered.",
+    "The support category includes in-app AI-content reports and their bounded evidence. No optional-disclosure exemption is claimed.",
+    "Railway, OpenAI, Brevo, Expo/APNs/FCM process data for configured features. No advertising SDK, data sale or cross-app advertising profile is configured.",
+    "Security, account management and customer support are included in Apple's App Functionality purpose.",
+    "No parental controls, independent security certification, regional processing exclusivity or instantaneous backup erasure is claimed."
+  ],
+  "references": [
+    "https://developer.apple.com/app-store/app-privacy-details/",
+    "https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/"
+  ],
+  "publishedAt": "2026-11-01T10:41:37.000Z",
+  "verifiedAt": "2026-11-01T10:41:38.418Z",
+  "verifiedCategoryCount": 15,
+  "verifiedPurposeCount": 25
+}

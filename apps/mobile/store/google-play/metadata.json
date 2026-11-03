@@ -1,0 +1,34 @@
+{
+  "applicationId": "com.markos.mobile",
+  "playDeveloperId": "7942065176861258837",
+  "playConsoleAppId": "4974430818389016731",
+  "playConsoleUrl": "https://play.google.com/console/u/5/developers/7942065176861258837/app/4974430818389016731/app-dashboard",
+  "defaultLanguage": "en-US",
+  "contactEmail": "support@raedat.online",
+  "contactWebsite": "https://web-production-94e63.up.railway.app/en/support",
+  "privacyPolicyUrl": "https://web-production-94e63.up.railway.app/en/privacy",
+  "accountDeletionUrl": "https://web-production-94e63.up.railway.app/en/delete-account",
+  "operator": "Raedat Software Company W.L.L",
+  "category": "BUSINESS",
+  "containsAds": false,
+  "targetAgeGroups": ["18_AND_OVER"],
+  "reviewStatus": "draft",
+  "track": "production",
+  "releaseName": "0.5.0 (10)",
+  "releaseNotes": [
+    {
+      "language": "en-US",
+      "text": "Plan campaigns with up to five reference files. Create and review posts, carousels, Stories and Motion Reels. Manage your business profile, calendar and available Instagram insights in English or Arabic. Includes optional notifications and account data controls."
+    },
+    {
+      "language": "ar",
+      "text": "خطّط حملاتك مع خمسة ملفات مرجعية بحد أقصى. أنشئ وراجع المنشورات والكاروسيل والقصص والريلز المتحركة. أدر ملف نشاطك والتقويم وإحصاءات إنستغرام المتاحة بالعربية أو الإنجليزية، مع إشعارات اختيارية وأدوات للتحكم في بيانات الحساب."
+    }
+  ],
+  "versionCode": 10,
+  "productionReleaseStatus": "draft",
+  "nativePhoneScreenshotsPerLocale": 5,
+  "verifiedOn": "2026-11-03",
+  "internalTrack": "internal",
+  "bundleSha256": "4ea92a4ceea13cce8b09fec068c6187c419635100164173161fad5137492d1f6"
+}

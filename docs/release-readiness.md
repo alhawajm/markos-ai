@@ -1,18 +1,56 @@
-# MARKOS release preparation — 27 October 2026
+# MARKOS release preparation - 3 November 2026
 
 The owner authorized implementation of the remaining security, operations, product-depth,
 notifications, analytics, acceptance and submission preparation. Railway is the selected
 host for the website, API, AI, workers and video rendering. Commercial billing remains
 deferred. No public approval, live delivery or physical-device acceptance is inferred from code.
 
+## 3 November store and native checkpoint
+
+- Google production is held at signed **0.5.0 (10)**. Five physical Android screenshots per English/Arabic listing and updated palette graphics were committed, then independently read back with matching SHA-256 values. The exact Console release preview now reports **zero errors** and one conditional R8/ProGuard mapping warning. No Send for review or rollout action was taken.
+- Apple's **build 9** is VALID, reports non-exempt encryption false, is **IN_BETA_TESTING** internally, and is selected in the manually held 0.5.0 store draft. Metadata, privacy and trader forms remain saved. Both genuine iPhone/iPad capture flows passed on a standard GitHub Mac runner. Fourteen selected images were visually reviewed, processed by Apple and read back with matching specifications, four group counts and exact order. Source/dimension/hash provenance is saved. Both temporary capture secrets were removed from GitHub and their absence checked. A fresh API read confirms manual release, Prepare for Submission, selected build 9 and zero review submissions.
+- Android native evidence now includes login/reopen, bilingual/RTL and light/dark routes, four format choices, approval with empty scheduling/publication timestamps, and five reference files preserved across restart and used by a completed three-day campaign. The saved plan contains all five reference records, context and a reference summary. A controlled Expo/FCM push received an OK provider receipt and appeared on the phone. This supersedes the earlier blanket device deferral; remaining acceptance and physical iPhone push remain separate.
+- All temporary phone display, rotation, interruption and stay-awake settings were restored and verified. Sample download files were removed and the temporary reviewer-phone push registration was revoked. A separate fictional review account was used; no official Instagram feed was touched.
+- The small native bottom-navigation label-fit fix is on main with successful CI. Matching 0.5.0 design updates are published on preview and production. Store binaries include the new palette; compatible updates include the label fit.
+- Meta's exact saved request remains **Review in progress**, the company is **Verified**, and the app is **Unpublished**. The checked alert was only its submission confirmation, with no reviewer action requested.
+- Focused checks: mobile TypeScript typecheck, capture-helper syntax, workflow/flow YAML parsing, changed-file formatting and whitespace checks passed. All 24 native image hashes, dimensions and color/alpha properties were checked; the changed public text passed a private-credential/contact scan. Native screenshots, Publisher validation/readback, phone notification receipt and explicit approval boundaries were checked directly. Repository CI passed for the functional capture source and the reviewed screenshot/record commit. No new repository-wide local verification suite was run.
+
+The records below preserve earlier dated evidence. This checkpoint and the platform setup records supersede their old build numbers, missing Android screenshots, blanket device deferral and finish-Dashboard error. Transactional-email/domain delivery, final legal review, Meta approval and remaining acceptance still gate public readiness.
+
 ## Confirmed operator details
 
 - Legal entity: **Raedat Software Company W.L.L** (owner supplied).
 - Public support/privacy contact: **support@raedat.online** (owner supplied).
 - Operational alert recipient: **info@raedat.online** (owner supplied).
-- Public business/postal address: not supplied; do not invent it.
-- The owner confirms Meta and Google Play Console access. Firebase/FCM is connected;
-  Play app-level publisher permission and the dashboard submission states remain pending.
+- Registered business address: Flat 22, Building 453, Street 711, Block 207, Al Muharraq, Bahrain; supplied in the owner's certificate and matched to the existing company Play account on 1 November. No postal code or public phone was invented. See [company metadata](../apps/mobile/store/company.json).
+- The owner confirms Meta and Google Play Console access. Firebase/FCM is connected.
+  Play publisher access works; build 10 and the bilingual listing, graphics and native Android
+  screenshots are saved. Data safety and Console declarations are saved, and the production
+  preview has no errors. This is not public-review acceptance.
+
+## 1 November store-preparation checkpoint
+
+- Google Play's exact company account/MARKOS dashboard was inspected directly: **10/11 setup tasks complete**. Native phone screenshots remain the unfinished setup task. The existing bilingual listing, declarations and internal build 9 draft were preserved; no public review or rollout was performed.
+- In the later console-only pass, the owner explicitly deferred device captures. Google showed **10 actioned declarations** with none needing attention, Free pricing and an existing Organization account. MARKOS's Android package is **Registered**, with identity inherited from the verified company account. Added 177 country entries plus Rest of World as a pending change and saved a production draft using exact build 9 and bilingual notes. Independent Publisher API reads matched the draft and country selection; the temporary read edit was deleted. The production preview's blocking error is the incomplete Dashboard setup, with screenshots still deferred. Its additional deobfuscation-file message is a conditional R8 warning, not an unsaved policy declaration. Other apps and global identity/signing settings were preserved.
+- Prepared the existing Apple app rather than creating a replacement. Saved and read back English and Arabic metadata, privacy/deletion/support links, Business and Productivity categories, copyright and age declarations. Selected valid iOS build 8, aligned the store version to 0.5.0 and set **manual release**. Free download pricing uses Bahrain as its base; availability is configured in 175 current territories without pre-order or automatic new-territory expansion.
+- Provisioned a separate, preverified fictional Apple reviewer workspace and verified its ordinary login. The protected Apple review form contains matched credentials, private contact details and an explicit feature/security walkthrough. A normal AI campaign job completed with three suggestions there; nothing was published from the review workspace. Existing Google Play/Meta reviewer accounts, Apple tester groups and other company apps were preserved.
+- Published Apple's App Privacy label and read it back against [privacy.json](../apps/mobile/store/apple/privacy.json): 15 data types, 25 category/purpose entries, linked to the account and no advertising tracking. The saved Apple profile restored successfully. The Free Apps Agreement is Active. The owner then authorized public trader contacts; email and SMS verification and contact confirmation completed. MARKOS is now declared a Trader, confirmed in a fresh browser and by `traderAppOverride: true`. Other apps' declarations, developer membership contacts, paid agreements and bank/tax details were preserved. Apple's version validator reports only missing medium Dynamic Island iPhone and 13-inch iPad screenshots. Neither locale has native screenshots. The owner explicitly deferred all device work; walkthrough, accessibility evaluation and push receipt remain unverified.
+- Meta's company verification is now **Verified** and the exact three-scope App Review request was submitted on 1 November; a fresh reload shows **Review in progress**. Both authorized dummy posts, including the future scheduled one, are now **PUBLISHED** with real provider post identities. Raedat's official account was not used for these tests. See the [Meta checkpoint](instagram-app-review.md).
+- Live saved-field checks passed for Apple's bilingual metadata, exact selected build, categories, age override, manual release, reviewer access, free pricing, current-territory availability, published privacy inventory and persisted app-specific trader declaration. The preparation validator reported the two missing screenshot groups, and a later app-scoped read returned zero review submissions. Helper syntax and focused documentation whitespace checks passed. No application code changed, and no broad application test suite was rerun. Store approval, device acceptance, final legal review and transactional-email delivery remain separate release gates.
+
+## 28 October checkpoint
+
+- In-app AI content reporting is merged in [PR #38](https://github.com/alhawajm/markos-ai/pull/38), main source `a5b84d369c6b2d5c1389d01a7774b2fb745be73c`. Web and native support draft, assistant-reply and general AI reports. The private queue uses existing platform roles, audited decisions, bounded server-captured evidence, workspace RLS and export/deletion handling.
+- Production migration `20261028090000_content_reports` is applied. API, web and worker deployments report SUCCESS. The AI service successfully redeployed after a valid owner-supplied key replaced the invalid runtime credential. Existing configured model IDs were verified against the account; no paid video provider was enabled.
+- The separate fictional review workspace completed normal onboarding, real AI profile generation/approval, and a queued three-day campaign with three suggestions. No suggestions were approved into content and nothing was published. The reviewer has no customer data, connected Instagram account, MFA requirement or expiring trial. Working reusable credentials and English instructions were saved and securely read back in Play's restricted Sign in details form.
+- Content rating, Health and Advertising ID declarations were completed directly in Console. IARC reports ESRB Teen, PEGI Parental guidance and 12+ in the other displayed regions. Data safety includes the reporting/security purposes. The dashboard showed 10/11 setup tasks complete; genuine native screenshots remain. Saved declarations are not Google review approval.
+- Android 0.5.0/build 9 and iOS 0.5.0/build 8 both embed reporting; exact EAS submissions finished. Publisher read-back matches Android's local SHA-256 and shows internal draft status. Apple reports VALID / IN_BETA_TESTING in the existing owner-only group. Compatible runtime 0.5.0 updates are served on preview and production with verified bundle hashes. Physical-device acceptance remains deferred by the owner.
+- The designated moderator completed authenticator enrollment and a fresh MFA login. PRODUCT_ADMIN access is active in the private operations workspace, and prior sessions were revoked during activation. A controlled report from the fictional workspace reached the protected web queue and was dismissed through the normal UI with an investigation note; the API confirmed the decision. No customer reports were changed. Live Instagram reviewer access, Meta permission review, publishing acceptance, native screenshots, device/push receipt, the real postal address and final legal review remain open. Email/domain work stays parked.
+- [Main CI](https://github.com/alhawajm/markos-ai/actions/runs/40656915394) passed: 650 API, 123 native, 97 web unit, 84 browser and 154 AI tests, plus typechecks, security and deployment-image checks. Local reporting checks passed: 11 focused API cases, two selected workspace-isolation/inventory cases, six RLS/baseline cases, four native cases and two English/Arabic rendered cases. These counts distinguish focused local checks from CI; no broad local regression rerun was used for documentation updates.
+
+The dated 27 October sections below retain the previous milestone's evidence. The latest
+checkpoint and [Play setup record](../apps/mobile/store/google-play/README.md) supersede
+their old build numbers, pending Console tasks and missing-reporting statements.
 
 ## Execution ledger
 
@@ -25,14 +63,14 @@ deferred. No public approval, live delivery or physical-device acceptance is inf
 | Native Railway backups     | Production PostgreSQL volume has no snapshots/schedules. The current plan rejects native backups as Pro-only. No plan upgrade was purchased.                                                                                                                                         |
 | Portable scheduled backups | Daily encrypted PostgreSQL/reference-media snapshots deployed to a separate Railway recovery project, with 30-day retention. A real restore recovered five workspaces and 22 media objects.                                                                                          |
 | Meta                       | Prepare exact three-scope Instagram Login review package, current-version compatibility and isolated reviewer walkthrough. Dashboard approval unverified.                                                                                                                            |
-| Notifications              | Android FCM V1 is now configured for com.markos.mobile in a dedicated Firebase project and linked to Expo. Existing iOS push key remains. Android APK and iPhone/TestFlight 0.5.0 build 7 finished; device receipt and Google Play Console app authorization remains pending.            |
+| Notifications              | Android FCM V1 is configured for com.markos.mobile and linked to Expo. Existing iOS push key remains. Android store build 9 and iPhone/TestFlight build 8 finished. Play authorization works; physical-device permission and push receipt remain pending. |
 | Live analytics / email     | Instagram analytics and publishing modes are live; live account metrics and saved summaries are verified; per-format publishing acceptance remains pending. Brevo accepted controlled emails, then reported sender/domain delivery failures.                                         |
 | Product depth              | 30/60/90-day campaigns now use saved weekly checkpoints, source summaries and creator-only recovery. Web/API/AI are deployed. Canonical profile history/recovery is deployed. Offering-catalog rollback, expanded brand/media tooling and deeper Insights remain product follow-ups. |
-| Store preparation          | Native 0.5 APK and IPA builds finished; iPhone build is in the owner-only TestFlight group. Bilingual public privacy/terms/support pages now identify the real operator and email provider. Device walkthroughs, store screenshots and final disclosures remain.                     |
-| Release source             | PR #37 is merged. API, web, worker and AI are deployed from main release 9363386; production source triggers now wait for GitHub checks.                                                                                                                                             |
+| Store preparation          | Android build 9 is an internal Play draft; iPhone build 8 is in owner-only TestFlight. Bilingual listing/graphics and Console declarations are saved. Native screenshots, device walkthroughs, final legal inputs and Meta acceptance remain. |
+| Release source             | PR #38 is merged and main CI passed. API/web/worker reporting deployments and the AI credential deployment succeeded. Production source triggers wait for GitHub checks. |
 | Video                      | Railway CPU Motion Reels remain the runnable default. No paid video API or unverified GPU provider will be enabled.                                                                                                                                                                  |
 
-## Verification recorded in this pass
+## Verification recorded on 27 October
 
 - API/web/mobile typechecks passed. Web production build and 17 web unit files (97 tests) passed.
 - Full AI suite: 150 tests passed. AI image build, selected Ruff checks and observability mypy passed.
@@ -60,6 +98,8 @@ Postal address and final legal review remain owner inputs. A separate project on
 same Railway account is not independent-provider disaster recovery.
 
 ## Acceptance boundaries
+
+The current Play setup is recorded in [the Google Play setup record](../apps/mobile/store/google-play/README.md). The existing company developer account was used; Baraha and account-wide identity settings were preserved. Android build 9, bilingual listing, support details, graphics, Data safety and Console declarations are saved. The real in-app reporting flow is deployed and embedded in both new binaries. Reporting code and a working review login do not establish moderator operational acceptance, Meta approval, screenshot acceptance or physical-device acceptance.
 
 Use named disposable databases for persistent tests. No live publishing, account erasure,
 customer subscription, broad data rewrite or customer notification is a routine test.

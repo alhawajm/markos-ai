@@ -1,0 +1,26 @@
+{
+  "operator": "Raedat Software Company W.L.L",
+  "registeredLegalName": "RAEDAT SOFTWARE COMPANY WLL ( NON PROFIT COMPANY)",
+  "website": "https://raedat.online",
+  "publicSupportEmail": "support@raedat.online",
+  "registeredAddress": {
+    "unit": "Flat 22",
+    "building": "Building 453",
+    "street": "Street 711",
+    "block": "Block 207",
+    "city": "Al Muharraq",
+    "country": "Bahrain",
+    "countryCode": "BH",
+    "postalCode": null
+  },
+  "verifiedOn": "2026-11-01",
+  "sources": [
+    "Owner-provided commercial registration certificate",
+    "Existing company Google Play developer account",
+    "Android developer verification Identity page"
+  ],
+  "notes": [
+    "Existing company identity, account ownership and contact settings were preserved.",
+    "No postal code or public telephone number is invented here. Private reviewer contact details remain outside Git."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "applicationId": "com.markos.mobile",
+  "collectsPersonalData": true,
+  "encryptedInTransit": true,
+  "supportsDeletionRequests": true,
+  "supportedAccountCreationMethods": ["PSL_ACM_USER_ID_PASSWORD", "PSL_ACM_USER_ID_PASSWORD_OTHER_AUTH"],
+  "privacyPolicyUrl": "https://web-production-94e63.up.railway.app/en/privacy",
+  "accountDeletionUrl": "https://web-production-94e63.up.railway.app/en/delete-account",
+  "dataDeletionUrl": "https://web-production-94e63.up.railway.app/en/support#privacy",
+  "sharingBasis": "Service providers process information for MARKOS features; Instagram publication and file sharing are explicit user actions. These transfers use Google's service-provider and user-initiated-transfer exceptions. No advertising SDK, sale of data or cross-app advertising profiles are configured.",
+  "independentSecurityReviewClaimed": false,
+  "types": [
+    { "id": "PSL_NAME", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ACCOUNT_MANAGEMENT"] },
+    {
+      "id": "PSL_EMAIL",
+      "optional": false,
+      "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ACCOUNT_MANAGEMENT", "PSL_DEVELOPER_COMMUNICATIONS", "PSL_FRAUD_PREVENTION_SECURITY"]
+    },
+    { "id": "PSL_USER_ACCOUNT", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ACCOUNT_MANAGEMENT", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_ADDRESS", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION"] },
+    { "id": "PSL_PHONE", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION"] },
+    { "id": "PSL_OTHER_MESSAGES", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_PHOTOS", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_VIDEOS", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_FILES_AND_DOCS", "optional": true, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION"] },
+    { "id": "PSL_USER_GENERATED_CONTENT", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_PERSONALIZATION", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_USER_INTERACTION", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ANALYTICS", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_OTHER_APP_ACTIVITY", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ANALYTICS", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_CRASH_LOGS", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ANALYTICS"] },
+    { "id": "PSL_PERFORMANCE_DIAGNOSTICS", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_ANALYTICS", "PSL_FRAUD_PREVENTION_SECURITY"] },
+    { "id": "PSL_DEVICE_ID", "optional": false, "purposes": ["PSL_APP_FUNCTIONALITY", "PSL_FRAUD_PREVENTION_SECURITY"] }
+  ]
+}

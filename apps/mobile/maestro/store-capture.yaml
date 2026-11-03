@@ -1,51 +1,102 @@
 appId: com.markos.mobile
 ---
-- launchApp:
-    clearState: true
+- launchApp
 - extendedWaitUntil:
     visible: Welcome back
     timeout: 60000
-- tapOn: Email
-- inputText: ${MAESTRO_STORE_EMAIL}
-- tapOn: Password
-- inputText: ${MAESTRO_STORE_PASSWORD}
-- hideKeyboard
-- tapOn: Log in
+- takeScreenshot: diagnostic-empty-login
+- scrollUntilVisible:
+    element:
+      text: ".*Email.*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: Email
+    below:
+      text: Email
+      index: 0
+- inputText:
+    text: ${MAESTRO_STORE_EMAIL}
+    label: Enter protected reviewer email
+- tapOn:
+    text: Email
+    index: 0
+- scrollUntilVisible:
+    element: Show password
+    direction: DOWN
+- tapOn: Show password
+- tapOn:
+    text: Password
+    below:
+      text: Password
+      index: 0
+- inputText:
+    text: ${MAESTRO_STORE_PASSWORD}
+    label: Enter protected reviewer password
+- tapOn:
+    text: Password
+    index: 0
+- scrollUntilVisible:
+    element: Hide password
+    direction: DOWN
+- tapOn: Hide password
+- scrollUntilVisible:
+    element: Log in
+    direction: DOWN
+- tapOn:
+    text: Log in
+    enabled: true
 - extendedWaitUntil:
     visible: Overview
     timeout: 60000
-- tapOn: Campaigns
-- tapOn: Search campaigns
+- takeScreenshot: store-00-overview
+- tapOn: ".*Campaigns.*"
+- tapOn:
+    text: Search
+    below:
+      text: Search
+      index: 0
 - inputText: Pearl Studio workshop launch
-- hideKeyboard
+- tapOn:
+    text: Search
+    index: 0
 - extendedWaitUntil:
     visible: ".*Pearl Studio workshop launch.*"
     timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: store-01-campaigns
-- tapOn: Create
+- tapOn: ".*Create.*"
 - extendedWaitUntil:
-    visible: Creative workshops in Manama
+    visible: ".*Creative workshops in Manama.*"
     timeout: 60000
-- tapOn: Creative workshops in Manama
+- tapOn: ".*Creative workshops in Manama.*"
+- tapOn: Edit
 - tapOn: Caption
 - waitForAnimationToEnd
 - takeScreenshot: store-02-create
+- tapOn: Preview
+- scrollUntilVisible:
+    element: pearl-studio-example.jpg
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: store-03-post-preview
 - tapOn: Back
-- tapOn: Calendar
+- tapOn: ".*Calendar.*"
 - waitForAnimationToEnd
-- takeScreenshot: store-03-calendar
-- tapOn: Overview
+- takeScreenshot: store-04-calendar
+- tapOn: ".*Overview.*"
 - tapOn: Workspace and settings
 - scrollUntilVisible:
     element: Business profile
     direction: UP
 - tapOn: Business profile
+- tapOn: Strategy
+- tapOn: Business
 - extendedWaitUntil:
     visible: ".*Pearl Studio.*"
     timeout: 60000
 - waitForAnimationToEnd
-- takeScreenshot: store-04-business-profile
+- takeScreenshot: store-05-business-profile
 - tapOn: Back
 - scrollUntilVisible:
     element: Language
@@ -58,7 +109,7 @@ appId: com.markos.mobile
 - tapOn: رجوع
 - tapOn: الحملات
 - waitForAnimationToEnd
-- takeScreenshot: store-05-arabic-campaigns
+- takeScreenshot: store-06-arabic-campaigns
 - tapOn: الرئيسية
 - tapOn: مساحة العمل والإعدادات
 - scrollUntilVisible:
@@ -72,4 +123,4 @@ appId: com.markos.mobile
 - tapOn: رجوع
 - tapOn: الحملات
 - waitForAnimationToEnd
-- takeScreenshot: store-06-arabic-dark-campaigns
+- takeScreenshot: store-07-arabic-dark-campaigns
