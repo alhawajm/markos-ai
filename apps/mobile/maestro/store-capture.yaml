@@ -48,6 +48,8 @@ appId: com.markos.mobile
     element: Business profile
     direction: UP
 - tapOn: Business profile
+- tapOn: Strategy
+- tapOn: Business
 - extendedWaitUntil:
     visible: ".*Pearl Studio.*"
     timeout: 60000
