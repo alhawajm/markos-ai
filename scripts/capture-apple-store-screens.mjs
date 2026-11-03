@@ -39,6 +39,7 @@ async function pngFiles(directory) {
   return lists.flat();
 }
 
+const failures = [];
 for (const { kind, device } of selected) {
   const id = device.udid;
   const artifactDirectory = path.join(temporary, `maestro-${kind}`);
@@ -67,9 +68,13 @@ for (const { kind, device } of selected) {
     command("xcrun", ["simctl", "install", id, app]);
     const maestroArgs = ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-capture.yaml"];
     // Credentials stay in the inherited MAESTRO_ environment, never command-line arguments.
-    command("maestro", maestroArgs, { timeout: 600_000, stdio: "inherit" });
-    const captures = (await pngFiles(artifactDirectory)).filter((file) => path.basename(file).startsWith("store-"));
-    if (captures.length < 4) throw new Error(`Too few completed native captures for ${kind}`);
+    let flowFailed = false;
+    try {
+      command("maestro", maestroArgs, { timeout: 600_000, stdio: "inherit" });
+    } catch {
+      flowFailed = true;
+    }
+    const captures = existsSync(artifactDirectory) ? (await pngFiles(artifactDirectory)).filter((file) => path.basename(file).startsWith("store-")) : [];
     const records = [];
     for (const file of captures) {
       const bytes = await readFile(file);
@@ -94,6 +99,7 @@ for (const { kind, device } of selected) {
     }
     receipt.devices.push({ kind, name: device.name, screenshots: records });
     await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+    if (flowFailed || captures.length < 4) failures.push(kind);
   } finally {
     try {
       command("xcrun", ["simctl", "shutdown", id]);
@@ -103,4 +109,5 @@ for (const { kind, device } of selected) {
   }
 }
 await writeFile(path.join(output, "capture-receipt.json"), JSON.stringify(receipt, null, 2));
+if (failures.length) throw new Error(`Native capture flow incomplete for ${failures.join(", ")}; completed candidate screenshots were retained`);
 console.log(JSON.stringify({ nativeScreenshotsCaptured: true, devices: receipt.devices.map((d) => ({ kind: d.kind, count: d.screenshots.length })) }));
