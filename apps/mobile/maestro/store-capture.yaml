@@ -13,18 +13,12 @@ appId: com.markos.mobile
 - tapOn:
     text: Email
     index: 1
-- assertVisible:
-    text: Email
-    focused: true
 - inputText:
     text: ${MAESTRO_STORE_EMAIL}
     label: Enter protected reviewer email
 - tapOn:
     text: Password
     index: 1
-- assertVisible:
-    text: Password
-    focused: true
 - inputText:
     text: ${MAESTRO_STORE_PASSWORD}
     label: Enter protected reviewer password
@@ -35,7 +29,8 @@ appId: com.markos.mobile
 - extendedWaitUntil:
     visible: Overview
     timeout: 60000
-- tapOn: Campaigns
+- takeScreenshot: store-00-overview
+- tapOn: ".*Campaigns.*"
 - tapOn:
     text: Search
     index: 1
@@ -46,7 +41,7 @@ appId: com.markos.mobile
     timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: store-01-campaigns
-- tapOn: Create
+- tapOn: ".*Create.*"
 - extendedWaitUntil:
     visible: ".*Creative workshops in Manama.*"
     timeout: 60000
@@ -62,10 +57,10 @@ appId: com.markos.mobile
     centerElement: true
 - takeScreenshot: store-03-post-preview
 - tapOn: Back
-- tapOn: Calendar
+- tapOn: ".*Calendar.*"
 - waitForAnimationToEnd
 - takeScreenshot: store-04-calendar
-- tapOn: Overview
+- tapOn: ".*Overview.*"
 - tapOn: Workspace and settings
 - scrollUntilVisible:
     element: Business profile

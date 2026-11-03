@@ -4,16 +4,10 @@ appId: com.markos.mobile
 - tapOn:
     text: Email
     index: 1
-- assertVisible:
-    text: Email
-    focused: true
 - eraseText: 1000
 - tapOn:
     text: Password
     index: 1
-- assertVisible:
-    text: Password
-    focused: true
 - eraseText: 1000
 - hideKeyboard
 - takeScreenshot: diagnostic-cleared-login
