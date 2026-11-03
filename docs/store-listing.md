@@ -2,7 +2,7 @@
 
 Google Play's bilingual listing, graphics and five genuine phone screenshots per language are saved and hash-verified. Its signed **0.5.0 (10)** production draft passes the Console preview with **zero errors** and one non-blocking deobfuscation warning. It remains a draft. See [the Play setup record](../apps/mobile/store/google-play/README.md).
 
-Apple's bilingual metadata, privacy label, trader verification and review-account instructions are saved. **iOS 0.5.0/build 9** is VALID, in internal TestFlight testing and selected for manual store release. Genuine iPhone and iPad capture work is in progress; those screenshots remain an open preparation item until uploaded and processed. See [the Apple setup record](../apps/mobile/store/apple/README.md).
+Apple's bilingual metadata, privacy label, trader verification and review-account instructions are saved. **iOS 0.5.0/build 9** is VALID, in internal TestFlight testing and selected for manual store release. Fourteen genuine iPhone/iPad screenshots are visually reviewed, uploaded, processed and read back in the correct language/device groups and order. See [the Apple setup record](../apps/mobile/store/apple/README.md).
 
 The physical Android pass verified normal login/reopen, captured bilingual/light/dark routes, four content-format choices, explicit approval without scheduling/publication, five-document campaign generation after saved-brief recovery, and a real controlled push receipt. Phone capture settings were restored. This does not establish complete cross-platform acceptance or public approval.
 
@@ -64,7 +64,7 @@ Suggested keywords: instagram,marketing,campaign,content,planner,reels,business,
 ## Submission gates
 
 - Store forms and saved draft uploads do not approve or release either app. Google production remains Draft; Apple remains Prepare for Submission with manual release.
-- Finish genuine Apple native screenshots and the remaining device/provider/accessibility acceptance scenarios. No untested accessibility features are claimed.
+- Finish the remaining device/provider/accessibility acceptance scenarios, including physical iPhone push delivery. No untested accessibility features are claimed.
 - Company IT must complete the parked transactional-email domain authentication and confirm support/operational inbox delivery. No paid email upgrade was purchased.
 - Complete final legal review and receive Meta's Advanced Access decision. Business verification is complete; the three-scope permission request remains **Review in progress**, and the Meta app is Unpublished.
 - Credentials, private reviewer contacts, OAuth material and live browser session links stay outside Git. Other company apps and signing identities are preserved.

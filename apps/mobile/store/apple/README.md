@@ -25,13 +25,13 @@ Verified 3 November 2026. Only MARKOS is in scope; other company apps, distribut
 | App Privacy | Published 1 November; 15 data types and 25 category/purpose entries, linked to the account, no advertising tracking |
 | Free Apps Agreement | Active through 13 April 2027 |
 | EU trader | Owner-approved email and phone verified by email/SMS; MARKOS's Trader declaration saved and freshly read back |
-| Native screenshots | 14 genuine iPhone/13-inch iPad screenshots captured and visually reviewed; Apple upload/processing readback is in progress |
+| Native screenshots | 14 genuine iPhone/13-inch iPad screenshots processed, assigned to the four language/device groups and read back in the intended order |
 
 `en-US.json`, `ar-SA.json`, `age-rating.json` and `privacy.json` hold the listing and declaration sources. The protected reviewer form uses a dedicated fictional account without customer data, a connected Instagram account, an MFA/payment requirement or an expiring trial. Credentials and private review contacts remain encrypted outside Git. They must never appear in screenshots, fixtures, notes or logs.
 
 Apple's trader contact verification used the registered company address and the owner's explicitly approved public contacts. Developer membership identity, other apps' declarations, paid agreements, bank information and tax settings were preserved. The account's separate Paid Apps Agreement/bank/tax prompts were not accepted for this free app. See [Apple's trader requirements](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements/).
 
-The selected build was updated from 8 to 9 after Apple's processing completed, then independently read back. Publishing the privacy label, selecting a build and uploading through EAS do not submit or release the app. The last preparation validator reported missing medium Dynamic Island iPhone and 13-inch iPad screenshots; recheck after the native assets finish.
+The selected build was updated from 8 to 9 after Apple's processing completed, then independently read back. Publishing the privacy label, selecting a build and uploading through EAS do not submit or release the app. The previously missing medium Dynamic Island iPhone and 13-inch iPad groups are now populated. A fresh API read confirms manual release, Prepare for Submission, selected build 9 and zero review submissions. The refreshed Console shows all ten English screenshots without screenshot errors; optional preview videos and unsupported Watch targets remain empty.
 
 ## Native screenshot preparation
 
@@ -39,7 +39,7 @@ The owner has Android hardware and authorized genuine native capture work. A sta
 
 The capture workflow uses Xcode's normal ad-hoc simulator signing; it does not use or replace the company's distribution certificates. Each device starts in a disposable simulator. The dedicated review account exercises normal login and saved workspace data; backend responses and UI are not mocked. Both device flows passed in [run 41632599149](https://github.com/alhawajm/markos-ai/actions/runs/41632599149). The two temporary GitHub reviewer secrets were removed and their absence checked after capture completed.
 
-[The native capture manifest](native-capture-manifest.json) records source commits, native dimensions and SHA-256 values for five English and two Arabic images per device. Each selected image was inspected for private data and visible failures. The general Overview frame and credential-cleared diagnostic frames are excluded from the store selection. Upload transfer alone does not establish processed placement acceptance.
+[The native capture manifest](native-capture-manifest.json) records source commits, native dimensions and SHA-256 values for five English and two Arabic images per device. Each selected image was inspected for private data and visible failures. The general Overview frame and credential-cleared diagnostic frames are excluded from the store selection. Apple's API confirmed every processed image's specification, all four group counts and their exact order. It returns `ACTIVE` for these placements while their parent version remains a manually held draft; this is not App Review approval.
 
 Apple currently requires a medium Dynamic Island iPhone screenshot and a 13-inch iPad screenshot for this tablet-capable app. Native examples are **1206 x 2622** and **2064 x 2752**, respectively. Recheck the live asset reference data before upload. PNG-to-JPEG conversion may remove alpha without changing the native layout or dimensions; web captures and generated device mockups are unsuitable.
 
@@ -49,4 +49,4 @@ The physical Android pass verified login/reopen, bilingual/RTL and light/dark ro
 
 Apple simulator capture establishes genuine native rendering and the exercised navigation/login flows. It does not prove physical iPhone APNs delivery or every device, accessibility and provider-failure scenario. No untested accessibility Nutrition Label features are claimed.
 
-Public submission remains held for native Apple screenshots, remaining acceptance, transactional-email/domain and support-delivery readiness, final legal review and Meta's Advanced Access decision. The Meta request is in review, not approved. The eventual review submission must use the verified build and processed, visually reviewed screenshots. Public availability remains a separate manual-release action after approval.
+Public submission remains held for remaining acceptance, transactional-email/domain and support-delivery readiness, final legal review and Meta's Advanced Access decision. The Meta request is in review, not approved. The eventual review submission must use the verified build and processed, visually reviewed screenshots. Public availability remains a separate manual-release action after approval.
