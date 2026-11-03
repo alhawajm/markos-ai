@@ -15,7 +15,7 @@ appId: com.markos.mobile
     visible: Overview
     timeout: 60000
 - tapOn: Campaigns
-- tapOn: Search campaigns
+- tapOn: Search
 - inputText: Pearl Studio workshop launch
 - hideKeyboard
 - extendedWaitUntil:
@@ -25,9 +25,9 @@ appId: com.markos.mobile
 - takeScreenshot: store-01-campaigns
 - tapOn: Create
 - extendedWaitUntil:
-    visible: Creative workshops in Manama
+    visible: ".*Creative workshops in Manama.*"
     timeout: 60000
-- tapOn: Creative workshops in Manama
+- tapOn: ".*Creative workshops in Manama.*"
 - tapOn: Caption
 - waitForAnimationToEnd
 - takeScreenshot: store-02-create

@@ -2,9 +2,15 @@ name: Native Apple store captures
 
 on:
   workflow_dispatch:
+    inputs:
+      existing_build_run:
+        description: Reuse a simulator artifact when native app source is unchanged
+        required: false
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: native-apple-store-captures
@@ -22,6 +28,8 @@ jobs:
       EXPO_PUBLIC_WEB_URL: https://web-production-94e63.up.railway.app
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -30,6 +38,7 @@ jobs:
           distribution: temurin
           java-version: "17"
       - name: Install workspace
+        if: inputs.existing_build_run == ''
         run: |
           corepack enable
           corepack pnpm install --frozen-lockfile
@@ -41,6 +50,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
           echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
       - name: Build native simulator app without signing credentials
+        if: inputs.existing_build_run == ''
         working-directory: apps/mobile
         run: |
           corepack pnpm exec expo prebuild --platform ios --no-install
@@ -48,11 +58,39 @@ jobs:
           pod install
           cd ..
           xcodebuild -workspace ios/MARKOS.xcworkspace -scheme MARKOS -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/markos-derived" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/markos-xcode.log" 2>&1 || { tail -n 120 "$RUNNER_TEMP/markos-xcode.log"; exit 1; }
+      - name: Package genuine simulator app
+        if: inputs.existing_build_run == ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-app"
+          tar -czf "$RUNNER_TEMP/native-app/MARKOS-simulator.tar.gz" -C "$RUNNER_TEMP/markos-derived/Build/Products/Release-iphonesimulator" MARKOS.app
+          node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/native-app/native-build.json", JSON.stringify({commit: process.env.GITHUB_SHA, bundleIdentifier: "com.markos.mobile", appVersion: "0.5.0"}))'
+      - name: Retain native binary for capture-flow retries
+        if: inputs.existing_build_run == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-markos-simulator-app
+          path: ${{ runner.temp }}/native-app/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Download existing simulator binary
+        if: inputs.existing_build_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: native-markos-simulator-app
+          path: ${{ runner.temp }}/native-app/
+          run-id: ${{ inputs.existing_build_run }}
+          github-token: ${{ github.token }}
+      - name: Validate simulator source and extract
+        run: |
+          native_commit=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/native-app/native-build.json", "utf8")).commit')
+          git diff --exit-code --quiet "$native_commit" HEAD -- apps/mobile packages pnpm-lock.yaml pnpm-workspace.yaml package.json ':(exclude)apps/mobile/maestro/**' ':(exclude)apps/mobile/store/**' ':(exclude)apps/mobile/test/**'
+          tar -xzf "$RUNNER_TEMP/native-app/MARKOS-simulator.tar.gz" -C "$RUNNER_TEMP/native-app"
       - name: Capture actual iPhone and iPad UI
         env:
           MAESTRO_STORE_EMAIL: ${{ secrets.MARKOS_STORE_REVIEW_EMAIL }}
           MAESTRO_STORE_PASSWORD: ${{ secrets.MARKOS_STORE_REVIEW_PASSWORD }}
-          MARKOS_SIMULATOR_APP: ${{ runner.temp }}/markos-derived/Build/Products/Release-iphonesimulator/MARKOS.app
+          MARKOS_SIMULATOR_APP: ${{ runner.temp }}/native-app/MARKOS.app
+          MARKOS_SIMULATOR_BUILD_META: ${{ runner.temp }}/native-app/native-build.json
         run: node scripts/capture-apple-store-screens.mjs
       - name: Upload only reviewed-page candidates and capture receipts
         if: always()

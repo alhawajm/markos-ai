@@ -23,6 +23,11 @@ const selected = [
 if (selected.some((item) => !item.device)) throw new Error("The runner needs an iPhone 17 Pro and a 13-inch iPad simulator");
 await mkdir(output, { recursive: true });
 const receipt = { source: "Native iOS simulator screenshots", syntheticUi: false, backendMocked: false, commit: process.env.GITHUB_SHA, devices: [] };
+if (process.env.MARKOS_SIMULATOR_BUILD_META) {
+  const nativeBuild = JSON.parse(await readFile(process.env.MARKOS_SIMULATOR_BUILD_META, "utf8"));
+  if (nativeBuild.bundleIdentifier !== "com.markos.mobile" || nativeBuild.appVersion !== "0.5.0") throw new Error("Wrong simulator app identity");
+  receipt.nativeBuildCommit = nativeBuild.commit;
+}
 
 async function pngFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
