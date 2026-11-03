@@ -83,7 +83,13 @@ export default function TabLayout() {
                 >
                   <Icon size={22} color={selected ? colors.accentText : colors.muted} strokeWidth={selected ? 2 : 1.6} />
                 </View>
-                <Txt variant="meta" style={{ textAlign: "center", color: selected ? colors.text : colors.muted, fontSize: 13 }}>
+                <Txt
+                  variant="meta"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                  style={{ textAlign: "center", color: selected ? colors.text : colors.muted, fontSize: 13 }}
+                >
                   {item.label}
                 </Txt>
               </Pressable>

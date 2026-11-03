@@ -1,0 +1,64 @@
+name: Native Apple store captures
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-apple-store-captures
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_NO_DOTENV: "1"
+      EXPO_PUBLIC_API_URL: https://api-production-dbba.up.railway.app
+      EXPO_PUBLIC_WEB_URL: https://web-production-94e63.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install workspace
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          node scripts/generate-native-tokens.mjs --check
+      - name: Install pinned Maestro CLI
+        run: |
+          curl --fail --silent --show-error --location https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.1/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
+          echo "54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  $RUNNER_TEMP/maestro.zip" | shasum -a 256 --check
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+      - name: Build native simulator app without signing credentials
+        working-directory: apps/mobile
+        run: |
+          corepack pnpm exec expo prebuild --platform ios --no-install
+          cd ios
+          pod install
+          cd ..
+          xcodebuild -workspace ios/MARKOS.xcworkspace -scheme MARKOS -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/markos-derived" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/markos-xcode.log" 2>&1 || { tail -n 120 "$RUNNER_TEMP/markos-xcode.log"; exit 1; }
+      - name: Capture actual iPhone and iPad UI
+        env:
+          MAESTRO_STORE_EMAIL: ${{ secrets.MARKOS_STORE_REVIEW_EMAIL }}
+          MAESTRO_STORE_PASSWORD: ${{ secrets.MARKOS_STORE_REVIEW_PASSWORD }}
+          MARKOS_SIMULATOR_APP: ${{ runner.temp }}/markos-derived/Build/Products/Release-iphonesimulator/MARKOS.app
+        run: node scripts/capture-apple-store-screens.mjs
+      - name: Upload only reviewed-page candidates and capture receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-apple-store-captures
+          path: var/native-apple-store-captures/
+          retention-days: 1
+          if-no-files-found: ignore
