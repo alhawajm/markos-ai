@@ -10,6 +10,30 @@ const app = process.env.MARKOS_SIMULATOR_APP;
 if (process.platform !== "darwin" || !temporary || !app || !existsSync(app)) throw new Error("A genuine Mac simulator build is required");
 if (!process.env.MAESTRO_STORE_EMAIL || !process.env.MAESTRO_STORE_PASSWORD) throw new Error("Protected fictional reviewer credentials are required");
 
+// Check the real native endpoint separately, without injecting its tokens into the app.
+// This separates runner/network/secret failures from UI automation and secure storage.
+const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+if (apiUrl !== "https://api-production-dbba.up.railway.app") throw new Error("The capture runner must use the real MARKOS API");
+const authHeaders = { "Content-Type": "application/json", "X-Markos-Session": "native" };
+const loginResponse = await fetch(`${apiUrl}/v1/auth/native/login`, {
+  method: "POST",
+  headers: authHeaders,
+  body: JSON.stringify({ email: process.env.MAESTRO_STORE_EMAIL, password: process.env.MAESTRO_STORE_PASSWORD }),
+  signal: AbortSignal.timeout(30_000)
+});
+const login = await loginResponse.json();
+if (!loginResponse.ok || login.data?.user?.email !== process.env.MAESTRO_STORE_EMAIL || !login.data?.tokens?.refreshToken) {
+  throw new Error(`Native reviewer preflight failed (${loginResponse.status})`);
+}
+const logoutResponse = await fetch(`${apiUrl}/v1/auth/native/logout`, {
+  method: "POST",
+  headers: authHeaders,
+  body: JSON.stringify({ refreshToken: login.data.tokens.refreshToken }),
+  signal: AbortSignal.timeout(30_000)
+});
+if (!logoutResponse.ok) throw new Error("Could not revoke the temporary preflight session");
+console.log("Real native reviewer login verified; temporary preflight session revoked");
+
 const command = (binary, args, options = {}) => execFileSync(binary, args, { encoding: "utf8", timeout: 120_000, ...options });
 const deviceList = JSON.parse(command("xcrun", ["simctl", "list", "devices", "available", "--json"]));
 const devices = Object.entries(deviceList.devices)
