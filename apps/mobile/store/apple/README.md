@@ -25,7 +25,7 @@ Verified 3 November 2026. Only MARKOS is in scope; other company apps, distribut
 | App Privacy | Published 1 November; 15 data types and 25 category/purpose entries, linked to the account, no advertising tracking |
 | Free Apps Agreement | Active through 13 April 2027 |
 | EU trader | Owner-approved email and phone verified by email/SMS; MARKOS's Trader declaration saved and freshly read back |
-| Native screenshots | Genuine iPhone and 13-inch iPad captures are in progress; none counted as uploaded until processing/readback succeeds |
+| Native screenshots | 14 genuine iPhone/13-inch iPad screenshots captured and visually reviewed; Apple upload/processing readback is in progress |
 
 `en-US.json`, `ar-SA.json`, `age-rating.json` and `privacy.json` hold the listing and declaration sources. The protected reviewer form uses a dedicated fictional account without customer data, a connected Instagram account, an MFA/payment requirement or an expiring trial. Credentials and private review contacts remain encrypted outside Git. They must never appear in screenshots, fixtures, notes or logs.
 
@@ -37,7 +37,9 @@ The selected build was updated from 8 to 9 after Apple's processing completed, t
 
 The owner has Android hardware and authorized genuine native capture work. A standard GitHub-hosted Mac builds the actual React Native app for genuine iPhone and iPad simulators using the real Railway API. The repository is public and uses standard runners. No Apple hardware purchase, larger runner or screenshot-cloud subscription was added.
 
-The capture workflow uses Xcode's normal ad-hoc simulator signing; it does not use or replace the company's distribution certificates. Each device starts in a disposable simulator. The dedicated review account exercises normal login and saved workspace data; backend responses and UI are not mocked. Only named screenshot candidates and capture receipts are retained. Temporary protected GitHub reviewer secrets must be removed once capture work finishes.
+The capture workflow uses Xcode's normal ad-hoc simulator signing; it does not use or replace the company's distribution certificates. Each device starts in a disposable simulator. The dedicated review account exercises normal login and saved workspace data; backend responses and UI are not mocked. Both device flows passed in [run 41632599149](https://github.com/alhawajm/markos-ai/actions/runs/41632599149). The two temporary GitHub reviewer secrets were removed and their absence checked after capture completed.
+
+[The native capture manifest](native-capture-manifest.json) records source commits, native dimensions and SHA-256 values for five English and two Arabic images per device. Each selected image was inspected for private data and visible failures. The general Overview frame and credential-cleared diagnostic frames are excluded from the store selection. Upload transfer alone does not establish processed placement acceptance.
 
 Apple currently requires a medium Dynamic Island iPhone screenshot and a 13-inch iPad screenshot for this tablet-capable app. Native examples are **1206 x 2622** and **2064 x 2752**, respectively. Recheck the live asset reference data before upload. PNG-to-JPEG conversion may remove alpha without changing the native layout or dimensions; web captures and generated device mockups are unsuitable.
 
