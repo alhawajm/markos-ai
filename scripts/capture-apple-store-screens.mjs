@@ -70,6 +70,7 @@ for (const { kind, device } of selected) {
     ]);
     command("xcrun", ["simctl", "ui", id, "appearance", "light"]);
     command("xcrun", ["simctl", "install", id, app]);
+    command("xcrun", ["simctl", "launch", id, "com.markos.mobile"]);
     const maestroArgs = ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-capture.yaml"];
     // Credentials stay in the inherited MAESTRO_ environment, never command-line arguments.
     let flowFailed = false;
