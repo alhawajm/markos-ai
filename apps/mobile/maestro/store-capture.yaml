@@ -28,13 +28,20 @@ appId: com.markos.mobile
     visible: ".*Creative workshops in Manama.*"
     timeout: 60000
 - tapOn: ".*Creative workshops in Manama.*"
+- tapOn: Edit
 - tapOn: Caption
 - waitForAnimationToEnd
 - takeScreenshot: store-02-create
+- tapOn: Preview
+- scrollUntilVisible:
+    element: pearl-studio-example.jpg
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: store-03-post-preview
 - tapOn: Back
 - tapOn: Calendar
 - waitForAnimationToEnd
-- takeScreenshot: store-03-calendar
+- takeScreenshot: store-04-calendar
 - tapOn: Overview
 - tapOn: Workspace and settings
 - scrollUntilVisible:
@@ -45,7 +52,7 @@ appId: com.markos.mobile
     visible: ".*Pearl Studio.*"
     timeout: 60000
 - waitForAnimationToEnd
-- takeScreenshot: store-04-business-profile
+- takeScreenshot: store-05-business-profile
 - tapOn: Back
 - scrollUntilVisible:
     element: Language
@@ -58,7 +65,7 @@ appId: com.markos.mobile
 - tapOn: رجوع
 - tapOn: الحملات
 - waitForAnimationToEnd
-- takeScreenshot: store-05-arabic-campaigns
+- takeScreenshot: store-06-arabic-campaigns
 - tapOn: الرئيسية
 - tapOn: مساحة العمل والإعدادات
 - scrollUntilVisible:
@@ -72,4 +79,4 @@ appId: com.markos.mobile
 - tapOn: رجوع
 - tapOn: الحملات
 - waitForAnimationToEnd
-- takeScreenshot: store-06-arabic-dark-campaigns
+- takeScreenshot: store-07-arabic-dark-campaigns
