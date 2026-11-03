@@ -75,9 +75,20 @@ for (const { kind, device } of selected) {
     // Credentials stay in the inherited MAESTRO_ environment, never command-line arguments.
     let flowFailed = false;
     try {
-      command("maestro", maestroArgs, { timeout: 600_000, stdio: "inherit" });
+      // XCTest startup on a standard hosted Mac can take several minutes before navigation begins.
+      command("maestro", maestroArgs, { timeout: 1_200_000, stdio: "inherit" });
     } catch {
       flowFailed = true;
+    }
+    if (flowFailed) {
+      try {
+        command("maestro", ["--device", id, "test", "--test-output-dir", artifactDirectory, "apps/mobile/maestro/store-login-diagnostic.yaml"], {
+          timeout: 180_000,
+          stdio: "inherit"
+        });
+      } catch {
+        // No diagnostic is retained unless every protected-field clearing step completed.
+      }
     }
     const allPngs = existsSync(artifactDirectory) ? await pngFiles(artifactDirectory) : [];
     const captures = allPngs.filter((file) => path.basename(file).startsWith("store-"));
@@ -85,6 +96,8 @@ for (const { kind, device } of selected) {
       // This explicit frame is taken before any credentials are entered. Never retain general failure screenshots.
       const emptyLogin = allPngs.find((file) => path.basename(file) === "diagnostic-empty-login.png");
       if (emptyLogin) await copyFile(emptyLogin, path.join(output, `${kind}-diagnostic-empty-login.png`));
+      const clearedLogin = allPngs.find((file) => path.basename(file) === "diagnostic-cleared-login.png");
+      if (clearedLogin) await copyFile(clearedLogin, path.join(output, `${kind}-diagnostic-cleared-login.png`));
     }
     const records = [];
     for (const file of captures) {
