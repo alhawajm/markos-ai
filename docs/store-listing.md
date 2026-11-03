@@ -1,6 +1,12 @@
-# MARKOS store listing draft — 27 September 2026
+# MARKOS store listing - 3 November 2026
 
-Display name: **MARKOS — Instagram Marketing** (28 characters). The owner asked us to choose positioning around Instagram. Primary category: Business; secondary category where supported: Productivity. This is listing copy, not confirmation of public store release.
+Google Play's bilingual listing, graphics and five genuine phone screenshots per language are saved and hash-verified. Its signed **0.5.0 (10)** production draft passes the Console preview with **zero errors** and one non-blocking deobfuscation warning. It remains a draft. See [the Play setup record](../apps/mobile/store/google-play/README.md).
+
+Apple's bilingual metadata, privacy label, trader verification and review-account instructions are saved. **iOS 0.5.0/build 9** is VALID, in internal TestFlight testing and selected for manual store release. Genuine iPhone and iPad capture work is in progress; those screenshots remain an open preparation item until uploaded and processed. See [the Apple setup record](../apps/mobile/store/apple/README.md).
+
+The physical Android pass verified normal login/reopen, captured bilingual/light/dark routes, four content-format choices, explicit approval without scheduling/publication, five-document campaign generation after saved-brief recovery, and a real controlled push receipt. Phone capture settings were restored. This does not establish complete cross-platform acceptance or public approval.
+
+Display name: **MARKOS — Instagram Marketing**. Primary category: Business; secondary where supported: Productivity. The stored localized titles retain their reviewed punctuation. Raedat Software Company W.L.L is the operator; [company metadata](../apps/mobile/store/company.json) records the matched registered address.
 
 ## English
 
@@ -47,7 +53,7 @@ Suggested keywords: instagram,marketing,campaign,content,planner,reels,business,
 ## Store metadata and disclosure facts
 
 - Package/bundle: `com.markos.mobile`; Expo project: `@mo4180/markos`; dedicated Apple app: `6814797764`.
-- Privacy draft: `https://web-production-94e63.up.railway.app/en/privacy` (Arabic: `/ar/privacy`). Do not submit this as a finalized policy until the operator/contact and retention terms are completed.
+- Privacy policy: `https://web-production-94e63.up.railway.app/en/privacy` (Arabic: `/ar/privacy`), saved in Play's dedicated form. Operator/support details are owner supplied; the registered company address has now been matched to the certificate and existing company Play identity. Provider saves do not establish public review approval.
 - Account-deletion flow: `https://web-production-94e63.up.railway.app/en/delete-account` (Arabic: `/ar/delete-account`). Requires sign-in and fresh password or email-code confirmation, plus MFA when enabled.
 - Data used by the current implementation: account email/name; business profile and uploaded documents/artwork; prompts and generated content; connected Instagram credentials and available analytics; preferences, publishing events, diagnostic usage, and optional push tokens. Do not check “no data collected.”
 - Current hosting/provider categories include Railway, configured AI providers, Brevo for requested email, and Expo/APNs/FCM for enabled phone alerts. No advertising SDK is added by this release. Store tracking/privacy answers still need the final provider configuration checked.
@@ -55,18 +61,10 @@ Suggested keywords: instagram,marketing,campaign,content,planner,reels,business,
 - Account deletion removes owned workspaces and memberships elsewhere, stops new access and publishing, and queues stored-media cleanup. Previously published Instagram posts remain. Security/transaction records and separately retained backups are not represented as instantly erased.
 - Motion Reels use CPU rendering and do not call a paid video provider. Do not advertise free generative video footage or a live Wan service.
 
-## Required before public submission
+## Submission gates
 
-The owner confirmed **Raedat Software Company W.L.L** and **support@raedat.online**. The real public business/postal address and final privacy/retention review remain pending. Do not infer an address from the developer team or invent one.
-
-Firebase and the dedicated Android FCM V1 service account are configured. Android 0.5.0/build 7 APK and build 8 AAB finished. The store bundle passed archive/signature checks and contains arm64, armv7, x86 and x86_64 libraries. The Play submission profile targets an internal draft and does not send changes for review; the separate Play publisher credential is configured in EAS; app-level Console permission remains pending. Never reuse the FCM key for store submission.
-
-iPhone 0.5.0/build 7 is VALID / IN_BETA_TESTING in the existing owner-only internal group. Store release, screenshots and physical-device acceptance remain separate gates. The owner elected to test the phone later.
-
-Capture screenshots from the new native binaries using a dedicated business fixture: campaign brief with five references; Post/Carousel/Reel editor; full preview; calendar; Insights; Arabic business profile. Never use customer documents, live credentials or another app's screenshots. Required screenshot sizes must be checked in each store's current upload form.
-
-## Prepared Play publisher identity
-
-The Android Publisher API is enabled in MARKOS's dedicated Google project. The separate identity is `markos-play-publisher@markos-mobile-35017b4c.iam.gserviceaccount.com`. The publisher key was generated and transferred directly into MARKOS's EAS submission credentials, without a plaintext local file. No Google project IAM role was granted. The FCM credential was preserved and remains separate.
-
-The owner must confirm/create the MARKOS app entry and grant this identity app-specific Play Console access. Limit the invitation to MARKOS and use the current [Expo service-account guide](https://expo.fyi/creating-google-service-account); account-wide Admin, finance and subscription access are not needed. The key is already installed in EAS. Once Console access is granted, submit the exact signed build 8 as an internal draft. The current [Expo Android submission guide](https://docs.expo.dev/submit/android/) supports first releases through EAS once the app entry and credential are configured; do not require a manual first upload based on older instructions.
+- Store forms and saved draft uploads do not approve or release either app. Google production remains Draft; Apple remains Prepare for Submission with manual release.
+- Finish genuine Apple native screenshots and the remaining device/provider/accessibility acceptance scenarios. No untested accessibility features are claimed.
+- Company IT must complete the parked transactional-email domain authentication and confirm support/operational inbox delivery. No paid email upgrade was purchased.
+- Complete final legal review and receive Meta's Advanced Access decision. Business verification is complete; the three-scope permission request remains **Review in progress**, and the Meta app is Unpublished.
+- Credentials, private reviewer contacts, OAuth material and live browser session links stay outside Git. Other company apps and signing identities are preserved.

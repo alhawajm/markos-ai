@@ -1,0 +1,74 @@
+{
+  "capturedOn": "2026-11-03",
+  "nativeSource": "Physical Android device running com.markos.mobile 0.5.0 with production Railway APIs",
+  "uiCommit": "d7f167e37458d0725471a3276525e969d74b4ea2",
+  "syntheticUi": false,
+  "viewport": [
+    1080,
+    2160
+  ],
+  "conversion": "Lossless alpha removal only; no resizing or cropping",
+  "fictionalWorkspace": true,
+  "captures": [
+    {
+      "locale": "en-US",
+      "file": "screenshots/en-US/01-campaigns.png",
+      "sha256": "f8687604b65c2dd0c5ae4e878b09890977175aa9e6b356d254465e5b16f6de8c",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "en-US",
+      "file": "screenshots/en-US/02-post-caption.png",
+      "sha256": "7e25061b007a3eb9be691d426af18032558c5dfd1bbb3128a7a02cb3313be544",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "en-US",
+      "file": "screenshots/en-US/03-post-preview.png",
+      "sha256": "db7915dc9df15192e60fd5c82b7b2f9ef86bb8e45af8ae6b656871c2c9e22e95",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "en-US",
+      "file": "screenshots/en-US/04-calendar.png",
+      "sha256": "de2ea1fc12ce2e1dd571fdd5efa72a0997f8c3e7b8e3870917b26d2e74110874",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "en-US",
+      "file": "screenshots/en-US/06-dark-campaigns.png",
+      "sha256": "480c9e64792875208a0e6e49559d41b10ad9a85246a7f4d1908713b01e054c0a",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "ar",
+      "file": "screenshots/ar/01-campaigns.png",
+      "sha256": "d9b39f59771df8af9612b29ecec1bb1f5507d25bf2bff1c36634674da37028eb",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "ar",
+      "file": "screenshots/ar/02-post-caption.png",
+      "sha256": "13b1af867e4c4fadc60a8936199f483b670154fd940b9dbfad0bab73880e45a9",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "ar",
+      "file": "screenshots/ar/03-post-preview.png",
+      "sha256": "f45647fdde88e71e486bf671b1b9dba4c8a8e416253d2428c57118afe22782f0",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "ar",
+      "file": "screenshots/ar/04-calendar.png",
+      "sha256": "404c0593058afd4f7899421aa4de9327eb81d04c7ddd1427ab372d307242ccaf",
+      "reviewedForPrivateDataAndNotifications": true
+    },
+    {
+      "locale": "ar",
+      "file": "screenshots/ar/06-dark-campaigns.png",
+      "sha256": "7f3fb25ac46e5039ac669e7cfcbfea7ec6b4638a1d3070359f1e98e947fa30d7",
+      "reviewedForPrivateDataAndNotifications": true
+    }
+  ]
+}
