@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { EmailDeliveryError, sendTransactionalMail, type EmailProvider } from "../email/transactional-mail";
+import { EmailDeliveryError, sendTransactionalMail, type EmailProvider, type GmailCredentials } from "../email/transactional-mail";
 
 export type OperationalFailure = { service: "api" | "worker" | "backup"; code: string; task: string };
 type AlertResult = "ACCEPTED" | "FAILED" | "UNKNOWN" | "SUPPRESSED";
@@ -14,7 +14,8 @@ export function reportOperationalFailure(failure: OperationalFailure): void {
 /** At most one email per classified failure/cooldown; raw exceptions never enter the message. */
 export function createFailureReporter(options: {
   provider?: EmailProvider;
-  apiKey: string;
+  apiKey: string | undefined;
+  gmail?: GmailCredentials | undefined;
   from: string;
   to: string;
   cooldownSeconds: number;
@@ -39,7 +40,7 @@ export function createFailureReporter(options: {
     const text = `MARKOS needs attention.\nService: ${input.service}\nTask: ${input.task}\nCode: ${input.code}\nTime: ${new Date(now).toISOString()}\n\nCheck Railway service health and sanitized logs. This alert contains no customer content or credentials.`;
     try {
       await sendTransactionalMail(
-        { provider: options.provider ?? "sendgrid", apiKey: options.apiKey, from: options.from },
+        { provider: options.provider ?? "sendgrid", apiKey: options.apiKey, from: options.from, gmail: options.gmail },
         { to: [options.to], subject: `MARKOS: ${input.service} ${input.code}`, text },
         options.fetchImpl ?? fetch,
         8000

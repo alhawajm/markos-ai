@@ -1,9 +1,9 @@
 import type { Locale } from "@markos/shared-types";
 import { env } from "../config/env";
-import { sendTransactionalMail } from "../email/transactional-mail";
+import { emailConfiguration, isEmailConfigured, sendTransactionalMail, type EmailProvider, type GmailCredentials } from "../email/transactional-mail";
 
 export interface VerificationEmailProvider {
-  readonly mode: "local" | "sendgrid" | "brevo";
+  readonly mode: "local" | EmailProvider;
   send(input: { email: string; locale: Locale; token: string }): Promise<void>;
 }
 
@@ -46,10 +46,11 @@ export function assertVerificationEmailConfiguration(
   configuration: {
     apiKey: string | undefined;
     fromEmail: string | undefined;
+    gmail?: GmailCredentials | undefined;
     nodeEnv: "development" | "test" | "production";
-    provider: "local" | "sendgrid" | "brevo";
+    provider: "local" | EmailProvider;
   } = {
-    apiKey: env.EMAIL_PROVIDER === "brevo" ? env.BREVO_API_KEY : env.SENDGRID_API_KEY,
+    ...emailConfiguration(env),
     fromEmail: env.FROM_EMAIL,
     nodeEnv: env.NODE_ENV,
     provider: env.EMAIL_PROVIDER
@@ -59,7 +60,7 @@ export function assertVerificationEmailConfiguration(
     return;
   }
 
-  if (configuration.provider === "local" || configuration.apiKey === undefined || configuration.fromEmail === undefined) {
+  if (configuration.provider === "local" || !isEmailConfigured({ ...configuration, provider: configuration.provider, from: configuration.fromEmail })) {
     throw new VerificationEmailConfigurationError();
   }
 }
@@ -73,7 +74,7 @@ export class LocalVerificationEmailProvider implements VerificationEmailProvider
 }
 
 export class SendGridVerificationEmailProvider implements VerificationEmailProvider {
-  get mode(): "sendgrid" | "brevo" {
+  get mode(): EmailProvider {
     return this.configuration.provider ?? "sendgrid";
   }
 
@@ -81,14 +82,16 @@ export class SendGridVerificationEmailProvider implements VerificationEmailProvi
     private readonly configuration: {
       apiKey: string | undefined;
       fromEmail: string | undefined;
+      gmail?: GmailCredentials | undefined;
       webBaseUrl: string;
-      provider?: "sendgrid" | "brevo";
+      provider?: EmailProvider;
     },
     private readonly fetchImpl: typeof fetch = fetch
   ) {}
 
   async send(input: { email: string; locale: Locale; token: string }): Promise<void> {
-    if (this.configuration.apiKey === undefined || this.configuration.fromEmail === undefined) {
+    const configuration = { provider: this.mode, apiKey: this.configuration.apiKey, from: this.configuration.fromEmail, gmail: this.configuration.gmail };
+    if (!isEmailConfigured(configuration)) {
       throw new VerificationEmailConfigurationError();
     }
 
@@ -142,7 +145,7 @@ export class SendGridVerificationEmailProvider implements VerificationEmailProvi
 
     try {
       await sendTransactionalMail(
-        { provider: this.mode, apiKey: this.configuration.apiKey, from: this.configuration.fromEmail },
+        configuration,
         {
           to: [input.email],
           subject,
@@ -168,7 +171,7 @@ export function createVerificationEmailProvider(fetchImpl: typeof fetch = fetch)
 
   return new SendGridVerificationEmailProvider(
     {
-      apiKey: env.EMAIL_PROVIDER === "brevo" ? env.BREVO_API_KEY : env.SENDGRID_API_KEY,
+      ...emailConfiguration(env),
       fromEmail: env.FROM_EMAIL,
       webBaseUrl: env.WEB_BASE_URL,
       provider: env.EMAIL_PROVIDER

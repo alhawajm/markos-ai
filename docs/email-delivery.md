@@ -5,13 +5,65 @@ The installed key reached SendGrid but received HTTP 401 with `Maximum credits e
 This was a provider allowance failure, not a missing Railway secret. Sealed variables
 appear empty through Railway's API; check runtime configuration without logging values.
 
-Brevo is the selected free replacement. Its published Free plan includes **300 sends
+On 5 November 2026 the owner authorized a **Gmail API** sender for low-volume mail
+without company IT/DNS access. The Gmail transport is implemented; authorization,
+runtime activation and inbox receipt must be verified before calling it operational.
+Messages use the authorized Gmail address with the display name MARKOS, rather
+than impersonating the unauthenticated company address. Customers need no Gmail
+account and grant no Google permissions.
+
+## Gmail activation
+
+1. Use a company-controlled operator Gmail mailbox and a dedicated OAuth client in
+   the existing MARKOS Google Cloud project. Enable Gmail API, keep billing disabled,
+   and request only `https://www.googleapis.com/auth/gmail.send`. Do not reuse the
+   customer-login client, Firebase CLI credentials, or broad mailbox permissions.
+2. Configure the consent screen for this operator-only connection. External Testing
+   grants expire after seven days; complete the appropriate production consent
+   configuration/review before relying on unattended sending. Never claim Google
+   verification based on having created a client or accepted an unverified-app prompt.
+3. Authorize the sender with a desktop loopback OAuth flow using state and PKCE.
+   `scripts/authorize-gmail-sender.mjs --help` describes the workstation helper. It
+   opens Google locally, runs the actual mail transport against an explicitly
+   authorized test inbox, and installs sealed API credentials without activating
+   a provider or printing authorization URLs/tokens. Keep its Desktop OAuth JSON
+   under ignored `var/` or outside the repository.
+   Store `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` and `GMAIL_REFRESH_TOKEN` in Railway
+   API secret variables. Worker and backup services reference the API's values.
+   Seal credentials using Railway's variable menu; sealed values cannot be read back.
+   Keep the previous provider selected until the credentials and code are ready.
+4. Set `FROM_EMAIL` to the actual authorized Gmail address. Run a controlled send
+   through the deployed transport, check Google's acknowledgement, and confirm
+   receipt in the authorized test inbox. Then set `EMAIL_PROVIDER=gmail` and deploy
+   API, worker and backup with consistent references. Exercise verification/recovery
+   in the selected mailbox; never log their links or codes.
+5. Refresh authorization if Google revokes the grant or the sender password changes.
+   Inspect sanitized operational logs for `EMAIL_REJECTED`; do not claim a grant
+   lasts forever. Gmail does not supply transactional delivery-event guarantees.
+
+Standard Gmail API usage has no additional API cost, while request quotas and
+mailbox sending limits still apply. This is a low-volume option, not unlimited mail;
+do not enable billing, purchase quota or automatically fall back to a paid provider.
+The transport caches short-lived access tokens only in process memory, coalesces
+refreshes and never exposes Google error bodies. A token-refresh failure occurs
+before sending and can be retried safely; a network failure after submission is
+UNKNOWN. An explicit 401 can trigger one refresh and resubmission.
+
+References: [sending MIME messages](https://developers.google.com/workspace/gmail/api/guides/sending),
+[desktop OAuth/PKCE](https://developers.google.com/identity/protocols/oauth2/native-app),
+[OAuth token expiration](https://developers.google.com/identity/protocols/oauth2#expiration),
+[scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification),
+and [API quotas](https://developers.google.com/workspace/gmail/api/reference/quota).
+
+## Previous Brevo setup
+
+Brevo was the selected free replacement. Its published Free plan includes **300 sends
 per day** for transactional email, without a time-limited trial. Check the current
 [free-plan limits](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan)
 before changing the plan. Provider caps can delay emails; this is not unlimited email.
 Do not enable paid upgrades, prepaid credits or automatic paid fallback.
 
-## Activate
+### Brevo activation
 
 1. Complete the company's Brevo account verification and keep the Free plan selected.
 2. Add and verify `support@raedat.online` as sender. Authenticate the domain using the
@@ -45,7 +97,7 @@ Setup references: [Brevo transactional email API](https://developers.brevo.com/d
 [anonymous tracking](https://help.brevo.com/hc/en-us/articles/11643306229906-Can-I-anonymize-the-tracking-of-opens-and-clicks-for-my-emails),
 and [the vendor's tracking limitation discussion](https://community.brevo.com/t/no-way-to-disable-by-option-tracking-in-transactional-e-mail/201?page=2).
 
-## External acceptance still required
+### Brevo external acceptance still required
 
 The owner created a free Brevo account and supplied a restricted key. The key is
 installed in Railway; API and worker deployments use Brevo. Controlled requests

@@ -1101,7 +1101,7 @@ export interface AnalyticsEmailDeliveryResult {
   delivered: boolean;
   filename: string;
   messageId?: string;
-  mode: "dry_run" | "sendgrid" | "brevo";
+  mode: "dry_run" | "sendgrid" | "brevo" | "gmail";
   month: string;
   recipients: string[];
   skippedReason?: string;

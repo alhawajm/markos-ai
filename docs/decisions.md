@@ -1009,3 +1009,27 @@ Railway remains the daily application. Retain the team's offline developer setup
 Expose up to the latest 50 authoritative profile snapshots, filtered to one requested module and folded when adjacent values are identical. History reads require the active workspace and vault read permission. Owner-selected facts load into the existing editor; review and an ordinary Save are required. Use the current profile revision for conflict detection, retain canonical module validation and projection/RAG updates, and leave other sections and the offering catalog untouched. History must never overwrite raw managed Vault projections.
 
 Register the API error handler before plugins/routes so errors keep the API envelope, including revision conflicts. Keep Google Play submission configured as an internal draft with review submission disabled; the separate publisher credential and Play Console app permission remain external inputs.
+
+## 2026-11-05 - Gmail for low-volume transactional mail without company DNS
+
+The owner authorized a free Gmail sender to remove the company-DNS dependency of
+the stalled Brevo setup. Add Gmail as an explicitly selected transport using the
+HTTPS Gmail API, with a send-only OAuth grant for the operator's mailbox. This is
+separate from customer Google sign-in; customers do not authorize mailbox access.
+Keep billing disabled and respect Google's API/mailbox limits. Do not add SMTP,
+purchase a domain, enable a paid fallback or silently change provider on failure.
+
+Keep refresh/client credentials in Railway's secret configuration, never in Git,
+browser bundles or logs. A desktop loopback/PKCE authorization can provision the
+single operator mailbox without a new public administration endpoint. Configure
+the Google consent client for its actual operator-only use; do not claim Google
+verification or rely on a seven-day Testing grant for unattended production use.
+If Google requires additional review, complete its supported process.
+
+Preserve existing English/Arabic verification, recovery, report and operations
+templates. Build UTF-8 MIME with separate plain/HTML alternatives and attachments.
+Only an explicit 401 rejection permits one refreshed-token resubmission; a lost
+send acknowledgement remains UNKNOWN and is never replayed automatically by the
+transport. Google acceptance does not establish inbox receipt. Activate Gmail only
+after mailbox authorization and controlled live acceptance; record actual receipt
+separately. Brevo/SendGrid remain compatibility transports, not automatic fallbacks.

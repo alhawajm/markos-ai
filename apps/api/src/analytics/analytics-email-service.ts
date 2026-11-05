@@ -2,11 +2,11 @@ import type { AnalyticsEmailDeliveryForAllWorkspacesResult, AnalyticsEmailDelive
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
 import { exportMonthlyAnalyticsPdf } from "./analytics-service";
-import { emailConfiguration, EmailDeliveryError, sendTransactionalMail, type EmailProvider } from "../email/transactional-mail";
+import { emailConfiguration, isEmailConfigured, EmailDeliveryError, sendTransactionalMail, type EmailProvider } from "../email/transactional-mail";
 
 type Mail = { attachment: Buffer; filename: string; html: string; subject: string; text: string; to: string[] };
 export interface AnalyticsEmailProvider {
-  mode: "dry_run" | "sendgrid" | "brevo";
+  mode: "dry_run" | EmailProvider;
   send(input: Mail): Promise<{ messageId: string }>;
 }
 export class DryRunAnalyticsEmailProvider implements AnalyticsEmailProvider {
@@ -30,7 +30,7 @@ export class SendGridAnalyticsEmailProvider implements AnalyticsEmailProvider {
   ) {}
   async send(input: Mail): Promise<{ messageId: string }> {
     const configuration = emailConfiguration({ ...env, EMAIL_PROVIDER: this.mode });
-    if (!configuration.apiKey || !configuration.from) throw new ReportMailError("REPORT_EMAIL_NOT_CONFIGURED", "FAILED");
+    if (!isEmailConfigured(configuration)) throw new ReportMailError("REPORT_EMAIL_NOT_CONFIGURED", "FAILED");
     try {
       return await sendTransactionalMail(
         configuration,
@@ -54,7 +54,7 @@ export class SendGridAnalyticsEmailProvider implements AnalyticsEmailProvider {
 export function createAnalyticsEmailProvider(): AnalyticsEmailProvider {
   return env.EMAIL_PROVIDER === "local" && env.NODE_ENV !== "production"
     ? new DryRunAnalyticsEmailProvider()
-    : new SendGridAnalyticsEmailProvider(fetch, env.EMAIL_PROVIDER === "brevo" ? "brevo" : "sendgrid");
+    : new SendGridAnalyticsEmailProvider(fetch, emailConfiguration(env).provider);
 }
 function previousMonthKey(now: Date) {
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
@@ -67,7 +67,7 @@ function result(
   status: string,
   extra: Partial<AnalyticsEmailDeliveryResult> = {}
 ): AnalyticsEmailDeliveryResult {
-  // ACCEPTED means queued by SendGrid, never a claim that it reached the inbox.
+  // ACCEPTED means queued by the provider, never a claim that it reached the inbox.
   return { workspaceId, month, mode, attachmentBytes: 0, filename: "", recipients: [], delivered: false, skippedReason: status, ...extra };
 }
 

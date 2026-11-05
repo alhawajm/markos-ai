@@ -8,7 +8,7 @@ import { backupMasterKey, signBackupManifest } from "./backup-crypto";
 import { createFailureReporter } from "../observability/failure-alerts";
 import { finishBackup, objectBytes, putEncryptedBackup, recoveryPrefix, type BackupObject } from "./backup-store";
 import { expireBackups } from "./backup-retention";
-import { emailConfiguration } from "../email/transactional-mail";
+import { emailConfiguration, isEmailConfigured } from "../email/transactional-mail";
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -151,11 +151,12 @@ async function main() {
 main().catch(async () => {
   console.error("MARKOS scheduled backup failed. Check sanitized Railway logs and the most recent complete snapshot.");
   const configuration = emailConfiguration(process.env);
-  if (configuration.apiKey && configuration.from && process.env.OPS_ALERT_EMAIL) {
+  if (isEmailConfigured(configuration) && configuration.from && process.env.OPS_ALERT_EMAIL) {
     const report = createFailureReporter({
       apiKey: configuration.apiKey,
       from: configuration.from,
       provider: configuration.provider,
+      gmail: configuration.gmail,
       to: process.env.OPS_ALERT_EMAIL,
       cooldownSeconds: 900,
       claim: async () => true

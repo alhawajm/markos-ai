@@ -4,7 +4,7 @@ import type { Locale } from "@markos/shared-types";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { decryptCredential, encryptCredential } from "../security/credential-encryption";
-import { emailConfiguration, sendTransactionalMail } from "../email/transactional-mail";
+import { emailConfiguration, isEmailConfigured, sendTransactionalMail } from "../email/transactional-mail";
 
 type Mail = { email: string; locale: Locale; code?: string };
 export type AuthMail = Mail & { kind: "RESET_CODE" | "PASSWORD_CHANGED" | "DELETE_CODE" };
@@ -23,7 +23,7 @@ export async function queueAuthMail(
 export async function sendAuthMail(mail: AuthMail, fetchImpl: typeof fetch = fetch): Promise<void> {
   if (env.EMAIL_PROVIDER === "local" && env.NODE_ENV !== "production") return;
   const configuration = emailConfiguration(env);
-  if (!configuration.apiKey || !configuration.from) throw new Error("AUTH_EMAIL_NOT_CONFIGURED");
+  if (!isEmailConfigured(configuration)) throw new Error("AUTH_EMAIL_NOT_CONFIGURED");
   const ar = mail.locale === "ar";
   const reset = mail.kind === "RESET_CODE";
   const deletion = mail.kind === "DELETE_CODE";

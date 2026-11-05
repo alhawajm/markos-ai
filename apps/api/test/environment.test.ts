@@ -18,6 +18,19 @@ afterEach(() => {
 });
 
 describe("environment configuration", () => {
+  it("accepts Gmail sender credentials separately from public Google sign-in", () => {
+    const parsed = parseEnvironment({
+      EMAIL_PROVIDER: "gmail",
+      GMAIL_CLIENT_ID: "sender-client",
+      GMAIL_CLIENT_SECRET: "sender-secret",
+      GMAIL_REFRESH_TOKEN: "sender-refresh",
+      GOOGLE_OAUTH_CLIENT_ID: "login-client"
+    });
+    expect(parsed.EMAIL_PROVIDER).toBe("gmail");
+    expect(parsed.GMAIL_CLIENT_ID).toBe("sender-client");
+    expect(parsed.GOOGLE_OAUTH_CLIENT_ID).toBe("login-client");
+    expect(parseEnvironment({ GMAIL_REFRESH_TOKEN: "" }).GMAIL_REFRESH_TOKEN).toBeUndefined();
+  });
   it("resolves the default file at the repository root", () => {
     expect(repositoryEnvPath).toBe(resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env"));
   });

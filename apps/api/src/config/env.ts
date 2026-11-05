@@ -57,13 +57,16 @@ export const envSchema = z
     JWT_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
     MFA_STEP_UP_TTL: z.coerce.number().int().positive().default(900),
     EMAIL_VERIFICATION_TTL: z.coerce.number().int().positive().default(86400),
-    EMAIL_PROVIDER: z.enum(["local", "sendgrid", "brevo"]).default("local"),
+    EMAIL_PROVIDER: z.enum(["local", "sendgrid", "brevo", "gmail"]).default("local"),
     EMAIL_VERIFICATION_API_BASE_URL: optionalUrl.refine(
       (value) => value === undefined || new URL(value).protocol === "https:",
       "The verification API must use HTTPS"
     ),
     SENDGRID_API_KEY: optionalString,
     BREVO_API_KEY: optionalString,
+    GMAIL_CLIENT_ID: optionalString,
+    GMAIL_CLIENT_SECRET: optionalString,
+    GMAIL_REFRESH_TOKEN: optionalString,
     EXPO_PUSH_ACCESS_TOKEN: optionalString,
     OPS_ALERT_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.string().email().optional()),
     OPS_ALERTS_ENABLED: z
