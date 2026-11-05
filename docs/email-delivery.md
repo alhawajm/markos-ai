@@ -6,8 +6,11 @@ This was a provider allowance failure, not a missing Railway secret. Sealed vari
 appear empty through Railway's API; check runtime configuration without logging values.
 
 On 5 November 2026 the owner authorized a **Gmail API** sender for low-volume mail
-without company IT/DNS access. The Gmail transport is implemented; authorization,
-runtime activation and inbox receipt must be verified before calling it operational.
+without company IT/DNS access. Gmail is selected on the deployed API, worker and
+backup service, using `markosaiowner@gmail.com`. Google accepted the setup messages
+and a live English/Arabic message sent by the Railway API. The worker independently
+validated its refresh credential and send-only scope; API health returned HTTP 200.
+Inbox receipt is still awaiting the owner's confirmation; acceptance is not delivery.
 Messages use the authorized Gmail address with the display name MARKOS, rather
 than impersonating the unauthenticated company address. Customers need no Gmail
 account and grant no Google permissions.
@@ -28,13 +31,19 @@ account and grant no Google permissions.
    authorized test inbox, and installs sealed API credentials without activating
    a provider or printing authorization URLs/tokens. Keep its Desktop OAuth JSON
    under ignored `var/` or outside the repository.
+   The helper saves an encrypted Windows CurrentUser DPAPI checkpoint under ignored
+   `var/release-prep/` before sending and after acceptance. `--resume` verifies the
+   same sender, recipient and Railway target, reuses the grant and skips an accepted
+   test. UNKNOWN results block resumption to prevent replay. An expired Railway
+   access token is refreshed before each request; use `MARKOS_RAILWAY_CLI` when its
+   executable is not on PATH. Remove the temporary plaintext client JSON afterward.
    Store `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` and `GMAIL_REFRESH_TOKEN` in Railway
    API secret variables. Worker and backup services reference the API's values.
    Seal credentials using Railway's variable menu; sealed values cannot be read back.
    Keep the previous provider selected until the credentials and code are ready.
 4. Set `FROM_EMAIL` to the actual authorized Gmail address. Run a controlled send
-   through the deployed transport, check Google's acknowledgement, and confirm
-   receipt in the authorized test inbox. Then set `EMAIL_PROVIDER=gmail` and deploy
+   through the deployed transport and check Google's acknowledgement. Record inbox
+   receipt separately without claiming delivery from acceptance. Set `EMAIL_PROVIDER=gmail` and deploy
    API, worker and backup with consistent references. Exercise verification/recovery
    in the selected mailbox; never log their links or codes.
 5. Refresh authorization if Google revokes the grant or the sender password changes.
@@ -54,6 +63,26 @@ References: [sending MIME messages](https://developers.google.com/workspace/gmai
 [OAuth token expiration](https://developers.google.com/identity/protocols/oauth2#expiration),
 [scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification),
 and [API quotas](https://developers.google.com/workspace/gmail/api/reference/quota).
+
+### Current Google configuration
+
+Gmail API is enabled in the existing MARKOS project and Google billing remains
+disabled. The dedicated Desktop client and consent branding use existing public
+Railway privacy/terms pages and the Railway host as the authorized domain. The
+publishing status is **In production**, rather than seven-day Testing. The only
+declared/requested scope is `gmail.send`; no inbox-reading grant was requested.
+This new OAuth client is **unverified**, with one operator grant under Google's
+unverified-user cap. Customers receiving transactional messages do not authorize
+this client. Do not describe it as Google-reviewed or reuse it for public Google
+account connections without completing the applicable verification process.
+
+API credentials and worker/backup references were sealed and verified as unreadable
+through Railway's variables API. Live API and worker containers read the configured
+sender and credentials correctly. All three Gmail-support deployments succeeded.
+No company DNS record, paid email plan, public OAuth endpoint or customer account
+migration was required. The initial setup encountered a Railway access-token expiry
+after Google's acceptance; the helper now refreshes that login and keeps encrypted
+recovery state so an installation failure does not lose an approved grant.
 
 ## Previous Brevo setup
 

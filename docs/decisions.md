@@ -1033,3 +1033,12 @@ send acknowledgement remains UNKNOWN and is never replayed automatically by the
 transport. Google acceptance does not establish inbox receipt. Activate Gmail only
 after mailbox authorization and controlled live acceptance; record actual receipt
 separately. Brevo/SendGrid remain compatibility transports, not automatic fallbacks.
+
+Operator provisioning keeps a Windows CurrentUser DPAPI checkpoint under ignored
+`var/`, retaining approved credentials across a failed Railway installation.
+Refresh Railway authentication before each request because its access token can
+expire during Google's security check. Explicit recovery validates the same
+sender, recipient and deployment target, skips acknowledged tests and refuses an
+UNKNOWN send result. Remove the temporary plaintext client file after installation.
+Select the live sender after controlled provider acceptance; inbox confirmation
+remains a separate recorded acceptance check rather than a claim of delivery.
