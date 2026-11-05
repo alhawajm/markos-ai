@@ -10,7 +10,8 @@ without company IT/DNS access. Gmail is selected on the deployed API, worker and
 backup service, using `markosaiowner@gmail.com`. Google accepted the setup messages
 and a live English/Arabic message sent by the Railway API. The worker independently
 validated its refresh credential and send-only scope; API health returned HTTP 200.
-Inbox receipt is still awaiting the owner's confirmation; acceptance is not delivery.
+The owner confirmed receipt of “MARKOS Gmail delivery check” in the authorized
+Gmail inbox on 5 November 2026. The sender setup and inbox-delivery check are complete.
 Messages use the authorized Gmail address with the display name MARKOS, rather
 than impersonating the unauthenticated company address. Customers need no Gmail
 account and grant no Google permissions.
