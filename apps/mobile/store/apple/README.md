@@ -1,11 +1,11 @@
 # MARKOS App Store preparation
 
-Verified 3 November 2026. Only MARKOS is in scope; other company apps, distribution certificates and existing tester groups are preserved.
+Submission verified 8 November 2026. Only MARKOS is in scope; other company apps, distribution certificates and existing tester groups are preserved.
 
 - App: `6814797764`; bundle: `com.markos.mobile`.
 - [App Store Connect](https://appstoreconnect.apple.com/apps/6814797764/distribution).
 - Store version **0.5.0**, selected build **9**, processing **VALID**.
-- State **Prepare for Submission**, with **manual release**.
+- Submitted **8 November 2026 at 12:21 Bahrain time**; state **Waiting for Review**, with **manual release**.
 - Build 9 is **IN_BETA_TESTING** internally and **READY_FOR_BETA_SUBMISSION** externally. No public TestFlight link or external review was created by this pass.
 
 ## Saved forms and metadata
@@ -31,7 +31,7 @@ Verified 3 November 2026. Only MARKOS is in scope; other company apps, distribut
 
 Apple's trader contact verification used the registered company address and the owner's explicitly approved public contacts. Developer membership identity, other apps' declarations, paid agreements, bank information and tax settings were preserved. The account's separate Paid Apps Agreement/bank/tax prompts were not accepted for this free app. See [Apple's trader requirements](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements/).
 
-The selected build was updated from 8 to 9 after Apple's processing completed, then independently read back. Publishing the privacy label, selecting a build and uploading through EAS do not submit or release the app. The previously missing medium Dynamic Island iPhone and 13-inch iPad groups are now populated. A fresh API read confirms manual release, Prepare for Submission, selected build 9 and zero review submissions. The refreshed Console shows all ten English screenshots without screenshot errors; optional preview videos and unsupported Watch targets remain empty.
+The selected build was updated from 8 to 9 after Apple's processing completed, then independently read back. The previously missing medium Dynamic Island iPhone and 13-inch iPad groups are populated. On 8 November, all fourteen screenshots were confirmed COMPLETE, reviewer login passed again, and the exact version was added to a review submission and submitted through Apple's API. Independent readback confirmed **WAITING_FOR_REVIEW** and manual release. Uploading a binary or saving a review draft alone does not establish submission or approval. Optional preview videos and unsupported Watch targets remain empty.
 
 ## Native screenshot preparation
 
@@ -49,4 +49,6 @@ The physical Android pass verified login/reopen, bilingual/RTL and light/dark ro
 
 Apple simulator capture establishes genuine native rendering and the exercised navigation/login flows. It does not prove physical iPhone APNs delivery or every device, accessibility and provider-failure scenario. No untested accessibility Nutrition Label features are claimed.
 
-Public submission remains held for remaining acceptance, transactional-email/domain and support-delivery readiness, final legal review and Meta's Advanced Access decision. The Meta request is in review, not approved. The eventual review submission must use the verified build and processed, visually reviewed screenshots. Public availability remains a separate manual-release action after approval.
+The owner authorized store review submission on 8 November while holding public launch. Gmail delivery is confirmed, and the owner selected the monitored **info.raedat.2024@gmail.com** address for support and privacy requests. Both live privacy pages identify Google/Gmail; support, Terms and deletion pages were checked in both languages. The source release CI passed, as did three live rendered legal-page tests. Compatible 0.5.0 updates on preview and production carry the corrected native support contact; served Android/iOS bundles match the export.
+
+Apple review and Meta Advanced Access approval remain pending. Public availability requires a separate manual release after approval and launch acceptance. Physical iPhone APNs delivery remains unverified; simulator captures and configuration checks do not establish that result.

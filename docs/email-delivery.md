@@ -16,6 +16,10 @@ Messages use the authorized Gmail address with the display name MARKOS, rather
 than impersonating the unauthenticated company address. Customers need no Gmail
 account and grant no Google permissions.
 
+On 8 November the owner selected **info.raedat.2024@gmail.com** as the monitored
+public support/privacy inbox. Store listings, native Help and public legal pages
+use that address. It is distinct from the authorized outgoing sender above.
+
 ## Gmail activation
 
 1. Use a company-controlled operator Gmail mailbox and a dedicated OAuth client in

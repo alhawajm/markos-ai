@@ -1,4 +1,17 @@
-# MARKOS release preparation - 3 November 2026
+# MARKOS release preparation - 8 November 2026
+
+## 8 November submission checkpoint
+
+- The owner authorized final store submission, selected **closed testing before Android's public launch**, and confirmed **info.raedat.2024@gmail.com** is monitored. Public support/privacy pages, native Help and both store descriptions now use that contact. Account-level registered trader contacts are separate and were preserved.
+- **Apple 0.5.0/build 9 is WAITING_FOR_REVIEW**, submitted at **12:21 Bahrain time**, with **MANUAL** release retained. The API confirmed the exact version/build, fourteen COMPLETE screenshots, saved reviewer access and the submitted review state. A fresh ordinary native reviewer login passed and its temporary session was revoked.
+- **Google Alpha/build 10 is submitted**. At **12:27 Bahrain time**, Publishing overview showed **Changes in review**, running quick checks before reviewer-queue entry. The existing Internal Test list of eleven users is selected without editing membership. Production build 10 remains a **draft**. The verified bundle hash and two-language release notes were used; validation reported no errors and one conditional R8/ProGuard mapping warning.
+- Google's required company trader declaration and MARKOS's app-level trader/Terms declaration are saved. Registered company identity was retained. Other apps inherit the account status and have their own confirmation task; no other app's form or release was changed.
+- The live English/Arabic privacy policy identifies **Google/Gmail**, superseding Brevo as the active processor. Both support, Terms and deletion routes were fetched successfully. Gmail sending and actual inbox receipt were already confirmed on 5 November; no company DNS change or paid email plan was introduced.
+- Runtime 0.5.0 support updates are published on **production** and **preview**. Both Android and iOS downloads match the exported bundle hashes on each channel. The web deployment for source `9749e195e76bf2d806fa3cf0185f9025bbfa2d54` is SUCCESS.
+- Validation passed: web and native TypeScript checks; **7** focused web cases; **3** rendered legal-page cases against the live site; changed-file formatting/whitespace; and [source release CI](https://github.com/alhawajm/markos-ai/actions/runs/42465555181). No repository-wide suite was run locally.
+- Meta's actual submission list still says **Review in progress**, with the app **Unpublished**. Permission names listed in a request do not establish approval. Meta approval and a fresh non-tester Instagram connection test remain external launch prerequisites. Physical iPhone APNs delivery remains unverified; earlier Android delivery and genuine simulator screenshots do not substitute for it.
+
+The dated records below preserve earlier evidence. This checkpoint supersedes previous draft-only submission status and the old transactional-email/domain hold. Store approval and public availability are separate from successful submission.
 
 The owner authorized implementation of the remaining security, operations, product-depth,
 notifications, analytics, acceptance and submission preparation. Railway is the selected
