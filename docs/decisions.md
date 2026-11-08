@@ -1042,3 +1042,8 @@ sender, recipient and deployment target, skips acknowledged tests and refuses an
 UNKNOWN send result. Remove the temporary plaintext client file after installation.
 Select the live sender after controlled provider acceptance; inbox confirmation
 remains a separate recorded acceptance check rather than a claim of delivery.
+
+
+## 2026-11-08 ? Submission contact and email disclosure
+
+The owner confirmed that info.raedat.2024@gmail.com is monitored and selected it for public support and privacy requests. Use that address consistently in the native Help screen, public legal/support pages and both store listings. Preserve the separate company identity and verified account-level trader contacts. Update English and Arabic privacy disclosures to identify Google/Gmail as the active email processor; Brevo remains an inactive compatibility transport. The owner authorized final store review submission after preparation. Store review, Meta Advanced Access approval and public availability remain distinct states; record their actual outcomes without treating uploaded binaries as review submissions or simulator screenshots as physical iPhone notification delivery.

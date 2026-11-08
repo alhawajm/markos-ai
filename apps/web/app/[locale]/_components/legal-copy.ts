@@ -4,9 +4,9 @@ export const legalCopy = {
     back: "Back to sign up",
     language: "العربية",
     draftLabel: "Raedat Software Company W.L.L",
-    draftMessage: "For account, support or privacy requests, contact support@raedat.online.",
-    version: "Version 1.0",
-    effective: "Updated: 26 October 2026",
+    draftMessage: "For account, support or privacy requests, contact info.raedat.2024@gmail.com.",
+    version: "Version 1.1",
+    effective: "Updated: 8 November 2026",
     contents: "On this page",
     footer: "Operated by Raedat Software Company W.L.L",
     termsLink: "Terms of Service",
@@ -20,21 +20,21 @@ export const legalCopy = {
           id: "contact",
           title: "Contact support",
           paragraphs: [
-            "Email support@raedat.online with a short description of the problem, whether you use web, Android or iPhone, and the app version. Include a screenshot only if it does not expose private information."
+            "Email info.raedat.2024@gmail.com with a short description of the problem, whether you use web, Android or iPhone, and the app version. Include a screenshot only if it does not expose private information."
           ]
         },
         {
           id: "security",
           title: "Account and security help",
           paragraphs: [
-            "Never send your password, authenticator code, recovery code, API key or Instagram token to support. Use the normal password-recovery flow if you cannot sign in. Report suspected unauthorized access to support@raedat.online."
+            "Never send your password, authenticator code, recovery code, API key or Instagram token to support. Use the normal password-recovery flow if you cannot sign in. Report suspected unauthorized access to info.raedat.2024@gmail.com."
           ]
         },
         {
           id: "privacy",
           title: "Privacy and deletion",
           paragraphs: [
-            "Request access, correction or deletion at support@raedat.online, or use Settings and the public Delete account page. We may verify your identity before acting on a request."
+            "Request access, correction or deletion at info.raedat.2024@gmail.com, or use Settings and the public Delete account page. We may verify your identity before acting on a request."
           ]
         }
       ]
@@ -105,7 +105,7 @@ export const legalCopy = {
           id: "contact",
           title: "8. Contact and changes",
           paragraphs: [
-            "Contact Raedat Software Company W.L.L at support@raedat.online for support, privacy requests or questions about these terms. We may update these terms as the service changes; the updated version and date appear on this page."
+            "Contact Raedat Software Company W.L.L at info.raedat.2024@gmail.com for support, privacy requests or questions about these terms. We may update these terms as the service changes; the updated version and date appear on this page."
           ]
         }
       ]
@@ -137,7 +137,7 @@ export const legalCopy = {
           id: "providers",
           title: "3. Hosting and service providers",
           paragraphs: [
-            "Railway hosts the application services, database and object storage. Configured AI providers receive relevant instructions and business context for the assistance you request. Meta processes Instagram authorization, publishing and insights requests. Brevo handles requested email; Expo and Apple/Google notification services handle enabled phone alerts.",
+            "Railway hosts the application services, database and object storage. Configured AI providers receive relevant instructions and business context for the assistance you request. Meta processes Instagram authorization, publishing and insights requests. Google processes requested email through Gmail; Expo and Apple/Google notification services handle enabled phone alerts.",
             "Processing may occur outside Bahrain. Connected providers apply their own privacy and security practices. We use service credentials and limit application access to the purposes described here. Do not upload information you are not authorized to share with these services."
           ]
         },
@@ -170,14 +170,14 @@ export const legalCopy = {
           title: "7. Your controls and requests",
           paragraphs: [
             "Use Settings to update account information, manage notification/email preferences, disconnect Instagram, manage team access, export workspace data or delete your account. Instagram may also require removing MARKOS in its Apps and websites controls.",
-            "You can request access, correction, deletion or other applicable privacy rights by emailing support@raedat.online. We may verify your identity and authority before acting. The public Delete account page explains the authenticated deletion process in English and Arabic."
+            "You can request access, correction, deletion or other applicable privacy rights by emailing info.raedat.2024@gmail.com. We may verify your identity and authority before acting. The public Delete account page explains the authenticated deletion process in English and Arabic."
           ]
         },
         {
           id: "contact",
           title: "8. Contact and policy changes",
           paragraphs: [
-            "The operator is Raedat Software Company W.L.L. Send privacy questions or requests to support@raedat.online. We update this page when relevant practices change; the version and update date appear above."
+            "The operator is Raedat Software Company W.L.L. Send privacy questions or requests to info.raedat.2024@gmail.com. We update this page when relevant practices change; the version and update date appear above."
           ]
         }
       ]
@@ -188,9 +188,9 @@ export const legalCopy = {
     back: "العودة إلى إنشاء الحساب",
     language: "English",
     draftLabel: "Raedat Software Company W.L.L",
-    draftMessage: "لطلبات الحساب والدعم والخصوصية، تواصل عبر support@raedat.online.",
-    version: "الإصدار ١.٠",
-    effective: "آخر تحديث: ٢٦ أكتوبر ٢٠٢٦",
+    draftMessage: "لطلبات الحساب والدعم والخصوصية، تواصل عبر info.raedat.2024@gmail.com.",
+    version: "الإصدار ١.١",
+    effective: "آخر تحديث: ٨ نوفمبر ٢٠٢٦",
     contents: "في هذه الصفحة",
     footer: "تشغّله Raedat Software Company W.L.L",
     termsLink: "شروط الاستخدام",
@@ -204,21 +204,21 @@ export const legalCopy = {
           id: "contact",
           title: "التواصل مع الدعم",
           paragraphs: [
-            "راسل support@raedat.online بوصف مختصر للمشكلة ونوع النسخة: الويب أو أندرويد أو آيفون، ورقم إصدار التطبيق. أرفق لقطة شاشة فقط إذا كانت لا تكشف معلومات خاصة."
+            "راسل info.raedat.2024@gmail.com بوصف مختصر للمشكلة ونوع النسخة: الويب أو أندرويد أو آيفون، ورقم إصدار التطبيق. أرفق لقطة شاشة فقط إذا كانت لا تكشف معلومات خاصة."
           ]
         },
         {
           id: "security",
           title: "المساعدة في الحساب والأمان",
           paragraphs: [
-            "لا ترسل كلمة المرور أو رمز المصادقة أو الاستعادة أو مفتاح خدمة أو رمز إنستغرام إلى الدعم. استخدم استعادة كلمة المرور عند تعذر الدخول، وأبلغ support@raedat.online عند الاشتباه بوصول غير مخول."
+            "لا ترسل كلمة المرور أو رمز المصادقة أو الاستعادة أو مفتاح خدمة أو رمز إنستغرام إلى الدعم. استخدم استعادة كلمة المرور عند تعذر الدخول، وأبلغ info.raedat.2024@gmail.com عند الاشتباه بوصول غير مخول."
           ]
         },
         {
           id: "privacy",
           title: "الخصوصية والحذف",
           paragraphs: [
-            "اطلب الوصول أو التصحيح أو الحذف عبر support@raedat.online أو استخدم الإعدادات وصفحة حذف الحساب العامة. قد نتحقق من هويتك قبل تنفيذ الطلب."
+            "اطلب الوصول أو التصحيح أو الحذف عبر info.raedat.2024@gmail.com أو استخدم الإعدادات وصفحة حذف الحساب العامة. قد نتحقق من هويتك قبل تنفيذ الطلب."
           ]
         }
       ]
@@ -288,7 +288,7 @@ export const legalCopy = {
           id: "contact",
           title: "٨. التواصل والتغييرات",
           paragraphs: [
-            "تواصل مع Raedat Software Company W.L.L عبر support@raedat.online للدعم أو الخصوصية أو الاستفسار عن الشروط. قد نحدّث الشروط مع تغيّر الخدمة؛ يظهر الإصدار والتاريخ المحدّثان في هذه الصفحة."
+            "تواصل مع Raedat Software Company W.L.L عبر info.raedat.2024@gmail.com للدعم أو الخصوصية أو الاستفسار عن الشروط. قد نحدّث الشروط مع تغيّر الخدمة؛ يظهر الإصدار والتاريخ المحدّثان في هذه الصفحة."
           ]
         }
       ]
@@ -319,7 +319,7 @@ export const legalCopy = {
           id: "providers",
           title: "٣. الاستضافة ومزودو الخدمات",
           paragraphs: [
-            "تستضيف Railway خدمات التطبيق وقاعدة البيانات وتخزين الملفات. تتلقى خدمات الذكاء الاصطناعي المهيأة التعليمات والسياق اللازمين للمساعدة المطلوبة. تعالج ميتا ربط إنستغرام والنشر والإحصاءات. تتولى Brevo البريد المطلوب، وتتولى Expo وخدمات إشعارات آبل وغوغل التنبيهات المفعلة.",
+            "تستضيف Railway خدمات التطبيق وقاعدة البيانات وتخزين الملفات. تتلقى خدمات الذكاء الاصطناعي المهيأة التعليمات والسياق اللازمين للمساعدة المطلوبة. تعالج ميتا ربط إنستغرام والنشر والإحصاءات. تعالج غوغل البريد المطلوب عبر Gmail، وتتولى Expo وخدمات إشعارات آبل وغوغل التنبيهات المفعلة.",
             "قد تتم المعالجة خارج البحرين. تخضع الخدمات المتصلة أيضًا لممارسات الخصوصية والأمان الخاصة بمزوديها. نستخدم بيانات اعتماد للخدمات ونحدّ الوصول إلى الأغراض الموضحة. لا ترفع معلومات لا تملك صلاحية مشاركتها مع هذه الخدمات."
           ]
         },
@@ -352,14 +352,14 @@ export const legalCopy = {
           title: "٧. خياراتك وطلباتك",
           paragraphs: [
             "استخدم الإعدادات لتحديث الحساب وإدارة التنبيهات والبريد وفصل إنستغرام وإدارة الفريق وتصدير بيانات المساحة أو حذف الحساب. قد يتطلب إنستغرام أيضًا إزالة ماركوس من إعدادات التطبيقات ومواقع الويب.",
-            "يمكنك طلب الوصول أو التصحيح أو الحذف أو الحقوق الأخرى المنطبقة عبر support@raedat.online. قد نتحقق من هويتك وصلاحيتك قبل التنفيذ. توضح صفحة حذف الحساب العامة الإجراء الموثّق بالعربية والإنجليزية."
+            "يمكنك طلب الوصول أو التصحيح أو الحذف أو الحقوق الأخرى المنطبقة عبر info.raedat.2024@gmail.com. قد نتحقق من هويتك وصلاحيتك قبل التنفيذ. توضح صفحة حذف الحساب العامة الإجراء الموثّق بالعربية والإنجليزية."
           ]
         },
         {
           id: "contact",
           title: "٨. التواصل وتغييرات السياسة",
           paragraphs: [
-            "المشغّل هو Raedat Software Company W.L.L. أرسل أسئلة وطلبات الخصوصية إلى support@raedat.online. نحدّث هذه الصفحة عند تغيّر الممارسات ذات الصلة، ويظهر الإصدار وتاريخ التحديث أعلاه."
+            "المشغّل هو Raedat Software Company W.L.L. أرسل أسئلة وطلبات الخصوصية إلى info.raedat.2024@gmail.com. نحدّث هذه الصفحة عند تغيّر الممارسات ذات الصلة، ويظهر الإصدار وتاريخ التحديث أعلاه."
           ]
         }
       ]

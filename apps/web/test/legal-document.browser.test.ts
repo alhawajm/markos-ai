@@ -62,7 +62,7 @@ describe("rendered legal documents", () => {
     for (const locale of ["en", "ar"]) {
       await page.goto(`${baseUrl}/${locale}/support`, { waitUntil: "networkidle" });
       await expect(page.getByRole("heading", { level: 1 }).isVisible()).resolves.toBe(true);
-      await expect(page.locator('a[href="mailto:support@raedat.online"]').first().isVisible()).resolves.toBe(true);
+      await expect(page.locator('a[href="mailto:info.raedat.2024@gmail.com"]').first().isVisible()).resolves.toBe(true);
       await expect(noHorizontalOverflow(page)).resolves.toBe(true);
       if (locale === "ar") await expect(page.locator("html").getAttribute("dir")).resolves.toBe("rtl");
       await saveScreenshot(page, `legal-support-${locale}-mobile`);

@@ -68,9 +68,9 @@ export function LegalDocument({ kind, locale }: { kind: LegalDocumentKind; local
                 <h2>{section.title}</h2>
                 {section.paragraphs.map((paragraph) => (
                   <p key={paragraph}>
-                    {paragraph.split("support@raedat.online").map((part, index) => (
+                    {paragraph.split("info.raedat.2024@gmail.com").map((part, index) => (
                       <span key={index}>
-                        {index ? <a href="mailto:support@raedat.online">support@raedat.online</a> : null}
+                        {index ? <a href="mailto:info.raedat.2024@gmail.com">info.raedat.2024@gmail.com</a> : null}
                         {part}
                       </span>
                     ))}

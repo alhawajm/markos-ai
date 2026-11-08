@@ -90,10 +90,10 @@ describe("public legal pages", () => {
     for (const locale of ["en", "ar"] as const) {
       const copy = JSON.stringify(legalCopy[locale]);
       expect(copy).toContain("Raedat Software Company W.L.L");
-      expect(copy).toContain("support@raedat.online");
+      expect(copy).toContain("info.raedat.2024@gmail.com");
       expect(copy).not.toContain("Ra'edat Software L.L.C.");
     }
-    expect(legalSource).toContain('href="mailto:support@raedat.online"');
+    expect(legalSource).toContain('href="mailto:info.raedat.2024@gmail.com"');
   });
 
   it("keeps both draft documents out of search indexes", () => {

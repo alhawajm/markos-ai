@@ -25,14 +25,14 @@ export default function Support() {
         <Txt variant="heading">{t("Here to help", "نحن هنا لمساعدتك")}</Txt>
         <Txt>
           {t(
-            "Email support@raedat.online with what happened and your app version. Never send passwords or verification codes.",
-            "راسل support@raedat.online بوصف المشكلة ورقم إصدار التطبيق. لا ترسل كلمات المرور أو رموز التحقق."
+            "Email info.raedat.2024@gmail.com with what happened and your app version. Never send passwords or verification codes.",
+            "راسل info.raedat.2024@gmail.com بوصف المشكلة ورقم إصدار التطبيق. لا ترسل كلمات المرور أو رموز التحقق."
           )}
         </Txt>
       </Card>
       {error ? (
         <Notice error>
-          {t("Couldn’t open that link. Email support@raedat.online or try again.", "تعذر فتح الرابط. راسل support@raedat.online أو حاول مجددًا.")}
+          {t("Couldn’t open that link. Email info.raedat.2024@gmail.com or try again.", "تعذر فتح الرابط. راسل info.raedat.2024@gmail.com أو حاول مجددًا.")}
         </Notice>
       ) : null}
       <ListGroup>
@@ -40,7 +40,7 @@ export default function Support() {
         <ListRow
           icon={Mail}
           label={t("Contact support", "التواصل مع الدعم")}
-          onPress={() => void open("mailto:support@raedat.online?subject=MARKOS%20support")}
+          onPress={() => void open("mailto:info.raedat.2024@gmail.com?subject=MARKOS%20support")}
         />
         <ListRow icon={ShieldCheck} label={t("Privacy policy", "سياسة الخصوصية")} onPress={() => void open(`${config.webUrl}/${locale}/privacy`)} />
         <ListRow icon={FileText} last label={t("Terms of service", "شروط الاستخدام")} onPress={() => void open(`${config.webUrl}/${locale}/terms`)} />
