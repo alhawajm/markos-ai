@@ -73,19 +73,22 @@ export async function getBusinessProfileState(workspaceId: string): Promise<Onbo
   };
 }
 
-export async function generateWorkspaceBusinessProfile(workspaceId: string): Promise<void> {
+export async function generateWorkspaceBusinessProfile(
+  workspaceId: string,
+  preview?: { context: VaultRagChunk[]; quickSetup: Prisma.InputJsonObject }
+): Promise<void> {
   const score = await getVaultScore(workspaceId);
 
-  if (!score.completedSections.includes("COMPANY") || !score.completedSections.includes("PRODUCTS")) {
+  if (!preview && (!score.completedSections.includes("COMPANY") || !score.completedSections.includes("PRODUCTS"))) {
     throw new BusinessProfileContextIncompleteError();
   }
 
-  const context = await onboardingContext(workspaceId);
+  const context = preview?.context ?? (await onboardingContext(workspaceId));
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
   try {
-    const generated = await requestBusinessProfile({ workspaceId, context });
+    const generated = await requestBusinessProfile({ workspaceId, context, ...(preview ? { concise: true } : {}) });
 
     await prisma.$transaction(async (tx) => {
       await tx.aiInteraction.updateMany({
@@ -107,7 +110,8 @@ export async function generateWorkspaceBusinessProfile(workspaceId: string): Pro
           promptVersion: generated.prompt_version,
           prompt: {
             workflow: "onboarding-business-profile",
-            retrievedContext: context
+            retrievedContext: context,
+            ...(preview ? { quickSetup: preview.quickSetup } : {})
           } as unknown as Prisma.InputJsonValue,
           response: {
             generatedProfile: generated.profile,
@@ -195,11 +199,12 @@ export async function approveWorkspaceBusinessProfile(workspaceId: string, input
   await indexVaultEntries(entries);
 }
 
-export async function invalidateBusinessProfile(workspaceId: string): Promise<void> {
+export async function invalidateBusinessProfile(workspaceId: string, exceptInteractionId?: string): Promise<void> {
   await prisma.aiInteraction.updateMany({
     where: {
       workspaceId,
       agent: businessProfileAgentName,
+      ...(exceptInteractionId ? { id: { not: exceptInteractionId } } : {}),
       deletedAt: null,
       OR: [{ regenerated: null }, { regenerated: false }]
     },

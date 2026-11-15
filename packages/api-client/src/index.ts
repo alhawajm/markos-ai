@@ -1,4 +1,5 @@
 import type {
+  WorkspaceAssistantTurn,
   CampaignReferenceFileInput,
   ContentAuthoringOperation,
   ContentReportInput,
@@ -111,6 +112,20 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
+  async workspaceAssistant(): Promise<WorkspaceAssistantTurn[]> {
+    return (await this.request<WorkspaceAssistantTurn[]>("/v1/assistant/conversation")).data;
+  }
+  async messageWorkspaceAssistant(input: { requestId: string; message: string; locale: "en" | "ar" }): Promise<WorkspaceAssistantTurn> {
+    return (await this.request<WorkspaceAssistantTurn>("/v1/assistant/conversation", { method: "POST", body: input })).data;
+  }
+  async confirmWorkspaceAssistant(id: string, confirmationToken: string): Promise<WorkspaceAssistantTurn> {
+    return (
+      await this.request<WorkspaceAssistantTurn>(`/v1/assistant/conversation/${encodeURIComponent(id)}/confirm`, {
+        method: "POST",
+        body: { confirmationToken }
+      })
+    ).data;
+  }
   async accountSettings(): Promise<AccountSettings> {
     return (await this.request<AccountSettings>("/v1/account")).data;
   }
@@ -272,6 +287,19 @@ export class MarkosApiClient {
   async onboardingDocumentAnalysis(): Promise<OnboardingDocumentAnalysisRecord | null> {
     const response = await this.request<OnboardingDocumentAnalysisRecord | null>("/v1/onboarding/document-analysis");
     return response.data;
+  }
+
+  async previewQuickOnboarding(input: {
+    details: { name: string; offer: string; location?: string; audience?: string; voice?: string; goal?: string };
+    analysisId?: string;
+  }): Promise<OnboardingState> {
+    return (await this.request<OnboardingState>("/v1/onboarding/quick/preview", { method: "POST", body: input })).data;
+  }
+  async confirmQuickOnboarding(interactionId: string): Promise<OnboardingState> {
+    return (await this.request<OnboardingState>("/v1/onboarding/quick/confirm", { method: "POST", body: { interactionId } })).data;
+  }
+  async analyzeInstagramProfile(url: string): Promise<OnboardingDocumentAnalysisRecord> {
+    return (await this.request<OnboardingDocumentAnalysisRecord>("/v1/onboarding/instagram-analysis", { method: "POST", body: { url } })).data;
   }
 
   async analyzeOnboardingDocuments(

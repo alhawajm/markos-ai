@@ -6,11 +6,17 @@ import { prisma } from "../src/db/prisma";
 import { buildApp } from "../src/http/app";
 import { instagramJpegFixture } from "./helpers/jpeg";
 
-const imageMock = vi.hoisted(() => ({ calls: 0, error: undefined as Error | undefined, hold: null as Promise<void> | null }));
+const imageMock = vi.hoisted(() => ({
+  calls: 0,
+  sources: [] as Array<string | null>,
+  error: undefined as Error | undefined,
+  hold: null as Promise<void> | null
+}));
 
 vi.mock("../src/ai/image-client", () => ({
-  generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string }) => {
+  generateImageAsset: async (input: { aspectRatio: string; prompt: string; workspaceId: string; sourceImage?: { base64Data: string } }) => {
     imageMock.calls += 1;
+    imageMock.sources.push(input.sourceImage?.base64Data ?? null);
     if (imageMock.hold) await imageMock.hold;
     if (imageMock.error) throw imageMock.error;
     const dimensions = {
@@ -300,6 +306,40 @@ describe("media routes", () => {
     await app.close();
   });
 
+  it("edits the attached original on a color request and retains the original asset", async () => {
+    const app = await buildApp(),
+      session = await registerTestUser(app),
+      headers = authHeaders(session.tokens.accessToken),
+      content = await createDraftContent(session.workspace.id);
+    imageMock.sources = [];
+    const first = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: { contentMediaItemId: content.mediaItems[0]!.id, expectedRevision: content.revision, aspectRatio: "4:5", prompt: "Warm bakery design" }
+    });
+    expect(first.statusCode).toBe(200);
+    const result = first.json().data;
+    const original = await app.inject({ method: "GET", url: new URL(result.mediaAsset.publicUrl).pathname });
+    const second = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/generate-image`,
+      headers,
+      payload: {
+        contentMediaItemId: content.mediaItems[0]!.id,
+        expectedRevision: result.contentItem.revision,
+        aspectRatio: "4:5",
+        prompt: "Change only the background to pink. Preserve composition and wording."
+      }
+    });
+    expect(second.statusCode).toBe(200);
+    expect(imageMock.sources).toEqual([null, original.rawPayload.toString("base64")]);
+    expect(await prisma.mediaAsset.count({ where: { workspaceId: session.workspace.id, deletedAt: null } })).toBe(2);
+    const audit = await prisma.aiInteraction.findFirstOrThrow({ where: { workspaceId: session.workspace.id, agent: "IMAGE" }, orderBy: { createdAt: "desc" } });
+    expect(audit.prompt).toMatchObject({ sourceMediaAssetId: result.mediaAsset.id, mode: "EDIT" });
+    expect(JSON.stringify(audit.prompt)).not.toContain(original.rawPayload.toString("base64"));
+    await app.close();
+  });
   it("generates an AI image for content, attaches it, and meters usage", async () => {
     const app = await buildApp();
     const session = await registerTestUser(app);

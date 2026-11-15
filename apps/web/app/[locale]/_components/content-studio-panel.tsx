@@ -78,6 +78,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     [busy, setBusy] = useState("");
   const working = useRef(false);
   const [tab, setTab] = useState<"caption" | "media" | "details">("media");
+  const [manualEditor, setManualEditor] = useState(false);
   const [panel, setPanel] = useState<"assistant" | "preview">("assistant");
   const [selection, setSelection] = useState<string | null>(null);
   const [report, setReport] = useState<{ source: "CONTENT" | "ASSISTANT_MESSAGE"; id: string } | null>(null);
@@ -598,443 +599,473 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             </div>
           </header>
           <div className="create-toolbar">
-            <label className="create-type">
-              <TypeIcon size={21} />
-              <select
-                aria-label={t("Content type", "نوع المحتوى")}
-                value={record.contentType}
-                disabled={locked}
-                onChange={(e) => {
-                  setRetain("");
-                  void run("convert", () => convert(e.target.value as ContentType));
-                }}
-              >
-                {(Object.keys(icons) as ContentType[]).map((type) => (
-                  <option key={type} value={type}>
-                    {kindName(type)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <nav aria-label={t("Editor tabs", "أقسام المحرر")}>
-              {(["caption", "media", "details"] as const)
-                .filter((value) => value !== "caption" || record.contentType !== "STORY")
-                .map((value) => (
-                  <button key={value} className="studio-button" aria-current={activeTab === value ? "page" : undefined} onClick={() => setTab(value)}>
-                    {value === "caption" ? t("Caption", "النص") : value === "media" ? t("Media", "الوسائط") : t("Details", "التفاصيل")}
-                  </button>
-                ))}
-            </nav>
+            <button
+              className="studio-button"
+              aria-expanded={manualEditor}
+              onClick={() => {
+                setManualEditor((value) => !value);
+                setPanel("assistant");
+              }}
+            >
+              {manualEditor ? t("Back to preview", "العودة للمعاينة") : t("Edit manually", "تعديل يدوي")}
+            </button>
+            <span className="create-muted">{kindName(record.contentType)}</span>
           </div>
-          <div className="create-editor-body">
-            {activeTab === "caption" && (
-              <div className="create-caption">
-                {field(t("Caption", "النص"), { kind: "content", field: "caption", value: record.caption }, true, 2200)}
-                <p className="create-muted">{Array.from(record.caption).length} / 2200</p>
+          {!manualEditor && (
+            <div className="create-editor-body create-primary-preview">
+              <ContentStudioPreview
+                locale={locale}
+                brandName={session?.workspace.name ?? ""}
+                contentType={record.contentType}
+                caption={record.caption}
+                media={media}
+              />
+            </div>
+          )}
+          {manualEditor && (
+            <>
+              <div className="create-toolbar">
+                <label className="create-type">
+                  <TypeIcon size={21} />
+                  <select
+                    aria-label={t("Content type", "نوع المحتوى")}
+                    value={record.contentType}
+                    disabled={locked}
+                    onChange={(e) => {
+                      setRetain("");
+                      void run("convert", () => convert(e.target.value as ContentType));
+                    }}
+                  >
+                    {(Object.keys(icons) as ContentType[]).map((type) => (
+                      <option key={type} value={type}>
+                        {kindName(type)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <nav aria-label={t("Editor tabs", "أقسام المحرر")}>
+                  {(["caption", "media", "details"] as const)
+                    .filter((value) => value !== "caption" || record.contentType !== "STORY")
+                    .map((value) => (
+                      <button key={value} className="studio-button" aria-current={activeTab === value ? "page" : undefined} onClick={() => setTab(value)}>
+                        {value === "caption" ? t("Caption", "النص") : value === "media" ? t("Media", "الوسائط") : t("Details", "التفاصيل")}
+                      </button>
+                    ))}
+                </nav>
               </div>
-            )}
-            {activeTab === "details" && (
-              <div className="create-details">
-                {field(t("Content pillar", "محور المحتوى"), { kind: "content", field: "contentPillar", value: record.contentPillar ?? "" }, false, 160)}
-                {field(t("Post objective", "هدف المنشور"), { kind: "content", field: "campaignGoal", value: record.campaignGoal ?? "" }, false, 500)}
-                {field(t("Tone", "النبرة"), { kind: "content", field: "tone", value: record.tone ?? "" }, false, 200)}
-                <div className="create-wide">{field(t("Brief", "الموجز"), { kind: "content", field: "brief", value: record.brief ?? "" }, true, 1000)}</div>
-              </div>
-            )}
-            {activeTab === "media" && selected && (
-              <>
-                {record.contentType === "CAROUSEL" && (
-                  <div className="create-slide-strip" aria-label={t("Carousel slides", "شرائح المنشور")}>
-                    {record.mediaItems.map((item, index) => {
-                      const thumbnail = assets.find((asset) => asset.id === item.mediaAssetId);
-                      return (
-                        <div
-                          className="create-slide"
-                          key={item.id}
-                          draggable={!locked}
-                          onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (locked) return;
-                            const id = e.dataTransfer.getData("text/plain");
-                            const ids = record.mediaItems.map((item) => item.id);
-                            if (!ids.includes(id)) return;
-                            ids.splice(ids.indexOf(id), 1);
-                            ids.splice(index, 0, id);
-                            void structure([{ type: "reorderMediaItems", orderedIds: ids }]);
-                          }}
-                        >
-                          <button
-                            className="create-slide-select"
-                            aria-pressed={selected.id === item.id}
-                            aria-label={t(`Select slide ${index + 1}`, `اختر الشريحة ${index + 1}`)}
-                            onClick={() => setSelection(item.id)}
-                          >
-                            {thumbnail ? <img src={thumbnail.publicUrl} alt="" /> : <Images size={24} />}
-                            <span>{index + 1}</span>
-                          </button>
-                          <div>
-                            <button
-                              aria-label={t(`Move slide ${index + 1} earlier`, `تقديم الشريحة ${index + 1}`)}
-                              disabled={locked || index === 0}
-                              onClick={() =>
-                                reorder(
-                                  record.mediaItems.map((i) => i.id),
-                                  item.id,
-                                  -1,
-                                  "reorderMediaItems"
-                                )
-                              }
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              aria-label={t(`Move slide ${index + 1} later`, `تأخير الشريحة ${index + 1}`)}
-                              disabled={locked || index === record.mediaItems.length - 1}
-                              onClick={() =>
-                                reorder(
-                                  record.mediaItems.map((i) => i.id),
-                                  item.id,
-                                  1,
-                                  "reorderMediaItems"
-                                )
-                              }
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <button
-                      className="create-add-slide"
-                      disabled={locked || record.mediaItems.length >= 10}
-                      onClick={() =>
-                        void run("add", async () => {
-                          const previous = record.mediaItems.map((i) => i.id);
-                          await mutate([{ type: "addMediaItem", fields: {} }]);
-                          setSelection(coordinator.record.mediaItems.find((i) => !previous.includes(i.id))?.id ?? selected.id);
-                        })
-                      }
-                    >
-                      <Plus />
-                      {t("Add slide", "إضافة شريحة")}
-                    </button>
+              <div className="create-editor-body">
+                {activeTab === "caption" && (
+                  <div className="create-caption">
+                    {field(t("Caption", "النص"), { kind: "content", field: "caption", value: record.caption }, true, 2200)}
+                    <p className="create-muted">{Array.from(record.caption).length} / 2200</p>
                   </div>
                 )}
-                {record.contentType === "REEL" && (
-                  <section className="create-script" aria-label={t("Reel script", "سيناريو الريل")}>
-                    <h2>{t("Reel script", "سيناريو الريل")}</h2>
-                    <div className="create-details">
-                      {field(t("Hook", "المقدمة"), { kind: "script", field: "hook", value: record.reelScript?.hook ?? "" }, false, 300)}
-                      <label className="studio-field">
-                        <span>{t("Intended Reel duration (seconds)", "مدة الريل المقصودة (ثوانٍ)")}</span>
-                        <input
-                          aria-label={t("Intended Reel duration (seconds)", "مدة الريل المقصودة (ثوانٍ)")}
-                          type="number"
-                          min={1}
-                          max={3600}
-                          disabled={locked}
-                          value={record.reelScript?.intendedDurationSeconds ?? ""}
-                          onChange={(e) => edit({ kind: "script", field: "intendedDurationSeconds", value: e.target.value ? Number(e.target.value) : null })}
-                        />
-                      </label>
-                    </div>
-                    <ol className="create-beats">
-                      {record.reelScript?.beats.map((beat, index) => (
-                        <li key={beat.id}>
-                          {field(t(`Beat ${index + 1}`, `المشهد ${index + 1}`), { kind: "beat", id: beat.id, field: "text", value: beat.text }, true, 800)}
-                          <div className="create-inline">
-                            <button
-                              className="studio-button"
-                              disabled={locked || index === 0}
-                              aria-label={t(`Move beat ${index + 1} earlier`, `تقديم المشهد ${index + 1}`)}
-                              onClick={() =>
-                                reorder(
-                                  record.reelScript!.beats.map((b) => b.id),
-                                  beat.id,
-                                  -1,
-                                  "reorderReelBeats"
-                                )
-                              }
-                            >
-                              <ArrowUp size={16} />
-                            </button>
-                            <button
-                              className="studio-button"
-                              disabled={locked || index === record.reelScript!.beats.length - 1}
-                              aria-label={t(`Move beat ${index + 1} later`, `تأخير المشهد ${index + 1}`)}
-                              onClick={() =>
-                                reorder(
-                                  record.reelScript!.beats.map((b) => b.id),
-                                  beat.id,
-                                  1,
-                                  "reorderReelBeats"
-                                )
-                              }
-                            >
-                              <ArrowDown size={16} />
-                            </button>
-                            <button
-                              className="studio-button"
-                              disabled={locked}
-                              aria-label={t(`Remove beat ${index + 1}`, `حذف المشهد ${index + 1}`)}
-                              onClick={() =>
-                                setConfirmation({
-                                  title: t("Remove beat?", "حذف المشهد؟"),
-                                  detail: beat.text,
-                                  run: () => mutate([{ type: "removeReelBeat", beatId: beat.id }])
-                                })
-                              }
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                    <button className="studio-button" disabled={locked} onClick={() => void structure([{ type: "addReelBeat", text: "" }])}>
-                      <Plus size={17} />
-                      {t("Add beat", "إضافة مشهد")}
-                    </button>
-                  </section>
+                {activeTab === "details" && (
+                  <div className="create-details">
+                    {field(t("Content pillar", "محور المحتوى"), { kind: "content", field: "contentPillar", value: record.contentPillar ?? "" }, false, 160)}
+                    {field(t("Post objective", "هدف المنشور"), { kind: "content", field: "campaignGoal", value: record.campaignGoal ?? "" }, false, 500)}
+                    {field(t("Tone", "النبرة"), { kind: "content", field: "tone", value: record.tone ?? "" }, false, 200)}
+                    <div className="create-wide">{field(t("Brief", "الموجز"), { kind: "content", field: "brief", value: record.brief ?? "" }, true, 1000)}</div>
+                  </div>
                 )}
-                <section className="create-media-workspace" data-selected-item={selected.id}>
-                  <header className="create-inline">
-                    <h2>
-                      {record.contentType === "CAROUSEL"
-                        ? t(
-                            `Slide ${record.mediaItems.indexOf(selected) + 1} of ${record.mediaItems.length}`,
-                            `الشريحة ${record.mediaItems.indexOf(selected) + 1} من ${record.mediaItems.length}`
-                          )
-                        : record.contentType === "REEL"
-                          ? t("Video media", "وسائط الفيديو")
-                          : kindName(record.contentType)}
-                    </h2>
+                {activeTab === "media" && selected && (
+                  <>
                     {record.contentType === "CAROUSEL" && (
-                      <button
-                        className="studio-button"
-                        disabled={locked || record.mediaItems.length === 1}
-                        onClick={() =>
-                          setConfirmation({
-                            title: t("Remove slide?", "حذف الشريحة؟"),
-                            detail: t("Creative fields will be removed. Its Library asset is kept.", "ستُحذف الحقول مع الاحتفاظ بملف المكتبة."),
-                            run: () => mutate([{ type: "removeMediaItem", itemId: selected.id }])
-                          })
-                        }
-                      >
-                        <Trash2 size={16} />
-                        {t("Remove slide", "حذف الشريحة")}
-                      </button>
-                    )}
-                  </header>
-                  <div className="create-media-grid">
-                    <div>
-                      <div className={`create-media-preview ${record.contentType === "STORY" || selected.mediaKind === "VIDEO" ? "create-vertical" : ""}`}>
-                        {asset ? (
-                          asset.mimeType.startsWith("video/") ? (
-                            <video controls playsInline src={asset.publicUrl} aria-label={asset.filename} />
-                          ) : (
-                            <img src={asset.publicUrl} alt={asset.filename} />
-                          )
-                        ) : (
-                          <div className="create-empty-media">
-                            <ImageIcon size={40} />
-                            <span>{t("Generate or choose media", "ولّد الوسائط أو اخترها")}</span>
-                          </div>
-                        )}
+                      <div className="create-slide-strip" aria-label={t("Carousel slides", "شرائح المنشور")}>
+                        {record.mediaItems.map((item, index) => {
+                          const thumbnail = assets.find((asset) => asset.id === item.mediaAssetId);
+                          return (
+                            <div
+                              className="create-slide"
+                              key={item.id}
+                              draggable={!locked}
+                              onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                if (locked) return;
+                                const id = e.dataTransfer.getData("text/plain");
+                                const ids = record.mediaItems.map((item) => item.id);
+                                if (!ids.includes(id)) return;
+                                ids.splice(ids.indexOf(id), 1);
+                                ids.splice(index, 0, id);
+                                void structure([{ type: "reorderMediaItems", orderedIds: ids }]);
+                              }}
+                            >
+                              <button
+                                className="create-slide-select"
+                                aria-pressed={selected.id === item.id}
+                                aria-label={t(`Select slide ${index + 1}`, `اختر الشريحة ${index + 1}`)}
+                                onClick={() => setSelection(item.id)}
+                              >
+                                {thumbnail ? <img src={thumbnail.publicUrl} alt="" /> : <Images size={24} />}
+                                <span>{index + 1}</span>
+                              </button>
+                              <div>
+                                <button
+                                  aria-label={t(`Move slide ${index + 1} earlier`, `تقديم الشريحة ${index + 1}`)}
+                                  disabled={locked || index === 0}
+                                  onClick={() =>
+                                    reorder(
+                                      record.mediaItems.map((i) => i.id),
+                                      item.id,
+                                      -1,
+                                      "reorderMediaItems"
+                                    )
+                                  }
+                                >
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  aria-label={t(`Move slide ${index + 1} later`, `تأخير الشريحة ${index + 1}`)}
+                                  disabled={locked || index === record.mediaItems.length - 1}
+                                  onClick={() =>
+                                    reorder(
+                                      record.mediaItems.map((i) => i.id),
+                                      item.id,
+                                      1,
+                                      "reorderMediaItems"
+                                    )
+                                  }
+                                >
+                                  <ArrowDown size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <button
+                          className="create-add-slide"
+                          disabled={locked || record.mediaItems.length >= 10}
+                          onClick={() =>
+                            void run("add", async () => {
+                              const previous = record.mediaItems.map((i) => i.id);
+                              await mutate([{ type: "addMediaItem", fields: {} }]);
+                              setSelection(coordinator.record.mediaItems.find((i) => !previous.includes(i.id))?.id ?? selected.id);
+                            })
+                          }
+                        >
+                          <Plus />
+                          {t("Add slide", "إضافة شريحة")}
+                        </button>
                       </div>
-                      <div className="create-media-actions">
-                        {(selected.mediaKind !== "VIDEO" || generatedFootage) && (
-                          <button
-                            className="studio-button studio-button-primary"
-                            disabled={
-                              locked ||
-                              conversationActive ||
-                              activeGeneration ||
-                              !selected.visualDirection?.trim() ||
-                              (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
-                            }
-                            onClick={() => void run("generate", generate)}
-                          >
-                            <Sparkles size={17} />
-                            {selected.mediaKind === "VIDEO" ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي") : t("Generate", "توليد")}
-                          </button>
-                        )}
-                        <button className="studio-button" disabled={locked} onClick={() => upload.current?.click()}>
-                          {t("Replace", "استبدال")}
+                    )}
+                    {record.contentType === "REEL" && (
+                      <section className="create-script" aria-label={t("Reel script", "سيناريو الريل")}>
+                        <h2>{t("Reel script", "سيناريو الريل")}</h2>
+                        <div className="create-details">
+                          {field(t("Hook", "المقدمة"), { kind: "script", field: "hook", value: record.reelScript?.hook ?? "" }, false, 300)}
+                          <label className="studio-field">
+                            <span>{t("Intended Reel duration (seconds)", "مدة الريل المقصودة (ثوانٍ)")}</span>
+                            <input
+                              aria-label={t("Intended Reel duration (seconds)", "مدة الريل المقصودة (ثوانٍ)")}
+                              type="number"
+                              min={1}
+                              max={3600}
+                              disabled={locked}
+                              value={record.reelScript?.intendedDurationSeconds ?? ""}
+                              onChange={(e) =>
+                                edit({ kind: "script", field: "intendedDurationSeconds", value: e.target.value ? Number(e.target.value) : null })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <ol className="create-beats">
+                          {record.reelScript?.beats.map((beat, index) => (
+                            <li key={beat.id}>
+                              {field(t(`Beat ${index + 1}`, `المشهد ${index + 1}`), { kind: "beat", id: beat.id, field: "text", value: beat.text }, true, 800)}
+                              <div className="create-inline">
+                                <button
+                                  className="studio-button"
+                                  disabled={locked || index === 0}
+                                  aria-label={t(`Move beat ${index + 1} earlier`, `تقديم المشهد ${index + 1}`)}
+                                  onClick={() =>
+                                    reorder(
+                                      record.reelScript!.beats.map((b) => b.id),
+                                      beat.id,
+                                      -1,
+                                      "reorderReelBeats"
+                                    )
+                                  }
+                                >
+                                  <ArrowUp size={16} />
+                                </button>
+                                <button
+                                  className="studio-button"
+                                  disabled={locked || index === record.reelScript!.beats.length - 1}
+                                  aria-label={t(`Move beat ${index + 1} later`, `تأخير المشهد ${index + 1}`)}
+                                  onClick={() =>
+                                    reorder(
+                                      record.reelScript!.beats.map((b) => b.id),
+                                      beat.id,
+                                      1,
+                                      "reorderReelBeats"
+                                    )
+                                  }
+                                >
+                                  <ArrowDown size={16} />
+                                </button>
+                                <button
+                                  className="studio-button"
+                                  disabled={locked}
+                                  aria-label={t(`Remove beat ${index + 1}`, `حذف المشهد ${index + 1}`)}
+                                  onClick={() =>
+                                    setConfirmation({
+                                      title: t("Remove beat?", "حذف المشهد؟"),
+                                      detail: beat.text,
+                                      run: () => mutate([{ type: "removeReelBeat", beatId: beat.id }])
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                        <button className="studio-button" disabled={locked} onClick={() => void structure([{ type: "addReelBeat", text: "" }])}>
+                          <Plus size={17} />
+                          {t("Add beat", "إضافة مشهد")}
                         </button>
-                        <button className="studio-button" disabled={locked} onClick={() => setDialog("library")}>
-                          <FolderOpen size={16} />
-                          {t("Library", "المكتبة")}
-                        </button>
-                        {selected.mediaAssetId && (
+                      </section>
+                    )}
+                    <section className="create-media-workspace" data-selected-item={selected.id}>
+                      <header className="create-inline">
+                        <h2>
+                          {record.contentType === "CAROUSEL"
+                            ? t(
+                                `Slide ${record.mediaItems.indexOf(selected) + 1} of ${record.mediaItems.length}`,
+                                `الشريحة ${record.mediaItems.indexOf(selected) + 1} من ${record.mediaItems.length}`
+                              )
+                            : record.contentType === "REEL"
+                              ? t("Video media", "وسائط الفيديو")
+                              : kindName(record.contentType)}
+                        </h2>
+                        {record.contentType === "CAROUSEL" && (
                           <button
                             className="studio-button"
-                            aria-label={t("Detach media", "فصل الوسائط")}
-                            disabled={locked}
+                            disabled={locked || record.mediaItems.length === 1}
                             onClick={() =>
-                              void run("detach", async () => {
-                                await coordinator.action(async (current) => {
-                                  const saved = await api.current.detachMediaFromContent(current.id, selected.id, current.revision);
-                                  return { result: undefined, record: saved };
-                                });
+                              setConfirmation({
+                                title: t("Remove slide?", "حذف الشريحة؟"),
+                                detail: t("Creative fields will be removed. Its Library asset is kept.", "ستُحذف الحقول مع الاحتفاظ بملف المكتبة."),
+                                run: () => mutate([{ type: "removeMediaItem", itemId: selected.id }])
                               })
                             }
                           >
-                            <X size={16} />
+                            <Trash2 size={16} />
+                            {t("Remove slide", "حذف الشريحة")}
                           </button>
                         )}
-                      </div>
-                      {selected.mediaKind === "VIDEO" && (
-                        <MotionReelComposer
-                          key={`${record.id}:${selected.id}`}
-                          api={client}
-                          assets={assets}
-                          duration={selected.generationDurationSeconds ?? 8}
-                          disabled={locked || !!activeGeneration || conversationActive || running(videoJob)}
-                          t={t}
-                          onUploaded={(asset) => setAssets((current) => [...current.filter((row) => row.id !== asset.id), asset])}
-                          generate={async (motion) => {
-                            await run("motion-reel", async () => {
-                              await coordinator.action(async (current) => {
-                                setVideoJob(
-                                  await api.current.generateContentVideo(current.id, {
-                                    contentMediaItemId: selected.id,
-                                    expectedRevision: current.revision,
-                                    motion
-                                  })
-                                );
-                                setNotice(t("Motion Reel queued.", "أُضيف الريل المتحرك إلى الانتظار."));
-                                return { result: undefined, record: await api.current.contentItem(current.id) };
-                              });
-                            });
-                          }}
-                        />
-                      )}
-                      {videoJob && videoJob.contentMediaItemId === selected.id && (
-                        <p role="status" className="create-muted">
-                          {videoGenerationMessage(videoJob, locale)}
-                        </p>
-                      )}
-                      {videoJob && videoJob.contentMediaItemId === selected.id && running(videoJob) && (
-                        <button
-                          className="studio-button"
-                          disabled={!!busy}
-                          onClick={() =>
-                            void run("cancel-video", async () => {
-                              await coordinator.action(async () => {
-                                setVideoJob(await api.current.cancelMediaGeneration(videoJob.id));
-                                return { result: undefined };
-                              });
-                            })
-                          }
-                        >
-                          {t("Cancel generation", "إلغاء التوليد")}
-                        </button>
-                      )}
-                      {videoJob?.contentMediaItemId === selected.id && videoJob?.retryable && !videoJob.outputMediaAssetId && !running(videoJob) && (
-                        <button
-                          className="studio-button"
-                          disabled={locked}
-                          onClick={() =>
-                            void run("retry-video", async () => {
-                              await coordinator.action(async (current) => {
-                                setVideoJob(await api.current.retryMediaGeneration(videoJob.id, current.revision));
-                                return { result: undefined, record: await api.current.contentItem(current.id) };
-                              });
-                            })
-                          }
-                        >
-                          {t("Retry video generation", "إعادة توليد الفيديو")}
-                        </button>
-                      )}
-                    </div>
-                    <div className="create-media-fields">
-                      {record.contentType === "STORY" && (
-                        <label className="studio-field">
-                          <span>{t("Media format", "تنسيق الوسائط")}</span>
-                          <select
-                            aria-label={t("Media format", "تنسيق الوسائط")}
-                            value={selected.mediaKind ?? "IMAGE"}
-                            disabled={locked || !!selected.mediaAssetId}
-                            onChange={(e) =>
-                              void structure([
-                                {
-                                  type: "updateMediaItem",
-                                  itemId: selected.id,
-                                  fields: { mediaKind: e.target.value as "IMAGE" | "VIDEO", generationDurationSeconds: null, aspectRatio: "VERTICAL" }
-                                }
-                              ])
-                            }
-                          >
-                            <option value="IMAGE">{t("Image", "صورة")}</option>
-                            <option value="VIDEO">{t("Video", "فيديو")}</option>
-                          </select>
-                          {selected.mediaAssetId && <small>{t("Detach media to change its format.", "افصل الوسائط لتغيير تنسيقها.")}</small>}
-                        </label>
-                      )}
-                      {record.contentType === "CAROUSEL" && (
-                        <>
-                          {field(t("Purpose", "الغرض"), { kind: "media", id: selected.id, field: "purpose", value: selected.purpose ?? "" }, false, 160)}
-                          {field(
-                            t("Slide title", "عنوان الشريحة"),
-                            { kind: "media", id: selected.id, field: "title", value: selected.title ?? "" },
-                            false,
-                            160
-                          )}
-                          {field(t("Slide body", "نص الشريحة"), { kind: "media", id: selected.id, field: "body", value: selected.body ?? "" }, true, 800)}
-                        </>
-                      )}
-                      {field(
-                        t("Visual direction", "التوجيه البصري"),
-                        { kind: "media", id: selected.id, field: "visualDirection", value: selected.visualDirection ?? "" },
-                        true,
-                        2000
-                      )}
-                      <div className="create-settings">
-                        <label className="studio-field">
-                          <span>{t("Aspect ratio", "نسبة الأبعاد")}</span>
-                          <select
-                            aria-label={t("Aspect ratio", "نسبة الأبعاد")}
-                            disabled={locked}
-                            value={selected.aspectRatio ?? (record.contentType === "STORY" || selected.mediaKind === "VIDEO" ? "VERTICAL" : "PORTRAIT")}
-                            onChange={(e) => edit({ kind: "media", id: selected.id, field: "aspectRatio", value: e.target.value })}
-                          >
-                            {selected.mediaKind !== "VIDEO" && (
-                              <>
-                                <option value="SQUARE">1:1</option>
-                                <option value="PORTRAIT">4:5</option>
-                              </>
+                      </header>
+                      <div className="create-media-grid">
+                        <div>
+                          <div className={`create-media-preview ${record.contentType === "STORY" || selected.mediaKind === "VIDEO" ? "create-vertical" : ""}`}>
+                            {asset ? (
+                              asset.mimeType.startsWith("video/") ? (
+                                <video controls playsInline src={asset.publicUrl} aria-label={asset.filename} />
+                              ) : (
+                                <img src={asset.publicUrl} alt={asset.filename} />
+                              )
+                            ) : (
+                              <div className="create-empty-media">
+                                <ImageIcon size={40} />
+                                <span>{t("Generate or choose media", "ولّد الوسائط أو اخترها")}</span>
+                              </div>
                             )}
-                            <option value="VERTICAL">9:16</option>
-                          </select>
-                        </label>
-                        {selected.mediaKind === "VIDEO" && (
-                          <label className="studio-field">
-                            <span>{t("Generated clip duration", "مدة المقطع المولّد")}</span>
-                            <select
-                              aria-label={t("Generated clip duration", "مدة المقطع المولّد")}
-                              disabled={locked}
-                              value={selected.generationDurationSeconds ?? 8}
-                              onChange={(e) => edit({ kind: "media", id: selected.id, field: "generationDurationSeconds", value: Number(e.target.value) })}
+                          </div>
+                          <div className="create-media-actions">
+                            {(selected.mediaKind !== "VIDEO" || generatedFootage) && (
+                              <button
+                                className="studio-button studio-button-primary"
+                                disabled={
+                                  locked ||
+                                  conversationActive ||
+                                  activeGeneration ||
+                                  !selected.visualDirection?.trim() ||
+                                  (running(videoJob) && videoJob?.contentMediaItemId === selected.id)
+                                }
+                                onClick={() => void run("generate", generate)}
+                              >
+                                <Sparkles size={17} />
+                                {selected.mediaKind === "VIDEO" ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي") : t("Generate", "توليد")}
+                              </button>
+                            )}
+                            <button className="studio-button" disabled={locked} onClick={() => upload.current?.click()}>
+                              {t("Replace", "استبدال")}
+                            </button>
+                            <button className="studio-button" disabled={locked} onClick={() => setDialog("library")}>
+                              <FolderOpen size={16} />
+                              {t("Library", "المكتبة")}
+                            </button>
+                            {selected.mediaAssetId && (
+                              <button
+                                className="studio-button"
+                                aria-label={t("Detach media", "فصل الوسائط")}
+                                disabled={locked}
+                                onClick={() =>
+                                  void run("detach", async () => {
+                                    await coordinator.action(async (current) => {
+                                      const saved = await api.current.detachMediaFromContent(current.id, selected.id, current.revision);
+                                      return { result: undefined, record: saved };
+                                    });
+                                  })
+                                }
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                          {selected.mediaKind === "VIDEO" && (
+                            <MotionReelComposer
+                              key={`${record.id}:${selected.id}`}
+                              api={client}
+                              assets={assets}
+                              duration={selected.generationDurationSeconds ?? 8}
+                              disabled={locked || !!activeGeneration || conversationActive || running(videoJob)}
+                              t={t}
+                              onUploaded={(asset) => setAssets((current) => [...current.filter((row) => row.id !== asset.id), asset])}
+                              generate={async (motion) => {
+                                await run("motion-reel", async () => {
+                                  await coordinator.action(async (current) => {
+                                    setVideoJob(
+                                      await api.current.generateContentVideo(current.id, {
+                                        contentMediaItemId: selected.id,
+                                        expectedRevision: current.revision,
+                                        motion
+                                      })
+                                    );
+                                    setNotice(t("Motion Reel queued.", "أُضيف الريل المتحرك إلى الانتظار."));
+                                    return { result: undefined, record: await api.current.contentItem(current.id) };
+                                  });
+                                });
+                              }}
+                            />
+                          )}
+                          {videoJob && videoJob.contentMediaItemId === selected.id && (
+                            <p role="status" className="create-muted">
+                              {videoGenerationMessage(videoJob, locale)}
+                            </p>
+                          )}
+                          {videoJob && videoJob.contentMediaItemId === selected.id && running(videoJob) && (
+                            <button
+                              className="studio-button"
+                              disabled={!!busy}
+                              onClick={() =>
+                                void run("cancel-video", async () => {
+                                  await coordinator.action(async () => {
+                                    setVideoJob(await api.current.cancelMediaGeneration(videoJob.id));
+                                    return { result: undefined };
+                                  });
+                                })
+                              }
                             >
-                              {[4, 8, 12].map((n) => (
-                                <option value={n} key={n}>
-                                  {n} {t("seconds", "ثوانٍ")}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
+                              {t("Cancel generation", "إلغاء التوليد")}
+                            </button>
+                          )}
+                          {videoJob?.contentMediaItemId === selected.id && videoJob?.retryable && !videoJob.outputMediaAssetId && !running(videoJob) && (
+                            <button
+                              className="studio-button"
+                              disabled={locked}
+                              onClick={() =>
+                                void run("retry-video", async () => {
+                                  await coordinator.action(async (current) => {
+                                    setVideoJob(await api.current.retryMediaGeneration(videoJob.id, current.revision));
+                                    return { result: undefined, record: await api.current.contentItem(current.id) };
+                                  });
+                                })
+                              }
+                            >
+                              {t("Retry video generation", "إعادة توليد الفيديو")}
+                            </button>
+                          )}
+                        </div>
+                        <div className="create-media-fields">
+                          {record.contentType === "STORY" && (
+                            <label className="studio-field">
+                              <span>{t("Media format", "تنسيق الوسائط")}</span>
+                              <select
+                                aria-label={t("Media format", "تنسيق الوسائط")}
+                                value={selected.mediaKind ?? "IMAGE"}
+                                disabled={locked || !!selected.mediaAssetId}
+                                onChange={(e) =>
+                                  void structure([
+                                    {
+                                      type: "updateMediaItem",
+                                      itemId: selected.id,
+                                      fields: { mediaKind: e.target.value as "IMAGE" | "VIDEO", generationDurationSeconds: null, aspectRatio: "VERTICAL" }
+                                    }
+                                  ])
+                                }
+                              >
+                                <option value="IMAGE">{t("Image", "صورة")}</option>
+                                <option value="VIDEO">{t("Video", "فيديو")}</option>
+                              </select>
+                              {selected.mediaAssetId && <small>{t("Detach media to change its format.", "افصل الوسائط لتغيير تنسيقها.")}</small>}
+                            </label>
+                          )}
+                          {record.contentType === "CAROUSEL" && (
+                            <>
+                              {field(t("Purpose", "الغرض"), { kind: "media", id: selected.id, field: "purpose", value: selected.purpose ?? "" }, false, 160)}
+                              {field(
+                                t("Slide title", "عنوان الشريحة"),
+                                { kind: "media", id: selected.id, field: "title", value: selected.title ?? "" },
+                                false,
+                                160
+                              )}
+                              {field(t("Slide body", "نص الشريحة"), { kind: "media", id: selected.id, field: "body", value: selected.body ?? "" }, true, 800)}
+                            </>
+                          )}
+                          {field(
+                            t("Visual direction", "التوجيه البصري"),
+                            { kind: "media", id: selected.id, field: "visualDirection", value: selected.visualDirection ?? "" },
+                            true,
+                            2000
+                          )}
+                          <div className="create-settings">
+                            <label className="studio-field">
+                              <span>{t("Aspect ratio", "نسبة الأبعاد")}</span>
+                              <select
+                                aria-label={t("Aspect ratio", "نسبة الأبعاد")}
+                                disabled={locked}
+                                value={selected.aspectRatio ?? (record.contentType === "STORY" || selected.mediaKind === "VIDEO" ? "VERTICAL" : "PORTRAIT")}
+                                onChange={(e) => edit({ kind: "media", id: selected.id, field: "aspectRatio", value: e.target.value })}
+                              >
+                                {selected.mediaKind !== "VIDEO" && (
+                                  <>
+                                    <option value="SQUARE">1:1</option>
+                                    <option value="PORTRAIT">4:5</option>
+                                  </>
+                                )}
+                                <option value="VERTICAL">9:16</option>
+                              </select>
+                            </label>
+                            {selected.mediaKind === "VIDEO" && (
+                              <label className="studio-field">
+                                <span>{t("Generated clip duration", "مدة المقطع المولّد")}</span>
+                                <select
+                                  aria-label={t("Generated clip duration", "مدة المقطع المولّد")}
+                                  disabled={locked}
+                                  value={selected.generationDurationSeconds ?? 8}
+                                  onChange={(e) => edit({ kind: "media", id: selected.id, field: "generationDurationSeconds", value: Number(e.target.value) })}
+                                >
+                                  {[4, 8, 12].map((n) => (
+                                    <option value={n} key={n}>
+                                      {n} {t("seconds", "ثوانٍ")}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-          </div>
+                    </section>
+                  </>
+                )}
+              </div>
+            </>
+          )}
           {publishJob && (
             <p className="create-muted" role="status">
               {publishing
@@ -1079,7 +1110,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
             <strong>
               <Sparkles size={22} /> MARKOS
             </strong>
-            <div className="create-panel-toggle">
+            <div className="create-panel-toggle" hidden={!manualEditor}>
               <button aria-pressed={panel === "assistant"} onClick={() => setPanel("assistant")}>
                 {t("Assistant", "المساعد")}
               </button>
@@ -1106,8 +1137,12 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 <div key={turn.id} className={`create-message create-message-${turn.role}`} dir="auto">
                   {turn.text}
                   {turn.role === "assistant" ? (
-                    <button className="studio-button mt-2" onClick={() => setReport({ source: "ASSISTANT_MESSAGE", id: turn.id })}>
-                      {t("Report reply", "الإبلاغ عن الرد")}
+                    <button
+                      className="create-report-icon"
+                      aria-label={t("Report reply", "الإبلاغ عن الرد")}
+                      onClick={() => setReport({ source: "ASSISTANT_MESSAGE", id: turn.id })}
+                    >
+                      <MoreHorizontal size={17} />
                     </button>
                   ) : null}
                 </div>
@@ -1142,7 +1177,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       })
                     }
                   >
-                    {t("Confirm changes", "تأكيد التغييرات")}
+                    {proposal.generatesMedia ? t("Confirm and create", "تأكيد وإنشاء") : t("Confirm changes", "تأكيد التغييرات")}
                   </button>
                   <p className="create-muted">{t("Or send another instruction to change the proposal.", "أو أرسل تعليمات أخرى لتغيير الاقتراح.")}</p>
                 </section>

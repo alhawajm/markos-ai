@@ -1,0 +1,218 @@
+.quick-setup {
+  min-height: 100dvh;
+  padding: 28px 24px 64px;
+  color: var(--text);
+  background: var(--background);
+}
+.quick-setup-brand {
+  max-width: 760px;
+  margin: 0 auto 32px;
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+.quick-setup-brand span {
+  color: var(--accent-text);
+}
+.quick-setup-card {
+  max-width: 680px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 40px;
+}
+.quick-setup-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.quick-setup-card h1 {
+  font-size: clamp(26px, 3.5vw, 36px);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.quick-setup-intro {
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin: 14px 0 28px;
+  max-width: 52ch;
+}
+.quick-setup-options {
+  display: grid;
+  gap: 12px;
+}
+.quick-setup-option {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: start;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  min-height: 88px;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.quick-setup-option:hover {
+  background: var(--surface-muted);
+  border-color: var(--accent);
+}
+.quick-setup-option > svg {
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+.quick-setup-option > span {
+  flex: 1;
+}
+.quick-setup-option strong {
+  font-size: 16px;
+  font-weight: 500;
+  display: block;
+}
+.quick-setup-option small {
+  font-size: 14px;
+  line-height: 1.5;
+  display: block;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.quick-setup-form {
+  display: grid;
+  gap: 20px;
+}
+.quick-setup-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.quick-setup-form input:not([type="file"]),
+.quick-setup-form textarea {
+  width: 100%;
+  min-height: 48px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 400;
+}
+.quick-setup-form small {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.quick-setup-primary {
+  min-height: 50px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 13px 22px;
+  margin-top: 10px;
+  width: 100%;
+}
+.quick-setup-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.quick-setup-back {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  color: var(--link);
+  font-size: 14px;
+  min-height: 44px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.quick-setup-upload {
+  padding: 24px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--background);
+}
+.quick-setup-error {
+  border: 1px solid var(--danger);
+  padding: 14px;
+  border-radius: 12px;
+  color: var(--danger);
+  margin: 20px 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.quick-setup-progress {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 40px 0;
+}
+.quick-setup-progress small {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.quick-setup-summary h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.quick-setup-summary > p {
+  font-size: 17px;
+  line-height: 1.8;
+  margin-bottom: 24px;
+}
+.quick-setup-summary > div {
+  margin: 20px 0;
+}
+.quick-setup-summary strong {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.quick-setup-summary div p {
+  margin-top: 5px;
+  line-height: 1.7;
+  font-size: 16px;
+}
+.quick-setup :focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 3px;
+}
+.quick-setup[dir="rtl"] h1 {
+  letter-spacing: normal;
+}
+.quick-setup[dir="rtl"] .quick-setup-primary svg,
+.quick-setup[dir="rtl"] .quick-setup-option > svg:last-child {
+  transform: rotate(180deg);
+}
+@media (max-width: 640px) {
+  .quick-setup {
+    padding: 20px 16px 40px;
+  }
+  .quick-setup-brand {
+    margin-bottom: 24px;
+  }
+  .quick-setup-card {
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+  .quick-setup-option {
+    padding: 17px 14px;
+    gap: 12px;
+  }
+}

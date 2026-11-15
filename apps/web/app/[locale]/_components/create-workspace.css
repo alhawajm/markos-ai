@@ -82,6 +82,30 @@
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
+.create-primary-preview {
+  display: flex;
+  flex-direction: column;
+}
+.create-primary-preview .studio-preview-stage {
+  min-height: 28rem;
+  flex: 1;
+}
+.create-panel-toggle[hidden] {
+  display: none;
+}
+.create-report-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-inline-start: 8px;
+  border-radius: 10px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.create-report-icon:hover {
+  background: var(--accent-soft);
+}
 .create-footer {
   border-top: 1px solid var(--border);
   justify-content: flex-end;

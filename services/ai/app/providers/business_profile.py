@@ -90,7 +90,10 @@ class OpenAIBusinessProfileProvider:
         generated = await generate_structured(
             client=self._client,
             input_text=build_business_profile_input(request),
-            instructions=build_business_profile_instructions(),
+            instructions=build_business_profile_instructions() + (
+                "\nThis is quick onboarding: use at most 60 words for overview and one short sentence for every other field in each language. Do not invent missing business facts; describe them as not yet specified."
+                if request.concise else ""
+            ),
             model=model,
             output_label="business profile",
             schema=BusinessProfile,

@@ -28,6 +28,7 @@ type OnboardingPayload =
   | z.infer<typeof objectivesOnboardingSchema>;
 
 interface SaveOnboardingModuleOptions {
+  preserveProfileInteractionId?: string;
   offeringSource?: { sourceRef?: string; sourceType: OfferingSourceType };
   preserveApprovedProfile?: boolean;
 }
@@ -109,7 +110,7 @@ export async function saveOnboardingModule(
   }
 
   const vaultScore = await getVaultScore(workspaceId);
-  if (!preserveApprovedProfile) await invalidateBusinessProfile(workspaceId);
+  if (!preserveApprovedProfile) await invalidateBusinessProfile(workspaceId, options.preserveProfileInteractionId);
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
     select: { onboardingSkippedModules: true }

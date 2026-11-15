@@ -44,8 +44,14 @@ class FakeImages:
     def __init__(self, response: RawImageResponse) -> None:
         self.response = response
         self.last_kwargs: dict[str, object] | None = None
+        self.edited = False
 
     async def generate(self, **kwargs: object) -> RawImageResponse:
+        self.last_kwargs = kwargs
+        return self.response
+
+    async def edit(self, **kwargs: object) -> RawImageResponse:
+        self.edited = True
         self.last_kwargs = kwargs
         return self.response
 
@@ -112,7 +118,7 @@ def test_openai_image_provider_requests_publish_ready_jpeg_and_exact_usage() -> 
     assert "Use warm neutrals" in str(kwargs["prompt"])
     assert kwargs["user"] != "workspace-secret-id"
     assert str(kwargs["user"]).startswith("markos-")
-    assert result.prompt_version == "image.v2.openai"
+    assert result.prompt_version == "image.v3.openai"
     assert result.mime_type == "image/jpeg"
     assert result.filename.endswith(".jpg")
     assert result.width == width
@@ -130,6 +136,43 @@ def test_openai_image_provider_rejects_invalid_provider_bytes() -> None:
 
     assert raised.value.code == "AI_IMAGE_OUTPUT_INVALID"
     assert raised.value.retryable is True
+
+
+def test_visual_edit_receives_original_artwork_and_never_calls_generate() -> None:
+    from app.contracts.image import ImageEditSource
+
+    original = valid_test_jpeg(320, 400)
+    client = FakeClient(FakeResponse(valid_test_jpeg(1024, 1280)))
+    request = image_request().model_copy(
+        update={
+            "source_image": ImageEditSource(
+                mime_type="image/jpeg", base64_data=base64.b64encode(original).decode()
+            )
+        }
+    )
+    asyncio.run(OpenAIImageProvider(client=client).generate_image(request))
+    assert client.fake_images.edited is True
+    kwargs = client.fake_images.last_kwargs
+    assert kwargs is not None
+    assert kwargs["image"] == ("current-artwork.jpg", original, "image/jpeg")
+    assert "targeted edit" in str(kwargs["prompt"])
+    assert "exact English/Arabic wording" in str(kwargs["prompt"])
+    assert "input_fidelity" not in kwargs  # Configured models may not accept it.
+
+
+def test_unreadable_edit_source_fails_without_falling_back_to_new_generation() -> None:
+    from app.contracts.image import ImageEditSource
+
+    client = FakeClient(FakeResponse(valid_test_jpeg(1024, 1280)))
+    request = image_request().model_copy(
+        update={
+            "source_image": ImageEditSource(mime_type="image/jpeg", base64_data="invalid-base64!")
+        }
+    )
+    with pytest.raises(AiServiceError) as raised:
+        asyncio.run(OpenAIImageProvider(client=client).generate_image(request))
+    assert raised.value.code == "AI_IMAGE_EDIT_SOURCE_INVALID"
+    assert client.fake_images.last_kwargs is None
 
 
 def test_image_status_errors_distinguish_moderation_and_transient_failures() -> None:

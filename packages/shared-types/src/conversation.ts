@@ -14,7 +14,7 @@ export interface ConversationRunRecord {
   status: ConversationRunStatus;
   errorCode: string | null;
   proposedCaption: string | null;
-  confirmation?: { token: string; revision: number; consequences: string[] } | null;
+  confirmation?: { token: string; revision: number; consequences: string[]; generatesMedia?: boolean } | null;
   actions?: AssistantActionState | null;
 }
 export interface ContentConversationRecord {
@@ -58,7 +58,7 @@ export interface AssistantActionState {
   editsSaved: boolean;
   revision: number;
   bindings: Record<string, string>;
-  confirmation: { token: string; revision: number; consequences: string[] } | null;
+  confirmation: { token: string; revision: number; consequences: string[]; generatesMedia?: boolean } | null;
   generation: Array<{
     itemId: string;
     status: "PENDING" | "DISPATCHING" | "QUEUED" | "RUNNING" | "ATTACHED" | "LIBRARY_ONLY" | "FAILED" | "UNKNOWN";

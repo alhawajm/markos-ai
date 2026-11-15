@@ -11,6 +11,7 @@ import {
   type UploadMediaInput
 } from "@markos/validation";
 import { generateImageAsset } from "../ai/image-client";
+import { AiServiceRequestError } from "../ai/request";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
@@ -184,13 +185,32 @@ export async function generateImageForContent(
 
   try {
     const promptTemplate = await selectPromptTemplateForRun(workspaceId, imageAgentName, `${workspaceId}:${job.contentMediaItemId}:${aspectRatio}:${prompt}`);
+    const sourceId = (job.renderOptions as { sourceMediaAssetId?: string } | null)?.sourceMediaAssetId;
+    const source = sourceId ? await prisma.mediaAsset.findFirst({ where: { id: sourceId, workspaceId, deletedAt: null } }) : null;
+    if (
+      sourceId &&
+      (!source || !["image/jpeg", "image/png", "image/webp"].includes(source.mimeType) || source.s3Key.startsWith("external:") || source.sizeBytes > 8_000_000)
+    )
+      throw new AiServiceRequestError({
+        code: "AI_IMAGE_EDIT_SOURCE_UNAVAILABLE",
+        message: "The original artwork is unavailable for editing. Upload it again.",
+        statusCode: 409,
+        retryable: false
+      });
+    const sourceImage = source
+      ? {
+          mimeType: source.mimeType as "image/jpeg" | "image/png" | "image/webp",
+          base64Data: (await readStoredMedia(workspaceId, source.s3Key)).toString("base64")
+        }
+      : undefined;
     await reserveWorkspaceUsage({ workspaceId, metric: "AI_IMAGE", now: usagePeriodDate });
     imageUsageReserved = true;
     const generated = await generateImageAsset({
       aspectRatio,
       prompt,
       ...(promptTemplate === undefined ? {} : { promptTemplate: { body: promptTemplate.body, version: promptTemplate.version } }),
-      workspaceId
+      workspaceId,
+      ...(sourceImage ? { sourceImage } : {})
     });
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
     const bytes = Buffer.from(generated.base64_data, "base64");
@@ -247,7 +267,8 @@ export async function generateImageForContent(
             contentItemId,
             prompt,
             ...(promptTemplate === undefined ? {} : { promptTemplate }),
-            contentMediaItemId: job.contentMediaItemId
+            contentMediaItemId: job.contentMediaItemId,
+            ...(sourceId ? { sourceMediaAssetId: sourceId, mode: "EDIT" } : { mode: "GENERATE" })
           } as unknown as Prisma.InputJsonValue,
           response: {
             mediaAssetId: asset.id,

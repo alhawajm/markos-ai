@@ -42,6 +42,7 @@ from app.contracts.video import (
     VideoPlanResponse,
     VideoStartRequest,
 )
+from app.contracts.workspace_assistant import WorkspaceAssistantRequest, WorkspaceAssistantResponse
 from app.core.config import settings
 from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
@@ -59,6 +60,7 @@ from app.providers.offering_document import get_offering_document_provider
 from app.providers.onboarding_document import get_onboarding_document_provider
 from app.providers.video import get_video_provider
 from app.providers.video_plan import prepare_video
+from app.providers.workspace_assistant import respond_to_workspace
 from app.video_text import render_video_text
 
 
@@ -135,6 +137,11 @@ async def health() -> HealthResponse:
         status="ok",
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+@app.post("/ai/workspace/conversation", response_model=WorkspaceAssistantResponse)
+async def workspace_conversation(request: WorkspaceAssistantRequest) -> WorkspaceAssistantResponse:
+    return await respond_to_workspace(request)
 
 
 @app.get("/ai/health/deep")

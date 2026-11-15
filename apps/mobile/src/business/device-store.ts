@@ -18,7 +18,7 @@ export class BusinessDeviceStore<T> {
   constructor(
     private scope: string,
     private epoch: number,
-    kind: "setup" | "profile"
+    kind: "setup" | "profile" | "quick-setup" | "assistant"
   ) {
     this.key = `markos.business.${kind}.${scope}`;
     this.files = new BriefStore(scope, epoch, "onboarding");
@@ -50,7 +50,12 @@ export class BusinessDeviceStore<T> {
 }
 export function clearBusinessDeviceData(scope: string, epoch: number): Promise<void> {
   return enqueue(scope, async () => {
-    await AsyncStorage.multiRemove([`markos.business.setup.${scope}`, `markos.business.profile.${scope}`]);
+    await AsyncStorage.multiRemove([
+      `markos.business.setup.${scope}`,
+      `markos.business.profile.${scope}`,
+      `markos.business.quick-setup.${scope}`,
+      `markos.business.assistant.${scope}`
+    ]);
     await new BriefStore(scope, epoch, "onboarding").clear();
   });
 }

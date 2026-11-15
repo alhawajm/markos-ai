@@ -3,10 +3,10 @@ import { MarkosApiError } from "@markos/api-client";
 import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router/react-navigation";
-import { Send, Sparkles } from "lucide-react-native";
+import { Send, Sparkles, Ellipsis } from "lucide-react-native";
 import type { ContentConversationRecord, ContentRecord, ConversationTurnInput } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
-import { Button, Card, Field, Loading, Notice, Row, TextAction, Txt } from "../ui";
+import { Button, Card, Field, Loading, Notice, Row, TextAction, Txt, IconButton } from "../ui";
 import { errorMessage } from "../errors";
 import { newRequestId } from "../request-id";
 import { conversationActive } from "./model";
@@ -157,8 +157,8 @@ export function StudioConversation({
             onPress={() =>
               void send(
                 t(
-                  `Prepare the caption and visual directions for this ${item.contentType.toLowerCase()} using its brief and campaign context. Keep the selected format. Save the draft for my review; do not mark it ready or schedule it.`,
-                  `أعدّ النص والتوجيهات البصرية لهذه المسودة باستخدام ملخصها وسياق الحملة. حافظ على نوع المحتوى المحدد واحفظها لمراجعتي دون اعتماد أو جدولة.`
+                  `Create the caption and generate the actual media for this ${item.contentType.toLowerCase()} using its brief and campaign context. Keep the selected format. Show one short plan to confirm, then execute it. Do not mark it ready or schedule it.`,
+                  `أنشئ النص والوسائط الفعلية لهذه المسودة باستخدام ملخصها وسياق الحملة. حافظ على نوع المحتوى المحدد واعرض خطة قصيرة واحدة لتأكيدها ثم نفّذها. دون اعتماد أو جدولة.`
                 )
               )
             }
@@ -182,7 +182,9 @@ export function StudioConversation({
             {entry.role === "user" ? t("You", "أنت") : "MARKOS"}
           </Txt>
           <Txt selectable>{entry.text}</Txt>
-          {entry.role === "assistant" ? <TextAction label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReportMessage(entry.id)} /> : null}
+          {entry.role === "assistant" ? (
+            <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReportMessage(entry.id)} />
+          ) : null}
         </View>
       ))}
       {active ? (
@@ -218,7 +220,7 @@ export function StudioConversation({
           ))}
           <Button
             disabled={busy || disabled}
-            label={t("Apply these changes", "تطبيق هذه التغييرات")}
+            label={latest.confirmation.generatesMedia ? t("Confirm and create", "تأكيد وإنشاء") : t("Confirm changes", "تأكيد التغييرات")}
             onPress={() => {
               void run(async () => {
                 const confirmation = latest.confirmation!;
@@ -261,7 +263,7 @@ export function StudioConversation({
           </Notice>
         );
       })}
-      {latest && !active ? (
+      {latest?.actions?.generation.some((action) => ["FAILED", "UNKNOWN", "LIBRARY_ONLY"].includes(action.status)) && !active ? (
         <Card tone="tint">
           <Txt>
             {t(
@@ -269,8 +271,7 @@ export function StudioConversation({
               "راجع المسودة ووسائطها. المسودة المكتوبة لا تحتوي على صورة أو فيديو منشأ حتى تُرفق الوسائط."
             )}
           </Txt>
-          <TextAction label={t("Review full draft", "مراجعة المسودة كاملة")} onPress={openPreview} />
-          <TextAction label={t("Generate or choose media", "إنشاء أو اختيار الوسائط")} onPress={openMedia} />
+          <TextAction label={t("Check media and retry", "مراجعة الوسائط وإعادة المحاولة")} onPress={openMedia} />
         </Card>
       ) : null}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
@@ -335,7 +336,7 @@ export function StudioConversation({
                   ? t("Prepare the caption and each slide…", "أعدّ النص وكل شريحة…")
                   : item.contentType === "STORY"
                     ? t("Prepare my image or video Story…", "أعدّ قصتي كصورة أو فيديو…")
-                    : t("Write the caption and image direction…", "اكتب النص والتوجّه البصري للصورة…")
+                    : t("Create a post, or change this design…", "أنشئ منشورًا أو عدّل هذا التصميم…")
             }
           />
           {message ? (

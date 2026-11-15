@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { HealthResponse } from "@markos/shared-types";
 import { registerAdminRoutes } from "../admin/admin-routes";
 import { registerAgentRoutes } from "../agents/agent-routes";
+import { registerWorkspaceAssistantRoutes } from "../assistant/workspace-assistant-routes";
 import { registerAnalyticsRoutes } from "../analytics/analytics-routes";
 import { registerAuthRoutes } from "../auth/auth-routes";
 import { registerPasswordRoutes } from "../auth/password-routes";
@@ -119,6 +120,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAuthRoutes(app);
   await registerPasswordRoutes(app);
   await registerAgentRoutes(app);
+  await registerWorkspaceAssistantRoutes(app);
   await registerAnalyticsRoutes(app);
   await registerBillingRoutes(app);
   await registerCalendarRoutes(app);

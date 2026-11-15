@@ -21,6 +21,7 @@ class BusinessProfile(StrictContract):
 
 
 class BusinessProfileGenerateRequest(StrictContract):
+    concise: bool = False
     workspace_id: str = Field(min_length=1, max_length=120)
     context: list[VaultContextChunk] = Field(min_length=1, max_length=20)
     model: str | None = Field(default=None, min_length=1, max_length=200)

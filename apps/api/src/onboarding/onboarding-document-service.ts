@@ -119,7 +119,8 @@ export async function retryOnboardingDocumentAnalysis(workspaceId: string, analy
 export async function approveOnboardingDocumentAnalysis(
   workspaceId: string,
   analysisId: string,
-  input: ApproveOnboardingDocumentAnalysisInput
+  input: ApproveOnboardingDocumentAnalysisInput,
+  options: { preserveProfileInteractionId?: string } = {}
 ): Promise<ApproveOnboardingDocumentAnalysisResult> {
   const analysis = await findAnalysis(workspaceId, analysisId);
   if (analysis.status !== "READY" || analysis.interactionId === null) {
@@ -129,15 +130,16 @@ export async function approveOnboardingDocumentAnalysis(
   if (!generated.success) throw new OnboardingDocumentAnalysisConflictError("The analysis result is unavailable");
 
   const profile = input.profile;
-  await saveOnboardingModule(workspaceId, "company", profile.company);
+  await saveOnboardingModule(workspaceId, "company", profile.company, options);
   await saveOnboardingModule(workspaceId, "products", profile.offerings, {
+    ...options,
     offeringSource: { sourceType: "DOCUMENT", sourceRef: analysis.id }
   });
-  if (profile.story !== undefined) await saveOnboardingModule(workspaceId, "story", profile.story);
-  if (profile.audience !== undefined) await saveOnboardingModule(workspaceId, "audience", profile.audience);
-  if (profile.competitors !== undefined) await saveOnboardingModule(workspaceId, "competitors", profile.competitors);
-  if (profile.brand !== undefined) await saveOnboardingModule(workspaceId, "brand", profile.brand);
-  if (profile.objectives !== undefined) await saveOnboardingModule(workspaceId, "objectives", profile.objectives);
+  if (profile.story !== undefined) await saveOnboardingModule(workspaceId, "story", profile.story, options);
+  if (profile.audience !== undefined) await saveOnboardingModule(workspaceId, "audience", profile.audience, options);
+  if (profile.competitors !== undefined) await saveOnboardingModule(workspaceId, "competitors", profile.competitors, options);
+  if (profile.brand !== undefined) await saveOnboardingModule(workspaceId, "brand", profile.brand, options);
+  if (profile.objectives !== undefined) await saveOnboardingModule(workspaceId, "objectives", profile.objectives, options);
 
   const interaction = await prisma.aiInteraction.findFirstOrThrow({
     where: { id: analysis.interactionId, workspaceId, agent: analysisAgentName, deletedAt: null }

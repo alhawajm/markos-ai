@@ -53,6 +53,7 @@ class RawImageResponse(Protocol):
 
 class ImagesApi(Protocol):
     async def generate(self, **kwargs: object) -> RawImageResponse: ...
+    async def edit(self, **kwargs: object) -> RawImageResponse: ...
 
 
 class OpenAIImageClient(Protocol):
@@ -126,7 +127,7 @@ class OpenAIImageProvider:
         )
 
         try:
-            response = await self._client.images.generate(
+            options: dict[str, object] = dict(
                 background="opaque",
                 model=model,
                 moderation="auto",
@@ -138,6 +139,37 @@ class OpenAIImageProvider:
                 size=size,
                 user=user_identifier,
             )
+            if request.source_image is not None:
+                try:
+                    original = base64.b64decode(request.source_image.base64_data, validate=True)
+                except (ValueError, binascii.Error):
+                    raise AiServiceError(
+                        code="AI_IMAGE_EDIT_SOURCE_INVALID",
+                        message="The existing artwork could not be read",
+                        status_code=400,
+                        retryable=False,
+                    ) from None
+                if not original or len(original) > 8_000_000:
+                    raise AiServiceError(
+                        code="AI_IMAGE_EDIT_SOURCE_INVALID",
+                        message="The existing artwork is too large",
+                        status_code=400,
+                        retryable=False,
+                    )
+                extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[
+                    request.source_image.mime_type
+                ]
+                options.pop("moderation", None)
+                response = await self._client.images.edit(
+                    **options,
+                    image=(
+                        f"current-artwork.{extension}",
+                        original,
+                        request.source_image.mime_type,
+                    ),
+                )
+            else:
+                response = await self._client.images.generate(**options)
         except APITimeoutError as error:
             log_image_provider_failure(error)
             raise provider_error(

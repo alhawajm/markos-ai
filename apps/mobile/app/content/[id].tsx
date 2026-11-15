@@ -76,7 +76,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
   const working = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [view, setView] = useState<"preview" | "assistant">("preview");
+  const [view, setView] = useState<"preview" | "assistant">("assistant");
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [section, setSection] = useState<"review" | "caption" | "media" | "details">("review");
@@ -381,9 +381,8 @@ function Editor({ initial }: { initial: ContentRecord }) {
       <Segmented
         value={view === "assistant" ? "assistant" : section === "review" ? "review" : "edit"}
         options={[
-          { value: "edit", label: t("Edit", "تعديل") },
           { value: "review", label: t("Preview", "معاينة") },
-          { value: "assistant", label: t("Assistant", "المساعد") }
+          { value: "assistant", label: t("Chat", "المحادثة") }
         ]}
         onChange={(value) => {
           setView(value === "assistant" ? "assistant" : "preview");
@@ -552,6 +551,17 @@ function Editor({ initial }: { initial: ContentRecord }) {
         openPreview={() => openSection("review")}
       />
       <Sheet title={t("Draft options", "خيارات المسودة")} visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
+        {editable ? (
+          <ListRow
+            label={t("Edit manually", "تعديل يدوي")}
+            detail={t("Caption, media and details", "النص والوسائط والتفاصيل")}
+            onPress={() => {
+              setOptionsOpen(false);
+              setView("preview");
+              setSection(draft.contentType === "STORY" ? "media" : "caption");
+            }}
+          />
+        ) : null}
         <ListRow
           label={t("Report content", "الإبلاغ عن المحتوى")}
           onPress={() => {

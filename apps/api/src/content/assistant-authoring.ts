@@ -70,7 +70,7 @@ export async function destructiveConsequences(tx: Prisma.TransactionClient, root
       throw new ContentAggregateError("CONTENT_RETAIN_SELECTION_REQUIRED", "Specify the stable item ID to retain before proposing this conversion");
     if (preview.preview.requiresConfirmation)
       consequences.push(
-        `Convert to ${result.conversion.contentType}; retain ${preview.preview.retainedItemId ?? "compatible items"}; remove items ${preview.preview.removedItemIds.join(", ") || "none"}; detach assets ${preview.preview.detachedAssetIds.join(", ") || "none"}; reset ${preview.preview.resetFields.join(", ") || "none"}.`
+        `This format change removes ${preview.preview.removedItemIds.length} media slots and detaches ${preview.preview.detachedAssetIds.length} files. Original files stay in Library.`
       );
   }
   for (const op of result.operations) {
@@ -80,13 +80,13 @@ export async function destructiveConsequences(tx: Prisma.TransactionClient, root
         item &&
         [item.mediaAssetId, item.purpose, item.title, item.body, item.visualDirection, item.aspectRatio, item.generationDurationSeconds].some(Boolean)
       )
-        consequences.push(`Remove populated media item ${item.id}; keep its Library asset.`);
+        consequences.push(`Remove slide ${item.position + 1}; keep its original file in Library.`);
     }
     if (
       (op.type === "removeReelBeat" || (op.type === "updateReelBeat" && !op.text.trim())) &&
       root.reelScript?.beats.some((beat) => beat.id === op.beatId && beat.text.trim())
     )
-      consequences.push(`Remove script text from beat ${op.beatId}.`);
+      consequences.push("Remove existing text from the Reel script.");
     if (
       op.type === "updateReelScript" &&
       op.field === "hook" &&

@@ -12,7 +12,13 @@ class ImagePromptTemplate(StrictContract):
     version: str = Field(min_length=1, max_length=120)
 
 
+class ImageEditSource(StrictContract):
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"]
+    base64_data: str = Field(min_length=1, max_length=11_000_000)
+
+
 class ImageGenerateRequest(StrictContract):
+    source_image: ImageEditSource | None = None
     workspace_id: str = Field(min_length=1, max_length=120)
     prompt: str = Field(min_length=3, max_length=1_000)
     aspect_ratio: ImageAspectRatio = "4:5"

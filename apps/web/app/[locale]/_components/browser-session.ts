@@ -170,6 +170,10 @@ function expireBrowserSession(locale: Locale): void {
 }
 
 function clearBrowserSession(): void {
+  const current = useSessionStore.getState().session;
+  if (current) {
+    for (const prefix of ["markos.home-chat", "markos.quick-setup"]) window.localStorage.removeItem(`${prefix}:${current.user.id}:${current.workspace.id}`);
+  }
   window.localStorage.removeItem(SESSION_KEY);
   useSessionStore.getState().setSession(null);
 }

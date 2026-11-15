@@ -31,6 +31,7 @@ import { CalendarPanel } from "./calendar-panel";
 import { ContentStudioPanel } from "./content-studio-panel";
 import { createMarkosClient, initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
+import { WorkspaceAssistant } from "./workspace-assistant";
 
 export type SectionSlug =
   | "analytics"
@@ -75,6 +76,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const [notificationState, setNotificationState] = useState<{ owner: string; items: NotificationRecord[] }>({ owner: "", items: [] });
   const notifications = notificationState.owner === ownerKey ? notificationState.items : [];
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
     const generation = ++checkGeneration.current;
@@ -355,8 +357,16 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
               activeSection === "content-studio" ? "w-full min-w-0 px-4 py-5 lg:p-6" : "mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8"
             }
           >
-            {activeSection === "dashboard" || activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
-            {activeSection === "dashboard" ? <FinalDashboard locale={locale} /> : null}
+            {activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
+            {activeSection === "dashboard" ? (
+              <>
+                <WorkspaceAssistant key={ownerKey} locale={locale} />
+                <details className="mt-8" onToggle={(e) => setActivityOpen(e.currentTarget.open)}>
+                  <summary className="cursor-pointer text-sm text-[var(--text-muted)]">{locale === "ar" ? "نشاط مساحة العمل" : "Workspace activity"}</summary>
+                  {activityOpen ? <FinalDashboard locale={locale} /> : null}
+                </details>
+              </>
+            ) : null}
             {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
             {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
@@ -682,7 +692,7 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
       "campaign-builder": "منشئ الحملات",
       campaigns: "الحملات",
       "content-studio": "إنشاء المحتوى",
-      dashboard: "نظرة عامة",
+      dashboard: "ماركوس",
       knowledge: "ملف النشاط",
       opportunities: "الفرص",
       settings: "الإعدادات"
@@ -694,7 +704,7 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
       "campaign-builder": "Campaign builder",
       campaigns: "Campaigns",
       "content-studio": "Create",
-      dashboard: "Overview",
+      dashboard: "MARKOS",
       knowledge: "Business profile",
       opportunities: "Opportunities",
       settings: "Settings"

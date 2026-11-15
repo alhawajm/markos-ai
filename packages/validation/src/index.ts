@@ -870,3 +870,5 @@ export type GenerateVideoForContentInput = z.infer<typeof generateVideoForConten
 
 export * from "./authoring-assistant";
 export * from "./content-reports";
+export * from "./quick-onboarding";
+export * from "./workspace-assistant";

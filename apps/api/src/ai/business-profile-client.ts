@@ -20,12 +20,17 @@ export interface BusinessProfileGenerateResponse {
   profile: BusinessProfile;
 }
 
-export async function generateBusinessProfile(input: { workspaceId: string; context: VaultRagChunk[] }): Promise<BusinessProfileGenerateResponse> {
-  const model = await resolveModelSetting("LLM_LONGFORM_MODEL");
+export async function generateBusinessProfile(input: {
+  workspaceId: string;
+  context: VaultRagChunk[];
+  concise?: boolean;
+}): Promise<BusinessProfileGenerateResponse> {
+  const model = await resolveModelSetting(input.concise ? "LLM_PRIMARY_MODEL" : "LLM_LONGFORM_MODEL");
 
   return requestAi("/ai/onboarding/profile/generate", {
     body: {
       workspace_id: input.workspaceId,
+      ...(input.concise ? { concise: true } : {}),
       context: input.context.map((chunk) => ({
         section: chunk.section,
         key: chunk.key,

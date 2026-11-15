@@ -82,6 +82,7 @@ export async function dispatchGeneration(workspaceId: string, contentItemId: str
         durationSeconds: duration,
         provider: kind === "VIDEO" ? (input.motion ? "motion_reel" : "configured_video_provider") : "configured_image_provider",
         ...(input.motion ? { renderOptions: input.motion } : {}),
+        ...(kind === "IMAGE" && item.mediaAssetId ? { renderOptions: { sourceMediaAssetId: item.mediaAssetId } } : {}),
         status: kind === "IMAGE" ? "STARTING" : "QUEUED"
       }
     });

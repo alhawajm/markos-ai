@@ -29,7 +29,7 @@ const record = (row: ContentReport): ContentReportRecord => ({
 const text = (parts: (string | null | undefined)[]) => parts.filter(Boolean).join("\n\n").slice(0, 4000);
 const missing = () => new ContentReportError("REPORT_SOURCE_NOT_FOUND", "The reported content is no longer available in this workspace.", 404);
 
-async function snapshot(tx: WorkspaceTransactionClient, workspaceId: string, input: ContentReportInput) {
+async function snapshot(tx: WorkspaceTransactionClient, workspaceId: string, input: ContentReportInput, reportedById: string) {
   if (input.source === "GENERAL_AI") return { excerpt: "", mediaAssetIds: [] as string[] };
   if (input.source === "CONTENT") {
     const item = await tx.contentItem.findFirst({
@@ -46,7 +46,30 @@ async function snapshot(tx: WorkspaceTransactionClient, workspaceId: string, inp
     const message = await tx.conversationMessage.findFirst({
       where: { id: input.sourceId!, workspaceId, role: "assistant", conversation: { contentItem: { workspaceId, deletedAt: null } } }
     });
-    if (!message) throw missing();
+    if (!message) {
+      const turn = await tx.aiInteraction.findFirst({
+        where: { id: input.sourceId!, workspaceId, agent: "WORKSPACE_ASSISTANT", deletedAt: null, prompt: { path: ["userId"], equals: reportedById } }
+      });
+      if (!turn) throw missing();
+      const response = turn.response as Record<string, unknown>,
+        proposal = response.proposal as Record<string, unknown> | null;
+      const strings = (value: unknown): string[] =>
+        typeof value === "string"
+          ? [value]
+          : Array.isArray(value)
+            ? value.flatMap(strings)
+            : value && typeof value === "object"
+              ? Object.values(value).flatMap(strings)
+              : [];
+      return {
+        excerpt: text([
+          typeof response.reply === "string" ? response.reply : "",
+          typeof proposal?.summary === "string" ? proposal.summary : "",
+          ...strings(response.strategy)
+        ]),
+        mediaAssetIds: [] as string[]
+      };
+    }
     return { excerpt: text([message.text]), mediaAssetIds: [] as string[] };
   }
   const campaign = await tx.campaign.findFirst({ where: { id: input.sourceId!, workspaceId, deletedAt: null } });
@@ -67,7 +90,7 @@ export async function submitContentReport(workspaceId: string, reportedById: str
     return await withWorkspaceDbContext(workspaceId, async (tx) => {
       const existing = await tx.contentReport.findUnique({ where: key });
       if (existing) return replay(existing);
-      const captured = await snapshot(tx, workspaceId, input);
+      const captured = await snapshot(tx, workspaceId, input, reportedById);
       return receipt(await tx.contentReport.create({ data: { ...input, sourceId: input.sourceId ?? null, workspaceId, reportedById, ...captured } }));
     });
   } catch (error) {

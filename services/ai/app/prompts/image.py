@@ -1,9 +1,16 @@
 from app.contracts.image import ImageGenerateRequest
 
-IMAGE_PROMPT_VERSION = "image.v2"
+IMAGE_PROMPT_VERSION = "image.v3"
 
 
 def build_image_prompt(request: ImageGenerateRequest) -> str:
+    if request.source_image is not None:
+        return (
+            "Edit the supplied existing artwork. This is a targeted edit, not a new image concept.\n"
+            "Change ONLY what the owner asks to change. Preserve the composition, subjects, product identity, logo, typography, exact English/Arabic wording and all other unrequested details.\n"
+            "For a color change, recolor only the requested region or design elements. Do not replace the scene or redraw unrelated parts.\n"
+            f"Keep the {request.aspect_ratio} frame.\nREQUESTED EDIT\n{request.prompt}"
+        )
     customization = ""
 
     if request.prompt_template is not None:

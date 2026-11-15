@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { registerQuickOnboardingRoutes } from "./quick-onboarding-routes";
 import {
   approveBusinessProfileSchema,
   audienceOnboardingSchema,
@@ -73,6 +74,7 @@ const maxOnboardingDocumentBodyBytes = 28 * 1024 * 1024;
 type ModuleSchema = (typeof moduleSchemas)[keyof typeof moduleSchemas];
 
 export async function registerOnboardingRoutes(app: FastifyInstance): Promise<void> {
+  await registerQuickOnboardingRoutes(app);
   app.get(
     "/v1/onboarding",
     {
@@ -526,7 +528,7 @@ function handleOfferingDocumentError(error: unknown, reply: { status: (code: num
   throw error;
 }
 
-function handleOnboardingDocumentError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {
+export function handleOnboardingDocumentError(error: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) {
   if (error instanceof OnboardingDocumentInvalidError) {
     return reply.status(400).send(errorEnvelope("ONBOARDING_DOCUMENT_INVALID", error.message));
   }

@@ -234,6 +234,7 @@ async function setup(initial: ContentRecord) {
     return route.fulfill(json([]));
   });
   await page.goto(`${baseUrl}/en/app/content-studio?item=${initial.id}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.getByRole("button", { name: "Edit manually", exact: true }).click();
   await page.getByTestId("create-workspace").waitFor();
   return { page, context, state };
 }

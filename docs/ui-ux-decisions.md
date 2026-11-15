@@ -4,7 +4,7 @@ Handoff note: this document retains dated decisions and verification history. Pr
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-11-02
+- Last updated: 2026-11-15
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -580,3 +580,13 @@ browser fixtures cover the resumed state; those fixtures are not live-provider a
 ## 2026-10-27 - Profile version recovery
 
 Put Version history inside the existing profile editor as a collapsed secondary disclosure. Show one version selector and one Review action; load the selected fields into the ordinary form and retain its Save and conflict controls. The native editor confirms replacement of unsaved form values first. English and Arabic copy explain that reviewing does not save. Keep field labels explicit for assistive technology. This extends the accepted editor and does not change primary navigation or introduce a Figma approval dependency.
+
+## 2026-11-15 - Reduce entry and authoring effort
+
+Accepted owner direction: quick context, short summary, then a conversational starting point on both web and native mobile. The manual path contains six fields total with only two required. Imported source routes ask for a URL or up to five files; incomplete extraction asks only for missing essentials in the same short form. The business summary is readable prose, not another questionnaire.
+
+Home greets the owner with a single composer and three suggestions. Plans have one primary confirmation action and can be refined by replying. Workspace activity is secondary on web. Create defaults to preview plus chat on desktop and Chat/Preview on mobile. Caption, media and detailed controls remain behind “Edit manually”; error recovery and lifecycle controls remain reachable. Existing Sunlit colors, typography, light/dark modes, accessible controls and Arabic/RTL are retained.
+
+Reference: Google's [Pomelli introduction](https://blog.google/innovation-and-ai/models-and-research/google-labs/pomelli/) informs the context-to-identity-to-creation sequence; MARKOS retains its own identity, workspace isolation and human publishing approval.
+
+Acceptance: count six manual inputs; complete setup without Instagram authorization; confirm imported/typed facts once; open Home to a useful conversation; confirm a content plan once and reach its working draft; make a targeted visual change using the owned original; edit a caption without image generation; retain manual editing and explicit publishing review. Validate the actual mounted components at 1440×900, narrow mobile width, Arabic/RTL and both themes. Fixture-based visual checks are separate evidence from disposable-database API integration tests.

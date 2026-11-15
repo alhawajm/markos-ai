@@ -23,6 +23,7 @@ export async function generateImageAsset(input: {
   prompt: string;
   promptTemplate?: { body: string; version: string };
   workspaceId: string;
+  sourceImage?: { mimeType: "image/jpeg" | "image/png" | "image/webp"; base64Data: string };
 }): Promise<ImageGenerateResponse> {
   const model = await resolveModelSetting("IMAGE_MODEL_PRIMARY");
   return requestAi<ImageGenerateResponse>("/ai/images/generate", {
@@ -30,6 +31,7 @@ export async function generateImageAsset(input: {
       aspect_ratio: input.aspectRatio,
       model,
       prompt: input.prompt,
+      ...(input.sourceImage ? { source_image: { mime_type: input.sourceImage.mimeType, base64_data: input.sourceImage.base64Data } } : {}),
       ...(input.promptTemplate === undefined ? {} : { prompt_template: input.promptTemplate }),
       workspace_id: input.workspaceId
     },

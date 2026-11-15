@@ -17,6 +17,7 @@ import { AiServiceRequestError } from "../ai/request";
 import { recordAiTokenUsage } from "../usage/usage-service";
 import { ContentConflictError } from "./content-conflict";
 import { getContentToneLock } from "./content-service";
+import { assistantProposal } from "./assistant-proposal";
 
 export class ConversationError extends Error {
   constructor(
@@ -57,7 +58,7 @@ function actionText(state: AssistantActionState, locale: string): string {
       "نتيجة التوليد غير معروفة بعد انقطاع. لن يُعاد طلبه تلقائيًا."
     ]
   };
-  for (const entry of state.generation) lines.push(`${entry.itemId}: ${labels[entry.status][ar ? 1 : 0]}`);
+  for (const entry of state.generation) lines.push(labels[entry.status][ar ? 1 : 0]!);
   return lines.join("\n");
 }
 
@@ -282,7 +283,13 @@ export async function getContentConversation(workspaceId: string, contentItemId:
   };
 }
 
-export async function submitConversationTurn(workspaceId: string, userId: string, contentItemId: string, input: ConversationTurnInput) {
+export async function submitConversationTurn(
+  workspaceId: string,
+  userId: string,
+  contentItemId: string,
+  input: ConversationTurnInput,
+  approvedPlanId?: string
+) {
   await contentForWorkspace(workspaceId, contentItemId);
   try {
     await prisma.$transaction(async (tx) => {
@@ -321,7 +328,10 @@ export async function submitConversationTurn(workspaceId: string, userId: string
           requestId: input.requestId,
           instruction: input.message,
           locale: input.locale,
-          baseRevision: content.revision
+          baseRevision: content.revision,
+          ...(approvedPlanId
+            ? { actionState: { approvedPlanId, editsSaved: false, revision: content.revision, bindings: {}, confirmation: null, generation: [] } }
+            : {})
         }
       });
       await tx.conversationMessage.create({ data: { workspaceId, conversationId: conversation.id, runId: run.id, role: "user", text: input.message } });
@@ -452,15 +462,46 @@ export async function processConversationRuns(workspaceId?: string) {
       if (!(await canContinue(run.workspaceId, run.userId, tx))) throw new ConversationError("CONVERSATION_ACCESS_CHANGED", "Access changed.");
       const root = await lockContentRoot(tx, run.workspaceId, current.id, run.baseRevision);
       const consequences = await destructiveConsequences(tx, root, result);
-      const state: AssistantActionState = consequences.length
-        ? {
-            editsSaved: false,
-            revision: root.revision,
-            bindings: {},
-            generation: [],
-            confirmation: { token: randomUUID(), revision: root.revision, consequences }
-          }
-        : await applyAssistantBatch(tx, run.workspaceId, current.id, run.baseRevision, result);
+      const approved =
+        run.actionState && typeof run.actionState === "object" && !Array.isArray(run.actionState) && typeof run.actionState.approvedPlanId === "string"
+          ? await tx.aiInteraction.findFirst({
+              where: {
+                id: run.actionState.approvedPlanId,
+                workspaceId: run.workspaceId,
+                agent: "WORKSPACE_ASSISTANT",
+                accepted: true,
+                deletedAt: null,
+                prompt: { path: ["userId"], equals: run.userId }
+              }
+            })
+          : null;
+      const approvalState = approved?.response as Record<string, unknown> | undefined;
+      const approvalProposal = approvalState?.proposal as Record<string, unknown> | undefined;
+      const matchesApproval = approvalState?.contentItemId === root.id && approvalProposal?.instruction === run.instruction;
+      const hasActions = !!result.conversion || result.operations.length > 0 || result.generation.length > 0;
+      if (hasActions && (!matchesApproval || consequences.length)) {
+        // Validate the complete batch, including local refs and owned IDs, without
+        // committing a single change before the owner has seen the proposal.
+        await tx.$executeRawUnsafe("SAVEPOINT assistant_proposal_validation");
+        await applyAssistantBatch(tx, run.workspaceId, current.id, run.baseRevision, result);
+        await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT assistant_proposal_validation");
+        await tx.$executeRawUnsafe("RELEASE SAVEPOINT assistant_proposal_validation");
+      }
+      const state: AssistantActionState =
+        hasActions && (!matchesApproval || consequences.length)
+          ? {
+              editsSaved: false,
+              revision: root.revision,
+              bindings: {},
+              generation: [],
+              confirmation: {
+                token: randomUUID(),
+                revision: root.revision,
+                consequences: assistantProposal(result, run.locale, root.mediaItems, consequences),
+                generatesMedia: result.generation.length > 0
+              }
+            }
+          : await applyAssistantBatch(tx, run.workspaceId, current.id, run.baseRevision, result);
       await saveActionReceipt(tx, run, state, result);
       await tx.contentConversation.update({ where: { id: conversation.id }, data: { summary: result.summary } });
       await tx.aiInteraction.create({

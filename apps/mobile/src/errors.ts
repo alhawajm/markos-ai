@@ -112,6 +112,9 @@ export function errorMessage(error: unknown, t: (en: string, ar: string) => stri
     case "CAMPAIGN_CONTEXT_MISSING":
     case "BUSINESS_PROFILE_REQUIRED":
       return t("Complete your business profile before drafting a campaign.", "أكمل ملف نشاطك التجاري قبل إنشاء الحملة.");
+    case "AI_IMAGE_EDIT_SOURCE_INVALID":
+    case "AI_IMAGE_EDIT_SOURCE_UNAVAILABLE":
+      return t("The original artwork is unavailable for editing. Upload it again.", "التصميم الأصلي غير متاح للتعديل. ارفعه مجددًا.");
     case "AI_PROVIDER_TIMEOUT":
       return t(
         "Generation took too long. Check your campaigns before trying again; your brief is still saved.",

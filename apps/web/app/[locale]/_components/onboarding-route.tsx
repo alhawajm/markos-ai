@@ -14,6 +14,7 @@ import {
   type OnboardingDraft
 } from "./onboarding-draft";
 import { OnboardingPanel } from "./onboarding-panel";
+import { QuickOnboarding } from "./quick-onboarding";
 
 type RouteStatus = "checking" | "allowed" | "failed";
 
@@ -57,7 +58,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
           ]) {
             window.localStorage.removeItem(key);
           }
-          router.replace(`/${locale}/instagram-setup`);
+          router.replace(`/${locale}/app`);
           return;
         }
 
@@ -94,6 +95,7 @@ export function OnboardingRoute({ editMode, locale }: { editMode: boolean; local
   useEffect(() => checkOnboarding(), [attempt, checkOnboarding]);
 
   if (status === "allowed" && initialState && ownerKey && loadedOwnerKey === ownerKey) {
+    if (!editMode) return <QuickOnboarding key={ownerKey} initialState={initialState} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />;
     return (
       <OnboardingPanel key={ownerKey} editMode={editMode} initialState={initialState} locale={locale} {...(initialDraft === null ? {} : { initialDraft })} />
     );

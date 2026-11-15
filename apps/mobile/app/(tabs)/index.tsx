@@ -1,87 +1,229 @@
-import React from "react";
-import { RefreshControl } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { BriefcaseBusiness, CalendarDays, History } from "lucide-react-native";
+import { ImagePlus, Lightbulb, Target, Send, Sparkles, Ellipsis } from "lucide-react-native";
+import { newRequestId } from "../../src/request-id";
+import type { WorkspaceAssistantTurn } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, ListGroup, ListRow, Loading, Screen, Txt } from "../../src/ui";
-import { QueryFailure } from "../../src/content";
+import { sessionController } from "../../src/auth/transport";
+import { BusinessDeviceStore } from "../../src/business/device-store";
+import { Button, Card, Field, Loading, Notice, Screen, Txt, TextAction, Row, IconButton } from "../../src/ui";
+import { ContentReportSheet } from "../../src/content-report";
+import { errorMessage } from "../../src/errors";
 
-export default function Overview() {
-  const { api, scope, session } = useAccount();
-  const { t, colors } = useAppearance();
-  const router = useRouter();
-  const result = useQuery({ queryKey: [scope, "campaigns", "overview"], queryFn: () => api.campaignSummaries({ limit: 8 }) });
-  const activity = useQuery({
-    queryKey: [scope, "publishing-activity", "overview"],
-    queryFn: () => api.publishingActivity({ status: "FAILED" }),
-    refetchOnWindowFocus: "always"
-  });
-  const next = result.data?.items.find((item) => item.postCounts.idea + item.postCounts.draft + item.postCounts.inReview > 0) ?? result.data?.items[0];
+type Request = { requestId: string; message: string; locale: "en" | "ar" };
+export default function Home() {
+  const { api, scope, epoch, queryClient, session } = useAccount(),
+    { t, locale, colors } = useAppearance(),
+    router = useRouter();
+  const store = useMemo(() => new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, "assistant"), [scope, epoch]);
+  const key = [scope, "workspace-assistant"];
+  const [report, setReport] = useState<string | null>(null);
+  const result = useQuery({ queryKey: key, queryFn: () => api.workspaceAssistant(), refetchInterval: 2500 });
+  const [message, setMessage] = useState(""),
+    [pending, setPending] = useState<Request | null>(null),
+    [restored, setRestored] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    setRestored(false);
+    setMessage("");
+    setPending(null);
+    setError("");
+    setBusy(false);
+    void store
+      .read()
+      .then((v) => {
+        if (live) {
+          setMessage(v?.message ?? "");
+          setPending(v?.pending ?? null);
+          setRestored(true);
+        }
+      })
+      .catch(() => {
+        if (live) setError(t("Couldn’t restore your saved message. Reopen this screen to retry.", "تعذّر استعادة رسالتك المحفوظة. أعد فتح الشاشة للمحاولة."));
+      });
+    return () => {
+      live = false;
+    };
+  }, [store]);
+  useEffect(() => {
+    if (pending && result.data?.some((v) => v.id === pending.requestId)) {
+      setPending(null);
+      setMessage("");
+      void store.clear();
+    }
+  }, [result.data, pending, store]);
+  const active = result.data?.some((v) => ["THINKING", "EXECUTING"].includes(v.status));
+  const accept = (saved: WorkspaceAssistantTurn) =>
+    queryClient.setQueryData<WorkspaceAssistantTurn[]>(key, (items) =>
+      items?.some((i) => i.id === saved.id) ? items.map((i) => (i.id === saved.id ? saved : i)) : [...(items ?? []), saved]
+    );
+  async function send() {
+    if (busy || active || !restored) return;
+    const request = pending ?? { requestId: newRequestId(), message: message.trim(), locale };
+    if (!request.message) return;
+    setBusy(true);
+    setError("");
+    try {
+      await store.save({ message: request.message, pending: request });
+      sessionController.assertEpoch(epoch);
+      setPending(request);
+      const saved = await api.messageWorkspaceAssistant(request);
+      sessionController.assertEpoch(epoch);
+      accept(saved);
+      await store.clear();
+      setPending(null);
+      setMessage("");
+    } catch (e) {
+      setError(errorMessage(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirm(turn: WorkspaceAssistantTurn) {
+    if (!turn.confirmationToken) return;
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await api.confirmWorkspaceAssistant(turn.id, turn.confirmationToken);
+      sessionController.assertEpoch(epoch);
+      accept(saved);
+    } catch (e) {
+      setError(errorMessage(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function edit(text: string) {
+    setMessage(text);
+    void store
+      .save({ message: text, pending: null })
+      .catch(() => setError(t("Couldn’t save this message. Keep the app open.", "تعذّر حفظ الرسالة. أبقِ التطبيق مفتوحًا.")));
+  }
+  if (!session.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role)))
+    return (
+      <Screen>
+        <Txt variant="title">{t("Your workspace", "مساحة عملك")}</Txt>
+        <Txt muted>{t("Review your team’s campaigns and results.", "راجع حملات فريقك ونتائجها.")}</Txt>
+        <TextAction label={t("Open campaigns", "فتح الحملات")} onPress={() => router.push("/(tabs)/campaigns")} />
+        <TextAction label={t("Open insights", "فتح الإحصاءات")} onPress={() => router.push("/(tabs)/insights")} />
+      </Screen>
+    );
   return (
-    <Screen
-      refreshControl={
-        <RefreshControl
-          refreshing={result.isRefetching}
-          onRefresh={() => {
-            void result.refetch();
-          }}
-          tintColor={colors.accentText}
-        />
-      }
-    >
-      <Txt variant="title">
-        {t("Hello", "أهلًا")}, {session.user.fullName.split(" ")[0]}
-      </Txt>
-      <Txt muted>{t("Here is what needs your attention.", "إليك ما يحتاج انتباهك.")}</Txt>
-      {activity.data?.total ? (
-        <Card tone="warning">
-          <Txt variant="heading">{t("Publishing needs attention", "النشر يحتاج انتباهك")}</Txt>
-          <Txt>
-            {activity.data.total} {t("posts need review before another attempt.", "منشور يحتاج المراجعة قبل محاولة أخرى.")}
-          </Txt>
-          <Button label={t("Review publishing activity", "مراجعة نشاط النشر")} onPress={() => router.push("/publishing")} />
-        </Card>
+    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
+      <View style={{ alignItems: "center", gap: 12, paddingVertical: 20 }}>
+        <View style={{ backgroundColor: colors.secondarySoft, padding: 16, borderRadius: 24 }}>
+          <Sparkles size={28} color={colors.accentText} />
+        </View>
+        <Txt variant="title" style={{ textAlign: "center" }}>
+          {t("What shall we create?", "ماذا سنُبدع اليوم؟")}
+        </Txt>
+        <Txt muted style={{ textAlign: "center" }}>
+          {t("Tell me your idea. We’ll make it happen together.", "أخبرني بفكرتك. سنُبدعها معًا.")}
+        </Txt>
+      </View>
+      {!result.data?.length && !result.isPending ? (
+        <View style={{ gap: 8 }}>
+          {[
+            {
+              icon: Lightbulb,
+              label: t("Build a strategy", "بناء استراتيجية"),
+              message: t("Create an Instagram marketing strategy for my business.", "أنشئ استراتيجية تسويق على إنستغرام لنشاطي.")
+            },
+            { icon: ImagePlus, label: t("Create content", "إنشاء محتوى"), message: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
+            {
+              icon: Target,
+              label: t("Plan a campaign", "تخطيط حملة"),
+              message: t("Help me plan a campaign for an upcoming event or offer.", "ساعدني في تخطيط حملة لفعالية أو عرض قادم.")
+            }
+          ].map((s) => (
+            <Button secondary key={s.label} icon={s.icon} label={s.label} disabled={!restored || busy} onPress={() => edit(s.message)} />
+          ))}
+        </View>
       ) : null}
-      {result.isPending ? (
-        <Loading />
-      ) : result.isError ? (
-        <QueryFailure
-          error={result.error}
-          retry={() => {
-            void result.refetch();
-          }}
-        />
-      ) : (
-        <>
-          <Card tone="tint">
-            <Txt variant="label">{t("Your next step", "خطوتك القادمة")}</Txt>
-            <Txt>
-              {next ? next.title : t("Bring your next event, offer or idea to life with a campaign.", "حوّل فعاليتك أو عرضك أو فكرتك القادمة إلى حملة.")}
-            </Txt>
-            <Button
-              label={next ? t("Continue campaign", "متابعة الحملة") : t("Create a campaign", "إنشاء حملة")}
-              onPress={() => (next ? router.push({ pathname: "/campaign/[id]", params: { id: next.id } }) : router.push("/campaign/new"))}
-            />
+      {result.isPending ? <Loading /> : null}
+      {result.data?.map((turn, index) => (
+        <View key={turn.id} style={{ gap: 16, marginVertical: 8 }}>
+          <Card tone="tint" style={{ alignSelf: "flex-end", maxWidth: "92%" }}>
+            <Txt selectable>{turn.message}</Txt>
           </Card>
-        </>
-      )}
-      <ListGroup title={t("Your workspace", "مساحة عملك")}>
-        <ListRow
-          icon={CalendarDays}
-          label={t("Open calendar", "فتح التقويم")}
-          detail={t("Your drafts and scheduled posts", "مسوداتك ومنشوراتك المجدولة")}
-          onPress={() => router.push("/(tabs)/calendar")}
+          <View style={{ gap: 12 }}>
+            <Row>
+              <Sparkles size={15} color={colors.accentText} />
+              <Txt variant="label" muted style={{ flex: 1 }}>
+                MARKOS
+              </Txt>
+              {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
+            </Row>
+            {turn.reply ? <Txt selectable>{turn.reply}</Txt> : null}
+            {turn.status === "THINKING" ? <Loading /> : null}
+            {turn.status === "PROPOSED" && turn.proposal ? (
+              <Card>
+                <Txt variant="label">{t("Here’s the plan", "إليك الخطة")}</Txt>
+                <Txt>{turn.proposal.summary}</Txt>
+                {index === result.data.length - 1 ? (
+                  <>
+                    <Button label={t("Confirm and start", "تأكيد وبدء")} busy={busy} disabled={active} onPress={() => void confirm(turn)} />
+                    <Txt variant="meta" muted>
+                      {t("Want to change something? Tell me below.", "تريد تغيير شيء؟ أخبرني أدناه.")}
+                    </Txt>
+                  </>
+                ) : null}
+              </Card>
+            ) : null}
+            {turn.status === "EXECUTING" ? <Notice>{t("Starting your plan…", "أبدأ تنفيذ خطتك…")}</Notice> : null}
+            {turn.contentItemId ? (
+              <TextAction
+                label={t("Open draft", "فتح المسودة")}
+                onPress={() => router.push({ pathname: "/content/[id]", params: { id: turn.contentItemId! } })}
+              />
+            ) : null}
+            {turn.campaignRequestId ? <TextAction label={t("Open campaigns", "فتح الحملات")} onPress={() => router.push("/(tabs)/campaigns")} /> : null}
+            {turn.strategy ? (
+              <Card>
+                {strategyLines(turn.strategy).map((line, i) => (
+                  <Txt selectable key={i}>
+                    {line}
+                  </Txt>
+                ))}
+              </Card>
+            ) : null}
+          </View>
+        </View>
+      ))}
+      {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
+      <Card>
+        <Field
+          label={t("Message MARKOS", "راسل ماركوس")}
+          value={message}
+          onChangeText={edit}
+          editable={restored && !pending}
+          multiline
+          maxLength={4000}
+          placeholder={t("An idea, an event, or something to change…", "فكرة أو فعالية أو شيء تريد تغييره…")}
         />
-        <ListRow icon={History} label={t("Publishing activity", "نشاط النشر")} onPress={() => router.push("/publishing")} />
-        <ListRow
-          icon={BriefcaseBusiness}
-          last
-          label={t("Edit business profile", "تعديل ملف النشاط")}
-          detail={t("Audience, voice and business details", "الجمهور والنبرة وتفاصيل النشاط")}
-          onPress={() => router.push("/business")}
+        <Button
+          icon={Send}
+          label={pending ? t("Retry saved message", "إعادة إرسال الرسالة المحفوظة") : t("Send", "إرسال")}
+          busy={busy}
+          disabled={!restored || active || !(pending?.message ?? message).trim()}
+          onPress={() => void send()}
         />
-      </ListGroup>
+      </Card>
+      <Txt variant="meta" muted style={{ textAlign: "center" }}>
+        {t("You review everything before it’s published.", "تراجع كل شيء قبل نشره.")}
+      </Txt>
+      {report ? <ContentReportSheet source="ASSISTANT_MESSAGE" sourceId={report} visible onClose={() => setReport(null)} /> : null}
     </Screen>
   );
+}
+function strategyLines(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(strategyLines);
+  if (value && typeof value === "object")
+    return Object.entries(value).flatMap(([key, v]) => (typeof v === "string" ? [`${key.replace(/_/g, " ")}: ${v}`] : strategyLines(v)));
+  return [];
 }

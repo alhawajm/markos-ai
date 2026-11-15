@@ -1373,3 +1373,4 @@ export type ContentAuthoringOperation =
   | { type: "reorderReelBeats"; orderedIds: string[] };
 export { sanitizeTelemetryEvent } from "./telemetry-privacy";
 export * from "./content-reports";
+export * from "./workspace-assistant";

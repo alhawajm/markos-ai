@@ -1,6 +1,8 @@
 import { env } from "../config/env";
 
 const safeAiMessages: Record<string, string> = {
+  AI_IMAGE_EDIT_SOURCE_INVALID: "The original artwork could not be read. Upload it again before editing",
+  AI_IMAGE_EDIT_SOURCE_UNAVAILABLE: "The original artwork is unavailable. Upload it again before editing",
   AI_CONTEXT_MISSING: "Knowledge Vault context is required for AI generation",
   AI_DOCUMENT_INVALID: "The uploaded document is invalid",
   AI_DOCUMENT_UNREADABLE: "The uploaded document did not contain readable text",

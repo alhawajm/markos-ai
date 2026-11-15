@@ -90,6 +90,35 @@ async function fixture() {
 }
 
 describe("durable post conversations", () => {
+  it("holds edits and media until one confirmation, and deduplicates that confirmation", async () => {
+    const f = await fixture(),
+      target = f.item.mediaItems[0].id;
+    respond.mockResolvedValue({
+      ...output(),
+      result: {
+        ...output().result,
+        operations: [
+          { type: "updateContent", field: "caption", value: "Fresh bread" },
+          { type: "updateMediaItem", itemId: target, field: "visualDirection", value: "Warm bakery design" }
+        ],
+        generation: [{ itemId: target }]
+      }
+    } as Awaited<ReturnType<typeof respond>>);
+    imageGeneration.mockImplementation(
+      async () => ({ contentItem: (await f.get()).contentItem, mediaAsset: { id: randomUUID() } }) as Awaited<ReturnType<typeof generateImageForContent>>
+    );
+    await f.send();
+    await processConversationRuns(f.session.workspace.id);
+    const proposed = await f.get();
+    expect(proposed.latestRun.status).toBe("AWAITING_CONFIRMATION");
+    expect(proposed.contentItem.caption).toBe("Original");
+    expect(imageGeneration).not.toHaveBeenCalled();
+    expect(proposed.latestRun.confirmation.generatesMedia).toBe(true);
+    expect((await acknowledge(f, proposed.latestRun)).statusCode).toBe(200);
+    expect((await acknowledge(f, proposed.latestRun)).statusCode).toBe(200);
+    expect(imageGeneration).toHaveBeenCalledOnce();
+    expect((await f.get()).contentItem.caption).toBe("Fresh bread");
+  });
   it("carries saved campaign document context into its posts without the full campaign schedule", async () => {
     const f = await fixture();
     const campaign = await prisma.campaign.create({
@@ -114,6 +143,7 @@ describe("durable post conversations", () => {
     const sent = await f.send({ ...f.input, expectedRevision: linked.revision, message: "Draft the campaign post with its event details." });
     expect(sent.json()).not.toHaveProperty("error");
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(respond).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({
@@ -139,6 +169,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output({ ...patch(), caption: null, ...details }) as Awaited<ReturnType<typeof respond>>);
     await f.send({ ...f.input, message: "Apply the agreed pillar, objective, tone and brief to this post." });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: f.item.id } })).toMatchObject({
       ...details,
       caption: "Original",
@@ -151,6 +182,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output({ ...patch(), caption: null, contentPillar: null, campaignGoal: null, tone: "" }) as Awaited<ReturnType<typeof respond>>);
     await f.send({ ...f.input, requestId: randomUUID(), expectedRevision: (await f.get()).contentItem.revision, message: "Clear only the tone." });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect((await f.get()).contentItem.revision).toBeGreaterThan(saved.contentItem.revision);
     expect(respond.mock.lastCall?.[0].current).toMatchObject(details);
     expect((await f.get()).contentItem).toMatchObject({
@@ -172,6 +204,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output({ ...patch(), [field]: "x".repeat(limit + 1) }) as Awaited<ReturnType<typeof respond>>);
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.latestRun.status).toBe("FAILED");
     expect(saved.contentItem).toMatchObject({ caption: "Original", brief: "Citrus post", revision: f.item.revision });
@@ -185,6 +218,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(response as Awaited<ReturnType<typeof respond>>);
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.latestRun.status).toBe("SUCCEEDED");
     expect(saved.messages.at(-1).text).toContain("I have not changed");
@@ -197,6 +231,7 @@ describe("durable post conversations", () => {
     expect((await f.send()).statusCode).toBe(202);
     expect((await f.get()).messages).toHaveLength(1);
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
     expect(saved.latestRun.status).toBe("SUCCEEDED");
@@ -209,6 +244,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output(patch()) as Awaited<ReturnType<typeof respond>>);
     await f.send({ ...f.input, message: "Write a bilingual caption" });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.contentItem).toMatchObject({ caption });
     expect(saved.contentItem.revision).toBeGreaterThan(f.item.revision);
@@ -222,6 +258,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output() as Awaited<ReturnType<typeof respond>>);
     await f.send({ ...f.input, requestId: randomUUID(), expectedRevision: (await f.get()).contentItem.revision, message: "What did we choose?" });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(respond.mock.lastCall?.[0]).toMatchObject({
       current: { caption: "Owner edited this" },
       summary: "Owner is preparing a citrus post."
@@ -261,6 +298,7 @@ describe("durable post conversations", () => {
     });
     expect(stale.json().error.code).toBe("CONTENT_REVISION_CONFLICT");
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(respond).not.toHaveBeenCalled();
     expect((await f.get()).latestRun.status).toBe("CONFLICT");
   });
@@ -282,6 +320,7 @@ describe("durable post conversations", () => {
     });
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.latestRun).toMatchObject({ status: "CONFLICT", proposedCaption: caption });
     expect(saved.contentItem.caption).toBe(kind === "caption" ? "Newer edit" : "Original");
@@ -294,6 +333,7 @@ describe("durable post conversations", () => {
     respond.mockResolvedValue(output({ ...patch(), caption: "x".repeat(2201), status: "PUBLISHED" }) as Awaited<ReturnType<typeof respond>>);
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const saved = await f.get();
     expect(saved.latestRun.status).toBe("FAILED");
     expect(saved.contentItem).toMatchObject({ caption: "Original", status: "DRAFT", revision: f.item.revision });
@@ -304,11 +344,14 @@ describe("durable post conversations", () => {
     respond.mockRejectedValueOnce(new Error("provider unavailable"));
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(respond).toHaveBeenCalledTimes(1);
     expect((await f.get()).latestRun.status).toBe("FAILED");
     expect((await f.send({ ...f.input, requestId: randomUUID() })).statusCode).toBe(202);
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect((await f.get()).latestRun.status).toBe("SUCCEEDED");
   });
 
@@ -318,6 +361,7 @@ describe("durable post conversations", () => {
     const run = (await f.get()).latestRun;
     await prisma.conversationRun.update({ where: { id: run.id }, data: { status: "RUNNING", leaseExpiresAt: new Date(0) } });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect((await f.get()).latestRun).toMatchObject({ status: "FAILED", errorCode: "CONVERSATION_INTERRUPTED" });
     expect(respond).not.toHaveBeenCalled();
   });
@@ -335,6 +379,7 @@ describe("durable post conversations", () => {
     });
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(await prisma.contentItem.findUniqueOrThrow({ where: { id: f.item.id } })).toMatchObject({ caption: "Original" });
     expect((await prisma.conversationRun.findFirstOrThrow({ where: { workspaceId: f.session.workspace.id } })).status).toBe("FAILED");
   });
@@ -344,6 +389,7 @@ describe("durable post conversations", () => {
     const other = await fixture();
     await f.send();
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const own = await f.get();
     const counts = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SET LOCAL ROLE markos_app`;
@@ -399,7 +445,16 @@ async function execute(f: Fixture, operations: AssistantResult["operations"], ex
   const current = await f.get();
   expect((await f.send({ ...f.input, requestId: randomUUID(), expectedRevision: current.contentItem.revision })).statusCode).toBe(202);
   await processConversationRuns(f.session.workspace.id);
+  await confirmOrdinary(f);
   return f.get();
+}
+async function confirmOrdinary(f: Fixture) {
+  const proposed = await f.get();
+  if (
+    proposed?.latestRun?.status === "AWAITING_CONFIRMATION" &&
+    !proposed.latestRun.confirmation.consequences.some((s: string) => /Remove slide|Remove existing|Clear the saved|This format change/.test(s))
+  )
+    expect((await acknowledge(f, proposed.latestRun)).statusCode).toBe(200);
 }
 async function format(f: Fixture, contentType: "CAROUSEL" | "REEL" | "STORY") {
   await convertContentAggregate(f.session.workspace.id, f.item.id, {
@@ -458,6 +513,7 @@ describe("relational assistant authoring", () => {
     const original = await prisma.conversationRun.findUniqueOrThrow({ where: { id: saved.latestRun.id } });
     await f.send({ ...f.input, requestId: original.requestId as ReturnType<typeof randomUUID>, expectedRevision: original.baseRevision });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect((await f.get()).contentItem.revision).toBe(before);
     expect(respond).toHaveBeenCalledTimes(1);
   });
@@ -552,7 +608,7 @@ describe("relational assistant authoring", () => {
     ]);
     const proposed = await execute(f, [], { conversion: { contentType: "POST", retainMediaItemId: null } });
     expect(proposed.latestRun.status).toBe("AWAITING_CONFIRMATION");
-    expect(proposed.latestRun.confirmation.consequences[0]).toContain("Convert to POST");
+    expect(proposed.latestRun.confirmation.consequences[0]).toContain("Change format to post");
     await acknowledge(f, proposed.latestRun);
     const saved = await f.get();
     expect(saved.contentItem.contentType).toBe("POST");
@@ -616,6 +672,7 @@ describe("relational assistant authoring", () => {
       expect((await f.get()).latestRun.actions.generation[0].status).toBe(expected);
     }
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     expect(videoGeneration).toHaveBeenCalledTimes(1);
     expect((await f.get()).contentItem.revision).toBe(rev);
   });
@@ -650,7 +707,7 @@ describe("assistant execution boundaries", () => {
     expect(JSON.stringify(snapshot)).not.toMatch(/secret-key|private.invalid|private.jpg|cdnUrl|s3Key/);
   });
 
-  it("allows an empty slide removal without confirmation and keeps Story caption optional", async () => {
+  it("applies one confirmed empty slide removal and keeps Story caption optional", async () => {
     const f = await fixture();
     await format(f, "CAROUSEL");
     const added = await execute(f, [{ type: "addMediaItem", ref: "$empty", purpose: null, title: null, body: null, visualDirection: null }]);
@@ -704,6 +761,7 @@ describe("assistant execution boundaries", () => {
       }
     });
     await processConversationRuns(f.session.workspace.id);
+    await confirmOrdinary(f);
     const recovered = await f.get();
     expect(recovered.latestRun).toMatchObject({ status: "FAILED", errorCode: "GENERATION_DISPATCH_INTERRUPTED" });
     expect(recovered.latestRun.actions.generation[0].status).toBe("UNKNOWN");
