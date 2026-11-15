@@ -28,6 +28,11 @@ for CONTENT; durationDays for CAMPAIGN (default7, one post/day); others may be n
 For campaigns preserve the requested start date as ISO-8601 startsAt (UTC timezone) and
 publishesPerDay (1/2/3, default1). Use context.today for relative dates. If no date is specified
 set startsAt=null; the server defaults to today. State duration, date and intensity in the plan.
+Check the last campaign day against event dates. Never promise on-site coverage or follow-up
+outside the campaign window. If necessary, ask whether to shift the start or extend the duration.
+context.campaigns shows already-running or stopped work. For status/open requests explain its
+actual state and point to that conversation's campaign progress, finish, or open control; do not
+propose a duplicate campaign unless the owner explicitly asks for a new campaign.
 instruction is the owner's full brief plus agreed refinements; preserve dates, names and
 exact English/Arabic wording. Proposal is NOT execution. The server asks for one confirmation
 then runs it. Never claim created/saved/published/scheduled. You cannot publish, schedule,
@@ -44,7 +49,7 @@ async def respond_to_workspace(
     if settings.ai_text_provider != "openai" and client is None:
         return WorkspaceAssistantResponse(
             model="local-workspace",
-            prompt_version="workspace-chat.v1.local",
+            prompt_version="workspace-chat.v2.local",
             tokens_in=0,
             tokens_out=0,
             result=WorkspaceAssistantResult(
@@ -83,7 +88,7 @@ async def respond_to_workspace(
     )
     return WorkspaceAssistantResponse(
         model=result.model,
-        prompt_version="workspace-chat.v1",
+        prompt_version="workspace-chat.v2",
         tokens_in=result.tokens_in,
         tokens_out=result.tokens_out,
         result=result.content,

@@ -17,7 +17,10 @@ export interface WorkspaceAssistantTurn {
   confirmationToken?: string;
   contentItemId?: string;
   campaignRequestId?: string;
+  campaignId?: string;
+  campaign?: CampaignGenerationJobRecord;
   strategy?: Record<string, unknown>;
   errorCode?: string;
   createdAt: string;
 }
+import type { CampaignGenerationJobRecord } from "./index";

@@ -1,8 +1,9 @@
+import { MarkosMark, TaskFeedback, Enter } from "../../src/motion";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { View, RefreshControl, ScrollView } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { ImagePlus, Lightbulb, Target, Send, Sparkles, Ellipsis } from "lucide-react-native";
+import { Send, Ellipsis } from "lucide-react-native";
 import { newRequestId } from "../../src/request-id";
 import type { WorkspaceAssistantTurn } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
@@ -58,7 +59,7 @@ export default function Home() {
       void store.clear();
     }
   }, [result.data, pending, store]);
-  const active = result.data?.some((v) => ["THINKING", "EXECUTING"].includes(v.status));
+  const active = result.data?.some((v) => v.status === "THINKING" || (v.status === "EXECUTING" && !v.campaign));
   const accept = (saved: WorkspaceAssistantTurn) =>
     queryClient.setQueryData<WorkspaceAssistantTurn[]>(key, (items) =>
       items?.some((i) => i.id === saved.id) ? items.map((i) => (i.id === saved.id ? saved : i)) : [...(items ?? []), saved]
@@ -115,6 +116,20 @@ export default function Home() {
         <TextAction label={t("Open insights", "فتح الإحصاءات")} onPress={() => router.push("/(tabs)/insights")} />
       </Screen>
     );
+  async function resumeCampaign(turn: WorkspaceAssistantTurn) {
+    if (!turn.campaign?.canResume) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api.resumeCampaignGeneration(turn.campaign.requestId);
+      sessionController.assertEpoch(epoch);
+      await result.refetch();
+    } catch (e) {
+      setError(errorMessage(e, t));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <Screen
       scrollRef={scrollRef}
@@ -156,8 +171,8 @@ export default function Home() {
       refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}
     >
       <View style={{ alignItems: "center", gap: 12, paddingVertical: 20 }}>
-        <View style={{ backgroundColor: colors.secondarySoft, padding: 16, borderRadius: 24 }}>
-          <Sparkles size={28} color={colors.accentText} />
+        <View style={{ padding: 8 }}>
+          <MarkosMark size={44} color={colors.accentText} />
         </View>
         <Txt variant="title" style={{ textAlign: "center" }}>
           {t("What shall we create?", "ماذا سنُبدع اليوم؟")}
@@ -170,70 +185,102 @@ export default function Home() {
         <View style={{ gap: 8 }}>
           {[
             {
-              icon: Lightbulb,
               label: t("Build a strategy", "بناء استراتيجية"),
               message: t("Create an Instagram marketing strategy for my business.", "أنشئ استراتيجية تسويق على إنستغرام لنشاطي.")
             },
-            { icon: ImagePlus, label: t("Create content", "إنشاء محتوى"), message: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
+            { label: t("Create content", "إنشاء محتوى"), message: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
             {
-              icon: Target,
               label: t("Plan a campaign", "تخطيط حملة"),
               message: t("Help me plan a campaign for an upcoming event or offer.", "ساعدني في تخطيط حملة لفعالية أو عرض قادم.")
             }
           ].map((s) => (
-            <Button secondary key={s.label} icon={s.icon} label={s.label} disabled={!restored || busy} onPress={() => edit(s.message)} />
+            <Button secondary key={s.label} label={s.label} disabled={!restored || busy} onPress={() => edit(s.message)} />
           ))}
         </View>
       ) : null}
       {result.isPending ? <Loading /> : null}
       {result.data?.map((turn, index) => (
-        <View key={turn.id} style={{ gap: 16, marginVertical: 8 }}>
-          <Card tone="tint" style={{ alignSelf: "flex-end", maxWidth: "92%" }}>
-            <Txt selectable>{turn.message}</Txt>
-          </Card>
-          <View style={{ gap: 12 }}>
-            <Row>
-              <Sparkles size={15} color={colors.accentText} />
-              <Txt variant="label" muted style={{ flex: 1 }}>
-                MARKOS
-              </Txt>
-              {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
-            </Row>
-            {turn.reply ? <Txt selectable>{turn.reply}</Txt> : null}
-            {turn.status === "THINKING" ? <Loading /> : null}
-            {turn.status === "PROPOSED" && turn.proposal ? (
-              <Card>
-                <Txt variant="label">{t("Here’s the plan", "إليك الخطة")}</Txt>
-                <Txt>{turn.proposal.summary}</Txt>
-                {index === result.data.length - 1 ? (
-                  <>
-                    <Button label={t("Confirm and start", "تأكيد وبدء")} busy={busy} disabled={active} onPress={() => void confirm(turn)} />
-                    <Txt variant="meta" muted>
-                      {t("Want to change something? Tell me below.", "تريد تغيير شيء؟ أخبرني أدناه.")}
-                    </Txt>
-                  </>
-                ) : null}
-              </Card>
-            ) : null}
-            {turn.status === "EXECUTING" ? <Notice>{t("Starting your plan…", "أبدأ تنفيذ خطتك…")}</Notice> : null}
-            {turn.contentItemId ? (
-              <TextAction
-                label={t("Open draft", "فتح المسودة")}
-                onPress={() => router.push({ pathname: "/content/[id]", params: { id: turn.contentItemId! } })}
-              />
-            ) : null}
-            {turn.campaignRequestId ? <TextAction label={t("Open campaigns", "فتح الحملات")} onPress={() => router.push("/(tabs)/campaigns")} /> : null}
-            {turn.strategy ? (
-              <Card>
-                {strategyLines(turn.strategy).map((line, i) => (
-                  <Txt selectable key={i}>
-                    {line}
+        <Enter key={turn.id}>
+          <View style={{ gap: 16, marginVertical: 8 }}>
+            <Card tone="tint" style={{ alignSelf: "flex-end", maxWidth: "92%" }}>
+              <Txt selectable>{turn.message}</Txt>
+            </Card>
+            <View style={{ gap: 12 }}>
+              <Row>
+                <MarkosMark size={22} color={colors.accentText} />
+                <Txt variant="label" muted style={{ flex: 1 }}>
+                  MARKOS
+                </Txt>
+                {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
+              </Row>
+              {turn.reply ? (
+                <Enter>
+                  <Txt selectable>{turn.reply}</Txt>
+                </Enter>
+              ) : null}
+              {turn.status === "THINKING" ? <TaskFeedback label={t("Thinking through your request", "أفكّر في طلبك")} startedAt={turn.createdAt} /> : null}
+              {turn.status === "PROPOSED" && turn.proposal ? (
+                <Enter>
+                  <Card>
+                    <Txt variant="label">{t("Here’s the plan", "إليك الخطة")}</Txt>
+                    <Txt>{turn.proposal.summary}</Txt>
+                    {index === result.data.length - 1 ? (
+                      <>
+                        <Button label={t("Confirm and start", "تأكيد وبدء")} busy={busy} disabled={active} onPress={() => void confirm(turn)} />
+                        <Txt variant="meta" muted>
+                          {t("Want to change something? Tell me below.", "تريد تغيير شيء؟ أخبرني أدناه.")}
+                        </Txt>
+                      </>
+                    ) : null}
+                  </Card>
+                </Enter>
+              ) : null}
+              {turn.status === "EXECUTING" ? (
+                <TaskFeedback
+                  label={turn.campaign ? t("Planning your campaign", "أُعدّ حملتك") : t("Starting your plan", "أبدأ تنفيذ خطتك")}
+                  progress={turn.campaign?.progress}
+                  startedAt={turn.campaign?.createdAt}
+                />
+              ) : null}
+              {turn.contentItemId ? (
+                <TextAction
+                  label={t("Open draft", "فتح المسودة")}
+                  onPress={() => router.push({ pathname: "/content/[id]", params: { id: turn.contentItemId! } })}
+                />
+              ) : null}
+              {turn.campaignId ? (
+                <TextAction
+                  label={t("Open campaign", "فتح الحملة")}
+                  onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: turn.campaignId! } })}
+                />
+              ) : null}
+              {turn.campaign?.status === "FAILED" ? (
+                <Card tone="warning">
+                  <Txt>
+                    {turn.campaign.progress
+                      ? t(
+                          `${turn.campaign.progress.completedWeeks} of ${turn.campaign.progress.totalWeeks} weeks saved. The campaign is not complete yet.`,
+                          `تم حفظ ${turn.campaign.progress.completedWeeks} من ${turn.campaign.progress.totalWeeks} أسابيع. الحملة لم تكتمل بعد.`
+                        )
+                      : t("The campaign has not finished yet.", "لم يكتمل إعداد الحملة بعد.")}
                   </Txt>
-                ))}
-              </Card>
-            ) : null}
+                  {turn.campaign.canResume ? (
+                    <Button label={t("Retry remaining work", "إعادة محاولة العمل المتبقي")} busy={busy} onPress={() => void resumeCampaign(turn)} />
+                  ) : null}
+                </Card>
+              ) : null}
+              {turn.strategy ? (
+                <Card>
+                  {strategyLines(turn.strategy).map((line, i) => (
+                    <Txt selectable key={i}>
+                      {line}
+                    </Txt>
+                  ))}
+                </Card>
+              ) : null}
+            </View>
           </View>
-        </View>
+        </Enter>
       ))}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
       {report ? <ContentReportSheet source="ASSISTANT_MESSAGE" sourceId={report} visible onClose={() => setReport(null)} /> : null}

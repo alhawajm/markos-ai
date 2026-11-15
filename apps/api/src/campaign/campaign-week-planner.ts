@@ -91,12 +91,13 @@ export async function planNextCampaignWeek(job: CampaignGenerationJob, leaseExpi
     generated.campaign.publishesPerDay !== input.publishesPerDay ||
     generated.campaign.weeklyCadence.length !== 1 ||
     !localWeek ||
-    localWeek.week !== 1 ||
     (prepared.referenceFiles.length > 0 && !outline.referenceSummary?.trim()) ||
     localWeek.days.some((day) => day.posts.some((post) => !pillars.has(post.contentPillar)))
   ) {
     throw new CampaignGenerationError("AI_SERVICE_RESPONSE_INVALID", "The weekly plan was incomplete. Your completed weeks are saved.");
   }
+  // The provider may label this sole window with its global week number. The
+  // validated local days are authoritative; our checkpoint owns week numbering.
   const week = { ...localWeek, week: completed + 1, days: localWeek.days.map((day) => ({ ...day, day: day.day + startDay - 1 })) };
   const next = { version: 1, prepared, outline, weeks: [...(checkpoint?.weeks ?? []), week], model: generated.model, promptVersion: generated.prompt_version };
   await prisma.$transaction(async (tx) => {

@@ -1,8 +1,9 @@
 "use client";
+import { MarkosPulse } from "./task-feedback";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, ExternalLink, LoaderCircle } from "lucide-react";
+import { Check, ExternalLink } from "lucide-react";
 import type { InstagramLearningField, InstagramLearningRecord, Locale } from "@markos/shared-types";
 import { useMarkosClient } from "./browser-session";
 
@@ -433,7 +434,7 @@ export function InstagramLearningPanel({ locale, username }: { locale: Locale; u
                 </button>
               ) : (
                 <button type="button" disabled={busy || !selected.length} className={primary + " h-16"} onClick={() => void save(false)}>
-                  {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Check size={18} />}
+                  {busy ? <MarkosPulse size={18} className="animate-spin" /> : <Check size={18} />}
                   {ar ? "اعتماد التغييرات المختارة" : "Use selected changes"}
                 </button>
               )}
@@ -443,7 +444,7 @@ export function InstagramLearningPanel({ locale, username }: { locale: Locale; u
       ) : (
         <div role="status" className="mt-6 space-y-5">
           <p className="flex items-center gap-3 text-lg">
-            <LoaderCircle className="animate-spin motion-reduce:animate-none" size={22} />
+            <MarkosPulse className="animate-spin motion-reduce:animate-none" size={22} />
             {run?.status === "ANALYZING"
               ? ar
                 ? "جارٍ تحليل الأنماط وإعداد تغييرات للمراجعة…"

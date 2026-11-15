@@ -62,6 +62,10 @@ vi.mock("expo-file-system", () => ({ File: class {} }));
 vi.mock("../src/share-file", () => ({ shareFile: vi.fn() }));
 vi.mock("../src/studio/media-preview", () => ({ MediaPreview: "MediaPreview" }));
 vi.mock("../src/studio/motion-reel", () => ({ MotionReel: "MotionReel" }));
+vi.mock("../src/motion", async () => {
+  const { createElement } = await import("react");
+  return { MarkosMark: () => null, TaskFeedback: ({ label }: { label: string }) => createElement("TaskFeedback", {}, label) };
+});
 vi.mock("../src/auth/transport", () => ({ sessionController: { assertEpoch: vi.fn() } }));
 vi.mock("../src/studio/device-store", () => ({
   StudioDeviceStore: class {

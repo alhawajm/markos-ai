@@ -3,7 +3,7 @@ import { Platform, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
-import { FileText, Paperclip, Sparkles, X } from "lucide-react-native";
+import { FileText, Paperclip, X } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
 import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, SelectField, Txt } from "../../src/ui";
 import { briefStore, ReferenceError } from "../../src/campaigns/brief-store";
@@ -141,7 +141,6 @@ export default function NewCampaign() {
         <>
           <Button
             label={step === 1 ? t("Continue", "متابعة") : t("Draft campaign", "إنشاء مسودة الحملة")}
-            icon={step === 2 ? Sparkles : undefined}
             busy={busy}
             disabled={picking || brief.objective.trim().length < 3 || !saved}
             onPress={() => {

@@ -73,9 +73,10 @@ describe("presentation journey", () => {
     }
     await page.goto(`${baseUrl}/${locale}/app/campaigns`, { waitUntil: "domcontentloaded" });
     const planning = page.getByRole("region", { name: locale === "ar" ? "حالة إنشاء الحملات" : "Campaign planning status" });
-    await planning.getByRole("button", { name: locale === "ar" ? "متابعة التخطيط" : "Continue planning", exact: true }).click();
-    await planning.getByText(locale === "ar" ? /جارٍ إعداد الحملة/ : /Drafting your campaign/).waitFor();
-    await expect(planning.getByText(/3\/13/).isVisible()).resolves.toBe(true);
+    await planning.getByRole("button", { name: locale === "ar" ? "إكمال الحملة" : "Finish campaign", exact: true }).click();
+    await planning.getByText(locale === "ar" ? /جارٍ إعداد الحملة/ : /Planning your campaign/).waitFor();
+    await expect(planning.getByRole("progressbar").getAttribute("aria-valuenow")).resolves.toBe("3");
+    await expect(planning.getByRole("progressbar").getAttribute("aria-valuemax")).resolves.toBe("13");
     expect(resumes).toBe(1);
     expect(submissions).toBe(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

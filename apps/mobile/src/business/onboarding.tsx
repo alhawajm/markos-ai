@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, BackHandler, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Check, FileText, Pencil, Sparkles, Trash2, Upload } from "lucide-react-native";
+import { Check, FileText, Pencil, Trash2, Upload } from "lucide-react-native";
 import type { BusinessProfile, OnboardingDocumentAnalysisRecord, OnboardingState } from "@markos/shared-types";
 import { approveBusinessProfileSchema } from "@markos/validation";
 import { sessionController } from "../auth/transport";
@@ -499,13 +499,7 @@ export function NativeOnboarding({ initial, onConnectInstagram }: { initial: Onb
                       label={t("Choose files", "اختيار الملفات")}
                       onPress={() => void run(async () => change({ ...saved, files: await store.files.pick(saved.files) }))}
                     />
-                    <Button
-                      icon={Sparkles}
-                      busy={busy}
-                      disabled={!saved.files.length}
-                      label={t("Analyze files", "تحليل الملفات")}
-                      onPress={() => void analyze()}
-                    />
+                    <Button busy={busy} disabled={!saved.files.length} label={t("Analyze files", "تحليل الملفات")} onPress={() => void analyze()} />
                   </>
                 ) : analysis.status === "PROCESSING" ? (
                   <Card tone="tint">
@@ -645,7 +639,7 @@ export function NativeOnboarding({ initial, onConnectInstagram }: { initial: Onb
                 ))}
                 <Button
                   busy={busy}
-                  icon={reviewingDocuments ? Check : Sparkles}
+                  icon={reviewingDocuments ? Check : undefined}
                   disabled={!reviewingDocuments && !state.readyForProfile}
                   label={
                     reviewingDocuments

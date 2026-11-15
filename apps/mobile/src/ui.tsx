@@ -1,6 +1,5 @@
 import React, { useState, type PropsWithChildren } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, X, type LucideIcon }
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAppearance, useSession } from "./providers";
+import { InkPulse, TaskFeedback } from "./motion";
 
 export function Txt({
   variant = "body",
@@ -109,12 +109,13 @@ export function Button({
         borderWidth: secondary ? 1 : 0,
         borderColor: colors.borderStrong,
         backgroundColor: secondary ? (pressed ? colors.accentSoft : colors.surface) : pressed ? colors.buttonActive : colors.primary,
-        opacity: disabled || busy ? 0.55 : 1,
+        opacity: disabled && !busy ? 0.55 : 1,
+        transform: [{ scale: pressed && !busy ? 0.985 : 1 }],
         justifyContent: "center"
       })}
     >
       <Row style={{ justifyContent: "center", gap: 8 }}>
-        {busy ? <ActivityIndicator color={color} /> : Icon ? <Icon size={20} strokeWidth={1.5} color={color} /> : null}
+        {busy ? <InkPulse color={color} /> : Icon ? <Icon size={20} strokeWidth={1.5} color={color} /> : null}
         <Txt variant="label" style={{ fontSize: 16, color, textAlign: "center" }}>
           {label}
         </Txt>
@@ -494,12 +495,11 @@ export function Notice({ children, error = false }: PropsWithChildren<{ error?: 
     </View>
   );
 }
-export function Loading() {
-  const { colors, t } = useAppearance();
+export function Loading({ label, detail }: { label?: string; detail?: string } = {}) {
+  const { t } = useAppearance();
   return (
     <View style={{ padding: 32, gap: 12, alignItems: "center" }}>
-      <ActivityIndicator color={colors.accentText} />
-      <Txt muted>{t("Loading…", "جارٍ التحميل…")}</Txt>
+      <TaskFeedback label={label ?? t("Loading…", "جارٍ التحميل…")} detail={detail} compact={!detail} />
     </View>
   );
 }

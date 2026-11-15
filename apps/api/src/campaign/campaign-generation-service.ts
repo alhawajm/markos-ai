@@ -10,7 +10,7 @@ import { validateCampaignReferences } from "./campaign-reference-files";
 import { assertCampaignGenerationAccess, CampaignGenerationError } from "./campaign-generation-access";
 import { campaignCheckpoint, planNextCampaignWeek } from "./campaign-week-planner";
 
-const jobSelect = {
+export const campaignGenerationPublicSelect = {
   id: true,
   userId: true,
   requestId: true,
@@ -24,8 +24,9 @@ const jobSelect = {
   completedWeeks: true,
   resumable: true
 } as const;
+const jobSelect = campaignGenerationPublicSelect;
 type GenerationViewer = { userId: string; mayGenerate: boolean };
-function record(row: Pick<CampaignGenerationJob, keyof typeof jobSelect>, viewer?: GenerationViewer): CampaignGenerationJobRecord {
+export function campaignGenerationRecord(row: Pick<CampaignGenerationJob, keyof typeof jobSelect>, viewer?: GenerationViewer): CampaignGenerationJobRecord {
   return {
     id: row.id,
     requestId: row.requestId,
@@ -43,6 +44,7 @@ function record(row: Pick<CampaignGenerationJob, keyof typeof jobSelect>, viewer
       (!viewer || (viewer.userId === row.userId && viewer.mayGenerate))
   };
 }
+const record = campaignGenerationRecord;
 
 export async function resumeCampaignGeneration(workspaceId: string, userId: string, requestId: string): Promise<CampaignGenerationJobRecord> {
   await assertCampaignGenerationAccess(workspaceId, userId);

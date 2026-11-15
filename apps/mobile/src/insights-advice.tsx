@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Download, Sparkles } from "lucide-react-native";
+import { Download } from "lucide-react-native";
 import { useAccount, useAppearance } from "./providers";
 import { Button, Card, Field, Notice, Txt } from "./ui";
 import { errorMessage } from "./errors";
@@ -45,7 +45,7 @@ export function InsightsAdvice({ days }: { days: number }) {
           maxLength={1000}
           editable={!advice.isPending}
         />
-        <Button icon={Sparkles} busy={advice.isPending} label={t("Explain my performance", "اشرح أدائي")} onPress={() => advice.mutate()} />
+        <Button busy={advice.isPending} label={t("Explain my performance", "اشرح أدائي")} onPress={() => advice.mutate()} />
         {advice.isError ? <Notice error>{errorMessage(advice.error, t)}</Notice> : null}
         {output ? (
           <>

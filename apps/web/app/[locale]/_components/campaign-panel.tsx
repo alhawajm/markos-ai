@@ -1,8 +1,9 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronRight, FileText, Paperclip, Plus, RefreshCcw, Search, Sparkles, X, Zap } from "lucide-react";
+import { CalendarDays, ChevronRight, FileText, Paperclip, Plus, RefreshCcw, Search, X, Zap } from "lucide-react";
 import {
   campaignDurations,
   campaignGenerationDurations,
@@ -524,7 +525,7 @@ function CampaignComposer({
       </button>
       <div className="flex items-center gap-3 pe-12">
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-          <Sparkles size={20} />
+          <MarkosAiIcon size={20} />
         </span>
         <div>
           <h2 className="font-display text-2xl font-bold">{t(locale, "generate")}</h2>

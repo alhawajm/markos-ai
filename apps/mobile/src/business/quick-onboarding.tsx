@@ -218,8 +218,10 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
         ) : null}
         {busy || !restored ? (
           <Card>
-            <Loading />
-            <Txt>{busy || t("Restoring your setup…", "نستعيد إعدادك…")}</Txt>
+            <Loading
+              label={busy || t("Restoring your setup…", "نستعيد إعدادك…")}
+              detail={t("Your details stay here while we work.", "تبقى تفاصيلك هنا أثناء العمل.")}
+            />
           </Card>
         ) : (
           <>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CampaignGenerationJobRecord, Locale } from "@markos/shared-types";
 import { useMarkosClient } from "./browser-session";
 import styles from "./campaign-review.module.css";
+import { TaskFeedback } from "./task-feedback";
 
 export function CampaignGenerationStatus({
   locale,
@@ -98,10 +99,20 @@ export function CampaignGenerationStatus({
           <div className={styles.cardHeader}>
             <div>
               <h2>{job.objective || (ar ? "حملة جديدة" : "New campaign")}</h2>
-              <p>
-                {job.status === "FAILED" ? (ar ? "توقف التخطيط" : "Planning stopped") : ar ? "جارٍ إعداد الحملة" : "Drafting your campaign"}
-                {job.progress ? ` · ${job.progress.completedWeeks}/${job.progress.totalWeeks} ${ar ? "أسابيع محفوظة" : "weeks saved"}` : ""}
-              </p>
+              {job.status === "FAILED" ? (
+                <p>
+                  {ar ? "لم يكتمل إعداد الحملة" : "Campaign planning is not complete"}
+                  {job.progress ? ` · ${job.progress.completedWeeks}/${job.progress.totalWeeks} ${ar ? "أسابيع محفوظة" : "weeks saved"}` : ""}
+                </p>
+              ) : (
+                <TaskFeedback
+                  label={ar ? "جارٍ إعداد الحملة" : "Planning your campaign"}
+                  locale={locale}
+                  startedAt={job.createdAt}
+                  progress={job.progress}
+                  compact
+                />
+              )}
             </div>
           </div>
           <p className={styles.objective}>
@@ -126,7 +137,7 @@ export function CampaignGenerationStatus({
                 void resume(job);
               }}
             >
-              {busy === job.id ? (ar ? "جارٍ المتابعة…" : "Resuming…") : ar ? "متابعة التخطيط" : "Continue planning"}
+              {busy === job.id ? (ar ? "جارٍ الاستئناف…" : "Resuming…") : ar ? "إكمال الحملة" : "Finish campaign"}
             </button>
           ) : job.status === "FAILED" ? (
             <button type="button" className={styles.button} onClick={onReviewBrief}>

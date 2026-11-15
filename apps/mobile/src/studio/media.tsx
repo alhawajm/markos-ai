@@ -4,10 +4,11 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router/react-navigation";
-import { ArrowDown, ArrowUp, FolderOpen, Plus, Sparkles, Trash2, Upload } from "lucide-react-native";
+import { ArrowDown, ArrowUp, FolderOpen, Plus, Trash2, Upload } from "lucide-react-native";
 import type { ContentAuthoringOperation, ContentMediaItemRecord, ContentRecord, MediaAssetRecord } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Disclosure, Field, IconButton, ListGroup, ListRow, Notice, Row, Segmented, Sheet, TextAction, Txt } from "../ui";
+import { TaskFeedback } from "../motion";
 import { MediaPreview } from "./media-preview";
 import { MotionReel } from "./motion-reel";
 import { generationActive } from "./model";
@@ -37,6 +38,7 @@ export function StudioMedia({
   const [libraryTarget, setLibraryTarget] = useState<string | null>(null);
   const [sourceTarget, setSourceTarget] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState(item.mediaItems[0]?.id ?? null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const selectedMedia = item.mediaItems.find((media) => media.id === selectedId) ?? item.mediaItems[0];
   const assets = useQuery({ queryKey: [scope, "media"], queryFn: () => api.mediaAssets() });
   const capabilities = useQuery({ queryKey: [scope, "video-capabilities"], queryFn: () => api.videoCapabilities() });
@@ -86,26 +88,30 @@ export function StudioMedia({
     });
   }
   async function generate(target: string) {
-    await run(async () => {
-      const saved = await save();
-      const input = { contentMediaItemId: target, expectedRevision: saved.revision };
-      const video = mediaKind(saved, saved.mediaItems.find((media) => media.id === target)!) === "VIDEO";
-      if (video) {
-        const next = await api.generateContentVideo(item.id, input);
-        queryClient.setQueryData([scope, "video-job", item.id], next);
-      } else {
-        await api.generateContentImage(item.id, input);
-        await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
-      }
-      accept(await api.contentItem(item.id));
-    });
+    setGeneratingId(target);
+    try {
+      await run(async () => {
+        const saved = await save();
+        const input = { contentMediaItemId: target, expectedRevision: saved.revision };
+        const video = mediaKind(saved, saved.mediaItems.find((media) => media.id === target)!) === "VIDEO";
+        if (video) {
+          const next = await api.generateContentVideo(item.id, input);
+          queryClient.setQueryData([scope, "video-job", item.id], next);
+        } else {
+          await api.generateContentImage(item.id, input);
+          await queryClient.invalidateQueries({ queryKey: [scope, "media"] });
+        }
+        accept(await api.contentItem(item.id));
+      });
+    } finally {
+      setGeneratingId(null);
+    }
   }
   return (
     <View style={{ gap: 20 }}>
       {assets.isError ? <Notice error>{errorMessage(assets.error, t)}</Notice> : null}
       {item.contentType === "CAROUSEL" && missingImages.length > 1 ? (
         <Button
-          icon={Sparkles}
           disabled={locked}
           label={t(`Generate ${missingImages.length} missing slide images`, `إنشاء صور الشرائح الناقصة (${missingImages.length})`)}
           onPress={() =>
@@ -194,7 +200,9 @@ export function StudioMedia({
                   {!kind ? <Notice>{t("Choose an image or video to start this Story.", "اختر صورة أو فيديو لبدء هذه القصة.")}</Notice> : null}
                 </>
               ) : null}
-              {asset ? (
+              {generatingId === media.id || (active && job?.contentMediaItemId === media.id) ? (
+                <TaskFeedback label={video ? t("Creating your video", "أنشئ الفيديو الخاص بك") : t("Creating your image", "أنشئ صورتك")} />
+              ) : asset ? (
                 <MediaPreview asset={asset} portrait={video} />
               ) : (
                 <View style={{ backgroundColor: colors.surfaceMuted, padding: 32, borderRadius: 16 }}>
@@ -313,7 +321,6 @@ export function StudioMedia({
                     ) : null}
                     {!video || capabilities.data?.generatedFootage ? (
                       <Button
-                        icon={Sparkles}
                         secondary={!!asset}
                         label={
                           video

@@ -138,7 +138,7 @@ def get_campaign_provider() -> CampaignProvider:
 
 
 def campaign_prompt_version(request: CampaignRequest) -> str:
-    return "campaign.v4.weekly" if isinstance(request, CampaignSegmentRequest) else CAMPAIGN_PROMPT_VERSION
+    return "campaign.v5.weekly" if isinstance(request, CampaignSegmentRequest) else CAMPAIGN_PROMPT_VERSION
 
 
 def estimate_tokens(text: str) -> int:

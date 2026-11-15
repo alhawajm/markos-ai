@@ -1,7 +1,8 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Lock, Sparkles } from "lucide-react";
+import { AlertTriangle, Lock } from "lucide-react";
 import type { Locale } from "@markos/shared-types";
 
 type UsageTone = "ok" | "warning" | "blocked";
@@ -45,7 +46,7 @@ export function MeteredActionNotice({ locale, usage }: { locale: Locale; usage: 
       <div className="rounded-xl border border-[var(--border)] bg-canvas px-3 py-2 text-xs text-muted">
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 font-semibold text-navy">
-            <Sparkles size={13} className="text-[var(--link)]" />
+            <MarkosAiIcon size={13} className="text-[var(--link)]" />
             {usage.label}
           </span>
           <span className="font-bold text-muted">

@@ -1,4 +1,5 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 import Link from "next/link";
 import { type KeyboardEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -18,7 +19,6 @@ import {
   Plus,
   RefreshCw,
   Send,
-  Sparkles,
   Video as VideoIcon,
   X
 } from "lucide-react";
@@ -1398,7 +1398,7 @@ function CalendarDetails({
               className="sunlit-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold"
               href={`/${locale}/app/analytics`}
             >
-              <Sparkles size={16} /> {copy.viewInsights}
+              <MarkosAiIcon size={16} /> {copy.viewInsights}
             </Link>
           ) : null}
           {record.status === "SCHEDULED" ? (
@@ -1875,7 +1875,7 @@ function MonthStatusGlyph({ size, status }: { size: number; status: ContentStatu
   if (status === "FAILED") return <AlertCircle aria-hidden="true" size={size} />;
   if (status === "SCHEDULED") return <CalendarDays aria-hidden="true" size={size} />;
   if (status === "PUBLISHED") return <CheckCircle2 aria-hidden="true" size={size} />;
-  if (status === "APPROVED") return <Sparkles aria-hidden="true" size={size} />;
+  if (status === "APPROVED") return <CheckCircle2 aria-hidden="true" size={size} />;
   if (status === "DRAFT") return <Pencil aria-hidden="true" size={size} />;
   return <List aria-hidden="true" size={size} />;
 }

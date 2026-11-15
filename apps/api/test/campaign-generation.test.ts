@@ -87,7 +87,7 @@ beforeEach(() => {
       nextActions: ["Review plan"],
       weeklyCadence: [
         {
-          week: 1,
+          week: Math.ceil(planning.start_day / 7),
           focus: `Window ${planning.start_day}`,
           days: Array.from({ length: request.durationDays }, (_, i) => ({
             day: i + 1,

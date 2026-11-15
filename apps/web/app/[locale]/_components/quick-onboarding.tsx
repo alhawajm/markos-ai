@@ -1,7 +1,9 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
+import { TaskFeedback } from "./task-feedback";
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, FileText, Instagram, LoaderCircle, Pencil, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Instagram, Pencil } from "lucide-react";
 import type { Locale, OnboardingState, OnboardingDocumentAnalysisRecord } from "@markos/shared-types";
 import {
   emptyQuickOnboarding,
@@ -228,7 +230,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
           </button>
         ) : null}
         <div className="quick-setup-kicker">
-          <Sparkles size={19} />
+          <MarkosAiIcon size={19} />
           {t("A little context. A better start.", "سياق بسيط. بداية أفضل.")}
         </div>
         <h1>
@@ -251,13 +253,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
             {error}
           </p>
         ) : null}
-        {busy ? (
-          <div className="quick-setup-progress" role="status">
-            <LoaderCircle className="animate-spin" size={22} />
-            <p>{busy}</p>
-            <small>{t("No long forms. We’ll show you a summary to confirm.", "بدون استمارات طويلة. سنعرض ملخصًا لتأكيده.")}</small>
-          </div>
-        ) : null}
+        {busy ? <TaskFeedback label={busy} detail={t("We’ll show you a short summary to confirm.", "سنعرض ملخصًا قصيرًا لتأكيده.")} locale={locale} /> : null}
         {page === "choose" && !busy ? (
           <div className="quick-setup-options">
             {(

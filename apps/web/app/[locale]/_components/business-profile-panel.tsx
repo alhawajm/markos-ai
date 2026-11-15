@@ -1,9 +1,10 @@
 "use client";
+import { MarkosPulse } from "./task-feedback";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Building2, Check, ChevronLeft, ChevronRight, LoaderCircle, Package, Palette, Pencil, Plus, Search, Target, Users, X } from "lucide-react";
+import { Building2, Check, ChevronLeft, ChevronRight, Package, Palette, Pencil, Plus, Search, Target, Users, X } from "lucide-react";
 import { MarkosApiError } from "@markos/api-client";
 import type { BusinessKnowledgeRecord, BusinessKnowledgeRevision, Locale, OfferingMaintenanceUpdate, OfferingRecord } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
@@ -130,7 +131,7 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
         </div>
       ) : !data ? (
         <div role="status" className="flex items-center gap-3 py-12 text-[var(--muted)]">
-          <LoaderCircle size={22} className="animate-spin" />
+          <MarkosPulse size={22} className="animate-spin" />
           {t("Loading business profile…", "جارٍ تحميل ملف النشاط…")}
         </div>
       ) : !data.approved ? (
@@ -620,7 +621,7 @@ function EditDialog({
             {t("Cancel", "إلغاء")}
           </button>
           <button className={primary} type="submit" disabled={!dirty || busy || (conflict && !reviewed) || Boolean(caution && !confirmed)}>
-            {busy ? <LoaderCircle size={18} className="animate-spin" /> : null}
+            {busy ? <MarkosPulse size={18} className="animate-spin" /> : null}
             {t("Save changes", "حفظ التغييرات")}
           </button>
         </footer>

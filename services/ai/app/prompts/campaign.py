@@ -22,7 +22,7 @@ def build_campaign_instructions(request: CampaignRequest) -> str:
         planning = (
             "\nWEEKLY PLANNING WINDOW\n"
             "This is one bounded window of a longer campaign. The durationDays in your response "
-            "is the window length; number its days locally from 1. The startsAt is this window's "
+            "is the window length; return exactly one week numbered 1 and number its days locally from 1. The startsAt is this window's "
             "actual start date. The planningContext gives the whole campaign duration and position. "
             "For the first window, make summary, objectives, pillars, KPIs, risks and nextActions "
             "a strategy for the WHOLE campaign, while returning ideas only for this window. "

@@ -1,8 +1,9 @@
+import { MarkosMark } from "../src/motion";
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Sparkles, Eye, EyeOff } from "lucide-react-native";
+import { Eye, EyeOff } from "lucide-react-native";
 import { useAppearance, useSession } from "../src/providers";
 import { sessionController } from "../src/auth/transport";
 import { errorMessage } from "../src/errors";
@@ -39,7 +40,7 @@ export default function Login() {
         <Row style={{ justifyContent: "space-between", marginBottom: 20 }}>
           <Row>
             <View style={{ padding: 12, backgroundColor: colors.secondary, borderRadius: 16 }}>
-              <Sparkles size={24} strokeWidth={1.5} color={colors.onSecondary} />
+              <MarkosMark size={24} strokeWidth={1.5} color={colors.onSecondary} />
             </View>
             <Txt variant="heading">MARKOS</Txt>
           </Row>

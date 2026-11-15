@@ -55,3 +55,4 @@ export const elevation = {
   e2: "0 4px 12px rgba(16,24,40,.10)",
   e3: "0 16px 40px rgba(16,24,40,.16)"
 } as const;
+export { markosMonogram } from "./identity";

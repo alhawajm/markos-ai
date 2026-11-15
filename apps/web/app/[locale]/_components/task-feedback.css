@@ -1,0 +1,188 @@
+.markos-pulse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+  animation: none !important;
+  vertical-align: middle;
+}
+.markos-pulse i {
+  display: block;
+  width: 3px;
+  height: 65%;
+  border-radius: 3px;
+  background: currentColor;
+  transform-origin: center;
+  animation: markos-ink 1.2s ease-in-out infinite;
+}
+.markos-pulse i:nth-child(2) {
+  height: 95%;
+  animation-delay: 0.14s;
+}
+.markos-pulse i:nth-child(3) {
+  animation-delay: 0.28s;
+}
+.markos-task {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  animation: markos-arrive 0.24s ease-out both;
+}
+.markos-task-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  min-height: 24px;
+}
+.markos-task-line .markos-pulse {
+  color: var(--link);
+}
+.markos-task-time {
+  margin-inline-start: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.markos-task-detail {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 9px 0 0 !important;
+  white-space: normal;
+}
+.markos-task-lines {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  max-width: 440px;
+}
+.markos-task-lines span {
+  height: 7px;
+  border-radius: 8px;
+  background: var(--muted-surface, var(--surface-muted));
+  opacity: 0.6;
+  animation: markos-paper 2s ease-in-out infinite;
+}
+.markos-task-lines span:nth-child(2) {
+  width: 86%;
+  animation-delay: 0.12s;
+}
+.markos-task-lines span:nth-child(3) {
+  width: 58%;
+  animation-delay: 0.24s;
+}
+.markos-task-progress {
+  height: 5px;
+  border-radius: 5px;
+  background: var(--border);
+  overflow: hidden;
+  margin-top: 16px;
+}
+.markos-task-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--link);
+  transition: width 0.5s ease;
+}
+.markos-task-compact {
+  padding: 6px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.markos-task-compact .markos-task-line {
+  font-size: 14px;
+}
+.workspace-chat-turn,
+.create-message {
+  animation: markos-arrive 0.22s ease-out both;
+}
+.workspace-chat-plan,
+.create-proposal {
+  animation: markos-arrive 0.3s ease-out both;
+}
+.workspace-chat-starters button,
+.workspace-chat-composer button {
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.workspace-chat-starters button:hover {
+  transform: translateY(-2px);
+}
+.workspace-chat button:active {
+  transform: scale(0.98);
+}
+@keyframes markos-ink {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+@keyframes markos-paper {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+@keyframes markos-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .markos-pulse i,
+  .markos-task,
+  .markos-task-lines span,
+  .workspace-chat-turn,
+  .workspace-chat-plan,
+  .create-message,
+  .create-proposal {
+    animation: none !important;
+    transform: none !important;
+  }
+  .markos-pulse i {
+    opacity: 0.7;
+  }
+  .markos-task-progress > span,
+  .workspace-chat-starters button,
+  .workspace-chat-composer button {
+    transition: none !important;
+  }
+  .workspace-chat-starters button:hover {
+    transform: none;
+  }
+}
+.markos-reply-arrive {
+  animation: markos-arrive 0.24s ease-out both;
+}
+.sunlit-modal-shell[open] {
+  animation: markos-arrive 0.18s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .markos-reply-arrive,
+  .sunlit-modal-shell[open] {
+    animation: none !important;
+  }
+}

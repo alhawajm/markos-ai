@@ -153,7 +153,35 @@ it("preserves a long campaign's date and publishing intensity through the confir
   const job = await prisma.campaignGenerationJob.findFirstOrThrow({ where: { workspaceId: f.session.workspace.id } });
   expect(job.input).toMatchObject({ durationDays: 90, startsAt: "2026-12-01T06:00:00.000Z", publishesPerDay: 3 });
   expect(job.totalWeeks).toBe(13);
-  expect((await f.get())[0]).toMatchObject({ status: "COMPLETED", campaignRequestId: turn.id });
+  expect((await f.get())[0]).toMatchObject({
+    status: "EXECUTING",
+    campaignRequestId: turn.id,
+    campaign: { status: "QUEUED", progress: { completedWeeks: 0, totalWeeks: 13 } }
+  });
+  await prisma.campaignGenerationJob.update({
+    where: { id: job.id },
+    data: { status: "FAILED", completedWeeks: 1, resumable: true, errorCode: "AI_PROVIDER_TIMEOUT" }
+  });
+  const stopped = (await f.get())[0];
+  expect(stopped).toMatchObject({ status: "FAILED", campaign: { status: "FAILED", canResume: true, progress: { completedWeeks: 1, totalWeeks: 13 } } });
+  expect(stopped.campaignId).toBeUndefined();
+  const campaign = await prisma.campaign.create({
+    data: {
+      workspaceId: f.session.workspace.id,
+      title: "Ready campaign",
+      durationDays: 90,
+      publishesPerDay: 3,
+      startsAt: new Date("2026-12-01"),
+      endsAt: new Date("2027-03-01"),
+      content: {}
+    }
+  });
+  await prisma.campaignGenerationJob.update({
+    where: { id: job.id },
+    data: { status: "COMPLETED", campaignId: campaign.id, completedWeeks: 13, errorCode: null }
+  });
+  expect((await f.get())[0]).toMatchObject({ status: "COMPLETED", campaignId: campaign.id, campaign: { status: "COMPLETED", canResume: false } });
+  expect(await workspaceAssistantHistory(f.session.workspace.id, randomUUID())).toEqual([]);
 });
 it("isolates messages and confirmation tokens by workspace AND user", async () => {
   const f = await fixture(),

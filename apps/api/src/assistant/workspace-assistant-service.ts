@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type AiInteraction } from "@prisma/client";
 import { z } from "zod";
-import type { WorkspaceAssistantTurn } from "@markos/shared-types";
+import type { WorkspaceAssistantTurn, CampaignGenerationJobRecord } from "@markos/shared-types";
 import { workspaceAssistantMessageSchema, workspaceAssistantResultSchema } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { getBusinessKnowledge } from "../business-profile/knowledge-service";
@@ -10,7 +10,7 @@ import { requestAi, AiServiceRequestError } from "../ai/request";
 import { recordAiTokenUsage } from "../usage/usage-service";
 import { createContentAggregate } from "../content/content-aggregate";
 import { canContinue, ConversationError, submitConversationTurn } from "../content/conversation-service";
-import { queueCampaignGeneration } from "../campaign/campaign-generation-service";
+import { queueCampaignGeneration, campaignGenerationRecord, campaignGenerationPublicSelect } from "../campaign/campaign-generation-service";
 import { runWorkspaceAgent } from "../agents/agent-service";
 import { env } from "../config/env";
 
@@ -19,26 +19,58 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
 type Prompt = { userId: string; message: string; locale: "en" | "ar"; startsAt: string };
 type State = Omit<WorkspaceAssistantTurn, "id" | "message" | "createdAt"> & { baseRevision?: number; contentRequestId?: string; executionClaimed?: boolean };
 const state = (row: AiInteraction) => row.response as unknown as State;
-function record(row: AiInteraction): WorkspaceAssistantTurn {
+function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): WorkspaceAssistantTurn {
   const s = state(row);
+  const ar = (row.prompt as unknown as Prompt).locale === "ar";
+  const campaignStatus = campaign ? (campaign.status === "COMPLETED" ? "COMPLETED" : campaign.status === "FAILED" ? "FAILED" : "EXECUTING") : undefined;
+  const campaignReply = campaign
+    ? campaign.status === "COMPLETED"
+      ? ar
+        ? "حملتك جاهزة. افتحها لمراجعة الخطة."
+        : "Your campaign is ready. Open it to review the plan."
+      : campaign.status === "FAILED"
+        ? ar
+          ? "توقف التخطيط قبل الاكتمال. الأسابيع المحفوظة لم تُفقد؛ يمكنك استئناف العمل المتبقي هنا."
+          : "Planning stopped before completion. Your saved weeks are kept; resume the remaining work here."
+        : ar
+          ? "جارٍ إعداد حملتك. سأضع رابطها هنا بمجرد اكتمالها."
+          : "Your campaign is being planned. I’ll link it here as soon as it’s ready."
+    : undefined;
   return {
     id: row.id,
     message: (row.prompt as unknown as Prompt).message,
-    reply: s.reply,
-    status: s.status,
+    reply: campaignReply ?? s.reply,
+    status: campaignStatus ?? s.status,
     proposal: s.proposal,
     createdAt: row.createdAt.toISOString(),
     ...(s.status === "PROPOSED" ? { confirmationToken: s.confirmationToken } : {}),
     ...(s.contentItemId ? { contentItemId: s.contentItemId } : {}),
     ...(s.campaignRequestId ? { campaignRequestId: s.campaignRequestId } : {}),
+    ...(campaign ? { campaign, ...(campaign.campaignId ? { campaignId: campaign.campaignId } : {}) } : {}),
     ...(s.strategy ? { strategy: s.strategy } : {}),
     ...(s.errorCode ? { errorCode: s.errorCode } : {})
   };
 }
 const owned = (workspaceId: string, userId: string) => ({ workspaceId, agent, deletedAt: null, prompt: { path: ["userId"], equals: userId } });
+async function currentRecord(row: AiInteraction) {
+  if (!row.accepted || state(row).proposal?.action !== "CAMPAIGN") return record(row);
+  const job = await prisma.campaignGenerationJob.findFirst({
+    where: { workspaceId: row.workspaceId, userId: (row.prompt as unknown as Prompt).userId, requestId: state(row).campaignRequestId ?? row.id },
+    select: campaignGenerationPublicSelect
+  });
+  return record(row, job ? campaignGenerationRecord(job) : undefined);
+}
 export async function workspaceAssistantHistory(workspaceId: string, userId: string) {
   const rows = await prisma.aiInteraction.findMany({ where: owned(workspaceId, userId), orderBy: { createdAt: "desc" }, take: 20 });
-  return rows.reverse().map(record);
+  const requests = rows.filter((row) => row.accepted && state(row).proposal?.action === "CAMPAIGN").map((row) => state(row).campaignRequestId ?? row.id);
+  const jobs = requests.length
+    ? await prisma.campaignGenerationJob.findMany({
+        where: { workspaceId, userId, requestId: { in: requests } },
+        select: campaignGenerationPublicSelect
+      })
+    : [];
+  const byRequest = new Map(jobs.map((job) => [job.requestId, campaignGenerationRecord(job, { userId, mayGenerate: true })]));
+  return rows.reverse().map((row) => record(row, byRequest.get(state(row).campaignRequestId ?? row.id)));
 }
 export async function submitWorkspaceMessage(workspaceId: string, userId: string, raw: unknown) {
   const input = workspaceAssistantMessageSchema.parse(raw);
@@ -55,7 +87,7 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
       row.deletedAt
     )
       throw new ConversationError("ASSISTANT_REQUEST_MISMATCH", "This message ID is already in use.");
-    return record(row);
+    return currentRecord(row);
   };
   if (existing) return replay(existing);
   try {
@@ -65,7 +97,7 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
           id: input.requestId,
           workspaceId,
           agent,
-          promptVersion: "workspace-chat.v1",
+          promptVersion: "workspace-chat.v2",
           prompt: { userId, message: input.message, locale: input.locale, startsAt: new Date().toISOString() },
           response: json({ status: "THINKING", reply: "", proposal: null }),
           model: "queued",
@@ -173,7 +205,15 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         message: p.message,
         locale: p.locale,
         model: await resolveModelSetting("LLM_PRIMARY_MODEL"),
-        context: { business, drafts, today: new Date().toISOString(), timezone: "Asia/Bahrain" },
+        context: {
+          business,
+          drafts,
+          campaigns: history
+            .filter((t) => t.campaign)
+            .map((t) => ({ status: t.campaign!.status, progress: t.campaign!.progress, summary: t.proposal?.summary })),
+          today: new Date().toISOString(),
+          timezone: "Asia/Bahrain"
+        },
         history: history
           .filter((t) => t.id !== row.id && !["THINKING", "FAILED"].includes(t.status))
           .slice(-10)
@@ -198,9 +238,11 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
       proposal.startsAt = proposal.startsAt ?? p.startsAt;
       proposal.durationDays = proposal.durationDays ?? 7;
       proposal.publishesPerDay = proposal.publishesPerDay ?? 1;
-      const date = new Intl.DateTimeFormat(p.locale === "ar" ? "ar-BH" : "en-GB", { dateStyle: "medium", timeZone: "Asia/Bahrain" }).format(
-        new Date(proposal.startsAt)
-      );
+      const format = new Intl.DateTimeFormat(p.locale === "ar" ? "ar-BH" : "en-GB", { dateStyle: "medium", timeZone: "Asia/Bahrain" });
+      const start = new Date(proposal.startsAt),
+        end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + proposal.durationDays - 1);
+      const date = `${format.format(start)} – ${format.format(end)}`;
       proposal.summary =
         proposal.summary.slice(0, 800) +
         `\n${date} · ${proposal.durationDays} ${p.locale === "ar" ? "يوم" : "days"} · ${proposal.publishesPerDay}/${p.locale === "ar" ? "يوم" : "day"}`;
@@ -280,7 +322,7 @@ export async function confirmWorkspacePlan(workspaceId: string, userId: string, 
     s.executionClaimed = false;
     return tx.aiInteraction.update({ where: { id: row.id }, data: { accepted: true, response: json(s) } });
   });
-  return record(row);
+  return currentRecord(row);
 }
 
 async function executeWorkspacePlan(row: AiInteraction) {

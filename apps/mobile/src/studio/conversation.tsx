@@ -1,9 +1,10 @@
+import { MarkosMark, TaskFeedback } from "../motion";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MarkosApiError } from "@markos/api-client";
 import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router/react-navigation";
-import { Send, Sparkles, Ellipsis } from "lucide-react-native";
+import { Send, Ellipsis } from "lucide-react-native";
 import type { ContentConversationRecord, ContentRecord, ConversationTurnInput } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Field, Loading, Notice, Row, TextAction, Txt, IconButton } from "../ui";
@@ -140,7 +141,7 @@ export function StudioConversation({
   return (
     <View style={{ gap: 16 }}>
       <Row>
-        <Sparkles size={24} strokeWidth={1.5} color={colors.accentText} />
+        <MarkosMark size={24} strokeWidth={1.5} color={colors.accentText} />
         <Txt variant="heading">MARKOS</Txt>
       </Row>
       {!result.data?.messages.length && !result.isPending ? (
@@ -188,7 +189,12 @@ export function StudioConversation({
         </View>
       ))}
       {active ? (
-        <Notice>{t("MARKOS is working. You can leave and return to this conversation.", "ماركوس يعمل الآن. يمكنك المغادرة والعودة إلى هذه المحادثة.")}</Notice>
+        <TaskFeedback
+          label={
+            latest?.status === "DISPATCHING" ? t("Creating your media", "أنشئ الوسائط الخاصة بك") : t("Thinking through your changes", "أفكّر في تعديلاتك")
+          }
+          detail={t("You can leave and return to this conversation.", "يمكنك المغادرة والعودة إلى هذه المحادثة.")}
+        />
       ) : null}
       {latest && ["FAILED", "CONFLICT"].includes(latest.status) ? (
         <Card tone="warning">

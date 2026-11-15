@@ -1,11 +1,11 @@
+import { MarkosMark, TaskFeedback } from "../../src/motion";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MarkosApiError } from "@markos/api-client";
-import { Check, Clock3, Sparkles } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Loading, Notice, Row, Screen, Txt } from "../../src/ui";
+import { Button, Card, Loading, Notice, Screen, Txt } from "../../src/ui";
 import { QueryFailure } from "../../src/content";
 import { briefStore } from "../../src/campaigns/brief-store";
 import { campaignStart } from "../../src/campaigns/brief-model";
@@ -87,7 +87,7 @@ export default function CampaignGeneration() {
             ? t("Let’s try that again", "لنحاول مجددًا")
             : t("Drafting your campaign", "جارٍ إعداد حملتك")}
       </Txt>
-      <Sparkles size={40} strokeWidth={1.5} color={colors.accentText} />
+      <MarkosMark size={40} strokeWidth={1.5} color={colors.accentText} />
       {job?.objective ? <Txt>{job.objective}</Txt> : null}
       {result.isPending ? <Loading /> : null}
       {missing ? (
@@ -111,25 +111,11 @@ export default function CampaignGeneration() {
       {job && ["QUEUED", "RUNNING"].includes(job.status) ? (
         <>
           <Txt muted>{t("MARKOS is bringing your business context and event references together.", "يجمع ماركوس سياق نشاطك التجاري ومراجع الفعالية.")}</Txt>
-          <Card>
-            <Row>
-              <Check size={24} color={colors.accentText} />
-              <Txt>{t("Brief and references received", "تم استلام الملخص والمراجع")}</Txt>
-            </Row>
-            <Row>
-              <Clock3 size={24} color={colors.accentText} />
-              <Txt>
-                {job.progress
-                  ? t(
-                      `${job.progress.completedWeeks} of ${job.progress.totalWeeks} weeks saved`,
-                      `تم حفظ ${job.progress.completedWeeks} من ${job.progress.totalWeeks} أسابيع`
-                    )
-                  : job.status === "QUEUED"
-                    ? t("Waiting to start", "بانتظار البدء")
-                    : t("Drafting the campaign", "جارٍ إعداد الحملة")}
-              </Txt>
-            </Row>
-          </Card>
+          <TaskFeedback
+            label={job.status === "QUEUED" ? t("Preparing the next part", "أُحضّر الجزء التالي") : t("Planning your campaign", "أُعدّ حملتك")}
+            progress={job.progress}
+            startedAt={job.updatedAt}
+          />
           <Notice>
             {t(
               "You can leave this screen or lock your phone. Your campaign will be here when you return.",
@@ -157,7 +143,7 @@ export default function CampaignGeneration() {
                   "الأسابيع المكتملة محفوظة. تابع بإعادة إنشاء الأسبوع غير المكتمل فقط."
                 )}
               </Txt>
-              <Button label={t("Continue planning", "متابعة التخطيط")} busy={resume.isPending} onPress={() => resume.mutate()} />
+              <Button label={t("Finish campaign", "إكمال الحملة")} busy={resume.isPending} onPress={() => resume.mutate()} />
             </>
           ) : (
             <Button

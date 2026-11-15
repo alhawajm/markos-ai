@@ -1,4 +1,6 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
+import { MarkosPulse } from "./task-feedback";
 
 import { ThemeSelect } from "../../_components/theme-control";
 
@@ -15,18 +17,15 @@ import {
   Info,
   Languages,
   Layers3,
-  LoaderCircle,
   MessageCircleMore,
   Pencil,
   Plus,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   Target,
   Trash2,
   UploadCloud,
   Users,
-  WandSparkles,
   X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -40,7 +39,6 @@ import type {
   OnboardingState
 } from "@markos/shared-types";
 import { initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
-import { MarkosAiIcon } from "./markos-ai-icon";
 import { useModalDialog } from "./use-modal-dialog";
 import { canRetryOfferingDocumentFailure, offeringDocumentFailureMessage } from "./offering-document-errors";
 import { pollOnboardingDocumentAnalysis, recoverOnboardingDocumentRequest } from "./onboarding-document-recovery";
@@ -437,7 +435,7 @@ function englishSteps(): StepDefinition[] {
       title: "Why should customers choose you?",
       intro: "A rough answer is useful. It does not need to sound like marketing copy.",
       help: "A differentiator and the problem you solve improve positioning, profile resolution, and Campaign rationale.",
-      icon: Sparkles,
+      icon: MarkosAiIcon,
       skippable: true,
       fields: [
         {
@@ -1520,7 +1518,7 @@ function BusinessDocumentScreen({
           type="button"
         >
           {waiting ? (
-            <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={28} />
+            <MarkosPulse className="animate-spin text-[var(--sunlit-aqua-dark)]" size={28} />
           ) : (
             <UploadCloud className="text-[var(--sunlit-aqua-dark)]" size={28} />
           )}
@@ -1593,7 +1591,7 @@ function BusinessDocumentScreen({
                 onClick={() => onAnalyze(selectedFiles)}
                 type="button"
               >
-                {waiting ? <LoaderCircle className="animate-spin" size={17} /> : <WandSparkles size={17} />}
+                {waiting ? <MarkosPulse className="animate-spin" size={17} /> : <MarkosAiIcon size={17} />}
                 {waiting ? copy.businessDocuments.analyzing : copy.businessDocuments.analyze}
               </button>
             </div>
@@ -1910,7 +1908,7 @@ function StepScreen({
                 onClick={onSave}
                 type="button"
               >
-                {saving ? <LoaderCircle className="animate-spin" size={16} /> : null}
+                {saving ? <MarkosPulse className="animate-spin" size={16} /> : null}
                 {copy.saveContinue}
                 <NextIcon size={16} />
               </button>
@@ -2278,7 +2276,7 @@ function OfferingDocumentLauncher({
         </label>
       ) : waiting ? (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--surface)] px-3 py-3 text-[13px] font-semibold text-[var(--sunlit-ink-soft)]">
-          <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={17} />
+          <MarkosPulse className="animate-spin text-[var(--sunlit-aqua-dark)]" size={17} />
           {copy.documents.analyzing}
         </div>
       ) : (
@@ -2378,7 +2376,7 @@ function OfferingDocumentAssistant({
 
       {waiting ? (
         <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-[var(--surface)] px-4 py-4 text-[14px] font-semibold text-[var(--sunlit-ink-soft)] sm:mx-5">
-          <LoaderCircle className="animate-spin text-[var(--sunlit-aqua-dark)]" size={19} />
+          <MarkosPulse className="animate-spin text-[var(--sunlit-aqua-dark)]" size={19} />
           {copy.documents.analyzing}
         </div>
       ) : null}
@@ -2646,7 +2644,7 @@ function ReviewScreen({
             onClick={onCreate}
             type="button"
           >
-            {saving ? <LoaderCircle className="animate-spin" size={17} /> : editMode ? <Check size={17} /> : <WandSparkles size={17} />}
+            {saving ? <MarkosPulse className="animate-spin" size={17} /> : editMode ? <Check size={17} /> : <MarkosAiIcon size={17} />}
             {readyForProfile ? (editMode ? copy.review.save : copy.review.create) : copy.review.missingEssential}
           </button>
         </div>
@@ -2690,7 +2688,7 @@ function ProfileScreen({
         <div>
           <span className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] border border-[color-mix(in_srgb,var(--secondary)_24%,transparent)] bg-[var(--sunlit-aqua-soft)]">
             <span className="absolute inset-0 animate-ping rounded-[2rem] bg-[color-mix(in_srgb,var(--secondary)_10%,transparent)]" />
-            <LoaderCircle className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} />
+            <MarkosPulse className="relative animate-spin text-[var(--sunlit-aqua-dark)]" size={38} />
           </span>
           <h1 className="mt-7 font-display text-[32px] font-semibold leading-tight tracking-tight sm:text-[38px] rtl:tracking-normal">
             {copy.profile.generatingTitle}
@@ -2872,7 +2870,7 @@ function ProfileScreen({
             onClick={onApprove}
             type="button"
           >
-            {saving ? <LoaderCircle className="animate-spin" size={17} /> : <CheckCircle2 size={17} />}
+            {saving ? <MarkosPulse className="animate-spin" size={17} /> : <CheckCircle2 size={17} />}
             {copy.profile.approve}
           </button>
         </div>

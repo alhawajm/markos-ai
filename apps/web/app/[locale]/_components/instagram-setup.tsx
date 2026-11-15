@@ -1,10 +1,11 @@
 "use client";
+import { MarkosPulse } from "./task-feedback";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { Check, Instagram, LoaderCircle, ShieldCheck } from "lucide-react";
+import { Check, Instagram, ShieldCheck } from "lucide-react";
 import type { InstagramConnection, Locale, MfaTotpSetup } from "@markos/shared-types";
 import { appEntryRedirect } from "./app-entry";
 import { createMarkosClient, initializeBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
@@ -124,7 +125,7 @@ export function InstagramSetup({ locale }: { locale: Locale }) {
         ) : null}
         {!ready ? (
           <div role="status" className="flex items-center gap-3">
-            <LoaderCircle className="animate-spin motion-reduce:animate-none" size={20} />
+            <MarkosPulse className="animate-spin motion-reduce:animate-none" size={20} />
             {ar ? "جارٍ التحقق من الإعداد…" : "Checking setup…"}
           </div>
         ) : (
@@ -222,7 +223,7 @@ export function InstagramSetup({ locale }: { locale: Locale }) {
                         className={setupPrimary}
                         onClick={() => void action(async () => setSetup(await client.setupMfaTotp()))}
                       >
-                        {busy ? <LoaderCircle size={18} className="animate-spin" /> : null}
+                        {busy ? <MarkosPulse size={18} className="animate-spin" /> : null}
                         {ar ? "إعداد تطبيق المصادقة" : "Set up authenticator"}
                       </button>
                     )
@@ -238,7 +239,7 @@ export function InstagramSetup({ locale }: { locale: Locale }) {
                         })
                       }
                     >
-                      {busy ? <LoaderCircle size={18} className="animate-spin" /> : null}
+                      {busy ? <MarkosPulse size={18} className="animate-spin" /> : null}
                       {ar ? "الربط بإنستغرام" : "Connect Instagram"}
                     </button>
                   )}

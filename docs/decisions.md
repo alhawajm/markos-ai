@@ -1057,3 +1057,8 @@ The workspace opens with MARKOS chat and suggested jobs (strategy, content, camp
 Image requests targeting an attached image use the owned original as input to the image-edit endpoint. Unrequested composition, logos and bilingual wording must be preserved in the instructions. Missing/unreadable originals fail explicitly rather than silently switching to a new concept. Original assets remain in Library. Caption-only operations do not generate images. Model selection continues through the existing configured roles.
 
 Instagram reading uses public unauthenticated pages and bounded first-party CDN media only. Private profiles, redirects/login walls and unavailable public data produce an honest fallback to files/manual setup. There is no guarantee Instagram will expose every public account to logged-out access, and no private API or CAPTCHA bypass is introduced.
+
+
+## 2026-11-15 - Campaign readiness from durable jobs
+
+Queuing campaign generation is a handoff, not a completed campaign. Home replies project the actor-owned, workspace-scoped generation job, including saved-week counts and resumability; completed jobs expose their exact campaign ID. Existing queued-handoff history gains the same projection. Confirmation replays read current job state, and failed planning does not advertise Open campaign. Keep the existing explicit resume/checkpoint boundaries and publishing approval. For weekly planning, validate the complete local day/post schedule and canonical pillars, then assign the global week number from the checkpoint; a provider-supplied global week label must not reject otherwise valid work. Campaign proposals show both start and last planning dates, and the strategist must not promise event coverage outside that interval.

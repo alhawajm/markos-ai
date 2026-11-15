@@ -1,4 +1,5 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
 
 import { MarkosApiClient } from "@markos/api-client";
 
@@ -41,7 +42,6 @@ import {
   Play,
   Settings,
   Share2,
-  Sparkles,
   Target,
   TrendingUp,
   User,
@@ -50,14 +50,13 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { logoutBrowserSession, useMarkosClient, useMarkosSession } from "./browser-session";
-import { MarkosAiIcon } from "./markos-ai-icon";
 import { ContentStatusBadge } from "./content-status-badge";
 import { contentStatusLabel } from "./content-status";
 import { LatestTrendViewport } from "./latest-trend-viewport";
 import { NotificationToast } from "./notification-toast";
 
 type Accent = "amber" | "gold" | "teal";
-type IconType = typeof Sparkles;
+type IconType = typeof MarkosAiIcon;
 
 interface ContentReadyCardModel {
   accent: Accent;
@@ -698,7 +697,7 @@ export function OpportunitiesPanel({ locale }: { locale: Locale }) {
   return (
     <section className="space-y-6 xl:space-y-8">
       <HeroTitle
-        icon={Sparkles}
+        icon={MarkosAiIcon}
         subtitle={
           locale === "ar"
             ? "أمثلة توضيحية؛ ليست توصيات مبنية على أداء نشاطك."
@@ -906,7 +905,7 @@ export function CampaignBuilderPanel({ locale }: { locale: Locale }) {
           </div>
           <article className="lux-card rounded-[1.5rem] p-5 xl:p-6">
             <div className="mb-6 flex items-center gap-4 xl:mb-8 xl:gap-5">
-              <IconTile accentName="teal" icon={Sparkles} />
+              <IconTile accentName="teal" icon={MarkosAiIcon} />
               <div>
                 <h3 className="text-xl font-bold text-[var(--text)] xl:text-2xl">Workspace Campaign Drafts</h3>
                 <p className="mt-2 text-base text-[var(--text)] xl:text-lg">
@@ -1734,7 +1733,7 @@ export function FinalVaultPanel({ locale }: { locale: Locale }) {
                       : "grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--surface)] text-[var(--sunlit-muted)]"
                   }
                 >
-                  {index % 2 === 0 ? <Brain size={20} /> : <Sparkles size={20} />}
+                  {index % 2 === 0 ? <Brain size={20} /> : <MarkosAiIcon size={20} />}
                 </span>
                 <div>
                   <h3 className="text-lg font-semibold text-[var(--text)]">{module.title}</h3>
@@ -2131,7 +2130,7 @@ function OpportunityCard({
           className="lux-button-primary inline-flex items-center gap-3 rounded-full px-6 py-3 text-base font-bold xl:px-7 xl:py-3.5"
           href={`/${locale}/app/content-studio`}
         >
-          <Sparkles size={20} /> Generate Content <ArrowRight size={20} />
+          <MarkosAiIcon size={20} /> Generate Content <ArrowRight size={20} />
         </a>
         <a
           className="rounded-full border border-[var(--border)] px-6 py-3 text-base font-bold text-[var(--text)] xl:px-7 xl:py-3.5"

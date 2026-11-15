@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowUp, LoaderCircle, Sparkles, Target, ImagePlus, Lightbulb, MoreHorizontal } from "lucide-react";
+import { ArrowUp, MoreHorizontal } from "lucide-react";
+import { MarkosAiIcon } from "./markos-ai-icon";
+import { MarkosPulse, TaskFeedback } from "./task-feedback";
 import { ContentReportDialog } from "./content-report-dialog";
 import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
@@ -18,7 +20,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     [ready, setReady] = useState(false),
     [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale } | null>(null);
   const end = useRef<HTMLDivElement>(null),
-    active = turns.some((turn) => ["THINKING", "EXECUTING"].includes(turn.status));
+    active = turns.some((turn) => turn.status === "THINKING" || (turn.status === "EXECUTING" && !turn.campaign));
   const following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
   useEffect(() => {
@@ -105,6 +107,19 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
       setBusy(false);
     }
   }
+  async function resumeCampaign(turn: WorkspaceAssistantTurn) {
+    if (!turn.campaign?.canResume) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api.resumeCampaignGeneration(turn.campaign.requestId);
+      setTurns(await api.workspaceAssistant());
+    } catch {
+      setError(t("Couldn’t resume the saved campaign. Please try again.", "تعذّر استئناف الحملة المحفوظة. حاول مجددًا."));
+    } finally {
+      setBusy(false);
+    }
+  }
   if (session && !session.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role)))
     return (
       <section className="workspace-chat">
@@ -119,7 +134,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     <section className="workspace-chat" dir={locale === "ar" ? "rtl" : "ltr"} aria-label={t("MARKOS conversation", "محادثة ماركوس")}>
       <header className="workspace-chat-welcome">
         <span className="workspace-chat-mark">
-          <Sparkles size={26} />
+          <MarkosAiIcon size={44} />
         </span>
         <p>MARKOS</p>
         <h1>{t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")}</h1>
@@ -129,13 +144,11 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
         <div className="workspace-chat-starters">
           {[
             {
-              icon: Lightbulb,
               label: t("Build a strategy", "بناء استراتيجية"),
               text: t("Create an Instagram marketing strategy for my business.", "أنشئ استراتيجية تسويق على إنستغرام لنشاطي.")
             },
-            { icon: ImagePlus, label: t("Create content", "إنشاء محتوى"), text: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
+            { label: t("Create content", "إنشاء محتوى"), text: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
             {
-              icon: Target,
               label: t("Plan a campaign", "تخطيط حملة"),
               text: t("Help me plan a campaign for an upcoming event or offer.", "ساعدني في تخطيط حملة لفعالية أو عرض قادم.")
             }
@@ -149,7 +162,6 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
                 document.getElementById("home-message")?.focus();
               }}
             >
-              <s.icon size={20} />
               {s.label}
             </button>
           ))}
@@ -163,18 +175,16 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
             </p>
             <div className="workspace-chat-reply" dir="auto">
               <span className="workspace-chat-speaker">
-                <Sparkles size={16} /> MARKOS
+                <MarkosAiIcon size={22} /> MARKOS
                 {turn.reply ? (
                   <button className="workspace-chat-report" aria-label={t("Report reply", "الإبلاغ عن الرد")} onClick={() => setReport(turn.id)}>
                     <MoreHorizontal size={17} />
                   </button>
                 ) : null}
               </span>
-              <p>{turn.reply}</p>
+              {turn.reply && <p className="markos-reply-arrive">{turn.reply}</p>}
               {turn.status === "THINKING" && (
-                <p role="status">
-                  <LoaderCircle size={18} className="animate-spin" /> {t("Thinking…", "أفكّر…")}
-                </p>
+                <TaskFeedback label={t("Thinking through your request", "أفكّر في طلبك")} locale={locale} startedAt={turn.createdAt} />
               )}
               {turn.proposal && turn.status === "PROPOSED" && (
                 <div className="workspace-chat-plan">
@@ -190,16 +200,40 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
                   )}
                 </div>
               )}
-              {turn.status === "EXECUTING" && <p role="status">{t("Starting your plan…", "أبدأ تنفيذ خطتك…")}</p>}
+              {turn.status === "EXECUTING" && (
+                <TaskFeedback
+                  label={turn.campaign ? t("Planning your campaign", "أُعدّ حملتك") : t("Starting your plan", "أبدأ تنفيذ خطتك")}
+                  locale={locale}
+                  progress={turn.campaign?.progress}
+                  startedAt={turn.campaign?.createdAt}
+                />
+              )}
               {turn.contentItemId && (
                 <a className="workspace-chat-link" href={`/${locale}/app/content-studio?item=${turn.contentItemId}`}>
                   {t("Open draft →", "فتح المسودة ←")}
                 </a>
               )}
-              {turn.campaignRequestId && (
-                <a className="workspace-chat-link" href={`/${locale}/app/campaigns`}>
-                  {t("Open campaigns →", "فتح الحملات ←")}
+              {turn.campaignId && (
+                <a className="workspace-chat-link" href={`/${locale}/app/campaigns?campaign=${turn.campaignId}`}>
+                  {t("Open campaign →", "فتح الحملة ←")}
                 </a>
+              )}
+              {turn.campaign?.status === "FAILED" && (
+                <div className="workspace-chat-plan">
+                  <p>
+                    {turn.campaign.progress
+                      ? t(
+                          `${turn.campaign.progress.completedWeeks} of ${turn.campaign.progress.totalWeeks} weeks saved. The campaign is not complete yet.`,
+                          `تم حفظ ${turn.campaign.progress.completedWeeks} من ${turn.campaign.progress.totalWeeks} أسابيع. الحملة لم تكتمل بعد.`
+                        )
+                      : t("The campaign has not finished yet.", "لم يكتمل إعداد الحملة بعد.")}
+                  </p>
+                  {turn.campaign.canResume && (
+                    <button className="studio-button studio-button-primary" disabled={busy} onClick={() => void resumeCampaign(turn)}>
+                      {t("Retry remaining work", "إعادة محاولة العمل المتبقي")}
+                    </button>
+                  )}
+                </div>
               )}
               {turn.strategy && (
                 <article className="workspace-chat-strategy">
@@ -244,7 +278,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
           aria-label={pending ? t("Retry message", "إعادة المحاولة") : t("Send message", "إرسال الرسالة")}
           type="submit"
         >
-          {busy ? <LoaderCircle size={21} className="animate-spin" /> : <ArrowUp size={23} />}
+          {busy ? <MarkosPulse size={21} /> : <ArrowUp size={23} />}
         </button>
       </form>
       {error && (

@@ -1,4 +1,6 @@
 "use client";
+import { MarkosAiIcon } from "./markos-ai-icon";
+import { TaskFeedback } from "./task-feedback";
 /* eslint-disable @next/next/no-img-element -- Media Library URLs are rendered without image optimization. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -10,12 +12,10 @@ import {
   Image as ImageIcon,
   Images,
   Instagram,
-  LoaderCircle,
   MoreHorizontal,
   Plus,
   RectangleVertical,
   Send,
-  Sparkles,
   Trash2,
   X
 } from "lucide-react";
@@ -861,7 +861,17 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                       <div className="create-media-grid">
                         <div>
                           <div className={`create-media-preview ${record.contentType === "STORY" || selected.mediaKind === "VIDEO" ? "create-vertical" : ""}`}>
-                            {asset ? (
+                            {busy === "generate" ||
+                            (conversationActive && conversation?.latestRun?.status === "DISPATCHING") ||
+                            (activeGeneration && selected.mediaKind === "VIDEO") ? (
+                              <TaskFeedback
+                                label={
+                                  selected.mediaKind === "VIDEO" ? t("Creating your video", "أنشئ الفيديو الخاص بك") : t("Creating your image", "أنشئ صورتك")
+                                }
+                                locale={locale}
+                                detail={t("The result will appear here when it is ready.", "ستظهر النتيجة هنا عندما تصبح جاهزة.")}
+                              />
+                            ) : asset ? (
                               asset.mimeType.startsWith("video/") ? (
                                 <video controls playsInline src={asset.publicUrl} aria-label={asset.filename} />
                               ) : (
@@ -887,7 +897,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                                 }
                                 onClick={() => void run("generate", generate)}
                               >
-                                <Sparkles size={17} />
+                                <MarkosAiIcon size={17} />
                                 {selected.mediaKind === "VIDEO" ? t("Generate AI footage", "توليد مشاهد بالذكاء الاصطناعي") : t("Generate", "توليد")}
                               </button>
                             )}
@@ -1108,7 +1118,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
         <aside className="create-companion" aria-label="MARKOS">
           <header className="create-companion-header">
             <strong>
-              <Sparkles size={22} /> MARKOS
+              <MarkosAiIcon size={22} /> MARKOS
             </strong>
             <div className="create-panel-toggle" hidden={!manualEditor}>
               <button aria-pressed={panel === "assistant"} onClick={() => setPanel("assistant")}>
@@ -1148,10 +1158,14 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 </div>
               ))}
               {conversationActive && (
-                <div className="create-thinking" role="status">
-                  <LoaderCircle className="animate-spin" size={20} />
-                  {t("MARKOS is working…", "MARKOS يعمل…")}
-                </div>
+                <TaskFeedback
+                  label={
+                    conversation?.latestRun?.status === "DISPATCHING"
+                      ? t("Creating your media", "أنشئ الوسائط الخاصة بك")
+                      : t("Thinking through your changes", "أفكّر في تعديلاتك")
+                  }
+                  locale={locale}
+                />
               )}
               {proposal && (
                 <section className="create-proposal">
