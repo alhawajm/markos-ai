@@ -70,7 +70,7 @@ async function setup(initial: ContentRecord) {
     user: session.user,
     workspace: session.workspace
   });
-  await page.route(/^http:\/\/(?:localhost|127\.0\.0\.1):4000\//, async (route) => {
+  await page.route("**/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname,
       method = route.request().method();
     if (method === "OPTIONS") return route.fulfill({ status: 204 });
@@ -347,6 +347,7 @@ describe("Relational Create workspace", () => {
       await page.reload();
       await page.getByTestId("create-workspace").waitFor();
       await expect.poll(() => page.locator(".create-message").count()).toBe(2);
+      await page.getByRole("button", { name: "Edit manually", exact: true }).click();
       await page.getByRole("button", { name: "Caption", exact: true }).click();
       await page.getByLabel("Caption", { exact: true }).fill("Final edit before deletion");
       await page.getByLabel("More actions", { exact: true }).click();
@@ -471,6 +472,7 @@ it("surfaces server-issued destructive proposals, rejects stale confirmation, an
     };
     await page.reload();
     await page.getByRole("button", { name: "Confirm changes", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Edit manually", exact: true }).click();
     await page.getByLabel("Visual direction", { exact: true }).fill("Keep my pending direction");
     await page.getByRole("button", { name: "Confirm changes", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "This draft changed" }).first().waitFor();
