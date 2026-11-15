@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type AiInteraction } from "@prisma/client";
 import { z } from "zod";
-import type { WorkspaceAssistantTurn, CampaignGenerationJobRecord } from "@markos/shared-types";
+import type { WorkspaceAssistantTurn, CampaignGenerationJobRecord, TaskIntent } from "@markos/shared-types";
 import { workspaceAssistantMessageSchema, workspaceAssistantResultSchema } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { getBusinessKnowledge } from "../business-profile/knowledge-service";
@@ -18,9 +18,25 @@ import { searchVaultContext } from "../vault/vault-service";
 
 const agent = "WORKSPACE_ASSISTANT";
 const json = (value: unknown) => value as Prisma.InputJsonValue;
-type Prompt = { userId: string; message: string; locale: "en" | "ar"; startsAt: string };
+type Prompt = { userId: string; message: string; locale: "en" | "ar"; startsAt: string; intent?: TaskIntent };
 type State = Omit<WorkspaceAssistantTurn, "id" | "message" | "createdAt"> & { baseRevision?: number; contentRequestId?: string; executionClaimed?: boolean };
 const state = (row: AiInteraction) => row.response as unknown as State;
+function boundedStrategy(value: Record<string, unknown> | undefined) {
+  const strategy = value?.strategy as Record<string, unknown> | undefined;
+  const entries = (key: string) =>
+    Array.isArray(strategy?.[key])
+      ? (strategy![key] as unknown[])
+          .filter((text): text is string => typeof text === "string")
+          .slice(0, 4)
+          .map((text) => text.slice(0, 800))
+      : [];
+  return {
+    summary: typeof value?.summary === "string" ? value.summary.slice(0, 1500) : "",
+    objectives: entries("objectives"),
+    pillars: entries("pillars"),
+    nextActions: entries("nextActions")
+  };
+}
 function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): WorkspaceAssistantTurn {
   const s = state(row);
   const ar = (row.prompt as unknown as Prompt).locale === "ar";
@@ -40,6 +56,7 @@ function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): Wor
     : undefined;
   return {
     id: row.id,
+    intent: (row.prompt as unknown as Prompt).intent ?? "GENERAL",
     message: (row.prompt as unknown as Prompt).message,
     reply: campaignReply ?? s.reply,
     status: campaignStatus ?? s.status,
@@ -62,8 +79,12 @@ async function currentRecord(row: AiInteraction) {
   });
   return record(row, job ? campaignGenerationRecord(job) : undefined);
 }
-export async function workspaceAssistantHistory(workspaceId: string, userId: string) {
-  const rows = await prisma.aiInteraction.findMany({ where: owned(workspaceId, userId), orderBy: { createdAt: "desc" }, take: 20 });
+export async function workspaceAssistantHistory(workspaceId: string, userId: string, intent?: TaskIntent) {
+  const rows = await prisma.aiInteraction.findMany({
+    where: { ...owned(workspaceId, userId), ...(intent && intent !== "GENERAL" ? { AND: [{ prompt: { path: ["intent"], equals: intent } }] } : {}) },
+    orderBy: { createdAt: "desc" },
+    take: 20
+  });
   const requests = rows.filter((row) => row.accepted && state(row).proposal?.action === "CAMPAIGN").map((row) => state(row).campaignRequestId ?? row.id);
   const jobs = requests.length
     ? await prisma.campaignGenerationJob.findMany({
@@ -86,6 +107,7 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
       p.userId !== userId ||
       p.message !== input.message ||
       p.locale !== input.locale ||
+      (p.intent ?? "GENERAL") !== (input.intent ?? "GENERAL") ||
       row.deletedAt
     )
       throw new ConversationError("ASSISTANT_REQUEST_MISMATCH", "This message ID is already in use.");
@@ -99,8 +121,8 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
           id: input.requestId,
           workspaceId,
           agent,
-          promptVersion: "workspace-chat.v3",
-          prompt: { userId, message: input.message, locale: input.locale, startsAt: new Date().toISOString() },
+          promptVersion: "workspace-chat.v4",
+          prompt: { userId, message: input.message, locale: input.locale, startsAt: new Date().toISOString(), intent: input.intent ?? "GENERAL" },
           response: json({ status: "THINKING", reply: "", proposal: null }),
           model: "queued",
           tokensIn: 0,
@@ -191,7 +213,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
   const p = row.prompt as unknown as Prompt;
   try {
     if (!(await canContinue(row.workspaceId, p.userId))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "Access changed", 403);
-    const [business, drafts, history, retrieved, personalization] = await Promise.all([
+    const [business, drafts, history, retrieved, personalization, previousStrategy] = await Promise.all([
       getBusinessKnowledge(row.workspaceId),
       prisma.contentItem.findMany({
         where: { workspaceId: row.workspaceId, deletedAt: null, status: { in: ["DRAFT", "IN_REVIEW"] } },
@@ -199,9 +221,17 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         take: 8,
         select: { id: true, brief: true, caption: true, contentType: true, revision: true }
       }),
-      workspaceAssistantHistory(row.workspaceId, p.userId),
+      workspaceAssistantHistory(row.workspaceId, p.userId, p.intent),
       searchVaultContext(row.workspaceId, { query: p.message, topK: 8 }),
-      personalizationContext(row.workspaceId, p.userId)
+      personalizationContext(row.workspaceId, p.userId),
+      prisma.aiInteraction.findFirst({
+        where: {
+          ...owned(row.workspaceId, p.userId),
+          accepted: true,
+          AND: [{ response: { path: ["status"], equals: "COMPLETED" } }, { response: { path: ["proposal", "action"], equals: "STRATEGY" } }]
+        },
+        orderBy: { createdAt: "desc" }
+      })
     ]);
     const generated = await requestAi("/ai/workspace/conversation", {
       body: {
@@ -211,8 +241,10 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         model: await resolveModelSetting("LLM_PRIMARY_MODEL"),
         context: {
           business,
+          entryIntent: p.intent ?? "GENERAL",
           vault: retrieved,
           personalization: personalization.value,
+          previousStrategy: previousStrategy ? boundedStrategy(state(previousStrategy).strategy) : null,
           drafts,
           campaigns: history
             .filter((t) => t.campaign)
@@ -328,7 +360,23 @@ export async function confirmWorkspacePlan(workspaceId: string, userId: string, 
       throw new ConversationError("ASSISTANT_CONFIRMATION_INVALID", "This confirmation does not match the plan.");
     if (row.accepted) return row;
     if (s.status !== "PROPOSED") throw new ConversationError("ASSISTANT_PLAN_UNAVAILABLE", "Prepare a new plan.");
-    if (await tx.aiInteraction.findFirst({ where: { ...owned(workspaceId, userId), createdAt: { gt: row.createdAt } } }))
+    const intent = (row.prompt as unknown as Prompt).intent ?? "GENERAL";
+    if (
+      await tx.aiInteraction.findFirst({
+        where: {
+          ...owned(workspaceId, userId),
+          createdAt: { gt: row.createdAt },
+          AND: [
+            {
+              OR: [
+                { prompt: { path: ["intent"], equals: intent } },
+                ...(intent === "GENERAL" ? [{ prompt: { path: ["intent"], equals: Prisma.AnyNull } }] : [])
+              ]
+            }
+          ]
+        }
+      })
+    )
       throw new ConversationError("ASSISTANT_PLAN_SUPERSEDED", "Confirm your latest plan instead.");
     if (s.proposal.action === "CONTENT") {
       const content = await createContentAggregate(tx, workspaceId, {
@@ -382,7 +430,11 @@ async function executeWorkspacePlan(row: AiInteraction) {
       });
       s.campaignRequestId = row.id;
     } else if (s.proposal!.action === "STRATEGY") {
-      const result = await runWorkspaceAgent(workspaceId, { agent: "MARKETING_STRATEGIST", task: s.proposal!.instruction, locale: p.locale }, p.userId);
+      const result = await runWorkspaceAgent(
+        workspaceId,
+        { agent: "MARKETING_STRATEGIST", task: s.proposal!.instruction.slice(0, 1000), locale: p.locale, inputs: { ownerBrief: s.proposal!.instruction } },
+        p.userId
+      );
       s.strategy = result.output;
     }
     s.status = "COMPLETED";

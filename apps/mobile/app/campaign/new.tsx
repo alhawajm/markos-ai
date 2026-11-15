@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { FileText, Paperclip, X } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, SelectField, Txt } from "../../src/ui";
+import { Button, Card, Disclosure, Field, IconButton, ListRow, Loading, Notice, Row, Screen, Segmented, SelectField, Txt } from "../../src/ui";
 import { briefStore, ReferenceError } from "../../src/campaigns/brief-store";
 import { campaignStart, localDate, newBrief, validDate, type Brief } from "../../src/campaigns/brief-model";
 import { errorMessage } from "../../src/errors";
@@ -167,7 +167,7 @@ export default function NewCampaign() {
           if (value === "1" || brief.objective.trim().length >= 3) setStep(Number(value));
         }}
       />
-      <Txt variant="title">{step === 1 ? t("Give your idea context", "امنح فكرتك سياقًا") : t("Set the plan", "حدّد الخطة")}</Txt>
+      <Txt variant="title">{step === 1 ? t("Give your idea context", "امنح فكرتك سياقًا") : t("Review the plan", "راجع الخطة")}</Txt>
       {brief.pendingSince && !busy ? (
         <>
           <Notice>
@@ -263,54 +263,61 @@ export default function NewCampaign() {
         </>
       ) : (
         <>
-          <Txt muted>{t("Choose the pace. You can review every draft before scheduling.", "اختر وتيرة النشر. يمكنك مراجعة كل مسودة قبل جدولتها.")}</Txt>
+          <Txt muted>
+            {t("Here’s the brief MARKOS will use. Adjust anything you need before starting.", "هذا هو الملخص الذي سيستخدمه ماركوس. عدّل ما تحتاجه قبل البدء.")}
+          </Txt>
           <Card tone="tint">
             <Txt variant="label">{brief.objective}</Txt>
             <Txt muted>
               {brief.files.length} {t("references attached", "ملفات مرفقة")}
             </Txt>
             {brief.description ? <Txt numberOfLines={4}>{brief.description}</Txt> : null}
-          </Card>
-          <SelectField
-            label={t("Duration", "المدة")}
-            value={String(brief.durationDays)}
-            disabled={busy}
-            options={[3, 7, 14, 30, 60, 90].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
-            onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 | 30 | 60 | 90 })}
-          />
-          <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
-          <ListRow
-            last
-            label={new Date(`${brief.startDate}T12:00:00`).toLocaleDateString(locale, { dateStyle: "long" })}
-            disabled={busy}
-            onPress={() => setShowDate(!showDate)}
-          />
-          {showDate ? (
-            <DateTimePicker
-              value={new Date(`${brief.startDate}T12:00:00`)}
-              mode="date"
-              display={Platform.OS === "ios" ? "inline" : "default"}
-              themeVariant={mode}
-              locale={locale}
-              onChange={(event, date) => {
-                if (Platform.OS !== "ios") setShowDate(false);
-                if (event.type === "set" && date) void update({ startDate: localDate(date) });
-              }}
-            />
-          ) : null}
-          <Txt variant="label">{t("Publishing intensity", "وتيرة النشر")}</Txt>
-          <Segmented
-            value={String(brief.publishesPerDay)}
-            disabled={busy}
-            options={[1, 2, 3].map((count) => ({ value: String(count), label: `${count} ${t("/ day", "/ يوم")}` }))}
-            onChange={(count) => void update({ publishesPerDay: Number(count) })}
-          />
-          <Card tone="tint">
-            <Txt variant="heading">
-              {brief.durationDays * brief.publishesPerDay} {t("planned posts", "منشورًا مخطّطًا")}
+            <Txt>
+              {brief.durationDays} {t("days", "أيام")} · {brief.publishesPerDay} {t("/ day", "/ يوم")} · {brief.startDate}
             </Txt>
-            <Txt>{t("Nothing is scheduled automatically.", "لا تتم جدولة أي منشور تلقائيًا.")}</Txt>
           </Card>
+          <Disclosure title={t("Adjust timing and frequency", "تعديل التوقيت والوتيرة")}>
+            <SelectField
+              label={t("Duration", "المدة")}
+              value={String(brief.durationDays)}
+              disabled={busy}
+              options={[3, 7, 14, 30, 60, 90].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
+              onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 | 30 | 60 | 90 })}
+            />
+            <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
+            <ListRow
+              last
+              label={new Date(`${brief.startDate}T12:00:00`).toLocaleDateString(locale, { dateStyle: "long" })}
+              disabled={busy}
+              onPress={() => setShowDate(!showDate)}
+            />
+            {showDate ? (
+              <DateTimePicker
+                value={new Date(`${brief.startDate}T12:00:00`)}
+                mode="date"
+                display={Platform.OS === "ios" ? "inline" : "default"}
+                themeVariant={mode}
+                locale={locale}
+                onChange={(event, date) => {
+                  if (Platform.OS !== "ios") setShowDate(false);
+                  if (event.type === "set" && date) void update({ startDate: localDate(date) });
+                }}
+              />
+            ) : null}
+            <Txt variant="label">{t("Publishing intensity", "وتيرة النشر")}</Txt>
+            <Segmented
+              value={String(brief.publishesPerDay)}
+              disabled={busy}
+              options={[1, 2, 3].map((count) => ({ value: String(count), label: `${count} ${t("/ day", "/ يوم")}` }))}
+              onChange={(count) => void update({ publishesPerDay: Number(count) })}
+            />
+            <Card tone="tint">
+              <Txt variant="heading">
+                {brief.durationDays * brief.publishesPerDay} {t("planned posts", "منشورًا مخطّطًا")}
+              </Txt>
+              <Txt>{t("Nothing is scheduled automatically.", "لا تتم جدولة أي منشور تلقائيًا.")}</Txt>
+            </Card>
+          </Disclosure>
         </>
       )}
       {busy ? (

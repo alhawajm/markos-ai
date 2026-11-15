@@ -9,6 +9,7 @@ export interface WorkspaceAssistantProposal {
   publishesPerDay?: 1 | 2 | 3 | null;
 }
 export interface WorkspaceAssistantTurn {
+  intent?: import("./task-intents").TaskIntent;
   id: string;
   message: string;
   reply: string;

@@ -80,7 +80,7 @@ vi.mock("../src/studio/device-store", () => ({
   restoreEditor: vi.fn()
 }));
 vi.mock("../src/providers", () => ({
-  useAccount: () => ({ api: state.api, scope: "test", epoch: 1, queryClient: state.client, session: { workspace: { id: "workspace" } } }),
+  useAccount: () => ({ api: state.api, scope: "test", epoch: 1, queryClient: state.client, session: { workspace: { id: "workspace" }, roles: ["OWNER"] } }),
   useAppearance: () => ({
     locale: state.locale,
     rtl: state.locale === "ar",
@@ -117,6 +117,7 @@ vi.mock("../src/ui", async () => {
 import ContentDraft from "../app/content/[id]";
 import CampaignReview from "../app/campaign/[id]";
 import Create from "../app/(tabs)/create";
+vi.mock("../src/workspace-assistant", () => ({ WorkspaceAssistantScreen: () => null }));
 import { typeLabel } from "../src/content";
 
 let root: Root;
@@ -235,10 +236,10 @@ describe("rendered native Create handoffs", () => {
     state.api.contentItems = vi.fn(async () => [item]);
     state.api.createContent = vi.fn(async () => item);
     await mount(<Create />);
-    expect(buttons("New content")).toHaveLength(1);
+    expect(buttons("Start manually")).toHaveLength(1);
     expect(buttons("Post")).toHaveLength(0);
     expect(buttons("Published")).toHaveLength(0);
-    await press("New content");
+    await press("Start manually");
     expect(buttons("Post")).toHaveLength(1);
     await press("Post");
     expect(state.api.createContent).toHaveBeenCalledWith({ contentType: "POST" });
@@ -247,6 +248,7 @@ describe("rendered native Create handoffs", () => {
   it("preserves a lifecycle selection after closing its filter sheet", async () => {
     state.api.contentItems = vi.fn(async () => [item]);
     await mount(<Create />);
+    await press("Your saved content");
     await press("Drafts");
     await press("Published");
     expect(buttons("Published")).toHaveLength(1);

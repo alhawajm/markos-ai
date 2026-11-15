@@ -1,4 +1,6 @@
 .workspace-chat {
+  width: 100%;
+  min-width: 0;
   max-width: 840px;
   margin: 0 auto;
   padding: 32px 0 12px;
@@ -15,11 +17,96 @@
   padding: 8px;
   margin-bottom: 12px;
 }
-.workspace-chat-welcome h1 {
+.workspace-chat-welcome :is(h1, h2) {
   font-size: clamp(28px, 3vw, 38px);
   font-weight: 600;
   letter-spacing: -0.02em;
   margin: 10px 0;
+}
+.task-secondary {
+  width: 100%;
+  max-width: 840px;
+  margin: 28px auto;
+  display: grid;
+  gap: 14px;
+}
+.task-library {
+  border-top: 1px solid var(--border);
+  padding: 18px 0;
+  color: var(--text);
+}
+.task-library > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: list-item;
+  align-content: center;
+  font-weight: 600;
+}
+.task-library > p {
+  color: var(--text-muted);
+  margin-block: 12px;
+}
+.task-library ul {
+  list-style: none;
+  padding: 0;
+}
+.task-library li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 4px;
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+}
+.task-library li button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75%;
+}
+.task-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  padding: 16px 0;
+}
+.task-manual label {
+  display: grid;
+  gap: 8px;
+}
+.task-manual select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 12px;
+  min-width: 180px;
+}
+.workspace-chat-strategy ul {
+  list-style: disc;
+  padding-inline-start: 24px;
+  display: grid;
+  gap: 10px;
+}
+.workspace-chat-strategy h3 {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.workspace-chat-strategy summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+  min-height: 44px;
+  align-content: center;
+}
+.workspace-chat-strategy ul {
+  margin-top: 12px;
+}
+.workspace-chat-strategy details {
+  color: var(--text-muted);
 }
 .workspace-chat-mark path {
   stroke-dasharray: 105;
@@ -45,9 +132,12 @@
   color: var(--text-muted);
   line-height: 1.7;
 }
-.workspace-chat-welcome > p:first-of-type {
+.workspace-chat-eyebrow {
   font-size: 12px;
   letter-spacing: 0.12em;
+}
+.workspace-chat-end {
+  scroll-margin-bottom: 180px;
 }
 .workspace-chat-starters {
   display: flex;

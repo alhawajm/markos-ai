@@ -38,6 +38,7 @@ export default function Insights() {
         ]}
         onChange={setRange}
       />
+      <InsightsAdvice key={`${scope}:${range}:${locale}`} days={Number(range)} />
       {result.isPending ? (
         <Loading />
       ) : result.isError ? (
@@ -131,9 +132,6 @@ export default function Insights() {
           ) : null}
         </>
       )}
-      <Disclosure title={t("Advice and reports", "النصائح والتقارير")}>
-        <InsightsAdvice key={`${range}:${locale}`} days={Number(range)} />
-      </Disclosure>
       <Disclosure title={t("Data and connection", "البيانات والاتصال")}>
         <TextAction label={t("Instagram connection", "اتصال إنستغرام")} onPress={() => router.push("/instagram")} />
         <TextAction label={t("Refresh saved results", "تحديث النتائج المحفوظة")} disabled={result.isFetching} onPress={() => void result.refetch()} />

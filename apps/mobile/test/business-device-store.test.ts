@@ -55,6 +55,8 @@ describe("business device draft ownership", () => {
   });
   it("logout waits for earlier writes, removes only this identity, and blocks late writes", async () => {
     await new BusinessDeviceStore("other", 1, "setup").save({ name: "Keep" });
+    for (const kind of ["assistant-content", "assistant-campaign", "assistant-strategy"] as const)
+      await new BusinessDeviceStore("current", 1, kind).save({ message: "Private unsent goal" });
     let release!: () => void;
     state.wait = new Promise((resolve) => {
       release = resolve;
@@ -70,6 +72,7 @@ describe("business device draft ownership", () => {
     await rejected;
     await cleanup;
     expect(state.data.has("markos.business.setup.current")).toBe(false);
+    expect([...state.data.keys()].filter((key) => key.endsWith(".current"))).toEqual([]);
     expect(state.data.has("markos.business.setup.other")).toBe(true);
     expect(state.deleted).toEqual(["file:///app/onboarding-files/current"]);
     await expect(store.save({ name: "Late" })).rejects.toThrow("Identity changed");

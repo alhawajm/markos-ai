@@ -9,6 +9,8 @@ import { respondToConversation } from "../src/ai/conversation-client";
 import { requestAi } from "../src/ai/request";
 import { workspaceAssistantHistory, confirmWorkspacePlan } from "../src/assistant/workspace-assistant-service";
 import { saveOnboardingModule } from "../src/onboarding/onboarding-service";
+import { runWorkspaceAgent } from "../src/agents/agent-service";
+vi.mock("../src/agents/agent-service", () => ({ runWorkspaceAgent: vi.fn() }));
 vi.mock("../src/ai/request", async (original) => ({ ...(await original<typeof import("../src/ai/request")>()), requestAi: vi.fn() }));
 vi.mock("../src/ai/embeddings-client", () => ({ embedVaultTexts: vi.fn().mockRejectedValue(new Error("Use current Vault facts in this focused test")) }));
 vi.mock("../src/ai/conversation-client", async (original) => ({
@@ -25,6 +27,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 beforeEach(() => {
+  vi.mocked(runWorkspaceAgent).mockReset();
   vi.mocked(requestAi)
     .mockReset()
     .mockResolvedValue({
@@ -249,4 +252,111 @@ it("keeps Home replies private to the member and lets that member report a reply
     sourceId: turn.id,
     excerpt: expect.stringContaining("bakery")
   });
+});
+
+it("scopes task discussions and confirmations while rejecting an ID reused for another intent", async () => {
+  const f = await fixture();
+  const content = { ...f.input, intent: "CONTENT" };
+  expect((await app.inject({ method: "POST", url: "/v1/assistant/conversation", headers: f.headers, payload: content })).statusCode).toBe(202);
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const first = (await workspaceAssistantHistory(f.session.workspace.id, f.session.user.id, "CONTENT"))[0]!;
+  expect(first.intent).toBe("CONTENT");
+  expect(
+    (await app.inject({ method: "POST", url: "/v1/assistant/conversation", headers: f.headers, payload: { ...content, intent: "STRATEGY" } })).statusCode
+  ).toBe(409);
+  await app.inject({
+    method: "POST",
+    url: "/v1/assistant/conversation",
+    headers: f.headers,
+    payload: { ...f.input, requestId: randomUUID(), intent: "STRATEGY", message: "Find a useful strategy" }
+  });
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const scoped = await app.inject({ method: "GET", url: "/v1/assistant/conversation?intent=CONTENT", headers: f.headers });
+  expect(scoped.json().data.map((turn: { id: string }) => turn.id)).toEqual([first.id]);
+  await expect(confirmWorkspacePlan(f.session.workspace.id, f.session.user.id, first.id, first.confirmationToken!)).resolves.toMatchObject({
+    status: "EXECUTING"
+  });
+  expect((await app.inject({ method: "GET", url: "/v1/assistant/conversation?intent=UNKNOWN", headers: f.headers })).statusCode).toBe(400);
+});
+
+it("keeps the full strategy brief and uses the user's earlier strategy as private advisory context", async () => {
+  const f = await fixture(),
+    other = await fixture();
+  const instruction = "Build a detailed, practical strategy for our bakery. ".repeat(32);
+  vi.mocked(requestAi).mockResolvedValueOnce({
+    model: "test",
+    prompt_version: "test",
+    tokens_in: 1,
+    tokens_out: 1,
+    result: {
+      reply: "Here is the plan.",
+      proposal: {
+        action: "STRATEGY",
+        summary: "Build a practical bakery strategy.",
+        instruction,
+        contentType: null,
+        contentItemId: null,
+        durationDays: null,
+        startsAt: null,
+        publishesPerDay: null
+      }
+    }
+  });
+  const id = randomUUID();
+  await app.inject({
+    method: "POST",
+    url: "/v1/assistant/conversation",
+    headers: f.headers,
+    payload: { requestId: id, message: "Help me grow with a strategy", locale: "en", intent: "STRATEGY" }
+  });
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const [plan] = await workspaceAssistantHistory(f.session.workspace.id, f.session.user.id, "STRATEGY");
+  vi.mocked(runWorkspaceAgent).mockResolvedValue({
+    id: randomUUID(),
+    workspaceId: f.session.workspace.id,
+    agent: "MARKETING_STRATEGIST",
+    promptVersion: "test",
+    request: { task: instruction.slice(0, 1000), locale: "en", retrievedContext: [] },
+    output: {
+      summary: "A private bakery direction",
+      strategy: { objectives: ["More qualified visits"], pillars: ["Morning rituals"], nextActions: ["Plan next week"] },
+      assumptions: [],
+      missingInformation: []
+    },
+    tokensIn: 1,
+    tokensOut: 1,
+    model: "test",
+    createdAt: new Date().toISOString()
+  });
+  await confirmWorkspacePlan(f.session.workspace.id, f.session.user.id, id, plan!.confirmationToken!);
+  await processWorkspaceAssistant(f.session.workspace.id);
+  expect(runWorkspaceAgent).toHaveBeenCalledWith(
+    f.session.workspace.id,
+    expect.objectContaining({ task: instruction.slice(0, 1000), inputs: { ownerBrief: instruction } }),
+    f.session.user.id
+  );
+  for (const owner of [f, other]) {
+    await app.inject({
+      method: "POST",
+      url: "/v1/assistant/conversation",
+      headers: owner.headers,
+      payload: { requestId: randomUUID(), message: "Plan a campaign from my direction", locale: "en", intent: "CAMPAIGN" }
+    });
+    await processWorkspaceAssistant(owner.session.workspace.id);
+    const body = vi.mocked(requestAi).mock.calls.at(-1)![1].body as { context: { entryIntent: string; previousStrategy: { summary: string } | null } };
+    expect(body.context.entryIntent).toBe("CAMPAIGN");
+    if (owner === f) expect(body.context.previousStrategy?.summary).toBe("A private bakery direction");
+    else expect(body.context.previousStrategy).toBeNull();
+  }
+  await prisma.workspaceMember.create({ data: { workspaceId: f.session.workspace.id, userId: other.session.user.id, role: "EDITOR" } });
+  const colleagueSent = await app.inject({
+    method: "POST",
+    url: "/v1/assistant/conversation",
+    headers: { ...other.headers, "x-workspace-id": f.session.workspace.id },
+    payload: { requestId: randomUUID(), message: "Help with my campaign", locale: "en", intent: "CAMPAIGN" }
+  });
+  expect(colleagueSent.statusCode).toBe(202);
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const colleagueContext = vi.mocked(requestAi).mock.calls.at(-1)![1].body as { context: { previousStrategy: unknown } };
+  expect(colleagueContext.context.previousStrategy).toBeNull();
 });

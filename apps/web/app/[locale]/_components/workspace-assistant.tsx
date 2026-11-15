@@ -6,25 +6,34 @@ import { MarkosPulse, TaskFeedback } from "./task-feedback";
 import { ContentReportDialog } from "./content-report-dialog";
 import { PersonalMemoryDialog } from "./personal-memory-dialog";
 import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
+import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import "./workspace-assistant.css";
 
-export function WorkspaceAssistant({ locale }: { locale: Locale }) {
+export function WorkspaceAssistant(props: { locale: Locale; intent?: TaskIntent }) {
+  const session = useMarkosSession();
+  return <WorkspaceConversation key={`${session?.user.id}:${session?.workspace.id}:${props.intent ?? "GENERAL"}`} {...props} />;
+}
+function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale; intent?: TaskIntent }) {
   const api = useMarkosClient(locale),
     session = useMarkosSession();
   const t = useCallback((en: string, ar: string) => (locale === "ar" ? ar : en), [locale]);
-  const key = `markos.home-chat:${session?.user.id}:${session?.workspace.id}`;
+  const key = `markos.home-chat:${session?.user.id}:${session?.workspace.id}${intent === "GENERAL" ? "" : `:${intent}`}`;
+  const intro = taskIntroductions[intent],
+    language = locale === "ar" ? 1 : 0;
   const [turns, setTurns] = useState<WorkspaceAssistantTurn[]>([]),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [ready, setReady] = useState(false),
-    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale } | null>(null);
+    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale; intent?: TaskIntent } | null>(null);
   const end = useRef<HTMLDivElement>(null),
     active = turns.some((turn) => turn.status === "THINKING" || (turn.status === "EXECUTING" && !turn.campaign));
   const following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [earlier, setEarlier] = useState(false);
+  const shown = intent === "GENERAL" || earlier ? turns : turns.slice(-4);
   useEffect(() => {
     let live = true;
     try {
@@ -37,7 +46,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     }
     const load = () =>
       api
-        .workspaceAssistant()
+        .workspaceAssistant(intent === "GENERAL" ? undefined : intent)
         .then((data) => {
           if (live) {
             setTurns((previous) => (JSON.stringify(previous) === JSON.stringify(data) ? previous : data));
@@ -62,7 +71,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
       live = false;
       clearInterval(timer);
     };
-  }, [api, key, t]);
+  }, [api, key, t, intent]);
   useEffect(() => {
     if (following.current) end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [turns]);
@@ -78,7 +87,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
   }
   async function send() {
     following.current = true;
-    const request = pending ?? { requestId: crypto.randomUUID(), message: message.trim(), locale };
+    const request = pending ?? { requestId: crypto.randomUUID(), message: message.trim(), locale, ...(intent === "GENERAL" ? {} : { intent }) };
     if (!request.message || busy || active || !ready) return;
     setBusy(true);
     setError("");
@@ -115,7 +124,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     setError("");
     try {
       await api.resumeCampaignGeneration(turn.campaign.requestId);
-      setTurns(await api.workspaceAssistant());
+      setTurns(await api.workspaceAssistant(intent === "GENERAL" ? undefined : intent));
     } catch {
       setError(t("Couldn’t resume the saved campaign. Please try again.", "تعذّر استئناف الحملة المحفوظة. حاول مجددًا."));
     } finally {
@@ -140,44 +149,47 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     <section className="workspace-chat" dir={locale === "ar" ? "rtl" : "ltr"} aria-label={t("MARKOS conversation", "محادثة ماركوس")}>
       <header className="workspace-chat-welcome">
         <span className="workspace-chat-mark">
-          <MarkosAiIcon size={44} />
+          <MarkosAiIcon size={intent === "GENERAL" ? 44 : 32} />
         </span>
-        <p>MARKOS</p>
-        <h1>{t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")}</h1>
-        <p>{t("Tell me your idea. I’ll turn it into a plan, then we’ll create it together.", "أخبرني بفكرتك. سأحوّلها إلى خطة ثم نُبدعها معًا.")}</p>
-        <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
-          {t("What MARKOS remembers", "ما يتذكره ماركوس")}
-        </button>
+        {intent === "GENERAL" ? <p className="workspace-chat-eyebrow">MARKOS</p> : null}
+        <h1>
+          {intent === "GENERAL"
+            ? t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")
+            : intro.title[language]}
+        </h1>
+        <p>{intro.detail[language]}</p>
+        {intent === "GENERAL" ? (
+          <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
+            {t("What MARKOS remembers", "ما يتذكره ماركوس")}
+          </button>
+        ) : null}
       </header>
       {!turns.length && (
         <div className="workspace-chat-starters">
-          {[
-            {
-              label: t("Build a strategy", "بناء استراتيجية"),
-              text: t("Create an Instagram marketing strategy for my business.", "أنشئ استراتيجية تسويق على إنستغرام لنشاطي.")
-            },
-            { label: t("Create content", "إنشاء محتوى"), text: t("Help me create an Instagram post.", "ساعدني في إنشاء منشور لإنستغرام.") },
-            {
-              label: t("Plan a campaign", "تخطيط حملة"),
-              text: t("Help me plan a campaign for an upcoming event or offer.", "ساعدني في تخطيط حملة لفعالية أو عرض قادم.")
-            }
-          ].map((s) => (
-            <button
-              key={s.label}
-              disabled={busy || !ready}
-              onClick={() => {
-                setMessage(s.text);
-                persist(s.text, null);
-                document.getElementById("home-message")?.focus();
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
+          {taskSuggestions[intent]
+            .map((entry) => ({ label: entry[language], text: entry[language + 2]! }))
+            .map((s) => (
+              <button
+                key={s.label}
+                disabled={busy || !ready}
+                onClick={() => {
+                  setMessage(s.text);
+                  persist(s.text, null);
+                  document.getElementById("home-message")?.focus();
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
         </div>
       )}
       <div className="workspace-chat-thread" aria-live="polite">
-        {turns.map((turn, index) => (
+        {intent !== "GENERAL" && !earlier && turns.length > 4 ? (
+          <button className="workspace-chat-link" onClick={() => setEarlier(true)}>
+            {t("Earlier work", "الأعمال السابقة")}
+          </button>
+        ) : null}
+        {shown.map((turn) => (
           <div className="workspace-chat-turn" key={turn.id}>
             <p className="workspace-chat-user" dir="auto">
               {turn.message}
@@ -199,7 +211,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
                 <div className="workspace-chat-plan">
                   <strong>{t("Here’s the plan", "إليك الخطة")}</strong>
                   <p>{turn.proposal.summary}</p>
-                  {index === turns.length - 1 && (
+                  {turn.id === turns.at(-1)?.id && (
                     <>
                       <button className="studio-button studio-button-primary" disabled={busy || active} onClick={() => void confirm(turn)}>
                         {t("Confirm and start", "تأكيد وبدء")}
@@ -211,7 +223,13 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
               )}
               {turn.status === "EXECUTING" && (
                 <TaskFeedback
-                  label={turn.campaign ? t("Planning your campaign", "أُعدّ حملتك") : t("Starting your plan", "أبدأ تنفيذ خطتك")}
+                  label={
+                    turn.campaign || turn.proposal?.action === "CAMPAIGN"
+                      ? t("Planning your campaign", "أُعدّ حملتك")
+                      : turn.proposal?.action === "STRATEGY"
+                        ? t("Shaping your strategy", "أصوغ استراتيجيتك")
+                        : t("Preparing your draft", "أُعدّ مسودتك")
+                  }
                   locale={locale}
                   progress={turn.campaign?.progress}
                   startedAt={turn.campaign?.createdAt}
@@ -245,16 +263,17 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
                 </div>
               )}
               {turn.strategy && (
-                <article className="workspace-chat-strategy">
-                  {strategyLines(turn.strategy).map((s, i) => (
-                    <p key={i}>{s}</p>
-                  ))}
-                </article>
+                <>
+                  <GuidanceResult value={turn.strategy} locale={locale} />
+                  <a className="workspace-chat-link" href={`/${locale}/app/campaigns`}>
+                    {t("Plan a campaign →", "تخطيط حملة ←")}
+                  </a>
+                </>
               )}
             </div>
           </div>
         ))}
-        <div ref={end} />
+        <div ref={end} className="workspace-chat-end" />
       </div>
       <form
         className="workspace-chat-composer"
@@ -301,10 +320,30 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     </section>
   );
 }
-function strategyLines(value: unknown): string[] {
-  if (typeof value === "string") return [value];
-  if (Array.isArray(value)) return value.flatMap(strategyLines);
-  if (value && typeof value === "object")
-    return Object.entries(value).flatMap(([key, v]) => (typeof v === "string" ? [`${key.replace(/_/g, " ")}: ${v}`] : strategyLines(v)));
-  return [];
+export function GuidanceResult({ value, locale }: { value: Record<string, unknown>; locale: Locale }) {
+  const result = guidanceOutput(value),
+    ar = locale === "ar";
+  return (
+    <article className="workspace-chat-strategy">
+      {result.summary ? <p>{result.summary}</p> : null}
+      {result.sections.map((section) => (
+        <details key={section.key} className="workspace-chat-plan" open={section.key === "nextActions" || section.key === "recommendations"}>
+          <summary>{section.title[ar ? 1 : 0]}</summary>
+          <ul>
+            {section.items.map((text, i) => (
+              <li key={i}>{text}</li>
+            ))}
+          </ul>
+        </details>
+      ))}
+      {result.assumptions.length || result.missingInformation.length ? (
+        <details>
+          <summary>{ar ? "ما زال بحاجة إلى تأكيد" : "What still needs confirming"}</summary>
+          {[...result.missingInformation, ...result.assumptions].map((text, i) => (
+            <p key={i}>{text}</p>
+          ))}
+        </details>
+      ) : null}
+    </article>
+  );
 }

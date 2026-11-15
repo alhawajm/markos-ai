@@ -93,6 +93,7 @@ export default function Calendar() {
               <Txt>
                 {t("Choose another week or filter, or open Unscheduled to prepare a draft.", "اختر أسبوعًا أو مرشّحًا آخر، أو افتح غير مجدول لإعداد مسودة.")}
               </Txt>
+              <TextAction label={t("Plan something to share", "خطّط لمحتوى تشاركه")} onPress={() => router.push("/(tabs)/create")} />
             </Card>
           ) : (
             groups.map((group) => (
@@ -128,6 +129,7 @@ export default function Calendar() {
           {!result.data.unscheduled.items.length ? (
             <Card>
               <Txt>{t("No unscheduled drafts match this filter.", "لا توجد مسودات غير مجدولة تطابق هذا المرشّح.")}</Txt>
+              <TextAction label={t("Create content", "إنشاء محتوى")} onPress={() => router.push("/(tabs)/create")} />
             </Card>
           ) : null}
           {page > 0 ? <Button secondary label={t("Previous page", "الصفحة السابقة")} onPress={() => setPage(Math.max(0, page - 20))} /> : null}

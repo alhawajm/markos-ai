@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Download } from "lucide-react-native";
 import { useAccount, useAppearance } from "./providers";
-import { Button, Card, Field, Notice, Txt } from "./ui";
+import { Button, Card, Disclosure, Field, Notice, Txt } from "./ui";
 import { errorMessage } from "./errors";
 import { shareFile } from "./share-file";
 
@@ -85,19 +85,21 @@ export function InsightsAdvice({ days }: { days: number }) {
           </>
         ) : null}
       </Card>
-      <Card>
-        <Txt variant="heading">{t("Monthly report", "التقرير الشهري")}</Txt>
-        <Field label={t("Month (YYYY-MM)", "الشهر (YYYY-MM)")} value={month} onChangeText={setMonth} maxLength={7} autoCapitalize="none" />
-        <Button
-          secondary
-          icon={Download}
-          busy={report.isPending}
-          disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)}
-          label={t("Download or share PDF", "تنزيل أو مشاركة PDF")}
-          onPress={() => report.mutate()}
-        />
-        {report.isError ? <Notice error>{errorMessage(report.error, t)}</Notice> : null}
-      </Card>
+      <Disclosure title={t("Monthly report", "التقرير الشهري")}>
+        <Card>
+          <Txt variant="heading">{t("Monthly report", "التقرير الشهري")}</Txt>
+          <Field label={t("Month (YYYY-MM)", "الشهر (YYYY-MM)")} value={month} onChangeText={setMonth} maxLength={7} autoCapitalize="none" />
+          <Button
+            secondary
+            icon={Download}
+            busy={report.isPending}
+            disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)}
+            label={t("Download or share PDF", "تنزيل أو مشاركة PDF")}
+            onPress={() => report.mutate()}
+          />
+          {report.isError ? <Notice error>{errorMessage(report.error, t)}</Notice> : null}
+        </Card>
+      </Disclosure>
     </>
   );
 }

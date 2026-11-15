@@ -1,6 +1,7 @@
 "use client";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { TaskFeedback } from "./task-feedback";
+import { ContentStart } from "./content-start";
 /* eslint-disable @next/next/no-img-element -- Media Library URLs are rendered without image optimization. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -46,6 +47,26 @@ import "./create-workspace.css";
 
 const icons = { POST: ImageIcon, CAROUSEL: Images, REEL: Clapperboard, STORY: RectangleVertical };
 export function ContentStudioPanel({ locale }: { locale: Locale }) {
+  const [target, setTarget] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    setTarget(new URLSearchParams(window.location.search).get("item"));
+  }, []);
+  function open(id: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("item", id);
+    window.history.replaceState(window.history.state, "", url);
+    setTarget(id);
+  }
+  function start() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("item");
+    window.history.replaceState(window.history.state, "", url);
+    setTarget(null);
+  }
+  if (target === undefined) return <TaskFeedback locale={locale} label={locale === "ar" ? "جارٍ فتح مساحة العمل" : "Opening your workspace"} />;
+  return target ? <ContentStudioEditor key={target} locale={locale} onStart={start} /> : <ContentStart locale={locale} onOpen={open} />;
+}
+function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () => void }) {
   const client = useMarkosClient(locale),
     session = useMarkosSession();
   const api = useRef(client);
@@ -131,9 +152,10 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
     let active = true;
     if (!initialization.current) {
       const id = new URLSearchParams(window.location.search).get("item");
-      initialization.current = Promise.all([id ? api.current.contentItem(id) : api.current.createContent(), api.current.mediaAssets()]).then(
-        ([record, assets]) => ({ record, assets })
-      );
+      initialization.current = Promise.all([
+        id ? api.current.contentItem(id) : Promise.reject(new Error("Choose a draft to open")),
+        api.current.mediaAssets()
+      ]).then(([record, assets]) => ({ record, assets }));
     }
     initialization.current
       .then((result) => {
@@ -356,9 +378,9 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
       return { result: undefined, record: saved };
     });
   }
-  async function open(id?: string) {
+  async function open(id: string) {
     await coordinator?.flush();
-    const next = id ? await api.current.contentItem(id) : await api.current.createContent();
+    const next = await api.current.contentItem(id);
     mountRecord(next);
     setDialog(null);
   }
@@ -506,7 +528,16 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                 <FolderOpen size={17} />
                 {t("Open", "فتح")}
               </button>
-              <button className="studio-button" disabled={!!busy} onClick={() => void run("new", () => open())}>
+              <button
+                className="studio-button"
+                disabled={!!busy}
+                onClick={() =>
+                  void run("new", async () => {
+                    await coordinator.flush();
+                    onStart();
+                  })
+                }
+              >
                 <Plus size={17} />
                 {t("New", "جديد")}
               </button>
@@ -585,7 +616,7 @@ export function ContentStudioPanel({ locale }: { locale: Locale }) {
                               await api.current.deleteContent(current.id, current.revision);
                               return { result: undefined };
                             });
-                            await open();
+                            onStart();
                           }
                         })
                       }

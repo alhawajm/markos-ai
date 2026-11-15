@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, View } from "react-native";
 import { useNavigation, usePreventRemove } from "expo-router/react-navigation";
+import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { BusinessKnowledgeRecord, BusinessKnowledgeModule } from "@markos/shared-types";
 import { MarkosApiError } from "@markos/api-client";
@@ -26,6 +27,7 @@ export default function Business() {
   const { api, scope, epoch, queryClient } = useAccount();
   const { t } = useAppearance();
   const navigation = useNavigation();
+  const router = useRouter();
   const store = useMemo(() => new BusinessDeviceStore<Edit>(scope, epoch, "profile"), [scope, epoch]);
   const query = useQuery({ queryKey: [scope, "business"], queryFn: () => api.businessKnowledge() });
   const [group, setGroup] = useState(0);
@@ -174,6 +176,9 @@ export default function Business() {
   return (
     <Screen key={edit ? `edit:${edit.module}:${edit.offeringId ?? (edit.offering ? "new" : "module")}` : `view:${group}`}>
       <Txt variant="title">{t("Your business, in focus", "نشاطك بوضوح")}</Txt>
+      {!edit && group === 0 ? (
+        <TextAction label={t("Shape a strategy with MARKOS", "صُغ استراتيجية مع ماركوس")} onPress={() => router.push("/strategy")} />
+      ) : null}
       <Txt muted>
         {t(
           "Keep MARKOS up to date. Saved changes are shared with your website and future campaigns.",

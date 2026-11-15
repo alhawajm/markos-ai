@@ -1,4 +1,5 @@
 "use client";
+import { InsightsAdvisor } from "./insights-advisor";
 import { MarkosAiIcon } from "./markos-ai-icon";
 
 import { MarkosApiClient } from "@markos/api-client";
@@ -1211,6 +1212,8 @@ export function FinalAnalyticsPanel({ locale }: { locale: Locale }) {
           ))}
         </section>
       ) : null}
+
+      <InsightsAdvisor key={`${session?.user.id}:${session?.workspace.id}:${days}:${locale}`} locale={locale} days={days} />
 
       {!loading && !hasAnalytics ? (
         <section className="sunlit-panel grid min-h-56 place-items-center rounded-[1.75rem] p-8 text-center">

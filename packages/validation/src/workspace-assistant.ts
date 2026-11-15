@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { memoryUpdatesSchema } from "./personalization";
+import { taskIntents } from "@markos/shared-types";
 export const workspaceAssistantMessageSchema = z
-  .object({ requestId: z.string().uuid(), message: z.string().trim().min(1).max(4000), locale: z.enum(["en", "ar"]) })
+  .object({ requestId: z.string().uuid(), message: z.string().trim().min(1).max(4000), locale: z.enum(["en", "ar"]), intent: z.enum(taskIntents).optional() })
   .strict();
 export const workspaceAssistantConfirmSchema = z.object({ confirmationToken: z.string().uuid() }).strict();
 export const workspaceAssistantResultSchema = z

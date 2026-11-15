@@ -1375,3 +1375,5 @@ export { sanitizeTelemetryEvent } from "./telemetry-privacy";
 export * from "./content-reports";
 export * from "./workspace-assistant";
 export * from "./personalization";
+export * from "./task-intents";
+export * from "./guidance-output";

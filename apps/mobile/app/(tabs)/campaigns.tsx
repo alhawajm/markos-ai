@@ -3,9 +3,10 @@ import { Pressable, RefreshControl, View } from "react-native";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
-import { Plus, Target } from "lucide-react-native";
+import { Target } from "lucide-react-native";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Button, Card, Field, Loading, Row, Screen, TextAction, TitleBar, Txt } from "../../src/ui";
+import { Button, Card, Disclosure, Field, Loading, Row, Screen, TextAction, TitleBar, Txt } from "../../src/ui";
+import { WorkspaceAssistantScreen } from "../../src/workspace-assistant";
 import { QueryFailure, StatusBadge } from "../../src/content";
 
 export default function Campaigns() {
@@ -53,96 +54,102 @@ export default function Campaigns() {
       }
     >
       <TitleBar title={t("Campaigns", "الحملات")}>
-        <TextAction icon={Plus} label={t("New", "جديدة")} onPress={() => router.push("/campaign/new")} />
+        <TextAction label={t("Strategy", "الاستراتيجية")} onPress={() => router.push("/strategy")} />
       </TitleBar>
-      {generations.data
-        ?.filter((job) => job.status !== "COMPLETED")
-        .map((job) => (
-          <Card key={job.id} tone={job.status === "FAILED" ? "warning" : "tint"}>
-            <Txt variant="heading">{job.objective || t("Your campaign", "حملتك")}</Txt>
-            <Txt>
-              {job.status === "FAILED"
-                ? t("Generation needs your attention", "يتطلب الإنشاء انتباهك")
-                : t("MARKOS is drafting your campaign", "ماركوس يعدّ حملتك")}
+      <WorkspaceAssistantScreen intent="CAMPAIGN" embedded />
+      <TextAction label={t("Plan with files or set options", "التخطيط بملفات أو ضبط الخيارات")} onPress={() => router.push("/campaign/new")} />
+      <Disclosure title={t("Your campaigns", "حملاتك")}>
+        {generations.data
+          ?.filter((job) => job.status !== "COMPLETED")
+          .map((job) => (
+            <Card key={job.id} tone={job.status === "FAILED" ? "warning" : "tint"}>
+              <Txt variant="heading">{job.objective || t("Your campaign", "حملتك")}</Txt>
+              <Txt>
+                {job.status === "FAILED"
+                  ? t("Generation needs your attention", "يتطلب الإنشاء انتباهك")
+                  : t("MARKOS is drafting your campaign", "ماركوس يعدّ حملتك")}
+              </Txt>
+              <TextAction
+                label={t("View progress", "عرض التقدّم")}
+                onPress={() => router.push({ pathname: "/campaign/generation", params: { requestId: job.requestId } })}
+              />
+            </Card>
+          ))}
+        <Field label={t("Search", "بحث")} placeholder={t("Search campaigns", "ابحث عن حملة")} value={search} onChangeText={setSearch} returnKeyType="search" />
+        {result.isPending ? (
+          <Loading />
+        ) : result.isError ? (
+          <QueryFailure
+            error={result.error}
+            retry={() => {
+              void result.refetch();
+            }}
+          />
+        ) : null}
+        {!result.isPending && !result.isError && items.length === 0 ? (
+          <Card tone="tint">
+            <Target size={32} strokeWidth={1.5} color={colors.accentText} />
+            <Txt variant="heading">
+              {query ? t("No matching campaigns", "لا توجد حملات مطابقة") : t("Your next idea starts here", "فكرتك القادمة تبدأ هنا")}
             </Txt>
-            <TextAction
-              label={t("View progress", "عرض التقدّم")}
-              onPress={() => router.push({ pathname: "/campaign/generation", params: { requestId: job.requestId } })}
-            />
+            <Txt muted>
+              {query
+                ? t("Try another search.", "جرّب بحثًا آخر.")
+                : t(
+                    "Add an event, an offer, or a goal. Give MARKOS your references and shape the plan together.",
+                    "أضف فعالية أو عرضًا أو هدفًا. شارك مراجعك مع ماركوس لتصميم الخطة."
+                  )}
+            </Txt>
           </Card>
+        ) : null}
+        {items.map((item) => (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={item.title}
+            onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: item.id } })}
+          >
+            <Card style={{ padding: 20, gap: 14 }}>
+              <Txt variant="heading" numberOfLines={2}>
+                {item.title}
+              </Txt>
+              <Row>
+                <StatusBadge status={item.status} />
+                <Txt variant="meta" muted>
+                  {item.durationDays} {t("days", "أيام")}
+                </Txt>
+              </Row>
+              <Txt variant="meta" muted>
+                {new Date(item.startsAt).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" })} · {item.durationDays}{" "}
+                {t("days", "أيام")} · {item.publishesPerDay} {t("/ day", "/ يوم")}
+              </Txt>
+              {item.objective ? (
+                <Txt muted numberOfLines={2}>
+                  {item.objective}
+                </Txt>
+              ) : null}
+              <Row>
+                <Txt variant="meta" muted>
+                  {item.postCounts.idea + item.postCounts.draft + item.postCounts.inReview} {t("to prepare", "للإعداد")}
+                </Txt>
+                <Txt variant="meta" muted>
+                  {item.postCounts.scheduled} {t("scheduled", "مجدولة")}
+                </Txt>
+              </Row>
+            </Card>
+          </Pressable>
         ))}
-      <Field label={t("Search", "بحث")} placeholder={t("Search campaigns", "ابحث عن حملة")} value={search} onChangeText={setSearch} returnKeyType="search" />
-      {result.isPending ? (
-        <Loading />
-      ) : result.isError ? (
-        <QueryFailure
-          error={result.error}
-          retry={() => {
-            void result.refetch();
-          }}
-        />
-      ) : null}
-      {!result.isPending && !result.isError && items.length === 0 ? (
-        <Card tone="tint">
-          <Target size={32} strokeWidth={1.5} color={colors.accentText} />
-          <Txt variant="heading">{query ? t("No matching campaigns", "لا توجد حملات مطابقة") : t("Your next idea starts here", "فكرتك القادمة تبدأ هنا")}</Txt>
-          <Txt muted>
-            {query
-              ? t("Try another search.", "جرّب بحثًا آخر.")
-              : t(
-                  "Add an event, an offer, or a goal. Give MARKOS your references and shape the plan together.",
-                  "أضف فعالية أو عرضًا أو هدفًا. شارك مراجعك مع ماركوس لتصميم الخطة."
-                )}
-          </Txt>
-        </Card>
-      ) : null}
-      {items.map((item) => (
-        <Pressable
-          key={item.id}
-          accessibilityRole="button"
-          accessibilityLabel={item.title}
-          onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: item.id } })}
-        >
-          <Card style={{ padding: 20, gap: 14 }}>
-            <Txt variant="heading" numberOfLines={2}>
-              {item.title}
-            </Txt>
-            <Row>
-              <StatusBadge status={item.status} />
-              <Txt variant="meta" muted>
-                {item.durationDays} {t("days", "أيام")}
-              </Txt>
-            </Row>
-            <Txt variant="meta" muted>
-              {new Date(item.startsAt).toLocaleDateString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium" })} · {item.durationDays} {t("days", "أيام")}{" "}
-              · {item.publishesPerDay} {t("/ day", "/ يوم")}
-            </Txt>
-            {item.objective ? (
-              <Txt muted numberOfLines={2}>
-                {item.objective}
-              </Txt>
-            ) : null}
-            <Row>
-              <Txt variant="meta" muted>
-                {item.postCounts.idea + item.postCounts.draft + item.postCounts.inReview} {t("to prepare", "للإعداد")}
-              </Txt>
-              <Txt variant="meta" muted>
-                {item.postCounts.scheduled} {t("scheduled", "مجدولة")}
-              </Txt>
-            </Row>
-          </Card>
-        </Pressable>
-      ))}
-      {result.hasNextPage ? (
-        <Button
-          secondary
-          busy={result.isFetchingNextPage}
-          label={t("Load more", "عرض المزيد")}
-          onPress={() => {
-            void result.fetchNextPage();
-          }}
-        />
-      ) : null}
+        {result.hasNextPage ? (
+          <Button
+            secondary
+            busy={result.isFetchingNextPage}
+            label={t("Load more", "عرض المزيد")}
+            onPress={() => {
+              void result.fetchNextPage();
+            }}
+          />
+        ) : null}
+      </Disclosure>
     </Screen>
   );
 }

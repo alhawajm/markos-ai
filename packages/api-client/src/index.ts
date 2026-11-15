@@ -1,6 +1,7 @@
 import type {
   WorkspaceAssistantTurn,
   PersonalMemory,
+  TaskIntent,
   CampaignReferenceFileInput,
   ContentAuthoringOperation,
   ContentReportInput,
@@ -113,8 +114,8 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
-  async workspaceAssistant(): Promise<WorkspaceAssistantTurn[]> {
-    return (await this.request<WorkspaceAssistantTurn[]>("/v1/assistant/conversation")).data;
+  async workspaceAssistant(intent?: TaskIntent): Promise<WorkspaceAssistantTurn[]> {
+    return (await this.request<WorkspaceAssistantTurn[]>(`/v1/assistant/conversation${intent ? `?intent=${encodeURIComponent(intent)}` : ""}`)).data;
   }
   async personalMemory(): Promise<PersonalMemory[]> {
     return (await this.request<PersonalMemory[]>("/v1/assistant/memory")).data;
@@ -122,7 +123,7 @@ export class MarkosApiClient {
   async forgetMemory(id: string): Promise<void> {
     await this.request(`/v1/assistant/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
-  async messageWorkspaceAssistant(input: { requestId: string; message: string; locale: "en" | "ar" }): Promise<WorkspaceAssistantTurn> {
+  async messageWorkspaceAssistant(input: { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent }): Promise<WorkspaceAssistantTurn> {
     return (await this.request<WorkspaceAssistantTurn>("/v1/assistant/conversation", { method: "POST", body: input })).data;
   }
   async confirmWorkspaceAssistant(id: string, confirmationToken: string): Promise<WorkspaceAssistantTurn> {

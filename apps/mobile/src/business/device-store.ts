@@ -18,7 +18,7 @@ export class BusinessDeviceStore<T> {
   constructor(
     private scope: string,
     private epoch: number,
-    kind: "setup" | "profile" | "quick-setup" | "assistant"
+    kind: "setup" | "profile" | "quick-setup" | "assistant" | "assistant-content" | "assistant-campaign" | "assistant-strategy"
   ) {
     this.key = `markos.business.${kind}.${scope}`;
     this.files = new BriefStore(scope, epoch, "onboarding");
@@ -54,7 +54,10 @@ export function clearBusinessDeviceData(scope: string, epoch: number): Promise<v
       `markos.business.setup.${scope}`,
       `markos.business.profile.${scope}`,
       `markos.business.quick-setup.${scope}`,
-      `markos.business.assistant.${scope}`
+      `markos.business.assistant.${scope}`,
+      `markos.business.assistant-content.${scope}`,
+      `markos.business.assistant-campaign.${scope}`,
+      `markos.business.assistant-strategy.${scope}`
     ]);
     await new BriefStore(scope, epoch, "onboarding").clear();
   });

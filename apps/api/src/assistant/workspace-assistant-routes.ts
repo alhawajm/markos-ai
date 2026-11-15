@@ -6,6 +6,7 @@ import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { ConversationError } from "../content/conversation-service";
 import { confirmWorkspacePlan, processWorkspaceAssistant, submitWorkspaceMessage, workspaceAssistantHistory } from "./workspace-assistant-service";
 import { env } from "../config/env";
+import { taskIntents } from "@markos/shared-types";
 import { forgetPersonalMemory, listPersonalMemory } from "../vault/personalization-service";
 
 export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
@@ -28,10 +29,12 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
       return reply.status(404).send(errorEnvelope("MEMORY_NOT_FOUND", "Preference not found"));
     return ok({ forgotten: true });
   });
-  app.get("/v1/assistant/conversation", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
+  app.get("/v1/assistant/conversation", { config: { ...config, permissions: ["workspace:read"] } }, async (request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     const { workspaceId, userId } = requireWorkspaceContext();
-    return ok(await workspaceAssistantHistory(workspaceId, userId));
+    const query = z.object({ intent: z.enum(taskIntents).optional() }).safeParse(request.query);
+    if (!query.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid conversation area"));
+    return ok(await workspaceAssistantHistory(workspaceId, userId, query.data.intent));
   });
   app.post("/v1/assistant/conversation", { config }, async (request, reply) => {
     const input = workspaceAssistantMessageSchema.safeParse(request.body);

@@ -103,6 +103,11 @@ export function BusinessProfilePanel({ locale }: { locale: Locale }) {
           </p>
         ) : null}
       </header>
+      {tab === "marketing-strategy" ? (
+        <Link className={secondary} href={`/${locale}/app/strategy`}>
+          {t("Shape a strategy with MARKOS", "صُغ استراتيجية مع ماركوس")}
+        </Link>
+      ) : null}
       <nav aria-label={t("Business profile sections", "أقسام ملف النشاط")} className="flex gap-1 overflow-x-auto border-b border-[var(--border)]">
         {profileTabs.map((item, index) => {
           const Icon = icons[index]!;

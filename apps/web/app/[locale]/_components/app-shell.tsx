@@ -11,6 +11,7 @@ import {
   Bell,
   Brain,
   CalendarDays,
+  Compass,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +24,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { Locale, NotificationRecord } from "@markos/shared-types";
-import { CampaignBuilderPanel, DailyBriefingPanel, FinalAnalyticsPanel, FinalDashboard, OpportunitiesPanel } from "./final-command-panels";
+import { FinalAnalyticsPanel, FinalDashboard } from "./final-command-panels";
 import { BusinessProfilePanel } from "./business-profile-panel";
 import { InstagramConnectionBanner } from "./instagram-connection-banner";
 import { CampaignPanel } from "./campaign-panel";
@@ -42,6 +43,7 @@ export type SectionSlug =
   | "content-studio"
   | "dashboard"
   | "knowledge"
+  | "strategy"
   | "opportunities"
   | "settings";
 
@@ -52,6 +54,7 @@ type NavItem = {
 
 const primaryNavItems: NavItem[] = [
   { icon: Home, slug: "dashboard" },
+  { icon: Compass, slug: "strategy" },
   { icon: Target, slug: "campaigns" },
   { icon: Palette, slug: "content-studio" },
   { icon: CalendarDays, slug: "calendar" },
@@ -367,10 +370,11 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
                 </details>
               </>
             ) : null}
-            {activeSection === "briefing" ? <DailyBriefingPanel locale={locale} /> : null}
+            {activeSection === "briefing" ? <WorkspaceAssistant key={ownerKey} locale={locale} /> : null}
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
-            {activeSection === "opportunities" ? <OpportunitiesPanel locale={locale} /> : null}
-            {activeSection === "campaign-builder" ? <CampaignBuilderPanel locale={locale} /> : null}
+            {activeSection === "opportunities" ? <WorkspaceAssistant key={ownerKey} locale={locale} /> : null}
+            {activeSection === "campaign-builder" ? <CampaignPanel locale={locale} /> : null}
+            {activeSection === "strategy" ? <WorkspaceAssistant key={ownerKey} locale={locale} intent="STRATEGY" /> : null}
             {activeSection === "content-studio" ? <ContentStudioPanel key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "calendar" ? <CalendarPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}
@@ -695,7 +699,8 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
       dashboard: "ماركوس",
       knowledge: "ملف النشاط",
       opportunities: "الفرص",
-      settings: "الإعدادات"
+      settings: "الإعدادات",
+      strategy: "الاستراتيجية"
     },
     en: {
       analytics: "Insights",
@@ -707,7 +712,8 @@ function sectionLabel(locale: Locale, section: SectionSlug): string {
       dashboard: "MARKOS",
       knowledge: "Business profile",
       opportunities: "Opportunities",
-      settings: "Settings"
+      settings: "Settings",
+      strategy: "Strategy"
     }
   };
 

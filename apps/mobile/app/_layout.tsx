@@ -141,6 +141,7 @@ function Navigation() {
           <Stack.Screen name="instagram" options={{ header: () => <TaskHeader title={t("Instagram", "إنستغرام")} /> }} />
           <Stack.Screen name="security" options={{ header: () => <TaskHeader title={t("Account security", "أمان الحساب")} /> }} />
           <Stack.Screen name="business" options={{ header: () => <TaskHeader title={t("Business profile", "ملف النشاط")} /> }} />
+          <Stack.Screen name="strategy" options={{ header: () => <TaskHeader title={t("Strategy", "الاستراتيجية")} /> }} />
           <Stack.Screen name="notifications" options={{ header: () => <TaskHeader title={t("Notifications", "الإشعارات")} /> }} />
           <Stack.Screen name="notification-settings" options={{ header: () => <TaskHeader title={t("Notification settings", "إعدادات الإشعارات")} /> }} />
           <Stack.Screen name="administration" options={{ header: () => <TaskHeader title={t("Administration", "الإدارة")} /> }} />

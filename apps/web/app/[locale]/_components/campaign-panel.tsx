@@ -32,6 +32,7 @@ import {
 import styles from "./campaign-review.module.css";
 import { addCampaignReferenceFiles, campaignReferenceAccept, campaignReferencePayload } from "./campaign-reference-files";
 import { CampaignGenerationStatus } from "./campaign-generation-status";
+import { WorkspaceAssistant } from "./workspace-assistant";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -266,104 +267,108 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
     <section className={styles.page}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-[2rem] font-semibold">{t(locale, "title")}</h1>
-        <div className="flex gap-2">
-          <button className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns()} type="button">
-            <RefreshCcw aria-hidden="true" size={18} className={listBusy ? "animate-spin" : ""} />
-            {t(locale, "refresh")}
-          </button>
-          <button
-            className={`${styles.button} ${styles.primaryButton}`}
-            onClick={() => {
-              setGenerationError("");
-              setShowComposer(true);
-            }}
-            type="button"
-          >
-            <Plus aria-hidden="true" size={18} />
-            {t(locale, "newCampaign")}
-          </button>
-        </div>
       </header>
-      <div className={styles.indexTools}>
-        <label className={styles.search}>
-          <Search aria-hidden="true" size={19} />
-          <input
-            aria-label={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
-            placeholder={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
-            maxLength={120}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+      <WorkspaceAssistant locale={locale} intent="CAMPAIGN" />
+      <div className="task-secondary">
+        <button
+          className={styles.button}
+          onClick={() => {
+            setGenerationError("");
+            setShowComposer(true);
+          }}
+          type="button"
+        >
+          <Paperclip aria-hidden="true" size={18} />
+          {locale === "ar" ? "التخطيط بملفات أو ضبط الخيارات" : "Plan with files or set options"}
+        </button>
       </div>
-      <div className={styles.indexScroll} aria-busy={listBusy}>
-        {session ? (
-          <CampaignGenerationStatus
-            locale={locale}
-            newJob={queuedJob}
-            onComplete={refreshCompleted}
-            onReviewBrief={() => setShowComposer(true)}
-            onHasWorkChange={setHasPlanningWork}
-          />
-        ) : null}
-        {listError && (
-          <p className={styles.error} role="alert">
-            {listError}
-          </p>
-        )}
-        {!listLoaded && listBusy ? (
-          <div className={styles.empty} role="status">
-            {locale === "ar" ? "جارٍ تحميل الحملات…" : "Loading campaigns…"}
-          </div>
-        ) : campaigns.length ? (
-          <div className={styles.cardList}>
-            {campaigns.map((campaign) => (
-              <article className={styles.card} data-selected={campaign.id === lastId} key={campaign.id}>
-                <div className={styles.cardHeader}>
-                  <div>
-                    <h2>{campaign.title}</h2>
-                    <div className={styles.dates}>
-                      <span>
-                        <CalendarDays aria-hidden="true" size={17} />
-                        {reviewRange(locale, campaign.startsAt, campaign.endsAt)}
-                      </span>
-                      <span>{reviewCount(locale, campaign.durationDays, "days")}</span>
+      <details className="task-library task-secondary">
+        <summary>{locale === "ar" ? "حملاتك المحفوظة" : "Your saved campaigns"}</summary>
+        <button className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns()} type="button">
+          <RefreshCcw aria-hidden="true" size={18} className={listBusy ? "animate-spin" : ""} />
+          {t(locale, "refresh")}
+        </button>
+        <div className={styles.indexTools}>
+          <label className={styles.search}>
+            <Search aria-hidden="true" size={19} />
+            <input
+              aria-label={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+              placeholder={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+              maxLength={120}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className={styles.indexScroll} aria-busy={listBusy}>
+          {session ? (
+            <CampaignGenerationStatus
+              locale={locale}
+              newJob={queuedJob}
+              onComplete={refreshCompleted}
+              onReviewBrief={() => setShowComposer(true)}
+              onHasWorkChange={setHasPlanningWork}
+            />
+          ) : null}
+          {listError && (
+            <p className={styles.error} role="alert">
+              {listError}
+            </p>
+          )}
+          {!listLoaded && listBusy ? (
+            <div className={styles.empty} role="status">
+              {locale === "ar" ? "جارٍ تحميل الحملات…" : "Loading campaigns…"}
+            </div>
+          ) : campaigns.length ? (
+            <div className={styles.cardList}>
+              {campaigns.map((campaign) => (
+                <article className={styles.card} data-selected={campaign.id === lastId} key={campaign.id}>
+                  <div className={styles.cardHeader}>
+                    <div>
+                      <h2>{campaign.title}</h2>
+                      <div className={styles.dates}>
+                        <span>
+                          <CalendarDays aria-hidden="true" size={17} />
+                          {reviewRange(locale, campaign.startsAt, campaign.endsAt)}
+                        </span>
+                        <span>{reviewCount(locale, campaign.durationDays, "days")}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                {campaign.objective && <p className={styles.objective}>{campaign.objective}</p>}
-                <div className={styles.cardFooter}>
-                  <CampaignCounts counts={campaign.postCounts} locale={locale} total />
-                  <button
-                    type="button"
-                    className={styles.button}
-                    onClick={() => openCampaign(campaign.id)}
-                    aria-label={`${locale === "ar" ? "فتح الحملة" : "Open campaign"}: ${campaign.title}`}
-                  >
-                    {locale === "ar" ? "فتح الحملة" : "Open campaign"}
-                    <ChevronRight aria-hidden="true" size={18} className="rtl:rotate-180" />
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : listLoaded && !listError ? (
-          searchQuery ? (
-            <div className={styles.empty}>
-              <h2>{locale === "ar" ? "لا توجد حملات مطابقة" : "No matching campaigns"}</h2>
+                  {campaign.objective && <p className={styles.objective}>{campaign.objective}</p>}
+                  <div className={styles.cardFooter}>
+                    <CampaignCounts counts={campaign.postCounts} locale={locale} total />
+                    <button
+                      type="button"
+                      className={styles.button}
+                      onClick={() => openCampaign(campaign.id)}
+                      aria-label={`${locale === "ar" ? "فتح الحملة" : "Open campaign"}: ${campaign.title}`}
+                    >
+                      {locale === "ar" ? "فتح الحملة" : "Open campaign"}
+                      <ChevronRight aria-hidden="true" size={18} className="rtl:rotate-180" />
+                    </button>
+                  </div>
+                </article>
+              ))}
             </div>
-          ) : hasPlanningWork ? null : (
-            <CampaignEmpty locale={locale} onNew={() => setShowComposer(true)} />
-          )
-        ) : null}
-        {cursor && (
-          <div className={styles.loadMore}>
-            <button type="button" className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns(cursor)}>
-              {listBusy ? (locale === "ar" ? "جارٍ التحميل…" : "Loading…") : locale === "ar" ? "تحميل المزيد" : "Load more"}
-            </button>
-          </div>
-        )}
-      </div>
+          ) : listLoaded && !listError ? (
+            searchQuery ? (
+              <div className={styles.empty}>
+                <h2>{locale === "ar" ? "لا توجد حملات مطابقة" : "No matching campaigns"}</h2>
+              </div>
+            ) : hasPlanningWork ? null : (
+              <CampaignEmpty locale={locale} onNew={() => setShowComposer(true)} />
+            )
+          ) : null}
+          {cursor && (
+            <div className={styles.loadMore}>
+              <button type="button" className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns(cursor)}>
+                {listBusy ? (locale === "ar" ? "جارٍ التحميل…" : "Loading…") : locale === "ar" ? "تحميل المزيد" : "Load more"}
+              </button>
+            </div>
+          )}
+        </div>
+      </details>
       {activeId && (
         <CampaignReview
           key={activeId}
@@ -606,56 +611,64 @@ function CampaignComposer({
           </button>
           <p className="mt-2 text-xs leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceFormats")}</p>
         </section>
-        <fieldset className="mt-4">
-          <legend className="text-sm font-semibold">{t(locale, "duration")}</legend>
-          <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {campaignDurations.map((days) => {
-              const supported = campaignGenerationDurations.includes(days as CampaignGenerationDurationDays);
-              const selected = supported && durationDays === days;
-              return (
-                <button
-                  aria-pressed={selected}
-                  className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : supported ? "border-[var(--sunlit-line)] bg-[var(--surface)] hover:border-[var(--lavender)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
-                  disabled={!supported}
-                  key={days}
-                  onClick={() => supported && onDuration(days as CampaignGenerationDurationDays)}
-                  type="button"
-                >
-                  <span className="block text-lg font-semibold">{days}</span>
-                  <span className="block text-xs font-medium">{t(locale, "days")}</span>
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label>
-            <span className="text-sm font-semibold">{t(locale, "startDate")}</span>
-            <input
-              className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-bold outline-none"
-              min={todayForDateInput()}
-              onChange={(event) => onStart(event.target.value)}
-              type="date"
-              value={startsAt}
-            />
-          </label>
-          <fieldset>
-            <legend className="text-sm font-semibold">{t(locale, "intensity")}</legend>
-            <div className="mt-2 grid h-12 grid-cols-3 gap-2">
-              {[1, 2, 3].map((count) => (
-                <button
-                  aria-pressed={publishesPerDay === count}
-                  className={`rounded-xl border text-sm font-semibold ${publishesPerDay === count ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]" : "border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-muted)]"}`}
-                  key={count}
-                  onClick={() => onIntensity(count)}
-                  type="button"
-                >
-                  {count}/{t(locale, "dayShort")}
-                </button>
-              ))}
+        <p className="mt-5 text-sm">
+          {durationDays} {t(locale, "days")} · {publishesPerDay}/{t(locale, "dayShort")} · {startsAt}
+        </p>
+        <details className="mt-3">
+          <summary className="min-h-11 cursor-pointer content-center font-semibold">
+            {locale === "ar" ? "تعديل التوقيت والوتيرة" : "Adjust timing and frequency"}
+          </summary>
+          <fieldset className="mt-4">
+            <legend className="text-sm font-semibold">{t(locale, "duration")}</legend>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {campaignDurations.map((days) => {
+                const supported = campaignGenerationDurations.includes(days as CampaignGenerationDurationDays);
+                const selected = supported && durationDays === days;
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={`relative min-h-16 rounded-xl border p-2 ${selected ? "border-[var(--sunlit-coral)] bg-[var(--sunlit-paper-deep)] shadow-[0_6px_18px_color-mix(in_srgb,var(--primary)_12%,transparent)]" : supported ? "border-[var(--sunlit-line)] bg-[var(--surface)] hover:border-[var(--lavender)]" : "cursor-not-allowed border-dashed border-[var(--sunlit-line)] bg-[var(--sunlit-paper)] text-[var(--sunlit-muted)] opacity-70"}`}
+                    disabled={!supported}
+                    key={days}
+                    onClick={() => supported && onDuration(days as CampaignGenerationDurationDays)}
+                    type="button"
+                  >
+                    <span className="block text-lg font-semibold">{days}</span>
+                    <span className="block text-xs font-medium">{t(locale, "days")}</span>
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
-        </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label>
+              <span className="text-sm font-semibold">{t(locale, "startDate")}</span>
+              <input
+                className="sunlit-field mt-2 h-12 rounded-xl px-3 text-sm font-bold outline-none"
+                min={todayForDateInput()}
+                onChange={(event) => onStart(event.target.value)}
+                type="date"
+                value={startsAt}
+              />
+            </label>
+            <fieldset>
+              <legend className="text-sm font-semibold">{t(locale, "intensity")}</legend>
+              <div className="mt-2 grid h-12 grid-cols-3 gap-2">
+                {[1, 2, 3].map((count) => (
+                  <button
+                    aria-pressed={publishesPerDay === count}
+                    className={`rounded-xl border text-sm font-semibold ${publishesPerDay === count ? "border-[var(--sunlit-aqua)] bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]" : "border-[var(--sunlit-line)] bg-[var(--surface)] text-[var(--sunlit-muted)]"}`}
+                    key={count}
+                    onClick={() => onIntensity(count)}
+                    type="button"
+                  >
+                    {count}/{t(locale, "dayShort")}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </details>
       </fieldset>
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p role={message ? "alert" : "status"} className="min-h-5 text-sm text-[var(--danger)]">

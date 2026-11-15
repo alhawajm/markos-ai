@@ -55,6 +55,7 @@ async function setup(initial: ContentRecord) {
     media: [asset(), asset("replacement")],
     calls: [] as { path: string; body: Record<string, unknown> }[],
     counter: 1,
+    deleted: false,
     failSave: false,
     failImage: false,
     aiCaption: "MARKOS applied caption",
@@ -92,9 +93,10 @@ async function setup(initial: ContentRecord) {
     }
     if (path === `/v1/content/${state.record.id}` && method === "DELETE") {
       if (body.expectedRevision !== state.record.revision) return route.fulfill(fail());
+      state.deleted = true;
       return route.fulfill(json({ id: state.record.id }));
     }
-    if (path === "/v1/content" && method === "GET") return route.fulfill(json([state.record]));
+    if (path === "/v1/content" && method === "GET") return route.fulfill(json(state.deleted ? [] : [state.record]));
     if (path === `/v1/content/${state.record.id}` && method === "GET") return route.fulfill(json(state.record));
     if (path.endsWith("/conversation") && method === "GET") return route.fulfill(json(thread()));
     if (path.endsWith("/conversation") && method === "POST") {
@@ -353,7 +355,8 @@ describe("Relational Create workspace", () => {
       await page.getByLabel("More actions", { exact: true }).click();
       await page.getByRole("button", { name: "Delete draft", exact: true }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true }).click();
-      await expect.poll(() => state.record.id).toBe("new-draft");
+      await page.getByRole("heading", { name: "What would you like to share?", exact: true }).waitFor();
+      expect(state.calls.filter((call) => call.path === "/v1/content")).toHaveLength(0);
       const deletion = state.calls.findIndex((c) => c.path === "/v1/content/draft-1");
       expect(deletion).toBeGreaterThan(0);
       expect(state.calls[deletion]!.body.expectedRevision).toBeGreaterThan(3);

@@ -2,12 +2,11 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  height: calc(100dvh - 4.5rem);
-  min-height: 0;
+  min-height: calc(100dvh - 4.5rem);
   min-width: 0;
 }
 .indexScroll {
-  overflow: auto;
+  overflow: visible;
   min-height: 0;
   padding: 2px 4px 20px;
   scrollbar-gutter: stable;

@@ -72,6 +72,7 @@ describe("presentation journey", () => {
       };
     }
     await page.goto(`${baseUrl}/${locale}/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await openCampaignLibrary(page);
     const planning = page.getByRole("region", { name: locale === "ar" ? "حالة إنشاء الحملات" : "Campaign planning status" });
     await planning.getByRole("button", { name: locale === "ar" ? "إكمال الحملة" : "Finish campaign", exact: true }).click();
     await planning.getByText(locale === "ar" ? /جارٍ إعداد الحملة/ : /Planning your campaign/).waitFor();
@@ -481,15 +482,17 @@ describe("presentation journey", () => {
     const reviewer = page.getByRole("dialog", { name: "SnackLab 7-Day Community Sprint", exact: true });
     await reviewer.waitFor();
     await reviewer.getByRole("button", { name: "Close campaign", exact: true }).click();
+    await openCampaignLibrary(page);
     await page.getByRole("button", { name: "Open campaign: SnackLab 14-Day Instagram Campaign", exact: true }).click();
     await page.getByRole("dialog", { name: "SnackLab 14-Day Instagram Campaign", exact: true }).waitFor();
     await page.getByRole("button", { name: "Close campaign", exact: true }).click();
-    await page.getByRole("button", { name: "New campaign" }).click();
+    await page.getByRole("button", { name: "Plan with files or set options" }).click();
     const composer = page.getByRole("dialog", { name: "Create a campaign", exact: true });
     await composer.waitFor();
     expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     await page.keyboard.press("Shift+Tab");
     expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await composer.getByText("Adjust timing and frequency", { exact: true }).click();
     await expect(composer.getByRole("button", { name: "14 days", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
     for (const duration of [30, 60, 90]) {
       await expect(composer.getByRole("button", { name: new RegExp(`^${duration} days`) }).isDisabled()).resolves.toBe(false);
@@ -582,7 +585,7 @@ describe("presentation journey", () => {
     await expect(page.getByRole("link", { name: "MARKOS", exact: true }).getAttribute("aria-current")).resolves.toBe("page");
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
-    await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/en/app/content-studio?item=${content.id}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("create-workspace").waitFor();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${content.id}`);
     await page.getByRole("button", { name: "Edit manually", exact: true }).click();
@@ -1002,7 +1005,8 @@ describe("presentation journey", () => {
     });
 
     await emptyPage.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
-    await emptyPage.getByRole("button", { name: "New campaign", exact: true }).first().click();
+    await openCampaignLibrary(emptyPage);
+    await emptyPage.getByRole("button", { name: "Plan with files or set options", exact: true }).first().click();
     const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
     await closeComposer.waitFor();
     await emptyPage.keyboard.press("Escape");
@@ -1040,6 +1044,7 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
+    await openCampaignLibrary(page);
     await page.getByRole("button", { name: /^Open campaign:/ }).click();
     await page.getByRole("button", { name: /Compare the subscription tiers/ }).click();
     const description = "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.";
@@ -1625,4 +1630,9 @@ function quickProfileState() {
     status: "IN_PROGRESS",
     businessProfile: { status: "DRAFT", interactionId: "019fd833-4bf3-7ed5-9db9-6f96ab379054", profile, updatedAt: new Date().toISOString() }
   };
+}
+
+async function openCampaignLibrary(page: Page) {
+  const library = page.locator("details.task-library");
+  if ((await library.getAttribute("open")) === null) await library.locator(":scope > summary").click();
 }
