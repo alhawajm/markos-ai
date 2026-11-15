@@ -63,7 +63,7 @@ def test_workspace_memory_is_grounded_in_latest_user_evidence(message: str) -> N
     client = Client({"reply": "Understood.", "proposal": None, "memoryUpdates": [{
         "key": "LANGUAGE", "operation": "REMEMBER", "text": "Arabic first.", "evidence": message
     }]})
-    request = WorkspaceAssistantRequest(workspace_id="test", message=message, locale="en",
+    request = WorkspaceAssistantRequest(workspace_id="test", message=message, locale="en", model="configured-model",
         context={"personalization": {"preferences": [], "sharedGuidance": {"version": "test"}}})
     response = asyncio.run(respond_to_workspace(request, client))
     assert response.result.memoryUpdates[0].evidence == message
