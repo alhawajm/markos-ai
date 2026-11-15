@@ -20,6 +20,7 @@ vi.mock("../src/providers", () => ({
   useAppearance: () => ({ colors: {}, rtl: state.rtl, t: (en: string, ar: string) => (state.rtl ? ar : en) })
 }));
 vi.mock("../src/auth/transport", () => ({ sessionController: { assertEpoch: state.epoch } }));
+vi.mock("../src/motion", () => ({ InkPulse: () => null }));
 import { ContentReportSheet } from "../src/content-report";
 let root: Root;
 beforeEach(() => {
