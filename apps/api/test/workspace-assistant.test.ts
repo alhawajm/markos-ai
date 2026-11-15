@@ -8,6 +8,7 @@ import { processConversationRuns } from "../src/content/conversation-service";
 import { respondToConversation } from "../src/ai/conversation-client";
 import { requestAi } from "../src/ai/request";
 import { workspaceAssistantHistory, confirmWorkspacePlan } from "../src/assistant/workspace-assistant-service";
+import { saveOnboardingModule } from "../src/onboarding/onboarding-service";
 vi.mock("../src/ai/request", async (original) => ({ ...(await original<typeof import("../src/ai/request")>()), requestAi: vi.fn() }));
 vi.mock("../src/ai/conversation-client", async (original) => ({
   ...(await original<typeof import("../src/ai/conversation-client")>()),
@@ -111,6 +112,48 @@ it("queues a message once, creates nothing before confirmation, then executes wi
   expect(draft.caption).toBe("Fresh bread. خبز طازج.");
   expect(await prisma.conversationRun.findFirst({ where: { workspaceId: f.session.workspace.id } })).toMatchObject({ status: "SUCCEEDED" });
   expect(respondToConversation).toHaveBeenCalledOnce();
+});
+it("preserves a long campaign's date and publishing intensity through the confirmed handoff", async () => {
+  const f = await fixture();
+  await saveOnboardingModule(f.session.workspace.id, "company", { name: "Long campaign bakery", socials: [], languages: [] });
+  vi.mocked(requestAi).mockResolvedValueOnce({
+    model: "test",
+    prompt_version: "test",
+    tokens_in: 1,
+    tokens_out: 1,
+    result: {
+      reply: "Here is the plan.",
+      proposal: {
+        action: "CAMPAIGN",
+        summary: "A 90-day bakery campaign.",
+        instruction: "Plan 90 days for the bakery, three posts a day, starting 1 December.",
+        contentType: null,
+        contentItemId: null,
+        durationDays: 90,
+        startsAt: "2026-12-01T06:00:00.000Z",
+        publishesPerDay: 3
+      }
+    }
+  });
+  expect(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/v1/assistant/conversation",
+        headers: f.headers,
+        payload: { ...f.input, message: "Plan 90 days from December 1, three posts a day." }
+      })
+    ).statusCode
+  ).toBe(202);
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const turn = (await f.get())[0];
+  expect(turn.status).toBe("PROPOSED");
+  await confirmWorkspacePlan(f.session.workspace.id, f.session.user.id, turn.id, turn.confirmationToken);
+  await processWorkspaceAssistant(f.session.workspace.id);
+  const job = await prisma.campaignGenerationJob.findFirstOrThrow({ where: { workspaceId: f.session.workspace.id } });
+  expect(job.input).toMatchObject({ durationDays: 90, startsAt: "2026-12-01T06:00:00.000Z", publishesPerDay: 3 });
+  expect(job.totalWeeks).toBe(13);
+  expect((await f.get())[0]).toMatchObject({ status: "COMPLETED", campaignRequestId: turn.id });
 });
 it("isolates messages and confirmation tokens by workspace AND user", async () => {
   const f = await fixture(),

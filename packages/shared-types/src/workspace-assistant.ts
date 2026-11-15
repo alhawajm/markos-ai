@@ -4,7 +4,7 @@ export interface WorkspaceAssistantProposal {
   instruction: string;
   contentType: "POST" | "CAROUSEL" | "REEL" | "STORY" | null;
   contentItemId: string | null;
-  durationDays: 3 | 7 | 14 | null;
+  durationDays: 3 | 7 | 14 | 30 | 60 | 90 | null;
   startsAt?: string | null;
   publishesPerDay?: 1 | 2 | 3 | null;
 }

@@ -10,7 +10,7 @@ class WorkspaceProposal(BaseModel):
     instruction: str = Field(min_length=1, max_length=3500)
     contentType: Literal["POST", "CAROUSEL", "REEL", "STORY"] | None
     contentItemId: str | None
-    durationDays: Literal[3, 7, 14] | None
+    durationDays: Literal[3, 7, 14, 30, 60, 90] | None
     startsAt: str | None
     publishesPerDay: Literal[1, 2, 3] | None
 

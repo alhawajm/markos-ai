@@ -13,7 +13,7 @@ export const workspaceAssistantResultSchema = z
         instruction: z.string().min(1).max(3500),
         contentType: z.enum(["POST", "CAROUSEL", "REEL", "STORY"]).nullable(),
         contentItemId: z.string().uuid().nullable(),
-        durationDays: z.union([z.literal(3), z.literal(7), z.literal(14)]).nullable(),
+        durationDays: z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30), z.literal(60), z.literal(90)]).nullable(),
         startsAt: z.string().datetime().nullable(),
         publishesPerDay: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable()
       })
