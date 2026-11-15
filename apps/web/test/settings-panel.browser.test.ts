@@ -120,337 +120,133 @@ describe("active SettingsPanel Instagram interactions", () => {
     await page.close();
   });
 
-  it("isolates manual onboarding drafts by account and workspace and discards unowned legacy data", async () => {
+  it("isolates six-answer setup drafts by account and workspace without reading unowned legacy data", async () => {
     const page = await browserPage();
     let currentSession = { ...session, user: { ...session.user, id: "new-owner" }, workspace: { id: "new-workspace", name: "New business" } };
-    await page.addInitScript(() => {
-      if (!localStorage.getItem("legacy-seeded")) {
-        localStorage.setItem("markos.onboarding.draft.v3", JSON.stringify({ businessName: "SnackLab", industry: "Bakery", offer: "SnackLab products" }));
-        localStorage.setItem("legacy-seeded", "yes");
-      }
-    });
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === "/v1/auth/refresh") return route.fulfill(json(currentSession));
-      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+    await page.addInitScript(() =>
+      localStorage.setItem("markos.onboarding.draft.v3", JSON.stringify({ businessName: "Other owner", offer: "Private old details" }))
+    );
+    await page.route("**/v1/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/v1/auth/refresh") return route.fulfill(json(currentSession));
+      if (path === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (path === "/v1/business-profile")
+        return route.fulfill(json({ version: 1, approved: false, modules: { company: {}, audience: {}, brand: {}, objectives: {} }, catalog: null }));
       return route.fulfill(json(null));
     });
-    const openManual = async () => {
-      await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("button", { name: "Enter details myself" }).click();
-      await page.getByRole("heading", { name: "Let’s start with the basics" }).waitFor();
+    const open = async () => {
+      await page.goto(baseUrl + "/en/onboarding");
+      await page.getByRole("button", { name: /Tell me the basics/ }).click();
+      await page.getByLabel("Business name", { exact: true }).waitFor();
     };
     try {
-      await openManual();
-      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("New business");
-      expect(await page.getByLabel("Business type").inputValue()).toBe("");
-      expect(await page.locator("body").innerText()).not.toContain("SnackLab");
+      await open();
+      expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("");
+      expect(await page.locator(".quick-setup-form input,.quick-setup-form textarea").count()).toBe(6);
+      expect(await page.locator("body").innerText()).not.toContain("Private old details");
       expect(await page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v3"))).toBeNull();
-      await page.getByLabel("Business name").fill("My unsaved business");
-      await page.getByLabel("Business type").fill("Technology");
-      await openManual();
-      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("My unsaved business");
-
-      currentSession = { ...currentSession, workspace: { id: "other-workspace", name: "Other workspace" } };
-      await openManual();
-      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("Other workspace");
-      expect(await page.getByLabel("Business type").inputValue()).toBe("");
-
-      currentSession = { ...currentSession, user: { ...currentSession.user, id: "other-owner" }, workspace: { id: "new-workspace", name: "New business" } };
-      await openManual();
-      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("New business");
-      expect(await page.getByLabel("Business type").inputValue()).toBe("");
-
+      await page.getByLabel("Business name", { exact: true }).fill("My unsaved business");
+      await page.getByLabel("What do you offer?", { exact: true }).fill("Fresh pastries");
+      await expect
+        .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.quick-setup:new-owner:new-workspace") ?? "{}").details?.name))
+        .toBe("My unsaved business");
+      await open();
+      expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("My unsaved business");
+      currentSession = { ...currentSession, workspace: { id: "other-workspace", name: "Other" } };
+      await open();
+      expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("");
+      currentSession = { ...currentSession, workspace: { id: "new-workspace", name: "New business" }, user: { ...currentSession.user, id: "other-owner" } };
+      await open();
+      expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("");
       currentSession = { ...currentSession, user: { ...currentSession.user, id: "new-owner" } };
-      await openManual();
-      await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("My unsaved business");
-      expect(await page.getByLabel("Business type").inputValue()).toBe("Technology");
+      await open();
+      expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("My unsaved business");
     } finally {
       await page.close();
     }
   });
 
-  it("uses manual onboarding with structured offerings and protects unsaved edits in both locales", async () => {
+  it("offers a public Instagram link and an honest fallback when that profile cannot be read", async () => {
     const page = await browserPage();
-    let offeringPayload: Record<string, unknown> | undefined;
-    await page.addInitScript(
-      ({ identity }) => {
-        localStorage.setItem("markos.session", JSON.stringify(identity));
-        localStorage.setItem(
-          "markos.onboarding.draft",
-          JSON.stringify({
-            companyName: "Zain Arabia",
-            competitors: ["Batelco"],
-            industry: "Technology"
-          })
-        );
-      },
-      { identity: storedIdentity }
-    );
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-      if (pathname === "/v1/onboarding" && route.request().method() === "GET") return route.fulfill(json(emptyOnboardingState()));
-      if (pathname === "/v1/onboarding/company") return route.fulfill(json(onboardingStateWith({ completed: ["company"] })));
-      if (pathname === "/v1/onboarding/products" && route.request().method() === "PUT") {
-        offeringPayload = route.request().postDataJSON() as Record<string, unknown>;
-        return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"] })));
-      }
-      if (pathname === "/v1/business-profile" && route.request().method() === "GET") {
-        const timestamp = "2026-09-13T08:00:00.000Z";
-        return route.fulfill(
-          json({
-            version: 1,
-            approved: false,
-            updatedAt: timestamp,
-            modules: {},
-            catalog: {
-              id: "browser-catalog",
-              workspaceId: session.workspace.id,
-              version: 1,
-              projectionStatus: "READY",
-              projectedVersion: 1,
-              differentiators: [],
-              salesChannels: [],
-              createdAt: timestamp,
-              updatedAt: timestamp,
-              offerings: [
-                {
-                  id: "saved-coffee-beans",
-                  workspaceId: session.workspace.id,
-                  catalogId: "browser-catalog",
-                  name: "Coffee beans",
-                  kind: "PRODUCT",
-                  status: "ACTIVE",
-                  priceType: "UNSPECIFIED",
-                  currency: "BHD",
-                  version: 1,
-                  createdAt: timestamp,
-                  updatedAt: timestamp
-                }
-              ]
-            }
-          })
-        );
-      }
-      if (pathname === "/v1/onboarding/story/skip") return route.fulfill(json(onboardingStateWith({ completed: ["company", "products"], skipped: ["story"] })));
-      return route.fulfill({ status: 404, body: "{}" });
+    let previewCalls = 0;
+    await page.route("**/v1/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (path === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (path === "/v1/business-profile")
+        return route.fulfill(json({ version: 1, approved: false, modules: { company: {}, audience: {}, brand: {}, objectives: {} }, catalog: null }));
+      if (path === "/v1/onboarding/instagram-analysis")
+        return route.fulfill({
+          status: 422,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "INSTAGRAM_PUBLIC_PROFILE_REQUIRED", message: "This account is private" } })
+        });
+      if (path === "/v1/onboarding/quick/preview") previewCalls++;
+      return route.fulfill(json(null));
     });
-
-    await page.goto(`${baseUrl}/en/onboarding`, {
-      waitUntil: "domcontentloaded"
-    });
-    await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
-    await page.getByRole("button", { name: "Enter details myself" }).click();
-    const basicsHeading = page.getByRole("heading", { name: "Let’s start with the basics" });
-    await basicsHeading.waitFor();
-    await basicsHeading.evaluate(async (element) => {
-      const animatedScreen = element.closest("main > div");
-      await Promise.all((animatedScreen?.getAnimations({ subtree: true }) ?? []).map((animation) => animation.finished.catch(() => undefined)));
-    });
-    await expect.poll(() => page.getByLabel("Business name").inputValue()).toBe("Browser Workspace");
-    await expect(page.getByText("—", { exact: true }).count()).resolves.toBe(0);
-    const stepOneActionTop = Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1);
-    const body = await page.locator("body").innerText();
-    expect(body).not.toMatch(/Zain Arabia|Batelco|STC Bahrain|@zain_bh/i);
-    const stored = await page.evaluate(() => ({
-      legacy: localStorage.getItem("markos.onboarding.draft"),
-      previous: localStorage.getItem("markos.onboarding.draft.v2"),
-      unscoped: localStorage.getItem("markos.onboarding.draft.v3"),
-      next: localStorage.getItem("markos.onboarding.draft.v4:user-1:workspace-1")
-    }));
-    expect(stored.legacy).toBeNull();
-    expect(stored.previous).toBeNull();
-    expect(stored.unscoped).toBeNull();
-    expect(JSON.parse(stored.next ?? "{}")).toMatchObject({
-      businessName: "Browser Workspace",
-      competitors: "",
-      offer: ""
-    });
-
-    await page.getByRole("button", { name: "Save & continue" }).click();
-    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
-    await expect(page.locator("[data-notification-toast]").count()).resolves.toBe(0);
-    await expect
-      .poll(async () => Math.abs(Math.round((await page.getByRole("button", { name: "Save & continue" }).boundingBox())?.y ?? -1) - stepOneActionTop))
-      .toBeLessThanOrEqual(8);
-    await expect(page.getByRole("button", { name: "Save & continue" }).isDisabled()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Back" }).click();
-    await expect(page.getByRole("dialog", { name: "Leave this step?" }).count()).resolves.toBe(0);
-    await basicsHeading.waitFor();
-    await page.getByRole("button", { name: "Save & continue" }).click();
-    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
-    const offeringField = page.getByRole("textbox", { name: "Name 1", exact: true });
-    await offeringField.fill("Coffee beans");
-    await expect(page.getByRole("button", { name: "Save & continue" }).isEnabled()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Back" }).click();
-    const backGuard = page.getByRole("dialog", { name: "Leave this step?" });
-    await expect(backGuard.isVisible()).resolves.toBe(true);
-    const dialogBounds = await backGuard.boundingBox();
-    const viewportHeight = page.viewportSize()!.height;
-    expect(dialogBounds!.height).toBeLessThan(viewportHeight - 32);
-    expect(Math.abs(dialogBounds!.y + dialogBounds!.height / 2 - viewportHeight / 2)).toBeLessThan(2);
-    await expect(backGuard.evaluate((element) => getComputedStyle(element, "::backdrop").backgroundColor)).resolves.not.toBe("rgba(0, 0, 0, 0)");
-    const keepEditing = backGuard.getByRole("button", { name: "Keep editing" });
-    await expect(keepEditing.evaluate((element) => element === document.activeElement)).resolves.toBe(true);
-    await page.keyboard.press("Shift+Tab");
-    await expect(backGuard.evaluate((element) => element.contains(document.activeElement))).resolves.toBe(true);
-    await page.keyboard.press("Escape");
-    await expect(backGuard.count()).resolves.toBe(0);
-    await expect(page.getByRole("button", { name: "Back", exact: true }).evaluate((element) => element === document.activeElement)).resolves.toBe(true);
-    await expect(offeringField.inputValue()).resolves.toBe("Coffee beans");
-    await page.getByRole("button", { name: "Back" }).click();
-    await page.getByRole("dialog", { name: "Leave this step?" }).getByRole("button", { name: "Discard changes" }).click();
-    await basicsHeading.waitFor();
-    await page.getByRole("button", { name: "Save & continue" }).click();
-    await page.getByRole("heading", { name: "What do you sell or provide?" }).waitFor();
-    await expect(offeringField.inputValue()).resolves.toBe("");
-    await offeringField.fill("Coffee beans");
-    await page.getByRole("combobox", { name: "Type 1", exact: true }).selectOption("PRODUCT");
-    await page.screenshot({
-      path: "evidence/onboarding-products-ready.png",
-      fullPage: true
-    });
-
-    await page.setViewportSize({ height: 844, width: 390 });
-    const widths = await page.evaluate(() => ({
-      client: document.documentElement.clientWidth,
-      scroll: document.documentElement.scrollWidth
-    }));
-    expect(widths.scroll).toBeLessThanOrEqual(widths.client);
-    await page.screenshot({
-      path: "evidence/onboarding-products-mobile.png",
-      fullPage: true
-    });
-    await page.getByRole("button", { name: "Save & continue" }).click();
-    await page.getByRole("heading", { name: "Why should customers choose you?" }).waitFor();
-    expect(offeringPayload).toMatchObject({ items: [{ name: "Coffee beans", kind: "PRODUCT" }] });
-    await expect
-      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.onboarding.draft.v4:user-1:workspace-1") ?? "{}")))
-      .toMatchObject({
-        catalogVersion: 1,
-        offerings: [{ id: "saved-coffee-beans", version: 1, name: "Coffee beans" }]
-      });
-    await page.getByRole("button", { name: "Skip for now" }).click();
-    await page.getByRole("heading", { name: "Who usually buys from you?" }).waitFor();
-    await page.close();
-
-    const arabic = await browserPage();
-    await arabic.addInitScript((identity) => localStorage.setItem("markos.session", JSON.stringify(identity)), storedIdentity);
-    await arabic.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
-      return route.fulfill({ status: 404, body: "{}" });
-    });
-    await arabic.goto(`${baseUrl}/ar/onboarding`, {
-      waitUntil: "domcontentloaded"
-    });
-    await arabic.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
-    await arabic.getByRole("button", { name: "الإدخال يدوياً" }).click();
-    await arabic.getByRole("heading", { name: "لنبدأ بالأساسيات" }).waitFor();
-    await arabic.setViewportSize({ height: 844, width: 390 });
-    await expect(arabic.locator('[lang="ar"][dir="rtl"]').count()).resolves.toBeGreaterThan(0);
-    await expect(arabic.evaluate(() => ({ dir: document.documentElement.dir, lang: document.documentElement.lang }))).resolves.toEqual({
-      dir: "rtl",
-      lang: "ar"
-    });
-    const arabicWidths = await arabic.evaluate(() => ({
-      client: document.documentElement.clientWidth,
-      scroll: document.documentElement.scrollWidth
-    }));
-    expect(arabicWidths.scroll).toBeLessThanOrEqual(arabicWidths.client);
-    await arabic.close();
+    try {
+      await page.goto(baseUrl + "/en/onboarding");
+      await page.getByRole("button", { name: /Use your Instagram/ }).click();
+      await page.locator('input[type="url"]').fill("https://instagram.com/private_business/");
+      await page.locator(".quick-setup-form button[type=submit]").click();
+      await page.getByRole("alert").waitFor();
+      expect(previewCalls).toBe(0);
+      await page.getByRole("button", { name: "Use quick manual setup instead" }).click();
+      expect(await page.locator(".quick-setup-form input,.quick-setup-form textarea").count()).toBe(6);
+    } finally {
+      await page.close();
+    }
   });
 
-  it("renders an editable bilingual resolved profile and approves the reviewed version", async () => {
-    const page = await browserPage();
-    const interactionId = "019fd833-4bf3-7ed5-9db9-6f96ab379054";
-    let approvalPayload: Record<string, unknown> | undefined;
-    const profile = browserBusinessProfile();
-    const onboarding = {
+  it("reviews a short summary and adjusts six answers before confirming it once", async () => {
+    const page = await browserPage(),
+      interactionId = "019fd833-4bf3-7ed5-9db9-6f96ab379054";
+    let preview: Record<string, unknown> | undefined,
+      confirmed = 0;
+    let state = {
+      ...emptyOnboardingState(),
       status: "IN_PROGRESS",
-      onboardingScore: 100,
-      readyForProfile: true,
-      vaultScore: {
-        score: 100,
-        completedSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
-        missingSections: [],
-        requiredSections: ["COMPANY", "STORY", "PRODUCTS", "AUDIENCE", "COMPETITORS", "BRAND", "TONE", "OBJECTIVES"],
-        entryCount: 8
-      },
-      modules: onboardingModules({ completed: ["company", "story", "products", "audience", "competitors", "brand", "objectives"] }),
-      businessProfile: {
-        status: "DRAFT",
-        interactionId,
-        profile,
-        updatedAt: "2026-08-06T12:00:00.000Z"
-      }
+      businessProfile: { status: "DRAFT", interactionId, profile: browserBusinessProfile(), updatedAt: "2026-11-15T08:00:00Z" }
     };
-
-    await page.addInitScript((value) => localStorage.setItem("markos.session", JSON.stringify(value)), storedIdentity);
-    await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route) => {
-      const request = route.request();
-      const pathname = new URL(request.url()).pathname;
-      if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
-      if (pathname === "/v1/onboarding" && request.method() === "GET") return route.fulfill(json(onboarding));
-      if (pathname === "/v1/vault") return route.fulfill(json(emptyVault()));
-      if (pathname === "/v1/onboarding/document-analysis" || pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
-      if (pathname === "/v1/onboarding/profile/approve") {
-        approvalPayload = request.postDataJSON() as Record<string, unknown>;
-        return route.fulfill(
-          json({
-            ...onboarding,
-            status: "COMPLETE",
-            businessProfile: {
-              ...onboarding.businessProfile,
-              status: "APPROVED",
-              profile: approvalPayload.profile as Record<string, unknown>
-            }
-          })
-        );
+    await page.route("**/v1/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (path === "/v1/onboarding") return route.fulfill(json(state));
+      if (path === "/v1/vault") return route.fulfill(json(emptyVault()));
+      if (path === "/v1/business-profile")
+        return route.fulfill(json({ version: 1, approved: false, modules: { company: {}, audience: {}, brand: {}, objectives: {} }, catalog: null }));
+      if (path === "/v1/onboarding/quick/preview") {
+        preview = route.request().postDataJSON();
+        state = {
+          ...state,
+          businessProfile: { ...state.businessProfile, profile: { ...browserBusinessProfile(), businessName: (preview!.details as { name: string }).name } }
+        };
+        return route.fulfill(json(state));
       }
-      return route.fulfill(json([]));
-    });
-
-    await page.goto(`${baseUrl}/en/onboarding`, {
-      waitUntil: "domcontentloaded"
-    });
-    await page.getByRole("heading", { name: "Review your business profile" }).waitFor();
-    await expect(page.getByLabel("Business name").inputValue()).resolves.toBe("Pearl Coffee");
-    await page.locator('button[aria-controls="profile-tagline-en-content"]').click();
-    await page.getByLabel("Tagline").fill("Bahrain coffee, personally crafted.");
-    await page.getByRole("button", { name: "العربية", exact: true }).click();
-    await expect(page.getByLabel("Tagline").inputValue()).resolves.toBe(profile.tagline.ar);
-    await page.getByRole("button", { name: "English", exact: true }).click();
-    await page.screenshot({
-      path: "evidence/onboarding-business-profile.png",
-      fullPage: true
-    });
-    await page.setViewportSize({ height: 844, width: 390 });
-    const profileWidths = await page.evaluate(() => ({
-      client: document.documentElement.clientWidth,
-      scroll: document.documentElement.scrollWidth
-    }));
-    expect(profileWidths.scroll).toBeLessThanOrEqual(profileWidths.client);
-    await page.screenshot({
-      path: "evidence/onboarding-business-profile-mobile.png",
-      fullPage: true
-    });
-
-    await Promise.all([page.waitForURL(/\/en\/instagram-setup$/), page.getByRole("button", { name: "Approve profile & continue" }).click()]);
-
-    expect(approvalPayload).toMatchObject({
-      interactionId,
-      profile: {
-        businessName: "Pearl Coffee",
-        tagline: {
-          en: "Bahrain coffee, personally crafted.",
-          ar: profile.tagline.ar
-        }
+      if (path === "/v1/onboarding/quick/confirm") {
+        confirmed++;
+        expect(route.request().postDataJSON()).toEqual({ interactionId });
+        state = { ...state, status: "COMPLETE", businessProfile: { ...state.businessProfile, status: "APPROVED" } };
+        return route.fulfill(json(state));
       }
+      return route.fulfill(json(path === "/v1/onboarding/document-analysis" ? null : []));
     });
-    await page.close();
+    try {
+      await page.goto(baseUrl + "/en/onboarding");
+      await page.getByRole("heading", { name: "Pearl Coffee", exact: true }).waitFor();
+      expect(await page.locator(".quick-setup-summary input,.quick-setup-summary textarea").count()).toBe(0);
+      await page.getByRole("button", { name: "Adjust the basics" }).click();
+      await page.getByLabel("Business name", { exact: true }).fill("Pearl Coffee Bahrain");
+      await page.getByLabel("What do you offer?", { exact: true }).fill("Specialty coffee");
+      await page.getByRole("button", { name: "Review my summary" }).click();
+      await page.getByRole("heading", { name: "Pearl Coffee Bahrain", exact: true }).waitFor();
+      await page.getByRole("button", { name: /Looks good/ }).click();
+      await page.waitForURL(/\/en\/app$/);
+      expect(confirmed).toBe(1);
+      expect(Object.keys(preview!.details as object)).toHaveLength(6);
+    } finally {
+      await page.close();
+    }
   });
 
   it("processes callback results once, cleans sensitive query values, and renders sanitized mixed media", async () => {

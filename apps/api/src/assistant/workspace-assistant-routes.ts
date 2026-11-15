@@ -13,7 +13,8 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
     verifiedUserRequired: true,
     permissions: ["content:write", "agent:run", "campaign:generate"]
   };
-  app.get("/v1/assistant/conversation", { config: { ...config, permissions: ["workspace:read"] } }, async () => {
+  app.get("/v1/assistant/conversation", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
     const { workspaceId, userId } = requireWorkspaceContext();
     return ok(await workspaceAssistantHistory(workspaceId, userId));
   });

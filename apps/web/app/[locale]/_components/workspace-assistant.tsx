@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState,useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowUp, LoaderCircle, Sparkles, Target, ImagePlus, Lightbulb, MoreHorizontal } from "lucide-react";
 import { ContentReportDialog } from "./content-report-dialog";
 import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
@@ -9,7 +9,7 @@ import "./workspace-assistant.css";
 export function WorkspaceAssistant({ locale }: { locale: Locale }) {
   const api = useMarkosClient(locale),
     session = useMarkosSession();
-  const t = useCallback((en: string, ar: string) => (locale === "ar" ? ar : en),[locale]);
+  const t = useCallback((en: string, ar: string) => (locale === "ar" ? ar : en), [locale]);
   const key = `markos.home-chat:${session?.user.id}:${session?.workspace.id}`;
   const [turns, setTurns] = useState<WorkspaceAssistantTurn[]>([]),
     [message, setMessage] = useState(""),
@@ -19,6 +19,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale } | null>(null);
   const end = useRef<HTMLDivElement>(null),
     active = turns.some((turn) => ["THINKING", "EXECUTING"].includes(turn.status));
+  const following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -35,7 +36,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
         .workspaceAssistant()
         .then((data) => {
           if (live) {
-            setTurns(data);
+            setTurns((previous) => (JSON.stringify(previous) === JSON.stringify(data) ? previous : data));
             setPending((p) => {
               if (p && data.some((v) => v.id === p.requestId)) {
                 setMessage("");
@@ -57,14 +58,22 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
       live = false;
       clearInterval(timer);
     };
-  }, [api, key,t]);
+  }, [api, key, t]);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (following.current) end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [turns]);
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      following.current = entries[0]?.isIntersecting ?? true;
+    });
+    if (end.current) observer.observe(end.current);
+    return () => observer.disconnect();
+  }, []);
   function persist(text: string, request: typeof pending) {
     localStorage.setItem(key, JSON.stringify({ message: text, pending: request }));
   }
   async function send() {
+    following.current = true;
     const request = pending ?? { requestId: crypto.randomUUID(), message: message.trim(), locale };
     if (!request.message || busy || active || !ready) return;
     setBusy(true);

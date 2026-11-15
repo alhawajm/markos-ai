@@ -223,7 +223,7 @@ describe("rendered Sunlit authentication", () => {
       expect(new URL(page.url()).pathname).toBe("/en/verify");
       await page.getByRole("button", { name: "Continue setup", exact: true }).click();
       await page.waitForURL(/\/en\/onboarding$/);
-      await page.getByRole("button", { name: "Enter details myself" }).waitFor();
+      await page.getByRole("button", { name: "Tell me the basics" }).waitFor();
     } finally {
       await original.close();
       await other.close();

@@ -123,7 +123,8 @@ export async function confirmConversationActions(
     await saveActionReceipt(tx, run, applied, result);
     await tx.conversationRun.update({ where: { id: runId }, data: { actionState: receipt as unknown as Prisma.InputJsonValue } });
   });
-  await dispatchRunGeneration(runId);
+  // The durable processor dispatches media. Return the saved receipt immediately
+  // so both clients can show progress instead of holding an image request open.
   return getContentConversation(workspaceId, contentItemId);
 }
 
@@ -386,6 +387,18 @@ export async function canContinue(workspaceId: string, userId: string, tx: Prism
 export async function processConversationRuns(workspaceId?: string) {
   const scope = workspaceId ? { workspaceId } : {};
   await recoverDispatches(workspaceId);
+  const pendingDispatch = await prisma.conversationRun.findFirst({
+    where: {
+      ...scope,
+      status: "DISPATCHING",
+      AND: [
+        { actionState: { path: ["generation"], array_contains: [{ status: "PENDING" }] } },
+        { NOT: { actionState: { path: ["generation"], array_contains: [{ status: "DISPATCHING" }] } } }
+      ]
+    },
+    orderBy: { createdAt: "asc" }
+  });
+  if (pendingDispatch) await dispatchRunGeneration(pendingDispatch.id);
   const expired = await prisma.conversationRun.findMany({ where: { ...scope, status: "RUNNING", leaseExpiresAt: { lte: new Date() } }, take: 20 });
   for (const run of expired) await failRun(run.id, "CONVERSATION_INTERRUPTED");
   const candidate = await prisma.conversationRun.findFirst({ where: { ...scope, status: "QUEUED" }, orderBy: { createdAt: "asc" } });

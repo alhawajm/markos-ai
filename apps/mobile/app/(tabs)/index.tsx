@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, RefreshControl } from "react-native";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { View, RefreshControl, ScrollView } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { ImagePlus, Lightbulb, Target, Send, Sparkles, Ellipsis } from "lucide-react-native";
@@ -19,6 +19,8 @@ export default function Home() {
     router = useRouter();
   const store = useMemo(() => new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, "assistant"), [scope, epoch]);
   const key = [scope, "workspace-assistant"];
+  const scrollRef = useRef<ScrollView>(null),
+    following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
   const result = useQuery({ queryKey: key, queryFn: () => api.workspaceAssistant(), refetchInterval: 2500 });
   const [message, setMessage] = useState(""),
@@ -62,6 +64,7 @@ export default function Home() {
       items?.some((i) => i.id === saved.id) ? items.map((i) => (i.id === saved.id ? saved : i)) : [...(items ?? []), saved]
     );
   async function send() {
+    following.current = true;
     if (busy || active || !restored) return;
     const request = pending ?? { requestId: newRequestId(), message: message.trim(), locale };
     if (!request.message) return;
@@ -113,7 +116,45 @@ export default function Home() {
       </Screen>
     );
   return (
-    <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
+    <Screen
+      scrollRef={scrollRef}
+      scrollProps={{
+        onScroll: (e) => {
+          const v = e.nativeEvent;
+          following.current = v.contentOffset.y + v.layoutMeasurement.height >= v.contentSize.height - 100;
+        },
+        onContentSizeChange: () => {
+          if (following.current) scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      }}
+      footer={
+        <>
+          {" "}
+          <Card>
+            <Field
+              label={t("Message MARKOS", "راسل ماركوس")}
+              value={message}
+              onChangeText={edit}
+              editable={restored && !pending}
+              multiline
+              maxLength={4000}
+              placeholder={t("An idea, an event, or something to change…", "فكرة أو فعالية أو شيء تريد تغييره…")}
+            />
+            <Button
+              icon={Send}
+              label={pending ? t("Retry saved message", "إعادة إرسال الرسالة المحفوظة") : t("Send", "إرسال")}
+              busy={busy}
+              disabled={!restored || active || !(pending?.message ?? message).trim()}
+              onPress={() => void send()}
+            />
+          </Card>
+          <Txt variant="meta" muted style={{ textAlign: "center" }}>
+            {t("You review everything before it’s published.", "تراجع كل شيء قبل نشره.")}
+          </Txt>
+        </>
+      }
+      refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}
+    >
       <View style={{ alignItems: "center", gap: 12, paddingVertical: 20 }}>
         <View style={{ backgroundColor: colors.secondarySoft, padding: 16, borderRadius: 24 }}>
           <Sparkles size={28} color={colors.accentText} />
@@ -195,27 +236,6 @@ export default function Home() {
         </View>
       ))}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
-      <Card>
-        <Field
-          label={t("Message MARKOS", "راسل ماركوس")}
-          value={message}
-          onChangeText={edit}
-          editable={restored && !pending}
-          multiline
-          maxLength={4000}
-          placeholder={t("An idea, an event, or something to change…", "فكرة أو فعالية أو شيء تريد تغييره…")}
-        />
-        <Button
-          icon={Send}
-          label={pending ? t("Retry saved message", "إعادة إرسال الرسالة المحفوظة") : t("Send", "إرسال")}
-          busy={busy}
-          disabled={!restored || active || !(pending?.message ?? message).trim()}
-          onPress={() => void send()}
-        />
-      </Card>
-      <Txt variant="meta" muted style={{ textAlign: "center" }}>
-        {t("You review everything before it’s published.", "تراجع كل شيء قبل نشره.")}
-      </Txt>
       {report ? <ContentReportSheet source="ASSISTANT_MESSAGE" sourceId={report} visible onClose={() => setReport(null)} /> : null}
     </Screen>
   );

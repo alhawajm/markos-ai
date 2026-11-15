@@ -12,7 +12,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const rail = width >= 768;
   const destinations: Record<string, { label: string; icon: LucideIcon }> = {
-    index: { label: t("Overview", "الرئيسية"), icon: House },
+    index: { label: t("Home", "الرئيسية"), icon: House },
     campaigns: { label: t("Campaigns", "الحملات"), icon: Target },
     create: { label: t("Create", "إنشاء"), icon: Palette },
     calendar: { label: t("Calendar", "التقويم"), icon: CalendarDays },

@@ -25,55 +25,45 @@ describe("first-time onboarding profile review", () => {
     { locale: "en", theme: "dark" },
     { locale: "ar", theme: "light" },
     { locale: "ar", theme: "dark" }
-  ] as const)("keeps grouped profile editing readable in $locale / $theme", async ({ locale, theme }) => {
+  ] as const)("keeps the short summary and six-answer adjustment readable in $locale / $theme", async ({ locale, theme }) => {
     const context = await browser.newContext({ viewport: { height: 900, width: 1440 }, colorScheme: theme });
     const page = await context.newPage();
     await mockApi(page);
-
-    await page.goto(`${baseUrl}/${locale}/onboarding`, { waitUntil: "networkidle" });
-    await page.getByRole("heading", { level: 1, name: locale === "ar" ? "راجع ملف نشاطك" : "Review your business profile" }).waitFor();
-
-    const headings =
-      locale === "ar"
-        ? ["هوية النشاط", "معلومات العلامة", "الجمهور", "الأهداف", "النبرة والتفضيلات"]
-        : ["Business identity", "Brand information", "Audience", "Goals", "Tone and preferences"];
-    for (const name of headings) {
-      await expect(page.getByRole("heading", { level: 2, name }).isVisible()).resolves.toBe(true);
+    try {
+      await page.goto(baseUrl + "/" + locale + "/onboarding");
+      await page.getByRole("heading", { level: 1, name: locale === "ar" ? "هذا ما فهمته عن نشاطك." : "Here’s what I understand." }).waitFor();
+      expect(await page.locator(".quick-setup-summary input,.quick-setup-summary textarea").count()).toBe(0);
+      expect(await page.locator(".quick-setup-summary>div").count()).toBe(4);
+      await page.getByRole("button", { name: locale === "ar" ? "تعديل الأساسيات" : "Adjust the basics" }).click();
+      const fields = page.locator(".quick-setup-form input,.quick-setup-form textarea");
+      expect(await fields.count()).toBe(6);
+      const revised = locale === "ar" ? "الوصول إلى عملاء جدد." : "Reach more local customers.";
+      await fields.nth(5).fill(revised);
+      await fields.nth(0).focus();
+      expect(await fields.nth(5).inputValue()).toBe(revised);
+      const layout = await page.evaluate(() => ({
+        theme: document.documentElement.dataset.theme,
+        rootSize: getComputedStyle(document.documentElement).fontSize,
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      }));
+      expect(layout).toEqual({ theme, rootSize: "16px", overflow: false });
+      if (screenshotDir) {
+        await page.evaluate(() => document.fonts.ready);
+        await page.screenshot({ fullPage: true, path: path.join(screenshotDir, "onboarding-profile-review-" + locale + "-" + theme + ".png") });
+      }
+    } finally {
+      await context.close();
     }
-
-    const overviewButton = page.locator(`button[aria-controls="profile-overview-${locale}-content"]`);
-    await expect(overviewButton.getAttribute("aria-expanded")).resolves.toBe("false");
-    await overviewButton.click();
-    const overview = page.getByLabel(locale === "ar" ? "نبذة عن النشاط" : "Business overview");
-    await overview.waitFor();
-    await expect(overviewButton.getAttribute("aria-expanded")).resolves.toBe("true");
-    await expect(overview.evaluate((element) => getComputedStyle(element).resize)).resolves.toBe("none");
-    await expect(overview.getAttribute("dir")).resolves.toBe(locale === "ar" ? "rtl" : "ltr");
-    const revised = locale === "ar" ? "نساعد الأنشطة المحلية على تسويق منتجاتها." : "We help local businesses market their products.";
-    await overview.fill(revised);
-    await overviewButton.click();
-    await overviewButton.click();
-    await expect(overview.inputValue()).resolves.toBe(revised);
-    const layout = await page.evaluate(() => ({
-      theme: document.documentElement.dataset.theme,
-      rootSize: getComputedStyle(document.documentElement).fontSize,
-      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
-    }));
-    expect(layout).toEqual({ theme, rootSize: "16px", overflow: false });
-
-    if (screenshotDir) {
-      await page.evaluate(() => document.fonts.ready);
-      await page.screenshot({ fullPage: true, path: path.join(screenshotDir, `onboarding-profile-review-${locale}-${theme}.png`) });
-    }
-    await context.close();
   });
 });
 
 async function mockApi(page: Page) {
-  await page.route(/^http:\/\/(?:127\.0\.0\.1|localhost):4000\//, async (route: Route) => {
+  await page.route("**/v1/**", async (route: Route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/v1/auth/refresh") return route.fulfill(json(session()));
     if (pathname === "/v1/onboarding") return route.fulfill(json(onboardingState()));
+    if (pathname === "/v1/business-profile")
+      return route.fulfill(json({ version: 1, approved: false, modules: { company: {}, audience: {}, brand: {}, objectives: {} }, catalog: null }));
     if (pathname === "/v1/vault") return route.fulfill(json([]));
     if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
     if (pathname === "/v1/onboarding/document-analysis") return route.fulfill(json(null));

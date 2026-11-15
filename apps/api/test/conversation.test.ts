@@ -114,7 +114,16 @@ describe("durable post conversations", () => {
     expect(proposed.contentItem.caption).toBe("Original");
     expect(imageGeneration).not.toHaveBeenCalled();
     expect(proposed.latestRun.confirmation.generatesMedia).toBe(true);
-    expect((await acknowledge(f, proposed.latestRun)).statusCode).toBe(200);
+    const accepted = await app.inject({
+      method: "POST",
+      url: f.path + "/" + proposed.latestRun.id + "/confirm",
+      headers: f.headers,
+      payload: { confirmationToken: proposed.latestRun.confirmation.token, expectedRevision: proposed.latestRun.confirmation.revision }
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().data.latestRun.status).toBe("DISPATCHING");
+    expect(imageGeneration).not.toHaveBeenCalled();
+    await processConversationRuns(f.session.workspace.id);
     expect((await acknowledge(f, proposed.latestRun)).statusCode).toBe(200);
     expect(imageGeneration).toHaveBeenCalledOnce();
     expect((await f.get()).contentItem.caption).toBe("Fresh bread");
@@ -465,12 +474,14 @@ async function format(f: Fixture, contentType: "CAROUSEL" | "REEL" | "STORY") {
   return (await f.get()).contentItem;
 }
 async function acknowledge(f: Fixture, run: any, overrides: object = {}) {
-  return app.inject({
+  const response = await app.inject({
     method: "POST",
     url: f.path + "/" + run.id + "/confirm",
     headers: f.headers,
     payload: { confirmationToken: run.confirmation.token, expectedRevision: run.confirmation.revision, ...overrides }
   });
+  if (response.statusCode === 200 && response.json().data.latestRun?.status === "DISPATCHING") await processConversationRuns(f.session.workspace.id);
+  return response;
 }
 const addSlide = (ref: string): AssistantResult["operations"][number] => ({
   type: "addMediaItem",

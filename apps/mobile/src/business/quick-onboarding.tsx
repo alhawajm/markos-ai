@@ -35,6 +35,7 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
     [restoreAttempt, setRestoreAttempt] = useState(0);
   const alive = useRef(true),
     preparing = useRef<string | null>(null);
+  const detailsEdited = useRef(false);
   async function prepare(value: QuickOnboardingDetails, analysisId?: string) {
     setDetails(value);
     setError("");
@@ -59,7 +60,7 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
     }
   }
   async function receive(value: OnboardingDocumentAnalysisRecord) {
-    if (!alive.current) return;
+    if (!alive.current || detailsEdited.current) return;
     setAnalysis(value);
     if (value.status === "READY" && value.result && preparing.current !== value.id) {
       preparing.current = value.id;
@@ -120,6 +121,7 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
     return () => clearInterval(timer);
   }, [analysis?.id, analysis?.status, epoch]);
   async function analyze() {
+    detailsEdited.current = false;
     setError("");
     setBusy(t("Reading your business context…", "نقرأ سياق نشاطك…"));
     try {
@@ -239,7 +241,11 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
                   icon={Pencil}
                   label={t("Tell me the basics", "أخبرني بالأساسيات")}
                   detail={t("Six short answers. Only two required.", "ست إجابات قصيرة. اثنتان فقط مطلوبتان.")}
-                  onPress={() => setPage("manual")}
+                  onPress={() => {
+                    detailsEdited.current = true;
+                    setAnalysis(null);
+                    setPage("manual");
+                  }}
                 />
               </ListGroup>
             ) : null}
@@ -253,7 +259,10 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
                     value={details[key]}
                     multiline={key === "offer"}
                     maxLength={maxLength}
-                    onChangeText={(text) => setDetails({ ...details, [key]: text })}
+                    onChangeText={(text) => {
+                      detailsEdited.current = true;
+                      setDetails({ ...details, [key]: text });
+                    }}
                   />
                 ))}
                 <Button

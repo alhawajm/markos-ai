@@ -506,8 +506,15 @@ export function Loading() {
 export function Screen({
   children,
   footer,
-  refreshControl
-}: PropsWithChildren<{ footer?: React.ReactNode; refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"] }>) {
+  refreshControl,
+  scrollRef,
+  scrollProps
+}: PropsWithChildren<{
+  footer?: React.ReactNode;
+  refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
+  scrollRef?: React.Ref<ScrollView>;
+  scrollProps?: Pick<React.ComponentProps<typeof ScrollView>, "onScroll" | "onContentSizeChange">;
+}>) {
   const { colors } = useAppearance();
   const insets = useSafeAreaInsets();
   return (
@@ -517,6 +524,9 @@ export function Screen({
       keyboardVerticalOffset={insets.top + 64}
     >
       <ScrollView
+        ref={scrollRef}
+        {...scrollProps}
+        {...(scrollProps ? { scrollEventThrottle: 16 } : {})}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         refreshControl={refreshControl}

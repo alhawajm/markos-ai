@@ -44,6 +44,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
     [restored, setRestored] = useState(false);
   const preparing = useRef<string | null>(null),
     alive = useRef(true);
+  const detailsEdited = useRef(false);
   const message = (e: unknown) =>
     e instanceof Error ? e.message : t("Could not finish. Your details are kept here.", "تعذر إكمال الطلب. تفاصيلك محفوظة هنا.");
   async function prepare(value: QuickOnboardingDetails, sourceId?: string) {
@@ -69,17 +70,19 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
     }
   }
   async function acceptAnalysis(value: OnboardingDocumentAnalysisRecord) {
+    if (detailsEdited.current) return;
     setAnalysis(value);
-    if (value.status === "READY" && value.result && preparing.current !== value.id) {
+    if (value.status === "READY" && value.result && preparing.current !== value.id && !detailsEdited.current) {
       preparing.current = value.id;
       await prepare(quickDetailsFromDocuments(value.result.profile), value.id);
     }
     if (value.status === "FAILED")
       setError(t("We couldn’t read these files. Retry, or use the six-question setup.", "تعذرت قراءة الملفات. أعد المحاولة أو استخدم الإعداد المختصر."));
   }
-  const restore=useEffectEvent(()=>{
+  const restore = useEffectEvent(() => {
     let saved = false;
     try {
+      for (const legacyKey of ["markos.onboarding.draft", "markos.onboarding.draft.v2", "markos.onboarding.draft.v3"]) localStorage.removeItem(legacyKey);
       const raw = localStorage.getItem(key);
       if (raw) {
         const d = JSON.parse(raw);
@@ -94,7 +97,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
     void Promise.all([api.businessKnowledge(), api.onboardingDocumentAnalysis()])
       .then(([knowledge, active]) => {
         if (!alive.current) return;
-        if (!saved && !initialDraft) setDetails(quickDetailsFromKnowledge(knowledge));
+        if (!saved && !initialDraft && !detailsEdited.current) setDetails(quickDetailsFromKnowledge(knowledge));
         if (active) {
           setAnalysis(active);
           if (initialState.businessProfile.status !== "DRAFT") {
@@ -108,7 +111,8 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
       });
   });
   useEffect(() => {
-    alive.current=true;restore();
+    alive.current = true;
+    restore();
     return () => {
       alive.current = false;
     };
@@ -119,8 +123,13 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
         localStorage.setItem(key, JSON.stringify({ details, url }));
       } catch {}
   }, [details, url, key, restored]);
-  const pollAnalysis=useEffectEvent(()=>{
-    void api.onboardingDocumentAnalysis().then(v=>{if(alive.current&&v)void acceptAnalysis(v);}).catch(()=>{});
+  const pollAnalysis = useEffectEvent(() => {
+    void api
+      .onboardingDocumentAnalysis()
+      .then((v) => {
+        if (alive.current && v) void acceptAnalysis(v);
+      })
+      .catch(() => {});
   });
   useEffect(() => {
     if (analysis?.status !== "PROCESSING") return;
@@ -130,6 +139,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
     return () => clearInterval(timer);
   }, [analysis?.id, analysis?.status]);
   async function analyze(event: FormEvent) {
+    detailsEdited.current = false;
     event.preventDefault();
     setError("");
     setBusy(
@@ -266,7 +276,17 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
                 ]
               ] as const
             ).map(([value, Icon, title, body]) => (
-              <button key={value} className="quick-setup-option" onClick={() => setPage(value)}>
+              <button
+                key={value}
+                className="quick-setup-option"
+                onClick={() => {
+                  if (value === "manual") {
+                    detailsEdited.current = true;
+                    setAnalysis(null);
+                  }
+                  setPage(value);
+                }}
+              >
                 <Icon size={23} />
                 <span>
                   <strong>{title}</strong>
@@ -295,7 +315,10 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
                     required={key === "offer"}
                     maxLength={2000}
                     placeholder={placeholder}
-                    onChange={(e) => setDetails({ ...details, [key]: e.target.value })}
+                    onChange={(e) => {
+                      detailsEdited.current = true;
+                      setDetails({ ...details, [key]: e.target.value });
+                    }}
                   />
                 ) : (
                   <input
@@ -303,7 +326,10 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
                     required={key === "name"}
                     maxLength={key === "name" ? 160 : key === "location" ? 120 : 1000}
                     placeholder={placeholder}
-                    onChange={(e) => setDetails({ ...details, [key]: e.target.value })}
+                    onChange={(e) => {
+                      detailsEdited.current = true;
+                      setDetails({ ...details, [key]: e.target.value });
+                    }}
                   />
                 )}
               </label>
@@ -332,7 +358,11 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
                   multiple
                   accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
                   onChange={(e) => {
-                    const picked = Array.from(e.target.files ?? []);
+                    const picked = [...files];
+                    for (const file of Array.from(e.target.files ?? []))
+                      if (!picked.some((existing) => existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified))
+                        picked.push(file);
+                    e.target.value = "";
                     if (picked.length > 5 || picked.some((f) => f.size > 8_000_000) || picked.reduce((s, f) => s + f.size, 0) > 20_000_000) {
                       setError(t("Choose up to 5 files, 8 MB each and 20 MB total.", "اختر حتى ٥ ملفات، ٨ ميغابايت لكل ملف و٢٠ ميغابايت إجمالًا."));
                       return;
@@ -341,8 +371,9 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
                     setError("");
                   }}
                 />
+                {files.length ? <small>{files.length}/5</small> : null}
                 {files.map((f) => (
-                  <small key={f.name}>{f.name}</small>
+                  <small key={`${f.name}:${f.size}:${f.lastModified}`}>{f.name}</small>
                 ))}
               </label>
             )}
@@ -354,7 +385,15 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
               {analysis?.status === "PROCESSING" ? t("Reading…", "نقرأ الملفات…") : t("Understand my business", "تعرّف على نشاطي")}
               <ArrowRight size={18} />
             </button>
-            <button type="button" className="quick-setup-back" onClick={() => setPage("manual")}>
+            <button
+              type="button"
+              className="quick-setup-back"
+              onClick={() => {
+                detailsEdited.current = true;
+                setAnalysis(null);
+                setPage("manual");
+              }}
+            >
               {t("Use quick manual setup instead", "استخدم الإعداد اليدوي المختصر")}
             </button>
           </form>

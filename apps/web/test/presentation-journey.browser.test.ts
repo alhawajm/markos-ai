@@ -96,113 +96,101 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.waitForURL(`${baseUrl}/en/instagram-setup`);
+    await page.waitForURL(`${baseUrl}/en/app`);
     await expect(page.getByRole("heading", { name: "Tell us about your company" }).count()).resolves.toBe(0);
     await expect(page.evaluate(() => localStorage.getItem("markos.onboarding.draft.v2"))).resolves.toBeNull();
     await page.close();
   });
 
-  it("offers a document-assisted onboarding path and makes extracted colors editable before saving", async () => {
+  it("stages document context and needs a single short-summary confirmation", async () => {
     const page = await sessionPage();
-    await page.setViewportSize({ height: 900, width: 1440 });
-    let documentAnalysisFileCount = 0;
-    let documentAnalysisPosts = 0;
-    let moduleWrites = 0;
+    let count = 0,
+      posts = 0,
+      previews = 0,
+      confirmations = 0;
+    let complete = false;
     await mockApi(page, async (route, pathname) => {
       const method = route.request().method();
-      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
-      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
+      if (pathname === "/v1/onboarding") return route.fulfill(json(complete ? approvedOnboardingState(new Date().toISOString()) : emptyOnboardingState()));
       if (pathname === "/v1/onboarding/document-analysis" && method === "GET") return route.fulfill(json(null));
       if (pathname === "/v1/onboarding/document-analysis" && method === "POST") {
-        const body = route.request().postDataJSON() as { files?: unknown[] };
-        documentAnalysisFileCount = body.files?.length ?? 0;
-        documentAnalysisPosts += 1;
+        posts++;
+        count = route.request().postDataJSON().files.length;
         return route.fulfill(json(onboardingDocumentAnalysis()));
       }
-      if (method === "PUT" && pathname.startsWith("/v1/onboarding/")) {
-        moduleWrites += 1;
-        return route.fulfill(json(emptyOnboardingState()));
+      if (pathname === "/v1/onboarding/quick/preview") {
+        previews++;
+        expect(route.request().postDataJSON()).toMatchObject({
+          analysisId: onboardingDocumentAnalysis().id,
+          details: { name: "SnackLab", offer: "Protein bites" }
+        });
+        return route.fulfill(json(quickProfileState()));
       }
-      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
+      if (pathname === "/v1/onboarding/quick/confirm") {
+        confirmations++;
+        complete = true;
+        return route.fulfill(json(approvedOnboardingState(new Date().toISOString())));
+      }
       return route.fulfill(json([]));
     });
-
-    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Your marketing starts with understanding your business." }).waitFor();
-    const documentCta = await page.getByRole("button", { name: "Use business documents" }).boundingBox();
-    const manualCta = await page.getByRole("button", { name: "Enter details myself" }).boundingBox();
-    expect(Math.abs((documentCta?.width ?? 0) - (manualCta?.width ?? 0))).toBeLessThan(1);
-    await page.screenshot({ path: "evidence/sunlit-onboarding-greeting.png", fullPage: true });
-    await page.getByRole("button", { name: "Use business documents" }).click();
-    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
-    await page.locator('input[type="file"]').setInputFiles({ name: "brand.txt", mimeType: "text/plain", buffer: Buffer.from("SnackLab brand information") });
-    await page.locator('input[type="file"]').setInputFiles({ name: "offerings.pdf", mimeType: "application/pdf", buffer: Buffer.from("SnackLab offerings") });
-    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("brand", { exact: true }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("offerings", { exact: true }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByRole("region", { name: "Selected files" }).getByText("2/5", { exact: true }).isVisible()).toBe(true);
-    await page.screenshot({ path: "evidence/sunlit-onboarding-document-selection.png", fullPage: true });
-    expect(documentAnalysisPosts).toBe(0);
-    await page.getByRole("button", { name: "Analyze files" }).click();
-    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
-    expect(documentAnalysisFileCount).toBe(2);
-    expect(documentAnalysisPosts).toBe(1);
-    expect(moduleWrites).toBe(0);
-    await expect.poll(() => page.getByText("Information found in your files").isVisible()).toBe(true);
-
-    await page.getByRole("button", { name: /^Tone of voice/ }).click();
-    await page.getByRole("heading", { name: "How should the business sound?" }).waitFor();
-    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
-    await expect.poll(() => page.getByRole("code").filter({ hasText: "#2B59FF" }).isVisible()).toBe(true);
-    await expect.poll(() => page.getByRole("code").filter({ hasText: "#F97316" }).isVisible()).toBe(true);
-    await page.getByLabel("Choose color").fill("#123456");
-    await expect(page.locator('input[type="color"]').count()).resolves.toBe(3);
-    await page.screenshot({ path: "evidence/sunlit-onboarding-color-selection.png", fullPage: true });
-    await page.getByRole("button", { name: "Add selected color" }).click();
-    await expect(page.locator('input[type="color"]').count()).resolves.toBe(4);
-    await expect.poll(() => page.getByRole("code").filter({ hasText: "#123456" }).isVisible()).toBe(true);
-    expect(moduleWrites).toBe(0);
-    await page.close();
-
-    const arabicPage = await sessionPage();
-    await arabicPage.setViewportSize({ height: 900, width: 1440 });
-    await mockApi(arabicPage, async (route, pathname) => {
-      if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
-      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
-      if (pathname === "/v1/onboarding/document-analysis") return route.fulfill(json(null));
-      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
-      return route.fulfill(json([]));
-    });
-    await arabicPage.goto(`${baseUrl}/ar/onboarding`, { waitUntil: "domcontentloaded" });
-    await arabicPage.getByRole("heading", { name: "يبدأ تسويقك بفهم نشاطك." }).waitFor();
-    await expect(arabicPage.locator("main").getAttribute("dir")).resolves.toBe("rtl");
-    await arabicPage.screenshot({ path: "evidence/sunlit-onboarding-greeting-rtl.png", fullPage: true });
-    await arabicPage.close();
+    try {
+      await page.goto(baseUrl + "/en/onboarding");
+      await page.getByRole("button", { name: /Upload business files/ }).click();
+      await page.locator('input[type="file"]').setInputFiles({ name: "brand.txt", mimeType: "text/plain", buffer: Buffer.from("SnackLab brand information") });
+      await page.locator('input[type="file"]').setInputFiles({ name: "offerings.pdf", mimeType: "application/pdf", buffer: Buffer.from("SnackLab offerings") });
+      expect(await page.getByText("brand.txt", { exact: true }).isVisible()).toBe(true);
+      expect(await page.getByText("offerings.pdf", { exact: true }).isVisible()).toBe(true);
+      expect(await page.getByText("2/5", { exact: true }).isVisible()).toBe(true);
+      expect(posts).toBe(0);
+      await page.getByRole("button", { name: "Understand my business" }).click();
+      await page.getByRole("heading", { name: "SnackLab", exact: true }).waitFor();
+      expect(count).toBe(2);
+      expect(posts).toBe(1);
+      expect(previews).toBe(1);
+      expect(confirmations).toBe(0);
+      expect(await page.locator(".quick-setup-summary input").count()).toBe(0);
+      await page.getByRole("button", { name: /Looks good/ }).click();
+      await page.waitForURL(/\/en\/app$/);
+      expect(confirmations).toBe(1);
+    } finally {
+      await page.close();
+    }
   });
-
-  it("restores an active document analysis and lets the owner replace it", async () => {
+  it("recovers a staged file summary and replaces its source without saving business facts", async () => {
     const page = await sessionPage();
-    let discarded = false;
+    let discarded = 0,
+      previews = 0;
     await mockApi(page, async (route, pathname) => {
       const method = route.request().method();
       if (pathname === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
-      if (pathname === "/v1/onboarding/products/document-analysis") return route.fulfill(json(null));
-      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") {
-        return route.fulfill(json(discarded ? null : onboardingDocumentAnalysis()));
-      }
-      if (pathname.endsWith("/v1/onboarding/document-analysis/01a05c25-3efd-7ed2-bdcf-5de2e04be57e") && method === "DELETE") {
-        discarded = true;
+      if (pathname === "/v1/onboarding/document-analysis" && method === "GET") return route.fulfill(json(discarded ? null : onboardingDocumentAnalysis()));
+      if (pathname.endsWith("/document-analysis/" + onboardingDocumentAnalysis().id) && method === "DELETE") {
+        discarded++;
         return route.fulfill(json({ ...onboardingDocumentAnalysis(), status: "DISCARDED" }));
       }
-      if (pathname === "/v1/onboarding") return route.fulfill(json(approvedOnboardingState("2026-09-13T10:00:00.000Z")));
+      if (pathname === "/v1/onboarding/document-analysis" && method === "POST") return route.fulfill(json(onboardingDocumentAnalysis()));
+      if (pathname === "/v1/onboarding/quick/preview") {
+        previews++;
+        return route.fulfill(json(quickProfileState()));
+      }
       return route.fulfill(json([]));
     });
-
-    await page.goto(`${baseUrl}/en/onboarding`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Review what MARKOS will know" }).waitFor();
-    await page.getByRole("button", { name: "Discard and choose different files" }).click();
-    await page.getByRole("heading", { name: "Start with your business files" }).waitFor();
-    expect(discarded).toBe(true);
-    await page.close();
+    try {
+      await page.goto(baseUrl + "/en/onboarding");
+      await page.getByRole("heading", { name: "SnackLab", exact: true }).waitFor();
+      expect(previews).toBe(1);
+      await page.getByRole("button", { name: "Back", exact: true }).click();
+      await page.getByRole("button", { name: /Upload business files/ }).click();
+      await page
+        .locator('input[type="file"]')
+        .setInputFiles({ name: "replacement.txt", mimeType: "text/plain", buffer: Buffer.from("Updated business details") });
+      await page.getByRole("button", { name: "Understand my business" }).click();
+      await page.getByRole("heading", { name: "SnackLab", exact: true }).waitFor();
+      expect(discarded).toBe(1);
+      expect(previews).toBe(2);
+    } finally {
+      await page.close();
+    }
   });
 
   it("maintains Business Profile facts directly and retains failed edits", async () => {
@@ -589,13 +577,14 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Welcome back, SnackLab" }).waitFor();
-    await expect(page.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).resolves.toBe("page");
+    await page.locator(".workspace-chat").waitFor();
+    await expect(page.getByRole("link", { name: "MARKOS", exact: true }).getAttribute("aria-current")).resolves.toBe("page");
     await page.screenshot({ path: "evidence/sunlit-overview.png", fullPage: true });
 
     await page.goto(`${baseUrl}/en/app/content-studio`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("create-workspace").waitFor();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${content.id}`);
+    await page.getByRole("button", { name: "Edit manually", exact: true }).click();
     await expect.poll(() => page.getByRole("button", { name: "Caption", exact: true }).isVisible()).toBe(true);
     await expect.poll(() => page.getByLabel("Message MARKOS", { exact: true }).isVisible()).toBe(true);
     await page.screenshot({ path: "evidence/sunlit-create.png", fullPage: true });
@@ -1018,7 +1007,7 @@ describe("presentation journey", () => {
     await emptyPage.keyboard.press("Escape");
     await closeComposer.waitFor({ state: "detached" });
     await expect.poll(() => emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).toBe(true);
-    await emptyPage.getByRole("link", { name: "Overview" }).click();
+    await emptyPage.getByRole("link", { name: "MARKOS", exact: true }).click();
     await emptyPage.waitForURL(`${baseUrl}/en/app`);
     await emptyPage.close();
 
@@ -1079,6 +1068,7 @@ describe("presentation journey", () => {
     // Reopen immediately after Back, while Next still has the Create route cached.
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Edit manually", exact: true }).click();
     await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.goBack({ waitUntil: "domcontentloaded" });
@@ -1090,6 +1080,7 @@ describe("presentation journey", () => {
     expect(approvalCalls).toBe(1);
     await createButton.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=campaign`);
+    await page.getByRole("button", { name: "Edit manually", exact: true }).click();
     await page.getByRole("button", { name: "Caption", exact: true }).click();
     await page.getByLabel("Caption", { exact: true }).waitFor({ state: "visible" });
     await page.close();
@@ -1179,6 +1170,7 @@ describe("presentation journey", () => {
     await existingDraftLink.click();
     await page.waitForURL(`${baseUrl}/en/app/content-studio?item=${draft.id}&source=calendar`);
     await page.getByTestId("create-workspace").waitFor();
+    await page.getByRole("button", { name: "Edit manually", exact: true }).click();
     await page.getByRole("button", { name: "Caption", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Caption", exact: true }).inputValue()).resolves.toBe(draft.caption);
     expect(createCalls).toBe(0);
@@ -1611,5 +1603,25 @@ function snackLabKnowledge() {
       brand: { ...vault.BRAND[0]!.value, ...vault.TONE[0]!.value },
       objectives: vault.OBJECTIVES[0]!.value
     }
+  };
+}
+
+function quickProfileState() {
+  const localized = { en: "SnackLab makes wholesome bites for Bahrain.", ar: "سناك لاب يقدم وجبات خفيفة في البحرين." };
+  const profile = {
+    businessName: "SnackLab",
+    tagline: localized,
+    overview: localized,
+    uniqueValue: localized,
+    offerSummary: localized,
+    idealCustomer: localized,
+    marketPosition: localized,
+    brandVoice: localized,
+    marketingFocus: localized
+  };
+  return {
+    ...emptyOnboardingState(),
+    status: "IN_PROGRESS",
+    businessProfile: { status: "DRAFT", interactionId: "019fd833-4bf3-7ed5-9db9-6f96ab379054", profile, updatedAt: new Date().toISOString() }
   };
 }
