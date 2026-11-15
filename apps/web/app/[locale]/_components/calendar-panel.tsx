@@ -281,9 +281,9 @@ function CalendarPanelContent({ locale }: { locale: Locale }) {
     return () => window.clearTimeout(timeout);
   }, [motionState, shouldReduceMotion]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!showCancelConfirmation) return;
-    window.requestAnimationFrame(() => cancelDialogRef.current?.focus());
+    cancelDialogRef.current?.focus();
   }, [showCancelConfirmation]);
 
   const selectedRecord = records.find((record) => record.id === selectedRecordId) ?? null;

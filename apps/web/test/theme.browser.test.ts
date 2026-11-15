@@ -164,7 +164,7 @@ describe("site appearance controls", () => {
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page);
       expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
-      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-child"]);
+      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-of-type"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-en-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
       await page.getByRole("button", { name: /Change language\. Current language:/ }).click();
@@ -173,7 +173,7 @@ describe("site appearance controls", () => {
       await page.getByRole("button", { name: "طي الشريط الجانبي", exact: true }).click();
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page, true);
-      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-child"]);
+      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-of-type"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-ar-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "توسيع الشريط الجانبي", exact: true }).click();
       await page.getByRole("link", { name: "الإعدادات", exact: true }).click();

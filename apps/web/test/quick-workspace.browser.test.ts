@@ -145,13 +145,13 @@ it.each([
       await page.waitForURL(`**/${v.locale}/app`);
       await page.locator(".workspace-chat").waitFor();
       expect(await page.locator(".workspace-chat-starters button").count()).toBe(3);
-      await assertPlexFonts(page, [".workspace-chat-welcome h1", ".workspace-chat-welcome>p:last-child", ".workspace-chat-starters button"]);
+      await assertPlexFonts(page, [".workspace-chat-welcome h1", ".workspace-chat-welcome>p:last-of-type", ".workspace-chat-starters button"]);
       await page.screenshot({ path: `../../var/ux-2026-11-15/screens/home-${v.locale}-${v.theme}.png`, fullPage: true });
       await page.locator(".workspace-chat-starters button").nth(1).click();
       await page.locator("#home-message").fill(v.locale === "ar" ? "أنشئ منشورًا عن خبز الصباح." : "Create a post about the morning bake.");
       await page.locator(".workspace-chat-composer button").click();
       await page.locator(".workspace-chat-plan button").click();
-      await page.locator(".workspace-chat-link").click();
+      await page.getByRole("link", { name: v.locale === "ar" ? "فتح المسودة ←" : "Open draft →", exact: true }).click();
       await page.waitForURL("**/app/content-studio?item=draft-1");
       await page.getByRole("button", { name: v.locale === "ar" ? "تعديل يدوي" : "Edit manually" }).waitFor();
       expect(await page.getByLabel(v.locale === "ar" ? "نوع المحتوى" : "Content type").isVisible()).toBe(false);

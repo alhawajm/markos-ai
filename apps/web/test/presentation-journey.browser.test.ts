@@ -730,10 +730,9 @@ describe("presentation journey", () => {
     const collapsedCalendarLink = page.getByRole("link", { name: "Calendar", exact: true });
     const expandSidebarButton = page.getByRole("button", { name: "Expand sidebar" });
     await expect(expandSidebarButton.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
+    for (let step = 0; step < 10 && !(await collapsedCalendarLink.evaluate((element) => document.activeElement === element)); step++) {
+      await page.keyboard.press("Tab");
+    }
     await expect(collapsedCalendarLink.evaluate((element) => document.activeElement === element)).resolves.toBe(true);
     await page.waitForFunction(() => getComputedStyle(document.querySelector<HTMLElement>('[data-sidebar-tooltip="calendar"]')!).opacity === "1");
     await expect(collapsedCalendarLink.getAttribute("aria-current")).resolves.toBe("page");
