@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 from pydantic import ValidationError
+from test_conversation import Client
 
 from app.contracts.workspace_assistant import WorkspaceAssistantRequest, WorkspaceAssistantResult
 from app.providers.workspace_assistant import respond_to_workspace
-from tests.test_conversation import Client
 
 
 def test_workspace_chat_uses_business_context_and_returns_a_plan_without_execution() -> None:
