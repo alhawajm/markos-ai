@@ -122,6 +122,8 @@ describe("active SettingsPanel Instagram interactions", () => {
 
   it("isolates six-answer setup drafts by account and workspace without reading unowned legacy data", async () => {
     const page = await browserPage();
+    let staleAnalysis = false,
+      previewCalls = 0;
     let currentSession = { ...session, user: { ...session.user, id: "new-owner" }, workspace: { id: "new-workspace", name: "New business" } };
     await page.addInitScript(() =>
       localStorage.setItem("markos.onboarding.draft.v3", JSON.stringify({ businessName: "Other owner", offer: "Private old details" }))
@@ -130,6 +132,23 @@ describe("active SettingsPanel Instagram interactions", () => {
       const path = new URL(route.request().url()).pathname;
       if (path === "/v1/auth/refresh") return route.fulfill(json(currentSession));
       if (path === "/v1/onboarding") return route.fulfill(json(emptyOnboardingState()));
+      if (
+        path === "/v1/onboarding/document-analysis" &&
+        staleAnalysis &&
+        currentSession.workspace.id === "new-workspace" &&
+        currentSession.user.id === "new-owner"
+      )
+        return route.fulfill(
+          json({
+            id: "stale-analysis",
+            status: "READY",
+            result: { profile: { company: { name: "Old imported business" }, offerings: { summary: "Old imported menu" } } }
+          })
+        );
+      if (path === "/v1/onboarding/quick/preview") {
+        previewCalls += 1;
+        return route.fulfill(json(emptyOnboardingState()));
+      }
       if (path === "/v1/business-profile")
         return route.fulfill(json({ version: 1, approved: false, modules: { company: {}, audience: {}, brand: {}, objectives: {} }, catalog: null }));
       return route.fulfill(json(null));
@@ -150,8 +169,10 @@ describe("active SettingsPanel Instagram interactions", () => {
       await expect
         .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markos.quick-setup:new-owner:new-workspace") ?? "{}").details?.name))
         .toBe("My unsaved business");
+      staleAnalysis = true;
       await open();
       expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("My unsaved business");
+      expect(previewCalls).toBe(0);
       currentSession = { ...currentSession, workspace: { id: "other-workspace", name: "Other" } };
       await open();
       expect(await page.getByLabel("Business name", { exact: true }).inputValue()).toBe("");

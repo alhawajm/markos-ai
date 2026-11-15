@@ -86,6 +86,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
       const raw = localStorage.getItem(key);
       if (raw) {
         const d = JSON.parse(raw);
+        detailsEdited.current = d.manual === true;
         if (d.details) {
           setDetails({ ...emptyQuickOnboarding(), ...d.details });
           saved = true;
@@ -98,7 +99,7 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
       .then(([knowledge, active]) => {
         if (!alive.current) return;
         if (!saved && !initialDraft && !detailsEdited.current) setDetails(quickDetailsFromKnowledge(knowledge));
-        if (active) {
+        if (active && !detailsEdited.current) {
           setAnalysis(active);
           if (initialState.businessProfile.status !== "DRAFT") {
             setPage(active.status === "READY" ? "manual" : "documents");
@@ -120,9 +121,9 @@ export function QuickOnboarding({ locale, initialState, initialDraft }: { locale
   useEffect(() => {
     if (restored)
       try {
-        localStorage.setItem(key, JSON.stringify({ details, url }));
+        localStorage.setItem(key, JSON.stringify({ details, url, manual: detailsEdited.current && !analysis }));
       } catch {}
-  }, [details, url, key, restored]);
+  }, [details, url, key, restored, page, analysis]);
   const pollAnalysis = useEffectEvent(() => {
     void api
       .onboardingDocumentAnalysis()

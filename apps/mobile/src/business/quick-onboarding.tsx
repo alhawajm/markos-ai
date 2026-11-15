@@ -17,7 +17,7 @@ import { errorMessage } from "../errors";
 import { BusinessDeviceStore } from "./device-store";
 import type { Reference } from "../campaigns/brief-model";
 type Page = "choose" | "manual" | "instagram" | "documents" | "summary";
-type Saved = { details: QuickOnboardingDetails; url: string; files: Reference[] };
+type Saved = { details: QuickOnboardingDetails; url: string; files: Reference[]; manual?: boolean };
 export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; onConnectInstagram: () => void }) {
   const { api, scope, epoch, queryClient } = useAccount(),
     { t, locale, colors } = useAppearance();
@@ -75,11 +75,12 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
       .then(([saved, knowledge, active]) => {
         sessionController.assertEpoch(epoch);
         if (!alive.current) return;
+        detailsEdited.current = saved?.manual === true;
         setDetails(saved?.details ?? quickDetailsFromKnowledge(knowledge));
         setUrl(saved?.url ?? "");
         setFiles(saved?.files ?? []);
         setRestored(true);
-        if (active) {
+        if (active && !detailsEdited.current) {
           setAnalysis(active);
           if (initial.businessProfile.status !== "DRAFT") {
             setPage(active.status === "READY" ? "manual" : "documents");
@@ -99,14 +100,14 @@ export function QuickNativeOnboarding({ initial }: { initial: OnboardingState; o
   useEffect(() => {
     if (!restored) return;
     void store
-      .save({ details, url, files })
+      .save({ details, url, files, manual: detailsEdited.current && !analysis })
       .then(() => {
         if (alive.current) setDiskError(false);
       })
       .catch(() => {
         if (alive.current) setDiskError(true);
       });
-  }, [details, url, files, restored, store]);
+  }, [details, url, files, restored, store, page, analysis]);
   useEffect(() => {
     if (analysis?.status !== "PROCESSING") return;
     const timer = setInterval(() => {

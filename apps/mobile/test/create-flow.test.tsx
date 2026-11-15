@@ -142,6 +142,10 @@ async function mount(element = <ContentDraft />) {
   await settle();
   await settle();
 }
+async function mountPreview() {
+  await mount();
+  await press(state.locale === "ar" ? "معاينة" : "Preview");
+}
 function buttons(label: string) {
   return root.container.queryAll((node) => ["Button", "IconButton", "TextAction", "ListRow"].includes(String(node.type)) && node.props.label === label);
 }
@@ -246,7 +250,7 @@ describe("rendered native Create handoffs", () => {
   });
   it("edits one carousel slide at a time without discarding another slide's text", async () => {
     item = { ...item, contentType: "CAROUSEL", mediaItems: [item.mediaItems[0]!, { ...item.mediaItems[0]!, id: "second", position: 1 }] };
-    await mount();
+    await mountPreview();
     await press("Complete media");
     await press("Slide text");
     const title = () => root.container.queryAll((node) => node.type === "Field" && node.props.label === "Slide title");
@@ -278,7 +282,7 @@ describe("rendered native Create handoffs", () => {
       updatedAt: fixture.updatedAt
     };
     state.api.latestMediaGenerationJob = vi.fn(async () => job);
-    await mount();
+    await mountPreview();
     expect(buttons("Generating…")[0]!.props.disabled).toBe(true);
     const video: MediaAssetRecord = { ...photo, id: "video", type: "VIDEO", filename: "video.mp4", mimeType: "video/mp4" };
     assets = [video];
@@ -294,16 +298,47 @@ describe("rendered native Create handoffs", () => {
     expect(buttons("Mark ready")[0]!.props.disabled).toBe(false);
     expect(buttons("Generating…")).toHaveLength(0);
   });
-  it("takes an Assistant Post draft through image generation, Ready and scheduling navigation", async () => {
+  it("creates caption and media after one chat confirmation without a second Generate click", async () => {
     item = { ...item, caption: "" };
-    await mount();
+    state.api.sendConversationMessage = vi.fn(async (_id, input) => {
+      expect(input.message).toContain("actual media");
+      thread = {
+        ...thread,
+        messages: [{ id: "proposal", runId: "run", role: "assistant", text: "A bakery image with a bilingual caption.", createdAt: fixture.createdAt }],
+        latestRun: {
+          id: "run",
+          requestId: input.requestId,
+          status: "AWAITING_CONFIRMATION",
+          errorCode: null,
+          proposedCaption: null,
+          confirmation: { token: "plan-token", revision: item.revision, consequences: ["Create one image and a bilingual caption."], generatesMedia: true }
+        }
+      };
+      return { ...thread, contentItem: item };
+    });
+    state.api.confirmConversationActions = vi.fn(async (_id, _run, input) => {
+      expect(input).toEqual({ confirmationToken: "plan-token", expectedRevision: item.revision });
+      assets = [photo];
+      item = {
+        ...item,
+        caption: "Morning bake · مخبوزات الصباح",
+        revision: item.revision + 1,
+        mediaItems: item.mediaItems.map((media) => ({ ...media, mediaAssetId: photo.id }))
+      };
+      thread = { ...thread, contentItem: item, latestRun: { ...thread.latestRun!, status: "SUCCEEDED", confirmation: null } };
+      return thread;
+    });
+    await mount(<ContentDraft />);
+    expect(buttons("Generate image")).toHaveLength(0);
     expect(buttons("Mark ready")).toHaveLength(0);
-    await press("Prepare caption");
     await press("Prepare this draft");
-    await press("Generate or choose media");
-    expect(root.container.queryAll((node) => node.type === "MotionReel")).toHaveLength(0);
-    await press("Generate image");
-    expect(state.api.generateContentImage).toHaveBeenCalledOnce();
+    expect(item.caption).toBe("");
+    expect(item.mediaItems[0]!.mediaAssetId).toBeNull();
+    await press("Confirm and create");
+    expect(state.api.confirmConversationActions).toHaveBeenCalledOnce();
+    expect(state.api.generateContentImage).not.toHaveBeenCalled();
+    expect(buttons("Generate image")).toHaveLength(0);
+    await press("Preview");
     await press("Mark ready");
     const confirm = state.alert.mock.calls.at(-1)![2].find((button: { text: string }) => button.text === "Mark ready");
     await act(async () => {
@@ -317,7 +352,7 @@ describe("rendered native Create handoffs", () => {
   });
   it("shows a Story as Story and allows image generation instead of forcing a Reel", async () => {
     item = { ...item, contentType: "STORY", caption: "", mediaItems: [{ ...item.mediaItems[0]!, mediaKind: null }] };
-    await mount();
+    await mountPreview();
     expect(typeLabel("STORY", (en) => en)).toBe("Story");
     await press("Complete media");
     expect(buttons("Generate image")[0]!.props.disabled).toBe(true);
@@ -331,7 +366,7 @@ describe("rendered native Create handoffs", () => {
     item = { ...item, mediaItems: [{ ...item.mediaItems[0]!, mediaAssetId: photo.id }] };
     assets = [photo];
     thread = { ...thread, latestRun: { id: "run", requestId: "request", status: "DISPATCHING", errorCode: null, proposedCaption: null } };
-    await mount();
+    await mountPreview();
     expect(buttons("Generating…")[0]!.props.disabled).toBe(true);
     await press("Draft options");
     expect(buttons("Change content format")[0]!.props.disabled).toBe(true);
@@ -339,7 +374,7 @@ describe("rendered native Create handoffs", () => {
   });
   it("accepts a newer Assistant revision with the same timestamp and exposes generation recovery", async () => {
     item = { ...item, caption: "" };
-    await mount();
+    await mountPreview();
     item = { ...item, caption: "New caption", revision: item.revision + 1 };
     await act(async () => {
       state.client!.setQueryData(["test", "content", item.id], item);
@@ -372,7 +407,7 @@ describe("rendered native Create handoffs", () => {
       item = { ...item, contentType: "REEL", revision: item.revision + 1, mediaItems: [{ ...item.mediaItems[0]!, mediaKind: "VIDEO", mediaAssetId: null }] };
       return { applied: true, content: item, preview };
     });
-    await mount();
+    await mountPreview();
     await press("Draft options");
     await press("Change content format");
     await press("Reel");
@@ -387,7 +422,7 @@ describe("rendered native Create handoffs", () => {
   it("keeps Arabic Story controls and missing-media recovery accessible", async () => {
     state.locale = "ar";
     item = { ...item, contentType: "STORY", caption: "", mediaItems: [{ ...item.mediaItems[0]!, mediaKind: "IMAGE" }] };
-    await mount();
+    await mountPreview();
     await press("إكمال الوسائط");
     expect(buttons("إنشاء صورة")).toHaveLength(1);
     expect(typeLabel("STORY", (_en, ar) => ar)).toBe("قصة");
