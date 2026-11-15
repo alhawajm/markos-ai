@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memoryUpdatesSchema } from "./personalization";
 export const workspaceAssistantMessageSchema = z
   .object({ requestId: z.string().uuid(), message: z.string().trim().min(1).max(4000), locale: z.enum(["en", "ar"]) })
   .strict();
@@ -6,6 +7,7 @@ export const workspaceAssistantConfirmSchema = z.object({ confirmationToken: z.s
 export const workspaceAssistantResultSchema = z
   .object({
     reply: z.string().min(1).max(4000),
+    memoryUpdates: memoryUpdatesSchema,
     proposal: z
       .object({
         action: z.enum(["CONTENT", "EDIT_CONTENT", "CAMPAIGN", "STRATEGY"]),

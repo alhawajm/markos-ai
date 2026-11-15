@@ -6,6 +6,7 @@ import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { ConversationError } from "../content/conversation-service";
 import { confirmWorkspacePlan, processWorkspaceAssistant, submitWorkspaceMessage, workspaceAssistantHistory } from "./workspace-assistant-service";
 import { env } from "../config/env";
+import { forgetPersonalMemory, listPersonalMemory } from "../vault/personalization-service";
 
 export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
   const config: FastifyContextConfig = {
@@ -13,6 +14,20 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
     verifiedUserRequired: true,
     permissions: ["content:write", "agent:run", "campaign:generate"]
   };
+  app.get("/v1/assistant/memory", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const { workspaceId, userId } = requireWorkspaceContext();
+    return ok(await listPersonalMemory(workspaceId, userId));
+  });
+  app.delete("/v1/assistant/memory/:id", { config: { ...config, permissions: ["workspace:read"] } }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    if (!params.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid memory"));
+    const { workspaceId, userId } = requireWorkspaceContext();
+    if (!(await forgetPersonalMemory(workspaceId, userId, params.data.id)))
+      return reply.status(404).send(errorEnvelope("MEMORY_NOT_FOUND", "Preference not found"));
+    return ok({ forgotten: true });
+  });
   app.get("/v1/assistant/conversation", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     const { workspaceId, userId } = requireWorkspaceContext();

@@ -10,6 +10,7 @@ import { requestAi } from "../src/ai/request";
 import { workspaceAssistantHistory, confirmWorkspacePlan } from "../src/assistant/workspace-assistant-service";
 import { saveOnboardingModule } from "../src/onboarding/onboarding-service";
 vi.mock("../src/ai/request", async (original) => ({ ...(await original<typeof import("../src/ai/request")>()), requestAi: vi.fn() }));
+vi.mock("../src/ai/embeddings-client", () => ({ embedVaultTexts: vi.fn().mockRejectedValue(new Error("Use current Vault facts in this focused test")) }));
 vi.mock("../src/ai/conversation-client", async (original) => ({
   ...(await original<typeof import("../src/ai/conversation-client")>()),
   respondToConversation: vi.fn()

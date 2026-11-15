@@ -2,6 +2,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.contracts.personalization import MemoryUpdate
+
 
 class WorkspaceProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -18,6 +20,7 @@ class WorkspaceProposal(BaseModel):
 class WorkspaceAssistantResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reply: str = Field(min_length=1, max_length=4000)
+    memoryUpdates: list[MemoryUpdate] = Field(default_factory=list, max_length=6)
     proposal: WorkspaceProposal | None
 
 

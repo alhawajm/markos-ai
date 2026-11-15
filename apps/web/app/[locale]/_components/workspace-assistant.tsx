@@ -4,6 +4,7 @@ import { ArrowUp, MoreHorizontal } from "lucide-react";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { MarkosPulse, TaskFeedback } from "./task-feedback";
 import { ContentReportDialog } from "./content-report-dialog";
+import { PersonalMemoryDialog } from "./personal-memory-dialog";
 import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import "./workspace-assistant.css";
@@ -23,6 +24,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
     active = turns.some((turn) => turn.status === "THINKING" || (turn.status === "EXECUTING" && !turn.campaign));
   const following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   useEffect(() => {
     let live = true;
     try {
@@ -128,6 +130,10 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
         <a className="workspace-chat-link" href={`/${locale}/app/campaigns`}>
           {t("Open campaigns", "فتح الحملات")}
         </a>
+        <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
+          {t("What MARKOS remembers", "ما يتذكره ماركوس")}
+        </button>
+        {memoryOpen ? <PersonalMemoryDialog key={key} locale={locale} onClose={() => setMemoryOpen(false)} /> : null}
       </section>
     );
   return (
@@ -139,6 +145,9 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
         <p>MARKOS</p>
         <h1>{t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")}</h1>
         <p>{t("Tell me your idea. I’ll turn it into a plan, then we’ll create it together.", "أخبرني بفكرتك. سأحوّلها إلى خطة ثم نُبدعها معًا.")}</p>
+        <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
+          {t("What MARKOS remembers", "ما يتذكره ماركوس")}
+        </button>
       </header>
       {!turns.length && (
         <div className="workspace-chat-starters">
@@ -288,6 +297,7 @@ export function WorkspaceAssistant({ locale }: { locale: Locale }) {
       )}
       <p className="workspace-chat-note">{t("You review everything before it’s published.", "تراجع كل شيء قبل نشره.")}</p>
       {report ? <ContentReportDialog locale={locale} source="ASSISTANT_MESSAGE" sourceId={report} onClose={() => setReport(null)} /> : null}
+      {memoryOpen ? <PersonalMemoryDialog key={key} locale={locale} onClose={() => setMemoryOpen(false)} /> : null}
     </section>
   );
 }

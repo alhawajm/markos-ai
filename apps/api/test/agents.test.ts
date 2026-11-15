@@ -103,16 +103,17 @@ describe("agent routes", () => {
           agent,
           promptVersion: `${agent.toLowerCase()}.v1.test`,
           request: {
-            retrievedContext: [
+            retrievedContext: expect.arrayContaining([
               expect.objectContaining({
                 section: "COMPANY",
                 key: "profile"
-              })
-            ]
+              }),
+              expect.objectContaining({ key: "personalization/v1", value: expect.objectContaining({ preferences: [] }) })
+            ])
           },
           output: {
             agent,
-            groundingCount: 1
+            groundingCount: 2
           },
           tokensIn: 77,
           tokensOut: 123,
@@ -264,7 +265,7 @@ describe("agent routes", () => {
         output: {
           agent: "ANALYTICS_CONSULTANT",
           analyticsReach: 300,
-          groundingCount: 1
+          groundingCount: 2
         }
       }
     });

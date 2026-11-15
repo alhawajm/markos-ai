@@ -1,5 +1,6 @@
 import type {
   WorkspaceAssistantTurn,
+  PersonalMemory,
   CampaignReferenceFileInput,
   ContentAuthoringOperation,
   ContentReportInput,
@@ -114,6 +115,12 @@ export class MarkosApiError extends Error {
 export class MarkosApiClient {
   async workspaceAssistant(): Promise<WorkspaceAssistantTurn[]> {
     return (await this.request<WorkspaceAssistantTurn[]>("/v1/assistant/conversation")).data;
+  }
+  async personalMemory(): Promise<PersonalMemory[]> {
+    return (await this.request<PersonalMemory[]>("/v1/assistant/memory")).data;
+  }
+  async forgetMemory(id: string): Promise<void> {
+    await this.request(`/v1/assistant/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
   async messageWorkspaceAssistant(input: { requestId: string; message: string; locale: "en" | "ar" }): Promise<WorkspaceAssistantTurn> {
     return (await this.request<WorkspaceAssistantTurn>("/v1/assistant/conversation", { method: "POST", body: input })).data;

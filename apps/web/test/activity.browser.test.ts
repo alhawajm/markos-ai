@@ -59,6 +59,9 @@ it.each([
       canResume: false
     };
     let resumes = 0;
+    let memories = [
+      { id: "33333333-3333-4333-8333-333333333333", key: "LANGUAGE", text: "Arabic first, concise captions", updatedAt: new Date().toISOString() }
+    ];
     await page.addInitScript((value) => localStorage.setItem("markos.session", JSON.stringify(value)), {
       roles: session.roles,
       user: session.user,
@@ -70,7 +73,11 @@ it.each([
       if (p === "/v1/auth/refresh") data = session;
       else if (p === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
       else if (p === "/v1/assistant/conversation") data = [turn];
-      else if (p.endsWith("/resume")) {
+      else if (p === "/v1/assistant/memory") data = memories;
+      else if (p.startsWith("/v1/assistant/memory/") && route.request().method() === "DELETE") {
+        memories = [];
+        data = { forgotten: true };
+      } else if (p.endsWith("/resume")) {
         resumes++;
         turn.status = "EXECUTING";
         turn.campaign = { ...campaign, status: "QUEUED" };
@@ -81,6 +88,16 @@ it.each([
     try {
       await page.goto(`${base}/${v.locale}/app`, { waitUntil: "domcontentloaded" });
       await page.locator(".markos-task").waitFor();
+      await page.getByRole("button", { name: v.locale === "ar" ? "ما يتذكره ماركوس" : "What MARKOS remembers", exact: true }).click();
+      const memoryDialog = page.getByRole("dialog");
+      await memoryDialog.getByText("Arabic first, concise captions", { exact: true }).waitFor();
+      await page.screenshot({ path: `../../var/ui-motion-2026-11-15/screens/memory-${v.locale}-${v.theme}.png` });
+      await memoryDialog
+        .getByRole("button", { name: v.locale === "ar" ? "نسيان: Arabic first, concise captions" : "Forget: Arabic first, concise captions", exact: true })
+        .click();
+      await expect.poll(() => memories.length).toBe(0);
+      await memoryDialog.getByText(v.locale === "ar" ? /لا توجد تفضيلات محفوظة/ : /Nothing saved yet/).waitFor();
+      await memoryDialog.getByRole("button", { name: v.locale === "ar" ? "إغلاق" : "Close", exact: true }).click();
       expect(await page.locator(".lucide-sparkles,.lucide-wand-sparkles").count()).toBe(0);
       expect(await page.getByRole("progressbar").count()).toBe(0);
       expect(

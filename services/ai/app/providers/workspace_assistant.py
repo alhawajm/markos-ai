@@ -10,6 +10,7 @@ from app.contracts.workspace_assistant import (
 )
 from app.core.config import settings
 from app.core.errors import AiServiceError
+from app.prompts.personalization import MEMORY_CAPTURE_GUIDANCE, PERSONALIZATION_GUIDANCE
 from app.providers.openai_structured import OpenAIClient, generate_structured
 
 INSTRUCTIONS = """You are MARKOS, a warm, concise Instagram marketing partner for small businesses.
@@ -40,7 +41,7 @@ mark ready, manage accounts, or change business knowledge through this conversat
 If asked to publish/schedule direct the owner to review the draft and use its explicit controls.
 Don't demand Instagram connection to create a strategy or draft. Profile depth is optional.
 Keep replies short. Avoid technical IDs, implementation details and long lists of choices.
-"""
+""" + PERSONALIZATION_GUIDANCE + MEMORY_CAPTURE_GUIDANCE
 
 
 async def respond_to_workspace(
@@ -49,7 +50,7 @@ async def respond_to_workspace(
     if settings.ai_text_provider != "openai" and client is None:
         return WorkspaceAssistantResponse(
             model="local-workspace",
-            prompt_version="workspace-chat.v2.local",
+            prompt_version="workspace-chat.v3.local",
             tokens_in=0,
             tokens_out=0,
             result=WorkspaceAssistantResult(
@@ -88,7 +89,7 @@ async def respond_to_workspace(
     )
     return WorkspaceAssistantResponse(
         model=result.model,
-        prompt_version="workspace-chat.v2",
+        prompt_version="workspace-chat.v3",
         tokens_in=result.tokens_in,
         tokens_out=result.tokens_out,
         result=result.content,

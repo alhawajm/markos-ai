@@ -4,6 +4,7 @@ from pydantic import Field, model_validator
 
 from app.contracts.campaign import StrictContract
 from app.contracts.content import ContentDraft
+from app.contracts.personalization import MemoryUpdate
 
 Reference = Annotated[str, Field(pattern=r"^(?:[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}|\$[a-zA-Z][a-zA-Z0-9_]{0,39})$")]
 LocalReference = Annotated[str, Field(pattern=r"^\$[a-zA-Z][a-zA-Z0-9_]{0,39}$")]
@@ -147,6 +148,7 @@ class ConversationMessage(StrictContract):
 
 class ConversationResult(StrictContract):
     reply: str = Field(min_length=1, max_length=6000)
+    memoryUpdates: list[MemoryUpdate] = Field(default_factory=list, max_length=6)
     summary: str = Field(max_length=4000)
     conversion: Conversion | None
     operations: list[AuthoringOperation] = Field(max_length=50)

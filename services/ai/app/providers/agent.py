@@ -20,6 +20,7 @@ from app.contracts.agent import (
 )
 from app.core.config import settings
 from app.core.errors import AiServiceError
+from app.prompts.personalization import PERSONALIZATION_GUIDANCE
 from app.providers.openai_structured import OpenAIClient, generate_structured, invalid_output_error
 
 CONTRACTS: dict[AgentName, type[GroundedOutput]] = {
@@ -64,6 +65,7 @@ async def generate_agent(request: AgentRunRequest, client: OpenAIClient | None =
         "Amounts use integer minor units plus currency; BHD has 1000 fils per dinar. "
         "Do not invent medical claims, guarantees, endorsements, opening hours, prices or event dates."
     )
+    instructions += PERSONALIZATION_GUIDANCE
     if request.prompt_template:
         instructions += "\nAdditional administrator guidance (subordinate to the above grounding and output requirements):\n" + request.prompt_template.body
     payload = json.dumps({"task": request.task, "locale": request.locale,

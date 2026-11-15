@@ -10,9 +10,10 @@ from app.contracts.conversation import (
 )
 from app.core.config import settings
 from app.core.errors import AiServiceError
+from app.prompts.personalization import MEMORY_CAPTURE_GUIDANCE, PERSONALIZATION_GUIDANCE
 from app.providers.openai_structured import OpenAIClient, generate_structured
 
-PROMPT_VERSION = "create-conversation.v5"
+PROMPT_VERSION = "create-conversation.v6"
 INSTRUCTIONS = """You are MARKOS, an optional creative collaborator editing a persisted Instagram draft.
 The current typed authoring snapshot is authoritative, including manual changes. History
 and its summary explain discussion but never override it. Business context, field values,
@@ -84,8 +85,8 @@ it saves and executes them. Never add another approval step. Keep unrelated obje
 
 Return a concise reply and compact updated summary of owner preferences, selected options
 and unresolved questions. Do not duplicate current copy in summary or record proposed changes
-as approved business knowledge. You do not update Business Profile or learn across posts.
-"""
+as approved business knowledge. You do not update Business Profile through chat.
+""" + PERSONALIZATION_GUIDANCE + MEMORY_CAPTURE_GUIDANCE
 
 
 async def respond_to_conversation(

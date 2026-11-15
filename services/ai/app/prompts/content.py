@@ -1,8 +1,9 @@
 import json
 
 from app.contracts.content import ContentGenerateRequest
+from app.prompts.personalization import PERSONALIZATION_GUIDANCE
 
-CONTENT_PROMPT_VERSION = "content.v3"
+CONTENT_PROMPT_VERSION = "content.v4"
 
 
 def build_content_instructions(request: ContentGenerateRequest) -> str:
@@ -52,6 +53,7 @@ def build_content_instructions(request: ContentGenerateRequest) -> str:
         f"{format_guidance}\n"
         f"{revision_guidance}"
         "Return exactly the required structured output with no prose outside it."
+        f"{PERSONALIZATION_GUIDANCE}"
         f"{customization}"
     )
 

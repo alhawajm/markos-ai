@@ -13,6 +13,8 @@ import { canContinue, ConversationError, submitConversationTurn } from "../conte
 import { queueCampaignGeneration, campaignGenerationRecord, campaignGenerationPublicSelect } from "../campaign/campaign-generation-service";
 import { runWorkspaceAgent } from "../agents/agent-service";
 import { env } from "../config/env";
+import { applyPersonalMemory, personalizationContext } from "../vault/personalization-service";
+import { searchVaultContext } from "../vault/vault-service";
 
 const agent = "WORKSPACE_ASSISTANT";
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -97,7 +99,7 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
           id: input.requestId,
           workspaceId,
           agent,
-          promptVersion: "workspace-chat.v2",
+          promptVersion: "workspace-chat.v3",
           prompt: { userId, message: input.message, locale: input.locale, startsAt: new Date().toISOString() },
           response: json({ status: "THINKING", reply: "", proposal: null }),
           model: "queued",
@@ -189,7 +191,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
   const p = row.prompt as unknown as Prompt;
   try {
     if (!(await canContinue(row.workspaceId, p.userId))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "Access changed", 403);
-    const [business, drafts, history] = await Promise.all([
+    const [business, drafts, history, retrieved, personalization] = await Promise.all([
       getBusinessKnowledge(row.workspaceId),
       prisma.contentItem.findMany({
         where: { workspaceId: row.workspaceId, deletedAt: null, status: { in: ["DRAFT", "IN_REVIEW"] } },
@@ -197,7 +199,9 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         take: 8,
         select: { id: true, brief: true, caption: true, contentType: true, revision: true }
       }),
-      workspaceAssistantHistory(row.workspaceId, p.userId)
+      workspaceAssistantHistory(row.workspaceId, p.userId),
+      searchVaultContext(row.workspaceId, { query: p.message, topK: 8 }),
+      personalizationContext(row.workspaceId, p.userId)
     ]);
     const generated = await requestAi("/ai/workspace/conversation", {
       body: {
@@ -207,6 +211,8 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         model: await resolveModelSetting("LLM_PRIMARY_MODEL"),
         context: {
           business,
+          vault: retrieved,
+          personalization: personalization.value,
           drafts,
           campaigns: history
             .filter((t) => t.campaign)
@@ -233,7 +239,8 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
           })
           .parse(value)
     });
-    const proposal = workspaceAssistantResultSchema.parse(generated.result).proposal;
+    const parsed = workspaceAssistantResultSchema.parse(generated.result);
+    const proposal = parsed.proposal;
     if (proposal?.action === "CAMPAIGN") {
       proposal.startsAt = proposal.startsAt ?? p.startsAt;
       proposal.durationDays = proposal.durationDays ?? 7;
@@ -251,6 +258,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
     if (proposal?.action === "EDIT_CONTENT" && !target) throw new ConversationError("ASSISTANT_DRAFT_UNAVAILABLE", "Choose a current editable draft.");
     if (proposal?.action === "CONTENT" && !proposal.contentType) throw new ConversationError("AI_OUTPUT_INVALID", "A content format is required.");
     await prisma.$transaction(async (tx) => {
+      if (!(await canContinue(row.workspaceId, p.userId, tx))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "Access changed", 403);
       const changed = await tx.aiInteraction.updateMany({
         where: { id: row.id, workspaceId: row.workspaceId, model: "working", deletedAt: null },
         data: {
@@ -266,7 +274,29 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
           })
         }
       });
-      if (changed.count) await recordAiTokenUsage({ client: tx, workspaceId: row.workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out });
+      if (changed.count) {
+        const remembered = await applyPersonalMemory(tx, {
+          workspaceId: row.workspaceId,
+          userId: p.userId,
+          sourceId: row.id,
+          sourceAt: row.createdAt,
+          message: p.message,
+          updates: parsed.memoryUpdates ?? []
+        });
+        if (remembered) {
+          const receipt = await tx.aiInteraction.findUniqueOrThrow({ where: { id: row.id } });
+          await tx.aiInteraction.update({
+            where: { id: row.id },
+            data: {
+              response: json({
+                ...state(receipt),
+                reply: `${parsed.reply}\n\n${p.locale === "ar" ? "حُدّثت تفضيلاتك المحفوظة لهذه المساحة." : "Your saved preferences for this workspace are updated."}`
+              })
+            }
+          });
+        }
+        await recordAiTokenUsage({ client: tx, workspaceId: row.workspaceId, tokensIn: generated.tokens_in, tokensOut: generated.tokens_out });
+      }
     });
   } catch (error) {
     await prisma.aiInteraction.updateMany({
@@ -352,7 +382,7 @@ async function executeWorkspacePlan(row: AiInteraction) {
       });
       s.campaignRequestId = row.id;
     } else if (s.proposal!.action === "STRATEGY") {
-      const result = await runWorkspaceAgent(workspaceId, { agent: "MARKETING_STRATEGIST", task: s.proposal!.instruction, locale: p.locale });
+      const result = await runWorkspaceAgent(workspaceId, { agent: "MARKETING_STRATEGIST", task: s.proposal!.instruction, locale: p.locale }, p.userId);
       s.strategy = result.output;
     }
     s.status = "COMPLETED";

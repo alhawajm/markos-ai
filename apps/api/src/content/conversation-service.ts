@@ -18,6 +18,7 @@ import { recordAiTokenUsage } from "../usage/usage-service";
 import { ContentConflictError } from "./content-conflict";
 import { getContentToneLock } from "./content-service";
 import { assistantProposal } from "./assistant-proposal";
+import { applyPersonalMemory, personalizationContext } from "../vault/personalization-service";
 
 export class ConversationError extends Error {
   constructor(
@@ -415,7 +416,7 @@ export async function processConversationRuns(workspaceId?: string) {
       await failRun(candidate.id, "CONTENT_REVISION_CONFLICT", "CONFLICT");
       return;
     }
-    const [tone, profile, offerings, campaign, messages] = await Promise.all([
+    const [tone, profile, offerings, campaign, messages, personalization] = await Promise.all([
       getContentToneLock(candidate.workspaceId),
       prisma.knowledgeVault.findMany({
         where: { workspaceId: candidate.workspaceId, deletedAt: null, section: { in: ["COMPANY", "AUDIENCE"] } },
@@ -439,7 +440,8 @@ export async function processConversationRuns(workspaceId?: string) {
         where: { conversationId: conversation.id, workspaceId: candidate.workspaceId, runId: { not: candidate.id } },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 20
-      })
+      }),
+      personalizationContext(candidate.workspaceId, candidate.userId)
     ]);
     const campaignPlan = campaign?.content as Record<string, unknown> | undefined;
     const campaignContext = campaign
@@ -453,7 +455,15 @@ export async function processConversationRuns(workspaceId?: string) {
           referenceFiles: campaignPlan?.referenceFiles
         }
       : null;
-    const context = { profile, offerings, campaign: campaignContext, tone: tone.lock, brand: tone.context, offeringsMayBePartial: offerings.length === 20 };
+    const context = {
+      profile,
+      offerings,
+      campaign: campaignContext,
+      tone: tone.lock,
+      brand: tone.context,
+      offeringsMayBePartial: offerings.length === 20,
+      personalization: personalization.value
+    };
     const generated = await respondToConversation({
       workspace_id: candidate.workspaceId,
       locale: candidate.locale,
@@ -517,6 +527,14 @@ export async function processConversationRuns(workspaceId?: string) {
           : await applyAssistantBatch(tx, run.workspaceId, current.id, run.baseRevision, result);
       await saveActionReceipt(tx, run, state, result);
       await tx.contentConversation.update({ where: { id: conversation.id }, data: { summary: result.summary } });
+      await applyPersonalMemory(tx, {
+        workspaceId: run.workspaceId,
+        userId: run.userId,
+        sourceId: run.id,
+        sourceAt: run.createdAt,
+        message: run.instruction,
+        updates: result.memoryUpdates ?? []
+      });
       await tx.aiInteraction.create({
         data: {
           workspaceId: run.workspaceId,

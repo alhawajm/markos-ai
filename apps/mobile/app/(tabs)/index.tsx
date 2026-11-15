@@ -12,6 +12,7 @@ import { BusinessDeviceStore } from "../../src/business/device-store";
 import { Button, Card, Field, Loading, Notice, Screen, Txt, TextAction, Row, IconButton } from "../../src/ui";
 import { ContentReportSheet } from "../../src/content-report";
 import { errorMessage } from "../../src/errors";
+import { PersonalMemorySheet } from "../../src/personal-memory";
 
 type Request = { requestId: string; message: string; locale: "en" | "ar" };
 export default function Home() {
@@ -23,6 +24,7 @@ export default function Home() {
   const scrollRef = useRef<ScrollView>(null),
     following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const result = useQuery({ queryKey: key, queryFn: () => api.workspaceAssistant(), refetchInterval: 2500 });
   const [message, setMessage] = useState(""),
     [pending, setPending] = useState<Request | null>(null),
@@ -114,6 +116,8 @@ export default function Home() {
         <Txt muted>{t("Review your team’s campaigns and results.", "راجع حملات فريقك ونتائجها.")}</Txt>
         <TextAction label={t("Open campaigns", "فتح الحملات")} onPress={() => router.push("/(tabs)/campaigns")} />
         <TextAction label={t("Open insights", "فتح الإحصاءات")} onPress={() => router.push("/(tabs)/insights")} />
+        <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} />
+        {memoryOpen ? <PersonalMemorySheet key={scope} onClose={() => setMemoryOpen(false)} /> : null}
       </Screen>
     );
   async function resumeCampaign(turn: WorkspaceAssistantTurn) {
@@ -180,6 +184,7 @@ export default function Home() {
         <Txt muted style={{ textAlign: "center" }}>
           {t("Tell me your idea. We’ll make it happen together.", "أخبرني بفكرتك. سنُبدعها معًا.")}
         </Txt>
+        <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} />
       </View>
       {!result.data?.length && !result.isPending ? (
         <View style={{ gap: 8 }}>
@@ -284,6 +289,7 @@ export default function Home() {
       ))}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
       {report ? <ContentReportSheet source="ASSISTANT_MESSAGE" sourceId={report} visible onClose={() => setReport(null)} /> : null}
+      {memoryOpen ? <PersonalMemorySheet key={scope} onClose={() => setMemoryOpen(false)} /> : null}
     </Screen>
   );
 }

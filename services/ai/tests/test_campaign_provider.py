@@ -290,7 +290,7 @@ def test_local_provider_generates_natural_arabic_without_a_key() -> None:
     provider = LocalCampaignProvider()
     result = asyncio.run(provider.generate_campaign(campaign_request(locale="ar")))
 
-    assert result.prompt_version == "campaign.v3.local"
+    assert result.prompt_version == "campaign.v4.local"
     assert "حملة" in result.campaign.summary
     assert result.campaign.pillars[0].name == "الثقة والدليل"
     assert result.tokens_in > 0

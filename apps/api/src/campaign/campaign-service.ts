@@ -13,6 +13,7 @@ import { toMediaAssetRecord } from "../media/media-service";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
+import { withPersonalization } from "../vault/personalization-service";
 
 const campaignAgentName = "STRATEGIST";
 const localCurrency = "BHD";
@@ -282,7 +283,7 @@ async function findWorkspaceCampaign(workspaceId: string, campaignId: string) {
   return row;
 }
 
-export async function prepareCampaignContext(workspaceId: string, input: GenerateCampaignInput) {
+export async function prepareCampaignContext(workspaceId: string, input: GenerateCampaignInput, userId?: string) {
   const referenceFiles = validateCampaignReferences(input.referenceFiles ?? []);
   const score = await getVaultScore(workspaceId);
 
@@ -297,7 +298,7 @@ export async function prepareCampaignContext(workspaceId: string, input: Generat
   });
   const currentMarketing = (await getContentToneLock(workspaceId)).context;
   const currentIds = new Set(currentMarketing.map((chunk) => chunk.id));
-  const context = [...currentMarketing, ...retrieved.filter((chunk) => !currentIds.has(chunk.id))].slice(0, 10);
+  const context = await withPersonalization(workspaceId, [...currentMarketing, ...retrieved.filter((chunk) => !currentIds.has(chunk.id))], userId);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     campaignAgentName,
@@ -311,9 +312,10 @@ export async function generateWorkspaceCampaign(
   workspaceId: string,
   input: GenerateCampaignInput,
   job?: { id: string; userId: string; leaseExpiresAt?: Date },
-  assembled?: { response: CampaignGenerateResponse; prepared: PreparedCampaignContext }
+  assembled?: { response: CampaignGenerateResponse; prepared: PreparedCampaignContext },
+  userId?: string
 ): Promise<CampaignRecord> {
-  const { referenceFiles, context, promptTemplate } = assembled?.prepared ?? (await prepareCampaignContext(workspaceId, input));
+  const { referenceFiles, context, promptTemplate } = assembled?.prepared ?? (await prepareCampaignContext(workspaceId, input, job?.userId ?? userId));
   const usagePeriodDate = new Date();
   await reserveWorkspaceUsage({ workspaceId, metric: "AI_GENERATION", now: usagePeriodDate });
 
@@ -365,7 +367,7 @@ export async function generateWorkspaceCampaign(
       referenceSummary: generated.campaign.referenceSummary ?? null,
       ...(input.description ? { description: input.description } : {}),
       ...(referenceFiles.length ? { referenceFiles } : {}),
-      retrievedContext: context
+      retrievedContext: context.filter((chunk) => chunk.key !== "personalization/v1")
     };
     const promptVersion = promptTemplate?.version ?? generated.prompt_version;
 

@@ -40,7 +40,7 @@ export async function planNextCampaignWeek(job: CampaignGenerationJob, leaseExpi
   const input = generateCampaignSchema.parse(job.input);
   const checkpoint = campaignCheckpoint(job.checkpoint);
   if (job.checkpoint !== null && !checkpoint) throw new CampaignGenerationError("CAMPAIGN_CHECKPOINT_INVALID", "The saved plan could not be recovered.");
-  const prepared = checkpoint?.prepared ?? (await prepareCampaignContext(job.workspaceId, input));
+  const prepared = checkpoint?.prepared ?? (await prepareCampaignContext(job.workspaceId, input, job.userId));
   const completed = checkpoint?.weeks.length ?? 0;
   const total = Math.ceil(input.durationDays / 7);
   if (completed === total && checkpoint) {

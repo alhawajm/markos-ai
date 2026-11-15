@@ -27,6 +27,7 @@ export { toContentRecord } from "./content-aggregate";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, listVaultSection, searchVaultContext } from "../vault/vault-service";
+import { withPersonalization } from "../vault/personalization-service";
 
 const contentAgentName = "CONTENT";
 const localCurrency = "BHD";
@@ -95,7 +96,7 @@ export async function listContentItems(workspaceId: string): Promise<ContentReco
 export async function createWorkspaceContent(workspaceId: string, input: CreateContentInput): Promise<ContentRecord> {
   return prisma.$transaction((tx) => createContentAggregate(tx, workspaceId, input));
 }
-export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput): Promise<ContentRecord[]> {
+export async function generateWorkspaceContent(workspaceId: string, input: GenerateContentInput, userId?: string): Promise<ContentRecord[]> {
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
@@ -108,7 +109,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
     topK: 8
   });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const lockedContext = await withPersonalization(workspaceId, mergeVaultContext(context, toneLock.context), userId);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,
@@ -219,7 +220,7 @@ export async function generateWorkspaceContent(workspaceId: string, input: Gener
   }
 }
 
-export async function ideateWorkspaceContent(workspaceId: string, input: IdeateContentInput): Promise<ContentDraft> {
+export async function ideateWorkspaceContent(workspaceId: string, input: IdeateContentInput, userId?: string): Promise<ContentDraft> {
   const score = await getVaultScore(workspaceId);
   if (score.entryCount === 0) {
     throw new ContentContextMissingError();
@@ -228,7 +229,7 @@ export async function ideateWorkspaceContent(workspaceId: string, input: IdeateC
   const campaign = await findCampaign(workspaceId, input.campaignId);
   const context = await searchVaultContext(workspaceId, { query: input.topic, topK: 8 });
   const toneLock = await getContentToneLock(workspaceId);
-  const lockedContext = mergeVaultContext(context, toneLock.context);
+  const lockedContext = await withPersonalization(workspaceId, mergeVaultContext(context, toneLock.context), userId);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,
     contentAgentName,

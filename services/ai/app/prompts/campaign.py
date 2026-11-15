@@ -1,8 +1,9 @@
 import json
 
 from app.contracts.campaign import CampaignRequest, CampaignSegmentRequest
+from app.prompts.personalization import PERSONALIZATION_GUIDANCE
 
-CAMPAIGN_PROMPT_VERSION = "campaign.v3"
+CAMPAIGN_PROMPT_VERSION = "campaign.v4"
 
 
 def build_campaign_instructions(request: CampaignRequest) -> str:
@@ -66,6 +67,7 @@ def build_campaign_instructions(request: CampaignRequest) -> str:
         "post descriptions when it helps execute the idea.\n"
         "Return exactly the requested duration and publishing intensity. Do not omit or add days or posts.\n"
         "Return exactly the required structured output. Do not add prose outside that output."
+        f"{PERSONALIZATION_GUIDANCE}"
         f"{planning}"
         f"{customization}"
     )

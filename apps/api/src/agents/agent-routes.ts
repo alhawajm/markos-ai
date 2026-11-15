@@ -25,7 +25,7 @@ export async function registerAgentRoutes(app: FastifyInstance): Promise<void> {
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await runWorkspaceAgent(workspaceId, parsed.data));
+        return ok(await runWorkspaceAgent(workspaceId, parsed.data, requireWorkspaceContext().userId));
       } catch (error) {
         if (error instanceof AgentContextMissingError) {
           return reply.status(409).send(errorEnvelope("AGENT_CONTEXT_MISSING", error.message));

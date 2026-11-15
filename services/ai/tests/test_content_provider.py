@@ -173,7 +173,7 @@ def test_openai_content_provider_uses_grounded_strict_caption_contract(
     assert isinstance(output_format, dict)
     assert output_format["format"]["name"] == "markos_content_drafts"
     assert output_format["format"]["strict"] is True
-    assert result.prompt_version == "content.v3.openai"
+    assert result.prompt_version == "content.v4.openai"
     assert result.model == "gpt-content-returned"
     assert result.tokens_in == 210
     assert result.tokens_out == 340
@@ -196,7 +196,7 @@ def test_openai_content_provider_rejects_wrong_draft_count() -> None:
 def test_local_content_provider_preserves_bilingual_development_fallback() -> None:
     result = asyncio.run(LocalContentProvider().generate_content(content_request(count=2)))
 
-    assert result.prompt_version == "content.v3.local"
+    assert result.prompt_version == "content.v4.local"
     assert len(result.drafts) == 2
     assert all("\n\n" in draft.caption for draft in result.drafts)
     assert result.tokens_in > 0

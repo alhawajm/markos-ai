@@ -8,6 +8,7 @@ import { prisma } from "../db/prisma";
 import { selectPromptTemplateForRun } from "../prompts/prompt-service";
 import { recordAiTokenUsage, refundWorkspaceUsage, reserveWorkspaceUsage } from "../usage/usage-service";
 import { getVaultScore, searchVaultContext } from "../vault/vault-service";
+import { withPersonalization } from "../vault/personalization-service";
 
 const localCurrency = "BHD";
 
@@ -17,17 +18,18 @@ export class AgentContextMissingError extends Error {
   }
 }
 
-export async function runWorkspaceAgent(workspaceId: string, input: RunAgentInput): Promise<AgentRunRecord> {
+export async function runWorkspaceAgent(workspaceId: string, input: RunAgentInput, userId?: string): Promise<AgentRunRecord> {
   const score = await getVaultScore(workspaceId);
 
   if (score.entryCount === 0) {
     throw new AgentContextMissingError();
   }
 
-  const context = await searchVaultContext(workspaceId, {
+  const retrieved = await searchVaultContext(workspaceId, {
     query: agentRetrievalQuery(input),
     topK: 10
   });
+  const context = await withPersonalization(workspaceId, retrieved, userId);
   const agentInputs = await buildAgentInputs(workspaceId, input);
   const promptTemplate = await selectPromptTemplateForRun(
     workspaceId,

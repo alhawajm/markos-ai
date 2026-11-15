@@ -189,7 +189,7 @@ export async function registerCampaignRoutes(app: FastifyInstance): Promise<void
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await generateWorkspaceCampaign(workspaceId, parsed.data));
+        return ok(await generateWorkspaceCampaign(workspaceId, parsed.data, undefined, undefined, requireWorkspaceContext().userId));
       } catch (error) {
         if (error instanceof CampaignReferenceFileError) {
           return reply.status(400).send(errorEnvelope("CAMPAIGN_REFERENCE_INVALID", error.message));

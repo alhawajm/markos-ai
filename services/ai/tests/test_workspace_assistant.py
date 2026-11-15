@@ -54,3 +54,21 @@ def test_workspace_contract_cannot_publish_or_schedule() -> None:
                 },
             }
         )
+
+
+@pytest.mark.parametrize("message", [
+    "Remember that I prefer Arabic first.", "تذكّر أنني أفضل العربية أولاً."
+])
+def test_workspace_memory_is_grounded_in_latest_user_evidence(message: str) -> None:
+    client = Client({"reply": "Understood.", "proposal": None, "memoryUpdates": [{
+        "key": "LANGUAGE", "operation": "REMEMBER", "text": "Arabic first.", "evidence": message
+    }]})
+    request = WorkspaceAssistantRequest(workspace_id="test", message=message, locale="en",
+        context={"personalization": {"preferences": [], "sharedGuidance": {"version": "test"}}})
+    response = asyncio.run(respond_to_workspace(request, client))
+    assert response.result.memoryUpdates[0].evidence == message
+    instructions = str(client.fake.request["instructions"])
+    assert "one-off edit" in instructions
+    assert "exact verbatim evidence" in instructions
+    assert "forgotten or superseded" in instructions
+    assert "only the server" in instructions

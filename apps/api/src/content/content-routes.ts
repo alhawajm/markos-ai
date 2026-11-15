@@ -104,7 +104,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
 
       const { workspaceId } = requireWorkspaceContext();
       try {
-        return ok(await ideateWorkspaceContent(workspaceId, parsed.data));
+        return ok(await ideateWorkspaceContent(workspaceId, parsed.data, requireWorkspaceContext().userId));
       } catch (error) {
         if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)
@@ -165,7 +165,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       const { workspaceId } = requireWorkspaceContext();
 
       try {
-        return ok(await generateWorkspaceContent(workspaceId, parsed.data));
+        return ok(await generateWorkspaceContent(workspaceId, parsed.data, requireWorkspaceContext().userId));
       } catch (error) {
         if (error instanceof ContentAggregateError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
         if (error instanceof ContentConflictError || error instanceof ContentMediaValidationError)

@@ -1374,3 +1374,4 @@ export type ContentAuthoringOperation =
 export { sanitizeTelemetryEvent } from "./telemetry-privacy";
 export * from "./content-reports";
 export * from "./workspace-assistant";
+export * from "./personalization";

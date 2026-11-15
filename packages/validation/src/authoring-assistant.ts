@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memoryUpdatesSchema } from "./personalization";
 
 // Local references exist only within this result; they are never persisted IDs.
 const reference = z.union([z.string().uuid(), z.string().regex(/^\$[a-zA-Z][a-zA-Z0-9_]{0,39}$/)]);
@@ -11,6 +12,7 @@ const ordered = z
 export const assistantResultSchema = z
   .object({
     reply: z.string().min(1).max(6000),
+    memoryUpdates: memoryUpdatesSchema,
     summary: z.string().max(4000),
     conversion: z
       .object({ contentType: z.enum(["POST", "CAROUSEL", "REEL", "STORY"]), retainMediaItemId: z.string().uuid().nullable() })
