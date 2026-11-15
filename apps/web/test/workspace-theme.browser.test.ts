@@ -84,6 +84,7 @@ async function workspace(page: Page) {
     else if (pathname === "/v1/campaigns/summaries") data = { items: [campaign], nextCursor: null };
     else if (pathname === "/v1/content") data = [record];
     else if (pathname === "/v1/content/draft-1") data = record;
+    else if (pathname === "/v1/assistant/conversation") data = [];
     else if (pathname === "/v1/media/video-capabilities") data = { motion: true, generatedFootage: false };
     else if (pathname.endsWith("/conversation")) data = { id: "theme-thread", contentItem: record, messages: [], latestRun: null };
     else if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) data = null;
@@ -173,6 +174,7 @@ describe("whole-workspace appearance", () => {
             expect(styles.color, route).toBe(mode === "dark" ? "rgb(247, 240, 243)" : "rgb(38, 54, 64)");
           }
           if (route === "/content-studio") {
+            await page.getByRole("button", { name: locale === "ar" ? "تعديل يدوي" : "Edit manually", exact: true }).click();
             for (const label of locale === "ar" ? ["النص", "التفاصيل", "الوسائط"] : ["Caption", "Details", "Media"]) {
               const tab = page.locator(".create-toolbar").getByRole("button", { name: label, exact: true });
               await tab.click();

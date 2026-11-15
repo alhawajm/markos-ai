@@ -143,7 +143,7 @@ describe("site appearance controls", () => {
     });
     try {
       await page.goto(`${baseUrl}/en/app`, { waitUntil: "networkidle" });
-      await page.getByRole("heading", { name: "Welcome back, Theme" }).waitFor();
+      await page.getByRole("heading", { name: "What shall we create, Theme?" }).waitFor();
       expect(await page.getByRole("combobox", { name: "Appearance", exact: true }).count()).toBe(0);
       await page.getByRole("link", { name: "Settings", exact: true }).click();
       await page.getByRole("link", { name: "Appearance", exact: true }).click();
@@ -164,7 +164,7 @@ describe("site appearance controls", () => {
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page);
       expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
-      await assertPlexFonts(page, ["h1", ".sunlit-primary", ".sunlit-panel-soft p"]);
+      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-child"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-en-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
       await page.getByRole("button", { name: /Change language\. Current language:/ }).click();
@@ -173,7 +173,7 @@ describe("site appearance controls", () => {
       await page.getByRole("button", { name: "طي الشريط الجانبي", exact: true }).click();
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page, true);
-      await assertPlexFonts(page, ["h1", ".sunlit-primary", ".sunlit-panel-soft p"]);
+      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-child"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-ar-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "توسيع الشريط الجانبي", exact: true }).click();
       await page.getByRole("link", { name: "الإعدادات", exact: true }).click();

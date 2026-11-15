@@ -65,7 +65,7 @@ async function fixture(page: Page, populated = false, fullTrend = false) {
     workspace: session.workspace,
     roles: session.roles
   });
-  await page.route(/^http:\/\/(localhost|127\.0\.0\.1):4000\//, async (route) => {
+  await page.route("**/v1/**", async (route) => {
     if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204 });
     const url = new URL(route.request().url());
     requests.push(url.pathname + url.search);
@@ -74,7 +74,7 @@ async function fixture(page: Page, populated = false, fullTrend = false) {
     else if (url.pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
     else if (url.pathname === "/v1/workspace/instagram") data = { status: "CONNECTED", username: "the.snacklab" };
     else if (url.pathname === "/v1/vault/score") data = { score: 100, completedSections: [], requiredSections: [], missingSections: [], entryCount: 8 };
-    else if (url.pathname === "/v1/notifications" || url.pathname === "/v1/publishing/queue") data = [];
+    else if (["/v1/notifications", "/v1/publishing/queue", "/v1/assistant/conversation"].includes(url.pathname)) data = [];
     else if (url.pathname === "/v1/content")
       data = ["DRAFT", "FAILED"].map((status, index) => ({
         id: index ? "failed" : "draft",
@@ -125,6 +125,10 @@ describe("refined overview and Insights", () => {
       const observed = await fixture(page);
       try {
         await page.goto(`${baseUrl}/${locale}/app`, { waitUntil: "networkidle" });
+        await page
+          .locator("summary")
+          .filter({ hasText: locale === "ar" ? "نشاط مساحة العمل" : "Workspace activity" })
+          .click();
         await page.locator('[data-content-status="FAILED"]').waitFor();
         for (const theme of ["light", "dark"] as const) {
           await page.emulateMedia({ colorScheme: theme });
