@@ -11,8 +11,9 @@ import { persistTestInstagramConnection } from "./helpers/instagram-connection";
 import { DryRunInstagramPublisher } from "../src/publishing/instagram-publisher";
 import { instagramJpegFixture } from "./helpers/jpeg";
 import { validateInstagramDatabaseTarget } from "./helpers/instagram-database";
+import { storeWorkspaceMedia } from "../src/media/storage-service";
 
-const provider = vi.hoisted(() => ({ image: vi.fn(), start: vi.fn(), status: vi.fn(), download: vi.fn() }));
+const provider = vi.hoisted(() => ({ image: vi.fn(), start: vi.fn(), status: vi.fn(), download: vi.fn(), stored: new Map<string, Buffer>() }));
 vi.mock("../src/ai/video-plan-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/ai/video-plan-client")>()),
   prepareVideoRender: vi.fn(async (input: { prompt: string }) => ({
@@ -30,11 +31,16 @@ vi.mock("../src/ai/video-client", () => ({
 }));
 vi.mock("../src/media/storage-service", () => ({
   deleteStoredMedia: vi.fn(),
-  storeWorkspaceMedia: vi.fn(async (input: { workspaceId: string; filename: string; bytes: Buffer }) => ({
-    key: `${input.workspaceId}/${randomUUID()}`,
-    publicUrl: `https://example.com/${input.filename}`,
-    sizeBytes: input.bytes.length
-  }))
+  storeWorkspaceMedia: vi.fn(async (input: { workspaceId: string; filename: string; bytes: Buffer }) => {
+    const key = `${input.workspaceId}/${randomUUID()}`;
+    provider.stored.set(key, input.bytes);
+    return { key, publicUrl: `https://example.com/${input.filename}`, sizeBytes: input.bytes.length };
+  }),
+  readStoredMedia: vi.fn(async (workspaceId: string, key: string) => {
+    const bytes = provider.stored.get(key);
+    if (!key.startsWith(`${workspaceId}/`) || !bytes) throw new Error("Fixture source is unavailable");
+    return bytes;
+  })
 }));
 
 const owner = randomUUID(),
@@ -45,21 +51,25 @@ const create = (contentType: ContentType = "POST", workspaceId = owner) =>
   );
 const current = (c: ContentRecord) => getContentAggregate(c.workspaceId, c.id);
 const request = (c: ContentRecord) => ({ contentMediaItemId: c.mediaItems[0]!.id, expectedRevision: c.revision });
-const asset = (workspaceId = owner, mimeType = "image/jpeg", vertical = false) =>
-  prisma.mediaAsset.create({
+const asset = async (workspaceId = owner, mimeType = "image/jpeg", vertical = false) => {
+  const filename = mimeType === "video/mp4" ? "video.mp4" : "image.jpg";
+  const bytes = mimeType === "video/mp4" ? Buffer.from("video") : instagramJpegFixture(1080, vertical ? 1920 : 1080);
+  const stored = await storeWorkspaceMedia({ workspaceId, filename, bytes, contentType: mimeType });
+  return prisma.mediaAsset.create({
     data: {
       workspaceId,
       type: mimeType === "video/mp4" ? "VIDEO" : "IMAGE",
-      filename: mimeType === "video/mp4" ? "video.mp4" : "image.jpg",
-      s3Key: `external:${randomUUID()}`,
-      cdnUrl: `https://example.com/${randomUUID()}`,
+      filename,
+      s3Key: stored.key,
+      cdnUrl: stored.publicUrl,
       mimeType,
-      sizeBytes: 1000,
+      sizeBytes: bytes.byteLength,
       width: 1080,
       height: vertical ? 1920 : 1080,
       durationSeconds: mimeType === "video/mp4" ? 8 : null
     }
   });
+};
 const attach = (c: ContentRecord, mediaAssetId: string) => attachMediaToContent(c.workspaceId, c.id, { ...request(c), mediaAssetId });
 const ready = (c: ContentRecord) => updateContentItemStatus(c.workspaceId, c.id, { expectedRevision: c.revision, status: "APPROVED" });
 const edit = (c: ContentRecord, fields: { visualDirection?: string; aspectRatio?: "SQUARE"; generationDurationSeconds?: number }) =>
@@ -156,6 +166,16 @@ describe("item attachments", () => {
 });
 
 describe("image generation intent", () => {
+  it("keeps externally linked artwork attached and requires its original upload before editing", async () => {
+    const a = await asset();
+    await prisma.mediaAsset.update({ where: { id: a.id }, data: { s3Key: `external:${a.id}` } });
+    const c = await attach(await create(), a.id);
+    await expect(generateImageForContent(owner, c.id, { ...request(c), prompt: "Change the pink to blue" })).rejects.toMatchObject({
+      code: "AI_IMAGE_EDIT_SOURCE_UNAVAILABLE"
+    });
+    expect(provider.image).not.toHaveBeenCalled();
+    expect((await current(c)).mediaItems[0]!.mediaAssetId).toBe(a.id);
+  });
   it("uses saved slide direction/settings and replaces the selected slide even at capacity", async () => {
     let c = await create("CAROUSEL");
     c = await mutateContentAggregate(owner, c.id, {
