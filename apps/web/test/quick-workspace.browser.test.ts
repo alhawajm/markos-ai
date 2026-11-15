@@ -19,8 +19,12 @@ const profile = {
   )
 };
 beforeAll(async () => {
+  const executablePath =
+    process.env.SETTINGS_BROWSER_EXECUTABLE ??
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
+    (process.platform === "win32" ? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" : undefined);
   browser = await chromium.launch({
-    executablePath: process.env.SETTINGS_BROWSER_EXECUTABLE ?? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    ...(executablePath ? { executablePath } : {}),
     headless: true
   });
 });
