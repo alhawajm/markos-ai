@@ -45,6 +45,8 @@ vi.mock("lucide-react-native", () =>
       "Send",
       "Bookmark",
       "FileText",
+      "Paperclip",
+      "X",
       "Share2",
       "Ellipsis",
       "SlidersHorizontal",
@@ -67,6 +69,14 @@ vi.mock("../src/motion", async () => {
   return { MarkosMark: () => null, TaskFeedback: ({ label }: { label: string }) => createElement("TaskFeedback", {}, label) };
 });
 vi.mock("../src/auth/transport", () => ({ sessionController: { assertEpoch: vi.fn() } }));
+vi.mock("../src/campaigns/brief-store", () => ({
+  briefStore: () => ({
+    read: async () => ({ objective: "", description: "", files: [], durationDays: 14, publishesPerDay: 1, startDate: new Date().toISOString().slice(0, 10) }),
+    save: async () => {},
+    upload: async () => []
+  }),
+  ReferenceError: class extends Error {}
+}));
 vi.mock("../src/studio/device-store", () => ({
   StudioDeviceStore: class {
     readEditor = async () => null;
@@ -93,7 +103,22 @@ vi.mock("../src/ui", async () => {
   const { createElement, useState } = await import("react");
   return {
     ...Object.fromEntries(
-      ["Button", "Card", "Field", "IconButton", "ListGroup", "ListRow", "Loading", "Notice", "Row", "Screen", "TextAction", "TitleBar", "Txt"].map((name) => [
+      [
+        "Button",
+        "Card",
+        "Field",
+        "SelectField",
+        "IconButton",
+        "ListGroup",
+        "ListRow",
+        "Loading",
+        "Notice",
+        "Row",
+        "Screen",
+        "TextAction",
+        "TitleBar",
+        "Txt"
+      ].map((name) => [
         name,
         (props: Record<string, unknown>) => createElement(name, props, props.children as React.ReactNode, props.footer as React.ReactNode)
       ])
@@ -117,7 +142,9 @@ vi.mock("../src/ui", async () => {
 import ContentDraft from "../app/content/[id]";
 import CampaignReview from "../app/campaign/[id]";
 import Create from "../app/(tabs)/create";
-vi.mock("../src/workspace-assistant", () => ({ WorkspaceAssistantScreen: () => null }));
+import Campaigns from "../app/(tabs)/campaigns";
+import NewCampaign from "../app/campaign/new";
+vi.mock("../src/workspace-assistant", () => ({ WorkspaceAssistantScreen: "DuplicateChat" }));
 import { typeLabel } from "../src/content";
 
 let root: Root;
@@ -236,10 +263,12 @@ describe("rendered native Create handoffs", () => {
     state.api.contentItems = vi.fn(async () => [item]);
     state.api.createContent = vi.fn(async () => item);
     await mount(<Create />);
-    expect(buttons("Start manually")).toHaveLength(1);
+    expect(buttons("New content")).toHaveLength(1);
+    expect(root.container.queryAll((node) => node.type === "DuplicateChat")).toHaveLength(0);
+    expect(state.api.createContent).not.toHaveBeenCalled();
     expect(buttons("Post")).toHaveLength(0);
     expect(buttons("Published")).toHaveLength(0);
-    await press("Start manually");
+    await press("New content");
     expect(buttons("Post")).toHaveLength(1);
     await press("Post");
     expect(state.api.createContent).toHaveBeenCalledWith({ contentType: "POST" });
@@ -248,11 +277,52 @@ describe("rendered native Create handoffs", () => {
   it("preserves a lifecycle selection after closing its filter sheet", async () => {
     state.api.contentItems = vi.fn(async () => [item]);
     await mount(<Create />);
-    await press("Your saved content");
     await press("Drafts");
     await press("Published");
     expect(buttons("Published")).toHaveLength(1);
     expect(buttons("Ready")).toHaveLength(0);
+  });
+  it("shows saved campaigns directly and uses one new-campaign action", async () => {
+    state.api.campaignSummaries = vi.fn(async () => ({
+      items: [
+        {
+          id: "campaign",
+          title: "Bakery launch",
+          status: "DRAFT",
+          startsAt: fixture.createdAt,
+          durationDays: 14,
+          publishesPerDay: 1,
+          postCounts: { idea: 14, draft: 0, inReview: 0, scheduled: 0, ready: 0, published: 0, failed: 0 }
+        }
+      ],
+      nextCursor: null
+    })) as never;
+    state.api.campaignGenerations = vi.fn(async () => []);
+    await mount(<Campaigns />);
+    expect(root.container.queryAll((node) => node.type === "DuplicateChat")).toHaveLength(0);
+    expect(root.container.queryAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === "Bakery launch")).toHaveLength(1);
+    expect(buttons("New campaign")).toHaveLength(1);
+    await press("New campaign");
+    expect(state.push).toHaveBeenCalledWith("/campaign/new");
+  });
+  it("drafts a native campaign from one brief without a separate Continue step", async () => {
+    state.api.queueCampaignGeneration = vi.fn(async (requestId: string) => ({ id: "job", requestId, status: "QUEUED" })) as never;
+    await mount(<NewCampaign />);
+    expect(buttons("Continue")).toHaveLength(0);
+    expect(root.container.queryAll((node) => node.type === "Field")).toHaveLength(1);
+    const goal = root.container.queryAll((node) => node.type === "Field" && node.props.label === "Campaign objective")[0]!;
+    await act(async () => goal.props.onChangeText("A bakery launch"));
+    await settle();
+    await press("Draft campaign");
+    expect(state.api.queueCampaignGeneration).toHaveBeenCalledTimes(1);
+    expect(state.api.queueCampaignGeneration).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ objective: "A bakery launch", durationDays: 14, publishesPerDay: 1 })
+    );
+    expect(state.replace).toHaveBeenCalledWith({
+      pathname: "/campaign/generation",
+      params: { requestId: vi.mocked(state.api.queueCampaignGeneration).mock.calls[0]![0] }
+    });
   });
   it("edits one carousel slide at a time without discarding another slide's text", async () => {
     item = { ...item, contentType: "CAROUSEL", mediaItems: [item.mediaItems[0]!, { ...item.mediaItems[0]!, id: "second", position: 1 }] };

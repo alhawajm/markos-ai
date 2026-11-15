@@ -6,8 +6,7 @@ import { useIsFocused } from "expo-router/react-navigation";
 import { ChevronDown, Clapperboard, Images, Palette, RectangleVertical, Target } from "lucide-react-native";
 import type { ContentType } from "@markos/shared-types";
 import { useAccount, useAppearance } from "../../src/providers";
-import { Card, Disclosure, Field, ListGroup, ListRow, Loading, Notice, Row, Screen, Sheet, TextAction, TitleBar, Txt } from "../../src/ui";
-import { WorkspaceAssistantScreen } from "../../src/workspace-assistant";
+import { Button, Card, Field, ListGroup, ListRow, Loading, Notice, Row, Screen, Sheet, TextAction, TitleBar, Txt } from "../../src/ui";
 import { ContentCard, QueryFailure, typeLabel } from "../../src/content";
 import { errorMessage } from "../../src/errors";
 
@@ -47,31 +46,27 @@ export default function Create() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}>
       <TitleBar title={t("Create", "إنشاء")} />
-      <WorkspaceAssistantScreen intent="CONTENT" embedded />
-      <Disclosure title={t("Your saved content", "محتواك المحفوظ")}>
-        <Row style={{ justifyContent: "space-between" }}>
-          <Txt variant="heading">{t("Your content", "محتواك")}</Txt>
-          <TextAction icon={ChevronDown} label={filters.find((option) => option.value === filter)!.label} onPress={() => setPanel("filter")} />
-        </Row>
-        <Field label={t("Search content", "البحث في المحتوى")} value={search} onChangeText={setSearch} />
-        {result.isPending ? (
-          <Loading />
-        ) : result.isError ? (
-          <QueryFailure
-            error={result.error}
-            retry={() => {
-              void result.refetch();
-            }}
-          />
-        ) : drafts.length === 0 ? (
-          <Card tone="tint">
-            <Txt>{t("No content here yet. Start something new or choose another filter.", "لا يوجد محتوى هنا بعد. ابدأ محتوى جديدًا أو اختر مرشحًا آخر.")}</Txt>
-          </Card>
-        ) : (
-          drafts.map((item) => <ContentCard key={item.id} item={item} />)
-        )}
-      </Disclosure>
-      <TextAction label={t("Start manually", "البدء يدويًا")} onPress={() => setPanel("new")} />
+      <Button label={t("New content", "محتوى جديد")} onPress={() => setPanel("new")} />
+      <Row style={{ justifyContent: "space-between" }}>
+        <Txt variant="heading">{t("Your content", "محتواك")}</Txt>
+        <TextAction icon={ChevronDown} label={filters.find((option) => option.value === filter)!.label} onPress={() => setPanel("filter")} />
+      </Row>
+      {result.isPending ? (
+        <Loading />
+      ) : result.isError ? (
+        <QueryFailure
+          error={result.error}
+          retry={() => {
+            void result.refetch();
+          }}
+        />
+      ) : drafts.length === 0 ? (
+        <Card tone="tint">
+          <Txt>{t("No content here yet. Start something new or choose another filter.", "لا يوجد محتوى هنا بعد. ابدأ محتوى جديدًا أو اختر مرشحًا آخر.")}</Txt>
+        </Card>
+      ) : (
+        drafts.map((item) => <ContentCard key={item.id} item={item} />)
+      )}
       <Sheet
         title={t("New content", "محتوى جديد")}
         visible={panel === "new"}
@@ -113,6 +108,7 @@ export default function Create() {
         />
       </Sheet>
       <Sheet title={t("Show content", "عرض المحتوى")} visible={panel === "filter"} onClose={() => setPanel(null)}>
+        <Field label={t("Search content", "البحث في المحتوى")} value={search} onChangeText={setSearch} />
         <ListGroup>
           {filters.map((option, index) => (
             <ListRow

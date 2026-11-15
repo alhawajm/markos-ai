@@ -10,37 +10,42 @@ beforeAll(async () => {
     headless: true,
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {})
   });
-  await mkdir("../../var/task-journeys-2026-11-15/screens", { recursive: true });
+  await mkdir("../../var/ux-correction-2026-11-15/screens", { recursive: true });
 });
 afterAll(async () => {
   await browser?.close();
 });
 it.each([
-  { intent: "CONTENT", route: "content-studio", locale: "en", width: 1440, theme: "light" },
-  { intent: "CONTENT", route: "content-studio", locale: "ar", width: 390, theme: "dark" },
-  { intent: "CAMPAIGN", route: "campaigns", locale: "ar", width: 1440, theme: "light" },
-  { intent: "STRATEGY", route: "strategy", locale: "en", width: 1440, theme: "dark" },
-  { intent: "STRATEGY", route: "strategy", locale: "ar", width: 390, theme: "light" }
+  { route: "content-studio", locale: "en", width: 1440, theme: "light" },
+  { route: "content-studio", locale: "ar", width: 390, theme: "dark" },
+  { route: "campaigns", locale: "en", width: 1440, theme: "dark" },
+  { route: "campaigns", locale: "ar", width: 390, theme: "light" },
+  { route: "strategy", locale: "en", width: 1440, theme: "light" },
+  { route: "strategy", locale: "ar", width: 390, theme: "dark" }
 ] as const)(
-  "goal, short plan and result: $intent $locale $theme",
+  "focused tools, no duplicate chat: $route $locale $theme",
   async (v) => {
-    const context = await browser.newContext({ viewport: { width: v.width, height: 900 }, colorScheme: v.theme, reducedMotion: "reduce" });
+    const context = await browser.newContext({
+      viewport: { width: v.width, height: 900 },
+      deviceScaleFactor: 1,
+      colorScheme: v.theme,
+      reducedMotion: "reduce"
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(12000);
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("pageerror", (e) => errors.push(e.message));
     const session = {
-      user: { id: "task-owner", fullName: "Task Owner", email: "owner@example.test", isVerified: true, locale: v.locale },
-      workspace: { id: "task-workspace", name: "Fictional bakery" },
-      tokens: { accessToken: "task-fixture", expiresIn: 900 },
+      user: { id: "tool-owner", fullName: "Tool Owner", email: "owner@example.test", isVerified: true, locale: v.locale },
+      workspace: { id: "tool-workspace", name: "Fictional bakery" },
+      tokens: { accessToken: "tool-fixture", expiresIn: 900 },
       roles: ["OWNER"],
       mfaVerified: true
     };
     const item = draft({ id: "22222222-2222-4222-8222-222222222222", brief: "Existing pastry draft" });
-    let turns: unknown[] = [],
-      messages = 0,
-      confirmations = 0,
-      blankCreations = 0;
+    let conversations = 0,
+      creations = 0,
+      campaignRequests = 0;
     await page.addInitScript((value) => localStorage.setItem("markos.session", JSON.stringify(value)), {
       user: session.user,
       workspace: session.workspace,
@@ -54,107 +59,112 @@ it.each([
       if (url.pathname === "/v1/auth/refresh") data = session;
       else if (url.pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
       else if (url.pathname === "/v1/vault/score") data = { entryCount: 4, score: 60, missingSections: [] };
-      else if (url.pathname === "/v1/campaigns/summaries") data = { items: [], nextCursor: null };
+      else if (url.pathname === "/v1/campaigns/summaries")
+        data = {
+          items: [
+            {
+              id: "44444444-4444-4444-8444-444444444444",
+              title: "Bakery launch",
+              objective: "Attract local customers",
+              startsAt: "2026-11-15T00:00:00Z",
+              endsAt: "2026-11-28T23:59:59Z",
+              durationDays: 14,
+              publishesPerDay: 1,
+              postCounts: { total: 14, idea: 14, draft: 0, inReview: 0, ready: 0, scheduled: 0, published: 0, failed: 0 },
+              status: "DRAFT"
+            }
+          ],
+          nextCursor: null
+        };
       else if (url.pathname === "/v1/content") {
         if (method === "POST") {
-          blankCreations++;
+          creations++;
+          expect(route.request().postDataJSON()).toMatchObject({ contentType: "POST" });
           data = item;
         } else data = [item];
       } else if (url.pathname === `/v1/content/${item.id}`) data = item;
       else if (url.pathname === `/v1/content/${item.id}/conversation`) data = { id: null, contentItem: item, messages: [], latestRun: null };
       else if (url.pathname.endsWith("/latest")) data = null;
       else if (url.pathname === "/v1/assistant/conversation") {
-        if (method === "POST") {
-          const input = route.request().postDataJSON();
-          expect(input.intent).toBe(v.intent);
-          messages++;
-          data = {
-            id: input.requestId,
-            intent: v.intent,
-            message: input.message,
-            createdAt: new Date().toISOString(),
-            status: "PROPOSED",
-            reply: v.locale === "ar" ? "هذه خطتك المقترحة." : "Here is your proposed direction.",
-            confirmationToken: "33333333-3333-4333-8333-333333333333",
-            proposal: {
-              action: v.intent,
-              summary: "A focused bakery plan grounded in saved business knowledge.",
-              instruction: input.message,
-              contentType: v.intent === "CONTENT" ? "POST" : null,
-              contentItemId: null,
-              durationDays: v.intent === "CAMPAIGN" ? 7 : null
-            }
-          };
-          turns = [data];
-        } else {
-          expect(url.searchParams.get("intent")).toBe(v.intent);
-          data = turns;
-        }
-      } else if (url.pathname.endsWith("/confirm")) {
-        confirmations++;
+        conversations++;
+        data = [];
+      } else if (url.pathname === "/v1/assistant/strategy")
         data = {
-          ...(turns[0] as object),
-          status: "COMPLETED",
-          ...(v.intent === "CONTENT"
-            ? { contentItemId: item.id }
-            : v.intent === "CAMPAIGN"
-              ? { campaignId: "44444444-4444-4444-8444-444444444444" }
-              : {
-                  strategy: {
-                    summary: "A clear bakery direction",
-                    strategy: { objectives: ["Attract local customers"], pillars: ["Fresh morning rituals"], nextActions: ["Prepare next week’s content"] },
-                    sources: ["COMPANY/private-source-id"],
-                    assumptions: [],
-                    missingInformation: []
-                  }
-                })
+          id: "saved-strategy",
+          createdAt: "2026-11-14T12:00:00Z",
+          strategy: {
+            summary: "A clear bakery direction",
+            strategy: { objectives: ["Attract local customers"], pillars: ["Fresh morning rituals"], nextActions: ["Prepare next week’s content"] },
+            sources: ["COMPANY/private-source-id"],
+            assumptions: [],
+            missingInformation: []
+          }
         };
-        turns = [data];
+      else if (url.pathname === "/v1/campaigns/generations" && method === "POST") {
+        campaignRequests++;
+        const input = route.request().postDataJSON();
+        expect(input.objective).toBe("A winter bakery launch");
+        expect(input.durationDays).toBe(14);
+        expect(input.referenceFiles).toHaveLength(1);
+        data = {
+          id: "job-fixture",
+          requestId: input.requestId,
+          objective: input.objective,
+          status: "QUEUED",
+          campaignId: null,
+          canResume: false,
+          progress: { completedWeeks: 0, totalWeeks: 2 },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
       }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
     });
     try {
       await page.goto(`${base}/${v.locale}/app/${v.route}`, { waitUntil: "domcontentloaded" });
-      const composer = page.getByLabel(v.locale === "ar" ? "راسل ماركوس" : "Message MARKOS", { exact: true });
-      await composer.waitFor();
-      expect(blankCreations).toBe(0);
-      expect(await page.locator("select:visible").count()).toBe(0);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.evaluate(() => document.fonts.ready);
-      await page.screenshot({ path: `../../var/task-journeys-2026-11-15/screens/${v.intent}-${v.locale}-${v.theme}-start.png` });
-      await composer.fill(v.locale === "ar" ? "أريد جذب المزيد من العملاء إلى مخبزي." : "Help attract more customers to my bakery.");
-      await page.getByRole("button", { name: v.locale === "ar" ? "إرسال الرسالة" : "Send message", exact: true }).click();
-      const confirm = page.getByRole("button", { name: v.locale === "ar" ? "تأكيد وبدء" : "Confirm and start", exact: true });
-      await confirm.waitFor();
-      expect(messages).toBe(1);
-      expect(confirmations).toBe(0);
-      expect(blankCreations).toBe(0);
-      await confirm.click();
-      await expect.poll(() => confirmations).toBe(1);
-      if (v.intent === "CONTENT") {
-        const open = page.getByRole("link", { name: v.locale === "ar" ? "فتح المسودة ←" : "Open draft →", exact: true });
-        await open.waitFor();
-        await open.click();
-        await page.getByTestId("create-workspace").waitFor();
-        expect(blankCreations).toBe(0);
-      } else if (v.intent === "CAMPAIGN") {
-        await page.getByRole("link", { name: "فتح الحملة ←", exact: true }).waitFor();
-        await page.getByRole("button", { name: "التخطيط بملفات أو ضبط الخيارات", exact: true }).click();
+      if (v.route === "content-studio") {
+        await page.getByRole("heading", { name: "Existing pastry draft", exact: true }).waitFor();
+        expect(creations).toBe(0);
+        expect(conversations).toBe(0);
+        expect(await page.getByLabel(v.locale === "ar" ? "راسل ماركوس" : "Message MARKOS", { exact: true }).count()).toBe(0);
+        await page.screenshot({ path: `../../var/ux-correction-2026-11-15/screens/${v.route}-${v.locale}-start.png` });
+        await page.getByRole("button", { name: v.locale === "ar" ? "محتوى جديد" : "New content", exact: true }).click();
         const dialog = page.getByRole("dialog");
         await dialog.waitFor();
-        expect(await dialog.getByRole("button", { name: /^14 / }).count()).toBe(0);
-        await dialog.locator("summary").getByText("تعديل التوقيت والوتيرة", { exact: true }).click();
-        expect(await dialog.locator('input[type="date"]').isVisible()).toBe(true);
-        await page.keyboard.press("Escape");
+        expect(await dialog.locator("select").count()).toBe(1);
+        await dialog.getByRole("button", { name: v.locale === "ar" ? "فتح المسودة" : "Open draft", exact: true }).click();
+        await page.getByTestId("create-workspace").waitFor();
+        expect(creations).toBe(1);
+      } else if (v.route === "campaigns") {
+        await page.getByRole("heading", { name: "Bakery launch", exact: true }).waitFor();
+        expect(conversations).toBe(0);
+        expect(campaignRequests).toBe(0);
+        await page.screenshot({ path: `../../var/ux-correction-2026-11-15/screens/${v.route}-${v.locale}-start.png` });
+        await page.getByRole("button", { name: v.locale === "ar" ? "حملة جديدة" : "New campaign", exact: true }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor();
+        expect(await dialog.locator("textarea:visible").count()).toBe(0);
+        expect(await dialog.locator('input[type="date"]:visible').count()).toBe(0);
+        await dialog.locator('input:not([type="file"]):visible').fill("A winter bakery launch");
+        await dialog
+          .locator('input[type="file"]')
+          .setInputFiles({ name: "event.txt", mimeType: "text/plain", buffer: Buffer.from("A fictional winter bakery event") });
+        await dialog.getByRole("button", { name: v.locale === "ar" ? "إنشاء الحملة" : "Create campaign", exact: true }).click();
+        await expect.poll(() => campaignRequests).toBe(1);
       } else {
         await page.getByText("A clear bakery direction", { exact: true }).waitFor();
         await page.getByText("Prepare next week’s content", { exact: true }).waitFor();
         expect(await page.getByText("COMPANY/private-source-id").count()).toBe(0);
         expect(await page.getByText("Fresh morning rituals", { exact: true }).isVisible()).toBe(false);
+        expect(await page.locator("textarea").count()).toBe(0);
+        expect(conversations).toBe(0);
+        await page.screenshot({ path: `../../var/ux-correction-2026-11-15/screens/${v.route}-${v.locale}-start.png` });
+        await page.getByRole("link", { name: v.locale === "ar" ? "تحديث مع ماركوس" : "Update with MARKOS", exact: true }).click();
+        await page.getByLabel(v.locale === "ar" ? "راسل ماركوس" : "Message MARKOS", { exact: true }).waitFor();
+        expect(conversations).toBeGreaterThan(0);
       }
       expect(errors).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.screenshot({ path: `../../var/task-journeys-2026-11-15/screens/${v.intent}-${v.locale}-${v.theme}-result.png` });
     } finally {
       await context.close();
     }

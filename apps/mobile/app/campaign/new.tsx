@@ -20,7 +20,6 @@ export default function NewCampaign() {
   const [brief, setBrief] = useState<Brief>(newBrief);
   const current = useRef(brief);
   const [ready, setReady] = useState(false);
-  const [step, setStep] = useState(1);
   const mutationKey = [scope, "generate-campaign"];
   const activeGenerations = useIsMutating({ mutationKey });
   const working = useRef(false);
@@ -140,15 +139,10 @@ export default function NewCampaign() {
       footer={
         <>
           <Button
-            label={step === 1 ? t("Continue", "متابعة") : t("Draft campaign", "إنشاء مسودة الحملة")}
+            label={t("Draft campaign", "إنشاء مسودة الحملة")}
             busy={busy}
             disabled={picking || brief.objective.trim().length < 3 || !saved}
-            onPress={() => {
-              if (step === 1) {
-                setError("");
-                setStep(2);
-              } else void generate();
-            }}
+            onPress={() => void generate()}
           />
           <Txt variant="meta" muted>
             {t("Your campaign is saved as a draft. Review it before preparing posts.", "تُحفظ حملتك كمسودة. راجعها قبل إعداد المنشورات.")}
@@ -156,18 +150,7 @@ export default function NewCampaign() {
         </>
       }
     >
-      <Segmented
-        value={String(step)}
-        disabled={busy}
-        options={[
-          { value: "1", label: t("1. Brief", "١. الملخص") },
-          { value: "2", label: t("2. Plan", "٢. الخطة") }
-        ]}
-        onChange={(value) => {
-          if (value === "1" || brief.objective.trim().length >= 3) setStep(Number(value));
-        }}
-      />
-      <Txt variant="title">{step === 1 ? t("Give your idea context", "امنح فكرتك سياقًا") : t("Review the plan", "راجع الخطة")}</Txt>
+      <Txt variant="title">{t("New campaign", "حملة جديدة")}</Txt>
       {brief.pendingSince && !busy ? (
         <>
           <Notice>
@@ -179,147 +162,125 @@ export default function NewCampaign() {
           <Button secondary label={t("Check campaigns", "عرض الحملات")} onPress={() => router.replace("/(tabs)/campaigns")} />
         </>
       ) : null}
-      {step === 1 ? (
-        <>
-          <Txt muted>
-            {t(
-              "Share the event, proposal, design direction and details that make this campaign yours.",
-              "شارك تفاصيل الفعالية والمقترح والتوجّه البصري وكل ما يميّز حملتك."
-            )}
-          </Txt>
-          <Field
-            label={t("Campaign objective", "هدف الحملة")}
-            placeholder={t("What do you want this campaign to achieve?", "ما الذي تريد تحقيقه بهذه الحملة؟")}
-            value={brief.objective}
-            maxLength={500}
-            editable={!busy}
-            onChangeText={(objective) => {
-              void update({ objective });
-            }}
-            multiline
-            style={{ minHeight: 84 }}
-          />
-          <Field
-            label={t("Description and context", "الوصف والسياق")}
-            placeholder={t(
-              "Event details, audience, look and feel, key messages, and anything to avoid…",
-              "تفاصيل الفعالية والجمهور والطابع البصري والرسائل الأساسية وما ينبغي تجنّبه…"
-            )}
-            value={brief.description}
-            maxLength={5000}
-            editable={!busy}
-            onChangeText={(description) => {
-              void update({ description });
-            }}
-            multiline
-            style={{ minHeight: 160 }}
-            hint={`${brief.description.length} / 5000`}
-          />
-          <Row style={{ justifyContent: "space-between" }}>
-            <Txt variant="heading">{t("Supporting files", "الملفات الداعمة")}</Txt>
-            <Txt variant="label">{brief.files.length}/5</Txt>
-          </Row>
-          <Txt variant="meta" muted>
-            {t(
-              "PDF, DOCX, TXT, PNG, JPG or WebP. Up to 8 MB each; 20 MB total.",
-              "PDF وDOCX وTXT وPNG وJPG وWebP. حتى ٨ ميغابايت لكل ملف و٢٠ ميغابايت إجمالًا."
-            )}
-          </Txt>
-          {brief.files.map((file) => (
-            <Card key={file.id}>
-              <Row>
-                <FileText size={24} strokeWidth={1.5} color={colors.accentText} />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Txt variant="label" numberOfLines={2}>
-                    {file.filename}
-                  </Txt>
-                  <Txt variant="meta" muted>
-                    {(file.sizeBytes / 1_000_000).toFixed(1)} MB
-                  </Txt>
-                </View>
-                <IconButton
-                  icon={X}
-                  label={`${t("Remove", "إزالة")} ${file.filename}`}
-                  disabled={busy || picking}
-                  onPress={() => {
-                    void update({ files: brief.files.filter((item) => item.id !== file.id) }).then((persisted) => {
-                      if (persisted) store.remove(file);
-                    });
-                  }}
-                />
-              </Row>
-            </Card>
-          ))}
-          <Button
-            secondary
-            icon={Paperclip}
-            label={t("Attach files", "إرفاق ملفات")}
-            busy={picking}
-            disabled={busy || brief.files.length >= 5}
-            onPress={() => {
-              void pick();
-            }}
-          />
-        </>
-      ) : (
-        <>
-          <Txt muted>
-            {t("Here’s the brief MARKOS will use. Adjust anything you need before starting.", "هذا هو الملخص الذي سيستخدمه ماركوس. عدّل ما تحتاجه قبل البدء.")}
-          </Txt>
-          <Card tone="tint">
-            <Txt variant="label">{brief.objective}</Txt>
-            <Txt muted>
-              {brief.files.length} {t("references attached", "ملفات مرفقة")}
-            </Txt>
-            {brief.description ? <Txt numberOfLines={4}>{brief.description}</Txt> : null}
-            <Txt>
-              {brief.durationDays} {t("days", "أيام")} · {brief.publishesPerDay} {t("/ day", "/ يوم")} · {brief.startDate}
-            </Txt>
-          </Card>
-          <Disclosure title={t("Adjust timing and frequency", "تعديل التوقيت والوتيرة")}>
-            <SelectField
-              label={t("Duration", "المدة")}
-              value={String(brief.durationDays)}
-              disabled={busy}
-              options={[3, 7, 14, 30, 60, 90].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
-              onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 | 30 | 60 | 90 })}
-            />
-            <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
-            <ListRow
-              last
-              label={new Date(`${brief.startDate}T12:00:00`).toLocaleDateString(locale, { dateStyle: "long" })}
-              disabled={busy}
-              onPress={() => setShowDate(!showDate)}
-            />
-            {showDate ? (
-              <DateTimePicker
-                value={new Date(`${brief.startDate}T12:00:00`)}
-                mode="date"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                themeVariant={mode}
-                locale={locale}
-                onChange={(event, date) => {
-                  if (Platform.OS !== "ios") setShowDate(false);
-                  if (event.type === "set" && date) void update({ startDate: localDate(date) });
-                }}
-              />
-            ) : null}
-            <Txt variant="label">{t("Publishing intensity", "وتيرة النشر")}</Txt>
-            <Segmented
-              value={String(brief.publishesPerDay)}
-              disabled={busy}
-              options={[1, 2, 3].map((count) => ({ value: String(count), label: `${count} ${t("/ day", "/ يوم")}` }))}
-              onChange={(count) => void update({ publishesPerDay: Number(count) })}
-            />
-            <Card tone="tint">
-              <Txt variant="heading">
-                {brief.durationDays * brief.publishesPerDay} {t("planned posts", "منشورًا مخطّطًا")}
+      <Txt muted>
+        {t(
+          "Share the event, proposal, design direction and details that make this campaign yours.",
+          "شارك تفاصيل الفعالية والمقترح والتوجّه البصري وكل ما يميّز حملتك."
+        )}
+      </Txt>
+      <Field
+        label={t("Campaign objective", "هدف الحملة")}
+        placeholder={t("What do you want this campaign to achieve?", "ما الذي تريد تحقيقه بهذه الحملة؟")}
+        value={brief.objective}
+        maxLength={500}
+        editable={!busy}
+        onChangeText={(objective) => {
+          void update({ objective });
+        }}
+        multiline
+        style={{ minHeight: 84 }}
+      />
+      <Disclosure title={t("Add details", "إضافة تفاصيل")} defaultOpen={!!brief.description}>
+        <Field
+          label={t("Description and context", "الوصف والسياق")}
+          placeholder={t(
+            "Event details, audience, look and feel, key messages, and anything to avoid…",
+            "تفاصيل الفعالية والجمهور والطابع البصري والرسائل الأساسية وما ينبغي تجنّبه…"
+          )}
+          value={brief.description}
+          maxLength={5000}
+          editable={!busy}
+          onChangeText={(description) => {
+            void update({ description });
+          }}
+          multiline
+          style={{ minHeight: 160 }}
+          hint={`${brief.description.length} / 5000`}
+        />
+      </Disclosure>
+      {brief.files.map((file) => (
+        <Card key={file.id}>
+          <Row>
+            <FileText size={24} strokeWidth={1.5} color={colors.accentText} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Txt variant="label" numberOfLines={2}>
+                {file.filename}
               </Txt>
-              <Txt>{t("Nothing is scheduled automatically.", "لا تتم جدولة أي منشور تلقائيًا.")}</Txt>
-            </Card>
-          </Disclosure>
-        </>
-      )}
+              <Txt variant="meta" muted>
+                {(file.sizeBytes / 1_000_000).toFixed(1)} MB
+              </Txt>
+            </View>
+            <IconButton
+              icon={X}
+              label={`${t("Remove", "إزالة")} ${file.filename}`}
+              disabled={busy || picking}
+              onPress={() => {
+                void update({ files: brief.files.filter((item) => item.id !== file.id) }).then((persisted) => {
+                  if (persisted) store.remove(file);
+                });
+              }}
+            />
+          </Row>
+        </Card>
+      ))}
+      <Button
+        secondary
+        icon={Paperclip}
+        label={t("Attach files", "إرفاق ملفات")}
+        busy={picking}
+        disabled={busy || brief.files.length >= 5}
+        onPress={() => {
+          void pick();
+        }}
+      />
+      <Txt variant="meta" muted>
+        {t("Up to five PDF, Word, text or image files.", "حتى خمسة ملفات PDF أو Word أو نصوص أو صور.")}
+      </Txt>
+      <Txt muted>
+        {brief.durationDays} {t("days", "أيام")} · {brief.publishesPerDay} {t("/ day", "/ يوم")} · {brief.startDate}
+      </Txt>
+      <Disclosure title={t("Adjust timing and frequency", "تعديل التوقيت والوتيرة")}>
+        <SelectField
+          label={t("Duration", "المدة")}
+          value={String(brief.durationDays)}
+          disabled={busy}
+          options={[3, 7, 14, 30, 60, 90].map((days) => ({ value: String(days), label: `${days} ${t("days", "أيام")}` }))}
+          onChange={(days) => void update({ durationDays: Number(days) as 3 | 7 | 14 | 30 | 60 | 90 })}
+        />
+        <Txt variant="label">{t("Start date · Bahrain time", "تاريخ البدء · توقيت البحرين")}</Txt>
+        <ListRow
+          last
+          label={new Date(`${brief.startDate}T12:00:00`).toLocaleDateString(locale, { dateStyle: "long" })}
+          disabled={busy}
+          onPress={() => setShowDate(!showDate)}
+        />
+        {showDate ? (
+          <DateTimePicker
+            value={new Date(`${brief.startDate}T12:00:00`)}
+            mode="date"
+            display={Platform.OS === "ios" ? "inline" : "default"}
+            themeVariant={mode}
+            locale={locale}
+            onChange={(event, date) => {
+              if (Platform.OS !== "ios") setShowDate(false);
+              if (event.type === "set" && date) void update({ startDate: localDate(date) });
+            }}
+          />
+        ) : null}
+        <Txt variant="label">{t("Publishing intensity", "وتيرة النشر")}</Txt>
+        <Segmented
+          value={String(brief.publishesPerDay)}
+          disabled={busy}
+          options={[1, 2, 3].map((count) => ({ value: String(count), label: `${count} ${t("/ day", "/ يوم")}` }))}
+          onChange={(count) => void update({ publishesPerDay: Number(count) })}
+        />
+        <Card tone="tint">
+          <Txt variant="heading">
+            {brief.durationDays * brief.publishesPerDay} {t("planned posts", "منشورًا مخطّطًا")}
+          </Txt>
+          <Txt>{t("Nothing is scheduled automatically.", "لا تتم جدولة أي منشور تلقائيًا.")}</Txt>
+        </Card>
+      </Disclosure>
       {busy ? (
         <Notice>
           {t(

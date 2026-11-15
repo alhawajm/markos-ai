@@ -1,9 +1,8 @@
 "use client";
-import { MarkosAiIcon } from "./markos-ai-icon";
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronRight, FileText, Paperclip, Plus, RefreshCcw, Search, X, Zap } from "lucide-react";
+import { CalendarDays, ChevronRight, FileText, Paperclip, RefreshCcw, Search, X } from "lucide-react";
 import {
   campaignDurations,
   campaignGenerationDurations,
@@ -32,7 +31,6 @@ import {
 import styles from "./campaign-review.module.css";
 import { addCampaignReferenceFiles, campaignReferenceAccept, campaignReferencePayload } from "./campaign-reference-files";
 import { CampaignGenerationStatus } from "./campaign-generation-status";
-import { WorkspaceAssistant } from "./workspace-assistant";
 
 export function CampaignPanel({ locale }: { locale: Locale }) {
   const session = useMarkosSession();
@@ -51,7 +49,7 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
   const [listError, setListError] = useState("");
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [objective, setObjective] = useState(t(locale, "defaultObjective"));
+  const [objective, setObjective] = useState("");
   const [description, setDescription] = useState("");
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [durationDays, setDurationDays] = useState<CampaignGenerationDurationDays>(14);
@@ -267,39 +265,32 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
     <section className={styles.page}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-[2rem] font-semibold">{t(locale, "title")}</h1>
-      </header>
-      <WorkspaceAssistant locale={locale} intent="CAMPAIGN" />
-      <div className="task-secondary">
         <button
-          className={styles.button}
+          className={`${styles.button} ${styles.primaryButton}`}
           onClick={() => {
             setGenerationError("");
             setShowComposer(true);
           }}
           type="button"
         >
-          <Paperclip aria-hidden="true" size={18} />
-          {locale === "ar" ? "التخطيط بملفات أو ضبط الخيارات" : "Plan with files or set options"}
+          {locale === "ar" ? "حملة جديدة" : "New campaign"}
         </button>
-      </div>
-      <details className="task-library task-secondary">
-        <summary>{locale === "ar" ? "حملاتك المحفوظة" : "Your saved campaigns"}</summary>
-        <button className={styles.button} disabled={listBusy} onClick={() => void refreshCampaigns()} type="button">
-          <RefreshCcw aria-hidden="true" size={18} className={listBusy ? "animate-spin" : ""} />
-          {t(locale, "refresh")}
-        </button>
-        <div className={styles.indexTools}>
-          <label className={styles.search}>
-            <Search aria-hidden="true" size={19} />
-            <input
-              aria-label={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
-              placeholder={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
-              maxLength={120}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </div>
+      </header>
+      <div>
+        {campaigns.length > 5 || query ? (
+          <div className={styles.indexTools}>
+            <label className={styles.search}>
+              <Search aria-hidden="true" size={19} />
+              <input
+                aria-label={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+                placeholder={locale === "ar" ? "ابحث عن حملة" : "Find a campaign"}
+                maxLength={120}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
         <div className={styles.indexScroll} aria-busy={listBusy}>
           {session ? (
             <CampaignGenerationStatus
@@ -357,7 +348,14 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
                 <h2>{locale === "ar" ? "لا توجد حملات مطابقة" : "No matching campaigns"}</h2>
               </div>
             ) : hasPlanningWork ? null : (
-              <CampaignEmpty locale={locale} onNew={() => setShowComposer(true)} />
+              <div className={styles.empty}>
+                <h2>{locale === "ar" ? "حملتك القادمة تبدأ هنا" : "Your next campaign starts here"}</h2>
+                <p>
+                  {locale === "ar"
+                    ? "شارك هدفك وملفاتك. سيستخدم ماركوس ما يعرفه عن نشاطك لإعداد الخطة."
+                    : "Share a goal and any references. MARKOS will use what it knows about your business to draft the plan."}
+                </p>
+              </div>
             )
           ) : null}
           {cursor && (
@@ -368,7 +366,7 @@ function CampaignWorkspacePanel({ locale }: { locale: Locale }) {
             </div>
           )}
         </div>
-      </details>
+      </div>
       {activeId && (
         <CampaignReview
           key={activeId}
@@ -529,9 +527,6 @@ function CampaignComposer({
         <X size={17} />
       </button>
       <div className="flex items-center gap-3 pe-12">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-          <MarkosAiIcon size={20} />
-        </span>
         <div>
           <h2 className="font-display text-2xl font-bold">{t(locale, "generate")}</h2>
           <p className="text-sm text-[var(--sunlit-muted)]">{t(locale, "generateSub")}</p>
@@ -547,24 +542,22 @@ function CampaignComposer({
             value={objective}
           />
         </label>
-        <label className="mt-4 block">
-          <span className="text-sm font-semibold">{t(locale, "description")}</span>
-          <textarea
-            className="sunlit-field mt-2 min-h-28 resize-y rounded-xl px-4 py-3 text-sm leading-6 outline-none"
-            rows={4}
-            maxLength={5000}
-            value={description}
-            dir="auto"
-            onChange={(event) => onDescription(event.target.value)}
-            placeholder={t(locale, "descriptionPlaceholder")}
-          />
-        </label>
-        <section className="mt-4 rounded-xl border border-[var(--border)] p-4" aria-label={t(locale, "referenceFiles")}>
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">{t(locale, "referenceFiles")}</h3>
-            <span className="text-xs text-[var(--text-secondary)]">{referenceFiles.length}/5</span>
-          </div>
-          <p className="mt-1 text-sm leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceHint")}</p>
+        <details className="mt-4" open={description ? true : undefined}>
+          <summary className="min-h-11 cursor-pointer content-center font-medium">{locale === "ar" ? "إضافة تفاصيل" : "Add details"}</summary>
+          <label className="mt-2 block">
+            <span className="text-sm font-semibold">{t(locale, "description")}</span>
+            <textarea
+              className="sunlit-field mt-2 min-h-28 resize-y rounded-xl px-4 py-3 text-sm leading-6 outline-none"
+              rows={4}
+              maxLength={5000}
+              value={description}
+              dir="auto"
+              onChange={(event) => onDescription(event.target.value)}
+              placeholder={t(locale, "descriptionPlaceholder")}
+            />
+          </label>
+        </details>
+        <section className="mt-4" aria-label={t(locale, "referenceFiles")}>
           <input
             ref={fileInput}
             type="file"
@@ -608,6 +601,7 @@ function CampaignComposer({
           >
             <Paperclip size={16} />
             {t(locale, "addFiles")}
+            {referenceFiles.length ? ` (${referenceFiles.length}/5)` : ""}
           </button>
           <p className="mt-2 text-xs leading-5 text-[var(--sunlit-muted)]">{t(locale, "referenceFormats")}</p>
         </section>
@@ -680,27 +674,11 @@ function CampaignComposer({
           onClick={onGenerate}
           type="button"
         >
-          {isBusy ? <RefreshCcw className="animate-spin" size={16} /> : <Zap size={16} />}
+          {isBusy ? <RefreshCcw className="animate-spin" size={16} /> : null}
           {isBusy ? t(locale, "generating") : t(locale, "generateCta")}
         </button>
       </div>
     </dialog>
-  );
-}
-
-function CampaignEmpty({ locale, onNew }: { locale: Locale; onNew: () => void }) {
-  return (
-    <div className="flex h-full min-h-[420px] flex-col items-center justify-center px-6 text-center">
-      <span className="grid h-16 w-16 place-items-center rounded-[1.4rem] bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]">
-        <CalendarDays size={28} />
-      </span>
-      <h2 className="mt-5 font-display text-2xl font-bold">{t(locale, "emptyTitle")}</h2>
-      <p className="mt-2 max-w-md text-sm leading-6 text-[var(--sunlit-muted)]">{t(locale, "emptyBody")}</p>
-      <button className="sunlit-primary mt-5 inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-semibold" onClick={onNew} type="button">
-        <Plus size={16} />
-        {t(locale, "newCampaign")}
-      </button>
-    </div>
   );
 }
 

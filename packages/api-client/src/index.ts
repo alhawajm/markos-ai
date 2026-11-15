@@ -114,6 +114,10 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
+  async currentStrategy(): Promise<WorkspaceAssistantTurn | null> {
+    return (await this.request<WorkspaceAssistantTurn | null>("/v1/assistant/strategy")).data;
+  }
+
   async workspaceAssistant(intent?: TaskIntent): Promise<WorkspaceAssistantTurn[]> {
     return (await this.request<WorkspaceAssistantTurn[]>(`/v1/assistant/conversation${intent ? `?intent=${encodeURIComponent(intent)}` : ""}`)).data;
   }

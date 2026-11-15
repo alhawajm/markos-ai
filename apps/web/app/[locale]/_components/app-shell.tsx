@@ -33,6 +33,7 @@ import { ContentStudioPanel } from "./content-studio-panel";
 import { createMarkosClient, initializeBrowserSession, useMarkosClient, useMarkosSession, watchBrowserSession } from "./browser-session";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { WorkspaceAssistant } from "./workspace-assistant";
+import { StrategyPanel } from "./strategy-panel";
 
 export type SectionSlug =
   | "analytics"
@@ -374,7 +375,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}
             {activeSection === "opportunities" ? <WorkspaceAssistant key={ownerKey} locale={locale} /> : null}
             {activeSection === "campaign-builder" ? <CampaignPanel locale={locale} /> : null}
-            {activeSection === "strategy" ? <WorkspaceAssistant key={ownerKey} locale={locale} intent="STRATEGY" /> : null}
+            {activeSection === "strategy" ? <StrategyPanel key={ownerKey} locale={locale} /> : null}
             {activeSection === "content-studio" ? <ContentStudioPanel key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "calendar" ? <CalendarPanel locale={locale} /> : null}
             {activeSection === "analytics" ? <FinalAnalyticsPanel locale={locale} /> : null}

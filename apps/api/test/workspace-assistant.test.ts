@@ -88,6 +88,62 @@ async function fixture() {
       (await app.inject({ method: "GET", url: "/v1/assistant/conversation", headers: { authorization: `Bearer ${session.tokens.accessToken}` } })).json().data
   };
 }
+it("reads the latest completed strategy independently of chat pagination and isolates members and workspaces", async () => {
+  const f = await fixture(),
+    other = await fixture();
+  await prisma.workspaceMember.create({ data: { workspaceId: f.session.workspace.id, userId: other.session.user.id, role: "EDITOR" } });
+  expect((await app.inject({ method: "GET", url: "/v1/assistant/strategy" })).statusCode).toBe(401);
+  expect((await app.inject({ method: "GET", url: "/v1/assistant/strategy", headers: f.headers })).json().data).toBeNull();
+  const older = new Date("2026-01-01T12:00:00Z");
+  const row = await prisma.aiInteraction.create({
+    data: {
+      id: randomUUID(),
+      workspaceId: f.session.workspace.id,
+      agent: "WORKSPACE_ASSISTANT",
+      accepted: true,
+      promptVersion: "test",
+      prompt: { userId: f.session.user.id, message: "Make a strategy", locale: "en", intent: "GENERAL" },
+      response: {
+        status: "COMPLETED",
+        reply: "Saved",
+        proposal: { action: "STRATEGY" },
+        strategy: { summary: "Owner strategy", strategy: { nextActions: ["Plan the launch"] } }
+      },
+      model: "test",
+      tokensIn: 0,
+      tokensOut: 0,
+      costMinor: 0,
+      currency: "BHD",
+      createdAt: older
+    }
+  });
+  await prisma.aiInteraction.createMany({
+    data: Array.from({ length: 22 }, () => ({
+      id: randomUUID(),
+      workspaceId: f.session.workspace.id,
+      agent: "WORKSPACE_ASSISTANT",
+      accepted: false,
+      promptVersion: "test",
+      prompt: { userId: f.session.user.id, message: "Later discussion", locale: "en" },
+      response: { status: "DISCUSSION", reply: "No strategy", proposal: null },
+      model: "test",
+      tokensIn: 0,
+      tokensOut: 0,
+      costMinor: 0,
+      currency: "BHD"
+    }))
+  });
+  expect((await f.get()).every((turn: { id: string }) => turn.id !== row.id)).toBe(true);
+  const response = await app.inject({ method: "GET", url: "/v1/assistant/strategy", headers: f.headers });
+  expect(response.statusCode).toBe(200);
+  expect(response.headers["cache-control"]).toBe("private, no-store");
+  expect(response.json().data).toMatchObject({ id: row.id, strategy: { summary: "Owner strategy" } });
+  for (const headers of [other.headers, { ...other.headers, "x-workspace-id": f.session.workspace.id }])
+    expect((await app.inject({ method: "GET", url: "/v1/assistant/strategy", headers })).json().data).toBeNull();
+  await prisma.aiInteraction.update({ where: { id: row.id }, data: { accepted: false } });
+  expect((await app.inject({ method: "GET", url: "/v1/assistant/strategy", headers: f.headers })).json().data).toBeNull();
+});
+
 it("queues a message once, creates nothing before confirmation, then executes without a second confirmation", async () => {
   const f = await fixture();
   const send = () => app.inject({ method: "POST", url: "/v1/assistant/conversation", headers: f.headers, payload: f.input });

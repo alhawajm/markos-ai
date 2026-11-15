@@ -4,7 +4,13 @@ import { workspaceAssistantMessageSchema, workspaceAssistantConfirmSchema } from
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { ConversationError } from "../content/conversation-service";
-import { confirmWorkspacePlan, processWorkspaceAssistant, submitWorkspaceMessage, workspaceAssistantHistory } from "./workspace-assistant-service";
+import {
+  confirmWorkspacePlan,
+  currentWorkspaceStrategy,
+  processWorkspaceAssistant,
+  submitWorkspaceMessage,
+  workspaceAssistantHistory
+} from "./workspace-assistant-service";
 import { env } from "../config/env";
 import { taskIntents } from "@markos/shared-types";
 import { forgetPersonalMemory, listPersonalMemory } from "../vault/personalization-service";
@@ -15,6 +21,11 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
     verifiedUserRequired: true,
     permissions: ["content:write", "agent:run", "campaign:generate"]
   };
+  app.get("/v1/assistant/strategy", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const { workspaceId, userId } = requireWorkspaceContext();
+    return ok(await currentWorkspaceStrategy(workspaceId, userId));
+  });
   app.get("/v1/assistant/memory", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     const { workspaceId, userId } = requireWorkspaceContext();

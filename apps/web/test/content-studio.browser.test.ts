@@ -355,7 +355,7 @@ describe("Relational Create workspace", () => {
       await page.getByLabel("More actions", { exact: true }).click();
       await page.getByRole("button", { name: "Delete draft", exact: true }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true }).click();
-      await page.getByRole("heading", { name: "What would you like to share?", exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Create", exact: true }).waitFor();
       expect(state.calls.filter((call) => call.path === "/v1/content")).toHaveLength(0);
       const deletion = state.calls.findIndex((c) => c.path === "/v1/content/draft-1");
       expect(deletion).toBeGreaterThan(0);

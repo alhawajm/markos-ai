@@ -71,6 +71,17 @@ function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): Wor
   };
 }
 const owned = (workspaceId: string, userId: string) => ({ workspaceId, agent, deletedAt: null, prompt: { path: ["userId"], equals: userId } });
+export async function currentWorkspaceStrategy(workspaceId: string, userId: string) {
+  const row = await prisma.aiInteraction.findFirst({
+    where: {
+      ...owned(workspaceId, userId),
+      accepted: true,
+      AND: [{ response: { path: ["status"], equals: "COMPLETED" } }, { response: { path: ["proposal", "action"], equals: "STRATEGY" } }]
+    },
+    orderBy: { createdAt: "desc" }
+  });
+  return row ? record(row) : null;
+}
 async function currentRecord(row: AiInteraction) {
   if (!row.accepted || state(row).proposal?.action !== "CAMPAIGN") return record(row);
   const job = await prisma.campaignGenerationJob.findFirst({

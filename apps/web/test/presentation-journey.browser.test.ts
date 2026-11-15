@@ -72,7 +72,6 @@ describe("presentation journey", () => {
       };
     }
     await page.goto(`${baseUrl}/${locale}/app/campaigns`, { waitUntil: "domcontentloaded" });
-    await openCampaignLibrary(page);
     const planning = page.getByRole("region", { name: locale === "ar" ? "حالة إنشاء الحملات" : "Campaign planning status" });
     await planning.getByRole("button", { name: locale === "ar" ? "إكمال الحملة" : "Finish campaign", exact: true }).click();
     await planning.getByText(locale === "ar" ? /جارٍ إعداد الحملة/ : /Planning your campaign/).waitFor();
@@ -482,11 +481,10 @@ describe("presentation journey", () => {
     const reviewer = page.getByRole("dialog", { name: "SnackLab 7-Day Community Sprint", exact: true });
     await reviewer.waitFor();
     await reviewer.getByRole("button", { name: "Close campaign", exact: true }).click();
-    await openCampaignLibrary(page);
     await page.getByRole("button", { name: "Open campaign: SnackLab 14-Day Instagram Campaign", exact: true }).click();
     await page.getByRole("dialog", { name: "SnackLab 14-Day Instagram Campaign", exact: true }).waitFor();
     await page.getByRole("button", { name: "Close campaign", exact: true }).click();
-    await page.getByRole("button", { name: "Plan with files or set options" }).click();
+    await page.getByRole("button", { name: "New campaign" }).click();
     const composer = page.getByRole("dialog", { name: "Create a campaign", exact: true });
     await composer.waitFor();
     expect(await composer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
@@ -499,6 +497,7 @@ describe("presentation journey", () => {
     }
     await expect(page.getByText(/Zain Arabia/).count()).resolves.toBe(0);
 
+    await composer.locator('input:not([type="file"]):not([type="date"])').fill("Increase qualified Instagram inquiries");
     await composer.getByRole("button", { name: "Create campaign", exact: true }).click();
     await expect.poll(() => composer.getByRole("button", { name: "Close campaign composer" }).isDisabled()).toBe(true);
     await page.keyboard.press("Escape");
@@ -1004,13 +1003,12 @@ describe("presentation journey", () => {
     });
 
     await emptyPage.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
-    await openCampaignLibrary(emptyPage);
-    await emptyPage.getByRole("button", { name: "Plan with files or set options", exact: true }).first().click();
+    await emptyPage.getByRole("button", { name: "New campaign", exact: true }).first().click();
     const closeComposer = emptyPage.getByRole("button", { name: "Close campaign composer" });
     await closeComposer.waitFor();
     await emptyPage.keyboard.press("Escape");
     await closeComposer.waitFor({ state: "detached" });
-    await expect.poll(() => emptyPage.getByRole("heading", { name: "Start your first campaign" }).isVisible()).toBe(true);
+    await expect.poll(() => emptyPage.getByRole("heading", { name: "Your next campaign starts here" }).isVisible()).toBe(true);
     await emptyPage.getByRole("link", { name: "MARKOS", exact: true }).click();
     await emptyPage.waitForURL(`${baseUrl}/en/app`);
     await emptyPage.close();
@@ -1043,7 +1041,6 @@ describe("presentation journey", () => {
     });
 
     await page.goto(`${baseUrl}/en/app/campaigns`, { waitUntil: "domcontentloaded" });
-    await openCampaignLibrary(page);
     await page.getByRole("button", { name: /^Open campaign:/ }).click();
     await page.getByRole("button", { name: /Compare the subscription tiers/ }).click();
     const description = "Explain how every subscription tier supports a different kind of baker without hiding important pricing or delivery details.";
@@ -1629,9 +1626,4 @@ function quickProfileState() {
     status: "IN_PROGRESS",
     businessProfile: { status: "DRAFT", interactionId: "019fd833-4bf3-7ed5-9db9-6f96ab379054", profile, updatedAt: new Date().toISOString() }
   };
-}
-
-async function openCampaignLibrary(page: Page) {
-  const library = page.locator("details.task-library");
-  if ((await library.getAttribute("open")) === null) await library.locator(":scope > summary").click();
 }
