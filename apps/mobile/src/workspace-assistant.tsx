@@ -1,17 +1,18 @@
 import { MarkosMark, TaskFeedback, Enter } from "./motion";
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { View, RefreshControl, ScrollView } from "react-native";
+import { View, RefreshControl, ScrollView, Pressable, type TextInput } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
-import { Send, Ellipsis } from "lucide-react-native";
+import { Ellipsis } from "lucide-react-native";
 import { newRequestId } from "./request-id";
 import type { WorkspaceAssistantTurn } from "@markos/shared-types";
 import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
 import { useAccount, useAppearance } from "./providers";
 import { sessionController } from "./auth/transport";
 import { BusinessDeviceStore } from "./business/device-store";
-import { Button, Card, Disclosure, Field, Loading, Notice, Screen, Txt, TextAction, Row, IconButton } from "./ui";
+import { Button, Card, Disclosure, Loading, Notice, Screen, Txt, TextAction, Row, IconButton } from "./ui";
+import { ChatComposer } from "./chat-composer";
 import { ContentReportSheet } from "./content-report";
 import { errorMessage } from "./errors";
 import { PersonalMemorySheet } from "./personal-memory";
@@ -33,6 +34,7 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
     language = locale === "ar" ? 1 : 0;
   const scrollRef = useRef<ScrollView>(null),
     following = useRef(true);
+  const inputRef = useRef<TextInput>(null);
   const [report, setReport] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [earlier, setEarlier] = useState(false);
@@ -155,6 +157,9 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
       embedded={embedded}
       scrollRef={scrollRef}
       scrollProps={{
+        onLayout: () => {
+          if (following.current) scrollRef.current?.scrollToEnd({ animated: false });
+        },
         onScroll: (e) => {
           const v = e.nativeEvent;
           following.current = v.contentOffset.y + v.layoutMeasurement.height >= v.contentSize.height - 100;
@@ -165,50 +170,69 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
       }}
       footer={
         <>
-          {" "}
-          <Card>
-            <Field
-              label={t("Message MARKOS", "راسل ماركوس")}
-              value={message}
-              onChangeText={edit}
-              editable={restored && !pending}
-              multiline
-              maxLength={4000}
-              placeholder={t("An idea, an event, or something to change…", "فكرة أو فعالية أو شيء تريد تغييره…")}
-            />
-            <Button
-              icon={Send}
-              label={pending ? t("Retry saved message", "إعادة إرسال الرسالة المحفوظة") : t("Send", "إرسال")}
-              busy={busy}
-              disabled={!restored || active || !(pending?.message ?? message).trim()}
-              onPress={() => void send()}
-            />
-          </Card>
-          <Txt variant="meta" muted style={{ textAlign: "center" }}>
-            {t("You review everything before it’s published.", "تراجع كل شيء قبل نشره.")}
-          </Txt>
+          <ChatComposer
+            inputRef={inputRef}
+            value={message}
+            onChange={edit}
+            onSend={() => void send()}
+            editable={restored && !pending}
+            busy={busy}
+            retry={!!pending}
+            disabled={!restored || active || !(pending?.message ?? message).trim()}
+          />
+          {!result.data?.length && !result.isPending ? (
+            <Txt variant="meta" muted style={{ textAlign: "center" }}>
+              {t("You approve before publishing.", "توافق قبل النشر.")}
+            </Txt>
+          ) : null}
         </>
       }
       refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}
     >
-      <View style={{ alignItems: "center", gap: 12, paddingVertical: 20 }}>
-        <View style={{ padding: 8 }}>
-          <MarkosMark size={intent === "GENERAL" ? 44 : 32} color={colors.accentText} />
+      {result.data?.length === 0 ? (
+        <View style={{ alignItems: "center", gap: 8, paddingVertical: 16 }}>
+          <View style={{ padding: 8 }}>
+            <MarkosMark size={32} color={colors.accentText} />
+          </View>
+          <Txt variant="title" style={{ textAlign: "center", fontSize: 24 }}>
+            {intro.title[language]}
+          </Txt>
+          <Txt muted style={{ textAlign: "center" }}>
+            {intro.detail[language]}
+          </Txt>
+          {intent === "GENERAL" ? <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} /> : null}
         </View>
-        <Txt variant="title" style={{ textAlign: "center" }}>
-          {intro.title[language]}
-        </Txt>
-        <Txt muted style={{ textAlign: "center" }}>
-          {intro.detail[language]}
-        </Txt>
-        {intent === "GENERAL" ? <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} /> : null}
-      </View>
+      ) : intent === "GENERAL" ? (
+        <TextAction label={t("Memory", "الذاكرة")} accessibilityLabel={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} />
+      ) : null}
       {!result.data?.length && !result.isPending ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: locale === "ar" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 }}>
           {taskSuggestions[intent]
             .map((entry) => ({ label: entry[language], message: entry[language + 2]! }))
             .map((s) => (
-              <Button secondary key={s.label} label={s.label} disabled={!restored || busy} onPress={() => edit(s.message)} />
+              <Pressable
+                key={s.label}
+                accessibilityRole="button"
+                accessibilityLabel={s.label}
+                disabled={!restored || busy}
+                onPress={() => {
+                  edit(s.message);
+                  inputRef.current?.focus();
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.accentSoft : colors.surface,
+                  justifyContent: "center",
+                  opacity: !restored || busy ? 0.5 : 1
+                })}
+              >
+                <Txt style={{ fontSize: 15 }}>{s.label}</Txt>
+              </Pressable>
             ))}
         </View>
       ) : null}
@@ -218,14 +242,14 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
       ) : null}
       {(intent === "GENERAL" || earlier ? result.data : result.data?.slice(-4))?.map((turn) => (
         <Enter key={turn.id}>
-          <View style={{ gap: 16, marginVertical: 8 }}>
-            <Card tone="tint" style={{ alignSelf: "flex-end", maxWidth: "92%" }}>
+          <View style={{ gap: 10 }}>
+            <View style={{ alignSelf: "flex-end", maxWidth: "88%", padding: 14, borderRadius: 18, backgroundColor: colors.accentSoft }}>
               <Txt selectable>{turn.message}</Txt>
-            </Card>
-            <View style={{ gap: 12 }}>
+            </View>
+            <View style={{ gap: 8 }}>
               <Row>
-                <MarkosMark size={22} color={colors.accentText} />
-                <Txt variant="label" muted style={{ flex: 1 }}>
+                <MarkosMark size={18} color={colors.accentText} />
+                <Txt variant="meta" muted style={{ flex: 1 }}>
                   MARKOS
                 </Txt>
                 {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
@@ -315,7 +339,7 @@ function AssistantFrame({ embedded, ...props }: React.ComponentProps<typeof Scre
       {props.footer}
     </View>
   ) : (
-    <Screen {...props} />
+    <Screen {...props} layout="chat" />
   );
 }
 export function GuidanceResult({ value }: { value: Record<string, unknown> }) {

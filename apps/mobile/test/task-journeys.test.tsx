@@ -11,8 +11,8 @@ const state = vi.hoisted(() => ({
   push: vi.fn(),
   stores: new Map<string, unknown>()
 }));
-vi.mock("react-native", () => ({ View: "View", RefreshControl: "RefreshControl", ScrollView: "ScrollView" }));
-vi.mock("lucide-react-native", () => ({ Send: () => null, Ellipsis: () => null }));
+vi.mock("react-native", () => ({ View: "View", RefreshControl: "RefreshControl", ScrollView: "ScrollView", TextInput: "TextInput", Pressable: "Pressable" }));
+vi.mock("lucide-react-native", () => ({ Send: () => null, Ellipsis: () => null, RotateCcw: () => null }));
 vi.mock("expo-router", () => ({ useRouter: () => ({ push: state.push }) }));
 vi.mock("expo-router/react-navigation", () => ({ useIsFocused: () => true }));
 vi.mock("../src/providers", () => ({
@@ -48,6 +48,7 @@ vi.mock("../src/motion", async () => {
   const { createElement } = await import("react");
   return {
     MarkosMark: () => null,
+    InkPulse: () => null,
     TaskFeedback: ({ label }: { label: string }) => createElement("TaskFeedback", {}, label),
     Enter: ({ children }: React.PropsWithChildren) => children
   };
@@ -124,10 +125,12 @@ it.each(["CONTENT", "CAMPAIGN", "STRATEGY"] as TaskIntent[])("takes a goal throu
   expect(state.api.workspaceAssistant).toHaveBeenCalledWith(intent);
   const find = (type: string, label?: string) => root!.container.queryAll((node) => node.type === type && (!label || node.props.label === label));
   await act(async () => {
-    find("Field")[0]!.props.onChangeText("Attract more bakery customers");
+    find("TextInput")[0]!.props.onChangeText("Attract more bakery customers");
   });
   await act(async () => {
-    find("Button", state.locale === "ar" ? "إرسال" : "Send")[0]!.props.onPress();
+    root!.container
+      .queryAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === (state.locale === "ar" ? "إرسال" : "Send"))[0]!
+      .props.onPress();
   });
   expect(state.api.messageWorkspaceAssistant).toHaveBeenCalledWith(expect.objectContaining({ intent, message: "Attract more bakery customers" }));
   expect(state.api.confirmWorkspaceAssistant).not.toHaveBeenCalled();
@@ -173,7 +176,7 @@ it("keeps unsent goals separate between areas and workspace identities", async (
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
   };
-  const field = () => root!.container.queryAll((node) => node.type === "Field")[0]!;
+  const field = () => root!.container.queryAll((node) => node.type === "TextInput")[0]!;
   await render("CONTENT");
   await act(async () => field().props.onChangeText("Private unsent content goal"));
   await render("STRATEGY");
@@ -185,4 +188,68 @@ it("keeps unsent goals separate between areas and workspace identities", async (
   await render("CONTENT");
   expect(field().props.value).toBe("Private unsent content goal");
   expect(state.api.messageWorkspaceAssistant).not.toHaveBeenCalled();
+});
+
+it("keeps existing Home conversations compact and retries the same saved request", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.clearAllMocks();
+  state.stores.clear();
+  state.locale = "en";
+  state.scope = "owner:workspace";
+  state.client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  state.api.workspaceAssistant.mockResolvedValue([
+    {
+      id: "previous",
+      message: "Plan a fictional launch",
+      reply: "Your campaign is ready.",
+      status: "COMPLETED",
+      campaignId: "campaign",
+      createdAt: new Date().toISOString()
+    }
+  ]);
+  state.api.messageWorkspaceAssistant
+    .mockRejectedValueOnce(new Error("Network lost"))
+    .mockImplementationOnce(async (input) => ({
+      id: input.requestId,
+      message: input.message,
+      reply: "Let’s continue",
+      status: "DISCUSSION",
+      createdAt: new Date().toISOString()
+    }));
+  root = createRoot();
+  await act(() =>
+    root!.render(
+      <QueryClientProvider client={state.client!}>
+        <WorkspaceAssistantScreen />
+      </QueryClientProvider>
+    )
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  const text = root.container
+    .queryAll((n) => n.type === "Txt")
+    .map((n) => JSON.stringify(n.props.children))
+    .join(" ");
+  expect(text).not.toContain("What shall we create?");
+  expect(text).not.toContain("You approve before publishing.");
+  expect(root.container.queryAll((n) => n.type === "TextAction" && n.props.label === "Open campaign")).toHaveLength(1);
+  const field = () => root!.container.queryAll((n) => n.type === "TextInput")[0]!;
+  await act(() => field().props.onChangeText("Follow up on the launch"));
+  const press = async (label: string) =>
+    act(async () => {
+      await root!.container.queryAll((n) => n.type === "Pressable" && n.props.accessibilityLabel === label)[0]!.props.onPress();
+    });
+  await press("Send");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  const request = state.api.messageWorkspaceAssistant.mock.calls[0]![0];
+  expect(state.stores.get("owner:workspace:assistant")).toMatchObject({ pending: { requestId: request.requestId } });
+  await press("Retry saved message");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(state.api.messageWorkspaceAssistant.mock.calls[1]![0]).toEqual(request);
+  expect(field().props.value).toBe("");
 });

@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type TextInputProps,
   type TextProps,
   type ViewProps
@@ -508,15 +509,18 @@ export function Screen({
   footer,
   refreshControl,
   scrollRef,
-  scrollProps
+  scrollProps,
+  layout = "standard"
 }: PropsWithChildren<{
   footer?: React.ReactNode;
   refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
   scrollRef?: React.Ref<ScrollView>;
-  scrollProps?: Pick<React.ComponentProps<typeof ScrollView>, "onScroll" | "onContentSizeChange">;
+  scrollProps?: Pick<React.ComponentProps<typeof ScrollView>, "onScroll" | "onContentSizeChange" | "onLayout">;
+  layout?: "standard" | "chat";
 }>) {
   const { colors } = useAppearance();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -530,13 +534,27 @@ export function Screen({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         refreshControl={refreshControl}
-        contentContainerStyle={{ width: "100%", maxWidth: 760, alignSelf: "center", padding: 20, paddingBottom: 32, gap: 24 }}
+        contentContainerStyle={{
+          width: "100%",
+          maxWidth: 760,
+          alignSelf: "center",
+          padding: layout === "chat" ? 16 : 20,
+          paddingBottom: layout === "chat" ? 12 : 32,
+          gap: layout === "chat" ? 16 : 24
+        }}
       >
         {children}
       </ScrollView>
       {footer ? (
         <View
-          style={{ padding: 16, paddingBottom: Math.max(16, insets.bottom), borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
+          style={{
+            paddingHorizontal: layout === "chat" ? 12 : 16,
+            paddingVertical: layout === "chat" ? 8 : 16,
+            paddingBottom: layout === "chat" ? (width >= 768 ? Math.max(8, insets.bottom) : 8) : Math.max(16, insets.bottom),
+            borderTopWidth: layout === "chat" ? 0 : 1,
+            borderColor: colors.border,
+            backgroundColor: layout === "chat" ? colors.background : colors.surface
+          }}
         >
           <View style={{ width: "100%", maxWidth: 720, alignSelf: "center", gap: 8 }}>{footer}</View>
         </View>

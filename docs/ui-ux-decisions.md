@@ -617,3 +617,9 @@ Scheduling confirmation receives keyboard focus before paint so an immediate Esc
 Use the existing draft companion to explain the campaign handoff, preparation, incomplete media/caption, review, Ready, scheduled and published states. Show campaign origin/week and a real planned date when present. Keep historical messages unchanged and make current guidance depend on the actual draft and jobs. No extra workspace chat, onboarding questions, automatic generation, approval or publishing is added on entry.
 
 Place Schedule and Publish now in the main Ready controls, replacing the disabled Mark Ready dead end. Keep one visible Edit post action that returns Ready content to Draft. Native uses the same state/copy and attachment checks, with explicit publish confirmation and its existing publication-status screen. Retain bilingual/RTL behavior, the current palette and accessible controls.
+
+## 2026-11-16 — Compact native Home conversation
+
+Home uses one expanding message field with an inline 44px send/retry control. Its visible form label, outer card, full-width Send button and repeated approval note are removed from populated conversations; the input retains its accessible label and native text scaling. A long message grows to a bounded scrolling input and collapses after sending. Empty Home keeps a short welcome, three wrapping suggestions and a brief approval reminder. Existing history opens directly to the conversation, with tighter message spacing and a quiet Memory action.
+
+The Home frame uses compact padding and avoids adding the bottom phone inset twice above the tab bar. Tablet rail layouts retain the bottom safe area. Follow-to-latest still respects readers scrolling through history. Saved messages, identity/workspace separation, retries, confirmation, reports and direct result links remain unchanged. Use the same light/dark tokens and Arabic input/reading direction.
