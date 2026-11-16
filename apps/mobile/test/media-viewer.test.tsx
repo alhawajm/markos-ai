@@ -23,7 +23,9 @@ vi.mock("react-native", () => ({
   }
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
-vi.mock("lucide-react-native", () => Object.fromEntries(["ChevronLeft", "ChevronRight", "X", "ZoomIn", "ZoomOut"].map((key) => [key, () => null])));
+vi.mock("lucide-react-native", () =>
+  Object.fromEntries(["ChevronLeft", "ChevronRight", "X", "ZoomIn", "ZoomOut", "Maximize2"].map((key) => [key, () => null]))
+);
 vi.mock("expo-router", () => ({ useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, []) }));
 vi.mock("expo", () => ({ useEvent: () => ({ status: state.status }) }));
 vi.mock("expo-video", () => ({ useVideoPlayer: () => ({ pause: state.pause, replaceAsync: state.replaceAsync }), VideoView: "VideoView" }));
@@ -60,6 +62,17 @@ it("opens images, zooms, navigates the gallery and closes without changing a dra
   expect(root.container.queryAll((n) => n.type === "Image").at(-1)!.props.source.uri).toBe("https://media.example/second");
   await act(() => root.container.queryAll((n) => n.type === "Modal")[0]!.props.onRequestClose());
   expect(root.container.queryAll((n) => n.type === "Modal")).toHaveLength(0);
+});
+it("uses a larger canvas with a single expand control in the review preview", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  root = createRoot();
+  await act(() => root.render(<MediaPreview asset={asset("portrait")} canvas />));
+  const picture = root.container.queryAll((n) => n.type === "Image")[0]!;
+  expect(picture.props.resizeMode).toBe("contain");
+  expect(picture.props.style.maxHeight).toBeGreaterThan(380);
+  expect(root.container.queryAll((n) => n.type === "Button")).toHaveLength(0);
+  await act(() => root.container.queryAll((n) => n.type === "IconButton" && n.props.label === "Open full-size media")[0]!.props.onPress());
+  expect(root.container.queryAll((n) => n.type === "Modal")).toHaveLength(1);
 });
 it("opens a full Reel with playback controls, pauses the small preview, and handles load failure", async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

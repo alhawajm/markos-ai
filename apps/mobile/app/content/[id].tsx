@@ -434,9 +434,6 @@ function Editor({ initial }: { initial: ContentRecord }) {
           if (value === "edit" && section === "review") setSection("caption");
         }}
       />
-      {view === "preview" && section === "review" ? (
-        <Readiness item={draft} assets={assets.data} busy={busy || generating} publishing={publishing} open={openSection} />
-      ) : null}
       {generating ? (
         <Notice>
           {t("MARKOS is generating. You can leave; review the result when it finishes.", "ماركوس ينشئ المحتوى. يمكنك المغادرة ومراجعة النتيجة عند اكتمالها.")}
@@ -509,7 +506,12 @@ function Editor({ initial }: { initial: ContentRecord }) {
               onChange={setSection}
             />
           ) : null}
-          {section === "review" ? <PostPreview item={draft} assets={assets.data ?? []} /> : null}
+          {section === "review" ? (
+            <>
+              <PostPreview item={draft} assets={assets.data ?? []} />
+              <Readiness item={draft} assets={assets.data} busy={busy || generating} publishing={publishing} open={openSection} />
+            </>
+          ) : null}
           {section === "caption" ? (
             <>
               <Field

@@ -51,6 +51,8 @@ vi.mock("lucide-react-native", () =>
       "Ellipsis",
       "SlidersHorizontal",
       "ChevronDown",
+      "ChevronLeft",
+      "ChevronRight",
       "RectangleVertical",
       "Target"
     ].map((name) => [name, () => null])
