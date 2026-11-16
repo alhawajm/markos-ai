@@ -42,6 +42,7 @@ const rlsTables = [
   "instagram_recent_media",
   "oauth_state_nonces",
   "ai_interactions",
+  "workspace_chats",
   "subscriptions",
   "invoices",
   "payments",

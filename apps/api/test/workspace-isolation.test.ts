@@ -30,6 +30,15 @@ interface IsolationCase {
 
 const isolationCases: IsolationCase[] = [
   {
+    model: "WorkspaceChat",
+    create: (f) =>
+      prisma.workspaceChat.create({
+        data: { id: randomUUID(), workspaceId: f.workspaceId, userId: f.userId, title: "A private task" },
+        select: { id: true, workspaceId: true }
+      }),
+    list: (workspaceId) => prisma.workspaceChat.findMany({ where: { workspaceId }, select: { id: true, workspaceId: true } })
+  },
+  {
     model: "ContentReport",
     create: (f) =>
       prisma.contentReport.create({
