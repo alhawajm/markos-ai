@@ -45,8 +45,8 @@ function asset(id = "photo"): MediaAssetRecord {
     updatedAt: "2026-09-16T00:00:00Z"
   };
 }
-async function setup(initial: ContentRecord) {
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+async function setup(initial: ContentRecord, options: { locale?: "en" | "ar"; width?: number; height?: number; manual?: boolean } = {}) {
+  const context = await browser.newContext({ viewport: { width: options.width ?? 1920, height: options.height ?? 1080 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.on("pageerror", (error) => console.error("CREATE PAGE ERROR", error.message));
@@ -235,8 +235,8 @@ async function setup(initial: ContentRecord) {
     }
     return route.fulfill(json([]));
   });
-  await page.goto(`${baseUrl}/en/app/content-studio?item=${initial.id}`, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.getByRole("button", { name: "Edit manually", exact: true }).click();
+  await page.goto(`${baseUrl}/${options.locale ?? "en"}/app/content-studio?item=${initial.id}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  if (options.manual !== false) await page.getByRole("button", { name: options.locale === "ar" ? "تعديل يدوي" : "Edit manually", exact: true }).click();
   await page.getByTestId("create-workspace").waitFor();
   return { page, context, state };
 }
@@ -257,6 +257,60 @@ afterAll(async () => {
   await browser?.close();
 });
 describe("Relational Create workspace", () => {
+  it.each([
+    { locale: "en", width: 1440 },
+    { locale: "ar", width: 390 }
+  ] as const)("guides a campaign handoff through review and publishing choices ($locale)", async ({ locale, width }) => {
+    const h = await setup(draft({ caption: "", campaignId: "campaign-1", campaignWeek: 2, plannedAt: "2026-12-16T00:00:00+03:00" }), {
+      locale,
+      width,
+      height: 900,
+      manual: false
+    });
+    const { page, state } = h;
+    const ar = locale === "ar";
+    try {
+      const guidance = page.getByRole("region", { name: ar ? "الخطوة التالية" : "Next step", exact: true });
+      await guidance.getByRole("heading", { name: ar ? "لنُعدّ هذا المنشور من حملتك" : "Let’s create this campaign post", exact: true }).waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await screenshot(page, `campaign-handoff-${locale}`);
+      expect(state.calls.filter((call) => call.path.endsWith("/conversation"))).toHaveLength(0);
+      await guidance.getByRole("button", { name: ar ? "إعداد هذا المنشور" : "Prepare this post", exact: true }).click();
+      await expect.poll(() => state.calls.filter((call) => call.path.endsWith("/conversation")).length).toBe(1);
+      expect(state.calls.find((call) => call.path.endsWith("/conversation"))!.body.message).toContain(
+        ar ? "واتركها مسودة لأراجعها" : "leave it as a draft for my review"
+      );
+      state.record = {
+        ...state.record,
+        caption: "Review our launch",
+        mediaItems: [{ ...state.record.mediaItems[0]!, mediaAssetId: "photo" }],
+        revision: state.record.revision + 1
+      };
+      await page.reload();
+      await page.getByRole("heading", { name: ar ? "مسودتك جاهزة. راجعها الآن." : "Your draft is created. Review it next.", exact: true }).waitFor();
+      await page.getByRole("button", { name: ar ? "تحديد كجاهز" : "Mark Ready", exact: true }).click();
+      await page.getByRole("heading", { name: ar ? "منشورك جاهز للنشر" : "Your post is ready to publish", exact: true }).waitFor();
+      expect(state.record.status).toBe("APPROVED");
+      expect(await page.getByRole("button", { name: ar ? "نشر الآن" : "Publish now", exact: true }).isVisible()).toBe(true);
+      expect(await page.getByRole("button", { name: ar ? "جدولة" : "Schedule", exact: true }).isVisible()).toBe(true);
+      await screenshot(page, `ready-next-step-${locale}`);
+      expect(state.calls.some((call) => /publish-now|schedule$/.test(call.path))).toBe(false);
+      await page.getByRole("button", { name: ar ? "جدولة" : "Schedule", exact: true }).click();
+      await page.getByRole("dialog").waitFor();
+      expect(state.calls.some((call) => /schedule$/.test(call.path))).toBe(false);
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: ar ? "نشر الآن" : "Publish now", exact: true }).click();
+      await page.getByRole("dialog").waitFor();
+      expect(state.calls.some((call) => /publish-now/.test(call.path))).toBe(false);
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: ar ? "تعديل المنشور" : "Edit post", exact: true }).click();
+      await expect.poll(() => state.record.status).toBe("DRAFT");
+      expect(state.record.mediaItems[0]!.mediaAssetId).toBe("photo");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    } finally {
+      await h.context.close();
+    }
+  });
   it("authors carousel slides by stable identity, generates/replaces media and previews the persisted order", async () => {
     const h = await setup(
       draft({
@@ -344,7 +398,7 @@ describe("Relational Create workspace", () => {
       await expect.poll(() => state.record.status).toBe("APPROVED");
       expect(state.record.caption).toBe("Owner final caption");
       expect(await page.getByLabel("Caption", { exact: true }).isDisabled()).toBe(true);
-      await page.getByRole("button", { name: "Return to Draft", exact: true }).click();
+      await page.getByRole("button", { name: "Edit post", exact: true }).click();
       await expect.poll(() => state.record.status).toBe("DRAFT");
       await page.reload();
       await page.getByTestId("create-workspace").waitFor();

@@ -2,6 +2,7 @@
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { TaskFeedback } from "./task-feedback";
 import { ContentStart } from "./content-start";
+import { contentJourney, contentReadinessIssue, prepareDraftInstruction } from "@markos/shared-types";
 /* eslint-disable @next/next/no-img-element -- Media Library URLs are rendered without image optimization. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -337,9 +338,9 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
       }
     });
   }
-  async function send() {
-    if (!coordinator || !prompt.trim()) return;
-    const sent = prompt;
+  async function send(suggestion?: string) {
+    const sent = suggestion ?? prompt;
+    if (!coordinator || !sent.trim()) return;
     await coordinator.action(async (current) => {
       const prior = pendingSend.current;
       const input =
@@ -376,6 +377,29 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
     await coordinator.action(async (current) => {
       const saved = await api.current.updateContentStatus(current.id, "APPROVED", current.revision);
       return { result: undefined, record: saved };
+    });
+  }
+  async function returnToDraft(manual = false) {
+    if (!coordinator || publishing) return;
+    await coordinator.action(async (current) => {
+      const saved = await api.current.updateContentStatus(current.id, "DRAFT", current.revision);
+      return { result: undefined, record: saved };
+    });
+    setManualEditor(manual);
+    setTab(record?.contentType === "STORY" ? "media" : "caption");
+    setPanel("assistant");
+  }
+  function confirmPublish() {
+    setConfirmation({
+      title: t("Publish now?", "النشر الآن؟"),
+      detail: t("Publish this Ready content to Instagram.", "نشر هذا المحتوى الجاهز على Instagram."),
+      run: async () => {
+        await coordinator!.action(async (current) => {
+          setPublishJob(await api.current.publishContentNow(current.id));
+          return { result: undefined, record: await api.current.contentItem(current.id) };
+        });
+        setNotice(t("Publishing requested.", "طُلب النشر."));
+      }
     });
   }
   async function open(id: string) {
@@ -438,6 +462,13 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
     conflict: t("Conflict — needs attention", "تعارض — يلزم المراجعة")
   }[coordinator.status];
   const proposal = conversation?.latestRun?.confirmation;
+  const issue = contentReadinessIssue(record, assets);
+  const journey = contentJourney(record, locale, issue, {
+    working: conversationActive || !!activeGeneration || running(videoJob),
+    publishing,
+    publishingFailed: publishJob?.status === "FAILED" && record.status === "APPROVED"
+  });
+  const mayPublish = session?.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role));
   return (
     <div className="create-workspace" data-testid="create-workspace" dir={ar ? "rtl" : "ltr"}>
       {(error || notice) && (
@@ -560,31 +591,6 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
                   >
                     {t("Leave", "مغادرة")}
                   </button>
-                  {record.status === "APPROVED" && (
-                    <>
-                      <button className="studio-button" onClick={() => setDialog("schedule")}>
-                        {t("Schedule", "جدولة")}
-                      </button>
-                      <button
-                        className="studio-button"
-                        onClick={() =>
-                          setConfirmation({
-                            title: t("Publish now?", "النشر الآن؟"),
-                            detail: t("Publish this Ready content to Instagram.", "نشر هذا المحتوى الجاهز على Instagram."),
-                            run: async () => {
-                              await coordinator.action(async (current) => {
-                                setPublishJob(await api.current.publishContentNow(current.id));
-                                return { result: undefined, record: await api.current.contentItem(current.id) };
-                              });
-                              setNotice(t("Publishing requested.", "طُلب النشر."));
-                            }
-                          })
-                        }
-                      >
-                        {t("Publish now", "النشر الآن")}
-                      </button>
-                    </>
-                  )}
                   {record.status === "SCHEDULED" && (
                     <button
                       className="studio-button"
@@ -630,16 +636,27 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
             </div>
           </header>
           <div className="create-toolbar">
-            <button
-              className="studio-button"
-              aria-expanded={manualEditor}
-              onClick={() => {
-                setManualEditor((value) => !value);
-                setPanel("assistant");
-              }}
-            >
-              {manualEditor ? t("Back to preview", "العودة للمعاينة") : t("Edit manually", "تعديل يدوي")}
-            </button>
+            {(editable || record.status === "APPROVED") && (
+              <button
+                className="studio-button"
+                aria-expanded={manualEditor}
+                disabled={!!busy || publishing}
+                onClick={() => {
+                  if (record.status === "APPROVED") {
+                    void run("draft", () => returnToDraft(true));
+                    return;
+                  }
+                  setManualEditor((value) => !value);
+                  setPanel("assistant");
+                }}
+              >
+                {record.status === "APPROVED"
+                  ? t("Edit post", "تعديل المنشور")
+                  : manualEditor
+                    ? t("Back to preview", "العودة للمعاينة")
+                    : t("Edit manually", "تعديل يدوي")}
+              </button>
+            )}
             <span className="create-muted">{kindName(record.contentType)}</span>
           </div>
           {!manualEditor && (
@@ -1123,27 +1140,36 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
               <Check size={16} />
               {saveLabel}
             </span>
-            {!editable && <span>{t("Read-only", "للقراءة فقط")}</span>}
-            {record.status === "APPROVED" && (
+            {publishing ? (
+              <span role="status">{t("Publishing…", "جارٍ النشر…")}</span>
+            ) : record.status === "APPROVED" && mayPublish ? (
+              <>
+                <button className="studio-button" disabled={!!busy} onClick={confirmPublish}>
+                  {t("Publish now", "نشر الآن")}
+                </button>
+                <button className="studio-button studio-button-primary" disabled={!!busy} onClick={() => setDialog("schedule")}>
+                  {t("Schedule", "جدولة")}
+                </button>
+              </>
+            ) : record.status === "SCHEDULED" || record.status === "FAILED" ? (
+              <a className="studio-button studio-button-primary" href={`/${locale}/app/calendar`}>
+                {t("Open calendar", "فتح التقويم")}
+              </a>
+            ) : record.status === "PUBLISHED" ? (
+              <a className="studio-button studio-button-primary" href={`/${locale}/app/analytics`}>
+                {t("View insights", "عرض الأداء")}
+              </a>
+            ) : null}
+            {editable && (manualEditor || !issue) && (
               <button
-                className="studio-button"
-                disabled={!!busy}
-                onClick={() =>
-                  void run("draft", async () => {
-                    await coordinator.action(async (current) => {
-                      const saved = await api.current.updateContentStatus(current.id, "DRAFT", current.revision);
-                      return { result: undefined, record: saved };
-                    });
-                  })
-                }
+                className="studio-button studio-button-primary"
+                disabled={locked || conversationActive || !!activeGeneration || running(videoJob)}
+                onClick={() => void run("ready", ready)}
               >
-                {t("Return to Draft", "العودة إلى المسودة")}
+                <Check size={17} />
+                {t("Mark Ready", "تحديد كجاهز")}
               </button>
             )}
-            <button className="studio-button studio-button-primary" disabled={locked} onClick={() => void run("ready", ready)}>
-              <Check size={17} />
-              {t("Mark Ready", "تحديد كجاهز")}
-            </button>
           </footer>
         </section>
         <aside className="create-companion" aria-label="MARKOS">
@@ -1169,11 +1195,6 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
                 if (e) follow.current = e.scrollHeight - e.clientHeight - e.scrollTop < 80;
               }}
             >
-              {!conversation?.messages.length && (
-                <p className="create-muted">
-                  {t("What would you like to create? Ask MARKOS to develop or edit this draft.", "ماذا تريد أن تنشئ؟ اطلب من MARKOS تطوير المسودة أو تعديلها.")}
-                </p>
-              )}
               {conversation?.messages.map((turn) => (
                 <div key={turn.id} className={`create-message create-message-${turn.role}`} dir="auto">
                   {turn.text}
@@ -1244,31 +1265,66 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
                       }[item.status]}
                 </p>
               ))}
+              <section className="create-next-step" aria-label={t("Next step", "الخطوة التالية")}>
+                <div aria-live="polite">
+                  {journey.context ? <p className="create-journey-context">{journey.context}</p> : null}
+                  <h2>{journey.title}</h2>
+                  <p>{journey.detail}</p>
+                </div>
+                {editable && ["PREPARE", "CAPTION"].includes(journey.action) ? (
+                  <button
+                    className="studio-button studio-button-primary"
+                    disabled={locked || conversationActive || !!activeGeneration || running(videoJob) || !conversation}
+                    onClick={() => void run("send", () => send(prepareDraftInstruction(record, locale, journey.action === "CAPTION")))}
+                  >
+                    {journey.action === "CAPTION" ? t("Prepare caption", "إعداد النص") : t("Prepare this post", "إعداد هذا المنشور")}
+                  </button>
+                ) : null}
+                {editable && ["MEDIA", "EDIT_CAPTION"].includes(journey.action) ? (
+                  <button
+                    className="studio-button"
+                    disabled={locked}
+                    onClick={() => {
+                      setManualEditor(true);
+                      setTab(journey.action === "MEDIA" ? "media" : "caption");
+                    }}
+                  >
+                    {journey.action === "MEDIA" ? t("Complete media", "إكمال الوسائط") : t("Edit caption", "تعديل النص")}
+                  </button>
+                ) : null}
+                {journey.action === "REVIEW" ? (
+                  <button className="create-next-link" onClick={() => document.querySelector<HTMLTextAreaElement>(".create-composer textarea")?.focus()}>
+                    {t("Request a change", "طلب تعديل")}
+                  </button>
+                ) : null}
+              </section>
             </div>
-            <form
-              className="create-composer"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run("send", send);
-              }}
-            >
-              <textarea
-                aria-label={t("Message MARKOS", "راسل MARKOS")}
-                placeholder={t("Tell MARKOS what to create or change…", "أخبر MARKOS بما تريد إنشاءه أو تغييره…")}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
-                maxLength={4000}
-              />
-              <button
-                type="submit"
-                className="studio-button studio-button-primary"
-                aria-label={t("Send message", "إرسال رسالة")}
-                disabled={!!busy || conversationActive || !prompt.trim() || ["failed", "conflict"].includes(coordinator.status)}
+            {editable && (
+              <form
+                className="create-composer"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run("send", send);
+                }}
               >
-                <Send size={19} />
-              </button>
-            </form>
+                <textarea
+                  aria-label={t("Message MARKOS", "راسل MARKOS")}
+                  placeholder={t("Tell MARKOS what to create or change…", "أخبر MARKOS بما تريد إنشاءه أو تغييره…")}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={3}
+                  maxLength={4000}
+                />
+                <button
+                  type="submit"
+                  className="studio-button studio-button-primary"
+                  aria-label={t("Send message", "إرسال رسالة")}
+                  disabled={!!busy || conversationActive || !prompt.trim() || ["failed", "conflict"].includes(coordinator.status)}
+                >
+                  <Send size={19} />
+                </button>
+              </form>
+            )}
           </div>
           <div className="create-preview" hidden={panel !== "preview"}>
             <p className="create-preview-label">

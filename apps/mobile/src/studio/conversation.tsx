@@ -5,7 +5,15 @@ import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router/react-navigation";
 import { Send, Ellipsis } from "lucide-react-native";
-import type { ContentConversationRecord, ContentRecord, ConversationTurnInput } from "@markos/shared-types";
+import {
+  contentJourney,
+  contentReadinessIssue,
+  prepareDraftInstruction,
+  type ContentConversationRecord,
+  type ContentRecord,
+  type ConversationTurnInput,
+  type MediaAssetRecord
+} from "@markos/shared-types";
 import { useAccount, useAppearance } from "../providers";
 import { Button, Card, Field, Loading, Notice, Row, TextAction, Txt, IconButton } from "../ui";
 import { errorMessage } from "../errors";
@@ -24,7 +32,10 @@ export function StudioConversation({
   disabled,
   visible,
   openMedia,
-  openPreview
+  openPreview,
+  assets,
+  publishing = false,
+  working = false
 }: {
   item: ContentRecord;
   busy: boolean;
@@ -35,6 +46,9 @@ export function StudioConversation({
   run: (work: () => Promise<void>) => Promise<void>;
   openMedia: () => void;
   openPreview: () => void;
+  assets?: MediaAssetRecord[];
+  publishing?: boolean;
+  working?: boolean;
 }) {
   const { api, scope, epoch, queryClient } = useAccount();
   const focused = useIsFocused();
@@ -56,6 +70,7 @@ export function StudioConversation({
   const latest = result.data?.latestRun;
   const video = useQuery({ queryKey: [scope, "video-job", item.id], queryFn: () => api.latestMediaGenerationJob(item.id), enabled: focused });
   const active = conversationActive(latest?.status);
+  const journey = contentJourney(item, locale, contentReadinessIssue(item, assets), { working: active || working, publishing });
   useEffect(() => {
     if (result.data) accept(result.data.contentItem);
   }, [result.data, busy, accept]);
@@ -144,28 +159,6 @@ export function StudioConversation({
         <MarkosMark size={24} strokeWidth={1.5} color={colors.accentText} />
         <Txt variant="heading">MARKOS</Txt>
       </Row>
-      {!result.data?.messages.length && !result.isPending ? (
-        <Card tone="tint">
-          <Txt>
-            {t(
-              "Tell MARKOS what to create or change. Your business profile and campaign references are already part of the conversation.",
-              "أخبر ماركوس بما تريد إنشاءه أو تغييره. ملف نشاطك ومراجع حملتك جزء من سياق المحادثة."
-            )}
-          </Txt>
-          <TextAction
-            disabled={busy || disabled || active || !restored || !!pending || !!message.trim()}
-            label={t("Prepare this draft", "إعداد هذه المسودة")}
-            onPress={() =>
-              void send(
-                t(
-                  `Create the caption and generate the actual media for this ${item.contentType.toLowerCase()} using its brief and campaign context. Keep the selected format. Show one short plan to confirm, then execute it. Do not mark it ready or schedule it.`,
-                  `أنشئ النص والوسائط الفعلية لهذه المسودة باستخدام ملخصها وسياق الحملة. حافظ على نوع المحتوى المحدد واعرض خطة قصيرة واحدة لتأكيدها ثم نفّذها. دون اعتماد أو جدولة.`
-                )
-              )
-            }
-          />
-        </Card>
-      ) : null}
       {result.isPending ? <Loading /> : null}
       {result.data?.messages.map((entry) => (
         <View
@@ -280,6 +273,26 @@ export function StudioConversation({
           <TextAction label={t("Check media and retry", "مراجعة الوسائط وإعادة المحاولة")} onPress={openMedia} />
         </Card>
       ) : null}
+      {!result.isPending ? (
+        <Card tone="tint">
+          {journey.context ? (
+            <Txt variant="meta" muted>
+              {journey.context}
+            </Txt>
+          ) : null}
+          <Txt variant="heading">{journey.title}</Txt>
+          <Txt>{journey.detail}</Txt>
+          {["PREPARE", "CAPTION"].includes(journey.action) && ["DRAFT", "IN_REVIEW"].includes(item.status) ? (
+            <Button
+              label={journey.action === "CAPTION" ? t("Prepare caption", "إعداد النص") : t("Prepare this post", "إعداد هذا المنشور")}
+              disabled={busy || disabled || active || !restored || !!pending || !!message.trim()}
+              onPress={() => void send(prepareDraftInstruction(item, locale, journey.action === "CAPTION"))}
+            />
+          ) : null}
+          {journey.action === "MEDIA" ? <TextAction disabled={busy || disabled} label={t("Complete media", "إكمال الوسائط")} onPress={openMedia} /> : null}
+          {journey.action === "REVIEW" ? <Button label={t("Review draft", "مراجعة المسودة")} onPress={openPreview} /> : null}
+        </Card>
+      ) : null}
       {error || result.isError ? <Notice error>{error || errorMessage(result.error, t)}</Notice> : null}
       {restoreError ? (
         <>
@@ -325,7 +338,7 @@ export function StudioConversation({
             />
           ) : null}
         </Card>
-      ) : (
+      ) : ["DRAFT", "IN_REVIEW"].includes(item.status) ? (
         <>
           <Field
             label={t("Message MARKOS", "راسل ماركوس")}
@@ -363,7 +376,7 @@ export function StudioConversation({
             }}
           />
         </>
-      )}
+      ) : null}
       <ContentReportSheet
         visible={reportMessage !== null}
         onClose={() => setReportMessage(null)}

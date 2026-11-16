@@ -1,4 +1,5 @@
-import { captionValidationIssue, contentMediaIssue, type ContentRecord, type MediaAssetRecord, type ContentMediaItemRecord } from "@markos/shared-types";
+import { type ContentRecord, type ContentMediaItemRecord } from "@markos/shared-types";
+export { contentReadinessIssue as draftReadiness } from "@markos/shared-types";
 import type { MarkosApiClient } from "@markos/api-client";
 import { draftOperations, preserveDraftEdits } from "./model";
 
@@ -20,36 +21,6 @@ export async function saveDraftEdits(
 
 export function mediaKind(item: ContentRecord, media: ContentMediaItemRecord): "IMAGE" | "VIDEO" | null {
   return item.contentType === "REEL" ? "VIDEO" : item.contentType === "STORY" ? media.mediaKind : "IMAGE";
-}
-
-/** Same format/caption checks as the API; the API revalidates on approval. */
-export function draftReadiness(
-  item: ContentRecord,
-  assets: MediaAssetRecord[] | undefined
-): "caption" | "caption-invalid" | "media" | "carousel" | "loading" | "incompatible" | null {
-  if (item.contentType !== "STORY") {
-    if (!item.caption.trim()) return "caption";
-  }
-  if (captionValidationIssue(item.caption)) return "caption-invalid";
-  if (item.contentType === "CAROUSEL" && item.mediaItems.length < 2) return "carousel";
-  if (!item.mediaItems.length || item.mediaItems.some((media) => !media.mediaAssetId)) return "media";
-  if (!assets) return "loading";
-  if (
-    contentMediaIssue(
-      item.contentType,
-      item.mediaItems.map((media) => media.mediaAssetId!),
-      assets,
-      true
-    )
-  )
-    return "incompatible";
-  return item.mediaItems.some(
-    (media) =>
-      assets.find((asset) => asset.id === media.mediaAssetId)?.mimeType !==
-      (media.mediaKind === "VIDEO" ? "video/mp4" : media.mediaKind === "IMAGE" ? "image/jpeg" : "")
-  )
-    ? "incompatible"
-    : null;
 }
 
 /** Read a fresh revision after each attachment; never overwrite an existing asset or replay failed generation. */

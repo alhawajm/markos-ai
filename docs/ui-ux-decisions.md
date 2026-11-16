@@ -611,3 +611,9 @@ Owner correction: Home is the single workspace conversation. Create opens to vis
 Task discussions and unsent messages are scoped to user, workspace and area. Recent work is visible without flooding the page; older discussion is expandable. Confirmed written strategies can guide the user's next campaign as advisory context, never as new approved company facts. Background jobs continue through the existing durable server pipelines. The ordinary creation path does not add a second Generate step. Preserve English/Arabic, RTL, themes, reduced motion, accessible focus, explicit recovery and the full manual workflow.
 
 Scheduling confirmation receives keyboard focus before paint so an immediate Escape dismisses that confirmation alone and preserves the underlying Calendar view. Browser font checks select the description by semantic position rather than assuming it is the last child of a header that also contains actions.
+
+## 2026-11-16 — One clear next step inside Create
+
+Use the existing draft companion to explain the campaign handoff, preparation, incomplete media/caption, review, Ready, scheduled and published states. Show campaign origin/week and a real planned date when present. Keep historical messages unchanged and make current guidance depend on the actual draft and jobs. No extra workspace chat, onboarding questions, automatic generation, approval or publishing is added on entry.
+
+Place Schedule and Publish now in the main Ready controls, replacing the disabled Mark Ready dead end. Keep one visible Edit post action that returns Ready content to Draft. Native uses the same state/copy and attachment checks, with explicit publish confirmation and its existing publication-status screen. Retain bilingual/RTL behavior, the current palette and accessible controls.

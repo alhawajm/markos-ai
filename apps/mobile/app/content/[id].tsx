@@ -21,6 +21,7 @@ import { PostPreview } from "../../src/studio/post-preview";
 import { draftReadiness, saveDraftEdits } from "../../src/studio/workflow";
 import { PlannedTime } from "../../src/studio/planned-time";
 import { ContentReportSheet } from "../../src/content-report";
+import { canScheduleContent } from "../../src/instagram/model";
 
 export default function ContentDraft() {
   const focused = useIsFocused();
@@ -47,7 +48,7 @@ export default function ContentDraft() {
   return <Editor key={`${scope}:${id}`} initial={result.data} />;
 }
 function Editor({ initial }: { initial: ContentRecord }) {
-  const { api, scope, epoch, queryClient } = useAccount();
+  const { api, scope, epoch, queryClient, session } = useAccount();
   const focused = useIsFocused();
   const assets = useQuery({ queryKey: [scope, "media"], queryFn: () => api.mediaAssets() });
   const thread = useQuery({
@@ -62,9 +63,17 @@ function Editor({ initial }: { initial: ContentRecord }) {
     enabled: focused,
     refetchInterval: 2500
   });
+  const publication = useQuery({
+    queryKey: [scope, "publish-job", initial.id],
+    queryFn: () => api.latestPublishJob(initial.id),
+    enabled: focused,
+    refetchInterval: 2500
+  });
+  const publishing = !!publication.data && ["QUEUED", "PROCESSING", "RETRY_WAIT"].includes(publication.data.status);
   const generating = conversationActive(thread.data?.latestRun?.status) || generationActive(generation.data?.status);
   const device = useMemo(() => new StudioDeviceStore(scope, epoch, initial.id, initial.workspaceId), [scope, epoch, initial.id, initial.workspaceId]);
   const { t } = useAppearance();
+  const mayPublish = canScheduleContent(session.roles);
   const navigation = useNavigation();
   const router = useRouter();
   const [base, setBase] = useState(initial);
@@ -136,7 +145,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
   const dirty = draftOperations(base, draft).length > 0;
   const editable = ["DRAFT", "IN_REVIEW"].includes(base.status);
   const invalid = captionValidationIssue(draft.caption);
-  const locked = busy || generating || !editable || !!remote;
+  const locked = busy || generating || publishing || !editable || !!remote;
   const readiness = draftReadiness(draft, assets.data);
   const attachmentKey = base.mediaItems.map((media) => media.mediaAssetId ?? "").join(",");
   useEffect(() => {
@@ -285,6 +294,29 @@ function Editor({ initial }: { initial: ContentRecord }) {
       ]
     );
   }
+  function publishNow() {
+    if (busy || publishing || !mayPublish || base.status !== "APPROVED") return;
+    Alert.alert(t("Publish now?", "النشر الآن؟"), t("Publish this Ready content to Instagram now?", "نشر هذا المحتوى المعتمد على إنستغرام الآن؟"), [
+      { text: t("Keep reviewing", "متابعة المراجعة"), style: "cancel" },
+      {
+        text: t("Publish now", "نشر الآن"),
+        onPress: () =>
+          void run(async () => {
+            const job = await api.publishContentNow(base.id);
+            queryClient.setQueryData([scope, "publish-job", base.id], job);
+            void queryClient.invalidateQueries({ queryKey: [scope, "publication", base.id] });
+            router.push({ pathname: "/content/publication", params: { id: base.id } });
+          })
+      }
+    ]);
+  }
+  function editReadyPost() {
+    if (busy || publishing) return;
+    void run(async () => {
+      commit(await api.updateContentStatus(base.id, "DRAFT", base.revision));
+      setView("assistant");
+    });
+  }
   if (!restored)
     return (
       <Screen>
@@ -340,19 +372,30 @@ function Editor({ initial }: { initial: ContentRecord }) {
                     }
                   />
                 </View>
-              ) : (
+              ) : view === "assistant" ? null : (
                 <View style={{ flex: 1 }}>
                   <TextAction label={t("Review draft", "مراجعة المسودة")} onPress={() => openSection("review")} />
                 </View>
               )}
             </Row>
-          ) : ["APPROVED", "SCHEDULED", "FAILED"].includes(base.status) ? (
-            <Button
-              icon={CalendarDays}
-              label={base.status === "SCHEDULED" ? t("Manage schedule", "إدارة الجدولة") : t("Schedule", "جدولة")}
-              disabled={busy}
-              onPress={() => router.push({ pathname: "/content/schedule", params: { id: base.id } })}
-            />
+          ) : publishing ? (
+            <Txt>{t("Publishing…", "جارٍ النشر…")}</Txt>
+          ) : ["APPROVED", "SCHEDULED", "FAILED"].includes(base.status) && mayPublish ? (
+            <Row>
+              {base.status === "APPROVED" ? (
+                <View style={{ flex: 1 }}>
+                  <Button secondary label={t("Publish now", "نشر الآن")} disabled={busy} onPress={publishNow} />
+                </View>
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Button
+                  icon={CalendarDays}
+                  label={base.status === "SCHEDULED" ? t("Manage schedule", "إدارة الجدولة") : t("Schedule", "جدولة")}
+                  disabled={busy}
+                  onPress={() => router.push({ pathname: "/content/schedule", params: { id: base.id } })}
+                />
+              </View>
+            </Row>
           ) : null}
           <Txt variant="meta" muted>
             {busy
@@ -377,6 +420,7 @@ function Editor({ initial }: { initial: ContentRecord }) {
           {typeLabel(base.contentType, t)}
         </Txt>
         <IconButton icon={Ellipsis} label={t("Draft options", "خيارات المسودة")} onPress={() => setOptionsOpen(true)} />
+        {base.status === "APPROVED" ? <TextAction label={t("Edit post", "تعديل المنشور")} disabled={busy || publishing} onPress={editReadyPost} /> : null}
       </Row>
       <Segmented
         value={view === "assistant" ? "assistant" : section === "review" ? "review" : "edit"}
@@ -390,8 +434,8 @@ function Editor({ initial }: { initial: ContentRecord }) {
           if (value === "edit" && section === "review") setSection("caption");
         }}
       />
-      {editable && view === "preview" && section === "review" ? (
-        <Readiness item={draft} assets={assets.data} busy={busy || generating} open={openSection} />
+      {view === "preview" && section === "review" ? (
+        <Readiness item={draft} assets={assets.data} busy={busy || generating} publishing={publishing} open={openSection} />
       ) : null}
       {generating ? (
         <Notice>
@@ -549,6 +593,9 @@ function Editor({ initial }: { initial: ContentRecord }) {
         visible={view === "assistant"}
         openMedia={() => openSection("media")}
         openPreview={() => openSection("review")}
+        assets={assets.data}
+        publishing={publishing}
+        working={generating}
       />
       <Sheet title={t("Draft options", "خيارات المسودة")} visible={optionsOpen} onClose={() => setOptionsOpen(false)}>
         {editable ? (

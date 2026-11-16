@@ -679,6 +679,7 @@ export interface ContentToneLock {
 }
 
 export * from "./conversation";
+export * from "./content-journey";
 
 export interface ContentRecord {
   revision: number;

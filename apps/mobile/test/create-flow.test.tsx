@@ -210,6 +210,8 @@ beforeEach(() => {
     mediaAssets: vi.fn(async () => assets),
     videoCapabilities: vi.fn(async () => ({ motion: true, generatedFootage: false })),
     latestMediaGenerationJob: vi.fn(async () => null),
+    latestPublishJob: vi.fn(async () => null),
+    publishContentNow: vi.fn(async () => ({ id: "publish-job", status: "QUEUED" }) as never),
     contentConversation: vi.fn(async () => ({ ...thread, contentItem: item })),
     mutateContent: vi.fn(async (_id, input) => {
       expect(input.expectedRevision).toBe(item.revision);
@@ -259,6 +261,51 @@ afterEach(async () => {
 });
 
 describe("rendered native Create handoffs", () => {
+  it("explains an unopened campaign draft and prepares it only after the owner asks", async () => {
+    item = { ...item, caption: "", campaignId: "campaign", campaignWeek: 2 };
+    await mount();
+    expect(state.api.sendConversationMessage).not.toHaveBeenCalled();
+    expect(
+      root.container
+        .queryAll((node) => node.type === "Txt")
+        .map((node) => JSON.stringify(node.props.children))
+        .join(" ")
+    ).toContain("Campaign post");
+    await press("Prepare this post");
+    expect(state.api.sendConversationMessage).toHaveBeenCalledTimes(1);
+    expect(state.api.sendConversationMessage).toHaveBeenCalledWith(
+      item.id,
+      expect.objectContaining({ message: expect.stringContaining("leave it as a draft for my review") })
+    );
+    expect(state.api.updateContentStatus).not.toHaveBeenCalled();
+    expect(state.api.publishContentNow).not.toHaveBeenCalled();
+  });
+  it("shows publication choices after approval and requires explicit publish confirmation", async () => {
+    item = { ...item, status: "APPROVED", mediaItems: [{ ...item.mediaItems[0]!, mediaAssetId: photo.id }] };
+    assets = [photo];
+    await mount();
+    expect(buttons("Publish now")).toHaveLength(1);
+    expect(buttons("Schedule")).toHaveLength(1);
+    expect(buttons("Mark ready")).toHaveLength(0);
+    expect(state.api.publishContentNow).not.toHaveBeenCalled();
+    await press("Publish now");
+    expect(state.api.publishContentNow).not.toHaveBeenCalled();
+    const actions = state.alert.mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
+    await act(async () => actions.find((action) => action.text === "Publish now")!.onPress!());
+    await settle();
+    expect(state.api.publishContentNow).toHaveBeenCalledOnce();
+    expect(state.push).toHaveBeenCalledWith({ pathname: "/content/publication", params: { id: item.id } });
+  });
+  it("returns a Ready post to Draft explicitly before editing and preserves its media", async () => {
+    item = { ...item, status: "APPROVED", mediaItems: [{ ...item.mediaItems[0]!, mediaAssetId: photo.id }] };
+    assets = [photo];
+    await mount();
+    await press("Edit post");
+    expect(state.api.updateContentStatus).toHaveBeenCalledWith(item.id, "DRAFT", expect.any(Number));
+    expect(item.mediaItems[0]!.mediaAssetId).toBe(photo.id);
+    expect(state.api.generateContentImage).not.toHaveBeenCalled();
+    expect(state.api.publishContentNow).not.toHaveBeenCalled();
+  });
   it("keeps creation choices and lifecycle filters off the default content list", async () => {
     state.api.contentItems = vi.fn(async () => [item]);
     state.api.createContent = vi.fn(async () => item);
@@ -377,7 +424,7 @@ describe("rendered native Create handoffs", () => {
   it("creates caption and media after one chat confirmation without a second Generate click", async () => {
     item = { ...item, caption: "" };
     state.api.sendConversationMessage = vi.fn(async (_id, input) => {
-      expect(input.message).toContain("actual media");
+      expect(input.message).toContain("generate the media");
       thread = {
         ...thread,
         messages: [{ id: "proposal", runId: "run", role: "assistant", text: "A bakery image with a bilingual caption.", createdAt: fixture.createdAt }],
@@ -407,7 +454,7 @@ describe("rendered native Create handoffs", () => {
     await mount(<ContentDraft />);
     expect(buttons("Generate image")).toHaveLength(0);
     expect(buttons("Mark ready")).toHaveLength(0);
-    await press("Prepare this draft");
+    await press("Prepare this post");
     expect(item.caption).toBe("");
     expect(item.mediaItems[0]!.mediaAssetId).toBeNull();
     await press("Confirm and create");
