@@ -1196,6 +1196,7 @@ async function mockApi(page: Page, handler: (route: Route, pathname: string) => 
     async (route) => {
       const pathname = new URL(route.request().url()).pathname;
       if (pathname === "/v1/auth/refresh") return route.fulfill(json(session));
+      if (pathname === "/v1/assistant/chats") return route.fulfill(json({ items: [], nextCursor: null }));
       if (pathname === "/v1/workspace/instagram") return route.fulfill(json({ status: "CONNECTED", username: "the.snacklab" }));
       if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) return route.fulfill(json(null));
       if (pathname === "/v1/business-profile" && route.request().method() === "GET") return route.fulfill(json(snackLabKnowledge()));

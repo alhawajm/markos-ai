@@ -126,6 +126,7 @@ describe("site appearance controls", () => {
       let data: unknown = [];
       if (pathname === "/v1/auth/refresh") data = session;
       else if (pathname === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
+      else if (pathname === "/v1/assistant/chats") data = { items: [], nextCursor: null };
       else if (pathname === "/v1/workspace/instagram") data = { connected: false, status: "DISCONNECTED", recentMedia: [] };
       else if (pathname === "/v1/billing/summary") data = { invoices: [], payments: [] };
       else if (pathname === "/v1/auth/mfa/totp") data = { enabled: true };

@@ -153,7 +153,7 @@ it.each([
       await page.getByRole("button", { name: v.locale === "ar" ? "المحادثات" : "Chats", exact: true }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: /Earlier conversation|المحادثة السابقة/ }).click();
-      expect(await page.locator("#home-message").inputValue()).toBe("Unsent earlier follow-up");
+      await expect.poll(() => page.locator("#home-message").inputValue()).toBe("Unsent earlier follow-up");
       await page.getByText("Earlier answer", { exact: true }).waitFor();
       await page.getByRole("button", { name: v.locale === "ar" ? "المحادثات" : "Chats", exact: true }).click();
       await dialog.getByRole("button", { name: "I want to create a campaign", exact: false }).click();
