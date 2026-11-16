@@ -45,14 +45,17 @@ function asset(id = "photo"): MediaAssetRecord {
     updatedAt: "2026-09-16T00:00:00Z"
   };
 }
-async function setup(initial: ContentRecord, options: { locale?: "en" | "ar"; width?: number; height?: number; manual?: boolean } = {}) {
+async function setup(
+  initial: ContentRecord,
+  options: { locale?: "en" | "ar"; width?: number; height?: number; manual?: boolean; media?: MediaAssetRecord[]; theme?: "light" | "dark" } = {}
+) {
   const context = await browser.newContext({ viewport: { width: options.width ?? 1920, height: options.height ?? 1080 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.on("pageerror", (error) => console.error("CREATE PAGE ERROR", error.message));
   const state = {
     record: structuredClone(initial),
-    media: [asset(), asset("replacement")],
+    media: options.media ?? [asset(), asset("replacement")],
     calls: [] as { path: string; body: Record<string, unknown> }[],
     counter: 1,
     deleted: false,
@@ -71,6 +74,7 @@ async function setup(initial: ContentRecord, options: { locale?: "en" | "ar"; wi
     user: session.user,
     workspace: session.workspace
   });
+  await page.addInitScript((theme) => localStorage.setItem("markos.theme", theme), options.theme ?? "light");
   await page.route("**/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname,
       method = route.request().method();
@@ -255,6 +259,62 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await browser?.close();
+});
+
+it.each([
+  { locale: "en", width: 1440, height: 900, theme: "light" },
+  { locale: "en", width: 1920, height: 1080, theme: "dark" },
+  { locale: "ar", width: 390, height: 844, theme: "light" }
+] as const)("uses the artwork canvas without phone chrome or nested preview scrolling ($locale $width)", async ({ locale, width, height, theme }) => {
+  const caption = "A clear bilingual introduction. مقدمة واضحة باللغتين. ".repeat(10);
+  const h = await setup(draft({ caption, mediaItems: [{ ...item(), mediaAssetId: "photo" }] }), {
+    locale,
+    width,
+    height,
+    theme,
+    manual: false,
+    media: [
+      {
+        ...asset(),
+        height: 1350,
+        publicUrl: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350"><rect width="1080" height="1350" fill="#eec7a4"/><circle cx="540" cy="500" r="300" fill="#b86d3b"/><text x="540" y="1020" text-anchor="middle" font-size="80" fill="#382614">SnackLab</text></svg>')}`
+      }
+    ]
+  });
+  const { page, state } = h,
+    ar = locale === "ar";
+  try {
+    const preview = page.getByRole("region", { name: ar ? "معاينة المحتوى" : "Content preview", exact: true });
+    await preview.waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const image = preview.locator(".studio-artwork-fit img");
+    await image.waitFor();
+    const geometry = await preview.evaluate((el) => {
+      const stage = el.querySelector(".studio-artwork-stage")!.getBoundingClientRect(),
+        art = el.querySelector(".studio-artwork-fit")!.getBoundingClientRect();
+      const outer = el.closest(".create-primary-preview")!;
+      return {
+        stage: { width: stage.width, height: stage.height },
+        art: { width: art.width, height: art.height },
+        fits: art.left >= stage.left - 1 && art.right <= stage.right + 1 && art.top >= stage.top - 1 && art.bottom <= stage.bottom + 1,
+        scrolls: outer.scrollHeight > outer.clientHeight + 2
+      };
+    });
+    expect(geometry.art.width).toBeGreaterThan(width === 390 ? 240 : 360);
+    expect(geometry.art.height).toBeGreaterThan(300);
+    expect(geometry.fits).toBe(true);
+    expect(Math.max(geometry.art.width / geometry.stage.width, geometry.art.height / geometry.stage.height)).toBeGreaterThan(0.95);
+    expect(geometry.scrolls).toBe(false);
+    expect(await preview.locator(".studio-instagram, .studio-instagram-actions, .studio-instagram-identity").count()).toBe(0);
+    expect(await preview.getByRole("button", { name: ar ? "فتح الوسائط بالحجم الكامل" : "Open full-size media" }).count()).toBe(1);
+    await screenshot(page, `artwork-canvas-${locale}-${width}`);
+    await preview.getByRole("button", { name: ar ? "قراءة النص كاملًا" : "Read full caption" }).click();
+    expect(await preview.locator(".studio-artwork-caption p").textContent()).toBe(caption);
+    expect(state.calls.filter((call) => call.path.startsWith("/v1/content"))).toHaveLength(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {
+    await h.context.close();
+  }
 });
 
 it.each([

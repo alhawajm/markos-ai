@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, MoreHorizontal, Repeat2, Send, Maximize2 } from "lucide-react";
 import { MediaLightbox } from "./media-lightbox";
 import type { ContentType, Locale, MediaAssetRecord } from "@markos/shared-types";
@@ -11,7 +11,8 @@ export function ContentStudioPreview({
   contentType,
   locale,
   media,
-  fallbackRatio = "4:5"
+  fallbackRatio = "4:5",
+  presentation = "instagram"
 }: {
   brandName: string;
   caption: string;
@@ -19,6 +20,7 @@ export function ContentStudioPreview({
   locale: Locale;
   media: Array<MediaAssetRecord | null>;
   fallbackRatio?: "1:1" | "4:5" | "9:16";
+  presentation?: "canvas" | "instagram";
 }) {
   const [slide, setSlide] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -107,27 +109,81 @@ export function ContentStudioPreview({
     <p className="studio-instagram-caption text-white/60">{locale === "ar" ? "ستظهر معاينة النص هنا." : "Your caption will appear here."}</p>
   );
 
+  const lightbox = fullSize ? (
+    <MediaLightbox
+      assets={media.filter((asset): asset is MediaAssetRecord => asset !== null)}
+      initialId={fullSize}
+      locale={locale}
+      onClose={() => setFullSize(null)}
+    />
+  ) : null;
+  const expandControl = selected ? (
+    <button
+      type="button"
+      className="studio-media-expand"
+      aria-label={locale === "ar" ? "فتح الوسائط بالحجم الكامل" : "Open full-size media"}
+      title={locale === "ar" ? "عرض كامل" : "Full size"}
+      onClick={() => openFullSize(selected.id)}
+    >
+      <Maximize2 size={18} />
+    </button>
+  ) : null;
+  if (presentation === "canvas") {
+    const fallback = (isVertical ? "9:16" : fallbackRatio).split(":").map(Number);
+    const ratio = selected?.width && selected.height ? selected.width / selected.height : fallback[0]! / fallback[1]!;
+    return (
+      <section
+        className="studio-artwork-preview"
+        ref={stageRef}
+        aria-label={locale === "ar" ? "معاينة المحتوى" : "Content preview"}
+        data-content-type={contentType}
+      >
+        <div className="studio-artwork-stage" style={{ "--artwork-ratio": ratio } as CSSProperties}>
+          <div className="studio-artwork-fit">{mediaElement}</div>
+          {expandControl}
+        </div>
+        {contentType === "CAROUSEL" && media.length > 1 ? (
+          <nav className="studio-artwork-slides" aria-label={locale === "ar" ? "شرائح المنشور" : "Post slides"}>
+            <button
+              type="button"
+              aria-label={locale === "ar" ? "الشريحة السابقة" : "Previous slide"}
+              disabled={slide === 0}
+              onClick={() => setSlide(Math.max(0, slide - 1))}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span dir="ltr">
+              {Math.min(slide + 1, media.length)} / {media.length}
+            </span>
+            <button
+              type="button"
+              aria-label={locale === "ar" ? "الشريحة التالية" : "Next slide"}
+              disabled={slide >= media.length - 1}
+              onClick={() => setSlide(Math.min(media.length - 1, slide + 1))}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </nav>
+        ) : null}
+        {!isStory && fullCaption ? (
+          <div className="studio-artwork-caption" aria-label={locale === "ar" ? "نص المنشور" : "Post caption"}>
+            <p dir="auto">{shownCaption}</p>
+            {longCaption ? (
+              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+                {expanded ? (locale === "ar" ? "عرض أقل" : "Show less") : locale === "ar" ? "قراءة النص كاملًا" : "Read full caption"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {lightbox}
+      </section>
+    );
+  }
+
   return (
     <div className="studio-preview-stage" ref={stageRef}>
-      {selected ? (
-        <button
-          type="button"
-          className="studio-media-expand"
-          aria-label={locale === "ar" ? "فتح الوسائط بالحجم الكامل" : "Open full-size media"}
-          onClick={() => openFullSize(selected.id)}
-        >
-          <Maximize2 size={18} />
-          {locale === "ar" ? "عرض كامل" : "Full size"}
-        </button>
-      ) : null}
-      {fullSize ? (
-        <MediaLightbox
-          assets={media.filter((asset): asset is MediaAssetRecord => asset !== null)}
-          initialId={fullSize}
-          locale={locale}
-          onClose={() => setFullSize(null)}
-        />
-      ) : null}
+      {expandControl}
+      {lightbox}
       <article
         className={`studio-instagram ${isVertical ? "studio-instagram-vertical" : ""}`}
         aria-label={locale === "ar" ? "معاينة Instagram" : "Instagram post preview"}

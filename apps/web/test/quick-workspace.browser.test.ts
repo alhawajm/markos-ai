@@ -157,7 +157,7 @@ it.each([
       await page.waitForURL("**/app/content-studio?item=draft-1");
       await page.getByRole("button", { name: v.locale === "ar" ? "تعديل يدوي" : "Edit manually" }).waitFor();
       expect(await page.getByLabel(v.locale === "ar" ? "نوع المحتوى" : "Content type").isVisible()).toBe(false);
-      const preview = await page.locator(".create-primary-preview .studio-instagram").boundingBox();
+      const preview = await page.locator(".create-primary-preview .studio-artwork-stage").boundingBox();
       expect(preview?.width).toBeGreaterThan(100);
       expect(preview?.height).toBeGreaterThan(200);
       await page.screenshot({ path: `../../var/ux-2026-11-15/screens/create-${v.locale}-${v.theme}.png`, fullPage: true });

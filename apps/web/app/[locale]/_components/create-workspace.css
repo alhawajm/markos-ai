@@ -48,6 +48,17 @@
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
 }
+.create-preview-toolbar {
+  padding-block: 0.4rem;
+}
+.create-preview-toolbar .studio-button {
+  border-color: transparent;
+  padding-inline: 0.5rem;
+  background: transparent;
+}
+.create-preview-toolbar .studio-button:hover {
+  background: var(--surface-muted);
+}
 .create-toolbar nav {
   display: flex;
   gap: 0.5rem;
@@ -85,10 +96,7 @@
 .create-primary-preview {
   display: flex;
   flex-direction: column;
-}
-.create-primary-preview .studio-preview-stage {
-  min-height: 28rem;
-  flex: 1;
+  overflow: hidden;
 }
 .create-panel-toggle[hidden] {
   display: none;
@@ -497,6 +505,16 @@
   }
 }
 @media (max-width: 1099px) {
+  .create-editor-body.create-primary-preview {
+    max-height: none;
+  }
+  .create-primary-preview .studio-artwork-stage {
+    flex: none;
+    height: auto;
+    aspect-ratio: var(--artwork-ratio);
+    max-height: 62dvh;
+    min-height: 12rem;
+  }
   .create-columns {
     grid-template-columns: 1fr;
   }

@@ -635,7 +635,7 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
               </details>
             </div>
           </header>
-          <div className="create-toolbar">
+          <div className="create-toolbar create-preview-toolbar">
             {(editable || record.status === "APPROVED") && (
               <button
                 className="studio-button"
@@ -662,6 +662,7 @@ function ContentStudioEditor({ locale, onStart }: { locale: Locale; onStart: () 
           {!manualEditor && (
             <div className="create-editor-body create-primary-preview">
               <ContentStudioPreview
+                presentation="canvas"
                 locale={locale}
                 brandName={session?.workspace.name ?? ""}
                 contentType={record.contentType}
