@@ -109,6 +109,8 @@ it.each([
         ];
         return route.fulfill(reply(turns[0]));
       }
+      if (path === "/v1/assistant/chats") return route.fulfill(reply({ items: [], nextCursor: null }));
+      if (/\/v1\/assistant\/chats\/[^/]+\/messages$/.test(path)) return route.fulfill(reply({ turns, nextBefore: null }));
       if (path === "/v1/assistant/conversation") return route.fulfill(reply(turns));
       if (path.startsWith("/v1/assistant/conversation/") && path.endsWith("/confirm")) {
         turns = [

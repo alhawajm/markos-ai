@@ -88,6 +88,8 @@ it.each([
       else if (url.pathname === "/v1/assistant/conversation") {
         conversations++;
         data = [];
+      } else if (url.pathname === "/v1/assistant/chats") {
+        data = { items: [], nextCursor: null };
       } else if (url.pathname === "/v1/assistant/strategy")
         data = {
           id: "saved-strategy",

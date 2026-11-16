@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, MoreHorizontal, Repeat2, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, Heart, ImagePlus, MessageCircle, MoreHorizontal, Repeat2, Send, Maximize2 } from "lucide-react";
+import { MediaLightbox } from "./media-lightbox";
 import type { ContentType, Locale, MediaAssetRecord } from "@markos/shared-types";
 
 export function ContentStudioPreview({
@@ -22,6 +23,12 @@ export function ContentStudioPreview({
   const [slide, setSlide] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [failedMedia, setFailedMedia] = useState<string | null>(null);
+  const [fullSize, setFullSize] = useState<string | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  function openFullSize(id: string) {
+    stageRef.current?.querySelectorAll("video").forEach((video) => video.pause());
+    setFullSize(id);
+  }
   const selected = media[Math.min(slide, Math.max(0, media.length - 1))];
   const isStory = contentType === "STORY";
   const isVertical = isStory || contentType === "REEL";
@@ -49,8 +56,15 @@ export function ContentStudioPreview({
           onError={() => setFailedMedia(selected.id)}
         />
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img alt={selected.filename} src={selected.publicUrl} onError={() => setFailedMedia(selected.id)} />
+        <button
+          type="button"
+          className="studio-media-open"
+          aria-label={locale === "ar" ? "فتح الصورة بالحجم الكامل" : "Open full-size image"}
+          onClick={() => openFullSize(selected.id)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt={selected.filename} src={selected.publicUrl} onError={() => setFailedMedia(selected.id)} />
+        </button>
       )
     ) : (
       <div className="studio-preview-placeholder">
@@ -94,7 +108,26 @@ export function ContentStudioPreview({
   );
 
   return (
-    <div className="studio-preview-stage">
+    <div className="studio-preview-stage" ref={stageRef}>
+      {selected ? (
+        <button
+          type="button"
+          className="studio-media-expand"
+          aria-label={locale === "ar" ? "فتح الوسائط بالحجم الكامل" : "Open full-size media"}
+          onClick={() => openFullSize(selected.id)}
+        >
+          <Maximize2 size={18} />
+          {locale === "ar" ? "عرض كامل" : "Full size"}
+        </button>
+      ) : null}
+      {fullSize ? (
+        <MediaLightbox
+          assets={media.filter((asset): asset is MediaAssetRecord => asset !== null)}
+          initialId={fullSize}
+          locale={locale}
+          onClose={() => setFullSize(null)}
+        />
+      ) : null}
       <article
         className={`studio-instagram ${isVertical ? "studio-instagram-vertical" : ""}`}
         aria-label={locale === "ar" ? "معاينة Instagram" : "Instagram post preview"}

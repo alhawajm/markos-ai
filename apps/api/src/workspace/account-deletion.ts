@@ -76,7 +76,8 @@ export async function deleteAccount(
       await tx.instagramConnectionCredential.deleteMany({ where: { workspaceId: { in: ids } } });
       await tx.workspaceMember.updateMany({ where: { OR: [{ userId }, { workspaceId: { in: ids } }] }, data: { deletedAt: now } });
       await tx.contentReport.deleteMany({ where: { reportedById: userId } });
-      await tx.aiInteraction.deleteMany({ where: { agent: "USER_MEMORY", prompt: { path: ["userId"], equals: userId } } });
+      await tx.aiInteraction.deleteMany({ where: { agent: { in: ["USER_MEMORY", "WORKSPACE_ASSISTANT"] }, prompt: { path: ["userId"], equals: userId } } });
+      await tx.workspaceChat.deleteMany({ where: { userId } });
       await tx.workspaceInvitation.deleteMany({ where: { OR: [{ workspaceId: { in: ids } }, { email: user.email }] } });
       await tx.pushDevice.deleteMany({ where: { userId } });
       await tx.pushDelivery.deleteMany({ where: { OR: [{ userId }, { workspaceId: { in: ids } }] } });
@@ -157,6 +158,7 @@ async function purgeErasedWorkspace(workspaceId: string) {
       await tx.knowledgeVault.deleteMany({ where: { workspaceId } });
       await tx.instagramAnalytics.deleteMany({ where: { workspaceId } });
       await tx.aiInteraction.deleteMany({ where: { workspaceId } });
+      await tx.workspaceChat.deleteMany({ where: { workspaceId } });
       await tx.promptTemplate.deleteMany({ where: { workspaceId } });
       await tx.notification.deleteMany({ where: { workspaceId } });
       await tx.workspaceMember.deleteMany({ where: { workspaceId } });

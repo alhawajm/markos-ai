@@ -9,6 +9,10 @@ import { typeLabel } from "../content";
 
 export function PostPreview({ item, assets }: { item: ContentRecord; assets: MediaAssetRecord[] }) {
   const { colors, t } = useAppearance();
+  const gallery = item.mediaItems.flatMap((media) => {
+    const asset = assets.find((entry) => entry.id === media.mediaAssetId);
+    return asset ? [asset] : [];
+  });
   return (
     <Card>
       <Txt variant="heading">{t("Full post preview", "معاينة المنشور كاملًا")}</Txt>
@@ -25,7 +29,7 @@ export function PostPreview({ item, assets }: { item: ContentRecord; assets: Med
               </Txt>
             ) : null}
             {asset ? (
-              <MediaPreview asset={asset} portrait={item.contentType === "STORY" || item.contentType === "REEL"} />
+              <MediaPreview asset={asset} gallery={gallery} portrait={item.contentType === "STORY" || item.contentType === "REEL"} />
             ) : (
               <Txt muted>{t("Media has not been generated or attached yet.", "لم تُنشأ الوسائط أو تُرفق بعد.")}</Txt>
             )}

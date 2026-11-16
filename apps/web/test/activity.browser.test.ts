@@ -73,6 +73,12 @@ it.each([
       if (p === "/v1/auth/refresh") data = session;
       else if (p === "/v1/onboarding") data = { status: "COMPLETE", businessProfile: { status: "APPROVED" } };
       else if (p === "/v1/assistant/conversation") data = [turn];
+      else if (p === "/v1/assistant/chats")
+        data = {
+          items: [{ id: "activity-chat", title: "Earlier conversation", legacy: true, createdAt: turn.createdAt, updatedAt: turn.createdAt }],
+          nextCursor: null
+        };
+      else if (p === "/v1/assistant/chats/activity-chat/messages") data = { turns: [turn], nextBefore: null };
       else if (p === "/v1/assistant/memory") data = memories;
       else if (p.startsWith("/v1/assistant/memory/") && route.request().method() === "DELETE") {
         memories = [];

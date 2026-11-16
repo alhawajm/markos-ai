@@ -79,7 +79,13 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     prisma.contentItem.findMany({ where: { deletedAt: null, workspaceId }, include: contentAggregateInclude }),
     prisma.mediaAsset.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.instagramAnalytics.findMany({ where: { deletedAt: null, workspaceId } }),
-    prisma.aiInteraction.findMany({ where: { deletedAt: null, workspaceId } }),
+    prisma.aiInteraction.findMany({
+      where: {
+        deletedAt: null,
+        workspaceId,
+        OR: [{ agent: { notIn: ["USER_MEMORY", "WORKSPACE_ASSISTANT"] } }, { prompt: { path: ["userId"], equals: owner.id } }]
+      }
+    }),
     prisma.subscription.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.invoice.findMany({ where: { deletedAt: null, workspaceId } }),
     prisma.payment.findMany({ where: { deletedAt: null, workspaceId } }),
@@ -105,6 +111,7 @@ export async function exportWorkspaceData(workspaceId: string): Promise<Workspac
     },
     records: {
       aiInteractions: toJsonRows(aiInteractions),
+      workspaceChats: toJsonRows(await prisma.workspaceChat.findMany({ where: { workspaceId, userId: owner.id } })),
       analytics: toJsonRows(analytics),
       auditLogs: toJsonRows(auditLogs),
       calendars: toJsonRows(calendars),
@@ -210,6 +217,7 @@ export async function eraseWorkspaceData(input: { actorId: string; workspaceId: 
     counts.instagramConnectionCredentials = (await tx.instagramConnectionCredential.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.oauthStateNonces = (await tx.oAuthStateNonce.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.aiInteractions = (await tx.aiInteraction.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
+    counts.workspaceChats = (await tx.workspaceChat.deleteMany({ where: { workspaceId: input.workspaceId } })).count;
     counts.subscriptions = (await tx.subscription.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.invoices = (await tx.invoice.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;
     counts.payments = (await tx.payment.updateMany({ data: markDeleted, where: { deletedAt: null, workspaceId: input.workspaceId } })).count;

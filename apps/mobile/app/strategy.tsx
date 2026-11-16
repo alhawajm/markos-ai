@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { useAccount, useAppearance } from "../src/providers";
 import { Button, Card, Loading, Screen, TitleBar, Txt } from "../src/ui";
@@ -11,7 +11,8 @@ export default function Strategy() {
     { t, locale } = useAppearance(),
     router = useRouter(),
     focused = useIsFocused();
-  const result = useQuery({ queryKey: [scope, "strategy"], queryFn: () => api.currentStrategy(), enabled: focused });
+  const { plan } = useLocalSearchParams<{ plan?: string }>();
+  const result = useQuery({ queryKey: [scope, "strategy", plan ?? "latest"], queryFn: () => api.currentStrategy(plan), enabled: focused });
   const strategy = result.data;
   return (
     <Screen>

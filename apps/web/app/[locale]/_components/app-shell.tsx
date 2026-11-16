@@ -294,7 +294,10 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           </div>
         </aside>
 
-        <section className="sunlit-card-scroll min-w-0 lg:h-screen lg:overflow-y-auto lg:overscroll-contain" data-app-content-scroll>
+        <section
+          className={`sunlit-card-scroll min-w-0 ${["dashboard", "briefing", "opportunities"].includes(activeSection) ? "h-dvh overflow-y-auto overscroll-contain" : ""} lg:h-screen lg:overflow-y-auto lg:overscroll-contain`}
+          data-app-content-scroll
+        >
           <header className="brand-chrome sticky top-0 z-30 border-b border-[var(--sunlit-line)] px-5 py-3 sm:px-7 lg:hidden">
             <div className="mx-auto flex max-w-[1500px] items-center gap-3">
               <Link

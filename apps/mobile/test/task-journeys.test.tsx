@@ -7,12 +7,27 @@ const state = vi.hoisted(() => ({
   scope: "owner:workspace",
   locale: "en",
   client: null as QueryClient | null,
-  api: { workspaceAssistant: vi.fn(), messageWorkspaceAssistant: vi.fn(), confirmWorkspaceAssistant: vi.fn(), createContent: vi.fn() },
+  api: {
+    workspaceAssistant: vi.fn(),
+    assistantChats: vi.fn(),
+    assistantChatMessages: vi.fn(),
+    renameAssistantChat: vi.fn(),
+    messageWorkspaceAssistant: vi.fn(),
+    confirmWorkspaceAssistant: vi.fn(),
+    createContent: vi.fn()
+  },
   push: vi.fn(),
   stores: new Map<string, unknown>()
 }));
 vi.mock("react-native", () => ({ View: "View", RefreshControl: "RefreshControl", ScrollView: "ScrollView", TextInput: "TextInput", Pressable: "Pressable" }));
-vi.mock("lucide-react-native", () => ({ Send: () => null, Ellipsis: () => null, RotateCcw: () => null }));
+vi.mock("lucide-react-native", () => ({
+  Send: () => null,
+  Ellipsis: () => null,
+  RotateCcw: () => null,
+  MessagesSquare: () => null,
+  SquarePen: () => null,
+  ArrowUpRight: () => null
+}));
 vi.mock("expo-router", () => ({ useRouter: () => ({ push: state.push }) }));
 vi.mock("expo-router/react-navigation", () => ({ useIsFocused: () => true }));
 vi.mock("../src/providers", () => ({
@@ -28,8 +43,8 @@ vi.mock("../src/providers", () => ({
 vi.mock("../src/business/device-store", () => ({
   BusinessDeviceStore: class {
     key: string;
-    constructor(scope: string, _epoch: number, kind: string) {
-      this.key = `${scope}:${kind}`;
+    constructor(scope: string, _epoch: number, kind: string, partition?: string) {
+      this.key = `${scope}:${kind}${partition ? `:chat:${partition}` : ""}`;
     }
     read = async () => state.stores.get(this.key) ?? null;
     save = async (value: unknown) => {
@@ -56,7 +71,7 @@ vi.mock("../src/motion", async () => {
 vi.mock("../src/ui", async () => {
   const { createElement } = await import("react");
   return Object.fromEntries(
-    ["Button", "Card", "Disclosure", "Field", "Loading", "Notice", "Screen", "Txt", "TextAction", "Row", "IconButton"].map((tag) => [
+    ["Button", "Card", "Disclosure", "Field", "Loading", "Notice", "Screen", "Txt", "TextAction", "Row", "IconButton", "Sheet", "ListRow"].map((tag) => [
       tag,
       (props: Record<string, unknown>) => createElement(tag, props, props.children as React.ReactNode, props.footer as React.ReactNode)
     ])
@@ -207,15 +222,18 @@ it("keeps existing Home conversations compact and retries the same saved request
       createdAt: new Date().toISOString()
     }
   ]);
-  state.api.messageWorkspaceAssistant
-    .mockRejectedValueOnce(new Error("Network lost"))
-    .mockImplementationOnce(async (input) => ({
-      id: input.requestId,
-      message: input.message,
-      reply: "Let’s continue",
-      status: "DISCUSSION",
-      createdAt: new Date().toISOString()
-    }));
+  state.api.assistantChats.mockResolvedValue({
+    items: [{ id: "home", title: "Earlier conversation", legacy: true, updatedAt: new Date().toISOString() }],
+    nextCursor: null
+  });
+  state.api.assistantChatMessages.mockImplementation(async () => ({ turns: await state.api.workspaceAssistant(), nextBefore: null }));
+  state.api.messageWorkspaceAssistant.mockRejectedValueOnce(new Error("Network lost")).mockImplementationOnce(async (input) => ({
+    id: input.requestId,
+    message: input.message,
+    reply: "Let’s continue",
+    status: "DISCUSSION",
+    createdAt: new Date().toISOString()
+  }));
   root = createRoot();
   await act(() =>
     root!.render(
@@ -245,11 +263,71 @@ it("keeps existing Home conversations compact and retries the same saved request
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
   const request = state.api.messageWorkspaceAssistant.mock.calls[0]![0];
-  expect(state.stores.get("owner:workspace:assistant")).toMatchObject({ pending: { requestId: request.requestId } });
+  expect(state.stores.get("owner:workspace:assistant:chat:home")).toMatchObject({ pending: { requestId: request.requestId } });
   await press("Retry saved message");
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
   expect(state.api.messageWorkspaceAssistant.mock.calls[1]![0]).toEqual(request);
   expect(field().props.value).toBe("");
+});
+
+it("switches Home threads, restores each unsent message, and opens a saved campaign card", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  vi.clearAllMocks();
+  state.stores.clear();
+  state.locale = "en";
+  state.scope = "owner:workspace";
+  state.client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  state.api.assistantChats.mockResolvedValue({
+    items: [{ id: "campaign-chat", title: "Pearl launch", legacy: false, updatedAt: new Date().toISOString() }],
+    nextCursor: null
+  });
+  state.api.assistantChatMessages.mockResolvedValue({
+    turns: [
+      {
+        id: "result",
+        message: "Create the launch plan",
+        reply: "Your campaign is ready.",
+        status: "COMPLETED",
+        createdAt: new Date().toISOString(),
+        result: {
+          kind: "CAMPAIGN",
+          id: "saved-campaign",
+          title: "Pearl launch",
+          summary: "A week of launch posts",
+          postCount: 7,
+          durationDays: 7,
+          publishesPerDay: 1
+        }
+      }
+    ],
+    nextBefore: null
+  });
+  root = createRoot();
+  await act(() =>
+    root!.render(
+      <QueryClientProvider client={state.client!}>
+        <WorkspaceAssistantScreen />
+      </QueryClientProvider>
+    )
+  );
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+  await settle();
+  const field = () => root!.container.queryAll((n) => n.type === "TextInput")[0]!;
+  await act(() => field().props.onChangeText("Unsent launch revision"));
+  await act(() => root!.container.queryAll((n) => n.type === "Pressable" && n.props.accessibilityLabel === "Open campaign: Pearl launch")[0]!.props.onPress());
+  expect(state.push).toHaveBeenCalledWith({ pathname: "/campaign/[id]", params: { id: "saved-campaign" } });
+  await act(() => root!.container.queryAll((n) => n.type === "IconButton" && n.props.label === "New chat")[0]!.props.onPress());
+  await settle();
+  expect(field().props.value).toBe("");
+  await act(() => field().props.onChangeText("A completely different task"));
+  await act(() => root!.container.queryAll((n) => n.type === "ListRow" && n.props.label === "Pearl launch")[0]!.props.onPress());
+  await settle();
+  expect(field().props.value).toBe("Unsent launch revision");
+  expect(state.api.messageWorkspaceAssistant).not.toHaveBeenCalled();
+  expect(state.stores.get("owner:workspace:assistant:chat:campaign-chat")).toMatchObject({ message: "Unsent launch revision" });
 });

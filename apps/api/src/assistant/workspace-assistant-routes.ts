@@ -14,6 +14,7 @@ import {
 import { env } from "../config/env";
 import { taskIntents } from "@markos/shared-types";
 import { forgetPersonalMemory, listPersonalMemory } from "../vault/personalization-service";
+import { listWorkspaceChats, renameWorkspaceChat } from "./workspace-chats-service";
 
 export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
   const config: FastifyContextConfig = {
@@ -21,10 +22,57 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
     verifiedUserRequired: true,
     permissions: ["content:write", "agent:run", "campaign:generate"]
   };
-  app.get("/v1/assistant/strategy", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
+  const readConfig: FastifyContextConfig = { ...config, permissions: ["workspace:read"] };
+  app.get("/v1/assistant/chats", { config: readConfig }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const query = z.object({ cursor: z.string().max(500).optional() }).safeParse(request.query);
+    if (!query.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid conversation page"));
+    const { workspaceId, userId } = requireWorkspaceContext();
+    try {
+      return ok(await listWorkspaceChats(workspaceId, userId, query.data.cursor));
+    } catch (error) {
+      if (error instanceof ConversationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+      throw error;
+    }
+  });
+  app.get("/v1/assistant/chats/:id/messages", { config: readConfig }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params),
+      query = z.object({ before: z.string().uuid().optional() }).safeParse(request.query);
+    if (!params.success || !query.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid conversation page"));
+    const { workspaceId, userId } = requireWorkspaceContext();
+    try {
+      const rows = await workspaceAssistantHistory(workspaceId, userId, undefined, params.data.id, query.data.before, 21),
+        hasMore = rows.length > 20,
+        turns = hasMore ? rows.slice(1) : rows;
+      return ok({ turns, nextBefore: hasMore ? turns[0]!.id : null });
+    } catch (error) {
+      if (error instanceof ConversationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+      throw error;
+    }
+  });
+  app.patch("/v1/assistant/chats/:id", { config: readConfig }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params),
+      body = z
+        .object({ title: z.string().trim().min(1).max(100) })
+        .strict()
+        .safeParse(request.body);
+    if (!params.success || !body.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid conversation name"));
+    const { workspaceId, userId } = requireWorkspaceContext();
+    try {
+      return ok(await renameWorkspaceChat(workspaceId, userId, params.data.id, body.data.title));
+    } catch (error) {
+      if (error instanceof ConversationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+      throw error;
+    }
+  });
+  app.get("/v1/assistant/strategy", { config: { ...config, permissions: ["workspace:read"] } }, async (request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     const { workspaceId, userId } = requireWorkspaceContext();
-    return ok(await currentWorkspaceStrategy(workspaceId, userId));
+    const query = z.object({ id: z.string().uuid().optional() }).safeParse(request.query);
+    if (!query.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid saved strategy"));
+    return ok(await currentWorkspaceStrategy(workspaceId, userId, query.data.id));
   });
   app.get("/v1/assistant/memory", { config: { ...config, permissions: ["workspace:read"] } }, async (_request, reply) => {
     reply.header("Cache-Control", "private, no-store");

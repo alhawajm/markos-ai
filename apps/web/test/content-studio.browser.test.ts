@@ -256,6 +256,43 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close();
 });
+
+it.each([
+  { locale: "en", width: 1440 },
+  { locale: "ar", width: 390 }
+] as const)("opens full-size carousel media, zooms and closes without authoring changes ($locale)", async ({ locale, width }) => {
+  const h = await setup(
+    draft({
+      contentType: "CAROUSEL",
+      mediaItems: [
+        { ...item(), mediaAssetId: "photo" },
+        { ...item("item-2"), position: 1, mediaAssetId: "replacement" }
+      ]
+    }),
+    { locale, width, manual: false }
+  );
+  const { page, state } = h,
+    ar = locale === "ar";
+  try {
+    const before = state.calls.length;
+    const opener = page.getByRole("button", { name: ar ? "فتح الصورة بالحجم الكامل" : "Open full-size image" }).first();
+    await opener.click();
+    const dialog = page.getByRole("dialog", { name: ar ? "عرض الوسائط بالحجم الكامل" : "Full-size media" });
+    await dialog.waitFor();
+    expect(await dialog.locator("img").getAttribute("alt")).toBe("photo.jpg");
+    await dialog.getByRole("button", { name: ar ? "تكبير" : "Zoom in", exact: true }).click();
+    expect(await dialog.locator(".media-lightbox-zoomed").count()).toBe(1);
+    await dialog.getByRole("button", { name: ar ? "الوسائط التالية" : "Next media" }).click();
+    expect(await dialog.locator("img").getAttribute("alt")).toBe("replacement.jpg");
+    await page.keyboard.press("Escape");
+    await expect.poll(() => dialog.count()).toBe(0);
+    expect(await opener.evaluate((el) => el === document.activeElement)).toBe(true);
+    expect(state.calls).toHaveLength(before);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {
+    await h.context.close();
+  }
+});
 describe("Relational Create workspace", () => {
   it.each([
     { locale: "en", width: 1440 },

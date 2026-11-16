@@ -9,16 +9,39 @@ import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
 import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import "./workspace-assistant.css";
+import { WorkspaceChats } from "./workspace-chats";
+import type { WorkspaceChatSelection } from "@markos/shared-types";
+import { AssistantArtifactCard } from "./assistant-artifact-card";
 
 export function WorkspaceAssistant(props: { locale: Locale; intent?: TaskIntent }) {
   const session = useMarkosSession();
+  if (!props.intent || props.intent === "GENERAL")
+    return (
+      <WorkspaceChats key={`${session?.user.id}:${session?.workspace.id}`} locale={props.locale}>
+        {(chat, onSent) => <WorkspaceConversation key={`${session?.user.id}:${session?.workspace.id}:${chat.id}`} {...props} chat={chat} onSent={onSent} />}
+      </WorkspaceChats>
+    );
   return <WorkspaceConversation key={`${session?.user.id}:${session?.workspace.id}:${props.intent ?? "GENERAL"}`} {...props} />;
 }
-function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale; intent?: TaskIntent }) {
+function WorkspaceConversation({
+  locale,
+  intent = "GENERAL",
+  chat,
+  onSent
+}: {
+  locale: Locale;
+  intent?: TaskIntent;
+  chat?: WorkspaceChatSelection;
+  onSent?: (id: string) => void;
+}) {
   const api = useMarkosClient(locale),
     session = useMarkosSession();
   const t = useCallback((en: string, ar: string) => (locale === "ar" ? ar : en), [locale]);
-  const key = `markos.home-chat:${session?.user.id}:${session?.workspace.id}${intent === "GENERAL" ? "" : `:${intent}`}`;
+  const legacyKey = `markos.home-chat:${session?.user.id}:${session?.workspace.id}${intent === "GENERAL" ? "" : `:${intent}`}`;
+  const key = chat ? `${legacyKey}:chat:${chat.id}` : legacyKey;
+  const chatId = chat?.id,
+    newChat = chat?.isNew,
+    legacyChat = chat?.legacy;
   const intro = taskIntroductions[intent],
     language = locale === "ar" ? 1 : 0;
   const [turns, setTurns] = useState<WorkspaceAssistantTurn[]>([]),
@@ -26,18 +49,31 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [ready, setReady] = useState(false),
-    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale; intent?: TaskIntent } | null>(null);
+    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale; intent?: TaskIntent; chatId?: string } | null>(null);
+  const [older, setOlder] = useState<WorkspaceAssistantTurn[]>([]),
+    [before, setBefore] = useState<string | null>(null),
+    [loadingOlder, setLoadingOlder] = useState(false);
+  const loadedOlder = useRef(false);
   const end = useRef<HTMLDivElement>(null),
     active = turns.some((turn) => turn.status === "THINKING" || (turn.status === "EXECUTING" && !turn.campaign));
   const following = useRef(true);
   const [report, setReport] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [earlier, setEarlier] = useState(false);
-  const shown = intent === "GENERAL" || earlier ? turns : turns.slice(-4);
+  const combined = [...older.filter((old) => !turns.some((turn) => turn.id === old.id)), ...turns];
+  const shown = intent === "GENERAL" || earlier ? combined : turns.slice(-4);
   useEffect(() => {
     let live = true;
     try {
-      const data = JSON.parse(localStorage.getItem(key) ?? "null");
+      let raw = localStorage.getItem(key);
+      if (!raw && legacyChat) {
+        raw = localStorage.getItem(legacyKey);
+        if (raw) {
+          localStorage.setItem(key, raw);
+          localStorage.removeItem(legacyKey);
+        }
+      }
+      const data = JSON.parse(raw ?? "null");
       setMessage(data?.message ?? "");
       setPending(data?.pending ?? null);
       setReady(true);
@@ -45,8 +81,15 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
       setError(t("Couldn’t recover your saved message. Reload before continuing.", "تعذّر استعادة رسالتك المحفوظة. أعد تحميل الصفحة."));
     }
     const load = () =>
-      api
-        .workspaceAssistant(intent === "GENERAL" ? undefined : intent)
+      (chatId
+        ? newChat
+          ? Promise.resolve([])
+          : api.assistantChatMessages(chatId).then((page) => {
+              if (live && !loadedOlder.current) setBefore(page.nextBefore);
+              return page.turns;
+            })
+        : api.workspaceAssistant(intent === "GENERAL" ? undefined : intent)
+      )
         .then((data) => {
           if (live) {
             setTurns((previous) => (JSON.stringify(previous) === JSON.stringify(data) ? previous : data));
@@ -71,7 +114,7 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
       live = false;
       clearInterval(timer);
     };
-  }, [api, key, t, intent]);
+  }, [api, key, t, intent, chatId, newChat, legacyChat, legacyKey]);
   useEffect(() => {
     if (following.current) end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [turns]);
@@ -87,7 +130,13 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
   }
   async function send() {
     following.current = true;
-    const request = pending ?? { requestId: crypto.randomUUID(), message: message.trim(), locale, ...(intent === "GENERAL" ? {} : { intent }) };
+    const request = pending ?? {
+      requestId: crypto.randomUUID(),
+      message: message.trim(),
+      locale,
+      ...(intent === "GENERAL" ? {} : { intent }),
+      ...(chat ? { chatId: chat.id } : {})
+    };
     if (!request.message || busy || active || !ready) return;
     setBusy(true);
     setError("");
@@ -96,6 +145,7 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
       setPending(request);
       const turn = await api.messageWorkspaceAssistant(request);
       setTurns((items) => (items.some((i) => i.id === turn.id) ? items : [...items, turn]));
+      if (chat) onSent?.(chat.id);
       persist("", null);
       setPending(null);
       setMessage("");
@@ -124,7 +174,7 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
     setError("");
     try {
       await api.resumeCampaignGeneration(turn.campaign.requestId);
-      setTurns(await api.workspaceAssistant(intent === "GENERAL" ? undefined : intent));
+      setTurns(chat ? (await api.assistantChatMessages(chat.id)).turns : await api.workspaceAssistant(intent === "GENERAL" ? undefined : intent));
     } catch {
       setError(t("Couldn’t resume the saved campaign. Please try again.", "تعذّر استئناف الحملة المحفوظة. حاول مجددًا."));
     } finally {
@@ -183,6 +233,27 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
             ))}
         </div>
       )}
+      {chat && before ? (
+        <button
+          className="workspace-chat-link"
+          disabled={loadingOlder}
+          onClick={() => {
+            setLoadingOlder(true);
+            following.current = false;
+            void api
+              .assistantChatMessages(chat.id, before)
+              .then((page) => {
+                loadedOlder.current = true;
+                setOlder((old) => [...page.turns, ...old.filter((turn) => !page.turns.some((item) => item.id === turn.id))]);
+                setBefore(page.nextBefore);
+              })
+              .catch(() => setError(t("Couldn’t load earlier messages.", "تعذّر تحميل الرسائل السابقة.")))
+              .finally(() => setLoadingOlder(false));
+          }}
+        >
+          {t("Earlier messages", "الرسائل السابقة")}
+        </button>
+      ) : null}
       <div className="workspace-chat-thread" aria-live="polite">
         {intent !== "GENERAL" && !earlier && turns.length > 4 ? (
           <button className="workspace-chat-link" onClick={() => setEarlier(true)}>
@@ -235,12 +306,13 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
                   startedAt={turn.campaign?.createdAt}
                 />
               )}
-              {turn.contentItemId && (
+              {turn.result ? <AssistantArtifactCard artifact={turn.result} locale={locale} /> : null}
+              {!turn.result && turn.contentItemId && (
                 <a className="workspace-chat-link" href={`/${locale}/app/content-studio?item=${turn.contentItemId}`}>
                   {t("Open draft →", "فتح المسودة ←")}
                 </a>
               )}
-              {turn.campaignId && (
+              {!turn.result && turn.campaignId && (
                 <a className="workspace-chat-link" href={`/${locale}/app/campaigns?campaign=${turn.campaignId}`}>
                   {t("Open campaign →", "فتح الحملة ←")}
                 </a>
@@ -262,7 +334,7 @@ function WorkspaceConversation({ locale, intent = "GENERAL" }: { locale: Locale;
                   )}
                 </div>
               )}
-              {turn.strategy && (
+              {!turn.result && turn.strategy && (
                 <>
                   <GuidanceResult value={turn.strategy} locale={locale} />
                   <a className="workspace-chat-link" href={`/${locale}/app/campaigns`}>

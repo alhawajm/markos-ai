@@ -1,35 +1,48 @@
 import React, { useState } from "react";
-import { AppState, Image, View } from "react-native";
+import { AppState, Image, View, Pressable } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { MediaAssetRecord } from "@markos/shared-types";
 import { useAppearance } from "../providers";
 import { Button, Notice, Txt } from "../ui";
+import { MediaViewer } from "./media-viewer";
 
-export function MediaPreview({ asset, portrait = false }: { asset: MediaAssetRecord; portrait?: boolean }) {
+export function MediaPreview({ asset, portrait = false, gallery }: { asset: MediaAssetRecord; portrait?: boolean; gallery?: MediaAssetRecord[] }) {
   const { colors, t } = useAppearance();
   const [failed, setFailed] = useState(false);
-  if (asset.mimeType === "video/mp4") return <VideoPreview key={asset.publicUrl} uri={asset.publicUrl} />;
+  const [open, setOpen] = useState(false);
+  if (asset.mimeType === "video/mp4")
+    return (
+      <>
+        <VideoPreview key={asset.publicUrl} uri={asset.publicUrl} onExpand={() => setOpen(true)} />
+        {open ? <MediaViewer assets={gallery ?? [asset]} initialId={asset.id} onClose={() => setOpen(false)} /> : null}
+      </>
+    );
   if (failed)
     return <Notice error>{t("Couldn’t load this image. Reopen the draft to try again.", "تعذّر تحميل الصورة. أعد فتح المسودة للمحاولة مجددًا.")}</Notice>;
   return (
-    <Image
-      source={{ uri: asset.publicUrl }}
-      accessibilityLabel={asset.filename}
-      resizeMode="contain"
-      onError={() => setFailed(true)}
-      style={{
-        width: "100%",
-        aspectRatio: portrait ? 9 / 16 : asset.width && asset.height ? asset.width / asset.height : 4 / 5,
-        maxHeight: 380,
-        borderRadius: 16,
-        backgroundColor: colors.surfaceMuted
-      }}
-    />
+    <>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("Open full-size image", "فتح الصورة بالحجم الكامل")} onPress={() => setOpen(true)}>
+        <Image
+          source={{ uri: asset.publicUrl }}
+          accessibilityLabel={asset.filename}
+          resizeMode="contain"
+          onError={() => setFailed(true)}
+          style={{
+            width: "100%",
+            aspectRatio: portrait ? 9 / 16 : asset.width && asset.height ? asset.width / asset.height : 4 / 5,
+            maxHeight: 380,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceMuted
+          }}
+        />
+      </Pressable>
+      {open ? <MediaViewer assets={gallery ?? [asset]} initialId={asset.id} onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
-function VideoPreview({ uri }: { uri: string }) {
+function VideoPreview({ uri, onExpand }: { uri: string; onExpand: () => void }) {
   const { colors, t } = useAppearance();
   const player = useVideoPlayer(uri, (player) => {
     player.loop = true;
@@ -51,6 +64,14 @@ function VideoPreview({ uri }: { uri: string }) {
       <View style={{ alignItems: "center", borderRadius: 16, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
         <VideoView player={player} nativeControls contentFit="contain" style={{ width: "100%", height: 340 }} />
       </View>
+      <Button
+        secondary
+        label={t("Open full-size Reel", "فتح الريل بالحجم الكامل")}
+        onPress={() => {
+          player.pause();
+          onExpand();
+        }}
+      />
       {status === "error" ? (
         <>
           <Notice error>{t("The Reel couldn’t be loaded. Check your connection.", "تعذّر تحميل الريل. تحقّق من اتصالك.")}</Notice>

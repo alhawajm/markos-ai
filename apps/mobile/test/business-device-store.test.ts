@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ data: new Map<string, string>(), epoch: 1, wait: null as Promise<void> | null, deleted: [] as string[] }));
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
+    getAllKeys: async () => [...state.data.keys()],
     getItem: async (key: string) => state.data.get(key) ?? null,
     setItem: async (key: string, value: string) => {
       if (state.wait) await state.wait;
@@ -55,6 +56,9 @@ describe("business device draft ownership", () => {
   });
   it("logout waits for earlier writes, removes only this identity, and blocks late writes", async () => {
     await new BusinessDeviceStore("other", 1, "setup").save({ name: "Keep" });
+    await new BusinessDeviceStore("other", 1, "assistant", "chat").save({ message: "Keep private" });
+    await new BusinessDeviceStore("current", 1, "assistant", "chat").save({ message: "Delete private" });
+    await new BusinessDeviceStore("current", 1, "assistant-navigation").save({ id: "chat" });
     for (const kind of ["assistant-content", "assistant-campaign", "assistant-strategy"] as const)
       await new BusinessDeviceStore("current", 1, kind).save({ message: "Private unsent goal" });
     let release!: () => void;
@@ -74,6 +78,8 @@ describe("business device draft ownership", () => {
     expect(state.data.has("markos.business.setup.current")).toBe(false);
     expect([...state.data.keys()].filter((key) => key.endsWith(".current"))).toEqual([]);
     expect(state.data.has("markos.business.setup.other")).toBe(true);
+    expect([...state.data.keys()].some((key) => key.includes(".current:chat:"))).toBe(false);
+    expect(await new BusinessDeviceStore("other", 2, "assistant", "chat").read()).toEqual({ message: "Keep private" });
     expect(state.deleted).toEqual(["file:///app/onboarding-files/current"]);
     await expect(store.save({ name: "Late" })).rejects.toThrow("Identity changed");
   });

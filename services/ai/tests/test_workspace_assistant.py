@@ -37,6 +37,11 @@ def test_workspace_chat_uses_business_context_and_returns_a_plan_without_executi
     assert client.fake.request["model"] == "configured-model"
     assert "Pearl" in str(client.fake.request["input"])
     assert "one confirmation" in str(client.fake.request["instructions"])
+    instructions = str(client.fake.request["instructions"])
+    assert "duration" in instructions
+    assert "frequency" in instructions
+    assert "do not silently fill" in instructions
+    assert response.prompt_version == "workspace-chat.v5"
 
 
 def test_workspace_contract_cannot_publish_or_schedule() -> None:

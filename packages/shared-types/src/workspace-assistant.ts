@@ -9,6 +9,8 @@ export interface WorkspaceAssistantProposal {
   publishesPerDay?: 1 | 2 | 3 | null;
 }
 export interface WorkspaceAssistantTurn {
+  chatId?: string;
+  result?: WorkspaceAssistantArtifact;
   intent?: import("./task-intents").TaskIntent;
   id: string;
   message: string;
@@ -23,5 +25,39 @@ export interface WorkspaceAssistantTurn {
   strategy?: Record<string, unknown>;
   errorCode?: string;
   createdAt: string;
+}
+export interface WorkspaceChatRecord {
+  id: string;
+  title: string;
+  legacy: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface WorkspaceChatSelection {
+  id: string;
+  isNew: boolean;
+  legacy?: boolean;
+  title?: string;
+}
+export interface WorkspaceChatPage {
+  items: WorkspaceChatRecord[];
+  nextCursor: string | null;
+}
+export interface WorkspaceChatMessages {
+  turns: WorkspaceAssistantTurn[];
+  nextBefore: string | null;
+}
+export interface WorkspaceAssistantArtifact {
+  kind: "CAMPAIGN" | "CONTENT" | "STRATEGY";
+  id: string;
+  title: string;
+  summary: string;
+  status?: string;
+  contentType?: "POST" | "CAROUSEL" | "REEL" | "STORY";
+  startsAt?: string;
+  endsAt?: string;
+  durationDays?: number;
+  publishesPerDay?: number;
+  postCount?: number;
 }
 import type { CampaignGenerationJobRecord } from "./index";

@@ -21,7 +21,8 @@ context.entryIntent identifies the surface the owner opened: CONTENT, CAMPAIGN o
 Use it to interpret a short goal without asking which tool or agent they want. GENERAL is
 open-ended. An explicit request can change direction. Reuse the Vault and current preferences;
 do not ask users to repeat their audience, tone, offerings or goals already supplied there.
-Offer a useful default when a missing choice is reversible. Ask only for essential facts
+Offer a useful default for reversible creative choices. Campaign duration and publishing
+frequency are owner decisions: do not silently fill them. Ask only for essential facts
 that materially change the result, one focused question at a time. Work out format and
 content direction yourself when the owner has not specified them. Keep plans to 2-3 short
 lines stating the useful result, key choices and anything the owner must decide. Do not
@@ -36,10 +37,22 @@ Use only an existing draft ID from context for edits, and ask which draft if amb
 A content request includes caption and actual media generation, except script/caption-only
 requests. A visual edit preserves the current artwork and all unrequested details. State
 the chosen format and what will be created in summary (2-3 short lines). Set contentType
-for CONTENT; durationDays for CAMPAIGN (default7, one post/day); others may be null.
+for CONTENT; durationDays for CAMPAIGN; others may be null.
+CAMPAIGN INTAKE: a generic "I want to create a campaign" is not a complete brief.
+First ask what they are promoting and what outcome matters, unless already stated in
+this chat. Once that is clear, establish the duration and publishing frequency before
+offering a campaign proposal. If missing, ask a short combined question such as
+"How long should it run, and how many posts per day?" Offer 7/14/30 days and 1/2/3 daily
+as examples, not a required long form. Reuse any answers in this chat; do not ask again.
+Keep proposal=null during clarification. Only when the owner explicitly delegates these
+choices (for example "you decide" or "recommend the best plan") may you recommend a
+duration and frequency yourself; clearly name them in the short plan. Do not treat a
+generic request, a greeting, or a Vault marketing goal as that delegation. Never invent
+an event, offer, budget or campaign objective to avoid asking. Ask only missing context.
 For campaigns preserve the requested start date as ISO-8601 startsAt (UTC timezone) and
-publishesPerDay (1/2/3, default1). Use context.today for relative dates. If no date is specified
-set startsAt=null; the server defaults to today. State duration, date and intensity in the plan.
+publishesPerDay (1/2/3). Use context.today and context.timezone for relative dates. If no
+start date is stated, recommend an appropriate date explicitly in the plan, or ask when
+event coverage depends on that choice. State duration, dates and frequency in the plan.
 Check the last campaign day against event dates. Never promise on-site coverage or follow-up
 outside the campaign window. If necessary, ask whether to shift the start or extend the duration.
 context.campaigns shows already-running or stopped work. For status/open requests explain its
@@ -61,7 +74,7 @@ async def respond_to_workspace(
     if settings.ai_text_provider != "openai" and client is None:
         return WorkspaceAssistantResponse(
             model="local-workspace",
-            prompt_version="workspace-chat.v4.local",
+            prompt_version="workspace-chat.v5.local",
             tokens_in=0,
             tokens_out=0,
             result=WorkspaceAssistantResult(
@@ -100,7 +113,7 @@ async def respond_to_workspace(
     )
     return WorkspaceAssistantResponse(
         model=result.model,
-        prompt_version="workspace-chat.v4",
+        prompt_version="workspace-chat.v5",
         tokens_in=result.tokens_in,
         tokens_out=result.tokens_out,
         result=result.content,

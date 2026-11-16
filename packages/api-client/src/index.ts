@@ -114,8 +114,27 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
-  async currentStrategy(): Promise<WorkspaceAssistantTurn | null> {
-    return (await this.request<WorkspaceAssistantTurn | null>("/v1/assistant/strategy")).data;
+  async assistantChats(cursor?: string): Promise<import("@markos/shared-types").WorkspaceChatPage> {
+    return (await this.request<import("@markos/shared-types").WorkspaceChatPage>(`/v1/assistant/chats${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`))
+      .data;
+  }
+  async assistantChatMessages(id: string, before?: string): Promise<import("@markos/shared-types").WorkspaceChatMessages> {
+    return (
+      await this.request<import("@markos/shared-types").WorkspaceChatMessages>(
+        `/v1/assistant/chats/${encodeURIComponent(id)}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`
+      )
+    ).data;
+  }
+  async renameAssistantChat(id: string, title: string): Promise<import("@markos/shared-types").WorkspaceChatRecord> {
+    return (
+      await this.request<import("@markos/shared-types").WorkspaceChatRecord>(`/v1/assistant/chats/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: { title }
+      })
+    ).data;
+  }
+  async currentStrategy(id?: string): Promise<WorkspaceAssistantTurn | null> {
+    return (await this.request<WorkspaceAssistantTurn | null>(`/v1/assistant/strategy${id ? `?id=${encodeURIComponent(id)}` : ""}`)).data;
   }
 
   async workspaceAssistant(intent?: TaskIntent): Promise<WorkspaceAssistantTurn[]> {
@@ -127,7 +146,13 @@ export class MarkosApiClient {
   async forgetMemory(id: string): Promise<void> {
     await this.request(`/v1/assistant/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
-  async messageWorkspaceAssistant(input: { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent }): Promise<WorkspaceAssistantTurn> {
+  async messageWorkspaceAssistant(input: {
+    requestId: string;
+    chatId?: string;
+    message: string;
+    locale: "en" | "ar";
+    intent?: TaskIntent;
+  }): Promise<WorkspaceAssistantTurn> {
     return (await this.request<WorkspaceAssistantTurn>("/v1/assistant/conversation", { method: "POST", body: input })).data;
   }
   async confirmWorkspaceAssistant(id: string, confirmationToken: string): Promise<WorkspaceAssistantTurn> {

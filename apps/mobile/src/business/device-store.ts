@@ -18,9 +18,10 @@ export class BusinessDeviceStore<T> {
   constructor(
     private scope: string,
     private epoch: number,
-    kind: "setup" | "profile" | "quick-setup" | "assistant" | "assistant-content" | "assistant-campaign" | "assistant-strategy"
+    kind: "setup" | "profile" | "quick-setup" | "assistant" | "assistant-content" | "assistant-campaign" | "assistant-strategy" | "assistant-navigation",
+    partition?: string
   ) {
-    this.key = `markos.business.${kind}.${scope}`;
+    this.key = `markos.business.${kind}.${scope}${partition ? `:chat:${partition}` : ""}`;
     this.files = new BriefStore(scope, epoch, "onboarding");
   }
   private task<R>(work: () => Promise<R>): Promise<R> {
@@ -50,15 +51,18 @@ export class BusinessDeviceStore<T> {
 }
 export function clearBusinessDeviceData(scope: string, epoch: number): Promise<void> {
   return enqueue(scope, async () => {
-    await AsyncStorage.multiRemove([
+    const roots = [
       `markos.business.setup.${scope}`,
       `markos.business.profile.${scope}`,
       `markos.business.quick-setup.${scope}`,
       `markos.business.assistant.${scope}`,
       `markos.business.assistant-content.${scope}`,
       `markos.business.assistant-campaign.${scope}`,
-      `markos.business.assistant-strategy.${scope}`
-    ]);
+      `markos.business.assistant-strategy.${scope}`,
+      `markos.business.assistant-navigation.${scope}`
+    ];
+    const keys = await AsyncStorage.getAllKeys();
+    await AsyncStorage.multiRemove([...new Set([...roots, ...keys.filter((key) => roots.some((root) => key.startsWith(`${root}:chat:`)))])]);
     await new BriefStore(scope, epoch, "onboarding").clear();
   });
 }

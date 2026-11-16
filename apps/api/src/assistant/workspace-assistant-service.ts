@@ -15,10 +15,12 @@ import { runWorkspaceAgent } from "../agents/agent-service";
 import { env } from "../config/env";
 import { applyPersonalMemory, personalizationContext } from "../vault/personalization-service";
 import { searchVaultContext } from "../vault/vault-service";
+import { chatForMessage, legacyWorkspaceChat, requireWorkspaceChat } from "./workspace-chats-service";
+import { assistantArtifacts } from "./workspace-artifacts";
 
 const agent = "WORKSPACE_ASSISTANT";
 const json = (value: unknown) => value as Prisma.InputJsonValue;
-type Prompt = { userId: string; message: string; locale: "en" | "ar"; startsAt: string; intent?: TaskIntent };
+type Prompt = { userId: string; message: string; locale: "en" | "ar"; startsAt: string; intent?: TaskIntent; chatId?: string };
 type State = Omit<WorkspaceAssistantTurn, "id" | "message" | "createdAt"> & { baseRevision?: number; contentRequestId?: string; executionClaimed?: boolean };
 const state = (row: AiInteraction) => row.response as unknown as State;
 function boundedStrategy(value: Record<string, unknown> | undefined) {
@@ -56,6 +58,7 @@ function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): Wor
     : undefined;
   return {
     id: row.id,
+    ...(row.workspaceChatId ? { chatId: row.workspaceChatId } : {}),
     intent: (row.prompt as unknown as Prompt).intent ?? "GENERAL",
     message: (row.prompt as unknown as Prompt).message,
     reply: campaignReply ?? s.reply,
@@ -71,10 +74,11 @@ function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): Wor
   };
 }
 const owned = (workspaceId: string, userId: string) => ({ workspaceId, agent, deletedAt: null, prompt: { path: ["userId"], equals: userId } });
-export async function currentWorkspaceStrategy(workspaceId: string, userId: string) {
+export async function currentWorkspaceStrategy(workspaceId: string, userId: string, id?: string) {
   const row = await prisma.aiInteraction.findFirst({
     where: {
       ...owned(workspaceId, userId),
+      ...(id ? { id } : {}),
       accepted: true,
       AND: [{ response: { path: ["status"], equals: "COMPLETED" } }, { response: { path: ["proposal", "action"], equals: "STRATEGY" } }]
     },
@@ -83,18 +87,27 @@ export async function currentWorkspaceStrategy(workspaceId: string, userId: stri
   return row ? record(row) : null;
 }
 async function currentRecord(row: AiInteraction) {
-  if (!row.accepted || state(row).proposal?.action !== "CAMPAIGN") return record(row);
+  if (!row.accepted || state(row).proposal?.action !== "CAMPAIGN") return (await assistantArtifacts(row.workspaceId, [record(row)]))[0]!;
   const job = await prisma.campaignGenerationJob.findFirst({
     where: { workspaceId: row.workspaceId, userId: (row.prompt as unknown as Prompt).userId, requestId: state(row).campaignRequestId ?? row.id },
     select: campaignGenerationPublicSelect
   });
-  return record(row, job ? campaignGenerationRecord(job) : undefined);
+  return (await assistantArtifacts(row.workspaceId, [record(row, job ? campaignGenerationRecord(job) : undefined)]))[0]!;
 }
-export async function workspaceAssistantHistory(workspaceId: string, userId: string, intent?: TaskIntent) {
+export async function workspaceAssistantHistory(workspaceId: string, userId: string, intent?: TaskIntent, chatId?: string, before?: string, limit = 20) {
+  const chat = chatId ? await requireWorkspaceChat(workspaceId, userId, chatId) : await legacyWorkspaceChat(workspaceId, userId);
+  if (!chat) return [];
+  const anchor = before ? await prisma.aiInteraction.findFirst({ where: { id: before, ...owned(workspaceId, userId), workspaceChatId: chat.id } }) : null;
+  if (before && !anchor) throw new ConversationError("CHAT_NOT_FOUND", "This conversation page was not found.", 404);
   const rows = await prisma.aiInteraction.findMany({
-    where: { ...owned(workspaceId, userId), ...(intent && intent !== "GENERAL" ? { AND: [{ prompt: { path: ["intent"], equals: intent } }] } : {}) },
-    orderBy: { createdAt: "desc" },
-    take: 20
+    where: {
+      ...owned(workspaceId, userId),
+      workspaceChatId: chat.id,
+      ...(anchor ? { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] } : {}),
+      ...(intent && intent !== "GENERAL" ? { AND: [{ prompt: { path: ["intent"], equals: intent } }] } : {})
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit
   });
   const requests = rows.filter((row) => row.accepted && state(row).proposal?.action === "CAMPAIGN").map((row) => state(row).campaignRequestId ?? row.id);
   const jobs = requests.length
@@ -104,7 +117,10 @@ export async function workspaceAssistantHistory(workspaceId: string, userId: str
       })
     : [];
   const byRequest = new Map(jobs.map((job) => [job.requestId, campaignGenerationRecord(job, { userId, mayGenerate: true })]));
-  return rows.reverse().map((row) => record(row, byRequest.get(state(row).campaignRequestId ?? row.id)));
+  return assistantArtifacts(
+    workspaceId,
+    rows.reverse().map((row) => record(row, byRequest.get(state(row).campaignRequestId ?? row.id)))
+  );
 }
 export async function submitWorkspaceMessage(workspaceId: string, userId: string, raw: unknown) {
   const input = workspaceAssistantMessageSchema.parse(raw);
@@ -119,30 +135,40 @@ export async function submitWorkspaceMessage(workspaceId: string, userId: string
       p.message !== input.message ||
       p.locale !== input.locale ||
       (p.intent ?? "GENERAL") !== (input.intent ?? "GENERAL") ||
+      p.chatId !== input.chatId ||
       row.deletedAt
     )
       throw new ConversationError("ASSISTANT_REQUEST_MISMATCH", "This message ID is already in use.");
     return currentRecord(row);
   };
   if (existing) return replay(existing);
+  const chat = await chatForMessage(workspaceId, userId, input.chatId, input.message);
   try {
-    return record(
-      await prisma.aiInteraction.create({
-        data: {
-          id: input.requestId,
-          workspaceId,
-          agent,
-          promptVersion: "workspace-chat.v4",
-          prompt: { userId, message: input.message, locale: input.locale, startsAt: new Date().toISOString(), intent: input.intent ?? "GENERAL" },
-          response: json({ status: "THINKING", reply: "", proposal: null }),
-          model: "queued",
-          tokensIn: 0,
-          tokensOut: 0,
-          costMinor: 0,
-          currency: "BHD"
-        }
-      })
-    );
+    const saved = await prisma.aiInteraction.create({
+      data: {
+        id: input.requestId,
+        workspaceId,
+        workspaceChatId: chat.id,
+        agent,
+        promptVersion: "workspace-chat.v5",
+        prompt: {
+          userId,
+          message: input.message,
+          locale: input.locale,
+          startsAt: new Date().toISOString(),
+          intent: input.intent ?? "GENERAL",
+          ...(input.chatId ? { chatId: input.chatId } : {})
+        },
+        response: json({ status: "THINKING", reply: "", proposal: null }),
+        model: "queued",
+        tokensIn: 0,
+        tokensOut: 0,
+        costMinor: 0,
+        currency: "BHD"
+      }
+    });
+    await prisma.workspaceChat.updateMany({ where: { id: chat.id, workspaceId, userId }, data: { updatedAt: new Date() } });
+    return record(saved);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const duplicate = await prisma.aiInteraction.findUnique({ where: { id: input.requestId } });
@@ -232,7 +258,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         take: 8,
         select: { id: true, brief: true, caption: true, contentType: true, revision: true }
       }),
-      workspaceAssistantHistory(row.workspaceId, p.userId, p.intent),
+      workspaceAssistantHistory(row.workspaceId, p.userId, p.intent, row.workspaceChatId ?? undefined),
       searchVaultContext(row.workspaceId, { query: p.message, topK: 8 }),
       personalizationContext(row.workspaceId, p.userId),
       prisma.aiInteraction.findFirst({
@@ -283,7 +309,15 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
           .parse(value)
     });
     const parsed = workspaceAssistantResultSchema.parse(generated.result);
-    const proposal = parsed.proposal;
+    let proposal = parsed.proposal;
+    if (proposal?.action === "CAMPAIGN" && (!proposal.durationDays || !proposal.publishesPerDay)) {
+      const missing = [
+        !proposal.durationDays ? (p.locale === "ar" ? "مدة الحملة" : "how long it should run") : "",
+        !proposal.publishesPerDay ? (p.locale === "ar" ? "عدد المنشورات يوميًا" : "how many posts per day") : ""
+      ].filter(Boolean);
+      parsed.reply = p.locale === "ar" ? `قبل إعداد الخطة، ما ${missing.join(" و")}؟` : `Before I plan it, tell me ${missing.join(" and ")}.`;
+      proposal = null;
+    }
     if (proposal?.action === "CAMPAIGN") {
       proposal.startsAt = proposal.startsAt ?? p.startsAt;
       proposal.durationDays = proposal.durationDays ?? 7;
@@ -311,7 +345,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
           tokensOut: generated.tokens_out,
           response: json({
             status: proposal ? "PROPOSED" : "DISCUSSION",
-            reply: generated.result.reply,
+            reply: parsed.reply,
             proposal,
             ...(proposal ? { confirmationToken: randomUUID(), ...(target ? { baseRevision: target.revision } : {}) } : {})
           })
@@ -362,6 +396,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
 
 export async function confirmWorkspacePlan(workspaceId: string, userId: string, id: string, token: string) {
   if (!(await canContinue(workspaceId, userId))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "Access changed", 403);
+  await legacyWorkspaceChat(workspaceId, userId);
   const row = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM ai_interactions WHERE id=${id}::uuid AND "workspaceId"=${workspaceId}::uuid FOR UPDATE`;
     const row = await tx.aiInteraction.findFirst({ where: { id, ...owned(workspaceId, userId) } });
@@ -376,6 +411,7 @@ export async function confirmWorkspacePlan(workspaceId: string, userId: string, 
       await tx.aiInteraction.findFirst({
         where: {
           ...owned(workspaceId, userId),
+          workspaceChatId: row.workspaceChatId,
           createdAt: { gt: row.createdAt },
           AND: [
             {

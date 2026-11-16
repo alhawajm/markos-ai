@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
 import { Ellipsis } from "lucide-react-native";
 import { newRequestId } from "./request-id";
-import type { WorkspaceAssistantTurn } from "@markos/shared-types";
+import type { WorkspaceAssistantTurn, WorkspaceChatSelection } from "@markos/shared-types";
 import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
 import { useAccount, useAppearance } from "./providers";
 import { sessionController } from "./auth/transport";
@@ -16,20 +16,37 @@ import { ChatComposer } from "./chat-composer";
 import { ContentReportSheet } from "./content-report";
 import { errorMessage } from "./errors";
 import { PersonalMemorySheet } from "./personal-memory";
+import { HomeChats } from "./home-chats";
+import { AssistantArtifact } from "./assistant-artifact";
 
-type Request = { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent };
+type Request = { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent; chatId?: string };
 export function WorkspaceAssistantScreen(props: { intent?: TaskIntent; embedded?: boolean }) {
   const { scope } = useAccount();
+  if ((!props.intent || props.intent === "GENERAL") && !props.embedded)
+    return <HomeChats key={scope}>{(chat, onSent) => <WorkspaceConversation key={`${scope}:${chat.id}`} {...props} chat={chat} onSent={onSent} />}</HomeChats>;
   return <WorkspaceConversation key={`${scope}:${props.intent ?? "GENERAL"}`} {...props} />;
 }
-function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { intent?: TaskIntent; embedded?: boolean }) {
+function WorkspaceConversation({
+  intent = "GENERAL",
+  embedded = false,
+  chat,
+  onSent
+}: {
+  intent?: TaskIntent;
+  embedded?: boolean;
+  chat?: WorkspaceChatSelection;
+  onSent?: (id: string) => void;
+}) {
   const focused = useIsFocused();
   const { api, scope, epoch, queryClient, session } = useAccount(),
     { t, locale, colors } = useAppearance(),
     router = useRouter();
   const kind = { GENERAL: "assistant", CONTENT: "assistant-content", CAMPAIGN: "assistant-campaign", STRATEGY: "assistant-strategy" } as const;
-  const store = useMemo(() => new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, kind[intent]), [scope, epoch, intent]);
-  const key = intent === "GENERAL" ? [scope, "workspace-assistant"] : [scope, "workspace-assistant", intent];
+  const store = useMemo(
+    () => new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, kind[intent], chat?.id),
+    [scope, epoch, intent, chat?.id]
+  );
+  const key = chat ? [scope, "workspace-assistant", chat.id] : intent === "GENERAL" ? [scope, "workspace-assistant"] : [scope, "workspace-assistant", intent];
   const intro = taskIntroductions[intent],
     language = locale === "ar" ? 1 : 0;
   const scrollRef = useRef<ScrollView>(null),
@@ -38,11 +55,22 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
   const [report, setReport] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [earlier, setEarlier] = useState(false);
+  const [older, setOlder] = useState<WorkspaceAssistantTurn[]>([]),
+    [before, setBefore] = useState<string | null>(null),
+    [loadingOlder, setLoadingOlder] = useState(false);
+  const loadedOlder = useRef(false);
   const result = useQuery({
     queryKey: key,
-    queryFn: () => api.workspaceAssistant(intent === "GENERAL" ? undefined : intent),
+    queryFn: () =>
+      chat
+        ? api.assistantChatMessages(chat.id).then((page) => {
+            if (!loadedOlder.current) setBefore(page.nextBefore);
+            return page.turns;
+          })
+        : api.workspaceAssistant(intent === "GENERAL" ? undefined : intent),
+    initialData: chat?.isNew ? [] : undefined,
     refetchInterval: 2500,
-    enabled: focused
+    enabled: focused && !chat?.isNew
   });
   const [message, setMessage] = useState(""),
     [pending, setPending] = useState<Request | null>(null),
@@ -58,7 +86,15 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
     setBusy(false);
     void store
       .read()
-      .then((v) => {
+      .then(async (v) => {
+        if (!v && chat?.legacy) {
+          const legacy = new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, kind[intent]);
+          v = await legacy.read();
+          if (v) {
+            await store.save(v);
+            await legacy.clear();
+          }
+        }
         if (live) {
           setMessage(v?.message ?? "");
           setPending(v?.pending ?? null);
@@ -87,7 +123,13 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
   async function send() {
     following.current = true;
     if (busy || active || !restored) return;
-    const request = pending ?? { requestId: newRequestId(), message: message.trim(), locale, ...(intent === "GENERAL" ? {} : { intent }) };
+    const request = pending ?? {
+      requestId: newRequestId(),
+      message: message.trim(),
+      locale,
+      ...(intent === "GENERAL" ? {} : { intent }),
+      ...(chat ? { chatId: chat.id } : {})
+    };
     if (!request.message) return;
     setBusy(true);
     setError("");
@@ -98,6 +140,7 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
       const saved = await api.messageWorkspaceAssistant(request);
       sessionController.assertEpoch(epoch);
       accept(saved);
+      if (chat) onSent?.(chat.id);
       await store.clear();
       setPending(null);
       setMessage("");
@@ -200,9 +243,9 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
           <Txt muted style={{ textAlign: "center" }}>
             {intro.detail[language]}
           </Txt>
-          {intent === "GENERAL" ? <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} /> : null}
+          {intent === "GENERAL" && !chat ? <TextAction label={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} /> : null}
         </View>
-      ) : intent === "GENERAL" ? (
+      ) : intent === "GENERAL" && !chat ? (
         <TextAction label={t("Memory", "الذاكرة")} accessibilityLabel={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} />
       ) : null}
       {!result.data?.length && !result.isPending ? (
@@ -237,10 +280,32 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
         </View>
       ) : null}
       {result.isPending ? <Loading /> : null}
+      {chat && before ? (
+        <TextAction
+          label={t("Earlier messages", "الرسائل السابقة")}
+          disabled={loadingOlder}
+          onPress={() => {
+            setLoadingOlder(true);
+            following.current = false;
+            void api
+              .assistantChatMessages(chat.id, before)
+              .then((page) => {
+                loadedOlder.current = true;
+                setOlder((rows) => [...page.turns, ...rows.filter((turn) => !page.turns.some((row) => row.id === turn.id))]);
+                setBefore(page.nextBefore);
+              })
+              .catch((e) => setError(errorMessage(e, t)))
+              .finally(() => setLoadingOlder(false));
+          }}
+        />
+      ) : null}
       {intent !== "GENERAL" && !earlier && (result.data?.length ?? 0) > 4 ? (
         <TextAction label={t("Earlier work", "الأعمال السابقة")} onPress={() => setEarlier(true)} />
       ) : null}
-      {(intent === "GENERAL" || earlier ? result.data : result.data?.slice(-4))?.map((turn) => (
+      {(intent === "GENERAL" || earlier
+        ? [...older.filter((row) => !(result.data ?? []).some((turn) => turn.id === row.id)), ...(result.data ?? [])]
+        : result.data?.slice(-4)
+      )?.map((turn) => (
         <Enter key={turn.id}>
           <View style={{ gap: 10 }}>
             <View style={{ alignSelf: "flex-end", maxWidth: "88%", padding: 14, borderRadius: 18, backgroundColor: colors.accentSoft }}>
@@ -289,13 +354,14 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
                   startedAt={turn.campaign?.createdAt}
                 />
               ) : null}
-              {turn.contentItemId ? (
+              {turn.result ? <AssistantArtifact artifact={turn.result} /> : null}
+              {!turn.result && turn.contentItemId ? (
                 <TextAction
                   label={t("Open draft", "فتح المسودة")}
                   onPress={() => router.push({ pathname: "/content/[id]", params: { id: turn.contentItemId! } })}
                 />
               ) : null}
-              {turn.campaignId ? (
+              {!turn.result && turn.campaignId ? (
                 <TextAction
                   label={t("Open campaign", "فتح الحملة")}
                   onPress={() => router.push({ pathname: "/campaign/[id]", params: { id: turn.campaignId! } })}
@@ -316,7 +382,7 @@ function WorkspaceConversation({ intent = "GENERAL", embedded = false }: { inten
                   ) : null}
                 </Card>
               ) : null}
-              {turn.strategy ? (
+              {!turn.result && turn.strategy ? (
                 <>
                   <GuidanceResult value={turn.strategy} />
                   <TextAction label={t("Plan a campaign", "تخطيط حملة")} onPress={() => router.push("/(tabs)/campaigns")} />

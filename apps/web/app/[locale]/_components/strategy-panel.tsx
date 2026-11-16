@@ -15,12 +15,15 @@ function SavedStrategy({ locale }: { locale: Locale }) {
   const [strategy, setStrategy] = useState<WorkspaceAssistantTurn | null | undefined>(),
     [error, setError] = useState(false),
     [retry, setRetry] = useState(0);
+  const [plan, setPlan] = useState<string | null | undefined>();
+  useEffect(() => setPlan(new URLSearchParams(window.location.search).get("plan")), []);
   useEffect(() => {
+    if (plan === undefined) return;
     let live = true;
     setError(false);
     const refresh = () =>
       api
-        .currentStrategy()
+        .currentStrategy(plan ?? undefined)
         .then((value) => {
           if (live) {
             setStrategy(value);
@@ -38,7 +41,7 @@ function SavedStrategy({ locale }: { locale: Locale }) {
       live = false;
       clearInterval(timer);
     };
-  }, [api, retry]);
+  }, [api, retry, plan]);
   return (
     <section className="task-workspace" aria-labelledby="strategy-title">
       <header className="task-workspace-header">

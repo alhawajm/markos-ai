@@ -85,6 +85,7 @@ async function workspace(page: Page) {
     else if (pathname === "/v1/content") data = [record];
     else if (pathname === "/v1/content/draft-1") data = record;
     else if (pathname === "/v1/assistant/conversation") data = [];
+    else if (pathname === "/v1/assistant/chats") data = { items: [], nextCursor: null };
     else if (pathname === "/v1/media/video-capabilities") data = { motion: true, generatedFootage: false };
     else if (pathname.endsWith("/conversation")) data = { id: "theme-thread", contentItem: record, messages: [], latestRun: null };
     else if (pathname.endsWith("/media-generation/latest") || pathname.endsWith("/publish-job/latest")) data = null;

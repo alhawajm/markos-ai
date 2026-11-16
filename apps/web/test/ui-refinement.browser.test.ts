@@ -75,6 +75,7 @@ async function fixture(page: Page, populated = false, fullTrend = false) {
     else if (url.pathname === "/v1/workspace/instagram") data = { status: "CONNECTED", username: "the.snacklab" };
     else if (url.pathname === "/v1/vault/score") data = { score: 100, completedSections: [], requiredSections: [], missingSections: [], entryCount: 8 };
     else if (["/v1/notifications", "/v1/publishing/queue", "/v1/assistant/conversation"].includes(url.pathname)) data = [];
+    else if (url.pathname === "/v1/assistant/chats") data = { items: [], nextCursor: null };
     else if (url.pathname === "/v1/content")
       data = ["DRAFT", "FAILED"].map((status, index) => ({
         id: index ? "failed" : "draft",

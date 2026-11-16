@@ -836,6 +836,8 @@ model InstagramAnalytics {
 }
 
 model AiInteraction {
+  workspaceChatId String? @db.Uuid
+  workspaceChat WorkspaceChat? @relation(fields: [workspaceChatId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   conversationRunId String?                      @db.Uuid
   contentItemId     String?                      @db.Uuid
   contentRevision   Int?
@@ -859,7 +861,23 @@ model AiInteraction {
   deletedAt         DateTime?
 
   @@index([workspaceId, agent])
+  @@index([workspaceId, workspaceChatId, createdAt])
   @@map("ai_interactions")
+}
+
+model WorkspaceChat {
+  id String @id @db.Uuid
+  workspaceId String @db.Uuid
+  userId String @db.Uuid
+  title String
+  legacyKey String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  interactions AiInteraction[]
+  @@unique([id, workspaceId])
+  @@unique([workspaceId, userId, legacyKey])
+  @@index([workspaceId, userId, updatedAt, id])
+  @@map("workspace_chats")
 }
 
 model Plan {
