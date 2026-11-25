@@ -35,7 +35,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
 
   if (!sessionChecked) {
     return (
-      <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6" dir={locale === "ar" ? "rtl" : "ltr"}>
+      <main className="sunlit-theme sunlit-app markos-workspace grid min-h-screen place-items-center px-6" dir={locale === "ar" ? "rtl" : "ltr"}>
         <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <MarkosAiIcon size={25} />
@@ -63,7 +63,7 @@ export function SettingsPage({ locale }: { locale: Locale }) {
   const firstName = session?.user.fullName.split(/\s+/)[0] || (locale === "ar" ? "الحساب" : "Account");
 
   return (
-    <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <main className="sunlit-theme sunlit-app markos-workspace min-h-screen min-w-0 overflow-x-clip" dir={locale === "ar" ? "rtl" : "ltr"}>
       <header className="brand-chrome sticky top-0 z-40 border-b px-5 py-3 sm:px-7 xl:px-10">
         <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
