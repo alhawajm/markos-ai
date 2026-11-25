@@ -4,7 +4,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AnalyticsSummary, BusinessKnowledgeRecord, CampaignSummary } from "@markos/shared-types";
 import { draft } from "./create-fixtures";
-import { assertPlexFonts } from "./browser-fonts";
+import { assertPlexFonts, assertRobotoFonts } from "./browser-fonts";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required");
@@ -185,7 +185,8 @@ describe("whole-workspace appearance", () => {
           }
           await page.mouse.move(0, 0);
           await page.evaluate(() => document.fonts.ready);
-          await assertPlexFonts(page, [route === "/content-studio" ? ".create-toolbar button" : "h1"]);
+          const assertFonts = route === "" && locale === "en" ? assertRobotoFonts : assertPlexFonts;
+          await assertFonts(page, [route === "/content-studio" ? ".create-toolbar button" : "h1"]);
           if (screenshotDir)
             await page.screenshot({
               path: path.join(screenshotDir, `${locale}-${mode}-${width}-${route.replace(/[^a-z]+/g, "-") || "overview"}.png`),

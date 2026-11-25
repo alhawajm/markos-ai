@@ -94,7 +94,7 @@ it.each([
     try {
       await page.goto(`${base}/${v.locale}/app`, { waitUntil: "domcontentloaded" });
       await page.locator(".markos-task").waitFor();
-      await page.getByRole("button", { name: v.locale === "ar" ? "ما يتذكره ماركوس" : "What MARKOS remembers", exact: true }).click();
+      await page.getByRole("button", { name: v.locale === "ar" ? "ما يتذكّره ماركوس" : "What MARKOS remembers", exact: true }).click();
       const memoryDialog = page.getByRole("dialog");
       await memoryDialog.getByText("Arabic first, concise captions", { exact: true }).waitFor();
       await page.screenshot({ path: `../../var/ui-motion-2026-11-15/screens/memory-${v.locale}-${v.theme}.png` });

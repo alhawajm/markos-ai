@@ -2,7 +2,7 @@ import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { mkdir } from "node:fs/promises";
 import { draft } from "./create-fixtures";
-import { assertPlexFonts } from "./browser-fonts";
+import { assertPlexFonts, assertRobotoFonts } from "./browser-fonts";
 const base = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!base) throw new Error("SETTINGS_BROWSER_BASE_URL required");
 let browser: Browser;
@@ -146,12 +146,15 @@ it.each([
       await page.getByRole("button", { name: v.locale === "ar" ? /لنبدأ/ : /Looks good/ }).click();
       await page.waitForURL(`**/${v.locale}/app`);
       await page.locator(".workspace-chat").waitFor();
-      expect(await page.locator(".workspace-chat-starters button").count()).toBe(3);
-      await assertPlexFonts(page, [".workspace-chat-welcome h1", ".workspace-chat-welcome>p:last-of-type", ".workspace-chat-starters button"]);
+      expect(await page.locator(".workspace-chat-starters button").count()).toBe(4);
+      await (v.locale === "en" ? assertRobotoFonts : assertPlexFonts)(page, [
+        ".post-chat-welcome h1",
+        ".post-chat-welcome p",
+        ".workspace-chat-starters button"
+      ]);
       await page.screenshot({ path: `../../var/ux-2026-11-15/screens/home-${v.locale}-${v.theme}.png`, fullPage: true });
-      await page.locator(".workspace-chat-starters button").nth(1).click();
-      await page.locator("#home-message").fill(v.locale === "ar" ? "أنشئ منشورًا عن خبز الصباح." : "Create a post about the morning bake.");
-      await page.locator(".workspace-chat-composer button").click();
+      await page.locator("#home-message").fill(v.locale === "ar" ? "ساعدني في إعداد محتوى عن خبز الصباح." : "Help me prepare content about the morning bake.");
+      await page.locator(".workspace-chat-composer [type=submit]").click();
       await page.locator(".workspace-chat-plan button").click();
       await page.getByRole("link", { name: v.locale === "ar" ? "فتح المسودة ←" : "Open draft →", exact: true }).click();
       await page.waitForURL("**/app/content-studio?item=draft-1");

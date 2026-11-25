@@ -153,7 +153,7 @@ describe("refined overview and Insights", () => {
         const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "h1" });
         const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
         expect(
-          fonts.some((font) => font.isCustomFont && font.familyName.startsWith(locale === "ar" ? "IBM Plex Sans Arabic" : "IBM Plex Sans")),
+          fonts.some((font) => font.isCustomFont && font.familyName.startsWith(locale === "ar" ? "IBM Plex Sans Arabic" : "Roboto")),
           JSON.stringify({ locale, fonts })
         ).toBe(true);
         expect(observed.unknown).toEqual([]);

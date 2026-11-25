@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertPlexFonts } from "./browser-fonts";
+import { assertPlexFonts, assertRobotoFonts } from "./browser-fonts";
 
 const baseUrl = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!baseUrl) throw new Error("SETTINGS_BROWSER_BASE_URL is required for rendered appearance tests");
@@ -144,7 +144,7 @@ describe("site appearance controls", () => {
     });
     try {
       await page.goto(`${baseUrl}/en/app`, { waitUntil: "networkidle" });
-      await page.getByRole("heading", { name: "What shall we create, Theme?" }).waitFor();
+      await page.getByRole("heading", { name: "Your business is ready", exact: true }).waitFor();
       expect(await page.getByRole("combobox", { name: "Appearance", exact: true }).count()).toBe(0);
       await page.getByRole("link", { name: "Settings", exact: true }).click();
       await page.getByRole("link", { name: "Appearance", exact: true }).click();
@@ -165,7 +165,7 @@ describe("site appearance controls", () => {
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page);
       expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
-      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-of-type"]);
+      await assertRobotoFonts(page, [".post-chat-welcome h1", ".workspace-chat-starters button", ".post-chat-welcome p"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-en-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
       await page.getByRole("button", { name: /Change language\. Current language:/ }).click();
@@ -174,7 +174,7 @@ describe("site appearance controls", () => {
       await page.getByRole("button", { name: "طي الشريط الجانبي", exact: true }).click();
       await expect.poll(() => page.locator("[data-sidebar-collapsed]").getAttribute("data-sidebar-collapsed")).toBe("true");
       await assertCollapsedSidebar(page, true);
-      await assertPlexFonts(page, ["h1", ".workspace-chat-starters button", ".workspace-chat-welcome>p:last-of-type"]);
+      await assertPlexFonts(page, [".post-chat-welcome h1", ".workspace-chat-starters button", ".post-chat-welcome p"]);
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "sidebar-collapsed-ar-dark.png"), fullPage: true });
       await page.getByRole("button", { name: "توسيع الشريط الجانبي", exact: true }).click();
       await page.getByRole("link", { name: "الإعدادات", exact: true }).click();
