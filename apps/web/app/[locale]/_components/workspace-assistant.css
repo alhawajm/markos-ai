@@ -276,6 +276,28 @@
   margin-inline: auto;
   min-width: 0;
 }
+.workspace-home-canvas {
+  --home-gradient-strength: 28%;
+  --home-glass-opacity: 74%;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      ellipse clamp(22rem, 34vw, 66rem) 30rem at 35% 31rem,
+      color-mix(in srgb, #34d8ff var(--home-gradient-strength), transparent),
+      transparent 82%
+    ),
+    radial-gradient(
+      ellipse clamp(20rem, 29vw, 56rem) 29rem at 68% 27rem,
+      color-mix(in srgb, #e7d033 var(--home-gradient-strength), transparent),
+      transparent 82%
+    );
+  background-repeat: no-repeat;
+  background-attachment: local;
+}
+:root[data-theme="dark"] .workspace-home-canvas {
+  --home-gradient-strength: 16%;
+  --home-glass-opacity: 75%;
+}
 .workspace-home-page {
   --workspace-chat-width: 56rem;
 }
@@ -291,6 +313,49 @@
   margin-inline: auto;
   border-block-start: 1px solid var(--border);
   padding-block: var(--space-3);
+}
+.workspace-home-rail {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: var(--space-6);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.workspace-home-rail > h2 {
+  margin-block-end: var(--space-4);
+  color: var(--text);
+  font-size: 1.25rem;
+}
+@media (min-width: 100rem) {
+  .workspace-home-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(23rem, 31rem);
+    gap: clamp(2rem, 3vw, 4rem);
+    align-items: start;
+    max-width: 110rem;
+    margin-inline: auto;
+  }
+  .workspace-home-page {
+    --workspace-chat-width: 64rem;
+  }
+}
+@supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  .workspace-home-canvas :is(.workspace-chat-toolbar, .workspace-chat-composer, .workspace-home-rail) {
+    background-color: color-mix(in srgb, var(--surface) var(--home-glass-opacity), transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .workspace-home-canvas .workspace-chat-toolbar {
+    background-color: color-mix(in srgb, var(--background) 82%, transparent);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .workspace-home-canvas :is(.workspace-chat-toolbar, .workspace-chat-composer, .workspace-home-rail) {
+      background-color: var(--surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
 }
 .workspace-chat-toolbar {
   display: flex;

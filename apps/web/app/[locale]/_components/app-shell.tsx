@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "./use-modal-dialog";
 import Link from "next/link";
@@ -65,6 +65,34 @@ const primaryNavItems: NavItem[] = [
 const settingsNavItem: NavItem = { icon: Settings, slug: "settings" };
 const SIDEBAR_COLLAPSED_KEY = "markos.sidebar.collapsed";
 const LOCALE_PREFERENCE_KEY = "markos.locale";
+const wideHomeQuery = "(min-width: 100rem)";
+
+function subscribeWideHome(onChange: () => void) {
+  const media = window.matchMedia(wideHomeQuery);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function WorkspaceHomeActivity({ locale }: { locale: Locale }) {
+  const wide = useSyncExternalStore(
+    subscribeWideHome,
+    () => window.matchMedia(wideHomeQuery).matches,
+    () => false
+  );
+  const [open, setOpen] = useState(false);
+  const title = locale === "ar" ? "نشاط مساحة العمل" : "Workspace activity";
+  return wide ? (
+    <aside className="workspace-home-rail" aria-label={title}>
+      <h2>{title}</h2>
+      <FinalDashboard locale={locale} compact />
+    </aside>
+  ) : (
+    <details className="workspace-home-activity" onToggle={(event) => setOpen(event.currentTarget.open)} open={open}>
+      <summary className="cursor-pointer text-sm text-[var(--text-muted)]">{title}</summary>
+      {open ? <FinalDashboard locale={locale} /> : null}
+    </details>
+  );
+}
 
 export function AppShell({ activeSection, locale }: { activeSection: SectionSlug; locale: Locale }) {
   const client = useMarkosClient(locale);
@@ -80,7 +108,6 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const [notificationState, setNotificationState] = useState<{ owner: string; items: NotificationRecord[] }>({ owner: "", items: [] });
   const notifications = notificationState.owner === ownerKey ? notificationState.items : [];
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [activityOpen, setActivityOpen] = useState(false);
   const mobileNavRef = useRef<HTMLElement>(null);
   const checkSession = useCallback(() => {
     const generation = ++checkGeneration.current;
@@ -298,7 +325,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
         </aside>
 
         <section
-          className={`sunlit-card-scroll min-w-0 ${["dashboard", "briefing", "opportunities"].includes(activeSection) ? "h-dvh overflow-y-auto overscroll-contain" : ""} lg:h-screen lg:overflow-y-auto lg:overscroll-contain`}
+          className={`sunlit-card-scroll min-w-0 ${["dashboard", "briefing", "opportunities"].includes(activeSection) ? "h-dvh overflow-y-auto overscroll-contain" : ""} ${activeSection === "dashboard" ? "workspace-home-canvas" : ""} lg:h-screen lg:overflow-y-auto lg:overscroll-contain`}
           data-app-content-scroll
         >
           <header className="brand-chrome sticky top-0 z-30 border-b border-[var(--sunlit-line)] px-5 py-3 sm:px-7 lg:hidden">
@@ -371,13 +398,10 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
           >
             {activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "dashboard" ? (
-              <>
-                <WorkspaceAssistant key={ownerKey} locale={locale} />
-                <details className="workspace-home-activity" onToggle={(e) => setActivityOpen(e.currentTarget.open)}>
-                  <summary className="cursor-pointer text-sm text-[var(--text-muted)]">{locale === "ar" ? "نشاط مساحة العمل" : "Workspace activity"}</summary>
-                  {activityOpen ? <FinalDashboard locale={locale} /> : null}
-                </details>
-              </>
+              <div className="workspace-home-layout" key={ownerKey}>
+                <WorkspaceAssistant locale={locale} />
+                <WorkspaceHomeActivity locale={locale} />
+              </div>
             ) : null}
             {activeSection === "briefing" ? <WorkspaceAssistant key={ownerKey} locale={locale} /> : null}
             {activeSection === "campaigns" ? <CampaignPanel locale={locale} /> : null}

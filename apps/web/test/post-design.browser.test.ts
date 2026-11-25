@@ -26,6 +26,12 @@ it.each([
     const t = (en: string, ar: string) => (locale === "ar" ? ar : en);
     const viewport = { width, height: locale === "ar" ? 768 : 900 };
     const page = await browser.newPage({ viewport, reducedMotion: "reduce", acceptDownloads: true });
+    page.setDefaultTimeout(15_000);
+    const renderingErrors: string[] = [];
+    page.on("pageerror", (error) => renderingErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().includes("same key")) renderingErrors.push(message.text());
+    });
     const photo = await readFile("../mobile/assets/post-style-soft.jpg");
     let turn: WorkspaceAssistantTurn | undefined;
     const renders: (PostArtwork & { source?: PostArtworkSource })[] = [];
@@ -62,6 +68,7 @@ it.each([
       contentType: "POST",
       status: "DRAFT",
       caption: "",
+      contentPillar: "Bakery preview to review",
       mediaItems: [slot],
       revision: 0,
       reelScript: null,
@@ -108,6 +115,8 @@ it.each([
         return route.fulfill(json(turn));
       }
       if (path === `/v1/content/${id}`) return route.fulfill(json(item));
+      if (path === "/v1/content") return route.fulfill(json([item]));
+      if (path === "/v1/publishing/queue") return route.fulfill(json([]));
       if (path === "/v1/content/ideate") return route.fulfill(json({ caption: "Pearl Bakery\n8 am to 10 pm" }));
       if (path === "/v1/media/post-artwork") {
         renders.push(route.request().postDataJSON());
@@ -148,24 +157,33 @@ it.each([
       await page.goto(`${base}/${locale}/app`, { waitUntil: "domcontentloaded" });
       await page.getByRole("heading", { name: t("Your business is ready", "نشاطك التجاري جاهز") }).waitFor();
       await (locale === "en" ? assertRobotoFonts : assertPlexFonts)(page, [".post-chat-welcome h1", "#markos-primary-navigation a"]);
+      expect(await page.locator(".workspace-home-canvas").evaluate((node) => getComputedStyle(node).backgroundImage)).toContain("radial-gradient");
+      expect(await page.locator(".workspace-chat-composer").evaluate((node) => getComputedStyle(node).backdropFilter)).toContain("blur");
       await page.screenshot({ path: `${screens}/home-${locale}.png` });
-      if (locale === "en") {
-        await page.setViewportSize({ width: 3440, height: 1440 });
-        const pane = await page.locator("[data-app-content-scroll]").boundingBox();
-        const toolbar = await page.locator(".workspace-chat-toolbar").boundingBox();
-        const composer = await page.locator(".workspace-chat-composer").boundingBox();
-        const activity = await page.locator(".workspace-home-activity > summary").boundingBox();
-        expect(pane).not.toBeNull();
-        expect(toolbar).not.toBeNull();
-        expect(composer).not.toBeNull();
-        expect(activity).not.toBeNull();
-        expect(toolbar!.x - pane!.x).toBeLessThanOrEqual(40);
-        expect(composer!.width).toBeLessThanOrEqual(900);
-        expect(Math.abs(activity!.x - composer!.x)).toBeLessThan(2);
-        expect(await page.locator(".workspace-chat-post-flow").evaluate((node) => getComputedStyle(node).backgroundImage)).toBe("none");
-        await page.screenshot({ path: `${screens}/home-en-wide.png` });
-        await page.setViewportSize(viewport);
-      }
+      await page.setViewportSize({ width: 3440, height: 1440 });
+      const workArea = await page.locator(".workspace-home-layout").boundingBox();
+      const rail = page.getByRole("complementary", { name: t("Workspace activity", "نشاط مساحة العمل"), exact: true });
+      const draftLink = rail.getByRole("link", { name: /Bakery preview to review/ });
+      await draftLink.waitFor();
+      expect(await draftLink.getAttribute("href")).toBe(`/${locale}/app/content-studio?item=${id}`);
+      const toolbar = await page.locator(".workspace-chat-toolbar").boundingBox();
+      const composer = await page.locator(".workspace-chat-composer").boundingBox();
+      const activity = await rail.boundingBox();
+      expect(workArea).not.toBeNull();
+      expect(toolbar).not.toBeNull();
+      expect(composer).not.toBeNull();
+      expect(activity).not.toBeNull();
+      const direction = locale === "ar" ? "rtl" : "ltr";
+      const start = (box: NonNullable<typeof toolbar>) => (direction === "rtl" ? box.x + box.width : box.x);
+      expect(Math.abs(start(toolbar!) - start(workArea!))).toBeLessThan(2);
+      expect(composer!.width).toBeLessThanOrEqual(1024);
+      const columnGap = direction === "rtl" ? composer!.x - (activity!.x + activity!.width) : activity!.x - (composer!.x + composer!.width);
+      expect(columnGap).toBeGreaterThan(16);
+      expect(await page.locator(".workspace-chat-post-flow").evaluate((node) => getComputedStyle(node).backgroundImage)).toBe("none");
+      await page.screenshot({ path: `${screens}/home-${locale}-wide.png` });
+      await page.setViewportSize(viewport);
+      await page.locator(".workspace-home-activity > summary").waitFor();
+      await rail.waitFor({ state: "hidden" });
       await button(t("Post ideas", "أفكار منشورات")).click();
       await button(t("Opening hours", "ساعات العمل")).click();
       await page.locator('input[type="file"]').setInputFiles({ name: "bakery.jpg", mimeType: "image/jpeg", buffer: photo });
@@ -227,6 +245,7 @@ it.each([
       expect(scheduled).toEqual({ expectedRevision: reviewed, scheduledAt: "2099-12-31T11:30:00.000Z" });
       expect(publishNowCalls).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect(renderingErrors).toEqual([]);
     } finally {
       await page.close();
     }

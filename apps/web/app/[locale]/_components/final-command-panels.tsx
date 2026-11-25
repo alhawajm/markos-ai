@@ -326,7 +326,7 @@ const performanceRows = [
   { comments: "98", likes: "892", roi: "1.9x", score: "68", title: "Product Tutorial", views: "12,300" }
 ];
 
-export function FinalDashboard({ locale }: { locale: Locale }) {
+export function FinalDashboard({ locale, compact = false }: { locale: Locale; compact?: boolean }) {
   const session = useMarkosSession();
   const client = useMarkosClient(locale);
   const [liveState, setLiveState] = useState<DashboardLiveState>({
@@ -435,25 +435,27 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
   }, [client, session]);
 
   return (
-    <section className="min-w-0 space-y-6 xl:space-y-7">
-      <header>
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-semibold text-[var(--text)]">{copy.greeting}</h1>
-            <p className="mt-2 text-base text-[var(--text-muted)]" dir="auto">
-              {workspaceName}
-            </p>
+    <section className={compact ? "min-w-0 space-y-4" : "min-w-0 space-y-6 xl:space-y-7"}>
+      {!compact ? (
+        <header>
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-semibold text-[var(--text)]">{copy.greeting}</h1>
+              <p className="mt-2 text-base text-[var(--text-muted)]" dir="auto">
+                {workspaceName}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
+                {missionCta} <ArrowRight size={17} />
+              </a>
+              <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/campaigns`}>
+                {copy.campaigns}
+              </a>
+            </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <a className="sunlit-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={missionHref}>
-              {missionCta} <ArrowRight size={17} />
-            </a>
-            <a className="sunlit-secondary inline-flex min-h-11 items-center gap-2 rounded-xl px-5 text-sm font-extrabold" href={`/${locale}/app/campaigns`}>
-              {copy.campaigns}
-            </a>
-          </div>
-        </div>
-      </header>
+        </header>
+      ) : null}
 
       {!session ? (
         <article className="sunlit-panel-soft rounded-2xl p-5">
@@ -480,8 +482,9 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
         </article>
       ) : null}
 
-      <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className={compact ? "grid min-w-0 grid-cols-2 gap-3" : "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4"}>
         <SunlitMetricCard
+          compact={compact}
           icon={Palette}
           label={copy.workspaceContent}
           note={liveState.contentItems.length ? copy.contentReady : copy.contentEmpty}
@@ -489,6 +492,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           value={String(liveState.contentItems.length)}
         />
         <SunlitMetricCard
+          compact={compact}
           icon={Calendar}
           label={copy.scheduled}
           note={
@@ -502,6 +506,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
           value={String(liveState.publishingQueue.length)}
         />
         <SunlitMetricCard
+          compact={compact}
           icon={Eye}
           label={copy.insight}
           note={copy.latest}
@@ -512,12 +517,14 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
               : "—"
           }
         />
-        <article className="sunlit-panel rounded-2xl p-5">
+        <article className={`sunlit-panel rounded-2xl ${compact ? "p-3" : "p-5"}`}>
           <div className="flex items-center justify-between gap-4">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--secondary-soft)] text-[var(--text-soft)]">
               <Brain size={20} />
             </span>
-            <span className="text-3xl font-bold text-[var(--sunlit-ink)]">{liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}</span>
+            <span className={`font-bold text-[var(--sunlit-ink)] ${compact ? "text-2xl" : "text-3xl"}`}>
+              {liveState.vaultScore ? `${liveState.vaultScore.score}%` : "—"}
+            </span>
           </div>
           <h2 className="mt-4 text-base font-semibold text-[var(--text)]">{copy.profileReady}</h2>
           <a className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-[var(--interactive)]" href={`/${locale}/app/knowledge`}>
@@ -528,15 +535,15 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
 
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-[var(--sunlit-ink)]">{copy.contentReady}</h2>
-        <a className="inline-flex items-center gap-2 text-sm font-extrabold text-[var(--sunlit-pink)]" href={`/${locale}/app/content-studio`}>
+        <a className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--link)]" href={`/${locale}/app/content-studio`}>
           {copy.openAll} <ArrowRight size={17} />
         </a>
       </div>
       {readyItems.length > 0 ? (
-        <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className={compact ? "grid min-w-0 gap-2" : "grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4"}>
           {readyItems.slice(0, 4).map((item) => (
             <a
-              className="sunlit-panel group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:border-[var(--lavender)]"
+              className={`sunlit-panel group rounded-2xl transition hover:border-[var(--lavender)] ${compact ? "p-3" : "p-5 hover:-translate-y-0.5"}`}
               href={`/${locale}/app/content-studio?item=${item.id}`}
               key={item.id}
             >
@@ -544,7 +551,7 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
                 <span className="text-sm text-[var(--text-muted)]">{localizedContentTypeLabel(item.contentType, locale)}</span>
                 <ContentStatusBadge status={item.status} locale={locale} />
               </div>
-              <h3 className="mt-4 line-clamp-2 font-semibold leading-6 text-[var(--text)]" dir="auto">
+              <h3 className={`line-clamp-2 font-semibold leading-6 text-[var(--text)] ${compact ? "mt-2" : "mt-4"}`} dir="auto">
                 {recordTitle(item)}
               </h3>
               <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--text-muted)]">
@@ -569,12 +576,14 @@ export function FinalDashboard({ locale }: { locale: Locale }) {
 }
 
 function SunlitMetricCard({
+  compact = false,
   icon,
   label,
   note,
   tone,
   value
 }: {
+  compact?: boolean;
   icon: IconType;
   label: string;
   note: string;
@@ -589,12 +598,12 @@ function SunlitMetricCard({
         ? "bg-[color-mix(in_srgb,var(--secondary)_20%,transparent)] text-[var(--sunlit-warning)]"
         : "bg-[var(--sunlit-paper-deep)] text-[var(--sunlit-pink)]";
   return (
-    <article className="sunlit-panel rounded-2xl p-5">
-      <div className="flex items-start justify-between gap-4">
-        <span className={`grid h-11 w-11 place-items-center rounded-xl ${toneClass}`}>
+    <article className={`sunlit-panel rounded-2xl ${compact ? "p-3" : "p-5"}`}>
+      <div className={`flex items-start justify-between ${compact ? "gap-2" : "gap-4"}`}>
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${toneClass}`}>
           <Icon size={20} />
         </span>
-        <strong className="text-3xl font-bold tracking-tight text-[var(--sunlit-ink)]">{value}</strong>
+        <strong className={`font-bold tracking-tight text-[var(--sunlit-ink)] ${compact ? "text-2xl" : "text-3xl"}`}>{value}</strong>
       </div>
       <p className="mt-4 font-semibold text-[var(--sunlit-ink)]">{label}</p>
       <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--sunlit-muted)]">{note}</p>
