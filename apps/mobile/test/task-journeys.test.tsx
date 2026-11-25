@@ -19,13 +19,29 @@ const state = vi.hoisted(() => ({
   push: vi.fn(),
   stores: new Map<string, unknown>()
 }));
-vi.mock("react-native", () => ({ View: "View", RefreshControl: "RefreshControl", ScrollView: "ScrollView", TextInput: "TextInput", Pressable: "Pressable" }));
+vi.mock("react-native", () => ({
+  View: "View",
+  Image: "Image",
+  RefreshControl: "RefreshControl",
+  ScrollView: "ScrollView",
+  TextInput: "TextInput",
+  Pressable: "Pressable",
+  Keyboard: { dismiss: vi.fn() }
+}));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("lucide-react-native", () => ({
+  ArrowUp: () => null,
+  CalendarDays: () => null,
   Send: () => null,
   Ellipsis: () => null,
+  LayoutTemplate: () => null,
+  Menu: () => null,
+  Pencil: () => null,
+  Plus: () => null,
   RotateCcw: () => null,
   MessagesSquare: () => null,
   SquarePen: () => null,
+  X: () => null,
   ArrowUpRight: () => null
 }));
 vi.mock("expo-router", () => ({ useRouter: () => ({ push: state.push }) }));
@@ -59,6 +75,23 @@ vi.mock("../src/auth/transport", () => ({ sessionController: { assertEpoch: vi.f
 vi.mock("../src/errors", () => ({ errorMessage: () => "Try again" }));
 vi.mock("../src/content-report", () => ({ ContentReportSheet: () => null }));
 vi.mock("../src/personal-memory", () => ({ PersonalMemorySheet: () => null }));
+vi.mock("../src/post-design/card", () => ({ ChatPostDesign: () => null }));
+vi.mock("../src/post-design/choices", () => ({ TemplateChoices: () => null }));
+vi.mock("../src/post-design/files", () => ({
+  pickPostPhoto: vi.fn(),
+  postDesignFile: vi.fn(),
+  removePostFile: vi.fn()
+}));
+vi.mock("../src/post-design/theme", async () => {
+  const { createElement } = await import("react");
+  const { usePostFlowTheme } = await import("../src/post-design/palette");
+  return {
+    usePostFlowTheme,
+    PostMascot: () => null,
+    WelcomeGlow: () => null,
+    PostText: ({ children, ...props }: React.PropsWithChildren) => createElement("Txt", props, children)
+  };
+});
 vi.mock("../src/motion", async () => {
   const { createElement } = await import("react");
   return {
@@ -249,7 +282,7 @@ it("keeps existing Home conversations compact and retries the same saved request
     .queryAll((n) => n.type === "Txt")
     .map((n) => JSON.stringify(n.props.children))
     .join(" ");
-  expect(text).not.toContain("What shall we create?");
+  expect(text).not.toContain("Your business is ready");
   expect(text).not.toContain("You approve before publishing.");
   expect(root.container.queryAll((n) => n.type === "TextAction" && n.props.label === "Open campaign")).toHaveLength(1);
   const field = () => root!.container.queryAll((n) => n.type === "TextInput")[0]!;

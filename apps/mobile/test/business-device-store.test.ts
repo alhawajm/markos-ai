@@ -57,7 +57,9 @@ describe("business device draft ownership", () => {
   it("logout waits for earlier writes, removes only this identity, and blocks late writes", async () => {
     await new BusinessDeviceStore("other", 1, "setup").save({ name: "Keep" });
     await new BusinessDeviceStore("other", 1, "assistant", "chat").save({ message: "Keep private" });
+    await new BusinessDeviceStore("other", 1, "post-design", "turn").save({ stage: "style" });
     await new BusinessDeviceStore("current", 1, "assistant", "chat").save({ message: "Delete private" });
+    await new BusinessDeviceStore("current", 1, "post-design", "turn").save({ stage: "preview" });
     await new BusinessDeviceStore("current", 1, "assistant-navigation").save({ id: "chat" });
     for (const kind of ["assistant-content", "assistant-campaign", "assistant-strategy"] as const)
       await new BusinessDeviceStore("current", 1, kind).save({ message: "Private unsent goal" });
@@ -80,7 +82,8 @@ describe("business device draft ownership", () => {
     expect(state.data.has("markos.business.setup.other")).toBe(true);
     expect([...state.data.keys()].some((key) => key.includes(".current:chat:"))).toBe(false);
     expect(await new BusinessDeviceStore("other", 2, "assistant", "chat").read()).toEqual({ message: "Keep private" });
-    expect(state.deleted).toEqual(["file:///app/onboarding-files/current"]);
+    expect(await new BusinessDeviceStore("other", 2, "post-design", "turn").read()).toEqual({ stage: "style" });
+    expect(state.deleted).toEqual(["file:///app/onboarding-files/current", "file:///app/post-designs/current"]);
     await expect(store.save({ name: "Late" })).rejects.toThrow("Identity changed");
   });
   it("finishes queued edits before clearing a successfully saved draft", async () => {
