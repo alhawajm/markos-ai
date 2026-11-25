@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import type { ContentAuthoringOperation, ContentRecord, PostArtwork, PostArtworkSource, WorkspaceAssistantTurn } from "@markos/shared-types";
+import { assertPlexFonts, assertRobotoFonts } from "./browser-fonts";
 
 const base = process.env.SETTINGS_BROWSER_BASE_URL;
 if (!base) throw new Error("SETTINGS_BROWSER_BASE_URL required");
@@ -23,7 +24,8 @@ it.each([
   "finishes and edits the photo-based design from Home ($locale)",
   async ({ locale, theme, width }) => {
     const t = (en: string, ar: string) => (locale === "ar" ? ar : en);
-    const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: "reduce", acceptDownloads: true });
+    const viewport = { width, height: locale === "ar" ? 768 : 900 };
+    const page = await browser.newPage({ viewport, reducedMotion: "reduce", acceptDownloads: true });
     const photo = await readFile("../mobile/assets/post-style-soft.jpg");
     let turn: WorkspaceAssistantTurn | undefined;
     const renders: (PostArtwork & { source?: PostArtworkSource })[] = [];
@@ -145,7 +147,25 @@ it.each([
       const button = (name: string) => page.getByRole("button", { name, exact: true });
       await page.goto(`${base}/${locale}/app`, { waitUntil: "domcontentloaded" });
       await page.getByRole("heading", { name: t("Your business is ready", "نشاطك التجاري جاهز") }).waitFor();
+      await (locale === "en" ? assertRobotoFonts : assertPlexFonts)(page, [".post-chat-welcome h1", "#markos-primary-navigation a"]);
       await page.screenshot({ path: `${screens}/home-${locale}.png` });
+      if (locale === "en") {
+        await page.setViewportSize({ width: 3440, height: 1440 });
+        const pane = await page.locator("[data-app-content-scroll]").boundingBox();
+        const toolbar = await page.locator(".workspace-chat-toolbar").boundingBox();
+        const composer = await page.locator(".workspace-chat-composer").boundingBox();
+        const activity = await page.locator(".workspace-home-activity > summary").boundingBox();
+        expect(pane).not.toBeNull();
+        expect(toolbar).not.toBeNull();
+        expect(composer).not.toBeNull();
+        expect(activity).not.toBeNull();
+        expect(toolbar!.x - pane!.x).toBeLessThanOrEqual(40);
+        expect(composer!.width).toBeLessThanOrEqual(900);
+        expect(Math.abs(activity!.x - composer!.x)).toBeLessThan(2);
+        expect(await page.locator(".workspace-chat-post-flow").evaluate((node) => getComputedStyle(node).backgroundImage)).toBe("none");
+        await page.screenshot({ path: `${screens}/home-en-wide.png` });
+        await page.setViewportSize(viewport);
+      }
       await button(t("Post ideas", "أفكار منشورات")).click();
       await button(t("Opening hours", "ساعات العمل")).click();
       await page.locator('input[type="file"]').setInputFiles({ name: "bakery.jpg", mimeType: "image/jpeg", buffer: photo });

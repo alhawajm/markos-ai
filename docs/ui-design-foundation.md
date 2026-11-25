@@ -103,7 +103,7 @@ The shared Appearance control provides a visible keyboard-accessible night-mode 
 
 ### Typography
 
-- Use **IBM Plex Sans** for English and **IBM Plex Sans Arabic** for Arabic, including script-appropriate fallback for mixed content. Inter is superseded. Readex Pro was only a fallback option if the two-family setup proved impractical; it is not the adopted font.
+- Use **Roboto** for signed-in English workspace navigation and content. Public web and onboarding use **IBM Plex Sans** for English. Use **IBM Plex Sans Arabic** for Arabic, with script-appropriate fallback in mixed content.
 - `apps/web/app/fonts.ts` loads the pinned local WOFF2 files through `next/font/local`. Normal weights 400, 500, 600, and 700 are included; use these real faces rather than requesting synthetic 800–950 weights. Source revision and the included OFL license are recorded in [the font asset README](../apps/web/app/fonts/README.md).
 - Keep the root at **16px** at every viewport. Use **16px body**, **15px controls**, **14px labels**, and **13px secondary metadata** as the default scale. Occasional 12px text is reserved for genuinely secondary metadata; 10px or 11px text is unsuitable for normal UI.
 - Use 400 for ordinary body text, 500 for labels or moderate emphasis, 600 for headings and actions, and 700 sparingly for stronger emphasis. Create hierarchy through spacing, size, and contrast rather than making every label bold.

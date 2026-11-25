@@ -198,7 +198,7 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
 
   if (!sessionChecked || !session || checkedOwner !== JSON.stringify([session.user.id, session.workspace.id])) {
     return (
-      <main className="sunlit-theme sunlit-app grid min-h-screen place-items-center px-6">
+      <main className="sunlit-theme sunlit-app markos-workspace grid min-h-screen place-items-center px-6">
         <section className="sunlit-panel max-w-md rounded-[2rem] p-9 text-center">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[var(--sunlit-aqua-soft)] text-[var(--sunlit-aqua-dark)]">
             <MarkosAiIcon size={28} />
@@ -228,7 +228,10 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
   const SidebarToggleIcon = sidebarCollapsed ? (locale === "ar" ? ChevronLeft : ChevronRight) : locale === "ar" ? ChevronRight : ChevronLeft;
 
   return (
-    <main className="sunlit-theme sunlit-app min-h-screen min-w-0 overflow-x-clip lg:h-screen lg:overflow-hidden" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <main
+      className="sunlit-theme sunlit-app markos-workspace min-h-screen min-w-0 overflow-x-clip lg:h-screen lg:overflow-hidden"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
       <div
         className={`grid min-h-screen lg:h-screen ${sidebarCollapsed ? "lg:grid-cols-[6rem_minmax(0,1fr)]" : "lg:grid-cols-[15.25rem_minmax(0,1fr)]"} ${
           sidebarPreferenceReady ? "lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out motion-reduce:transition-none" : ""
@@ -361,14 +364,16 @@ export function AppShell({ activeSection, locale }: { activeSection: SectionSlug
 
           <div
             className={
-              activeSection === "content-studio" ? "w-full min-w-0 px-4 py-5 lg:p-6" : "mx-auto w-full max-w-[1500px] min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8"
+              activeSection === "content-studio"
+                ? "w-full min-w-0 px-4 py-5 lg:p-6"
+                : `mx-auto w-full min-w-0 px-4 py-5 sm:px-6 lg:py-6 xl:px-8 ${activeSection === "dashboard" ? "workspace-home-page" : "max-w-[1500px]"}`
             }
           >
             {activeSection === "knowledge" ? <InstagramConnectionBanner key={session?.workspace.id} locale={locale} /> : null}
             {activeSection === "dashboard" ? (
               <>
                 <WorkspaceAssistant key={ownerKey} locale={locale} />
-                <details className="mt-8" onToggle={(e) => setActivityOpen(e.currentTarget.open)}>
+                <details className="workspace-home-activity" onToggle={(e) => setActivityOpen(e.currentTarget.open)}>
                   <summary className="cursor-pointer text-sm text-[var(--text-muted)]">{locale === "ar" ? "نشاط مساحة العمل" : "Workspace activity"}</summary>
                   {activityOpen ? <FinalDashboard locale={locale} /> : null}
                 </details>

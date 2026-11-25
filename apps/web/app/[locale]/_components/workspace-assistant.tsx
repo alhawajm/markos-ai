@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowUp, MoreHorizontal, Plus, X } from "lucide-react";
+import { ArrowUp, Compass, LayoutTemplate, MoreHorizontal, Pencil, Plus, Target, X } from "lucide-react";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { MarkosPulse, TaskFeedback } from "./task-feedback";
 import { ContentReportDialog } from "./content-report-dialog";
@@ -23,6 +23,8 @@ import { AssistantArtifactCard } from "./assistant-artifact-card";
 import { ChatPostDesign, usePostImage } from "./post-design-card";
 import { savePostDesign } from "./post-design-storage";
 import "./post-design.css";
+
+const homeSuggestionIcons = [Compass, null, Target] as const;
 
 export function WorkspaceAssistant(props: { locale: Locale; intent?: TaskIntent }) {
   const session = useMarkosSession();
@@ -238,10 +240,15 @@ function WorkspaceConversation({
     );
   return (
     <section
-      className={`workspace-chat${supportsPostDesign ? " workspace-chat-post-flow" : ""}${welcome ? " workspace-chat-post-welcome" : ""}`}
+      className={`workspace-chat${supportsPostDesign ? " workspace-chat-post-flow" : ""}`}
       dir={locale === "ar" ? "rtl" : "ltr"}
       aria-label={t("MARKOS conversation", "محادثة ماركوس")}
     >
+      {supportsPostDesign ? (
+        <button className="brand-nav-item post-memory-link" onClick={() => setMemoryOpen(true)}>
+          {t("What MARKOS remembers", "ما يتذكّره ماركوس")}
+        </button>
+      ) : null}
       {supportsPostDesign ? (
         welcome ? (
           <header className="post-chat-welcome">
@@ -269,40 +276,38 @@ function WorkspaceConversation({
           ) : null}
         </header>
       )}
-      {supportsPostDesign ? (
-        <button className="workspace-chat-link post-memory-link" onClick={() => setMemoryOpen(true)}>
-          {t("What MARKOS remembers", "ما يتذكّره ماركوس")}
-        </button>
-      ) : null}
       {!turns.length && (
         <div className="workspace-chat-starters">
           {supportsPostDesign ? (
             <>
-              <button disabled={busy || !ready || !!pending} onClick={() => startPost(t("Design a post", "صمّم منشوراً"))}>
+              <button aria-pressed={designing} disabled={busy || !ready || !!pending} onClick={() => startPost(t("Design a post", "صمّم منشوراً"))}>
+                <Pencil size={16} aria-hidden />
                 {t("Design a post", "صمّم منشوراً")}
               </button>
               <button disabled={busy || !ready || !!pending} aria-expanded={ideasOpen} onClick={() => setIdeasOpen(!ideasOpen)}>
+                <LayoutTemplate size={16} aria-hidden />
                 {t("Post ideas", "أفكار منشورات")}
               </button>
             </>
           ) : null}
           {taskSuggestions[intent]
-            .map((entry) => ({ label: entry[language], text: entry[language + 2]! }))
+            .map((entry, index) => ({ label: entry[language], text: entry[language + 2]!, Icon: supportsPostDesign ? homeSuggestionIcons[index] : null }))
             .filter((_, index) => !supportsPostDesign || index !== 1)
-            .map((s) => (
+            .map(({ label, text, Icon }) => (
               <button
-                key={s.label}
+                key={label}
                 disabled={busy || !ready}
                 onClick={() => {
                   setDesigning(false);
                   setPhoto(undefined);
                   setIdeasOpen(false);
-                  setMessage(s.text);
-                  persist(s.text, null);
+                  setMessage(text);
+                  persist(text, null);
                   document.getElementById("home-message")?.focus();
                 }}
               >
-                {s.label}
+                {Icon ? <Icon size={16} aria-hidden /> : null}
+                {label}
               </button>
             ))}
         </div>

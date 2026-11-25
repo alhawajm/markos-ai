@@ -185,7 +185,7 @@ describe("whole-workspace appearance", () => {
           }
           await page.mouse.move(0, 0);
           await page.evaluate(() => document.fonts.ready);
-          const assertFonts = route === "" && locale === "en" ? assertRobotoFonts : assertPlexFonts;
+          const assertFonts = locale === "en" ? assertRobotoFonts : assertPlexFonts;
           await assertFonts(page, [route === "/content-studio" ? ".create-toolbar button" : "h1"]);
           if (screenshotDir)
             await page.screenshot({

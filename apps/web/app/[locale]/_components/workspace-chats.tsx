@@ -85,7 +85,7 @@ export function WorkspaceChats({ locale, children }: { locale: Locale; children:
     <div className="workspace-chat-home">
       <header className="workspace-chat-toolbar">
         <button
-          className="workspace-chat-toolbar-button"
+          className="brand-nav-item workspace-chat-toolbar-button"
           onClick={() => {
             setOpen(true);
             void load().catch(() => setError(ar ? "تعذّر تحديث المحادثات." : "Couldn’t refresh your chats."));
@@ -94,14 +94,16 @@ export function WorkspaceChats({ locale, children }: { locale: Locale; children:
           <History size={19} />
           <span>{ar ? "المحادثات" : "Chats"}</span>
         </button>
-        <span className="workspace-chat-current" dir="auto">
-          {selected?.isNew ? null : title}
-        </span>
         {session?.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role)) ? (
-          <button className="workspace-chat-toolbar-button" onClick={() => choose({ id: crypto.randomUUID(), isNew: true })}>
+          <button className="brand-nav-item workspace-chat-toolbar-button workspace-chat-new" onClick={() => choose({ id: crypto.randomUUID(), isNew: true })}>
             <Plus size={19} />
             <span>{ar ? "محادثة جديدة" : "New chat"}</span>
           </button>
+        ) : null}
+        {selected && !selected.isNew ? (
+          <span className="workspace-chat-current" dir="auto">
+            {title}
+          </span>
         ) : null}
       </header>
       {error ? <p role="alert">{error}</p> : null}
