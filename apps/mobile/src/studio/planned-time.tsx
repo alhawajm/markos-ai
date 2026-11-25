@@ -5,18 +5,38 @@ import { useAppearance } from "../providers";
 import { Button, Card, Txt } from "../ui";
 import { bahrainDate } from "../campaigns/brief-model";
 
-export function PlannedTime({ value, disabled, change }: { value?: string; disabled: boolean; change: (value: string | undefined) => void }) {
+export function PlannedTime({
+  value,
+  disabled,
+  change,
+  purpose = "plan"
+}: {
+  value?: string;
+  disabled: boolean;
+  change: (value: string | undefined) => void;
+  purpose?: "plan" | "schedule";
+}) {
   const { t, locale, mode } = useAppearance();
   const [picker, setPicker] = useState<"date" | "time" | null>(null);
   const current = value ? new Date(value) : new Date();
   return (
     <Card>
-      <Txt variant="label">{t("Planned publication time", "موعد النشر المخطط")}</Txt>
+      <Txt variant="label">{purpose === "schedule" ? t("Publishing time", "موعد النشر") : t("Planned publication time", "موعد النشر المخطط")}</Txt>
       <Txt>
         {value ? current.toLocaleString(locale, { timeZone: "Asia/Bahrain", dateStyle: "medium", timeStyle: "short" }) : t("Not planned yet", "لم يُحدد بعد")}
       </Txt>
-      <Button secondary disabled={disabled} label={t("Choose planning date", "اختيار التاريخ المخطط")} onPress={() => setPicker("date")} />
-      <Button secondary disabled={disabled || !value} label={t("Choose planning time", "اختيار الوقت المخطط")} onPress={() => setPicker("time")} />
+      <Button
+        secondary
+        disabled={disabled}
+        label={purpose === "schedule" ? t("Choose date", "اختيار التاريخ") : t("Choose planning date", "اختيار التاريخ المخطط")}
+        onPress={() => setPicker("date")}
+      />
+      <Button
+        secondary
+        disabled={disabled || !value}
+        label={purpose === "schedule" ? t("Choose time", "اختيار الوقت") : t("Choose planning time", "اختيار الوقت المخطط")}
+        onPress={() => setPicker("time")}
+      />
       {value ? (
         <Button
           secondary
@@ -55,10 +75,12 @@ export function PlannedTime({ value, disabled, change }: { value?: string; disab
         </>
       ) : null}
       <Txt variant="meta" muted>
-        {t(
-          "Bahrain time. This is a planning note, not a publishing schedule. Save your changes, then approve and schedule separately.",
-          "بتوقيت البحرين. هذا موعد للتخطيط وليس جدول نشر. احفظ التعديلات ثم اعتمد المحتوى وجدوله بشكل منفصل."
-        )}
+        {purpose === "schedule"
+          ? t("Bahrain time (UTC+3)", "بتوقيت البحرين (UTC+3)")
+          : t(
+              "Bahrain time. This is a planning note, not a publishing schedule. Save your changes, then approve and schedule separately.",
+              "بتوقيت البحرين. هذا موعد للتخطيط وليس جدول نشر. احفظ التعديلات ثم اعتمد المحتوى وجدوله بشكل منفصل."
+            )}
       </Txt>
     </Card>
   );

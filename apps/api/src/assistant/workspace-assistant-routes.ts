@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyContextConfig } from "fastify";
 import { z } from "zod";
-import { workspaceAssistantMessageSchema, workspaceAssistantConfirmSchema } from "@markos/validation";
+import { beginPostDesignSchema, workspaceAssistantMessageSchema, workspaceAssistantConfirmSchema } from "@markos/validation";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { ConversationError } from "../content/conversation-service";
 import {
+  beginWorkspacePostDesign,
   confirmWorkspacePlan,
   currentWorkspaceStrategy,
   processWorkspaceAssistant,
@@ -101,6 +102,17 @@ export async function registerWorkspaceAssistantRoutes(app: FastifyInstance) {
     const { workspaceId, userId } = requireWorkspaceContext();
     try {
       return reply.status(202).send(ok(await submitWorkspaceMessage(workspaceId, userId, input.data)));
+    } catch (error) {
+      if (error instanceof ConversationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
+      throw error;
+    }
+  });
+  app.post("/v1/assistant/post-designs", { config }, async (request, reply) => {
+    const input = beginPostDesignSchema.safeParse(request.body);
+    if (!input.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid post request"));
+    const { workspaceId, userId } = requireWorkspaceContext();
+    try {
+      return ok(await beginWorkspacePostDesign(workspaceId, userId, input.data));
     } catch (error) {
       if (error instanceof ConversationError) return reply.status(error.statusCode).send(errorEnvelope(error.code, error.message));
       throw error;

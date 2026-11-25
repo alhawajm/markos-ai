@@ -16,6 +16,7 @@
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans": "0.4.1",
     "@expo-google-fonts/ibm-plex-sans-arabic": "0.4.2",
+    "@expo-google-fonts/roboto": "0.4.3",
     "@markos/api-client": "workspace:*",
     "@markos/shared-types": "workspace:*",
     "@markos/ui-tokens": "workspace:*",

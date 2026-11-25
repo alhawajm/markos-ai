@@ -3,7 +3,7 @@ import { AccessibilityInfo, Animated, AppState, Easing, Text, View } from "react
 import { markosMonogram } from "@markos/ui-tokens";
 import { useAppearance } from "./providers";
 
-function useMotionAllowed() {
+export function useMotionAllowed() {
   const [reduced, setReduced] = useState(true),
     [active, setActive] = useState(AppState.currentState === "active");
   useEffect(() => {

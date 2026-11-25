@@ -10,6 +10,7 @@ export interface WorkspaceAssistantProposal {
 }
 export interface WorkspaceAssistantTurn {
   chatId?: string;
+  postDesign?: true;
   result?: WorkspaceAssistantArtifact;
   intent?: import("./task-intents").TaskIntent;
   id: string;

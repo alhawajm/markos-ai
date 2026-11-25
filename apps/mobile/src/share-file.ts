@@ -14,7 +14,11 @@ export async function shareFile(bytes: Uint8Array, filename: string, mimeType: s
     file.create({ overwrite: true });
     file.write(bytes);
     sessionController.assertEpoch(epoch);
-    await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: title, UTI: mimeType === "application/pdf" ? "com.adobe.pdf" : "public.json" });
+    await Sharing.shareAsync(file.uri, {
+      mimeType,
+      dialogTitle: title,
+      UTI: mimeType === "application/pdf" ? "com.adobe.pdf" : mimeType === "image/jpeg" ? "public.jpeg" : "public.json"
+    });
   } finally {
     if (file.exists) file.delete();
   }

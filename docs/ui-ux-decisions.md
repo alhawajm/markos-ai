@@ -4,7 +4,7 @@ Handoff note: this document retains dated decisions and verification history. Pr
 
 - Status: active decision register
 - Started: 2026-08-25
-- Last updated: 2026-11-15
+- Last updated: 2026-11-25
 - Workflow: `docs/ui-ux-workflow.md`
 - Visual foundation: `docs/ui-design-foundation.md`
 
@@ -635,3 +635,11 @@ Completed results use one clickable card with the saved title, a short summary a
 The default web Create preview uses a large artwork canvas fitted to the available width and height, preserving the media's aspect ratio. Remove the narrow simulated phone, repeated workspace identity and decorative Instagram actions from this main review surface. Show the caption beneath the artwork with an explicit expansion for long text; keep one 44px expand icon in the canvas corner and one compact carousel navigator. The manual-edit toggle stays visible in a shorter, quiet toolbar. Keep the Instagram simulation as the optional companion preview. Viewing, expanding captions and changing preview slides never saves, generates, approves or publishes content. Validate desktop and narrow Arabic layouts with no cropped media or nested phone scrolling.
 
 Native review follows the same artwork-first hierarchy: use the available screen area, show one saved carousel slide at a time with compact navigation, and place the caption and existing readiness guidance beneath the media. Remove the nested preview card, decorative social actions and repeated approval reminder. A corner expand action opens the existing full-screen viewer, pausing inline video first. Keep supporting Story text distinguished from published media and preserve explicit Ready, scheduling and publishing actions.
+
+## 2026-11-25 — Mobile Home chat post design
+
+The UI team’s `MARKOS · Product Design.fig` frames define the approved first mobile flow from Home welcome through a post preview, manual editing and sharing. This slice uses the original floral mascot outline and three style swatches, the welcome gradient stops `#E7D033` and `#34D8FF`, the `#FDFDFD` chat canvas, `#F0F0F0` assistant cards, `#DAF1F8` user message and `#428691` selection. As requested, the Latin UI uses Roboto. Existing Arabic type and RTL layout carry through the flow. The supplied reference shows a light chat and dark editor, so the app’s semantic dark tokens apply to the chat in dark mode.
+
+The first flow guides the user through a brief and optional photo, style, font, ratio, and review. Suggestions provide a starting point, and the user can edit or skip preferences using the suggested settings. Keep the current manual tabs and the Home chat history accessible.
+
+The desktop Home adapts the same flow to a wider conversation and a full-size artwork dialog with editing controls beside the image. The original photo and edit layers stay in the originating browser, scoped by user, workspace and chat turn. The final compatible image and caption are saved to the workspace draft. Desktop offers the system share sheet when it supports files and an image download for manual posting.

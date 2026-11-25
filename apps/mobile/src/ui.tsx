@@ -510,12 +510,18 @@ export function Screen({
   refreshControl,
   scrollRef,
   scrollProps,
+  backgroundColor,
+  backdrop,
+  centerContent = false,
   layout = "standard"
 }: PropsWithChildren<{
   footer?: React.ReactNode;
   refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
   scrollRef?: React.Ref<ScrollView>;
   scrollProps?: Pick<React.ComponentProps<typeof ScrollView>, "onScroll" | "onContentSizeChange" | "onLayout">;
+  backgroundColor?: string;
+  backdrop?: React.ReactNode;
+  centerContent?: boolean;
   layout?: "standard" | "chat";
 }>) {
   const { colors } = useAppearance();
@@ -523,10 +529,11 @@ export function Screen({
   const { width } = useWindowDimensions();
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ flex: 1, backgroundColor: backgroundColor ?? colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={insets.top + 64}
     >
+      {backdrop}
       <ScrollView
         ref={scrollRef}
         {...scrollProps}
@@ -538,6 +545,7 @@ export function Screen({
           width: "100%",
           maxWidth: 760,
           alignSelf: "center",
+          ...(centerContent ? { flexGrow: 1, justifyContent: "center" } : {}),
           padding: layout === "chat" ? 16 : 20,
           paddingBottom: layout === "chat" ? 12 : 32,
           gap: layout === "chat" ? 16 : 24
@@ -553,7 +561,7 @@ export function Screen({
             paddingBottom: layout === "chat" ? (width >= 768 ? Math.max(8, insets.bottom) : 8) : Math.max(16, insets.bottom),
             borderTopWidth: layout === "chat" ? 0 : 1,
             borderColor: colors.border,
-            backgroundColor: layout === "chat" ? colors.background : colors.surface
+            backgroundColor: backdrop ? "transparent" : (backgroundColor ?? (layout === "chat" ? colors.background : colors.surface))
           }}
         >
           <View style={{ width: "100%", maxWidth: 720, alignSelf: "center", gap: 8 }}>{footer}</View>

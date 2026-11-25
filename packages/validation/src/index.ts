@@ -872,4 +872,5 @@ export * from "./authoring-assistant";
 export * from "./content-reports";
 export * from "./quick-onboarding";
 export * from "./workspace-assistant";
+export * from "./post-design";
 export * from "./personalization";

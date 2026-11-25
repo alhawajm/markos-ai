@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type AiInteraction } from "@prisma/client";
 import { z } from "zod";
 import type { WorkspaceAssistantTurn, CampaignGenerationJobRecord, TaskIntent } from "@markos/shared-types";
-import { workspaceAssistantMessageSchema, workspaceAssistantResultSchema } from "@markos/validation";
+import { recommendPostTemplates } from "@markos/shared-types";
+import { beginPostDesignSchema, workspaceAssistantMessageSchema, workspaceAssistantResultSchema } from "@markos/validation";
 import { prisma } from "../db/prisma";
 import { getBusinessKnowledge } from "../business-profile/knowledge-service";
 import { resolveModelSetting } from "../admin/model-settings-service";
@@ -59,6 +60,7 @@ function record(row: AiInteraction, campaign?: CampaignGenerationJobRecord): Wor
   return {
     id: row.id,
     ...(row.workspaceChatId ? { chatId: row.workspaceChatId } : {}),
+    ...(s.postDesign ? { postDesign: true } : {}),
     intent: (row.prompt as unknown as Prompt).intent ?? "GENERAL",
     message: (row.prompt as unknown as Prompt).message,
     reply: campaignReply ?? s.reply,
@@ -122,6 +124,61 @@ export async function workspaceAssistantHistory(workspaceId: string, userId: str
     rows.reverse().map((row) => record(row, byRequest.get(state(row).campaignRequestId ?? row.id)))
   );
 }
+export async function beginWorkspacePostDesign(workspaceId: string, userId: string, raw: unknown) {
+  const input = beginPostDesignSchema.parse(raw);
+  if (!(await canContinue(workspaceId, userId))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "You no longer have access to create content.", 403);
+  const replay = (row: AiInteraction) => {
+    const prompt = row.prompt as unknown as Prompt;
+    if (
+      row.workspaceId !== workspaceId ||
+      row.agent !== agent ||
+      row.deletedAt ||
+      row.workspaceChatId !== input.chatId ||
+      prompt.userId !== userId ||
+      prompt.message !== input.message ||
+      prompt.locale !== input.locale ||
+      !state(row).postDesign
+    ) {
+      throw new ConversationError("ASSISTANT_REQUEST_MISMATCH", "This message ID is already in use.");
+    }
+    return record(row);
+  };
+  const existing = await prisma.aiInteraction.findUnique({ where: { id: input.requestId } });
+  if (existing) return replay(existing);
+  const chat = await chatForMessage(workspaceId, userId, input.chatId, input.message);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (!(await canContinue(workspaceId, userId, tx)))
+        throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "You no longer have access to create content.", 403);
+      const content = await createContentAggregate(tx, workspaceId, { platform: "INSTAGRAM", contentType: "POST", brief: input.message.slice(0, 1000) });
+      const row = await tx.aiInteraction.create({
+        data: {
+          id: input.requestId,
+          workspaceId,
+          workspaceChatId: chat.id,
+          agent,
+          model: "user-directed",
+          promptVersion: "post-design.v1",
+          tokensIn: 0,
+          tokensOut: 0,
+          costMinor: 0,
+          currency: "BHD",
+          prompt: { userId, message: input.message, locale: input.locale, chatId: chat.id, startsAt: new Date().toISOString() },
+          response: json({ status: "COMPLETED", reply: "", proposal: null, contentItemId: content.id, postDesign: true })
+        }
+      });
+      await tx.workspaceChat.updateMany({ where: { id: chat.id, workspaceId, userId }, data: { updatedAt: new Date() } });
+      return record(row);
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const duplicate = await prisma.aiInteraction.findUnique({ where: { id: input.requestId } });
+      if (duplicate) return replay(duplicate);
+    }
+    throw error;
+  }
+}
+
 export async function submitWorkspaceMessage(workspaceId: string, userId: string, raw: unknown) {
   const input = workspaceAssistantMessageSchema.parse(raw);
   if (!(await canContinue(workspaceId, userId))) throw new ConversationError("ASSISTANT_ACCESS_CHANGED", "You no longer have access to create content.", 403);
@@ -279,6 +336,7 @@ export async function processWorkspaceAssistant(workspaceId?: string) {
         context: {
           business,
           entryIntent: p.intent ?? "GENERAL",
+          visualTemplates: recommendPostTemplates(p.message).map(({ id, en, ar, recipe }) => ({ id, en, ar, recipe })),
           vault: retrieved,
           personalization: personalization.value,
           previousStrategy: previousStrategy ? boundedStrategy(state(previousStrategy).strategy) : null,

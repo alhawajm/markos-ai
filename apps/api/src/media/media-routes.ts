@@ -7,15 +7,17 @@ import {
   generateImageForContentSchema,
   generateVideoForContentSchema,
   registerPublicMediaSchema,
+  renderPostArtworkSchema,
   uploadMediaSchema,
   updateContentMediaSchema
 } from "@markos/validation";
 import { AiServiceRequestError } from "../ai/request";
-import { requestAi } from "../ai/request";
+import { requestAi, requestAiBinary } from "../ai/request";
+import { prisma } from "../db/prisma";
 import { errorEnvelope, ok } from "../http/envelope";
 import { requireWorkspaceContext } from "../tenancy/workspace-context";
 import { UsagePlanInactiveError, UsageQuotaExceededError } from "../usage/usage-service";
-import { MediaStorageError } from "./storage-service";
+import { MediaStorageError, readStoredMedia } from "./storage-service";
 import { ContentMediaValidationError } from "./content-media-integrity";
 import {
   attachMediaToContent,
@@ -31,6 +33,7 @@ import {
   MediaUploadInvalidError,
   readPublicMediaFile,
   registerPublicMedia,
+  toMediaAssetRecord,
   uploadMedia,
   updateContentMedia
 } from "./media-service";
@@ -48,6 +51,35 @@ import {
 const maxDirectUploadBodyBytes = 12 * 1024 * 1024;
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/v1/media/post-artwork",
+    {
+      bodyLimit: maxDirectUploadBodyBytes,
+      config: { workspaceRequired: true, verifiedUserRequired: true, permissions: ["media:write"] }
+    },
+    async (request, reply) => {
+      const parsed = renderPostArtworkSchema.safeParse(request.body);
+      if (!parsed.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid post artwork request"));
+      const { workspaceId } = requireWorkspaceContext();
+      const { source, ...artwork } = parsed.data;
+      try {
+        let photoBase64 = source && "photoBase64" in source ? source.photoBase64 : undefined;
+        if (source && "mediaAssetId" in source) {
+          const asset = await prisma.mediaAsset.findFirst({
+            where: { id: source.mediaAssetId, workspaceId, deletedAt: null, type: "IMAGE", sizeBytes: { lte: 8_000_000 } }
+          });
+          if (!asset || asset.s3Key.startsWith("external:")) throw new MediaAssetNotFoundError();
+          photoBase64 = (await readStoredMedia(workspaceId, asset.s3Key)).toString("base64");
+        }
+        const jpeg = await requestAiBinary("/ai/posts/render-artwork", { ...artwork, photo_base64: photoBase64 }, 8_000_000);
+        reply.header("Cache-Control", "private, no-store");
+        return ok({ base64Data: jpeg.toString("base64") });
+      } catch (error) {
+        return handleMediaMutationError(error, reply);
+      }
+    }
+  );
+
   app.get("/v1/media/video-capabilities", { config: { workspaceRequired: true, permissions: ["media:read"] } }, async () =>
     ok(await requestAi<{ motion: boolean; generatedFootage: boolean }>("/ai/videos/capabilities", { body: {} }))
   );
@@ -75,6 +107,15 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       return ok(await listMediaAssets(workspaceId));
     }
   );
+  app.get("/v1/media/:id", { config: { workspaceRequired: true, permissions: ["media:read"] } }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid asset ID"));
+    const { workspaceId } = requireWorkspaceContext();
+    const asset = await prisma.mediaAsset.findFirst({ where: { id, workspaceId, deletedAt: null } });
+    if (!asset) return reply.status(404).send(errorEnvelope("MEDIA_NOT_FOUND", "Media asset was not found"));
+    reply.header("Cache-Control", "private, no-store");
+    return ok(toMediaAssetRecord(asset));
+  });
 
   app.post(
     "/v1/media/upload",

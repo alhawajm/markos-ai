@@ -1,13 +1,13 @@
 import { MarkosMark, TaskFeedback, Enter } from "./motion";
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { View, RefreshControl, ScrollView, Pressable, type TextInput } from "react-native";
+import { Image, Keyboard, View, RefreshControl, ScrollView, Pressable, type TextInput } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useIsFocused } from "expo-router/react-navigation";
-import { Ellipsis } from "lucide-react-native";
+import { CalendarDays, Ellipsis, LayoutTemplate, Pencil, X } from "lucide-react-native";
 import { newRequestId } from "./request-id";
 import type { WorkspaceAssistantTurn, WorkspaceChatSelection } from "@markos/shared-types";
-import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
+import { taskIntroductions, taskSuggestions, guidanceOutput, postTemplates, type TaskIntent } from "@markos/shared-types";
 import { useAccount, useAppearance } from "./providers";
 import { sessionController } from "./auth/transport";
 import { BusinessDeviceStore } from "./business/device-store";
@@ -18,8 +18,14 @@ import { errorMessage } from "./errors";
 import { PersonalMemorySheet } from "./personal-memory";
 import { HomeChats } from "./home-chats";
 import { AssistantArtifact } from "./assistant-artifact";
+import { ChatPostDesign } from "./post-design/card";
+import { TemplateChoices } from "./post-design/choices";
+import { pickPostPhoto, postDesignFile, removePostFile } from "./post-design/files";
+import { newPostDesign, requestsPostDesign, wantsPostIdeas, type PostDesignState } from "./post-design/model";
+import { PostMascot, PostText, usePostFlowTheme, WelcomeGlow } from "./post-design/theme";
 
-type Request = { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent; chatId?: string };
+type Request = { requestId: string; message: string; locale: "en" | "ar"; intent?: TaskIntent; chatId?: string; postDesign?: true; photo?: string };
+type SavedChatInput = { message: string; pending: Request | null; photo?: string; designing?: boolean };
 export function WorkspaceAssistantScreen(props: { intent?: TaskIntent; embedded?: boolean }) {
   const { scope } = useAccount();
   if ((!props.intent || props.intent === "GENERAL") && !props.embedded)
@@ -41,11 +47,10 @@ function WorkspaceConversation({
   const { api, scope, epoch, queryClient, session } = useAccount(),
     { t, locale, colors } = useAppearance(),
     router = useRouter();
+  const chatTheme = usePostFlowTheme();
+  const isHome = !!chat && intent === "GENERAL";
   const kind = { GENERAL: "assistant", CONTENT: "assistant-content", CAMPAIGN: "assistant-campaign", STRATEGY: "assistant-strategy" } as const;
-  const store = useMemo(
-    () => new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, kind[intent], chat?.id),
-    [scope, epoch, intent, chat?.id]
-  );
+  const store = useMemo(() => new BusinessDeviceStore<SavedChatInput>(scope, epoch, kind[intent], chat?.id), [scope, epoch, intent, chat?.id]);
   const key = chat ? [scope, "workspace-assistant", chat.id] : intent === "GENERAL" ? [scope, "workspace-assistant"] : [scope, "workspace-assistant", intent];
   const intro = taskIntroductions[intent],
     language = locale === "ar" ? 1 : 0;
@@ -77,6 +82,11 @@ function WorkspaceConversation({
     [restored, setRestored] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [photo, setPhoto] = useState<string>();
+  const [designing, setDesigning] = useState(false);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [showIdeas, setShowIdeas] = useState(false);
+  const sending = useRef(false);
   useEffect(() => {
     let live = true;
     setRestored(false);
@@ -88,7 +98,7 @@ function WorkspaceConversation({
       .read()
       .then(async (v) => {
         if (!v && chat?.legacy) {
-          const legacy = new BusinessDeviceStore<{ message: string; pending: Request | null }>(scope, epoch, kind[intent]);
+          const legacy = new BusinessDeviceStore<SavedChatInput>(scope, epoch, kind[intent]);
           v = await legacy.read();
           if (v) {
             await store.save(v);
@@ -98,6 +108,8 @@ function WorkspaceConversation({
         if (live) {
           setMessage(v?.message ?? "");
           setPending(v?.pending ?? null);
+          setPhoto(v?.photo);
+          setDesigning(v?.designing === true);
           setRestored(true);
         }
       })
@@ -109,7 +121,7 @@ function WorkspaceConversation({
     };
   }, [store]);
   useEffect(() => {
-    if (pending && result.data?.some((v) => v.id === pending.requestId)) {
+    if (pending && !pending.postDesign && result.data?.some((v) => v.id === pending.requestId)) {
       setPending(null);
       setMessage("");
       void store.clear();
@@ -122,31 +134,50 @@ function WorkspaceConversation({
     );
   async function send() {
     following.current = true;
-    if (busy || active || !restored) return;
+    if (sending.current || busy || active || !restored || pickingPhoto) return;
+    const text = message.trim();
+    const useDesign = isHome && (designing || !!photo || (requestsPostDesign(text) && !wantsPostIdeas(text)));
     const request = pending ?? {
       requestId: newRequestId(),
-      message: message.trim(),
+      message: text || (useDesign && photo ? t("Design a post with this photo", "صمّم منشوراً بهذه الصورة") : ""),
       locale,
       ...(intent === "GENERAL" ? {} : { intent }),
-      ...(chat ? { chatId: chat.id } : {})
+      ...(chat ? { chatId: chat.id } : {}),
+      ...(useDesign ? { postDesign: true as const, ...(photo ? { photo } : {}) } : {})
     };
     if (!request.message) return;
+    sending.current = true;
     setBusy(true);
     setError("");
     try {
-      await store.save({ message: request.message, pending: request });
+      await store.save({ message: request.message, pending: request, designing, ...(photo ? { photo } : {}) });
       sessionController.assertEpoch(epoch);
       setPending(request);
-      const saved = await api.messageWorkspaceAssistant(request);
+      const { postDesign, photo: attachment, ...wire } = request;
+      let saved: WorkspaceAssistantTurn;
+      if (postDesign && wire.chatId) {
+        const postStore = new BusinessDeviceStore<PostDesignState>(scope, epoch, "post-design", wire.requestId);
+        if (!(await postStore.read())) {
+          await postStore.save(newPostDesign({ ideas: wantsPostIdeas(wire.message), ...(attachment ? { photo: attachment } : {}) }));
+        }
+        saved = await api.beginPostDesign({ requestId: wire.requestId, chatId: wire.chatId, message: wire.message, locale: wire.locale });
+        Keyboard.dismiss();
+      } else {
+        saved = await api.messageWorkspaceAssistant(wire);
+      }
       sessionController.assertEpoch(epoch);
       accept(saved);
       if (chat) onSent?.(chat.id);
       await store.clear();
       setPending(null);
       setMessage("");
+      setPhoto(undefined);
+      setDesigning(false);
+      setShowIdeas(false);
     } catch (e) {
       setError(errorMessage(e, t));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -164,11 +195,28 @@ function WorkspaceConversation({
       setBusy(false);
     }
   }
-  function edit(text: string) {
+  function saveInput(text: string, attachment: string | undefined, postMode: boolean) {
     setMessage(text);
+    setPhoto(attachment);
+    setDesigning(postMode);
     void store
-      .save({ message: text, pending: null })
+      .save({ message: text, pending: null, designing: postMode, ...(attachment ? { photo: attachment } : {}) })
       .catch(() => setError(t("Couldn’t save this message. Keep the app open.", "تعذّر حفظ الرسالة. أبقِ التطبيق مفتوحًا.")));
+  }
+  const edit = (text: string) => saveInput(text, photo, designing);
+  async function attachPhoto() {
+    if (pickingPhoto || pending || busy) return;
+    setPickingPhoto(true);
+    try {
+      const replacement = await pickPostPhoto(scope, epoch);
+      if (!replacement) return;
+      removePostFile(scope, photo);
+      saveInput(message, replacement, true);
+    } catch (problem) {
+      setError(errorMessage(problem, t));
+    } finally {
+      setPickingPhoto(false);
+    }
   }
   if (!session.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role)))
     return (
@@ -195,9 +243,38 @@ function WorkspaceConversation({
       setBusy(false);
     }
   }
+  const welcome = isHome && result.data?.length === 0;
+  const homePrompts = [
+    {
+      label: t("Design a post", "صمّم منشوراً"),
+      icon: Pencil,
+      choose: () => {
+        setShowIdeas(false);
+        saveInput(message, photo, true);
+        inputRef.current?.focus();
+      }
+    },
+    {
+      label: t("Plan my week", "خطّط لأسبوعي"),
+      icon: CalendarDays,
+      choose: () => {
+        setShowIdeas(false);
+        saveInput(t("Help me plan this week for my Instagram.", "ساعدني في التخطيط لهذا الأسبوع على إنستغرام."), undefined, false);
+        inputRef.current?.focus();
+      }
+    },
+    {
+      label: t("Post ideas", "أفكار لمنشورات"),
+      icon: LayoutTemplate,
+      choose: () => {
+        setShowIdeas((open) => !open);
+      }
+    }
+  ];
   return (
     <AssistantFrame
       embedded={embedded}
+      {...(isHome ? { centerContent: welcome, backgroundColor: chatTheme.canvas, ...(welcome ? { backdrop: <WelcomeGlow /> } : {}) } : {})}
       scrollRef={scrollRef}
       scrollProps={{
         onLayout: () => {
@@ -213,17 +290,82 @@ function WorkspaceConversation({
       }}
       footer={
         <>
+          {welcome && !photo ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 6, flexDirection: locale === "ar" ? "row-reverse" : "row" }}
+            >
+              {homePrompts.map(({ label, icon: Icon, choose }, index) => (
+                <Pressable
+                  key={label}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: (designing && index === 0) || (showIdeas && index === 2) }}
+                  disabled={!restored || busy || !!pending || (designing && index !== 0)}
+                  onPress={choose}
+                  style={{
+                    paddingHorizontal: 10,
+                    minHeight: 40,
+                    borderRadius: 16,
+                    gap: 5,
+                    alignItems: "center",
+                    flexDirection: locale === "ar" ? "row-reverse" : "row",
+                    backgroundColor: (designing && index === 0) || (showIdeas && index === 2) ? chatTheme.action : chatTheme.canvas,
+                    opacity: designing && index !== 0 ? 0.45 : 1
+                  }}
+                >
+                  <Icon size={15} color={chatTheme.ink} />
+                  <PostText variant="meta">{label}</PostText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+          {isHome && photo ? (
+            <View
+              style={{
+                alignSelf: locale === "ar" ? "flex-end" : "flex-start",
+                position: "relative",
+                padding: 4,
+                borderRadius: 12,
+                backgroundColor: chatTheme.canvas
+              }}
+            >
+              <Image
+                accessibilityLabel={t("Attached photo", "الصورة المرفقة")}
+                source={{ uri: postDesignFile(scope, photo).uri }}
+                style={{ width: 82, height: 82, borderRadius: 10 }}
+              />
+              {!pending ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("Remove attachment", "إزالة المرفق")}
+                  onPress={() => {
+                    removePostFile(scope, photo);
+                    saveInput(message, undefined, designing);
+                  }}
+                  style={{ position: "absolute", top: 4, right: 4, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+                >
+                  <View style={{ backgroundColor: chatTheme.canvas, borderRadius: 12, padding: 3 }}>
+                    <X size={15} color={chatTheme.ink} />
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           <ChatComposer
             inputRef={inputRef}
             value={message}
             onChange={edit}
             onSend={() => void send()}
             editable={restored && !pending}
-            busy={busy}
+            busy={busy || pickingPhoto}
             retry={!!pending}
-            disabled={!restored || active || !(pending?.message ?? message).trim()}
+            disabled={!restored || active || (!(pending?.message ?? message).trim() && !photo)}
+            postFlow={isHome}
+            onAttach={isHome ? () => void attachPhoto() : undefined}
           />
-          {!result.data?.length && !result.isPending ? (
+          {!isHome && !result.data?.length && !result.isPending ? (
             <Txt variant="meta" muted style={{ textAlign: "center" }}>
               {t("You approve before publishing.", "توافق قبل النشر.")}
             </Txt>
@@ -232,7 +374,34 @@ function WorkspaceConversation({
       }
       refreshControl={<RefreshControl refreshing={result.isRefetching} onRefresh={() => void result.refetch()} tintColor={colors.accentText} />}
     >
-      {result.data?.length === 0 ? (
+      {welcome ? (
+        <View style={{ alignItems: "center", gap: 3, paddingVertical: 12 }}>
+          <PostText variant="title" style={{ color: chatTheme.title, textAlign: "center", fontSize: 30, lineHeight: 39 }}>
+            {t("Your business is ready", "نشاطك جاهز")}
+          </PostText>
+          <PostText muted style={{ textAlign: "center" }}>
+            {t("What would you like MARKOS to do?", "ماذا تريد من ماركوس أن يفعل؟")}
+          </PostText>
+          <View style={{ width: "100%", alignItems: "center", paddingTop: 28 }}>
+            <PostMascot />
+          </View>
+          {showIdeas ? (
+            <View style={{ width: "100%", maxWidth: 390, borderRadius: 14, backgroundColor: chatTheme.card, padding: 10, gap: 8 }}>
+              <PostText variant="label">{t("Pick an idea to make your own", "اختر فكرة وخصّصها لك")}</PostText>
+              <TemplateChoices
+                brief={`${message} ${session.workspace.name}`}
+                onSelect={(id) => {
+                  const template = postTemplates.find((item) => item.id === id);
+                  if (!template) return;
+                  saveInput(t(`Design a post for: ${template.en}. `, `صمّم منشوراً بعنوان: ${template.ar}. `), photo, true);
+                  setShowIdeas(false);
+                  inputRef.current?.focus();
+                }}
+              />
+            </View>
+          ) : null}
+        </View>
+      ) : result.data?.length === 0 ? (
         <View style={{ alignItems: "center", gap: 8, paddingVertical: 16 }}>
           <View style={{ padding: 8 }}>
             <MarkosMark size={32} color={colors.accentText} />
@@ -248,7 +417,7 @@ function WorkspaceConversation({
       ) : intent === "GENERAL" && !chat ? (
         <TextAction label={t("Memory", "الذاكرة")} accessibilityLabel={t("What MARKOS remembers", "ما يتذكره ماركوس")} onPress={() => setMemoryOpen(true)} />
       ) : null}
-      {!result.data?.length && !result.isPending ? (
+      {!isHome && !result.data?.length && !result.isPending ? (
         <View style={{ flexDirection: locale === "ar" ? "row-reverse" : "row", flexWrap: "wrap", gap: 8 }}>
           {taskSuggestions[intent]
             .map((entry) => ({ label: entry[language], message: entry[language + 2]! }))
@@ -308,22 +477,28 @@ function WorkspaceConversation({
       )?.map((turn) => (
         <Enter key={turn.id}>
           <View style={{ gap: 10 }}>
-            <View style={{ alignSelf: "flex-end", maxWidth: "88%", padding: 14, borderRadius: 18, backgroundColor: colors.accentSoft }}>
-              <Txt selectable>{turn.message}</Txt>
+            <View
+              style={{
+                alignSelf: isHome && locale === "ar" ? "flex-start" : "flex-end",
+                maxWidth: "88%",
+                padding: 14,
+                borderRadius: 18,
+                backgroundColor: isHome ? chatTheme.user : colors.accentSoft
+              }}
+            >
+              {isHome ? <PostText selectable>{turn.message}</PostText> : <Txt selectable>{turn.message}</Txt>}
             </View>
             <View style={{ gap: 8 }}>
-              <Row>
-                <MarkosMark size={18} color={colors.accentText} />
-                <Txt variant="meta" muted style={{ flex: 1 }}>
-                  MARKOS
-                </Txt>
-                {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
-              </Row>
-              {turn.reply ? (
-                <Enter>
-                  <Txt selectable>{turn.reply}</Txt>
-                </Enter>
+              {!turn.postDesign ? (
+                <Row>
+                  <MarkosMark size={18} color={colors.accentText} />
+                  <Txt variant="meta" muted style={{ flex: 1 }}>
+                    MARKOS
+                  </Txt>
+                  {turn.reply ? <IconButton icon={Ellipsis} label={t("Report reply", "الإبلاغ عن الرد")} onPress={() => setReport(turn.id)} /> : null}
+                </Row>
               ) : null}
+              {turn.reply ? <Enter>{isHome ? <PostText selectable>{turn.reply}</PostText> : <Txt selectable>{turn.reply}</Txt>}</Enter> : null}
               {turn.status === "THINKING" ? <TaskFeedback label={t("Thinking through your request", "أفكّر في طلبك")} startedAt={turn.createdAt} /> : null}
               {turn.status === "PROPOSED" && turn.proposal ? (
                 <Enter>
@@ -354,8 +529,9 @@ function WorkspaceConversation({
                   startedAt={turn.campaign?.createdAt}
                 />
               ) : null}
-              {turn.result ? <AssistantArtifact artifact={turn.result} /> : null}
-              {!turn.result && turn.contentItemId ? (
+              {isHome && turn.postDesign && turn.contentItemId ? <ChatPostDesign turn={turn} id={turn.contentItemId} /> : null}
+              {turn.result && !(isHome && turn.postDesign) ? <AssistantArtifact artifact={turn.result} /> : null}
+              {!turn.result && turn.contentItemId && !(isHome && turn.postDesign) ? (
                 <TextAction
                   label={t("Open draft", "فتح المسودة")}
                   onPress={() => router.push({ pathname: "/content/[id]", params: { id: turn.contentItemId! } })}

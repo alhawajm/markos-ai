@@ -1,17 +1,22 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { MessagesSquare, SquarePen } from "lucide-react-native";
+import { Menu, SquarePen } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { WorkspaceChatSelection } from "@markos/shared-types";
 import { useAccount, useAppearance } from "./providers";
 import { BusinessDeviceStore } from "./business/device-store";
 import { newRequestId } from "./request-id";
-import { Button, Field, IconButton, ListRow, Loading, Notice, Row, Sheet, TextAction, Txt } from "./ui";
+import { Button, Field, IconButton, ListRow, Loading, Notice, Row, Sheet, TextAction } from "./ui";
 import { PersonalMemorySheet } from "./personal-memory";
+import { PostText, usePostFlowTheme } from "./post-design/theme";
 
 export function HomeChats({ children }: { children: (chat: WorkspaceChatSelection, onSent: (id: string) => void) => ReactNode }) {
   const { scope, epoch, api, queryClient, session } = useAccount(),
     { t, locale } = useAppearance();
+  const router = useRouter();
+  const theme = usePostFlowTheme();
   const nav = useMemo(() => new BusinessDeviceStore<WorkspaceChatSelection>(scope, epoch, "assistant-navigation"), [scope, epoch]);
   const [selected, setSelected] = useState<WorkspaceChatSelection>(),
     [restored, setRestored] = useState(false),
@@ -74,20 +79,26 @@ export function HomeChats({ children }: { children: (chat: WorkspaceChatSelectio
         : (row?.title ?? selected?.title ?? t("New chat", "محادثة جديدة"));
   const canWrite = session.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role));
   return (
-    <View style={{ flex: 1 }}>
-      <Row style={{ paddingHorizontal: 12, gap: 8 }}>
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: theme.canvas }}>
+      <Row style={{ paddingHorizontal: 15, gap: 8 }}>
         <IconButton
-          icon={MessagesSquare}
+          icon={Menu}
           label={t("Chats", "المحادثات")}
           onPress={() => {
             setOpen(true);
             void result.refetch();
           }}
         />
-        <Txt variant="label" numberOfLines={1} style={{ flex: 1, fontSize: 16 }}>
-          {selected?.isNew ? t("New chat", "محادثة جديدة") : title}
-        </Txt>
-        {canWrite ? <IconButton icon={SquarePen} label={t("New chat", "محادثة جديدة")} onPress={() => choose({ id: newRequestId(), isNew: true })} /> : null}
+        {selected?.isNew ? (
+          <View style={{ flex: 1 }} />
+        ) : (
+          <PostText variant="label" numberOfLines={1} style={{ flex: 1, fontSize: 16 }}>
+            {title}
+          </PostText>
+        )}
+        {canWrite && !selected?.isNew ? (
+          <IconButton icon={SquarePen} label={t("New chat", "محادثة جديدة")} onPress={() => choose({ id: newRequestId(), isNew: true })} />
+        ) : null}
       </Row>
       {error ? <Notice error>{error}</Notice> : null}
       {selected ? (
@@ -98,6 +109,9 @@ export function HomeChats({ children }: { children: (chat: WorkspaceChatSelectio
         <Loading />
       )}
       <Sheet visible={open} title={t("Your chats", "محادثاتك")} onClose={() => setOpen(false)}>
+        {canWrite ? (
+          <Button secondary icon={SquarePen} label={t("New chat", "محادثة جديدة")} onPress={() => choose({ id: newRequestId(), isNew: true })} />
+        ) : null}
         <Field label={t("Search chats", "البحث في المحادثات")} value={query} onChangeText={setQuery} />
         {selected && !selected.isNew ? (
           <TextAction
@@ -152,8 +166,22 @@ export function HomeChats({ children }: { children: (chat: WorkspaceChatSelectio
             setMemory(true);
           }}
         />
+        <TextAction
+          label={t("Workspace settings", "إعدادات مساحة العمل")}
+          onPress={() => {
+            setOpen(false);
+            router.push("/account");
+          }}
+        />
+        <TextAction
+          label={t("Notifications", "الإشعارات")}
+          onPress={() => {
+            setOpen(false);
+            router.push("/notifications");
+          }}
+        />
       </Sheet>
       {memory ? <PersonalMemorySheet key={scope} onClose={() => setMemory(false)} /> : null}
-    </View>
+    </SafeAreaView>
   );
 }

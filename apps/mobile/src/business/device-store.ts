@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sessionController } from "../auth/transport";
 import { BriefStore } from "../campaigns/brief-store";
+import { Directory, Paths } from "expo-file-system";
 const writes = new Map<string, Promise<unknown>>();
 function enqueue<T>(scope: string, task: () => Promise<T>): Promise<T> {
   const pending = (writes.get(scope) ?? Promise.resolve()).catch(() => {}).then(task);
@@ -18,7 +19,16 @@ export class BusinessDeviceStore<T> {
   constructor(
     private scope: string,
     private epoch: number,
-    kind: "setup" | "profile" | "quick-setup" | "assistant" | "assistant-content" | "assistant-campaign" | "assistant-strategy" | "assistant-navigation",
+    kind:
+      | "setup"
+      | "profile"
+      | "quick-setup"
+      | "assistant"
+      | "assistant-content"
+      | "assistant-campaign"
+      | "assistant-strategy"
+      | "assistant-navigation"
+      | "post-design",
     partition?: string
   ) {
     this.key = `markos.business.${kind}.${scope}${partition ? `:chat:${partition}` : ""}`;
@@ -59,10 +69,13 @@ export function clearBusinessDeviceData(scope: string, epoch: number): Promise<v
       `markos.business.assistant-content.${scope}`,
       `markos.business.assistant-campaign.${scope}`,
       `markos.business.assistant-strategy.${scope}`,
-      `markos.business.assistant-navigation.${scope}`
+      `markos.business.assistant-navigation.${scope}`,
+      `markos.business.post-design.${scope}`
     ];
     const keys = await AsyncStorage.getAllKeys();
     await AsyncStorage.multiRemove([...new Set([...roots, ...keys.filter((key) => roots.some((root) => key.startsWith(`${root}:chat:`)))])]);
     await new BriefStore(scope, epoch, "onboarding").clear();
+    const postDesigns = new Directory(Paths.document, "post-designs", encodeURIComponent(scope));
+    if (postDesigns.exists) postDesigns.delete();
   });
 }

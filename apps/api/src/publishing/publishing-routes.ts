@@ -39,9 +39,14 @@ export async function registerPublishingRoutes(app: FastifyInstance): Promise<vo
     async (request, reply) => {
       const params = request.params as { contentItemId?: string };
       if (!params.contentItemId) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Content item id is required"));
+      const input = z
+        .object({ expectedRevision: z.number().int().positive().optional() })
+        .strict()
+        .safeParse(request.body ?? {});
+      if (!input.success) return reply.status(400).send(errorEnvelope("VALIDATION_ERROR", "Invalid publish request"));
       const { workspaceId } = requireWorkspaceContext();
       try {
-        return reply.status(202).send(ok(await queuePublishNow(workspaceId, params.contentItemId)));
+        return reply.status(202).send(ok(await queuePublishNow(workspaceId, params.contentItemId, new Date(), input.data.expectedRevision)));
       } catch (error) {
         if (error instanceof PublishContentItemNotFoundError) return reply.status(404).send(errorEnvelope("CONTENT_NOT_FOUND", error.message));
         if (error instanceof PublishNowStateError) return reply.status(409).send(errorEnvelope("PUBLISH_NOW_STATE_INVALID", error.message));

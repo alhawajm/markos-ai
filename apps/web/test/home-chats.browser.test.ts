@@ -134,11 +134,11 @@ it.each([
       expect(await page.locator("#home-message").inputValue()).toBe("");
       expect(await page.getByText("Earlier answer", { exact: true }).count()).toBe(0);
       await page.locator("#home-message").fill("I want to create a campaign");
-      await page.locator(".workspace-chat-composer button").click();
+      await page.locator(".workspace-chat-composer [type=submit]").click();
       await page.getByText(v.locale === "ar" ? "ماذا تريد الترويج له، وما هدفك؟" : "What are you promoting, and what is the goal?", { exact: true }).waitFor();
       expect(await page.locator(".workspace-chat-plan").count()).toBe(0);
       await page.locator("#home-message").fill("Launch our bakery, 7 days, one post per day from December 1");
-      await page.locator(".workspace-chat-composer button").click();
+      await page.locator(".workspace-chat-composer [type=submit]").click();
       await page.locator(".workspace-chat-plan button").click();
       const card = page.locator(".workspace-artifact-card");
       await card.waitFor();

@@ -95,7 +95,7 @@ export function WorkspaceChats({ locale, children }: { locale: Locale; children:
           <span>{ar ? "المحادثات" : "Chats"}</span>
         </button>
         <span className="workspace-chat-current" dir="auto">
-          {selected?.isNew ? (ar ? "محادثة جديدة" : "New chat") : title}
+          {selected?.isNew ? null : title}
         </span>
         {session?.roles.some((role) => ["OWNER", "WORKSPACE_ADMIN", "EDITOR", "SUPER_ADMIN", "PRODUCT_ADMIN"].includes(role)) ? (
           <button className="workspace-chat-toolbar-button" onClick={() => choose({ id: crypto.randomUUID(), isNew: true })}>

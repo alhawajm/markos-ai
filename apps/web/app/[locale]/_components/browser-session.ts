@@ -5,6 +5,7 @@ import { MarkosApiClient, MarkosApiError } from "@markos/api-client";
 import type { AuthSession, Locale } from "@markos/shared-types";
 import { create } from "zustand";
 import { getBrowserApiBaseUrl } from "./api-base-url";
+import { clearPostDesigns } from "./post-design-storage";
 
 const SESSION_KEY = "markos.session";
 const REFRESH_LOCK_NAME = "markos.session.refresh";
@@ -117,10 +118,14 @@ export function setBrowserSession(session: AuthSession): void {
 }
 
 export async function logoutBrowserSession(locale: Locale): Promise<void> {
+  const current = useSessionStore.getState().session;
   clearBrowserSession();
 
   try {
-    await new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }).logout();
+    await Promise.all([
+      new MarkosApiClient({ baseUrl: getBrowserApiBaseUrl() }).logout(),
+      current ? clearPostDesigns(current.user.id).catch(() => {}) : undefined
+    ]);
   } finally {
     redirectToLogin(locale, false);
   }

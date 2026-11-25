@@ -1,17 +1,28 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowUp, MoreHorizontal } from "lucide-react";
+import { ArrowUp, MoreHorizontal, Plus, X } from "lucide-react";
 import { MarkosAiIcon } from "./markos-ai-icon";
 import { MarkosPulse, TaskFeedback } from "./task-feedback";
 import { ContentReportDialog } from "./content-report-dialog";
 import { PersonalMemoryDialog } from "./personal-memory-dialog";
 import type { Locale, WorkspaceAssistantTurn } from "@markos/shared-types";
-import { taskIntroductions, taskSuggestions, guidanceOutput, type TaskIntent } from "@markos/shared-types";
+import {
+  taskIntroductions,
+  taskSuggestions,
+  guidanceOutput,
+  recommendPostTemplates,
+  requestsPostDesign,
+  wantsPostIdeas,
+  type TaskIntent
+} from "@markos/shared-types";
 import { useMarkosClient, useMarkosSession } from "./browser-session";
 import "./workspace-assistant.css";
 import { WorkspaceChats } from "./workspace-chats";
 import type { WorkspaceChatSelection } from "@markos/shared-types";
 import { AssistantArtifactCard } from "./assistant-artifact-card";
+import { ChatPostDesign, usePostImage } from "./post-design-card";
+import { savePostDesign } from "./post-design-storage";
+import "./post-design.css";
 
 export function WorkspaceAssistant(props: { locale: Locale; intent?: TaskIntent }) {
   const session = useMarkosSession();
@@ -49,7 +60,16 @@ function WorkspaceConversation({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [ready, setReady] = useState(false),
-    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale; intent?: TaskIntent; chatId?: string } | null>(null);
+    [pending, setPending] = useState<{ requestId: string; message: string; locale: Locale; intent?: TaskIntent; chatId?: string; postDesign?: true } | null>(
+      null
+    );
+  const supportsPostDesign = !!chat && intent === "GENERAL";
+  const scope = `${session?.user.id}:${session?.workspace.id}`;
+  const [designing, setDesigning] = useState(false);
+  const [ideasOpen, setIdeasOpen] = useState(false);
+  const [photo, setPhoto] = useState<File>();
+  const draftPhoto = usePostImage(photo);
+  const attachment = useRef<HTMLInputElement>(null);
   const [older, setOlder] = useState<WorkspaceAssistantTurn[]>([]),
     [before, setBefore] = useState<string | null>(null),
     [loadingOlder, setLoadingOlder] = useState(false);
@@ -130,31 +150,52 @@ function WorkspaceConversation({
   }
   async function send() {
     following.current = true;
+    const text = message.trim();
+    const postDesign = supportsPostDesign && (designing || !!photo || requestsPostDesign(text));
     const request = pending ?? {
       requestId: crypto.randomUUID(),
-      message: message.trim(),
+      message: text,
       locale,
       ...(intent === "GENERAL" ? {} : { intent }),
-      ...(chat ? { chatId: chat.id } : {})
+      ...(chat ? { chatId: chat.id } : {}),
+      ...(postDesign ? { postDesign: true as const } : {})
     };
     if (!request.message || busy || active || !ready) return;
     setBusy(true);
     setError("");
     try {
+      if (!pending && request.postDesign && photo) {
+        await savePostDesign(`${scope}:${request.requestId}`, { stage: wantsPostIdeas(text) ? "ideas" : "style", photo, photoName: photo.name });
+      }
       persist(request.message, request);
       setPending(request);
-      const turn = await api.messageWorkspaceAssistant(request);
+      const { postDesign: guidedPost, ...input } = request;
+      const turn =
+        guidedPost && input.chatId
+          ? await api.beginPostDesign({ requestId: input.requestId, message: input.message, locale: input.locale, chatId: input.chatId })
+          : await api.messageWorkspaceAssistant(input);
       setTurns((items) => (items.some((i) => i.id === turn.id) ? items : [...items, turn]));
       if (chat) onSent?.(chat.id);
       persist("", null);
       setPending(null);
       setMessage("");
+      setPhoto(undefined);
+      setDesigning(false);
+      setIdeasOpen(false);
     } catch {
       setError(t("Message saved here. Use Retry to check this same request.", "حُفظت الرسالة هنا. أعد المحاولة للتحقّق من الطلب نفسه."));
     } finally {
       setBusy(false);
     }
   }
+  function startPost(text: string) {
+    setMessage(text);
+    setDesigning(true);
+    setIdeasOpen(false);
+    persist(text, null);
+    document.getElementById("home-message")?.focus();
+  }
+  const welcome = supportsPostDesign && !shown.length;
   async function confirm(turn: WorkspaceAssistantTurn) {
     if (!turn.confirmationToken) return;
     setBusy(true);
@@ -196,33 +237,66 @@ function WorkspaceConversation({
       </section>
     );
   return (
-    <section className="workspace-chat" dir={locale === "ar" ? "rtl" : "ltr"} aria-label={t("MARKOS conversation", "محادثة ماركوس")}>
-      <header className="workspace-chat-welcome">
-        <span className="workspace-chat-mark">
-          <MarkosAiIcon size={intent === "GENERAL" ? 44 : 32} />
-        </span>
-        {intent === "GENERAL" ? <p className="workspace-chat-eyebrow">MARKOS</p> : null}
-        <h1>
-          {intent === "GENERAL"
-            ? t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")
-            : intro.title[language]}
-        </h1>
-        <p>{intro.detail[language]}</p>
-        {intent === "GENERAL" ? (
-          <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
-            {t("What MARKOS remembers", "ما يتذكره ماركوس")}
-          </button>
-        ) : null}
-      </header>
+    <section
+      className={`workspace-chat${supportsPostDesign ? " workspace-chat-post-flow" : ""}${welcome ? " workspace-chat-post-welcome" : ""}`}
+      dir={locale === "ar" ? "rtl" : "ltr"}
+      aria-label={t("MARKOS conversation", "محادثة ماركوس")}
+    >
+      {supportsPostDesign ? (
+        welcome ? (
+          <header className="post-chat-welcome">
+            <h1>{t("Your business is ready", "نشاطك التجاري جاهز")}</h1>
+            <p>{t("What would you like MARKOS to do?", "ماذا تريد من ماركوس أن يفعل؟")}</p>
+            <span className="post-chat-mascot" aria-hidden />
+          </header>
+        ) : null
+      ) : (
+        <header className="workspace-chat-welcome">
+          <span className="workspace-chat-mark">
+            <MarkosAiIcon size={intent === "GENERAL" ? 44 : 32} />
+          </span>
+          {intent === "GENERAL" ? <p className="workspace-chat-eyebrow">MARKOS</p> : null}
+          <h1>
+            {intent === "GENERAL"
+              ? t(`What shall we create${session?.user.fullName ? `, ${session.user.fullName.split(" ")[0]}` : ""}?`, "ماذا سنُبدع اليوم؟")
+              : intro.title[language]}
+          </h1>
+          <p>{intro.detail[language]}</p>
+          {intent === "GENERAL" ? (
+            <button className="workspace-chat-link" onClick={() => setMemoryOpen(true)}>
+              {t("What MARKOS remembers", "ما يتذكره ماركوس")}
+            </button>
+          ) : null}
+        </header>
+      )}
+      {supportsPostDesign ? (
+        <button className="workspace-chat-link post-memory-link" onClick={() => setMemoryOpen(true)}>
+          {t("What MARKOS remembers", "ما يتذكّره ماركوس")}
+        </button>
+      ) : null}
       {!turns.length && (
         <div className="workspace-chat-starters">
+          {supportsPostDesign ? (
+            <>
+              <button disabled={busy || !ready || !!pending} onClick={() => startPost(t("Design a post", "صمّم منشوراً"))}>
+                {t("Design a post", "صمّم منشوراً")}
+              </button>
+              <button disabled={busy || !ready || !!pending} aria-expanded={ideasOpen} onClick={() => setIdeasOpen(!ideasOpen)}>
+                {t("Post ideas", "أفكار منشورات")}
+              </button>
+            </>
+          ) : null}
           {taskSuggestions[intent]
             .map((entry) => ({ label: entry[language], text: entry[language + 2]! }))
+            .filter((_, index) => !supportsPostDesign || index !== 1)
             .map((s) => (
               <button
                 key={s.label}
                 disabled={busy || !ready}
                 onClick={() => {
+                  setDesigning(false);
+                  setPhoto(undefined);
+                  setIdeasOpen(false);
                   setMessage(s.text);
                   persist(s.text, null);
                   document.getElementById("home-message")?.focus();
@@ -233,6 +307,18 @@ function WorkspaceConversation({
             ))}
         </div>
       )}
+      {ideasOpen && !shown.length ? (
+        <fieldset className="post-choice-card post-starter-ideas">
+          <legend>{t("Pick a starting point", "اختر نقطة البداية")}</legend>
+          <div className="post-choice-grid">
+            {recommendPostTemplates(message).map((template) => (
+              <button key={template.id} onClick={() => startPost(t(`Design a post: ${template.en}`, `صمّم منشوراً: ${template.ar}`))}>
+                {t(template.en, template.ar)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
       {chat && before ? (
         <button
           className="workspace-chat-link"
@@ -306,8 +392,12 @@ function WorkspaceConversation({
                   startedAt={turn.campaign?.createdAt}
                 />
               )}
-              {turn.result ? <AssistantArtifactCard artifact={turn.result} locale={locale} /> : null}
-              {!turn.result && turn.contentItemId && (
+              {turn.postDesign && turn.contentItemId ? (
+                <ChatPostDesign turn={turn} id={turn.contentItemId} storageKey={`${scope}:${turn.id}`} locale={locale} t={t} />
+              ) : turn.result ? (
+                <AssistantArtifactCard artifact={turn.result} locale={locale} />
+              ) : null}
+              {!turn.postDesign && !turn.result && turn.contentItemId && (
                 <a className="workspace-chat-link" href={`/${locale}/app/content-studio?item=${turn.contentItemId}`}>
                   {t("Open draft →", "فتح المسودة ←")}
                 </a>
@@ -354,16 +444,63 @@ function WorkspaceConversation({
           void send();
         }}
       >
+        {supportsPostDesign ? (
+          <>
+            <input
+              ref={attachment}
+              type="file"
+              hidden
+              accept="image/jpeg,image/png,image/webp"
+              aria-label={t("Attach reference image", "إرفاق صورة مرجعية")}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || !file.size || file.size > 8_000_000) {
+                  setError(t("Choose a JPEG, PNG, or WebP image up to 8 MB.", "اختر صورة JPEG أو PNG أو WebP بحجم لا يتجاوز ٨ ميغابايت."));
+                  return;
+                }
+                setError("");
+                setPhoto(file);
+                document.getElementById("home-message")?.focus();
+              }}
+            />
+            {photo && draftPhoto ? (
+              <div className="post-chat-attachment">
+                {/* The selected file is available only as a browser object URL. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={draftPhoto} alt="" />
+                <span>{photo.name}</span>
+                <button type="button" disabled={!!pending || busy} aria-label={t("Remove attachment", "إزالة المرفق")} onClick={() => setPhoto(undefined)}>
+                  <X size={16} />
+                </button>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="post-attach-button"
+              disabled={busy || active || !ready || !!pending}
+              aria-label={t("Add reference photo to post", "إضافة صورة مرجعية للمنشور")}
+              onClick={() => attachment.current?.click()}
+            >
+              <Plus size={21} />
+            </button>
+          </>
+        ) : null}
         <label className="sr-only" htmlFor="home-message">
           {t("Message MARKOS", "راسل ماركوس")}
         </label>
         <textarea
           id="home-message"
-          rows={3}
+          rows={supportsPostDesign ? 1 : 3}
           maxLength={4000}
           value={message}
           disabled={!ready || !!pending}
-          placeholder={t("An idea, an event, or something you’d like to change…", "فكرة أو فعالية أو شيء تريد تغييره…")}
+          placeholder={
+            supportsPostDesign
+              ? t("Ask MARKOS anything…", "اسأل ماركوس…")
+              : t("An idea, an event, or something you’d like to change…", "فكرة أو فعالية أو شيء تريد تغييره…")
+          }
           onChange={(e) => {
             setMessage(e.target.value);
             try {

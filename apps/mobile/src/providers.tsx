@@ -3,6 +3,8 @@ import { AppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLocales } from "expo-localization";
 import { useFonts } from "expo-font";
+import { Roboto_400Regular } from "@expo-google-fonts/roboto/400Regular";
+import { Roboto_500Medium } from "@expo-google-fonts/roboto/500Medium";
 import { IBMPlexSans_400Regular } from "@expo-google-fonts/ibm-plex-sans/400Regular";
 import { IBMPlexSans_600SemiBold } from "@expo-google-fonts/ibm-plex-sans/600SemiBold";
 import { IBMPlexSansArabic_400Regular } from "@expo-google-fonts/ibm-plex-sans-arabic/400Regular";
@@ -19,7 +21,14 @@ function useAppearanceValue() {
   const system = useColorScheme();
   const [preferences, setPreferences] = useState(defaults);
   const [ready, setReady] = useState(false);
-  const [fontsLoaded, fontError] = useFonts({ IBMPlexSans_400Regular, IBMPlexSans_600SemiBold, IBMPlexSansArabic_400Regular, IBMPlexSansArabic_600SemiBold });
+  const [fontsLoaded, fontError] = useFonts({
+    IBMPlexSans_400Regular,
+    IBMPlexSans_600SemiBold,
+    IBMPlexSansArabic_400Regular,
+    IBMPlexSansArabic_600SemiBold,
+    Roboto_400Regular,
+    Roboto_500Medium
+  });
   useEffect(() => {
     void AsyncStorage.getItem("markos.appearance")
       .then((raw) => {

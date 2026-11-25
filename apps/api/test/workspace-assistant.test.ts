@@ -92,6 +92,24 @@ async function fixture() {
   };
 }
 
+it("creates exactly one chat post draft per request and keeps it private", async () => {
+  const owner = await fixture();
+  const other = await fixture();
+  const payload = { ...owner.input, chatId: randomUUID(), message: "Design a post for our opening hours" };
+  const send = (headers: typeof owner.headers, body = payload) => app.inject({ method: "POST", url: "/v1/assistant/post-designs", headers, payload: body });
+  const first = await send(owner.headers);
+  expect(first.statusCode).toBe(200);
+  const { id, contentItemId } = first.json().data;
+  expect(first.json().data).toMatchObject({ id: payload.requestId, chatId: payload.chatId, postDesign: true, status: "COMPLETED" });
+  expect((await send(owner.headers)).json().data.contentItemId).toBe(contentItemId);
+  expect((await send(owner.headers, { ...payload, message: "Different brief" })).statusCode).toBe(409);
+  expect((await send(other.headers)).statusCode).toBe(409);
+  expect((await send(other.headers, { ...payload, requestId: randomUUID() })).statusCode).toBe(404);
+  expect(await prisma.contentItem.count({ where: { workspaceId: owner.session.workspace.id, id: contentItemId } })).toBe(1);
+  const history = await app.inject({ method: "GET", url: `/v1/assistant/chats/${payload.chatId}/messages`, headers: owner.headers });
+  expect(history.json().data.turns).toEqual([expect.objectContaining({ id, postDesign: true, contentItemId })]);
+});
+
 it("keeps new chats separate, scopes model history and preserves a proposal when another chat starts", async () => {
   const f = await fixture(),
     a = randomUUID(),

@@ -1102,3 +1102,11 @@ Full-size image/Reel/carousel viewing in Create is read-only. It supports zoom, 
 ### Immutable web-container dependencies
 
 The web Docker image installs dependencies explicitly with `pnpm install --frozen-lockfile` and disables pnpm 11's automatic pre-script reinstall via `pnpm_config_verify_deps_before_run=false`. The image contains the web workspace manifest, rather than every app manifest; a non-frozen automatic reinstall can prune the lockfile's other workspaces and reject their security patches as unused. Keep the frozen install and patched dependencies intact during both web build and startup.
+
+## 2026-11-25 — Mobile chat post artwork and sharing
+
+The first Figma handoff adds a guided post flow to the existing private Home chat. A submitted brief creates one workspace draft and one chat turn in the same transaction. Retrying the same request restores that turn; choosing a style, font or template does not authorize publication. The current version uses the workspace's existing content generation and caption grounding, then renders editable text and marks over the source photo with the AI service's CPU renderer. Text edits reuse the source artwork. The mobile device holds the original local photo and working layers within that account and workspace. Compatible final JPEGs and captions save to the existing content draft.
+
+The template catalog contains original MARKOS layout recipes informed by [Canvix social layouts](https://github.com/mir-ashiq/canvix/blob/main/src/lib/templates/collection-v08-social.ts) and [Pexels references](https://www.pexels.com/search/template/). It supplies recipe guidance to the assistant alongside Vault facts. The catalog includes no third-party stock imagery and imports no customer content into shared memory.
+
+Device Share hands the current JPEG to the native share sheet. MARKOS publishing retains Ready, live readiness, and explicit confirmation of the account and schedule or immediate action. The reviewed revision travels with publish-now. The Meta image publishing contract accepts 4:5 and 1:1 for this flow; 3:4 is a device export. Switching to 3:4 removes the prior upload from the draft so an outdated crop cannot be published accidentally.

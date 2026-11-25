@@ -16,7 +16,7 @@ export class PublishNowStateError extends Error {
   }
 }
 
-export async function queuePublishNow(workspaceId: string, contentItemId: string, now = new Date()): Promise<PublishJobRecord> {
+export async function queuePublishNow(workspaceId: string, contentItemId: string, now = new Date(), expectedRevision?: number): Promise<PublishJobRecord> {
   try {
     const job = await prisma.$transaction(async (tx) => {
       const content = await lockContentForMedia(tx, workspaceId, contentItemId);
@@ -26,6 +26,10 @@ export async function queuePublishNow(workspaceId: string, contentItemId: string
         where: { contentItemId, workspaceId, status: { in: ["QUEUED", "PROCESSING", "RETRY_WAIT"] } },
         orderBy: { createdAt: "desc" }
       });
+      if (expectedRevision !== undefined && content.revision !== expectedRevision) {
+        if (active?.trigger === "PUBLISH_NOW" && active.idempotencyKey.endsWith(`:${expectedRevision}`)) return active;
+        throw new PublishNowStateError("This post changed. Review the latest version before publishing.");
+      }
       if (active) return active;
       await tx.contentItem.update({
         where: { id: content.id },

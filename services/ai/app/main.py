@@ -48,6 +48,7 @@ from app.core.errors import AiServiceError
 from app.core.observability import capture_exception, init_observability
 from app.documents import extract_documents
 from app.motion_reel import render_motion_reel
+from app.post_artwork import PostArtworkRequest, render_post_artwork
 from app.providers.agent import generate_agent
 from app.providers.business_profile import get_business_profile_provider
 from app.providers.campaign import get_campaign_provider
@@ -286,6 +287,11 @@ async def generate_content(request: ContentGenerateRequest) -> ContentGenerateRe
             status_code=504,
             retryable=True,
         ) from None
+
+
+@app.post("/ai/posts/render-artwork")
+async def render_artwork(request: PostArtworkRequest) -> Response:
+    return Response(await asyncio.to_thread(render_post_artwork, request), media_type="image/jpeg")
 
 
 @app.post("/ai/images/generate", response_model=ImageGenerateResponse)

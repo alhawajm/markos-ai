@@ -1,6 +1,8 @@
 import { env } from "../config/env";
 
 const safeAiMessages: Record<string, string> = {
+  AI_POST_ARTWORK_INVALID_PHOTO: "Choose a valid JPEG, PNG or WebP photo under 8 MB.",
+  AI_POST_ARTWORK_RENDER_FAILED: "The post could not be rendered. Your edits have been kept.",
   AI_IMAGE_EDIT_SOURCE_INVALID: "The original artwork could not be read. Upload it again before editing",
   AI_IMAGE_EDIT_SOURCE_UNAVAILABLE: "The original artwork is unavailable. Upload it again before editing",
   AI_CONTEXT_MISSING: "Knowledge Vault context is required for AI generation",

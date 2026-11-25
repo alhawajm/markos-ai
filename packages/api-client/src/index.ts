@@ -114,6 +114,14 @@ export class MarkosApiError extends Error {
 }
 
 export class MarkosApiClient {
+  async beginPostDesign(input: { requestId: string; chatId: string; message: string; locale: "en" | "ar" }): Promise<WorkspaceAssistantTurn> {
+    return (await this.request<WorkspaceAssistantTurn>("/v1/assistant/post-designs", { method: "POST", body: input })).data;
+  }
+  async renderPostArtwork(
+    input: import("@markos/shared-types").PostArtwork & { source?: import("@markos/shared-types").PostArtworkSource }
+  ): Promise<{ base64Data: string }> {
+    return (await this.request<{ base64Data: string }>("/v1/media/post-artwork", { method: "POST", body: { ...input } })).data;
+  }
   async assistantChats(cursor?: string): Promise<import("@markos/shared-types").WorkspaceChatPage> {
     return (await this.request<import("@markos/shared-types").WorkspaceChatPage>(`/v1/assistant/chats${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`))
       .data;
@@ -733,6 +741,9 @@ export class MarkosApiClient {
     const response = await this.request<MediaAssetRecord[]>("/v1/media");
     return response.data;
   }
+  async mediaAsset(id: string): Promise<MediaAssetRecord> {
+    return (await this.request<MediaAssetRecord>(`/v1/media/${encodeURIComponent(id)}`)).data;
+  }
 
   async registerPublicMedia(input: {
     type?: MediaType;
@@ -884,9 +895,9 @@ export class MarkosApiClient {
     return (await this.request<{ motion: boolean; generatedFootage: boolean }>("/v1/media/video-capabilities")).data;
   }
 
-  async publishContentNow(contentItemId: string): Promise<PublishJobRecord> {
+  async publishContentNow(contentItemId: string, expectedRevision?: number): Promise<PublishJobRecord> {
     const response = await this.request<PublishJobRecord>(`/v1/content/${contentItemId}/publish-now`, {
-      body: {},
+      body: expectedRevision === undefined ? {} : { expectedRevision },
       method: "POST"
     });
     return response.data;

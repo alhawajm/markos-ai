@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { Send, RotateCcw } from "lucide-react-native";
+import { ArrowUp, Plus, Send, RotateCcw } from "lucide-react-native";
 import { useAppearance } from "./providers";
 import { InkPulse } from "./motion";
+import { usePostFlowTheme } from "./post-design/palette";
 
 const minimumHeight = 44,
   maximumHeight = 136;
@@ -15,7 +16,9 @@ export function ChatComposer({
   disabled = false,
   busy = false,
   retry = false,
-  inputRef
+  inputRef,
+  postFlow = false,
+  onAttach
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -25,6 +28,8 @@ export function ChatComposer({
   busy?: boolean;
   retry?: boolean;
   inputRef?: React.Ref<TextInput>;
+  postFlow?: boolean;
+  onAttach?: (() => void) | undefined;
 }) {
   const { colors, t, locale } = useAppearance(),
     rtl = locale === "ar";
@@ -34,7 +39,8 @@ export function ChatComposer({
     if (!value) setHeight(minimumHeight);
   }, [value]);
   const blocked = disabled || busy;
-  const Icon = retry ? RotateCcw : Send;
+  const palette = usePostFlowTheme();
+  const Icon = retry ? RotateCcw : postFlow ? ArrowUp : Send;
   return (
     <View
       style={{
@@ -43,11 +49,22 @@ export function ChatComposer({
         gap: 4,
         padding: 4,
         borderWidth: 1,
-        borderColor: focused ? colors.focus : colors.borderStrong,
+        borderColor: focused ? (postFlow ? palette.selection : colors.focus) : postFlow ? colors.border : colors.borderStrong,
         borderRadius: 26,
-        backgroundColor: colors.surface
+        backgroundColor: postFlow ? palette.canvas : colors.surface
       }}
     >
+      {onAttach ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("Attach a photo", "إرفاق صورة")}
+          disabled={!editable || busy}
+          onPress={onAttach}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Plus size={19} color={palette.ink} />
+        </Pressable>
+      ) : null}
       <TextInput
         ref={inputRef}
         accessibilityLabel={t("Message MARKOS", "راسل ماركوس")}
@@ -57,8 +74,8 @@ export function ChatComposer({
         multiline
         maxLength={4000}
         scrollEnabled={height >= maximumHeight}
-        placeholder={t("Message MARKOS…", "راسل ماركوس…")}
-        placeholderTextColor={colors.muted}
+        placeholder={postFlow ? t("Ask MARKOS anything…", "اسأل ماركوس…") : t("Message MARKOS…", "راسل ماركوس…")}
+        placeholderTextColor={postFlow ? palette.muted : colors.muted}
         selectionColor={colors.primary}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -72,14 +89,14 @@ export function ChatComposer({
           height,
           minHeight: minimumHeight,
           maxHeight: maximumHeight,
-          paddingHorizontal: 12,
+          paddingHorizontal: postFlow && onAttach ? 0 : 12,
           paddingVertical: 10,
           borderWidth: 0,
           color: colors.text,
-          fontSize: 16,
+          fontSize: postFlow ? 14 : 16,
           lineHeight: 24,
           includeFontPadding: false,
-          fontFamily: rtl || /[\u0600-\u06ff]/.test(value) ? "IBMPlexSansArabic_400Regular" : "IBMPlexSans_400Regular",
+          fontFamily: rtl || /[\u0600-\u06ff]/.test(value) ? "IBMPlexSansArabic_400Regular" : postFlow ? "Roboto_400Regular" : "IBMPlexSans_400Regular",
           textAlign: rtl ? "right" : "left",
           writingDirection: rtl ? "rtl" : "auto",
           textAlignVertical: "top"
@@ -99,10 +116,15 @@ export function ChatComposer({
           borderRadius: 22,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: blocked && !busy ? colors.surfaceMuted : pressed ? colors.buttonActive : colors.primary
+          opacity: postFlow && blocked && !busy ? 0.45 : 1,
+          backgroundColor: postFlow ? palette.action : blocked && !busy ? colors.surfaceMuted : pressed ? colors.buttonActive : colors.primary
         })}
       >
-        {busy ? <InkPulse size={20} color={colors.onPrimary} /> : <Icon size={20} strokeWidth={1.8} color={blocked ? colors.muted : colors.onPrimary} />}
+        {busy ? (
+          <InkPulse size={20} color={postFlow ? palette.ink : colors.onPrimary} />
+        ) : (
+          <Icon size={20} strokeWidth={1.8} color={postFlow ? palette.ink : blocked ? colors.muted : colors.onPrimary} />
+        )}
       </Pressable>
     </View>
   );

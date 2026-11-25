@@ -402,18 +402,29 @@ describe("publishing routes", () => {
       where: { id: content.id },
       data: { status: "APPROVED", scheduledAt: null }
     });
+    const approved = await prisma.contentItem.findUniqueOrThrow({ where: { id: content.id } });
     await prisma.user.update({ where: { id: session.user.id }, data: { mfaEnabled } });
     const headers = authHeaders(session.tokens.accessToken);
 
+    const stale = await app.inject({
+      method: "POST",
+      url: `/v1/content/${content.id}/publish-now`,
+      headers,
+      payload: { expectedRevision: approved.revision + 1 }
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(await prisma.publishJob.count({ where: { contentItemId: content.id } })).toBe(0);
     const first = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/publish-now`,
-      headers
+      headers,
+      payload: { expectedRevision: approved.revision }
     });
     const duplicate = await app.inject({
       method: "POST",
       url: `/v1/content/${content.id}/publish-now`,
-      headers
+      headers,
+      payload: { expectedRevision: approved.revision }
     });
     const latest = await app.inject({
       method: "GET",

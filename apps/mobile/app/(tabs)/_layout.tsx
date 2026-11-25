@@ -98,7 +98,7 @@ export default function TabLayout() {
         </View>
       )}
     >
-      <Tabs.Screen name="index" />
+      <Tabs.Screen name="index" options={{ headerShown: false }} />
       <Tabs.Screen name="campaigns" />
       <Tabs.Screen name="create" />
       <Tabs.Screen name="calendar" />
