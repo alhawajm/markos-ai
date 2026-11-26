@@ -18,6 +18,7 @@ import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, X, type LucideIcon }
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAppearance, useSession } from "./providers";
+import { ChatKeyboardFrame } from "./chat-keyboard";
 import { InkPulse, TaskFeedback } from "./motion";
 
 export function Txt({
@@ -527,12 +528,9 @@ export function Screen({
   const { colors } = useAppearance();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: backgroundColor ?? colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top + 64}
-    >
+  const canvas = backgroundColor ?? colors.background;
+  const content = (
+    <>
       {backdrop}
       <ScrollView
         ref={scrollRef}
@@ -541,6 +539,7 @@ export function Screen({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         refreshControl={refreshControl}
+        style={layout === "chat" ? { flex: 1, minHeight: 0 } : undefined}
         contentContainerStyle={{
           width: "100%",
           maxWidth: 760,
@@ -556,6 +555,7 @@ export function Screen({
       {footer ? (
         <View
           style={{
+            flexShrink: 0,
             paddingHorizontal: layout === "chat" ? 12 : 16,
             paddingVertical: layout === "chat" ? 8 : 16,
             paddingBottom: layout === "chat" ? (width >= 768 ? Math.max(8, insets.bottom) : 8) : Math.max(16, insets.bottom),
@@ -567,6 +567,16 @@ export function Screen({
           <View style={{ width: "100%", maxWidth: 720, alignSelf: "center", gap: 8 }}>{footer}</View>
         </View>
       ) : null}
+    </>
+  );
+  if (layout === "chat") return <ChatKeyboardFrame backgroundColor={canvas}>{content}</ChatKeyboardFrame>;
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: canvas }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={insets.top + 64}
+    >
+      {content}
     </KeyboardAvoidingView>
   );
 }

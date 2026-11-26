@@ -647,3 +647,7 @@ The desktop Home adapts the same flow to a wider conversation and a full-size ar
 Desktop Home uses the Sunlit workspace canvas, surfaces, borders and interaction states. The toolbar, conversation and composer share a readable chat column. Roboto applies throughout the signed-in English web workspace and IBM Plex Sans Arabic carries through Arabic. The welcome retains the mascot and the post editor uses the same themed surfaces as other workspace dialogs.
 
 The desktop Home canvas carries the cyan and yellow welcome gradient across the workspace. The composer, chat toolbar and activity panel use frosted Sunlit surfaces. At a 100rem viewport, Home presents a readable chat column beside a compact view of workspace activity with the existing live metrics and draft links. Smaller windows keep the activity disclosure below chat.
+
+## 2026-11-26 — Mobile Home keyboard
+
+Keep the composer above the on-screen keyboard and let the conversation scroll in the remaining space. Hide the phone's bottom tabs while typing in Home and restore them when the keyboard closes. Measure the chat frame so that native window resizing and the in-app keyboard offset do not reserve the same space twice.

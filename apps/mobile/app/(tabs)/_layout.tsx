@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import { Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { House, Target, Palette, CalendarDays, ChartNoAxesColumn, type LucideIcon } from "lucide-react-native";
+import { useKeyboardTop } from "../../src/chat-keyboard";
 import { useAppearance } from "../../src/providers";
 import { Txt, WorkspaceHeader } from "../../src/ui";
 
@@ -11,6 +12,7 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const rail = width >= 768;
+  const keyboardTop = useKeyboardTop();
   const destinations: Record<string, { label: string; icon: LucideIcon }> = {
     index: { label: t("Home", "الرئيسية"), icon: House },
     campaigns: { label: t("Campaigns", "الحملات"), icon: Target },
@@ -30,6 +32,7 @@ export default function TabLayout() {
       tabBar={({ state, navigation }) => (
         <View
           style={{
+            display: !rail && keyboardTop !== undefined && state.routes[state.index]?.name === "index" ? "none" : "flex",
             flexDirection: rail ? "column" : rtl ? "row-reverse" : "row",
             width: rail ? 108 : undefined,
             backgroundColor: colors.surface,

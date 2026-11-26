@@ -2,13 +2,34 @@ import React, { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "test-renderer";
 import { nativeColors } from "@markos/ui-tokens/native";
+import type { ViewProps } from "react-native";
 
 const appearance = vi.hoisted(() => ({ rtl: false, mode: "light" as "light" | "dark" }));
+type KeyboardListener = (event: { endCoordinates: { screenY: number } }) => void;
+const keyboard = vi.hoisted(() => ({
+  listeners: new Map<string, KeyboardListener>(),
+  frameBottom: 0
+}));
 vi.mock("react-native", async () => {
-  const { createElement } = await import("react");
+  const { createElement, useImperativeHandle } = await import("react");
   return {
-    ...Object.fromEntries(["ActivityIndicator", "KeyboardAvoidingView", "Pressable", "ScrollView", "Text", "TextInput", "View"].map((name) => [name, name])),
+    ...Object.fromEntries(["ActivityIndicator", "KeyboardAvoidingView", "Pressable", "ScrollView", "Text", "TextInput"].map((name) => [name, name])),
+    View: ({ ref, ...props }: ViewProps & { ref?: React.Ref<unknown> }) => {
+      useImperativeHandle(ref, () => ({
+        measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 72, 360, keyboard.frameBottom - 72)
+      }));
+      return createElement("View", props);
+    },
     Platform: { OS: "android" },
+    Keyboard: {
+      metrics: () => undefined,
+      addListener: (event: string, listener: KeyboardListener) => {
+        keyboard.listeners.set(event, listener);
+        return { remove: () => keyboard.listeners.delete(event) };
+      },
+      scheduleLayoutAnimation: vi.fn()
+    },
+    useWindowDimensions: () => ({ width: 360 }),
     Modal: (props: { visible: boolean; children: React.ReactNode }) => (props.visible ? createElement("Modal", props, props.children) : null)
   };
 });
@@ -20,7 +41,7 @@ vi.mock("../src/providers", () => ({
   useAppearance: () => ({ rtl: appearance.rtl, colors: nativeColors[appearance.mode], t: (en: string, ar: string) => (appearance.rtl ? ar : en) })
 }));
 
-import { Button, Card, Disclosure, Field, Row, Segmented, SelectField, Sheet, TaskHeader } from "../src/ui";
+import { Button, Card, Disclosure, Field, Row, Screen, Segmented, SelectField, Sheet, TaskHeader } from "../src/ui";
 
 let root: Root;
 beforeEach(() => {
@@ -41,6 +62,37 @@ const press = async (label: string) => {
 };
 
 describe("focused mobile panels", () => {
+  it("keeps the chat footer above the Android keyboard without adding space when the window resizes", async () => {
+    keyboard.frameBottom = 760;
+    function Chat() {
+      const [value, setValue] = useState("");
+      return <Screen layout="chat" footer={<Field label="Message MARKOS" value={value} onChangeText={setValue} />} />;
+    }
+    await act(async () => root.render(<Chat />));
+    const padding = () =>
+      root.container.queryAll((node) => node.type === "View" && node.props.style?.flex === 1 && "paddingBottom" in node.props.style)[0]!.props.style
+        .paddingBottom;
+    const layout = () => root.container.queryAll((node) => node.type === "View" && node.props.collapsable === false)[0]!.props.onLayout();
+    const input = () => root.container.queryAll((node) => node.type === "TextInput")[0]!;
+    const emit = (event: string, screenY: number) => keyboard.listeners.get(event)!({ endCoordinates: { screenY } });
+
+    await act(async () => layout());
+    expect(padding()).toBe(0);
+    await act(async () => emit("keyboardDidShow", 470));
+    expect(padding()).toBe(290);
+    await act(async () => input().props.onChangeText("My campaign idea"));
+    await act(async () => emit("keyboardDidShow", 410));
+    expect(padding()).toBe(350);
+
+    keyboard.frameBottom = 410;
+    await act(async () => layout());
+    expect(padding()).toBe(0);
+    keyboard.frameBottom = 760;
+    await act(async () => emit("keyboardDidHide", 760));
+    expect(padding()).toBe(0);
+    expect(input().props.value).toBe("My campaign idea");
+  });
+
   it.each(["light", "dark"] as const)("keeps editor controls readable and preserves focus callbacks in %s mode", async (mode) => {
     appearance.mode = mode;
     const focused = vi.fn();
